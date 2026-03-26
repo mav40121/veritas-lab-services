@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,11 +96,20 @@ export default function VeritaCheckPage() {
   const [customClia, setCustomClia] = useState(0.075);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"]));
 
+  // Ref map: gridRefs[row][col] → the actual <input> DOM element
+  const gridRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const setGridRef = useCallback((row: number, col: number) => (el: HTMLInputElement | null) => {
+    const key = `${row}-${col}`;
+    if (el) gridRefs.current.set(key, el);
+    else gridRefs.current.delete(key);
+  }, []);
+
   const cliaValue = CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
 
   const handleGridKeyDown = (e: React.KeyboardEvent, row: number, col: number) => {
     if (e.key !== "Tab") return;
     e.preventDefault();
+    e.stopPropagation();
     const numRows = dataPoints.length;
     const numCols = instrumentNames.length + 1; // +1 for Expected
     let nextRow = row;
@@ -116,7 +125,7 @@ export default function VeritaCheckPage() {
       if (nextRow >= numRows) { nextRow = 0; nextCol = col + 1; }
       if (nextCol >= numCols) return; // exit grid
     }
-    const next = document.querySelector<HTMLElement>(`[data-grid-row="${nextRow}"][data-grid-col="${nextCol}"]`);
+    const next = gridRefs.current.get(`${nextRow}-${nextCol}`);
     next?.focus();
   };
 
@@ -287,8 +296,8 @@ export default function VeritaCheckPage() {
                         {dataPoints.map((dp, idx) => (
                           <tr key={idx} className="border-b border-border/50">
                             <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
-                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" data-grid-row={idx} data-grid-col={0} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
-                            {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" data-grid-row={idx} data-grid-col={colIdx + 1} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
+                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
+                            {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                           </tr>
                         ))}
                       </tbody>
