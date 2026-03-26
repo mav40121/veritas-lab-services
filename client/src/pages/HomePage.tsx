@@ -136,9 +136,9 @@ export default function HomePage() {
             <FlaskConical size={14} />
             New Tool — VeritaCheck
           </div>
-          <h2 className="font-serif text-3xl font-bold mb-3">Lab Studies, Done Right.</h2>
+          <h2 className="font-serif text-3xl font-bold mb-3">The studies your lab has always run — finally done right.</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6 leading-relaxed">
-            Our new VeritaCheck tool automates calibration verification and method comparison studies — generating CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation. Automated calibration verification and method comparison — CLIA-compliant reports in under 60 seconds.
+            Calibration verification and method comparison, automated and browser-based. CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation — no desktop software required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">

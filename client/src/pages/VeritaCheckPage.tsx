@@ -232,9 +232,9 @@ export default function VeritaCheckPage() {
             <FlaskConical size={20} className="text-primary" />
             <Badge className="bg-primary/10 text-primary border-0">VeritaCheck</Badge>
           </div>
-          <h1 className="font-serif text-4xl font-bold mb-3">Lab Studies, Done Right.</h1>
+          <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run — finally done right.</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Automated calibration verification and method comparison — CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation. Under 60 seconds.
+            Calibration verification and method comparison, automated and browser-based. CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation — no desktop software required.
           </p>
         </div>
       </section>
