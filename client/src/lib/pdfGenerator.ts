@@ -277,15 +277,17 @@ function pdfSupportingPage(doc: jsPDF, study: Study, instrumentNames: string[], 
   hLine(doc, y); y += 6;
 
   const cliaP = (study.cliaAllowableError*100).toFixed(1);
-  const cfrMap: { [key: string]: string } = {
-    "7.5": "42 CFR §493.931",
-    "10.0": "42 CFR §493.931",
-    "7.0": "42 CFR §493.941",
-    "4.0": "42 CFR §493.931",
-    "5.0": "42 CFR §493.931",
+  // CFR citations with direct section URLs
+  const cfrMap: { [key: string]: { citation: string; url: string } } = {
+    "7.5":  { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
+    "10.0": { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
+    "7.0":  { citation: "42 CFR §493.941", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941" },
+    "4.0":  { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
+    "5.0":  { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
   };
-  const cfrCitation = cfrMap[cliaP] || "42 CFR §493 Subpart H";
-  const cfrUrl = "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-H";
+  const cfrEntry = cfrMap[cliaP] || { citation: "42 CFR §493 Subpart I", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I" };
+  const cfrCitation = cfrEntry.citation;
+  const cfrUrl = cfrEntry.url;
 
   // Two-column layout: specs left, supporting right
   doc.setFontSize(8); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
