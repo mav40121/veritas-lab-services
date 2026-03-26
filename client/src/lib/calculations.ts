@@ -31,12 +31,83 @@ function stddev(v: number[]) {
   return Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / (v.length - 1));
 }
 
+// Standard Error of Estimate (SEE) — spread of Y around the regression line
+function seeFn(x: number[], y: number[]): number {
+  const n = x.length;
+  if (n < 3) return 0;
+  const s = slopeFn(x, y), b = interceptFn(x, y);
+  const sse = y.reduce((sum, yi, i) => sum + (yi - (s * x[i] + b)) ** 2, 0);
+  return Math.sqrt(sse / (n - 2));
+}
+
+// Deming regression (assumes equal error variance: lambda=1)
+function demingRegression(x: number[], y: number[]): { slope: number; intercept: number } {
+  const n = x.length;
+  if (n < 2) return { slope: 1, intercept: 0 };
+  const xm = mean(x), ym = mean(y);
+  const Sxx = x.reduce((s, xi) => s + (xi - xm) ** 2, 0) / (n - 1);
+  const Syy = y.reduce((s, yi) => s + (yi - ym) ** 2, 0) / (n - 1);
+  const Sxy = x.reduce((s, xi, i) => s + (xi - xm) * (y[i] - ym), 0) / (n - 1);
+  const slope = (Syy - Sxx + Math.sqrt((Syy - Sxx) ** 2 + 4 * Sxy ** 2)) / (2 * Sxy);
+  const intercept = ym - slope * xm;
+  return { slope, intercept };
+}
+
+// 95% CI for OLS slope and intercept using t-distribution (df = n-2)
+// t critical value approximation for common n values
+function tCritical(df: number): number {
+  // Approximation of t(0.025, df) — accurate enough for lab use
+  if (df <= 1) return 12.706;
+  if (df <= 2) return 4.303;
+  if (df <= 3) return 3.182;
+  if (df <= 4) return 2.776;
+  if (df <= 5) return 2.571;
+  if (df <= 6) return 2.447;
+  if (df <= 7) return 2.365;
+  if (df <= 8) return 2.306;
+  if (df <= 9) return 2.262;
+  if (df <= 10) return 2.228;
+  if (df <= 15) return 2.131;
+  if (df <= 20) return 2.086;
+  if (df <= 25) return 2.060;
+  if (df <= 30) return 2.042;
+  if (df <= 40) return 2.021;
+  if (df <= 60) return 2.000;
+  if (df <= 120) return 1.980;
+  return 1.960;
+}
+
+function olsCI(x: number[], y: number[]): { slopeLo: number; slopeHi: number; interceptLo: number; interceptHi: number } {
+  const n = x.length;
+  if (n < 3) return { slopeLo: 0, slopeHi: 0, interceptLo: 0, interceptHi: 0 };
+  const xm = mean(x);
+  const s = slopeFn(x, y), b = interceptFn(x, y);
+  const see = seeFn(x, y);
+  const Sxx = x.reduce((sum, xi) => sum + (xi - xm) ** 2, 0);
+  const t = tCritical(n - 2);
+  const seSlopeNum = see / Math.sqrt(Sxx);
+  const seIntercept = see * Math.sqrt(x.reduce((sum, xi) => sum + xi ** 2, 0) / (n * Sxx));
+  return {
+    slopeLo: s - t * seSlopeNum,
+    slopeHi: s + t * seSlopeNum,
+    interceptLo: b - t * seIntercept,
+    interceptHi: b + t * seIntercept,
+  };
+}
+
 export interface RegressionResult {
   slope: number;
   intercept: number;
   proportionalBias: number; // slope - 1
   r2: number;
   n: number;
+  see: number;
+  // 95% CI
+  slopeLo?: number;
+  slopeHi?: number;
+  interceptLo?: number;
+  interceptHi?: number;
+  regressionType?: "Deming" | "OLS";
 }
 
 // ─── CALIBRATION VERIFICATION ─────────────────────────────────────────────────
@@ -108,20 +179,22 @@ export function calculateCalVer(
     };
   });
 
-  // Regression: each instrument vs. assigned
+  // Regression: each instrument vs. assigned (OLS only for Cal Ver)
   const regression: { [k: string]: RegressionResult } = {};
   const assignedVals = levelResults.map((r) => r.assignedValue);
   const meanVals = levelResults.map((r) => r.mean);
   if (assignedVals.length >= 2) {
     const s = slopeFn(assignedVals, meanVals), b = interceptFn(assignedVals, meanVals);
-    regression["Mean vs. Assigned"] = { slope: s, intercept: b, proportionalBias: s - 1, r2: rsq(assignedVals, meanVals), n: assignedVals.length };
+    const ci = olsCI(assignedVals, meanVals);
+    regression["Mean vs. Assigned"] = { slope: s, intercept: b, proportionalBias: s - 1, r2: rsq(assignedVals, meanVals), n: assignedVals.length, see: seeFn(assignedVals, meanVals), ...ci, regressionType: "OLS" };
   }
   instrumentNames.forEach((n) => {
     const xs: number[] = [], ys: number[] = [];
     levelResults.forEach((r) => { if (r.instruments[n]) { xs.push(r.assignedValue); ys.push(r.instruments[n].value); } });
     if (xs.length >= 2) {
       const s = slopeFn(xs, ys), b = interceptFn(xs, ys);
-      regression[`${n} vs. Assigned`] = { slope: s, intercept: b, proportionalBias: s - 1, r2: rsq(xs, ys), n: xs.length };
+      const ci = olsCI(xs, ys);
+      regression[`${n} vs. Assigned`] = { slope: s, intercept: b, proportionalBias: s - 1, r2: rsq(xs, ys), n: xs.length, see: seeFn(xs, ys), ...ci, regressionType: "OLS" };
     }
   });
 
@@ -162,9 +235,9 @@ export interface MethodCompLevelResult {
   instruments: {
     [name: string]: {
       value: number;
-      difference: number;       // test - reference (absolute)
+      difference: number;       // test - reference (absolute bias)
       pctDifference: number;    // (test - reference) / reference * 100
-      passFail: "Pass" | "Fail"; // |pctDiff| < cliaError
+      passFail: "Pass" | "Fail";
     };
   };
 }
@@ -177,14 +250,16 @@ export interface MethodCompResults {
     [key: string]: {
       meanDiff: number;
       sdDiff: number;
-      loa_upper: number; // mean + 1.96 SD
-      loa_lower: number; // mean - 1.96 SD
+      loa_upper: number;
+      loa_lower: number;
       pctMeanDiff: number;
     };
   };
   overallPass: boolean;
   passCount: number;
   totalCount: number;
+  xRange: { min: number; max: number };
+  yRange: { [name: string]: { min: number; max: number } };
   summary: string;
 }
 
@@ -211,35 +286,37 @@ export function calculateMethodComparison(
     return { level: dp.level, referenceValue: ref, instruments };
   });
 
-  // Regression: each test method vs. reference
-  const regression: { [k: string]: RegressionResult } = {};
+  // Result ranges
   const refVals = levelResults.map((r) => r.referenceValue);
+  const xRange = { min: Math.min(...refVals), max: Math.max(...refVals) };
+  const yRange: { [name: string]: { min: number; max: number } } = {};
+  instrumentNames.forEach((n) => {
+    const ys = levelResults.filter(r => r.instruments[n]).map(r => r.instruments[n].value);
+    if (ys.length) yRange[n] = { min: Math.min(...ys), max: Math.max(...ys) };
+  });
+
+  // Regression: Deming + OLS for each test method vs. reference
+  const regression: { [k: string]: RegressionResult } = {};
   instrumentNames.forEach((n) => {
     const xs: number[] = [], ys: number[] = [];
     levelResults.forEach((r) => { if (r.instruments[n]) { xs.push(r.referenceValue); ys.push(r.instruments[n].value); } });
     if (xs.length >= 2) {
+      // Deming regression
+      const dem = demingRegression(xs, ys);
+      const demSee = seeFn(xs, ys); // SEE from residuals (approximation)
+      regression[`${n} vs. Reference (Deming)`] = {
+        slope: dem.slope, intercept: dem.intercept, proportionalBias: dem.slope - 1,
+        r2: rsq(xs, ys), n: xs.length, see: demSee, regressionType: "Deming"
+      };
+      // OLS regression with 95% CI
       const s = slopeFn(xs, ys), b = interceptFn(xs, ys);
-      regression[`${n} vs. Reference`] = { slope: s, intercept: b, proportionalBias: s - 1, r2: rsq(xs, ys), n: xs.length };
+      const ci = olsCI(xs, ys);
+      regression[`${n} vs. Reference (OLS)`] = {
+        slope: s, intercept: b, proportionalBias: s - 1,
+        r2: rsq(xs, ys), n: xs.length, see: seeFn(xs, ys), ...ci, regressionType: "OLS"
+      };
     }
   });
-
-  // If multiple test instruments, also compare them against each other
-  if (instrumentNames.length >= 2) {
-    const i1 = instrumentNames[0];
-    instrumentNames.slice(1).forEach((n) => {
-      const xs: number[] = [], ys: number[] = [];
-      levelResults.forEach((r) => {
-        if (r.instruments[i1] && r.instruments[n]) {
-          xs.push(r.instruments[i1].value);
-          ys.push(r.instruments[n].value);
-        }
-      });
-      if (xs.length >= 2) {
-        const s = slopeFn(xs, ys), b = interceptFn(xs, ys);
-        regression[`${n} vs. ${i1}`] = { slope: s, intercept: b, proportionalBias: s - 1, r2: rsq(xs, ys), n: xs.length };
-      }
-    });
-  }
 
   // Bland-Altman per instrument
   const blandAltman: MethodCompResults["blandAltman"] = {};
@@ -264,7 +341,6 @@ export function calculateMethodComparison(
   const overallPass = passCount === totalCount && totalCount > 0;
   const cliaPercent = (cliaError * 100).toFixed(1);
 
-  // Build summary text
   const regLines = Object.entries(regression)
     .map(([name, reg]) => `${name}: slope=${reg.slope.toFixed(3)}, intercept=${reg.intercept.toFixed(3)}, R²=${reg.r2.toFixed(4)}`)
     .join("; ");
@@ -279,12 +355,10 @@ export function calculateMethodComparison(
     `${passCount} of ${totalCount} paired results were within TEa. ` +
     `The method comparison ${overallPass ? "PASSED" : "FAILED"} CLIA acceptability criteria.`;
 
-  return { type: "method_comparison", levelResults, regression, blandAltman, overallPass, passCount, totalCount, summary };
+  return { type: "method_comparison", levelResults, regression, blandAltman, overallPass, passCount, totalCount, xRange, yRange, summary };
 }
 
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-// Existing studies saved as "cal_ver" or "method_comparison" route through here.
-
 export type StudyResults = CalVerResults | MethodCompResults;
 
 export function calculateStudy(

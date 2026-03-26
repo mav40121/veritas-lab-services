@@ -380,6 +380,8 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
 function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResults) {
   const pw = 215.9, margin = 15, contentW = pw - 2*margin;
   const instrumentNames: string[] = JSON.parse(study.instruments);
+  const xRange = (results as any).xRange as { min: number; max: number } | undefined;
+  const yRange = (results as any).yRange as { [name: string]: { min: number; max: number } } | undefined;
   let y = pdfHeader(doc, study, pw, margin);
 
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
@@ -393,7 +395,6 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   }));
   drawScatterPlot(doc, "Correlation", "Reference Method", "Test Method", scatterSeries, true, margin, y, chartW, chartH);
 
-  // B-A plot for first instrument
   const firstInst = instrumentNames[0];
   const baData = results.levelResults
     .filter(r => r.instruments[firstInst])
@@ -402,27 +403,72 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   drawBlandAltman(doc, baData, study.cliaAllowableError, meanBias, margin+chartW+6, y, chartW, chartH);
   y += chartH + 6;
 
-  // Regression table
+  // Supporting statistics row (matches EP Evaluator layout)
+  hLine(doc, y); y += 4;
+  sectionTitle(doc, "Supporting Statistics", y, pw); y += 5;
+  doc.setFont("helvetica","normal"); doc.setFontSize(8); setRgb(doc, DARK);
+  const firstInstBA = results.blandAltman[firstInst];
+  const firstInstReg = Object.entries(results.regression).find(([k]) => k.includes("Deming"))?.[1];
+  const supportStats = [
+    ["Corr Coef (R):", firstInstReg ? Math.sqrt(firstInstReg.r2).toFixed(4) : "—"],
+    ["Bias:", firstInstBA ? firstInstBA.meanDiff.toFixed(3) : "—"],
+    ["X Mean ± SD:", xRange ? `${((xRange.min+xRange.max)/2).toFixed(3)}` : "—"],
+    ["Std Dev Diffs:", firstInstBA ? firstInstBA.sdDiff.toFixed(3) : "—"],
+    ["Points (Plotted/Total):", `${results.levelResults.length}/${results.levelResults.length}`],
+  ];
+  const col1X = margin, col2X = margin + 45, col3X = margin + 100, col4X = margin + 145;
+  supportStats.forEach((pair, i) => {
+    const x = i < 3 ? col1X : col3X;
+    const vx = i < 3 ? col2X : col4X;
+    const row = i < 3 ? i : i - 3;
+    doc.setFont("helvetica","bold"); doc.text(pair[0], x, y + row*5);
+    doc.setFont("helvetica","normal"); doc.text(pair[1], vx, y + row*5);
+  });
+  // Result ranges
+  if (xRange) {
+    doc.setFont("helvetica","bold"); doc.text("X Result Range:", col3X, y);
+    doc.setFont("helvetica","normal"); doc.text(`${xRange.min.toFixed(3)} to ${xRange.max.toFixed(3)}`, col4X, y);
+    instrumentNames.forEach((n, i) => {
+      if (yRange?.[n]) {
+        doc.setFont("helvetica","bold"); doc.text(`${n} Range:`, col3X, y + (i+1)*5);
+        doc.setFont("helvetica","normal"); doc.text(`${yRange[n].min.toFixed(3)} to ${yRange[n].max.toFixed(3)}`, col4X, y + (i+1)*5);
+      }
+    });
+  }
+  y += 20; doc.setFontSize(9);
+
+  // Regression table — Deming + OLS with CIs
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Regression Analysis", y, pw); y += 5;
-  const regCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R", "R²"];
-  const regColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+168, margin+191];
+  const regCols  = ["", "N", "Slope (95% CI)", "Intercept (95% CI)", "SEE", "Prop. Bias", "R", "R²"];
+  const regColX  = [margin, margin+22, margin+50, margin+100, margin+148, margin+163, margin+178, margin+191];
   tableHeader(doc, regCols, regColX, y, contentW, margin);
   y += 4;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
   Object.entries(results.regression).forEach(([name, reg]) => {
-    doc.text(name, regColX[0], y);
+    doc.text(name.replace(" vs. Reference", ""), regColX[0], y);
     doc.text(String(reg.n), regColX[1], y, { align: "right" });
-    doc.text(reg.slope.toFixed(4), regColX[2], y, { align: "right" });
-    doc.text(reg.intercept.toFixed(4), regColX[3], y, { align: "right" });
+    // Slope with CI
+    const slopeStr = reg.slopeLo !== undefined
+      ? `${reg.slope.toFixed(4)} (${reg.slopeLo.toFixed(3)}-${reg.slopeHi!.toFixed(3)})`
+      : reg.slope.toFixed(4);
+    doc.text(slopeStr, regColX[2], y, { align: "right" });
+    const intStr = reg.interceptLo !== undefined
+      ? `${reg.intercept.toFixed(4)} (${reg.interceptLo.toFixed(3)}-${reg.interceptHi!.toFixed(3)})`
+      : reg.intercept.toFixed(4);
+    doc.text(intStr, regColX[3], y, { align: "right" });
+    doc.text(reg.see.toFixed(4), regColX[4], y, { align: "right" });
     const bc = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? PASS_GREEN : FAIL_RED;
     setRgb(doc, bc);
-    doc.text((reg.proportionalBias*100).toFixed(2)+"%", regColX[4], y, { align: "right" });
+    doc.text((reg.proportionalBias*100).toFixed(2)+"%", regColX[5], y, { align: "right" });
     setRgb(doc, DARK);
-    doc.text(Math.sqrt(reg.r2).toFixed(4), regColX[5], y, { align: "right" });
-    doc.text(reg.r2.toFixed(4), regColX[6], y, { align: "right" });
+    doc.text(Math.sqrt(reg.r2).toFixed(4), regColX[6], y, { align: "right" });
+    doc.text(reg.r2.toFixed(4), regColX[7], y, { align: "right" });
     y += 5;
   });
+  doc.setFontSize(7); setRgb(doc, [120,120,120]);
+  doc.text("95% Confidence Intervals shown in parentheses (OLS only)", margin, y); y += 4;
+  doc.setFontSize(9); setRgb(doc, DARK);
 
   y += 3; hLine(doc, y); y += 6;
 
@@ -450,12 +496,11 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
 
   y += 3; hLine(doc, y); y += 6;
 
-  // Level-by-level data table
+  // Level-by-level data table — now includes Bias (Y-X) column
   sectionTitle(doc, "Level-by-Level Comparison Results", y, pw); y += 5;
-  // Columns: Level | Reference | [per instrument: Value, % Diff, Pass?]
-  const numInstCols = instrumentNames.length * 3;
+  const numInstCols = instrumentNames.length * 4; // Value + Bias + % Diff + Pass?
   const dataColW = contentW / (2 + numInstCols);
-  const dataCols = ["Level", "Reference", ...instrumentNames.flatMap(n => [n+" Value", "% Diff", "Pass?"])];
+  const dataCols = ["Level", "Reference", ...instrumentNames.flatMap(n => [n+" Value", "Bias", "% Diff", "Pass?"])];
   const dataColX = dataCols.map((_, i) => margin + i*dataColW + (i===0?2:dataColW-2));
   tableHeader(doc, dataCols, dataColX, y, contentW, margin, 1);
   y += 4;
@@ -467,8 +512,8 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
       `L${r.level}`,
       r.referenceValue.toFixed(3),
       ...instrumentNames.flatMap(n => r.instruments[n]
-        ? [r.instruments[n].value.toFixed(3), r.instruments[n].pctDifference.toFixed(2)+"%", r.instruments[n].passFail]
-        : ["—","—","—"]
+        ? [r.instruments[n].value.toFixed(3), r.instruments[n].difference.toFixed(3), r.instruments[n].pctDifference.toFixed(2)+"%", r.instruments[n].passFail]
+        : ["—","—","—","—"]
       ),
     ];
     row.forEach((val, i) => {
@@ -481,6 +526,21 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+
+  // Signature / Accepted by block
+  y += 8; hLine(doc, y); y += 8;
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); setRgb(doc, DARK);
+  doc.text("Accepted by:", margin, y); y += 8;
+  doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  // Signature line
+  doc.line(margin, y, margin+80, y);
+  doc.line(margin+100, y, margin+130, y);
+  y += 4;
+  doc.setFontSize(7); setRgb(doc, [120,120,120]);
+  doc.text("Signature / Name & Title", margin, y);
+  doc.text("Date", margin+100, y);
+  y += 6;
+
   pdfFooterSections(doc, study, instrumentNames, y, pw, margin, contentW);
 }
 

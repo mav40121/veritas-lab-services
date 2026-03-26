@@ -326,6 +326,9 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
       }))
   );
 
+  const xRange = (results as any).xRange as { min: number; max: number } | undefined;
+  const yRange = (results as any).yRange as { [name: string]: { min: number; max: number } } | undefined;
+
   return (
     <>
       {/* Summary KPIs */}
@@ -334,7 +337,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
           { label: "Sample Levels", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
           { label: "CLIA TEa", value: `±${cliaPercent}%` },
-          { label: "Instruments", value: instrumentNames.length },
+          { label: "Instruments", value: instrumentNames.length + 1 },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
             <div className="text-lg font-bold">{value}</div>
@@ -342,6 +345,30 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
           </CardContent></Card>
         ))}
       </div>
+
+      {/* Result Ranges */}
+      {xRange && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <span className="text-muted-foreground">Reference Range: </span>
+                <span className="font-mono">{xRange.min.toFixed(3)} – {xRange.max.toFixed(3)}</span>
+              </div>
+              {instrumentNames.map((n) => yRange?.[n] && (
+                <div key={n}>
+                  <span className="text-muted-foreground">{n} Range: </span>
+                  <span className="font-mono">{yRange[n].min.toFixed(3)} – {yRange[n].max.toFixed(3)}</span>
+                </div>
+              ))}
+              <div>
+                <span className="text-muted-foreground">Points (Plotted/Total): </span>
+                <span className="font-mono">{levelResults.length}/{levelResults.length}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts */}
       <div className="grid sm:grid-cols-2 gap-5 mb-6">
@@ -402,7 +429,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
         </Card>
       </div>
 
-      {/* Data table */}
+      {/* Data table — with Bias column */}
       <Card className="mb-6">
         <CardHeader className="pb-2"><CardTitle className="text-sm">Level-by-Level Comparison Results</CardTitle></CardHeader>
         <CardContent>
@@ -413,7 +440,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                   <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Level</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Reference</th>
                   {instrumentNames.map((n) => (
-                    <th key={n} colSpan={3} className="text-center py-2 pr-3 text-muted-foreground font-medium border-l border-border/40">{n}</th>
+                    <th key={n} colSpan={4} className="text-center py-2 pr-3 text-muted-foreground font-medium border-l border-border/40">{n}</th>
                   ))}
                 </tr>
                 <tr className="border-b border-border/60 bg-muted/20">
@@ -422,6 +449,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                   {instrumentNames.map((n) => (
                     <>
                       <th key={`${n}-val`} className="text-right py-1 pr-3 text-muted-foreground font-normal border-l border-border/40">Value</th>
+                      <th key={`${n}-bias`} className="text-right py-1 pr-3 text-muted-foreground font-normal">Bias</th>
                       <th key={`${n}-diff`} className="text-right py-1 pr-3 text-muted-foreground font-normal">% Diff</th>
                       <th key={`${n}-pf`} className="text-right py-1 pr-3 text-muted-foreground font-normal">Pass?</th>
                     </>
@@ -437,6 +465,9 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                       <>
                         <td key={`${n}-val`} className="text-right py-2 pr-3 font-mono border-l border-border/20">
                           {r.instruments[n] ? r.instruments[n].value.toFixed(3) : "—"}
+                        </td>
+                        <td key={`${n}-bias`} className="text-right py-2 pr-3 font-mono">
+                          {r.instruments[n] ? r.instruments[n].difference.toFixed(3) : "—"}
                         </td>
                         <td key={`${n}-diff`} className="text-right py-2 pr-3 font-mono">
                           {r.instruments[n]
@@ -460,7 +491,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
         </CardContent>
       </Card>
 
-      {/* Regression summary */}
+      {/* Regression summary — Deming + OLS with CI */}
       <Card className="mb-6">
         <CardHeader className="pb-2"><CardTitle className="text-sm">Regression Analysis</CardTitle></CardHeader>
         <CardContent>
@@ -470,8 +501,9 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                 <tr className="border-b border-border">
                   <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Comparison</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">N</th>
-                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Slope</th>
-                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Intercept</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Slope (95% CI)</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Intercept (95% CI)</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SEE</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Prop. Bias</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">R</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">R²</th>
@@ -482,8 +514,17 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                   <tr key={name} className="border-b border-border/40">
                     <td className="py-2 pr-3 font-medium">{name}</td>
                     <td className="text-right py-2 pr-3 font-mono">{reg.n}</td>
-                    <td className="text-right py-2 pr-3 font-mono">{reg.slope.toFixed(4)}</td>
-                    <td className="text-right py-2 pr-3 font-mono">{reg.intercept.toFixed(4)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">
+                      {reg.slopeLo !== undefined
+                        ? <>{reg.slope.toFixed(4)}<br/><span className="text-muted-foreground">({reg.slopeLo.toFixed(3)} – {reg.slopeHi!.toFixed(3)})</span></>
+                        : reg.slope.toFixed(4)}
+                    </td>
+                    <td className="text-right py-2 pr-3 font-mono">
+                      {reg.interceptLo !== undefined
+                        ? <>{reg.intercept.toFixed(4)}<br/><span className="text-muted-foreground">({reg.interceptLo.toFixed(3)} – {reg.interceptHi!.toFixed(3)})</span></>
+                        : reg.intercept.toFixed(4)}
+                    </td>
+                    <td className="text-right py-2 pr-3 font-mono">{reg.see.toFixed(4)}</td>
                     <td className="text-right py-2 pr-3 font-mono">
                       <span className={Math.abs(reg.proportionalBias) < study.cliaAllowableError ? "text-green-400" : "text-red-400"}>
                         {(reg.proportionalBias * 100).toFixed(2)}%
@@ -495,6 +536,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                 ))}
               </tbody>
             </table>
+            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only)</p>
           </div>
         </CardContent>
       </Card>
