@@ -13,4 +13,4 @@ export const PRICES = {
 
 export const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_QEEjv2dFlbW2fGz8AEf2w1Fcc3JWkmqZ";
 
-export const FRONTEND_URL = process.env.FRONTEND_URL || "https://veritaslabservices.com";
+export const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.veritaslabservices.com";

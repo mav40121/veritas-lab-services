@@ -15,6 +15,7 @@ app.use((req, res, next) => {
     "http://127.0.0.1:5000",
     "https://veritaslabservices.com",
     "https://www.veritaslabservices.com",
+    "https://www.veritaslabservices.com",
     process.env.FRONTEND_URL || "",
   ].filter(Boolean);
   const origin = req.headers.origin || "";
