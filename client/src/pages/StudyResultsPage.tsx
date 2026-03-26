@@ -272,6 +272,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Slope</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Intercept</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Prop. Bias</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">R</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">R²</th>
                 </tr>
               </thead>
@@ -287,6 +288,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
                         {(reg.proportionalBias * 100).toFixed(2)}%
                       </span>
                     </td>
+                    <td className="text-right py-2 pr-3 font-mono">{Math.sqrt(reg.r2).toFixed(4)}</td>
                     <td className="text-right py-2 pr-3 font-mono">{reg.r2.toFixed(4)}</td>
                   </tr>
                 ))}
@@ -471,6 +473,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Slope</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Intercept</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Prop. Bias</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">R</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">R²</th>
                 </tr>
               </thead>
@@ -486,6 +489,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                         {(reg.proportionalBias * 100).toFixed(2)}%
                       </span>
                     </td>
+                    <td className="text-right py-2 pr-3 font-mono">{Math.sqrt(reg.r2).toFixed(4)}</td>
                     <td className="text-right py-2 pr-3 font-mono">{reg.r2.toFixed(4)}</td>
                   </tr>
                 ))}

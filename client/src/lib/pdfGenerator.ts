@@ -323,8 +323,8 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   // Linearity table
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Linearity Summary", y, pw); y += 5;
-  const linCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R²"];
-  const linColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+175];
+  const linCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R", "R²"];
+  const linColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+168, margin+191];
   tableHeader(doc, linCols, linColX, y, contentW, margin);
   y += 4;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
@@ -337,7 +337,8 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
     setRgb(doc, bc);
     doc.text((reg.proportionalBias*100).toFixed(2)+"%", linColX[4], y, { align: "right" });
     setRgb(doc, DARK);
-    doc.text(reg.r2.toFixed(4), linColX[5], y, { align: "right" });
+    doc.text(Math.sqrt(reg.r2).toFixed(4), linColX[5], y, { align: "right" });
+    doc.text(reg.r2.toFixed(4), linColX[6], y, { align: "right" });
     y += 5;
   });
 
@@ -404,8 +405,8 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   // Regression table
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Regression Analysis", y, pw); y += 5;
-  const regCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R²"];
-  const regColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+175];
+  const regCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R", "R²"];
+  const regColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+168, margin+191];
   tableHeader(doc, regCols, regColX, y, contentW, margin);
   y += 4;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
@@ -418,7 +419,8 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
     setRgb(doc, bc);
     doc.text((reg.proportionalBias*100).toFixed(2)+"%", regColX[4], y, { align: "right" });
     setRgb(doc, DARK);
-    doc.text(reg.r2.toFixed(4), regColX[5], y, { align: "right" });
+    doc.text(Math.sqrt(reg.r2).toFixed(4), regColX[5], y, { align: "right" });
+    doc.text(reg.r2.toFixed(4), regColX[6], y, { align: "right" });
     y += 5;
   });
 
