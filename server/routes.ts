@@ -85,15 +85,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── STUDIES ───────────────────────────────────────────────────────────────
   app.get("/api/studies", (req, res) => {
-    // Support optional userId filter via auth header (optional auth)
     const auth = req.headers.authorization;
     if (auth?.startsWith("Bearer ")) {
       try {
         const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-        return res.json(storage.getStudiesByUser(payload.userId));
+        // Return studies owned by this user + shared guest studies (userId=null)
+        const userStudies = storage.getStudiesByUser(payload.userId);
+        const guestStudies = storage.getAllStudies().filter(s => !s.userId);
+        // Merge, deduplicate by id, sort by id desc
+        const all = [...userStudies, ...guestStudies];
+        const seen = new Set<number>();
+        const merged = all.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+        merged.sort((a, b) => b.id - a.id);
+        return res.json(merged);
       } catch {}
     }
-    // Guest: return all studies with no userId (session-scoped — in production would use session)
+    // Guest: return studies with no userId
     res.json(storage.getAllStudies().filter(s => !s.userId));
   });
 

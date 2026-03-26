@@ -1,8 +1,18 @@
-// Auth state — React context backed by in-memory token
-// No localStorage (blocked in sandboxed iframes) — token lives in module state
+// Auth state — token persisted to localStorage so it survives page refreshes
+
+const TOKEN_KEY = "veritas_token";
+const USER_KEY  = "veritas_user";
 
 let _token: string | null = null;
 let _user: AuthUser | null = null;
+
+// Hydrate from localStorage on module load
+try {
+  const stored = localStorage.getItem(TOKEN_KEY);
+  const storedUser = localStorage.getItem(USER_KEY);
+  if (stored) _token = stored;
+  if (storedUser) _user = JSON.parse(storedUser);
+} catch {}
 
 export interface AuthUser {
   id: number;
@@ -15,11 +25,19 @@ export interface AuthUser {
 export function setAuth(token: string, user: AuthUser) {
   _token = token;
   _user = user;
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {}
 }
 
 export function clearAuth() {
   _token = null;
   _user = null;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch {}
 }
 
 export function getToken(): string | null { return _token; }
