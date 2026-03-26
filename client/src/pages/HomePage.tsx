@@ -10,7 +10,7 @@ const services = [
   { icon: BarChart3, title: "Productivity Analysis", desc: "Expert on-site assessment of workflows, staffing, and resources using industry benchmarks. Actionable reports with data-driven recommendations." },
   { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation — tailored to your team's needs." },
   { icon: Award, title: "Interim Lab Director", desc: "Experienced interim Lab Administrative Directors who ensure uninterrupted operations and regulatory compliance during leadership transitions." },
-  { icon: FlaskConical, title: "VeritaCheck EP Analysis", desc: "Our new web-based EP evaluation tool — automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck Free" },
+  { icon: FlaskConical, title: "VeritaCheck — Lab Study Platform", desc: "Our new web-based EP evaluation tool — automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck Free" },
 ];
 
 const stats = [
@@ -136,9 +136,9 @@ export default function HomePage() {
             <FlaskConical size={14} />
             New Tool — VeritaCheck
           </div>
-          <h2 className="font-serif text-3xl font-bold mb-3">EP Analysis, Done Right.</h2>
+          <h2 className="font-serif text-3xl font-bold mb-3">Lab Studies, Done Right.</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6 leading-relaxed">
-            Our new VeritaCheck tool automates calibration verification and method comparison studies — generating CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation. Powered by the same math as EP Evaluator, at a fraction of the cost.
+            Our new VeritaCheck tool automates calibration verification and method comparison studies — generating CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation. Automated calibration verification and method comparison — CLIA-compliant reports in under 60 seconds.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">

@@ -173,7 +173,7 @@ export default function ServicesPage() {
                     </div>
                     <Badge className="text-xs bg-primary text-primary-foreground">New Tool</Badge>
                   </div>
-                  <h2 className="font-serif text-xl font-bold mb-2">VeritaCheck — EP Analysis Platform</h2>
+                  <h2 className="font-serif text-xl font-bold mb-2">VeritaCheck — Lab Study Platform</h2>
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4">Automated calibration verification and method comparison studies with CLIA-compliant PDF reports. Scatter plots, percent recovery charts, pass/fail evaluation — all in under 60 seconds.</p>
                   <ul className="space-y-1.5">
                     {["Calibration verification (linearity)", "Method comparison (up to 3 instruments)", "Slope, intercept, R², proportional bias", "CLIA TEa presets for major analytes", "Professional PDF report — printable and signable"].map(d => (

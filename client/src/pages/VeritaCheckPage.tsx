@@ -55,8 +55,8 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
 }
 
 const plans = [
-  { name: "Per Study", price: "$9", unit: "per report", description: "Pay only when you need a study.", features: ["Single EP study run", "Full PDF report", "Cal ver + method comparison", "CLIA pass/fail evaluation"], cta: "Buy a Study", highlight: false },
-  { name: "Annual Lab", price: "$149", unit: "per year", description: "Unlimited studies for your lab.", features: ["Unlimited EP studies", "All PDF reports", "Multi-instrument comparison", "Study history dashboard", "Priority support"], cta: "Subscribe — Best Value", highlight: true },
+  { name: "Per Study", price: "$9", unit: "per report", description: "Pay only when you need a study.", features: ["Single study run", "Full PDF report", "Cal ver + method comparison", "CLIA pass/fail evaluation"], cta: "Buy a Study", highlight: false },
+  { name: "Annual Lab", price: "$149", unit: "per year", description: "Unlimited studies for your lab.", features: ["Unlimited studies", "All PDF reports", "Multi-instrument comparison", "Study history dashboard", "Priority support"], cta: "Subscribe — Best Value", highlight: true },
 ];
 
 export default function VeritaCheckPage() {
@@ -230,9 +230,9 @@ export default function VeritaCheckPage() {
         <div className="container-default py-14">
           <div className="flex items-center gap-2 mb-4">
             <FlaskConical size={20} className="text-primary" />
-            <Badge className="bg-primary/10 text-primary border-0">VeritaCheck EP Analysis</Badge>
+            <Badge className="bg-primary/10 text-primary border-0">VeritaCheck</Badge>
           </div>
-          <h1 className="font-serif text-4xl font-bold mb-3">EP Analysis, Done Right.</h1>
+          <h1 className="font-serif text-4xl font-bold mb-3">Lab Studies, Done Right.</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             Automated calibration verification and method comparison — CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation. Under 60 seconds.
           </p>
@@ -243,7 +243,7 @@ export default function VeritaCheckPage() {
       <section className="section-padding border-b border-border">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-serif text-2xl font-bold">New EP Study</h2>
+            <h2 className="font-serif text-2xl font-bold">New Study</h2>
             {!isLoggedIn && (
               <p className="text-xs text-muted-foreground">
                 <a href="/#/login" className="text-primary hover:underline">Sign in</a> to save study history
@@ -378,7 +378,7 @@ export default function VeritaCheckPage() {
                 }}>
                   <FlaskConical size={13} className="mr-1.5" />Load Demo Data
                 </Button>
-                <span className="text-xs text-muted-foreground">Milford creatinine example from EP Evaluator</span>
+                <span className="text-xs text-muted-foreground">Milford creatinine calibration verification example</span>
               </div>
             </TabsContent>
           </Tabs>

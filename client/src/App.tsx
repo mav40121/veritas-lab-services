@@ -24,12 +24,12 @@ function SiteFooter() {
         <div className="grid sm:grid-cols-3 gap-8 mb-8">
           <div>
             <div className="font-serif font-bold text-base mb-2">Veritas Lab Services, LLC</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting — leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck EP analysis.</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting — leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck study analysis.</p>
           </div>
           <div>
             <div className="font-semibold text-sm mb-3">Services</div>
             <ul className="space-y-1.5 text-sm text-muted-foreground">
-              {["Leadership Coaching","Inspection Readiness","Productivity Analysis","Regulatory Preparedness","VeritaCheck EP Analysis"].map(s => <li key={s}>{s}</li>)}
+              {["Leadership Coaching","Inspection Readiness","Productivity Analysis","Regulatory Preparedness","VeritaCheck Study Analysis"].map(s => <li key={s}>{s}</li>)}
             </ul>
           </div>
           <div>

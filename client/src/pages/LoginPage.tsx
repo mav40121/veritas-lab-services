@@ -52,7 +52,7 @@ export default function LoginPage() {
             <FlaskConical size={22} className="text-primary" />
           </div>
           <h1 className="font-serif text-2xl font-bold">VeritaCheck Account</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to save and access your EP studies</p>
+          <p className="text-sm text-muted-foreground mt-1">Sign in to save and access your studies</p>
         </div>
         <Card>
           <CardContent className="pt-5">

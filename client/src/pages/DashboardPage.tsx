@@ -34,7 +34,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-xl font-bold">Study Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            All saved EP evaluation studies
+            All saved studies
           </p>
         </div>
         <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -77,7 +77,7 @@ export default function Dashboard() {
           <FlaskConical size={32} className="text-muted-foreground mx-auto mb-3" />
           <h3 className="font-semibold mb-1">No studies yet</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Run your first EP evaluation study to get started.
+            Run your first study to get started.
           </p>
           <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <Link href="/study/new">Start a Study</Link>
