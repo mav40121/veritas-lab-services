@@ -214,7 +214,7 @@ function pdfHeader(doc: jsPDF, study: Study, pw: number, margin: number): number
   doc.text(`Instrument: ${study.instrument}`, pw-margin, y+5, { align: "right" });
   // Title on its own line below
   y += 10; hLine(doc, y); y += 5;
-  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison";
+  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison";
   doc.setFontSize(12); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text(`${typeLabel} — ${study.testName}`, pw/2, y, { align: "center" });
   y += 7; hLine(doc, y); y += 5;
@@ -294,7 +294,7 @@ function pdfSupportingPage(doc: jsPDF, study: Study, instrumentNames: string[], 
   y += 5;
 
   const specs = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     ["CLIA Total Allowable Error", `±${cliaP}%`],
     ["CLIA CFR Reference", cfrCitation],
@@ -355,7 +355,7 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
 
   // Section title
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Calibration Verification", margin, y); y += 6;
+  doc.text("Calibration Verification / Linearity", margin, y); y += 6;
 
   // Charts
   const chartW = (contentW-6)/2, chartH = 55;
@@ -439,7 +439,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   hLine(doc, y); y += 5;
 
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Method Comparison", margin, y); y += 6;
+  doc.text("Correlation / Method Comparison", margin, y); y += 6;
 
   // Charts: correlation scatter + Bland-Altman
   const chartW = (contentW-6)/2, chartH = 55;

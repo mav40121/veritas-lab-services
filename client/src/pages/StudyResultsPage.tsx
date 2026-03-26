@@ -48,7 +48,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -113,7 +113,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"],
             ["CLIA Total Allowable Error", `±${cliaPercent}%`],
             ["Analyst", study.analyst],
             ["Date", study.date],

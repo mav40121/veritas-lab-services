@@ -269,8 +269,8 @@ export default function VeritaCheckPage() {
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cal_ver">Calibration Verification</SelectItem>
-                          <SelectItem value="method_comparison">Method Comparison</SelectItem>
+                          <SelectItem value="cal_ver">Calibration Verification / Linearity</SelectItem>
+                          <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
