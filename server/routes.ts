@@ -25,6 +25,17 @@ function authMiddleware(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // ── ADMIN ────────────────────────────────────────────────────────────────
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || "veritas-admin-2026";
+  app.post("/api/admin/set-plan", (req, res) => {
+    const { secret, userId, plan, credits } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const planCredits = plan === "annual" ? 99999 : (credits ?? 0);
+    storage.updateUserPlan(Number(userId), plan, planCredits);
+    const user = storage.getUserById(Number(userId));
+    res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
+  });
+
   // ── HEALTH CHECK ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "veritas-lab-services", timestamp: new Date().toISOString() });
