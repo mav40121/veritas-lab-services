@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, ChevronRight } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +16,8 @@ import { calculateStudy, type DataPoint } from "@/lib/calculations";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
+
+const API_BASE = "https://veritas-backend-production-3276.up.railway.app";
 
 const CLIA_PRESETS = [
   { label: "Creatinine (±0.3 mg/dL or 7.5%)", value: 0.075, cfr: "CFR 493.931" },
@@ -42,8 +45,47 @@ const plans = [
 
 export default function VeritaCheckPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
   const { isLoggedIn } = useAuth();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
+
+  // Check URL params for payment result after Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const payment = params.get("payment");
+    if (payment === "success") {
+      setPaymentStatus("success");
+      // Refresh user data to pick up new plan/credits
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    } else if (payment === "cancelled") {
+      setPaymentStatus("cancelled");
+    }
+  }, [search]);
+
+  const handleBuy = async (priceType: "perStudy" | "annual") => {
+    if (!isLoggedIn) {
+      toast({ title: "Sign in required", description: "Please create a free account to purchase.", variant: "destructive" });
+      navigate("/login");
+      return;
+    }
+    setCheckoutLoading(priceType);
+    try {
+      const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ priceType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Checkout failed");
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: "Payment error", description: err.message, variant: "destructive" });
+      setCheckoutLoading(null);
+    }
+  };
 
   const [testName, setTestName] = useState("");
   const [analyst, setAnalyst] = useState("");
@@ -270,27 +312,55 @@ export default function VeritaCheckPage() {
             <DollarSign size={18} className="text-primary" />
             <h2 className="font-serif text-2xl font-bold">Simple Pricing</h2>
           </div>
-          <p className="text-muted-foreground text-center mb-10">No hidden fees. Cancel anytime.</p>
+          <p className="text-muted-foreground text-center mb-6">No hidden fees. Cancel anytime.</p>
+
+          {/* Payment result banners */}
+          {paymentStatus === "success" && (
+            <Alert className="mb-6 max-w-2xl mx-auto border-green-500/30 bg-green-500/10">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-700 dark:text-green-400 font-medium">
+                Payment successful — your account has been updated. Thank you!
+              </AlertDescription>
+            </Alert>
+          )}
+          {paymentStatus === "cancelled" && (
+            <Alert className="mb-6 max-w-2xl mx-auto border-yellow-500/30 bg-yellow-500/10">
+              <XCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                Payment cancelled — no charge was made.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
-            {plans.map(plan => (
-              <Card key={plan.name} className={`relative border-2 ${plan.highlight ? "border-primary bg-primary/5" : "border-border"}`}>
-                {plan.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><Badge className="bg-primary text-primary-foreground">Most Popular</Badge></div>}
-                <CardContent className="p-6">
-                  <h3 className="font-bold text-lg mb-1">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1 mb-2">
-                    <span className="text-3xl font-bold">{plan.price}</span>
-                    <span className="text-sm text-muted-foreground">/{plan.unit.split("per ")[1]}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                  <ul className="space-y-2 mb-5">
-                    {plan.features.map(f => <li key={f} className="flex items-center gap-2 text-sm"><CheckCircle2 size={13} className="text-primary shrink-0" />{f}</li>)}
-                  </ul>
-                  <Button className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`} variant={plan.highlight ? "default" : "outline"}>
-                    {plan.cta}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+            {plans.map(plan => {
+              const priceType = plan.name === "Per Study" ? "perStudy" : "annual";
+              const isLoading = checkoutLoading === priceType;
+              return (
+                <Card key={plan.name} className={`relative border-2 ${plan.highlight ? "border-primary bg-primary/5" : "border-border"}`}>
+                  {plan.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><Badge className="bg-primary text-primary-foreground">Most Popular</Badge></div>}
+                  <CardContent className="p-6">
+                    <h3 className="font-bold text-lg mb-1">{plan.name}</h3>
+                    <div className="flex items-baseline gap-1 mb-2">
+                      <span className="text-3xl font-bold">{plan.price}</span>
+                      <span className="text-sm text-muted-foreground">/{plan.unit.split("per ")[1]}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                    <ul className="space-y-2 mb-5">
+                      {plan.features.map(f => <li key={f} className="flex items-center gap-2 text-sm"><CheckCircle2 size={13} className="text-primary shrink-0" />{f}</li>)}
+                    </ul>
+                    <Button
+                      className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
+                      variant={plan.highlight ? "default" : "outline"}
+                      disabled={isLoading || checkoutLoading !== null}
+                      onClick={() => handleBuy(priceType)}
+                    >
+                      {isLoading ? <><Loader2 size={14} className="mr-2 animate-spin" />Redirecting…</> : plan.cta}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
           <p className="text-center text-xs text-muted-foreground mt-6">
             Questions? <a href="/#/contact" className="text-primary hover:underline">Contact us</a> — we're happy to help.

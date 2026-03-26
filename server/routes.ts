@@ -1,8 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
+import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
 
 const JWT_SECRET = process.env.JWT_SECRET || "veritas-lab-services-secret-2026";
@@ -108,6 +109,99 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     storage.createContactMessage(parsed.data);
     res.json({ success: true });
+  });
+
+  // ── STRIPE ────────────────────────────────────────────────────────────────
+  // Create a checkout session for per-study ($9) or annual ($149/yr)
+  app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
+    if (!stripe) return res.status(503).json({ error: "Payments not configured" });
+    const { priceType } = req.body; // "perStudy" | "annual"
+    if (!priceType || !PRICES[priceType as keyof typeof PRICES]) {
+      return res.status(400).json({ error: "Invalid price type" });
+    }
+    const user = storage.getUserById(req.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const priceId = PRICES[priceType as keyof typeof PRICES];
+    const isSubscription = priceType === "annual";
+    const successUrl = `${FRONTEND_URL}/#/veritacheck?payment=success&type=${priceType}`;
+    const cancelUrl = `${FRONTEND_URL}/#/veritacheck?payment=cancelled`;
+
+    try {
+      // Reuse or create Stripe customer
+      let customerId = user.stripeCustomerId || undefined;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.name || undefined,
+          metadata: { userId: String(user.id) },
+        });
+        customerId = customer.id;
+        storage.updateUserStripe(user.id, { stripeCustomerId: customerId });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: isSubscription ? "subscription" : "payment",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: { userId: String(user.id), priceType },
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Stripe checkout error:", err.message);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  });
+
+  // Stripe webhook — handle checkout.session.completed, subscription events
+  app.post("/api/stripe/webhook", async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: "Payments not configured" });
+    const sig = req.headers["stripe-signature"] as string;
+    let event: any;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
+    } catch (err: any) {
+      console.error("Webhook signature error:", err.message);
+      return res.status(400).json({ error: "Invalid signature" });
+    }
+
+    try {
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as any;
+        const userId = parseInt(session.metadata?.userId || "0");
+        const priceType = session.metadata?.priceType;
+        if (userId) {
+          if (priceType === "perStudy") {
+            // Add 1 study credit
+            storage.addStudyCredits(userId, 1);
+          } else if (priceType === "annual" && session.subscription) {
+            // Activate annual plan
+            storage.updateUserStripe(userId, {
+              stripeSubscriptionId: session.subscription,
+              plan: "annual",
+            });
+          }
+        }
+      } else if (event.type === "customer.subscription.deleted") {
+        const sub = event.data.object as any;
+        const user = storage.getUserByStripeCustomerId(sub.customer);
+        if (user) {
+          storage.updateUserStripe(user.id, { stripeSubscriptionId: null, plan: "free" });
+        }
+      } else if (event.type === "invoice.payment_failed") {
+        // Log but don't downgrade immediately — Stripe will retry
+        const invoice = event.data.object as any;
+        console.warn("Payment failed for customer:", invoice.customer);
+      }
+    } catch (err: any) {
+      console.error("Webhook processing error:", err.message);
+      return res.status(500).json({ error: "Webhook processing failed" });
+    }
+
+    res.json({ received: true });
   });
 
   return httpServer;

@@ -8,8 +8,10 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
-  plan: text("plan").notNull().default("free"), // "free" | "annual"
+  plan: text("plan").notNull().default("free"), // "free" | "per_study" | "annual"
   studyCredits: integer("study_credits").notNull().default(0),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: text("created_at").notNull(),
 });
 

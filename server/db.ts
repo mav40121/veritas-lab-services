@@ -5,6 +5,12 @@ import * as schema from "@shared/schema";
 const sqlite = new Database("veritas.db");
 export const db = drizzle(sqlite, { schema });
 
+// Safely add new columns if they don't exist
+const existingCols = sqlite.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+const colNames = existingCols.map((c) => c.name);
+if (!colNames.includes("stripe_customer_id")) sqlite.exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
+if (!colNames.includes("stripe_subscription_id")) sqlite.exec("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT");
+
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -13,8 +19,12 @@ sqlite.exec(`
     name TEXT NOT NULL,
     plan TEXT NOT NULL DEFAULT 'free',
     study_credits INTEGER NOT NULL DEFAULT 0,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
     created_at TEXT NOT NULL
   );
+
+
 
   CREATE TABLE IF NOT EXISTS studies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
