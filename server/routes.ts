@@ -27,11 +27,10 @@ function authMiddleware(req: any, res: any, next: any) {
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // ── ADMIN ────────────────────────────────────────────────────────────────
   const ADMIN_SECRET = process.env.ADMIN_SECRET || "veritas-admin-2026";
-  app.get("/api/admin/users", (req, res) => {
-    const secret = req.query.secret as string;
+  app.post("/api/admin/users", (req, res) => {
+    const { secret } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const allStudies = storage.getAllStudies();
-    // Return users 1-20 that exist
     const userList = [];
     for (let i = 1; i <= 20; i++) {
       const u = storage.getUserById(i);
