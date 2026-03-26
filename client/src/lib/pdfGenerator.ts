@@ -253,21 +253,17 @@ function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
   doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });
 }
 
-// ─── Shared: signature block — anchored near bottom of current page ───────────
-function pdfSignatureBlock(doc: jsPDF, study: Study, _y: number, pw: number, margin: number, contentW: number) {
-  // Always anchor to a fixed position near the bottom of the current page
-  const pageH = doc.internal.pageSize.height;
-  const sigY = pageH - 48; // fixed distance from bottom
-  hLine(doc, sigY);
-  let y = sigY + 8;
+// ─── Shared: signature block — placed inline at given Y position ──────────────
+function pdfSignatureBlock(doc: jsPDF, study: Study, y: number, pw: number, margin: number, contentW: number): number {
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Accepted by:", margin, y); y += 10;
+  doc.text("Accepted by:", margin, y); y += 9;
+  // Signature line (left two-thirds) + Date line (right third)
   hLine(doc, y, margin, margin + contentW * 0.55);
-  hLine(doc, y, pw - margin - contentW * 0.3, pw - margin);
+  hLine(doc, y, pw - margin - contentW * 0.28, pw - margin);
   doc.setFontSize(7.5); setRgb(doc, MUTED); doc.setFont("helvetica","normal");
   doc.text("Signature / Name & Title", margin, y + 4);
-  doc.text("Date", pw - margin - contentW * 0.3, y + 4);
-  pdfPageFooter(doc, pw, margin);
+  doc.text("Date", pw - margin - contentW * 0.28, y + 4);
+  return y + 12;
 }
 
 // ─── Shared: supporting data page (page 2) ───────────────────────────────────
@@ -353,6 +349,10 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   const instrumentNames: string[] = JSON.parse(study.instruments);
   let y = pdfHeader(doc, study, pw, margin);
 
+  // Signature block at top — before data, just like EP Evaluator
+  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
+  hLine(doc, y); y += 5;
+
   // Section title
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text("Calibration Verification", margin, y); y += 6;
@@ -422,7 +422,8 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
-  pdfFooterSections(doc, study, instrumentNames, y, pw, margin, contentW);
+  pdfPageFooter(doc, pw, margin);
+  pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
 }
 
 // ─── PDF: METHOD COMPARISON ───────────────────────────────────────────────────
@@ -432,6 +433,10 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   const xRange = (results as any).xRange as { min: number; max: number } | undefined;
   const yRange = (results as any).yRange as { [name: string]: { min: number; max: number } } | undefined;
   let y = pdfHeader(doc, study, pw, margin);
+
+  // Signature block at top — before data, just like EP Evaluator
+  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
+  hLine(doc, y); y += 5;
 
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text("Method Comparison", margin, y); y += 6;
@@ -594,8 +599,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
-
-  pdfSignatureBlock(doc, study, y, pw, margin, contentW);
+  pdfPageFooter(doc, pw, margin);
   pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
 }
 
