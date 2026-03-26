@@ -50,3 +50,13 @@ const existingCols = sqlite.prepare("PRAGMA table_info(users)").all() as { name:
 const colNames = existingCols.map((c) => c.name);
 if (!colNames.includes("stripe_customer_id")) sqlite.exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
 if (!colNames.includes("stripe_subscription_id")) sqlite.exec("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT");
+
+// Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
+if (process.env.SEED_USER_PLAN) {
+  const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
+  if (seedEmail && seedPlan) {
+    const credits = parseInt(seedCredits || "0");
+    sqlite.prepare("UPDATE users SET plan = ?, study_credits = ? WHERE email = ?").run(seedPlan, credits, seedEmail.toLowerCase());
+    console.log(`[seed] Set ${seedEmail} to plan=${seedPlan} credits=${credits}`);
+  }
+}
