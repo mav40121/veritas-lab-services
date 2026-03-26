@@ -391,9 +391,9 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
     y += 5;
   });
 
-  y += 3; hLine(doc, y); y += 6;
+  // Always start statistical analysis on a new page
+  doc.addPage(); y = 20;
 
-  // Statistical analysis table
   sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
   const cols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
   const colW = contentW / cols.length;
@@ -553,9 +553,9 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
     y += 5;
   });
 
-  y += 3; hLine(doc, y); y += 6;
+  // Always start level-by-level data on a new page
+  doc.addPage(); y = 20;
 
-  // Level-by-level data table — now includes Bias (Y-X) column
   sectionTitle(doc, "Level-by-Level Comparison Results", y, pw); y += 5;
   // Fixed column positions: Level | Ref | Value | Bias | % Diff | Pass?
   const dataColX2 = [margin, margin+20, margin+60, margin+100, margin+135, margin+168];
