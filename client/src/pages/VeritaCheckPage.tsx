@@ -265,8 +265,8 @@ export default function VeritaCheckPage() {
                         {dataPoints.map((dp, idx) => (
                           <tr key={idx} className="border-b border-border/50">
                             <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
-                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" /></td>
-                            {instrumentNames.map(n => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" /></td>)}
+                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" tabIndex={100 + idx} /></td>
+                            {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" tabIndex={200 + colIdx * 100 + idx} /></td>)}
                           </tr>
                         ))}
                       </tbody>
