@@ -203,19 +203,21 @@ function drawBlandAltman(
 
 // ─── Shared: document header ──────────────────────────────────────────────────
 function pdfHeader(doc: jsPDF, study: Study, pw: number, margin: number): number {
-  let y = 15;
-  doc.setFontSize(20); doc.setFont("helvetica","bold"); setRgb(doc, TEAL);
+  let y = 14;
+  // Left: VeritaCheck logo
+  doc.setFontSize(18); doc.setFont("helvetica","bold"); setRgb(doc, TEAL);
   doc.text("VeritaCheck®", margin, y);
-  doc.setFontSize(8); doc.setFont("helvetica","normal"); setRgb(doc, MUTED);
+  doc.setFontSize(7.5); doc.setFont("helvetica","normal"); setRgb(doc, MUTED);
   doc.text("by Veritas Lab Services · veritaslabservices.com", margin, y+5);
-
-  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison";
-  doc.setFontSize(14); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text(`${typeLabel} — ${study.testName}`, pw-margin, y, { align: "right" });
+  // Right: instrument only on top line
   doc.setFontSize(8); doc.setFont("helvetica","normal"); setRgb(doc, MUTED);
   doc.text(`Instrument: ${study.instrument}`, pw-margin, y+5, { align: "right" });
-
-  y += 10; hLine(doc, y); y += 6;
+  // Title on its own line below
+  y += 10; hLine(doc, y); y += 5;
+  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison";
+  doc.setFontSize(12); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text(`${typeLabel} — ${study.testName}`, pw/2, y, { align: "center" });
+  y += 7; hLine(doc, y); y += 5;
   return y;
 }
 
@@ -318,7 +320,7 @@ function pdfFooterSections(doc: jsPDF, study: Study, instrumentNames: string[], 
   hLine(doc, pageH-12);
   doc.setFontSize(6.5); setRgb(doc, MUTED);
   doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
-  doc.text("Page 1", pw-margin, pageH-8, { align: "right" });
+  doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });
 }
 
 // ─── PDF: CALIBRATION VERIFICATION ───────────────────────────────────────────
@@ -439,26 +441,29 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
     ["Std Dev Diffs:", firstInstBA ? firstInstBA.sdDiff.toFixed(3) : "—"],
     ["Points (Plotted/Total):", `${results.levelResults.length}/${results.levelResults.length}`],
   ];
-  const col1X = margin, col2X = margin + 45, col3X = margin + 100, col4X = margin + 145;
-  supportStats.forEach((pair, i) => {
-    const x = i < 3 ? col1X : col3X;
-    const vx = i < 3 ? col2X : col4X;
-    const row = i < 3 ? i : i - 3;
-    doc.setFont("helvetica","bold"); doc.text(pair[0], x, y + row*5);
-    doc.setFont("helvetica","normal"); doc.text(pair[1], vx, y + row*5);
-  });
-  // Result ranges
-  if (xRange) {
-    doc.setFont("helvetica","bold"); doc.text("X Result Range:", col3X, y);
-    doc.setFont("helvetica","normal"); doc.text(`${xRange.min.toFixed(3)} to ${xRange.max.toFixed(3)}`, col4X, y);
-    instrumentNames.forEach((n, i) => {
-      if (yRange?.[n]) {
-        doc.setFont("helvetica","bold"); doc.text(`${n} Range:`, col3X, y + (i+1)*5);
-        doc.setFont("helvetica","normal"); doc.text(`${yRange[n].min.toFixed(3)} to ${yRange[n].max.toFixed(3)}`, col4X, y + (i+1)*5);
-      }
-    });
+  // Build all stats into two columns of 3 rows each
+  const allStats = [
+    ...supportStats,
+    ...(xRange ? [["X Result Range:", `${xRange.min.toFixed(3)} to ${xRange.max.toFixed(3)}`]] : []),
+    ...instrumentNames.filter(n => yRange?.[n]).map(n => [`${n} Range:`, `${yRange![n].min.toFixed(3)} to ${yRange![n].max.toFixed(3)}`]),
+  ];
+  const colLabelX = margin, colValX = margin + 48, col2LabelX = margin + 100, col2ValX = margin + 148;
+  const half = Math.ceil(allStats.length / 2);
+  for (let i = 0; i < half; i++) {
+    const left = allStats[i];
+    const right = allStats[i + half];
+    doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+    doc.text(left[0], colLabelX, y + i*5);
+    doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+    doc.text(left[1], colValX, y + i*5);
+    if (right) {
+      doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+      doc.text(right[0], col2LabelX, y + i*5);
+      doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+      doc.text(right[1], col2ValX, y + i*5);
+    }
   }
-  y += 20; doc.setFontSize(9);
+  y += half * 5 + 4; doc.setFontSize(9);
 
   // Regression table — Deming + OLS with CIs
   hLine(doc, y); y += 4;
@@ -525,7 +530,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   sectionTitle(doc, "Level-by-Level Comparison Results", y, pw); y += 5;
   // Fixed column positions: Level | Ref | Value | Bias | % Diff | Pass?
   const dataColX2 = [margin, margin+20, margin+60, margin+100, margin+135, margin+168];
-  const dataHeaders2 = ["Level", "Reference", ...instrumentNames.flatMap(n => ["Value", "Bias", "% Diff", "Pass?"])];
+  const dataHeaders2 = ["Level", "Reference", ...instrumentNames.flatMap(_ => ["Value", "Bias", "% Diff", "Pass?"])];
   // Print instrument name as sub-header spanning value/bias/pctdiff/pass columns
   doc.setFontSize(7); doc.setFont("helvetica","bold"); setRgb(doc, [100,100,100]);
   instrumentNames.forEach((n) => { doc.text(n, dataColX2[2], y, { align: "left" }); });
@@ -565,21 +570,6 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
-
-  // Signature / Accepted by block — page break if needed
-  if (y > 240) { doc.addPage(); y = 20; }
-  y += 8; hLine(doc, y); y += 8;
-  doc.setFont("helvetica","bold"); doc.setFontSize(9); setRgb(doc, DARK);
-  doc.text("Accepted by:", margin, y); y += 8;
-  doc.setFont("helvetica","normal"); doc.setFontSize(9);
-  // Signature line
-  doc.line(margin, y, margin+80, y);
-  doc.line(margin+100, y, margin+130, y);
-  y += 4;
-  doc.setFontSize(7); setRgb(doc, [120,120,120]);
-  doc.text("Signature / Name & Title", margin, y);
-  doc.text("Date", margin+100, y);
-  y += 6;
 
   pdfFooterSections(doc, study, instrumentNames, y, pw, margin, contentW);
 }
