@@ -253,12 +253,15 @@ function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
   doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });
 }
 
-// ─── Shared: signature block (page 1) ─────────────────────────────────────────
-function pdfSignatureBlock(doc: jsPDF, study: Study, y: number, pw: number, margin: number, contentW: number) {
-  hLine(doc, y); y += 8;
+// ─── Shared: signature block — anchored near bottom of current page ───────────
+function pdfSignatureBlock(doc: jsPDF, study: Study, _y: number, pw: number, margin: number, contentW: number) {
+  // Always anchor to a fixed position near the bottom of the current page
+  const pageH = doc.internal.pageSize.height;
+  const sigY = pageH - 48; // fixed distance from bottom
+  hLine(doc, sigY);
+  let y = sigY + 8;
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text("Accepted by:", margin, y); y += 10;
-  // Signature line (long) + Date line (right)
   hLine(doc, y, margin, margin + contentW * 0.55);
   hLine(doc, y, pw - margin - contentW * 0.3, pw - margin);
   doc.setFontSize(7.5); setRgb(doc, MUTED); doc.setFont("helvetica","normal");
@@ -561,7 +564,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   y += 4;
   doc.setFont("helvetica","normal");
   const pageH = 279; // letter page height mm
-  const footerH = 20; // space reserved for footer
+  const footerH = 68; // reserve space for eval section + signature + footer
   results.levelResults.forEach((r, ri) => {
     // Page break if needed
     if (y > pageH - footerH) {
@@ -587,7 +590,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
       else setRgb(doc, DARK);
       doc.text(val, dataColX2[i], y, { align: i===0?"left":"right" });
     });
-    y += 5;
+    y += 4.2;
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
