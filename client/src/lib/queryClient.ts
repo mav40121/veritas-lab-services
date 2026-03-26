@@ -1,7 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { authHeaders } from "./auth";
 
-const RAILWAY_URL = "https://radiant-quietude-production.up.railway.app";
+const RAILWAY_URL = "https://veritaslabservices.com";
 const API_BASE = "__PORT_5000__".startsWith("__") ? RAILWAY_URL : "__PORT_5000__";
 
 async function throwIfResNotOk(res: Response) {
