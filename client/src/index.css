@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Veritas Lab Services — Clinical Authority palette
+       Deep navy surfaces, warm slate text, teal-green accent.
+       Authoritative, trustworthy, professional healthcare. */
+    --background: 220 25% 97%;
+    --foreground: 220 30% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 10%;
+
+    --primary: 182 65% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 15% 93%;
+    --secondary-foreground: 220 20% 30%;
+
+    --muted: 220 15% 94%;
+    --muted-foreground: 220 10% 48%;
+
+    --accent: 182 65% 30%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 182 65% 30%;
+
+    --radius: 0.5rem;
+
+    /* Semantic */
+    --color-pass: 142 55% 36%;
+    --color-fail: 0 72% 48%;
+    --color-navy: 220 50% 15%;
+    --color-navy-light: 220 40% 22%;
+
+    /* Charts */
+    --chart-1: 182 65% 30%;
+    --chart-2: 210 75% 55%;
+    --chart-3: 142 55% 40%;
+    --chart-4: 38 85% 50%;
+    --chart-5: 280 55% 60%;
+  }
+
+  .dark {
+    --background: 220 28% 7%;
+    --foreground: 210 20% 90%;
+    --card: 220 25% 10%;
+    --card-foreground: 210 20% 90%;
+    --popover: 220 25% 10%;
+    --popover-foreground: 210 20% 90%;
+    --primary: 182 55% 44%;
+    --primary-foreground: 220 28% 7%;
+    --secondary: 220 20% 16%;
+    --secondary-foreground: 210 15% 70%;
+    --muted: 220 20% 14%;
+    --muted-foreground: 210 10% 50%;
+    --accent: 182 55% 44%;
+    --accent-foreground: 220 28% 7%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 210 20% 90%;
+    --border: 220 18% 18%;
+    --input: 220 18% 18%;
+    --ring: 182 55% 44%;
+    --color-pass: 142 50% 44%;
+    --color-fail: 0 65% 55%;
+    --color-navy: 220 35% 12%;
+    --color-navy-light: 220 30% 18%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Serif Display', 'Georgia', serif;
+    line-height: 1.15;
+  }
+}
+
+@layer utilities {
+  .navy-section {
+    background: hsl(var(--color-navy));
+    color: hsl(210 20% 90%);
+  }
+  .pass-badge {
+    @apply text-xs font-semibold px-2 py-0.5 rounded-full;
+    background: hsl(var(--color-pass) / 0.12);
+    color: hsl(var(--color-pass));
+    border: 1px solid hsl(var(--color-pass) / 0.3);
+  }
+  .fail-badge {
+    @apply text-xs font-semibold px-2 py-0.5 rounded-full;
+    background: hsl(var(--color-fail) / 0.12);
+    color: hsl(var(--color-fail));
+    border: 1px solid hsl(var(--color-fail) / 0.3);
+  }
+  .section-padding {
+    @apply py-16 sm:py-24;
+  }
+  .container-default {
+    @apply max-w-6xl mx-auto px-4 sm:px-6;
+  }
+}
