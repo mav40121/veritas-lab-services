@@ -200,7 +200,7 @@ export default function VeritaCheckPage() {
   const saveMutation = useMutation({
     mutationFn: async (study: InsertStudy) => {
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
-      return fetch("/api/studies", { method: "POST", headers, body: JSON.stringify(study) });
+      return fetch(`${API_BASE}/api/studies`, { method: "POST", headers, body: JSON.stringify(study) });
     },
     onSuccess: async (res) => {
       const data = await res.json();
