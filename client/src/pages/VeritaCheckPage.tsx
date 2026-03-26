@@ -17,7 +17,7 @@ import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
 
-const API_BASE = "https://veritas-backend-production-3276.up.railway.app";
+const API_BASE = "https://radiant-quietude-production.up.railway.app";
 
 const CLIA_PRESETS = [
   { label: "Creatinine (±0.3 mg/dL or 7.5%)", value: 0.075, cfr: "CFR 493.931" },
