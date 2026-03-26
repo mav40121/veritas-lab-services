@@ -2,7 +2,10 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@shared/schema";
 
-const sqlite = new Database("veritas.db");
+// Use /data volume if available (Railway persistent volume), otherwise local
+const DB_PATH = process.env.DB_PATH || (require('fs').existsSync('/data') ? '/data/veritas.db' : 'veritas.db');
+console.log(`[db] Using database at: ${DB_PATH}`);
+const sqlite = new Database(DB_PATH);
 export const db = drizzle(sqlite, { schema });
 
 // Step 1: Create tables if they don't exist (safe on fresh or existing DB)
