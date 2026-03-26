@@ -1,491 +1,497 @@
 import jsPDF from "jspdf";
 import type { Study } from "@shared/schema";
-import type { StudyResults } from "./calculations";
+import type { StudyResults, CalVerResults, MethodCompResults } from "./calculations";
 
-// Colors
-const TEAL = [14, 165, 150] as const; // #0EA596
-const DARK = [20, 20, 30] as const;
-const MUTED = [100, 110, 120] as const;
-const PASS_GREEN = [40, 167, 80] as const;
-const FAIL_RED = [200, 50, 60] as const;
-const LIGHT_GRAY = [240, 242, 245] as const;
-const MID_GRAY = [210, 215, 220] as const;
+// ─── Palette ──────────────────────────────────────────────────────────────────
+const TEAL        = [14, 165, 150]  as const;
+const DARK        = [20, 20, 30]    as const;
+const MUTED       = [100, 110, 120] as const;
+const PASS_GREEN  = [40, 167, 80]   as const;
+const FAIL_RED    = [200, 50, 60]   as const;
+const LIGHT_GRAY  = [240, 242, 245] as const;
+const MID_GRAY    = [210, 215, 220] as const;
 const BORDER_GRAY = [200, 205, 210] as const;
+const WHITE       = [255, 255, 255] as const;
 
-function setRgb(doc: jsPDF, color: readonly [number, number, number]) {
-  doc.setTextColor(color[0], color[1], color[2]);
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const setRgb      = (doc: jsPDF, c: readonly [number,number,number]) => doc.setTextColor(c[0],c[1],c[2]);
+const setFillRgb  = (doc: jsPDF, c: readonly [number,number,number]) => doc.setFillColor(c[0],c[1],c[2]);
+const setDrawRgb  = (doc: jsPDF, c: readonly [number,number,number]) => doc.setDrawColor(c[0],c[1],c[2]);
 
-function setFillRgb(doc: jsPDF, color: readonly [number, number, number]) {
-  doc.setFillColor(color[0], color[1], color[2]);
-}
-
-function setDrawRgb(doc: jsPDF, color: readonly [number, number, number]) {
-  doc.setDrawColor(color[0], color[1], color[2]);
-}
-
-function hLine(doc: jsPDF, y: number, x1 = 15, x2 = 195, color = MID_GRAY) {
+function hLine(doc: jsPDF, y: number, x1=15, x2=195, color=MID_GRAY) {
   setDrawRgb(doc, color);
   doc.setLineWidth(0.3);
   doc.line(x1, y, x2, y);
 }
 
+function sectionTitle(doc: jsPDF, text: string, y: number, pw: number) {
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  setRgb(doc, DARK);
+  doc.text(text, pw / 2, y, { align: "center" });
+}
+
+function tableHeader(
+  doc: jsPDF,
+  cols: string[],
+  colX: number[],
+  y: number,
+  contentW: number,
+  margin: number,
+  rightAlignFrom = 1
+) {
+  setFillRgb(doc, LIGHT_GRAY);
+  doc.rect(margin, y - 3, contentW, 6, "F");
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  setRgb(doc, MUTED);
+  cols.forEach((col, i) => {
+    doc.text(col, colX[i], y, { align: i >= rightAlignFrom ? "right" : "left" });
+  });
+}
+
+// ─── Charts (shared scatter / recovery / bland-altman inline renderers) ───────
 function drawScatterPlot(
   doc: jsPDF,
-  results: StudyResults,
-  x: number,
-  y: number,
-  w: number,
-  h: number
+  title: string,
+  xLabel: string,
+  yLabel: string,
+  series: { name: string; points: {x:number; y:number}[] }[],
+  showIdentity: boolean,
+  x: number, y: number, w: number, h: number
 ) {
-  const { dataPointResults } = results;
-  if (dataPointResults.length === 0) return;
-
-  // Chart box
-  setFillRgb(doc, [248, 250, 252]);
+  setFillRgb(doc, [248,250,252]);
   setDrawRgb(doc, BORDER_GRAY);
   doc.setLineWidth(0.4);
   doc.rect(x, y, w, h, "FD");
 
-  // Axis bounds
-  const allX = dataPointResults.map((r) => r.expectedValue);
-  const allY = dataPointResults.map((r) => r.mean);
-  const minX = Math.min(...allX);
-  const maxX = Math.max(...allX);
-  const minY = Math.min(...allY);
-  const maxY = Math.max(...allY);
-  const pad = (maxX - minX) * 0.1 || 1;
-  const xMin = minX - pad;
-  const xMax = maxX + pad;
-  const yMin = minY - pad;
-  const yMax = maxY + pad;
+  const allX = series.flatMap(s => s.points.map(p => p.x));
+  const allY = series.flatMap(s => s.points.map(p => p.y));
+  if (allX.length === 0) return;
+  const minX = Math.min(...allX), maxX = Math.max(...allX);
+  const minY = Math.min(...allY), maxY = Math.max(...allY);
+  const padX = (maxX - minX) * 0.1 || 1;
+  const padY = (maxY - minY) * 0.1 || 1;
+  const xMin = minX - padX, xMax = maxX + padX;
+  const yMin = minY - padY, yMax = maxY + padY;
 
-  const margin = { left: 18, right: 8, top: 8, bottom: 14 };
-  const plotW = w - margin.left - margin.right;
-  const plotH = h - margin.top - margin.bottom;
+  const ml=18, mr=8, mt=8, mb=14;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const cx = (v: number) => x + ml + ((v - xMin) / (xMax - xMin)) * pw;
+  const cy = (v: number) => y + mt + ph - ((v - yMin) / (yMax - yMin)) * ph;
 
-  function toCanvasX(v: number) {
-    return x + margin.left + ((v - xMin) / (xMax - xMin)) * plotW;
-  }
-  function toCanvasY(v: number) {
-    return y + margin.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+  setDrawRgb(doc, [220,225,230]); doc.setLineWidth(0.2);
+  for (let i=0;i<=4;i++) {
+    doc.line(x+ml, y+mt+(i/4)*ph, x+ml+pw, y+mt+(i/4)*ph);
+    doc.line(x+ml+(i/4)*pw, y+mt, x+ml+(i/4)*pw, y+mt+ph);
   }
 
-  // Grid lines
-  setDrawRgb(doc, [220, 225, 230]);
-  doc.setLineWidth(0.2);
-  const steps = 4;
-  for (let i = 0; i <= steps; i++) {
-    const gx = x + margin.left + (i / steps) * plotW;
-    const gy = y + margin.top + (i / steps) * plotH;
-    doc.line(x + margin.left, gy, x + margin.left + plotW, gy);
-    doc.line(gx, y + margin.top, gx, y + margin.top + plotH);
+  if (showIdentity) {
+    setDrawRgb(doc, [150,160,170]); doc.setLineWidth(0.5);
+    doc.line(cx(xMin), cy(xMin), cx(xMax), cy(xMax));
   }
 
-  // 1:1 reference line
-  setDrawRgb(doc, [150, 160, 170]);
-  doc.setLineWidth(0.5);
-  const l1x1 = toCanvasX(xMin);
-  const l1y1 = toCanvasY(xMin);
-  const l1x2 = toCanvasX(xMax);
-  const l1y2 = toCanvasY(xMax);
-  doc.line(l1x1, l1y1, l1x2, l1y2);
-
-  // Regression line (mean)
-  if (results.regression["Mean"]) {
-    const { slope, intercept } = results.regression["Mean"];
-    setDrawRgb(doc, TEAL);
-    doc.setLineWidth(0.8);
-    const rx1 = toCanvasX(xMin);
-    const ry1 = toCanvasY(slope * xMin + intercept);
-    const rx2 = toCanvasX(xMax);
-    const ry2 = toCanvasY(slope * xMax + intercept);
-    doc.line(rx1, ry1, rx2, ry2);
-  }
-
-  // Data points
-  const colors: readonly [number, number, number][] = [
-    TEAL,
-    [70, 140, 230],
-    [100, 200, 120],
-  ];
-  const instrumentNames = Object.keys(dataPointResults[0]?.instruments || {});
-  instrumentNames.forEach((name, ci) => {
+  const colors: readonly [number,number,number][] = [TEAL, [70,140,230], [100,200,120]];
+  series.forEach(({ points }, ci) => {
     const col = colors[ci % colors.length];
-    setFillRgb(doc, col);
-    setDrawRgb(doc, col);
-    doc.setLineWidth(0);
-    dataPointResults.forEach((r) => {
-      if (r.instruments[name]) {
-        const px = toCanvasX(r.expectedValue);
-        const py = toCanvasY(r.instruments[name].value);
-        doc.circle(px, py, 1.2, "F");
-      }
-    });
+    setFillRgb(doc, col); setDrawRgb(doc, col); doc.setLineWidth(0);
+    points.forEach(p => doc.circle(cx(p.x), cy(p.y), 1.2, "F"));
   });
 
-  // Axis labels
-  doc.setFontSize(7);
-  setRgb(doc, MUTED);
-  doc.text("Assigned (mg/dL)", x + margin.left + plotW / 2, y + h - 2, { align: "center" });
-  doc.text("M", x + margin.left - 3, y + margin.top + plotH / 2, { angle: 90 });
-
-  // Title
-  doc.setFontSize(7.5);
-  setRgb(doc, DARK);
-  doc.text("Scatter Plot", x + w / 2, y + 5, { align: "center" });
+  doc.setFontSize(7); setRgb(doc, MUTED);
+  doc.text(xLabel, x+ml+pw/2, y+h-2, { align: "center" });
+  doc.text(yLabel, x+ml-3, y+mt+ph/2, { angle: 90 });
+  doc.setFontSize(7.5); setRgb(doc, DARK);
+  doc.text(title, x+w/2, y+5, { align: "center" });
 }
 
 function drawRecoveryPlot(
   doc: jsPDF,
-  results: StudyResults,
+  assignedVals: number[],
+  recoveries: number[],
   cliaError: number,
-  x: number,
-  y: number,
-  w: number,
-  h: number
+  x: number, y: number, w: number, h: number
 ) {
-  const { dataPointResults } = results;
-  if (dataPointResults.length === 0) return;
-
-  setFillRgb(doc, [248, 250, 252]);
+  setFillRgb(doc, [248,250,252]);
   setDrawRgb(doc, BORDER_GRAY);
   doc.setLineWidth(0.4);
   doc.rect(x, y, w, h, "FD");
+  if (recoveries.length === 0) return;
 
   const cliaPercent = cliaError * 100;
-  const upper = 100 + cliaPercent;
-  const lower = 100 - cliaPercent;
-
-  const recoveries = dataPointResults.map((r) => r.pctRecovery);
-  const minR = Math.min(...recoveries, lower - 2);
-  const maxR = Math.max(...recoveries, upper + 2);
-  const allX = dataPointResults.map((r) => r.expectedValue);
-  const minX = Math.min(...allX);
-  const maxX = Math.max(...allX);
+  const upper = 100 + cliaPercent, lower = 100 - cliaPercent;
+  const minR = Math.min(...recoveries, lower-2), maxR = Math.max(...recoveries, upper+2);
+  const minX = Math.min(...assignedVals), maxX = Math.max(...assignedVals);
   const padX = (maxX - minX) * 0.1 || 1;
 
-  const margin = { left: 18, right: 8, top: 8, bottom: 14 };
-  const plotW = w - margin.left - margin.right;
-  const plotH = h - margin.top - margin.bottom;
+  const ml=18, mr=8, mt=8, mb=14;
+  const pw = w-ml-mr, ph = h-mt-mb;
+  const cx = (v: number) => x+ml+((v-(minX-padX))/(maxX-minX+2*padX))*pw;
+  const cy = (v: number) => y+mt+ph-((v-minR)/(maxR-minR))*ph;
 
-  function cx(v: number) {
-    return x + margin.left + ((v - (minX - padX)) / (maxX - minX + 2 * padX)) * plotW;
+  setDrawRgb(doc, [220,225,230]); doc.setLineWidth(0.2);
+  for (let i=0;i<=4;i++) doc.line(x+ml, y+mt+(i/4)*ph, x+ml+pw, y+mt+(i/4)*ph);
+
+  // CLIA band
+  setFillRgb(doc, [240,248,240]); doc.setLineWidth(0);
+  doc.rect(x+ml, cy(upper), pw, cy(lower)-cy(upper), "F");
+
+  setDrawRgb(doc, [150,160,170]); doc.setLineWidth(0.4);
+  doc.line(x+ml, cy(100), x+ml+pw, cy(100));
+  setDrawRgb(doc, [220,80,80]); doc.setLineWidth(0.5);
+  doc.line(x+ml, cy(upper), x+ml+pw, cy(upper));
+  doc.line(x+ml, cy(lower), x+ml+pw, cy(lower));
+
+  setDrawRgb(doc, TEAL); setFillRgb(doc, TEAL); doc.setLineWidth(0.8);
+  for (let i=1;i<recoveries.length;i++) {
+    doc.line(cx(assignedVals[i-1]), cy(recoveries[i-1]), cx(assignedVals[i]), cy(recoveries[i]));
   }
-  function cy(v: number) {
-    return y + margin.top + plotH - ((v - minR) / (maxR - minR)) * plotH;
-  }
+  recoveries.forEach((r,i) => doc.circle(cx(assignedVals[i]), cy(r), 1.2, "F"));
 
-  // Grid
-  setDrawRgb(doc, [220, 225, 230]);
-  doc.setLineWidth(0.2);
-  for (let i = 0; i <= 4; i++) {
-    const gy = y + margin.top + (i / 4) * plotH;
-    doc.line(x + margin.left, gy, x + margin.left + plotW, gy);
-  }
-
-  // CLIA bands
-  setFillRgb(doc, [240, 248, 240]);
-  doc.setLineWidth(0);
-  const bandTop = cy(upper);
-  const bandBottom = cy(lower);
-  doc.rect(x + margin.left, bandTop, plotW, bandBottom - bandTop, "F");
-
-  // 100% line
-  setDrawRgb(doc, [150, 160, 170]);
-  doc.setLineWidth(0.4);
-  doc.line(x + margin.left, cy(100), x + margin.left + plotW, cy(100));
-
-  // CLIA bounds
-  setDrawRgb(doc, [220, 80, 80]);
-  doc.setLineWidth(0.5);
-  doc.line(x + margin.left, cy(upper), x + margin.left + plotW, cy(upper));
-  doc.line(x + margin.left, cy(lower), x + margin.left + plotW, cy(lower));
-
-  // Recovery data line + dots
-  setDrawRgb(doc, TEAL);
-  setFillRgb(doc, TEAL);
-  doc.setLineWidth(0.8);
-  for (let i = 1; i < dataPointResults.length; i++) {
-    const prev = dataPointResults[i - 1];
-    const curr = dataPointResults[i];
-    doc.line(cx(prev.expectedValue), cy(prev.pctRecovery), cx(curr.expectedValue), cy(curr.pctRecovery));
-  }
-  dataPointResults.forEach((r) => {
-    doc.circle(cx(r.expectedValue), cy(r.pctRecovery), 1.2, "F");
-  });
-
-  // Labels
-  doc.setFontSize(7);
-  setRgb(doc, MUTED);
-  doc.text("Assigned (mg/dL)", x + margin.left + plotW / 2, y + h - 2, { align: "center" });
-  doc.text("% Rec", x + margin.left - 3, y + margin.top + plotH / 2, { angle: 90 });
-
-  doc.setFontSize(7.5);
-  setRgb(doc, DARK);
-  doc.text("Percent Recovery", x + w / 2, y + 5, { align: "center" });
+  doc.setFontSize(7); setRgb(doc, MUTED);
+  doc.text("Assigned Value", x+ml+pw/2, y+h-2, { align: "center" });
+  doc.text("% Rec", x+ml-3, y+mt+ph/2, { angle: 90 });
+  doc.setFontSize(7.5); setRgb(doc, DARK);
+  doc.text("Percent Recovery", x+w/2, y+5, { align: "center" });
 }
 
-export async function generatePDF(study: Study, results: StudyResults) {
-  const doc = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
-  const pw = 215.9; // page width
-  const margin = 15;
-  const contentW = pw - 2 * margin;
+function drawBlandAltman(
+  doc: jsPDF,
+  points: { avg: number; pctDiff: number }[],
+  cliaError: number,
+  meanBias: number,
+  x: number, y: number, w: number, h: number
+) {
+  setFillRgb(doc, [248,250,252]);
+  setDrawRgb(doc, BORDER_GRAY);
+  doc.setLineWidth(0.4);
+  doc.rect(x, y, w, h, "FD");
+  if (points.length === 0) return;
 
+  const cliaPercent = cliaError * 100;
+  const allY = points.map(p => p.pctDiff);
+  const minY = Math.min(...allY, -cliaPercent-2), maxY = Math.max(...allY, cliaPercent+2);
+  const allX = points.map(p => p.avg);
+  const minX = Math.min(...allX), maxX = Math.max(...allX);
+  const padX = (maxX - minX) * 0.1 || 1;
+
+  const ml=18, mr=8, mt=8, mb=14;
+  const pw = w-ml-mr, ph = h-mt-mb;
+  const cx = (v: number) => x+ml+((v-minX+padX)/(maxX-minX+2*padX))*pw;
+  const cy = (v: number) => y+mt+ph-((v-minY)/(maxY-minY))*ph;
+
+  setDrawRgb(doc, [220,225,230]); doc.setLineWidth(0.2);
+  for (let i=0;i<=4;i++) doc.line(x+ml, y+mt+(i/4)*ph, x+ml+pw, y+mt+(i/4)*ph);
+
+  setDrawRgb(doc, [150,160,170]); doc.setLineWidth(0.4);
+  doc.line(x+ml, cy(0), x+ml+pw, cy(0));
+  setDrawRgb(doc, [100,180,100]); doc.setLineWidth(0.5);
+  doc.line(x+ml, cy(meanBias), x+ml+pw, cy(meanBias)); // mean bias line
+  setDrawRgb(doc, [220,80,80]); doc.setLineWidth(0.5);
+  doc.line(x+ml, cy(cliaPercent), x+ml+pw, cy(cliaPercent));
+  doc.line(x+ml, cy(-cliaPercent), x+ml+pw, cy(-cliaPercent));
+
+  setFillRgb(doc, TEAL); doc.setLineWidth(0);
+  points.forEach(p => doc.circle(cx(p.avg), cy(p.pctDiff), 1.2, "F"));
+
+  doc.setFontSize(7); setRgb(doc, MUTED);
+  doc.text("Mean of Methods", x+ml+pw/2, y+h-2, { align: "center" });
+  doc.text("% Diff", x+ml-3, y+mt+ph/2, { angle: 90 });
+  doc.setFontSize(7.5); setRgb(doc, DARK);
+  doc.text("Bland-Altman", x+w/2, y+5, { align: "center" });
+}
+
+// ─── Shared: document header ──────────────────────────────────────────────────
+function pdfHeader(doc: jsPDF, study: Study, pw: number, margin: number): number {
   let y = 15;
-
-  // ── HEADER ──────────────────────────────────────────────────────────────
-  // Title block left
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, TEAL);
+  doc.setFontSize(20); doc.setFont("helvetica","bold"); setRgb(doc, TEAL);
   doc.text("VeritaCheck®", margin, y);
+  doc.setFontSize(8); doc.setFont("helvetica","normal"); setRgb(doc, MUTED);
+  doc.text("by Veritas Lab Services · veritaslabservices.com", margin, y+5);
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  setRgb(doc, MUTED);
-  doc.text("by Veritas Lab Services · veritaslabservices.com", margin, y + 5);
+  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison";
+  doc.setFontSize(14); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text(`${typeLabel} — ${study.testName}`, pw-margin, y, { align: "right" });
+  doc.setFontSize(8); doc.setFont("helvetica","normal"); setRgb(doc, MUTED);
+  doc.text(`Instrument: ${study.instrument}`, pw-margin, y+5, { align: "right" });
 
-  // Test name right
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, DARK);
-  const studyLabel = `${study.studyType === "cal_ver" ? "Cal Ver" : "Method Comparison"} — ${study.testName}`;
-  doc.text(studyLabel, pw - margin, y, { align: "right" });
+  y += 10; hLine(doc, y); y += 6;
+  return y;
+}
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  setRgb(doc, MUTED);
-  doc.text(`Instrument: ${study.instrument}`, pw - margin, y + 5, { align: "right" });
+// ─── Shared: evaluation + verdict box ────────────────────────────────────────
+function pdfEvalSection(doc: jsPDF, results: StudyResults, study: Study, y: number, pw: number, margin: number, contentW: number): number {
+  hLine(doc, y); y += 6;
+  doc.setFontSize(11); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text("Evaluation of Results", pw/2, y, { align: "center" }); y += 5;
+  doc.setFontSize(7.5); doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+  const lines = doc.splitTextToSize(results.summary, contentW);
+  doc.text(lines, margin, y);
+  y += lines.length * 4 + 4;
 
-  y += 10;
-  hLine(doc, y);
-  y += 6;
+  const boxColor = results.overallPass ? PASS_GREEN : FAIL_RED;
+  setFillRgb(doc, boxColor);
+  doc.roundedRect(margin, y-4, contentW, 10, 2, 2, "F");
+  doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, WHITE);
+  const cliaP = (study.cliaAllowableError*100).toFixed(1);
+  const verdict = results.overallPass
+    ? `PASS — ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`
+    : `FAIL — ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`;
+  doc.text(verdict, pw/2, y+2, { align: "center" });
+  y += 16;
+  return y;
+}
 
-  // ── SECTION: CALIBRATION VERIFICATION ───────────────────────────────────
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, DARK);
-  doc.text(
-    study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison",
-    margin,
-    y
-  );
-  y += 6;
+// ─── Shared: user specs + signature ──────────────────────────────────────────
+function pdfFooterSections(doc: jsPDF, study: Study, instrumentNames: string[], y: number, pw: number, margin: number, contentW: number) {
+  hLine(doc, y); y += 6;
+  const halfW = (contentW - 6) / 2;
+  doc.setFontSize(8); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text("User's Specifications", margin, y);
+  doc.text("Supporting Data", margin+halfW+6, y);
+  y += 4;
 
-  // Charts side by side
-  const chartW = (contentW - 6) / 2;
-  const chartH = 55;
-  drawScatterPlot(doc, results, margin, y, chartW, chartH);
-  drawRecoveryPlot(doc, results, study.cliaAllowableError, margin + chartW + 6, y, chartW, chartH);
+  const cliaP = (study.cliaAllowableError*100).toFixed(1);
+  const specs = [
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification" : "Method Comparison"],
+    ["CLIA Total Allowable Error", `±${cliaP}%`],
+    ["Allowable Systematic Error", `±${cliaP}%`],
+  ];
+  const supporting = [
+    ["Analyst", study.analyst],
+    ["Date", study.date],
+    ["Instruments / Methods", instrumentNames.join(", ")],
+    ["Generated by", "VeritaCheck · Veritas Lab Services"],
+  ];
+  doc.setFontSize(7.5);
+  for (let i=0;i<Math.max(specs.length,supporting.length);i++) {
+    if (specs[i]) {
+      setRgb(doc, MUTED); doc.setFont("helvetica","normal");
+      doc.text(specs[i][0], margin, y);
+      setRgb(doc, DARK);
+      doc.text(specs[i][1], margin+halfW-2, y, { align: "right" });
+    }
+    if (supporting[i]) {
+      setRgb(doc, MUTED); doc.setFont("helvetica","normal");
+      doc.text(supporting[i][0], margin+halfW+6, y);
+      setRgb(doc, DARK);
+      doc.text(supporting[i][1], pw-margin, y, { align: "right" });
+    }
+    y += 4.5;
+  }
+
+  y += 4; hLine(doc, y); y += 6;
+  // Signature line
+  doc.setFontSize(8); doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+  doc.text("Accepted by:", margin, y+6);
+  hLine(doc, y+10, margin+22, margin+80);
+  doc.setFontSize(7.5); setRgb(doc, MUTED);
+  doc.text("Signature", margin+22, y+14);
+  doc.text(study.date, pw-margin, y+6, { align: "right" });
+  hLine(doc, y+10, pw-margin-28, pw-margin);
+  doc.text("Date", pw-margin-10, y+14);
+
+  const pageH = doc.internal.pageSize.height;
+  hLine(doc, pageH-12);
+  doc.setFontSize(6.5); setRgb(doc, MUTED);
+  doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
+  doc.text("Page 1", pw-margin, pageH-8, { align: "right" });
+}
+
+// ─── PDF: CALIBRATION VERIFICATION ───────────────────────────────────────────
+function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
+  const pw = 215.9, margin = 15, contentW = pw - 2*margin;
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  let y = pdfHeader(doc, study, pw, margin);
+
+  // Section title
+  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text("Calibration Verification", margin, y); y += 6;
+
+  // Charts
+  const chartW = (contentW-6)/2, chartH = 55;
+  const assignedVals = results.levelResults.map(r => r.assignedValue);
+  const recoveries   = results.levelResults.map(r => r.pctRecovery);
+  const scatterSeries = instrumentNames.map(name => ({
+    name,
+    points: results.levelResults.filter(r => r.instruments[name]).map(r => ({ x: r.assignedValue, y: r.instruments[name].value }))
+  }));
+  drawScatterPlot(doc, "Scatter Plot", "Assigned Value", "Measured", scatterSeries, true, margin, y, chartW, chartH);
+  drawRecoveryPlot(doc, assignedVals, recoveries, study.cliaAllowableError, margin+chartW+6, y, chartW, chartH);
   y += chartH + 6;
 
-  // ── LINEARITY SUMMARY ────────────────────────────────────────────────────
-  hLine(doc, y);
+  // Linearity table
+  hLine(doc, y); y += 4;
+  sectionTitle(doc, "Linearity Summary", y, pw); y += 5;
+  const linCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R²"];
+  const linColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+175];
+  tableHeader(doc, linCols, linColX, y, contentW, margin);
   y += 4;
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, DARK);
-  doc.text("Linearity Summary", pw / 2, y, { align: "center" });
-  y += 5;
-
-  // Header row
-  const linCols = ["", "N", "Slope", "Intercept", "Prop. Bias", "R²"];
-  const linColX = [margin, margin + 30, margin + 55, margin + 90, margin + 125, margin + 160];
-  setFillRgb(doc, LIGHT_GRAY);
-  doc.rect(margin, y - 3, contentW, 6, "F");
-
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, MUTED);
-  linCols.forEach((col, i) => {
-    doc.text(col, linColX[i], y, { align: i > 0 ? "right" : "left" });
-  });
-  y += 4;
-
-  doc.setFont("helvetica", "normal");
-  setRgb(doc, DARK);
-  const n = results.dataPointResults.length;
+  doc.setFont("helvetica","normal"); setRgb(doc, DARK);
   Object.entries(results.regression).forEach(([name, reg]) => {
     doc.text(name, linColX[0], y);
-    doc.text(String(n), linColX[1], y, { align: "right" });
-    doc.text(reg.slope.toFixed(3) + " ± 0.014", linColX[2], y, { align: "right" });
-    doc.text(reg.intercept.toFixed(3) + " ± 0.234", linColX[3], y, { align: "right" });
-    const biasColor = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? PASS_GREEN : FAIL_RED;
-    setRgb(doc, biasColor);
-    doc.text((reg.proportionalBias * 100).toFixed(2) + "%", linColX[4], y, { align: "right" });
+    doc.text(String(reg.n), linColX[1], y, { align: "right" });
+    doc.text(reg.slope.toFixed(4), linColX[2], y, { align: "right" });
+    doc.text(reg.intercept.toFixed(4), linColX[3], y, { align: "right" });
+    const bc = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? PASS_GREEN : FAIL_RED;
+    setRgb(doc, bc);
+    doc.text((reg.proportionalBias*100).toFixed(2)+"%", linColX[4], y, { align: "right" });
     setRgb(doc, DARK);
     doc.text(reg.r2.toFixed(4), linColX[5], y, { align: "right" });
     y += 5;
   });
 
-  y += 3;
-  hLine(doc, y);
-  y += 6;
+  y += 3; hLine(doc, y); y += 6;
 
-  // ── STATISTICAL ANALYSIS TABLE ──────────────────────────────────────────
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, DARK);
-  doc.text("Statistical Analysis and Experimental Results", pw / 2, y, { align: "center" });
-  y += 5;
-
-  const instrumentNames = JSON.parse(study.instruments) as string[];
+  // Statistical analysis table
+  sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
   const cols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
   const colW = contentW / cols.length;
-
-  // Table header
-  setFillRgb(doc, LIGHT_GRAY);
-  doc.rect(margin, y - 3, contentW, 6, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, MUTED);
-  cols.forEach((col, i) => {
-    const colX = margin + i * colW + (i === 0 ? 0 : colW);
-    doc.text(col, margin + i * colW + (i === 0 ? 2 : colW - 2), y, {
-      align: i === 0 ? "left" : "right",
-    });
-  });
+  tableHeader(doc, cols, cols.map((_, i) => margin + i*colW + (i===0?2:colW-2)), y, contentW, margin);
   y += 4;
-
-  doc.setFont("helvetica", "normal");
-  results.dataPointResults.forEach((r, ri) => {
-    if (ri % 2 === 0) {
-      setFillRgb(doc, [250, 251, 253]);
-      doc.rect(margin, y - 3, contentW, 5, "F");
-    }
+  doc.setFont("helvetica","normal");
+  results.levelResults.forEach((r, ri) => {
+    if (ri%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
     setRgb(doc, DARK);
     const row = [
       `L${r.level}`,
-      r.expectedValue.toFixed(3),
+      r.assignedValue.toFixed(3),
       r.mean.toFixed(3),
-      r.pctRecovery.toFixed(1),
-      (r.obsErrorMean * 100).toFixed(2) + "%",
+      r.pctRecovery.toFixed(1)+"%",
+      (r.obsError*100).toFixed(2)+"%",
       r.passFailMean,
-      ...instrumentNames.map((n) =>
-        r.instruments[n] ? r.instruments[n].value.toFixed(3) : "—"
-      ),
+      ...instrumentNames.map(n => r.instruments[n] ? r.instruments[n].value.toFixed(3) : "—"),
     ];
-
     row.forEach((val, i) => {
       if (val === "Pass") setRgb(doc, PASS_GREEN);
       else if (val === "Fail") setRgb(doc, FAIL_RED);
       else setRgb(doc, DARK);
-
-      doc.text(val, margin + i * colW + (i === 0 ? 2 : colW - 2), y, {
-        align: i === 0 ? "left" : "right",
-      });
+      doc.text(val, margin+i*colW+(i===0?2:colW-2), y, { align: i===0?"left":"right" });
     });
     y += 5;
   });
 
+  y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+  pdfFooterSections(doc, study, instrumentNames, y, pw, margin, contentW);
+}
+
+// ─── PDF: METHOD COMPARISON ───────────────────────────────────────────────────
+function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResults) {
+  const pw = 215.9, margin = 15, contentW = pw - 2*margin;
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  let y = pdfHeader(doc, study, pw, margin);
+
+  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text("Method Comparison", margin, y); y += 6;
+
+  // Charts: correlation scatter + Bland-Altman
+  const chartW = (contentW-6)/2, chartH = 55;
+  const scatterSeries = instrumentNames.map(name => ({
+    name,
+    points: results.levelResults.filter(r => r.instruments[name]).map(r => ({ x: r.referenceValue, y: r.instruments[name].value }))
+  }));
+  drawScatterPlot(doc, "Correlation", "Reference Method", "Test Method", scatterSeries, true, margin, y, chartW, chartH);
+
+  // B-A plot for first instrument
+  const firstInst = instrumentNames[0];
+  const baData = results.levelResults
+    .filter(r => r.instruments[firstInst])
+    .map(r => ({ avg: (r.referenceValue + r.instruments[firstInst].value)/2, pctDiff: r.instruments[firstInst].pctDifference }));
+  const meanBias = results.blandAltman[firstInst]?.pctMeanDiff ?? 0;
+  drawBlandAltman(doc, baData, study.cliaAllowableError, meanBias, margin+chartW+6, y, chartW, chartH);
+  y += chartH + 6;
+
+  // Regression table
+  hLine(doc, y); y += 4;
+  sectionTitle(doc, "Regression Analysis", y, pw); y += 5;
+  const regCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R²"];
+  const regColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+175];
+  tableHeader(doc, regCols, regColX, y, contentW, margin);
   y += 4;
-  hLine(doc, y);
-  y += 6;
+  doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+  Object.entries(results.regression).forEach(([name, reg]) => {
+    doc.text(name, regColX[0], y);
+    doc.text(String(reg.n), regColX[1], y, { align: "right" });
+    doc.text(reg.slope.toFixed(4), regColX[2], y, { align: "right" });
+    doc.text(reg.intercept.toFixed(4), regColX[3], y, { align: "right" });
+    const bc = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? PASS_GREEN : FAIL_RED;
+    setRgb(doc, bc);
+    doc.text((reg.proportionalBias*100).toFixed(2)+"%", regColX[4], y, { align: "right" });
+    setRgb(doc, DARK);
+    doc.text(reg.r2.toFixed(4), regColX[5], y, { align: "right" });
+    y += 5;
+  });
 
-  // ── USER SPECS + SUPPORTING DATA ────────────────────────────────────────
-  const halfW = (contentW - 6) / 2;
+  y += 3; hLine(doc, y); y += 6;
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, DARK);
-  doc.text("User's Specifications", margin, y);
-  doc.text("Supporting Data", margin + halfW + 6, y);
+  // Bland-Altman bias summary table
+  sectionTitle(doc, "Bland-Altman Bias Summary", y, pw); y += 5;
+  const baCols = ["Instrument", "Mean Bias", "Mean % Bias", "SD of Diff", "95% LoA Lower", "95% LoA Upper"];
+  const baColX = [margin, margin+38, margin+75, margin+110, margin+145, margin+178];
+  tableHeader(doc, baCols, baColX, y, contentW, margin);
   y += 4;
+  doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+  Object.entries(results.blandAltman).forEach(([name, ba], bi) => {
+    if (bi%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
+    setRgb(doc, DARK);
+    doc.text(name, baColX[0], y);
+    doc.text(ba.meanDiff.toFixed(4), baColX[1], y, { align: "right" });
+    const bc = Math.abs(ba.pctMeanDiff) < study.cliaAllowableError*100 ? PASS_GREEN : FAIL_RED;
+    setRgb(doc, bc);
+    doc.text(ba.pctMeanDiff.toFixed(2)+"%", baColX[2], y, { align: "right" });
+    setRgb(doc, DARK);
+    doc.text(ba.sdDiff.toFixed(4), baColX[3], y, { align: "right" });
+    doc.text(ba.loa_lower.toFixed(4), baColX[4], y, { align: "right" });
+    doc.text(ba.loa_upper.toFixed(4), baColX[5], y, { align: "right" });
+    y += 5;
+  });
 
-  const specs = [
-    ["Allowable Total Error", `${(study.cliaAllowableError * 100).toFixed(1)}%`],
-    ["Systematic Error Budget", "100%"],
-    ["Allowable Systematic Error", `${(study.cliaAllowableError * 100).toFixed(1)}%`],
-  ];
+  y += 3; hLine(doc, y); y += 6;
 
-  const supporting = [
-    ["Analyst", study.analyst],
-    ["Date", study.date],
-    ["Instruments", instrumentNames.join(", ")],
-    ["Generated by", "VeritaCheck · Veritas Lab Services"],
-  ];
+  // Level-by-level data table
+  sectionTitle(doc, "Level-by-Level Comparison Results", y, pw); y += 5;
+  // Columns: Level | Reference | [per instrument: Value, % Diff, Pass?]
+  const numInstCols = instrumentNames.length * 3;
+  const dataColW = contentW / (2 + numInstCols);
+  const dataCols = ["Level", "Reference", ...instrumentNames.flatMap(n => [n+" Value", "% Diff", "Pass?"])];
+  const dataColX = dataCols.map((_, i) => margin + i*dataColW + (i===0?2:dataColW-2));
+  tableHeader(doc, dataCols, dataColX, y, contentW, margin, 1);
+  y += 4;
+  doc.setFont("helvetica","normal");
+  results.levelResults.forEach((r, ri) => {
+    if (ri%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
+    setRgb(doc, DARK);
+    const row: string[] = [
+      `L${r.level}`,
+      r.referenceValue.toFixed(3),
+      ...instrumentNames.flatMap(n => r.instruments[n]
+        ? [r.instruments[n].value.toFixed(3), r.instruments[n].pctDifference.toFixed(2)+"%", r.instruments[n].passFail]
+        : ["—","—","—"]
+      ),
+    ];
+    row.forEach((val, i) => {
+      if (val === "Pass") setRgb(doc, PASS_GREEN);
+      else if (val === "Fail") setRgb(doc, FAIL_RED);
+      else setRgb(doc, DARK);
+      doc.text(val, dataColX[i], y, { align: i===0?"left":"right" });
+    });
+    y += 5;
+  });
 
-  const maxRows = Math.max(specs.length, supporting.length);
-  doc.setFontSize(7.5);
-  for (let i = 0; i < maxRows; i++) {
-    if (specs[i]) {
-      doc.setFont("helvetica", "normal");
-      setRgb(doc, MUTED);
-      doc.text(specs[i][0], margin, y);
-      setRgb(doc, DARK);
-      doc.text(specs[i][1], margin + halfW - 2, y, { align: "right" });
-    }
-    if (supporting[i]) {
-      doc.setFont("helvetica", "normal");
-      setRgb(doc, MUTED);
-      doc.text(supporting[i][0], margin + halfW + 6, y);
-      setRgb(doc, DARK);
-      doc.text(supporting[i][1], pw - margin, y, { align: "right" });
-    }
-    y += 4.5;
+  y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+  pdfFooterSections(doc, study, instrumentNames, y, pw, margin, contentW);
+}
+
+// ─── Public entry point ───────────────────────────────────────────────────────
+export async function generatePDF(study: Study, results: StudyResults) {
+  const doc = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
+
+  if (results.type === "cal_ver") {
+    generateCalVerPDF(doc, study, results);
+  } else {
+    generateMethodCompPDF(doc, study, results);
   }
 
-  y += 4;
-  hLine(doc, y);
-  y += 6;
-
-  // ── EVALUATION OF RESULTS ────────────────────────────────────────────────
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, DARK);
-  doc.text("Evaluation of Results", pw / 2, y, { align: "center" });
-  y += 5;
-
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "normal");
-  setRgb(doc, DARK);
-  const summaryLines = doc.splitTextToSize(results.summary, contentW);
-  doc.text(summaryLines, margin, y);
-  y += summaryLines.length * 4 + 4;
-
-  // Pass/Fail box
-  const boxColor: readonly [number, number, number] = results.overallPass ? PASS_GREEN : FAIL_RED;
-  setFillRgb(doc, boxColor);
-  doc.roundedRect(margin, y - 4, contentW, 10, 2, 2, "F");
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  setRgb(doc, [255, 255, 255]);
-  const verdict = results.overallPass
-    ? `PASS — ${results.passCount}/${results.totalCount} results within TEa of ±${(study.cliaAllowableError * 100).toFixed(1)}%`
-    : `FAIL — ${results.passCount}/${results.totalCount} results within TEa of ±${(study.cliaAllowableError * 100).toFixed(1)}%`;
-  doc.text(verdict, pw / 2, y + 2, { align: "center" });
-  y += 16;
-
-  hLine(doc, y);
-  y += 6;
-
-  // ── SIGNATURE ────────────────────────────────────────────────────────────
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  setRgb(doc, DARK);
-  doc.text("Accepted by:", margin, y + 6);
-  hLine(doc, y + 10, margin + 22, margin + 80);
-  doc.setFontSize(7.5);
-  setRgb(doc, MUTED);
-  doc.text("Signature", margin + 22, y + 14);
-  doc.text(study.date, pw - margin, y + 6, { align: "right" });
-  hLine(doc, y + 10, pw - margin - 28, pw - margin);
-  doc.text("Date", pw - margin - 10, y + 14);
-
-  // ── FOOTER ───────────────────────────────────────────────────────────────
-  const pageH = doc.internal.pageSize.height;
-  hLine(doc, pageH - 12);
-  doc.setFontSize(6.5);
-  setRgb(doc, MUTED);
-  doc.text(
-    `VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`,
-    margin,
-    pageH - 8
-  );
-  doc.text("Page 1", pw - margin, pageH - 8, { align: "right" });
-
-  // Save
-  const filename = `VeritaCheck_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+  const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g,"_")}_${study.date}.pdf`;
   doc.save(filename);
 }

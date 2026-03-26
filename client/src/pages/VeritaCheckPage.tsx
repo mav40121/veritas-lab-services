@@ -213,7 +213,7 @@ export default function VeritaCheckPage() {
   const handleSubmit = () => {
     if (!testName.trim()) { toast({ title: "Please enter a test name", variant: "destructive" }); return; }
     if (filledLevels < MIN_LEVELS) { toast({ title: "Please enter at least 3 data points", variant: "destructive" }); return; }
-    const results = calculateStudy(dataPoints, instrumentNames, cliaValue);
+    const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType);
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "—",
       date, studyType, cliaAllowableError: cliaValue, dataPoints: JSON.stringify(dataPoints),
@@ -345,7 +345,7 @@ export default function VeritaCheckPage() {
                     <table className="w-full text-sm">
                       <thead><tr className="border-b border-border">
                         <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">Lvl</th>
-                        <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Expected</th>
+                        <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{studyType === "method_comparison" ? "Reference" : "Expected"}</th>
                         {instrumentNames.map(n => <th key={n} className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{n}</th>)}
                       </tr></thead>
                       <tbody>
