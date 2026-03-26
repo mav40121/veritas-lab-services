@@ -440,13 +440,15 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   // Regression table — Deming + OLS with CIs
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Regression Analysis", y, pw); y += 5;
-  const regCols  = ["", "N", "Slope (95% CI)", "Intercept (95% CI)", "SEE", "Prop. Bias", "R", "R²"];
-  const regColX  = [margin, margin+22, margin+50, margin+100, margin+148, margin+163, margin+178, margin+191];
+  const regCols  = ["Method", "N", "Slope (95% CI)", "Intercept (95% CI)", "SEE", "Prop. Bias", "R", "R²"];
+  const regColX  = [margin, margin+28, margin+55, margin+105, margin+148, margin+163, margin+178, margin+191];
   tableHeader(doc, regCols, regColX, y, contentW, margin);
   y += 4;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
   Object.entries(results.regression).forEach(([name, reg]) => {
-    doc.text(name.replace(" vs. Reference", ""), regColX[0], y);
+    // Shorten name: "CENTAUR SERUM vs. Reference (Deming)" -> "Deming"
+    const shortName = name.includes("Deming") ? "Deming" : "OLS";
+    doc.text(shortName, regColX[0], y);
     doc.text(String(reg.n), regColX[1], y, { align: "right" });
     // Slope with CI
     const slopeStr = reg.slopeLo !== undefined
@@ -498,14 +500,28 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
 
   // Level-by-level data table — now includes Bias (Y-X) column
   sectionTitle(doc, "Level-by-Level Comparison Results", y, pw); y += 5;
-  const numInstCols = instrumentNames.length * 4; // Value + Bias + % Diff + Pass?
-  const dataColW = contentW / (2 + numInstCols);
-  const dataCols = ["Level", "Reference", ...instrumentNames.flatMap(n => [n+" Value", "Bias", "% Diff", "Pass?"])];
-  const dataColX = dataCols.map((_, i) => margin + i*dataColW + (i===0?2:dataColW-2));
-  tableHeader(doc, dataCols, dataColX, y, contentW, margin, 1);
+  // Fixed column positions: Level | Ref | Value | Bias | % Diff | Pass?
+  const dataColX2 = [margin, margin+20, margin+60, margin+100, margin+135, margin+168];
+  const dataHeaders2 = ["Level", "Reference", ...instrumentNames.flatMap(n => ["Value", "Bias", "% Diff", "Pass?"])];
+  // Print instrument name as sub-header spanning value/bias/pctdiff/pass columns
+  doc.setFontSize(7); doc.setFont("helvetica","bold"); setRgb(doc, [100,100,100]);
+  instrumentNames.forEach((n) => { doc.text(n, dataColX2[2], y, { align: "left" }); });
+  y += 4;
+  doc.setFontSize(9);
+  tableHeader(doc, dataHeaders2, dataColX2, y, contentW, margin, 1);
   y += 4;
   doc.setFont("helvetica","normal");
+  const pageH = 279; // letter page height mm
+  const footerH = 20; // space reserved for footer
   results.levelResults.forEach((r, ri) => {
+    // Page break if needed
+    if (y > pageH - footerH) {
+      doc.addPage();
+      y = 20;
+      tableHeader(doc, dataHeaders2, dataColX2, y, contentW, margin, 1);
+      y += 4;
+      doc.setFont("helvetica","normal");
+    }
     if (ri%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
     setRgb(doc, DARK);
     const row: string[] = [
@@ -520,14 +536,15 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
       if (val === "Pass") setRgb(doc, PASS_GREEN);
       else if (val === "Fail") setRgb(doc, FAIL_RED);
       else setRgb(doc, DARK);
-      doc.text(val, dataColX[i], y, { align: i===0?"left":"right" });
+      doc.text(val, dataColX2[i], y, { align: i===0?"left":"right" });
     });
     y += 5;
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
 
-  // Signature / Accepted by block
+  // Signature / Accepted by block — page break if needed
+  if (y > 240) { doc.addPage(); y = 20; }
   y += 8; hLine(doc, y); y += 8;
   doc.setFont("helvetica","bold"); doc.setFontSize(9); setRgb(doc, DARK);
   doc.text("Accepted by:", margin, y); y += 8;
