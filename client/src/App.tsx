@@ -67,6 +67,7 @@ function AppContent() {
           <Route path="/services" component={ServicesPage} />
           <Route path="/team" component={TeamPage} />
           <Route path="/veritacheck" component={VeritaCheckPage} />
+          <Route path="/study/new" component={VeritaCheckPage} />
           <Route path="/study/:id/results" component={StudyResultsPage} />
           <Route path="/dashboard" component={DashboardPage} />
           <Route path="/contact" component={ContactPage} />
