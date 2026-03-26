@@ -28,14 +28,30 @@ const CLIA_PRESETS = [
   { label: "TSH (±3 SDs or 3 mIU/L)", value: 0.10, cfr: "CFR 493.933" },
   { label: "Custom", value: 0, cfr: "" },
 ];
-const NUM_LEVELS = 10;
+const MIN_LEVELS = 3;
+const MAX_LEVELS = 40;
+const DEFAULT_LEVELS = 10;
 
-function makeEmptyPoints(instruments: string[]): DataPoint[] {
-  return Array.from({ length: NUM_LEVELS }, (_, i) => ({
+function makeEmptyPoints(instruments: string[], count: number): DataPoint[] {
+  return Array.from({ length: count }, (_, i) => ({
     level: i + 1,
     expectedValue: null,
     instrumentValues: Object.fromEntries(instruments.map(n => [n, null])),
   }));
+}
+
+function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: number): DataPoint[] {
+  if (newCount > prev.length) {
+    // Add empty rows at the end
+    const extras = Array.from({ length: newCount - prev.length }, (_, i) => ({
+      level: prev.length + i + 1,
+      expectedValue: null,
+      instrumentValues: Object.fromEntries(instruments.map(n => [n, null])),
+    }));
+    return [...prev, ...extras];
+  }
+  // Trim rows from the end, renumber
+  return prev.slice(0, newCount).map((dp, i) => ({ ...dp, level: i + 1 }));
 }
 
 const plans = [
@@ -94,7 +110,14 @@ export default function VeritaCheckPage() {
   const [instrumentNames, setInstrumentNames] = useState<string[]>(["Instrument 1", "Instrument 2"]);
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
-  const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"]));
+  const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
+  const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
+
+  const handleNumLevelsChange = (val: string) => {
+    const n = parseInt(val);
+    setNumLevels(n);
+    setDataPoints(prev => resizeDataPoints(prev, instrumentNames, n));
+  };
 
   // Ref map: gridRefs[row][col] → the actual <input> DOM element
   const gridRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -142,6 +165,20 @@ export default function VeritaCheckPage() {
     setDataPoints(prev => prev.map(dp => ({ ...dp, instrumentValues: { ...dp.instrumentValues, [newName]: null } })));
   };
 
+  const addLevel = () => {
+    if (dataPoints.length >= MAX_LEVELS) return;
+    const n = dataPoints.length + 1;
+    setNumLevels(n);
+    setDataPoints(prev => [...prev, { level: n, expectedValue: null, instrumentValues: Object.fromEntries(instrumentNames.map(name => [name, null])) }]);
+  };
+
+  const removeLastLevel = () => {
+    if (dataPoints.length <= MIN_LEVELS) return;
+    const n = dataPoints.length - 1;
+    setNumLevels(n);
+    setDataPoints(prev => prev.slice(0, n));
+  };
+
   const removeInstrument = (idx: number) => {
     if (instrumentNames.length <= 1) return;
     const name = instrumentNames[idx];
@@ -175,7 +212,7 @@ export default function VeritaCheckPage() {
 
   const handleSubmit = () => {
     if (!testName.trim()) { toast({ title: "Please enter a test name", variant: "destructive" }); return; }
-    if (filledLevels < 3) { toast({ title: "Please enter at least 3 data points", variant: "destructive" }); return; }
+    if (filledLevels < MIN_LEVELS) { toast({ title: "Please enter at least 3 data points", variant: "destructive" }); return; }
     const results = calculateStudy(dataPoints, instrumentNames, cliaValue);
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "—",
@@ -281,8 +318,27 @@ export default function VeritaCheckPage() {
             <TabsContent value="data">
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
-                  Data Points
-                  <Badge variant="outline">{filledLevels} / {NUM_LEVELS} levels filled</Badge>
+                  <span>Data Points</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-normal">Levels:</span>
+                    <Select value={String(numLevels)} onValueChange={handleNumLevelsChange}>
+                      <SelectTrigger className="h-7 w-20 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: MAX_LEVELS - MIN_LEVELS + 1 }, (_, i) => i + MIN_LEVELS).map(n => (
+                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={removeLastLevel} disabled={dataPoints.length <= MIN_LEVELS} title="Remove last level">
+                      <span className="text-base leading-none">−</span>
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={addLevel} disabled={dataPoints.length >= MAX_LEVELS} title="Add level">
+                      <PlusCircle size={13} />
+                    </Button>
+                    <Badge variant="outline">{filledLevels} / {dataPoints.length} filled</Badge>
+                  </div>
                 </CardTitle></CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -309,14 +365,16 @@ export default function VeritaCheckPage() {
                 <Button variant="outline" size="sm" onClick={() => {
                   setTestName("GC1 CREAT"); setAnalyst("SED"); setDate("2025-02-06");
                   const names = ["ATELLICA 2 Run 1", "ATELLICA 2 Run 2"]; setInstrumentNames(names); setCliaPreset(0);
-                  setDataPoints([
+                const demoData = [
                     { level: 1, expectedValue: 0.3, instrumentValues: { "ATELLICA 2 Run 1": 0.31, "ATELLICA 2 Run 2": 0.29 } },
                     { level: 2, expectedValue: 7.0, instrumentValues: { "ATELLICA 2 Run 1": 7.37, "ATELLICA 2 Run 2": 7.37 } },
                     { level: 3, expectedValue: 13.8, instrumentValues: { "ATELLICA 2 Run 1": 14.25, "ATELLICA 2 Run 2": 14.21 } },
                     { level: 4, expectedValue: 20.5, instrumentValues: { "ATELLICA 2 Run 1": 20.88, "ATELLICA 2 Run 2": 20.91 } },
                     { level: 5, expectedValue: 27.3, instrumentValues: { "ATELLICA 2 Run 1": 27.22, "ATELLICA 2 Run 2": 27.11 } },
                     ...Array.from({ length: 5 }, (_, i) => ({ level: i + 6, expectedValue: null, instrumentValues: { "ATELLICA 2 Run 1": null, "ATELLICA 2 Run 2": null } })),
-                  ]);
+                  ];
+                  setNumLevels(10);
+                  setDataPoints(demoData);
                 }}>
                   <FlaskConical size={13} className="mr-1.5" />Load Demo Data
                 </Button>
