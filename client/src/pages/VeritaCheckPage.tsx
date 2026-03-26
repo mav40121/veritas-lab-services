@@ -98,6 +98,28 @@ export default function VeritaCheckPage() {
 
   const cliaValue = CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
 
+  const handleGridKeyDown = (e: React.KeyboardEvent, row: number, col: number) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    const numRows = dataPoints.length;
+    const numCols = instrumentNames.length + 1; // +1 for Expected
+    let nextRow = row;
+    let nextCol = col;
+    if (e.shiftKey) {
+      // Shift+Tab: go up
+      nextRow = row - 1;
+      if (nextRow < 0) { nextRow = numRows - 1; nextCol = col - 1; }
+      if (nextCol < 0) return; // exit grid
+    } else {
+      // Tab: go down
+      nextRow = row + 1;
+      if (nextRow >= numRows) { nextRow = 0; nextCol = col + 1; }
+      if (nextCol >= numCols) return; // exit grid
+    }
+    const next = document.querySelector<HTMLElement>(`[data-grid-row="${nextRow}"][data-grid-col="${nextCol}"]`);
+    next?.focus();
+  };
+
   const updateInstrumentName = (idx: number, name: string) => {
     const oldName = instrumentNames[idx];
     const newNames = [...instrumentNames]; newNames[idx] = name; setInstrumentNames(newNames);
@@ -265,8 +287,8 @@ export default function VeritaCheckPage() {
                         {dataPoints.map((dp, idx) => (
                           <tr key={idx} className="border-b border-border/50">
                             <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
-                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" tabIndex={100 + idx} /></td>
-                            {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" tabIndex={200 + colIdx * 100 + idx} /></td>)}
+                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" data-grid-row={idx} data-grid-col={0} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
+                            {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" data-grid-row={idx} data-grid-col={colIdx + 1} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                           </tr>
                         ))}
                       </tbody>
