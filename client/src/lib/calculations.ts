@@ -358,15 +358,153 @@ export function calculateMethodComparison(
   return { type: "method_comparison", levelResults, regression, blandAltman, overallPass, passCount, totalCount, xRange, yRange, summary };
 }
 
+// ─── PRECISION / IMPRECISION ──────────────────────────────────────────────────
+
+export interface PrecisionLevelResult {
+  level: number;
+  levelName: string;
+  n: number;
+  mean: number;
+  sd: number;
+  cv: number;
+  allowableCV: number;
+  passFail: "Pass" | "Fail";
+  withinRunSD?: number;
+  withinRunCV?: number;
+  betweenRunSD?: number;
+  betweenRunCV?: number;
+  betweenDaySD?: number;
+  betweenDayCV?: number;
+  totalSD?: number;
+  totalCV?: number;
+}
+
+export interface PrecisionResults {
+  type: "precision";
+  mode: "simple" | "advanced";
+  levelResults: PrecisionLevelResult[];
+  overallPass: boolean;
+  passCount: number;
+  totalCount: number;
+  summary: string;
+}
+
+export interface PrecisionDataPoint {
+  level: number;
+  levelName: string;
+  values: number[];
+  days?: number[][];
+  numDays?: number;
+  runsPerDay?: number;
+  replicatesPerRun?: number;
+}
+
+export function calculatePrecision(
+  dataPoints: PrecisionDataPoint[],
+  cliaAllowableImprecision: number,
+  mode: "simple" | "advanced"
+): PrecisionResults {
+  const allowableCV = cliaAllowableImprecision * 100;
+
+  const levelResults: PrecisionLevelResult[] = dataPoints.map(dp => {
+    const allVals = mode === "simple"
+      ? dp.values.filter(v => v !== null && !isNaN(v))
+      : (dp.days || []).flat().filter(v => v !== null && !isNaN(v));
+
+    if (allVals.length < 2) {
+      return {
+        level: dp.level, levelName: dp.levelName, n: 0, mean: 0, sd: 0, cv: 0,
+        allowableCV, passFail: "Fail" as const
+      };
+    }
+
+    const n = allVals.length;
+    const meanVal = allVals.reduce((a, b) => a + b, 0) / n;
+    const variance = allVals.reduce((s, v) => s + (v - meanVal) ** 2, 0) / (n - 1);
+    const sdVal = Math.sqrt(variance);
+    const cvVal = meanVal !== 0 ? (sdVal / meanVal) * 100 : 0;
+
+    if (mode === "simple") {
+      return {
+        level: dp.level, levelName: dp.levelName, n, mean: meanVal, sd: sdVal,
+        cv: cvVal, allowableCV, passFail: cvVal <= allowableCV ? "Pass" : "Fail"
+      };
+    }
+
+    // Advanced ANOVA mode
+    const numDays = dp.numDays || 1;
+    const runsPerDay = dp.runsPerDay || 1;
+    const replicatesPerRun = dp.replicatesPerRun || 1;
+    const days = dp.days || [];
+
+    let ssWithin = 0, dfWithin = 0;
+    let ssBetweenRun = 0, dfBetweenRun = 0;
+
+    const dayMeans: number[] = [];
+    days.forEach(dayRuns => {
+      const runSize = replicatesPerRun;
+      const runMeans: number[] = [];
+      for (let r = 0; r < runsPerDay; r++) {
+        const runVals = dayRuns.slice(r * runSize, (r + 1) * runSize).filter(v => !isNaN(v));
+        if (runVals.length < 1) continue;
+        const rm = runVals.reduce((a, b) => a + b, 0) / runVals.length;
+        runMeans.push(rm);
+        ssWithin += runVals.reduce((s, v) => s + (v - rm) ** 2, 0);
+        dfWithin += runVals.length - 1;
+      }
+      const dayMean = runMeans.length ? runMeans.reduce((a, b) => a + b, 0) / runMeans.length : 0;
+      dayMeans.push(dayMean);
+      ssBetweenRun += runMeans.reduce((s, rm) => s + replicatesPerRun * (rm - dayMean) ** 2, 0);
+      dfBetweenRun += runMeans.length - 1;
+    });
+
+    const grandMean = dayMeans.length ? dayMeans.reduce((a, b) => a + b, 0) / dayMeans.length : meanVal;
+    const ssBetweenDay = dayMeans.reduce((s, dm) => s + (runsPerDay * replicatesPerRun) * (dm - grandMean) ** 2, 0);
+    const dfBetweenDay = dayMeans.length - 1;
+
+    const msWithin = dfWithin > 0 ? ssWithin / dfWithin : 0;
+    const msBetweenRun = dfBetweenRun > 0 ? ssBetweenRun / dfBetweenRun : 0;
+    const msBetweenDay = dfBetweenDay > 0 ? ssBetweenDay / dfBetweenDay : 0;
+
+    const varWithinRun = msWithin;
+    const varBetweenRun = Math.max(0, (msBetweenRun - msWithin) / replicatesPerRun);
+    const varBetweenDay = Math.max(0, (msBetweenDay - msBetweenRun) / (runsPerDay * replicatesPerRun));
+    const varTotal = varWithinRun + varBetweenRun + varBetweenDay;
+
+    const toCV = (v: number) => meanVal !== 0 ? (Math.sqrt(v) / meanVal) * 100 : 0;
+
+    return {
+      level: dp.level, levelName: dp.levelName, n, mean: meanVal, sd: sdVal,
+      cv: cvVal, allowableCV,
+      passFail: cvVal <= allowableCV ? "Pass" : "Fail",
+      withinRunSD: Math.sqrt(varWithinRun), withinRunCV: toCV(varWithinRun),
+      betweenRunSD: Math.sqrt(varBetweenRun), betweenRunCV: toCV(varBetweenRun),
+      betweenDaySD: Math.sqrt(varBetweenDay), betweenDayCV: toCV(varBetweenDay),
+      totalSD: Math.sqrt(varTotal), totalCV: toCV(varTotal),
+    };
+  });
+
+  const passCount = levelResults.filter(r => r.passFail === "Pass").length;
+  const totalCount = levelResults.length;
+  const overallPass = passCount === totalCount && totalCount > 0;
+  const cliaStr = allowableCV.toFixed(1);
+  const summary = `Precision Verification was performed on ${totalCount} control level${totalCount !== 1 ? "s" : ""}. ` +
+    `CLIA Allowable Imprecision (CV) was ±${cliaStr}%. ` +
+    `${passCount} of ${totalCount} levels met the allowable imprecision criteria. ` +
+    `The precision study ${overallPass ? "PASSED" : "FAILED"} CLIA requirements.`;
+
+  return { type: "precision", mode, levelResults, overallPass, passCount, totalCount, summary };
+}
+
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults;
+export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
   instrumentNames: string[],
   cliaError: number,
   studyType: "cal_ver" | "method_comparison" = "cal_ver"
-): StudyResults {
+): CalVerResults | MethodCompResults {
   if (studyType === "method_comparison") {
     return calculateMethodComparison(dataPoints, instrumentNames, cliaError);
   }
@@ -376,3 +514,4 @@ export function calculateStudy(
 // ─── Type guards ──────────────────────────────────────────────────────────────
 export function isCalVer(r: StudyResults): r is CalVerResults { return r.type === "cal_ver"; }
 export function isMethodComp(r: StudyResults): r is MethodCompResults { return r.type === "method_comparison"; }
+export function isPrecision(r: StudyResults): r is PrecisionResults { return r.type === "precision"; }

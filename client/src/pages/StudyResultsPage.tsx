@@ -7,11 +7,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 import {
   calculateStudy,
+  calculatePrecision,
   isCalVer,
   isMethodComp,
+  isPrecision,
   type StudyResults,
   type CalVerResults,
   type MethodCompResults,
+  type PrecisionResults,
+  type PrecisionDataPoint,
   type DataPoint,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
@@ -42,7 +46,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+  const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : study.studyType === "precision" ? "Precision" : "MethodComp"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
   a.href = url;
   a.download = filename;
   a.style.display = "none";
@@ -77,7 +81,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -125,7 +129,7 @@ function EvalBox({ results }: { results: StudyResults }) {
               ? <CheckCircle2 size={16} className="text-green-400" />
               : <XCircle size={16} className="text-red-400" />}
             <span className={`text-sm font-semibold ${results.overallPass ? "text-green-400" : "text-red-400"}`}>
-              Overall: {results.overallPass ? "PASS" : "FAIL"} — {results.passCount}/{results.totalCount} results within TEa
+              Overall: {results.overallPass ? "PASS" : "FAIL"} — {results.passCount}/{results.totalCount} {isPrecision(results) ? "levels within allowable CV" : "results within TEa"}
             </span>
           </div>
         </div>
@@ -144,8 +148,8 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"],
-            ["CLIA Total Allowable Error", `±${cliaPercent}%`],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"],
+            [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", `±${cliaPercent}%`],
             ["Analyst", study.analyst],
             ["Date", study.date],
             ["Instruments / Methods", instrumentNames.join(", ")],
@@ -612,6 +616,121 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
   );
 }
 
+// ─── PRECISION VERIFICATION results ──────────────────────────────────────────
+function PrecisionReport({ study, results }: { study: Study; results: PrecisionResults }) {
+  return (
+    <>
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        {[
+          { label: "Control Levels", value: results.levelResults.length },
+          { label: "Levels Passing", value: results.passCount, className: "text-green-400" },
+          { label: "Allowable CV", value: `±${(study.cliaAllowableError * 100).toFixed(1)}%` },
+        ].map(({ label, value, className }) => (
+          <Card key={label}><CardContent className="p-4 text-center">
+            <div className={`text-2xl font-bold ${className || ""}`}>{value}</div>
+            <div className="text-xs text-muted-foreground mt-1">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      {/* Precision Summary Table */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Precision Summary</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Level</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">N</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Mean</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SD</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">CV%</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Allow CV%</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.levelResults.map((r, i) => (
+                  <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/20" : ""}`}>
+                    <td className="py-2 pr-3">{r.levelName}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.n}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.mean.toFixed(3)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.sd.toFixed(3)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.cv.toFixed(2)}%</td>
+                    <td className="text-right py-2 pr-3 font-mono">±{r.allowableCV.toFixed(1)}%</td>
+                    <td className="text-right py-2 pr-3">
+                      <span className={r.passFail === "Pass" ? "pass-badge" : "fail-badge"}>{r.passFail}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Advanced mode ANOVA breakdown */}
+      {results.mode === "advanced" && results.levelResults.some(r => r.withinRunCV !== undefined) && (
+        <Card className="mb-6">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">ANOVA Precision Components</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Level</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Within-Run CV%</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Between-Run CV%</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Between-Day CV%</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Total CV%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.levelResults.map((r, i) => (
+                    <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/20" : ""}`}>
+                      <td className="py-2 pr-3">{r.levelName}</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.withinRunCV?.toFixed(2) ?? "—"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.betweenRunCV?.toFixed(2) ?? "—"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.betweenDayCV?.toFixed(2) ?? "—"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono font-semibold">{r.totalCV?.toFixed(2) ?? "—"}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Individual Measurements */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Individual Measurements</CardTitle></CardHeader>
+        <CardContent>
+          {results.levelResults.map((r, li) => {
+            const rawDP = JSON.parse(study.dataPoints || "[]");
+            const dp = rawDP[li];
+            const vals: number[] = dp?.values || [];
+            const filtered = vals.filter((v: number) => !isNaN(v));
+            if (!filtered.length) return null;
+            return (
+              <div key={li} className="mb-4">
+                <div className="text-xs font-semibold text-muted-foreground mb-2">{r.levelName}</div>
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
+                  {filtered.map((v: number, i: number) => (
+                    <div key={i} className="text-center text-xs bg-muted/30 rounded px-1 py-1 font-mono">{v}</div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 // ─── Root page ────────────────────────────────────────────────────────────────
 function BottomPDFButton({ study, results }: { study: Study; results: StudyResults }) {
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -661,8 +780,10 @@ export default function StudyResults() {
   }
 
   const instrumentNames: string[] = JSON.parse(study.instruments);
-  const rawDataPoints: DataPoint[] = JSON.parse(study.dataPoints);
-  const results = calculateStudy(rawDataPoints, instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
+  const rawDataPoints = JSON.parse(study.dataPoints);
+  const results: StudyResults = study.studyType === "precision"
+    ? calculatePrecision(rawDataPoints as PrecisionDataPoint[], study.cliaAllowableError, (rawDataPoints[0]?.days ? "advanced" : "simple"))
+    : calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -670,6 +791,7 @@ export default function StudyResults() {
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
       {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
+      {isPrecision(results) && <PrecisionReport study={study} results={results} />}
 
       <EvalBox results={results} />
       <UserSpecs study={study} instrumentNames={instrumentNames} />

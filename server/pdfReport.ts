@@ -260,7 +260,7 @@ const CSS = `
 
 // ─── Shared header HTML ───────────────────────────────────────────────────────
 function headerHTML(study: Study): string {
-  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison";
+  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison";
   return `
   <div class="report-header">
     <div>
@@ -280,7 +280,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I";
 
   const specs = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     ["CLIA Total Allowable Error", `±${cliaP}%`],
     ["CLIA CFR Reference", `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`],
@@ -628,6 +628,98 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   </body></html>`;
 }
 
+// ─── PRECISION HTML report ───────────────────────────────────────────────────
+function buildPrecisionHTML(study: Study, results: any): string {
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const cliaCV = (study.cliaAllowableError * 100).toFixed(1);
+  const isAdvanced = results.mode === "advanced";
+
+  const summaryRows = results.levelResults.map((r: any, i: number) => {
+    const pfClass = r.passFail === "Pass" ? "pass" : "fail";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${r.levelName}</td>
+      <td class="text-right">${r.n}</td>
+      <td class="text-right">${r.mean.toFixed(3)}</td>
+      <td class="text-right">${r.sd.toFixed(3)}</td>
+      <td class="text-right">${r.cv.toFixed(2)}%</td>
+      <td class="text-right">±${cliaCV}%</td>
+      <td class="text-right ${pfClass}">${r.passFail}</td>
+    </tr>`;
+  }).join("");
+
+  const anovaSection = isAdvanced ? `
+    <hr class="divider" style="margin-top:8px">
+    <div class="section-label">ANOVA Precision Components</div>
+    <table>
+      <thead><tr>
+        <th>Level</th>
+        <th class="text-right">Within-Run SD</th><th class="text-right">Within-Run CV%</th>
+        <th class="text-right">Between-Run CV%</th>
+        <th class="text-right">Between-Day CV%</th>
+        <th class="text-right">Total CV%</th>
+      </tr></thead>
+      <tbody>${results.levelResults.map((r: any, i: number) => `
+        <tr class="${i % 2 === 1 ? "stripe" : ""}">
+          <td>${r.levelName}</td>
+          <td class="text-right">${r.withinRunSD?.toFixed(4) ?? "—"}</td>
+          <td class="text-right">${r.withinRunCV?.toFixed(2) ?? "—"}%</td>
+          <td class="text-right">${r.betweenRunCV?.toFixed(2) ?? "—"}%</td>
+          <td class="text-right">${r.betweenDayCV?.toFixed(2) ?? "—"}%</td>
+          <td class="text-right" style="font-weight:700">${r.totalCV?.toFixed(2) ?? "—"}%</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>` : "";
+
+  const dataPoints = JSON.parse((study as any).dataPoints || "[]");
+  const valuesSection = results.levelResults.map((r: any, li: number) => {
+    const vals: number[] = dataPoints[li]?.values || [];
+    const filtered = vals.filter((v: number) => !isNaN(v));
+    if (!filtered.length) return "";
+    const rows = [];
+    for (let i = 0; i < filtered.length; i += 10) {
+      const chunk = filtered.slice(i, i + 10);
+      rows.push(`<tr class="${(i / 10) % 2 === 1 ? "stripe" : ""}">${chunk.map((v: number) => `<td class="text-right" style="font-size:7pt">${v}</td>`).join("")}</tr>`);
+    }
+    return `
+      <div style="margin-bottom:8px">
+        <div style="font-size:7.5pt;font-weight:700;color:${MUTED};margin-bottom:3px">${r.levelName}</div>
+        <table style="font-size:7pt"><tbody>${rows.join("")}</tbody></table>
+      </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study)}
+
+  <div class="section-heading">Precision Verification (EP15)</div>
+
+  <hr class="divider">
+  <div class="section-label">Precision Summary</div>
+  <table>
+    <thead><tr>
+      <th>Level</th><th class="text-right">N</th><th class="text-right">Mean</th>
+      <th class="text-right">SD</th><th class="text-right">CV%</th>
+      <th class="text-right">Allow CV%</th><th class="text-right">Pass?</th>
+    </tr></thead>
+    <tbody>${summaryRows}</tbody>
+  </table>
+
+  ${anovaSection}
+
+  ${signatureHTML()}
+
+  <div class="stats-section">
+    <div class="section-label">Individual Measurements</div>
+    ${valuesSection}
+    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+  </div>
+
+  ${supportingPageHTML(study, instrumentNames)}
+  </body></html>`;
+}
+
 // ─── Puppeteer renderer ───────────────────────────────────────────────────────
 let _browser: any = null;
 async function getBrowser() {
@@ -656,6 +748,8 @@ const FOOTER_TEMPLATE = `
 export async function generatePDFBuffer(study: Study, results: any): Promise<Buffer> {
   const html = study.studyType === "cal_ver"
     ? buildCalVerHTML(study, results)
+    : study.studyType === "precision"
+    ? buildPrecisionHTML(study, results)
     : buildMethodCompHTML(study, results);
 
   const browser = await getBrowser();

@@ -12,7 +12,7 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, type DataPoint } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, type DataPoint, type PrecisionDataPoint } from "@/lib/calculations";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
@@ -182,12 +182,24 @@ export default function VeritaCheckPage() {
   const [testName, setTestName] = useState("");
   const [analyst, setAnalyst] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison">("cal_ver");
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision">("cal_ver");
   const [instrumentNames, setInstrumentNames] = useState<string[]>(["Instrument 1", "Instrument 2"]);
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
+
+  // Precision study state
+  const [precisionMode, setPrecisionMode] = useState<"simple" | "advanced">("simple");
+  const [precisionLevels, setPrecisionLevels] = useState(2);
+  const [precisionLevelNames, setPrecisionLevelNames] = useState<string[]>(["Level 1 (Low)", "Level 2 (High)", "Level 3 (Mid)"]);
+  const [precisionValues, setPrecisionValues] = useState<number[][]>([[], [], []]);
+  const [precisionReps, setPrecisionReps] = useState(20);
+  // Advanced mode
+  const [precisionDays, setPrecisionDays] = useState(5);
+  const [precisionRunsPerDay, setPrecisionRunsPerDay] = useState(1);
+  const [precisionReplicatesPerRun, setPrecisionReplicatesPerRun] = useState(2);
+  const [precisionAdvancedData, setPrecisionAdvancedData] = useState<number[][][]>([[], [], []]);
 
   const handleNumLevelsChange = (val: string) => {
     const n = parseInt(val);
@@ -271,7 +283,11 @@ export default function VeritaCheckPage() {
     }));
   };
 
-  const filledLevels = dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
+  const filledLevels = studyType === "precision"
+    ? (precisionMode === "simple"
+      ? precisionValues.slice(0, precisionLevels).filter(arr => (arr || []).filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length
+      : precisionAdvancedData.slice(0, precisionLevels).filter(days => (days || []).flat().filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length)
+    : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
 
   const saveMutation = useMutation({
     mutationFn: async (study: InsertStudy) => {
@@ -288,8 +304,34 @@ export default function VeritaCheckPage() {
 
   const handleSubmit = () => {
     if (!testName.trim()) { toast({ title: "Please enter a test name", variant: "destructive" }); return; }
+    if (studyType === "precision") {
+      if (filledLevels < 1) { toast({ title: "Please enter at least 3 measurements for one level", variant: "destructive" }); return; }
+      const precDataPoints: PrecisionDataPoint[] = precisionLevelNames.slice(0, precisionLevels).map((name, i) => {
+        if (precisionMode === "simple") {
+          return { level: i + 1, levelName: name, values: (precisionValues[i] || []).filter(v => v !== undefined && v !== null && !isNaN(v)) };
+        } else {
+          return {
+            level: i + 1, levelName: name,
+            days: precisionAdvancedData[i] || [],
+            numDays: precisionDays, runsPerDay: precisionRunsPerDay, replicatesPerRun: precisionReplicatesPerRun,
+            values: (precisionAdvancedData[i] || []).flat().filter(v => v !== undefined && v !== null && !isNaN(v))
+          };
+        }
+      });
+      const results = calculatePrecision(precDataPoints, cliaValue, precisionMode);
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: instrumentNames[0] || "—", analyst: analyst.trim() || "—",
+        date, studyType: "precision", cliaAllowableError: cliaValue,
+        dataPoints: JSON.stringify(precDataPoints),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
+        status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
     if (filledLevels < MIN_LEVELS) { toast({ title: "Please enter at least 3 data points", variant: "destructive" }); return; }
-    const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType);
+    const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison");
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "—",
       date, studyType, cliaAllowableError: cliaValue, dataPoints: JSON.stringify(dataPoints),
@@ -310,7 +352,7 @@ export default function VeritaCheckPage() {
           </div>
           <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run — finally done right.</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Calibration verification and method comparison, automated and browser-based. CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation — no desktop software required.
+            Calibration verification, method comparison, and precision studies — automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation — no desktop software required.
           </p>
         </div>
       </section>
@@ -354,6 +396,7 @@ export default function VeritaCheckPage() {
                         <SelectContent>
                           <SelectItem value="cal_ver">Calibration Verification / Linearity</SelectItem>
                           <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
+                          <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -378,7 +421,7 @@ export default function VeritaCheckPage() {
               </Card>
 
               <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-base">CLIA Total Allowable Error</CardTitle></CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <Select value={String(cliaPreset)} onValueChange={v => setCliaPreset(parseInt(v))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -415,6 +458,130 @@ export default function VeritaCheckPage() {
             </TabsContent>
 
             <TabsContent value="data">
+              {studyType === "precision" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
+                    <span>Precision Data Entry</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground font-normal">Mode:</span>
+                      <Select value={precisionMode} onValueChange={v => setPrecisionMode(v as "simple" | "advanced")}>
+                        <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="simple">Simple</SelectItem>
+                          <SelectItem value="advanced">Advanced (EP15)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-muted-foreground font-normal">Levels:</span>
+                      <Select value={String(precisionLevels)} onValueChange={v => setPrecisionLevels(parseInt(v))}>
+                        <SelectTrigger className="h-7 w-14 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1</SelectItem>
+                          <SelectItem value="2">2</SelectItem>
+                          <SelectItem value="3">3</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardTitle></CardHeader>
+                  <CardContent className="space-y-6">
+                    {precisionMode === "advanced" && (
+                      <div className="rounded-md bg-muted/50 border p-3 space-y-3">
+                        <p className="text-xs font-medium">Advanced — EP15 ANOVA</p>
+                        <p className="text-xs text-muted-foreground">For structured multi-day precision studies per CLSI EP15. Specify days, runs per day, and replicates per run.</p>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1"><Label className="text-xs">Days</Label>
+                            <Input type="number" min={1} max={20} value={precisionDays} onChange={e => setPrecisionDays(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                          </div>
+                          <div className="space-y-1"><Label className="text-xs">Runs / Day</Label>
+                            <Input type="number" min={1} max={3} value={precisionRunsPerDay} onChange={e => setPrecisionRunsPerDay(Math.max(1, Math.min(3, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                          </div>
+                          <div className="space-y-1"><Label className="text-xs">Replicates / Run</Label>
+                            <Input type="number" min={1} max={5} value={precisionReplicatesPerRun} onChange={e => setPrecisionReplicatesPerRun(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {precisionMode === "simple" && (
+                      <div className="flex items-center gap-3">
+                        <Label className="text-xs whitespace-nowrap">Replicates per level:</Label>
+                        <Select value={String(precisionReps)} onValueChange={v => setPrecisionReps(parseInt(v))}>
+                          <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[5,10,15,20,25,30,35,40].map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {Array.from({ length: precisionLevels }).map((_, li) => (
+                      <div key={li} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="shrink-0 text-xs">{li + 1}</Badge>
+                          <Input value={precisionLevelNames[li] || ""} onChange={e => {
+                            const names = [...precisionLevelNames]; names[li] = e.target.value; setPrecisionLevelNames(names);
+                          }} placeholder={`Level ${li + 1}`} className="h-8 text-sm max-w-xs" />
+                        </div>
+
+                        {precisionMode === "simple" ? (
+                          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                            {Array.from({ length: precisionReps }).map((_, vi) => (
+                              <Input key={vi} type="number" step="any" placeholder="—"
+                                value={precisionValues[li]?.[vi] ?? ""}
+                                onChange={e => {
+                                  const vals = [...precisionValues];
+                                  if (!vals[li]) vals[li] = [];
+                                  vals[li] = [...vals[li]];
+                                  vals[li][vi] = e.target.value === "" ? (undefined as any) : parseFloat(e.target.value);
+                                  setPrecisionValues(vals);
+                                }}
+                                className="h-8 text-xs text-center"
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead><tr className="border-b border-border">
+                                <th className="text-left py-1 pr-2 text-xs text-muted-foreground font-medium w-16">Day</th>
+                                {Array.from({ length: precisionRunsPerDay }).flatMap((_, ri) =>
+                                  Array.from({ length: precisionReplicatesPerRun }).map((_, repi) => (
+                                    <th key={`${ri}-${repi}`} className="text-center py-1 px-1 text-xs text-muted-foreground font-medium">
+                                      R{ri + 1}-{repi + 1}
+                                    </th>
+                                  ))
+                                )}
+                              </tr></thead>
+                              <tbody>
+                                {Array.from({ length: precisionDays }).map((_, di) => (
+                                  <tr key={di} className="border-b border-border/50">
+                                    <td className="py-1 pr-2 text-xs text-muted-foreground font-mono">Day {di + 1}</td>
+                                    {Array.from({ length: precisionRunsPerDay * precisionReplicatesPerRun }).map((_, ci) => (
+                                      <td key={ci} className="py-1 px-1">
+                                        <Input type="number" step="any" placeholder="—"
+                                          value={precisionAdvancedData[li]?.[di]?.[ci] ?? ""}
+                                          onChange={e => {
+                                            const data = [...precisionAdvancedData];
+                                            if (!data[li]) data[li] = [];
+                                            data[li] = [...data[li]];
+                                            if (!data[li][di]) data[li][di] = [];
+                                            data[li][di] = [...data[li][di]];
+                                            data[li][di][ci] = e.target.value === "" ? (undefined as any) : parseFloat(e.target.value);
+                                            setPrecisionAdvancedData(data);
+                                          }}
+                                          className="h-7 text-xs text-center w-20"
+                                        />
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                   <span>Data Points</span>
@@ -460,6 +627,7 @@ export default function VeritaCheckPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
               <div className="mt-4 flex items-center gap-3">
                 <Button variant="outline" size="sm" onClick={() => {
                   setTestName("GC1 CREAT"); setAnalyst("SED"); setDate("2025-02-06");
@@ -484,9 +652,9 @@ export default function VeritaCheckPage() {
 
           <div className="mt-8 flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {filledLevels >= 3 ? <span className="text-green-600 dark:text-green-400">✓ {filledLevels} levels ready</span> : <span>{filledLevels} / 3 minimum levels filled</span>}
+              {filledLevels >= (studyType === "precision" ? 1 : 3) ? <span className="text-green-600 dark:text-green-400">✓ {filledLevels} level{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : 3} minimum levels filled</span>}
             </div>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < 3 || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "precision" ? 1 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
               {saveMutation.isPending ? "Calculating…" : "Run Study & Generate Report"}
             </Button>
           </div>
