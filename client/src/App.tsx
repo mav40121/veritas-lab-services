@@ -20,6 +20,7 @@ import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import StudyGuidePage from "@/pages/StudyGuidePage";
+import BookPage from "@/pages/BookPage";
 
 function SiteFooter() {
   return (
@@ -43,6 +44,7 @@ function SiteFooter() {
             <div className="mt-3">
               <div className="font-semibold text-sm mb-2">Resources</div>
               <ul className="space-y-1 text-sm text-muted-foreground">
+                <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101 — New Book</a></li>
                 <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide — Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
                 <li><a href="https://www.cms.gov/medicare/quality/clinical-laboratory-improvement-amendments/brochures" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Brochures (CMS)</a></li>
@@ -92,6 +94,7 @@ function AppContent() {
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/study-guide" component={StudyGuidePage} />
+          <Route path="/book" component={BookPage} />
           <Route component={NotFound} />
         </Switch>
       </main>

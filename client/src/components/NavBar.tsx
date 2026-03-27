@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/services", label: "Services" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck", highlight: true },
+  { href: "/book", label: "Book" },
   { href: "/contact", label: "Contact" },
 ];
 
