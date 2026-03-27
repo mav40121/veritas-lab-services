@@ -43,17 +43,31 @@ async function downloadPDF(study: Study, results: StudyResults) {
     body: JSON.stringify({ study, results }),
   });
   if (!res.ok) throw new Error(await res.text());
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+
+  const filename = `VeritaCheck_${
+    study.studyType === "cal_ver" ? "CalVer" :
+    study.studyType === "precision" ? "Precision" : "MethodComp"
+  }_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+
+  // Use ArrayBuffer → base64 data URI to bypass Adobe Acrobat's
+  // blob-URL interception which strips the filename and shows about:blank
+  const arrayBuffer = await res.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
+  const dataUri = `data:application/octet-stream;base64,${base64}`;
+
   const a = document.createElement("a");
-  const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : study.studyType === "precision" ? "Precision" : "MethodComp"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
-  a.href = url;
+  a.href = dataUri;
   a.download = filename;
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];
