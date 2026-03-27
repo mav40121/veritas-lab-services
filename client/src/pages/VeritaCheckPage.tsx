@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -319,11 +319,16 @@ export default function VeritaCheckPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-serif text-2xl font-bold">New Study</h2>
-            {!isLoggedIn && (
-              <p className="text-xs text-muted-foreground">
-                <a href="/#/login" className="text-primary hover:underline">Sign in</a> to save study history
-              </p>
-            )}
+            <div className="flex items-center gap-3">
+              {!isLoggedIn && (
+                <p className="text-xs text-muted-foreground">
+                  <a href="/#/login" className="text-primary hover:underline">Sign in</a> to save study history
+                </p>
+              )}
+              <Button asChild variant="outline" size="sm" className="gap-1.5 font-medium">
+                <a href="/#/dashboard"><LayoutDashboard size={13} />My Studies</a>
+              </Button>
+            </div>
           </div>
 
           <Tabs defaultValue="setup" className="space-y-6">
