@@ -12,7 +12,7 @@ const navLinks = [
   { href: "/services", label: "Services" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck", highlight: true },
-  { href: "/book", label: "Book" },
+  { href: "/book", label: "Book", badge: "Coming Soon" },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -40,7 +40,7 @@ export function NavBar() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map(({ href, label, highlight }) => (
+          {navLinks.map(({ href, label, highlight, badge }: any) => (
             <Link key={href} href={href} className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors font-medium",
               highlight
@@ -51,6 +51,11 @@ export function NavBar() {
             )}>
               {highlight && <FlaskConical size={13} />}
               {label}
+              {badge && (
+                <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-500/25 rounded px-1.5 py-0.5 leading-none">
+                  {badge}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
