@@ -129,7 +129,7 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
   return prev.slice(0, newCount).map((dp, i) => ({ ...dp, level: i + 1 }));
 }
 
-const EARLY_ADOPTER_DEADLINE = "May 1, 2026";
+const EARLY_ADOPTER_DEADLINE = "June 15, 2026";
 
 const plans = [
   { priceType: "perStudy", name: "Per Study",   price: "$9",   unit: "per report", description: "Pay only when you need a study.",                        features: ["Single study run", "Full PDF report", "Cal Ver, Method Comp & Precision", "CLIA pass/fail evaluation"],                                                          cta: "Buy a Study",           highlight: false, badge: null },
