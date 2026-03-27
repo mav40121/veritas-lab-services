@@ -401,14 +401,9 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   const pageH_cv = doc.internal.pageSize.height;
   const rowH_cv = 5;
   const nRows = results.levelResults.length;
-  const evalH = 32;  // eval title + text + PASS bar
-  const sigH = 28;   // accepted by block
-  const footerH_cv = 28; // disclaimer + footer line
-  // Available space remaining on this page
-  const spaceLeft = pageH_cv - y - footerH_cv;
-  const totalNeeded = 12 + (nRows * rowH_cv) + evalH + sigH;
-  // Only break to new page if the whole block won't fit
-  if (totalNeeded > spaceLeft) { doc.addPage(); y = 20; }
+  const evalH = 32;
+  const sigH = 28;
+  const footerH_cv = 28;
 
   sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
   const cols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
@@ -574,7 +569,14 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   });
 
   // Always start level-by-level data on a new page
-  doc.addPage(); y = 20;
+  // Only add page if level-by-level data won't fit — otherwise flow directly
+  const pageH_mc = (doc as any).internal.pageSize.height;
+  const rowH_mc = 4.2;
+  const nRowsMC = results.levelResults.length;
+  const evalH_mc = 32, sigH_mc = 28, footerH_mc = 28;
+  const spaceLeftMC = pageH_mc - y - footerH_mc;
+  const neededMC = 12 + (nRowsMC * rowH_mc) + evalH_mc + sigH_mc;
+  if (neededMC > spaceLeftMC) { doc.addPage(); y = 20; }
 
   sectionTitle(doc, "Level-by-Level Comparison Results", y, pw); y += 5;
   // Fixed column positions: Level | Ref | Value | Bias | % Diff | Pass?
