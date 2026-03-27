@@ -171,6 +171,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/studies/:id", (req, res) => {
     const study = storage.getStudy(parseInt(req.params.id));
     if (!study) return res.status(404).json({ error: "Study not found" });
+
+    // If study belongs to a user, verify the requester is that user
+    if (study.userId) {
+      const auth = req.headers.authorization;
+      if (!auth?.startsWith("Bearer ")) {
+        return res.status(403).json({ error: "This study requires authentication" });
+      }
+      try {
+        const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+        if (payload.userId !== study.userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      } catch {
+        return res.status(403).json({ error: "Invalid or expired session" });
+      }
+    }
+
     res.json(study);
   });
 

@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/components/AuthContext";
+import { useLocation } from "wouter";
 import {
   calculateStudy,
   calculatePrecision,
@@ -765,19 +767,55 @@ function BottomPDFButton({ study, results }: { study: Study; results: StudyResul
 export default function StudyResults() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id || "0");
+  const { isLoggedIn } = useAuth();
+  const [, navigate] = useLocation();
 
   // Scroll to top whenever study ID changes
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [id]);
 
-  const { data: study, isLoading } = useQuery<Study>({
+  const { data: study, isLoading, error } = useQuery<Study>({
     queryKey: ["/api/studies", id],
-    queryFn: () => apiRequest("GET", `/api/studies/${id}`).then((r) => r.json()),
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/studies/${id}`);
+      if (res.status === 403) {
+        const data = await res.json();
+        throw new Error(data.error || "Access denied");
+      }
+      if (res.status === 404) throw new Error("Study not found");
+      return res.json();
+    },
+    retry: false,
   });
 
   if (isLoading) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-4">
         {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+      </div>
+    );
+  }
+
+  // Handle 403 / access denied
+  if (error) {
+    const msg = (error as Error).message;
+    const isAuthError = msg.includes("authentication") || msg.includes("Access denied") || msg.includes("expired");
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="text-4xl mb-4">{isAuthError ? "🔒" : "🔍"}</div>
+        <h2 className="text-xl font-bold mb-2">{isAuthError ? "Sign in required" : "Study not found"}</h2>
+        <p className="text-muted-foreground mb-6">
+          {isAuthError
+            ? "This study belongs to a registered account. Please sign in to view it."
+            : "This study doesn't exist or may have been deleted."}
+        </p>
+        <div className="flex gap-3 justify-center">
+          {isAuthError && (
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate("/login")}>
+              Sign In
+            </Button>
+          )}
+          <Button variant="outline" asChild><Link href="/dashboard">My Studies</Link></Button>
+        </div>
       </div>
     );
   }
