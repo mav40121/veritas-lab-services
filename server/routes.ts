@@ -225,7 +225,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
     if (!stripe) return res.status(503).json({ error: "Payments not configured" });
-    const { priceType } = req.body; // "perStudy" | "annual"
+    const { priceType } = req.body; // "perStudy" | "annual" | "lab"
     if (!priceType || !PRICES[priceType as keyof typeof PRICES]) {
       return res.status(400).json({ error: "Invalid price type" });
     }
@@ -233,7 +233,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const priceId = PRICES[priceType as keyof typeof PRICES];
-    const isSubscription = priceType === "annual";
+    const isSubscription = priceType === "annual" || priceType === "lab";
     const successUrl = `${FRONTEND_URL}/#/veritacheck?payment=success&type=${priceType}`;
     const cancelUrl = `${FRONTEND_URL}/#/veritacheck?payment=cancelled`;
 
@@ -287,11 +287,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (priceType === "perStudy") {
             // Add 1 study credit
             storage.addStudyCredits(userId, 1);
-          } else if (priceType === "annual" && session.subscription) {
-            // Activate annual plan
+          } else if ((priceType === "annual" || priceType === "lab") && session.subscription) {
+            // Activate annual or lab plan
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
-              plan: "annual",
+              plan: priceType, // "annual" or "lab"
             });
           }
         }

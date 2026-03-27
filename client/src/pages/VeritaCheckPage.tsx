@@ -130,8 +130,9 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
 }
 
 const plans = [
-  { name: "Per Study", price: "$9", unit: "per report", description: "Pay only when you need a study.", features: ["Single study run", "Full PDF report", "Cal ver + method comparison", "CLIA pass/fail evaluation"], cta: "Buy a Study", highlight: false },
-  { name: "Annual Lab", price: "$149", unit: "per year", description: "Unlimited studies for your lab.", features: ["Unlimited studies", "All PDF reports", "Multi-instrument comparison", "Study history dashboard", "Priority support"], cta: "Subscribe — Best Value", highlight: true },
+  { priceType: "perStudy", name: "Per Study",       price: "$9",   unit: "per report", description: "Pay only when you need a study.",                     features: ["Single study run", "Full PDF report", "Cal Ver + Method Comparison", "CLIA pass/fail evaluation"],                                                         cta: "Buy a Study",             highlight: false, badge: null },
+  { priceType: "annual",   name: "Individual",      price: "$149", unit: "per year",   description: "Unlimited studies for one analyst.",                 features: ["Unlimited studies", "All PDF reports", "Multi-instrument comparison", "Study history dashboard", "Priority support"],                                  cta: "Subscribe",               highlight: false, badge: null },
+  { priceType: "lab",      name: "Lab Account",     price: "$499", unit: "per year",   description: "Unlimited studies for your entire lab — up to 5 analysts.", features: ["Everything in Individual", "Up to 5 analyst accounts", "Shared study dashboard", "All PDF reports", "Priority support", "Best value for labs"], cta: "Subscribe — Best Value",   highlight: true,  badge: "Best Value" },
 ];
 
 export default function VeritaCheckPage() {
@@ -155,7 +156,7 @@ export default function VeritaCheckPage() {
     }
   }, [search]);
 
-  const handleBuy = async (priceType: "perStudy" | "annual") => {
+  const handleBuy = async (priceType: "perStudy" | "annual" | "lab") => {
     if (!isLoggedIn) {
       toast({ title: "Sign in required", description: "Please create a free account to purchase.", variant: "destructive" });
       navigate("/login");
@@ -519,13 +520,12 @@ export default function VeritaCheckPage() {
             </Alert>
           )}
 
-          <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {plans.map(plan => {
-              const priceType = plan.name === "Per Study" ? "perStudy" : "annual";
-              const isLoading = checkoutLoading === priceType;
+              const isLoading = checkoutLoading === plan.priceType;
               return (
                 <Card key={plan.name} className={`relative border-2 ${plan.highlight ? "border-primary bg-primary/5" : "border-border"}`}>
-                  {plan.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><Badge className="bg-primary text-primary-foreground">Most Popular</Badge></div>}
+                  {plan.badge && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><Badge className="bg-primary text-primary-foreground">{plan.badge}</Badge></div>}
                   <CardContent className="p-6">
                     <h3 className="font-bold text-lg mb-1">{plan.name}</h3>
                     <div className="flex items-baseline gap-1 mb-2">
@@ -540,7 +540,7 @@ export default function VeritaCheckPage() {
                       className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
                       variant={plan.highlight ? "default" : "outline"}
                       disabled={isLoading || checkoutLoading !== null}
-                      onClick={() => handleBuy(priceType)}
+                      onClick={() => handleBuy(plan.priceType as "perStudy" | "annual" | "lab")}
                     >
                       {isLoading ? <><Loader2 size={14} className="mr-2 animate-spin" />Redirecting…</> : plan.cta}
                     </Button>
