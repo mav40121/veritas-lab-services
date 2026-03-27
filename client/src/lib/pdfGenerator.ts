@@ -395,8 +395,8 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
   doc.setFontSize(8);
   Object.entries(results.regression).forEach(([name, reg]) => {
-    // Truncate name to fit in label column (max ~50mm at 8pt)
-    const label = name.length > 28 ? name.substring(0, 26) + "…" : name;
+    // Truncate name to fit in label column (max ~55mm at 8pt)
+    const label = name.length > 32 ? name.substring(0, 30) + "…" : name;
     doc.text(label, linColX[0], y);
     doc.text(String(reg.n), linColX[1], y, { align: "right" });
     doc.text(reg.slope.toFixed(4), linColX[2], y, { align: "right" });
@@ -426,9 +426,18 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   if (totalNeeded_cv > spaceLeft_cv) { doc.addPage(); y = 20; }
 
   sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
-  const cols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
-  const colW = contentW / cols.length;
-  tableHeader(doc, cols, cols.map((_, i) => margin + i*colW + (i===0?2:colW-2)), y, contentW, margin);
+  // Fixed column positions: Level | Assigned | Mean | % Rec | Obs Err | Pass? | Instrument(s)
+  // Instrument column gets the remainder of the row after fixed columns
+  const statFixedCols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
+  // Fixed X positions for first 6 cols; instrument columns share remaining space
+  // Column anchors (right-aligned text): Level@17, Assigned@67, Mean@99, %Rec@127, ObsErr@153, Pass?@176
+  // Instrument cols split remaining space from x=176 to x=198 (right margin)
+  const statColX: number[] = [margin+2, margin+52, margin+84, margin+112, margin+138, margin+161];
+  const instrStart = margin + 161;
+  const instrEnd = pw - margin; // = 200.9
+  const instrColW = (instrEnd - instrStart) / instrumentNames.length;
+  instrumentNames.forEach((_, ii) => statColX.push(instrStart + (ii+1)*instrColW - 2));
+  tableHeader(doc, statFixedCols, statColX, y, contentW, margin);
   y += 7;
   doc.setFont("helvetica","normal");
   results.levelResults.forEach((r, ri) => {
@@ -451,7 +460,7 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
       if (val === "Pass") setRgb(doc, PASS_GREEN);
       else if (val === "Fail") setRgb(doc, FAIL_RED);
       else setRgb(doc, DARK);
-      doc.text(val, margin+i*colW+(i===0?2:colW-2), y, { align: i===0?"left":"right" });
+      doc.text(val, statColX[i], y, { align: i===0?"left":"right" });
     });
     y += 5;
   });
