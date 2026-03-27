@@ -3,7 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +83,15 @@ export function NavBar() {
             </Button>
           )}
 
+          {isLoggedIn && (
+            <Button asChild size="sm" variant="outline" className={cn(
+              "hidden md:flex gap-1.5 font-medium",
+              location === "/dashboard" && "bg-secondary text-foreground border-border"
+            )}>
+              <Link href="/dashboard"><LayoutDashboard size={13} />My Studies</Link>
+            </Button>
+          )}
+
           <Button asChild size="sm" className="hidden md:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
@@ -105,7 +114,10 @@ export function NavBar() {
           ))}
           <div className="pt-2 border-t border-border mt-2 flex gap-2">
             {isLoggedIn ? (
-              <Button variant="outline" size="sm" onClick={logout} className="flex-1">Sign out</Button>
+              <>
+                <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/dashboard" onClick={() => setMobileOpen(false)}><LayoutDashboard size={13} className="mr-1" />My Studies</Link></Button>
+                <Button variant="outline" size="sm" onClick={logout} className="flex-1">Sign out</Button>
+              </>
             ) : (
               <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/login" onClick={() => setMobileOpen(false)}>Sign in</Link></Button>
             )}
