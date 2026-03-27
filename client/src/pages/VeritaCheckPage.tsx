@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -354,6 +354,13 @@ export default function VeritaCheckPage() {
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             Calibration verification, method comparison, and precision studies — automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation — no desktop software required.
           </p>
+          <div className="mt-4">
+            <Link href="/study-guide" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
+              <BookOpen size={14} />
+              Not sure which study you need? Read the Study Guide
+              <ChevronRight size={13} />
+            </Link>
+          </div>
         </div>
       </section>
 
