@@ -355,7 +355,7 @@ export default function VeritaCheckPage() {
             Calibration verification, method comparison, and precision studies — automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation — no desktop software required.
           </p>
           <div className="mt-4">
-            <Link href="/study-guide" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
+            <Link href="/study-guide" className="inline-flex items-center gap-1.5 text-base text-primary hover:underline font-semibold">
               <BookOpen size={14} />
               Not sure which study you need? Read the Study Guide
               <ChevronRight size={13} />
