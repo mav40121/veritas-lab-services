@@ -244,25 +244,33 @@ function pdfEvalSection(doc: jsPDF, results: StudyResults, study: Study, y: numb
   return y;
 }
 
-// ─── Shared: page footer bar (appears on every page) ─────────────────────────
+// ─── Shared: page footer bar — writes footer + page numbers on ALL pages ─────
 function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
   const pageH = doc.internal.pageSize.height;
-  const _contentW = pw - 2*margin;
-  hLine(doc, pageH-12);
-  doc.setFontSize(6.5); setRgb(doc, MUTED);
-  // Disclaimer line above the footer bar
-  doc.setFontSize(5.5); setRgb(doc, [160,160,160] as [number,number,number]);
-  doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.", margin, pageH-16, { maxWidth: _contentW });
-  doc.setFontSize(6.5); setRgb(doc, MUTED);
-  doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
-  doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });
+  const cw = pw - 2*margin;
+  const totalPages = (doc.internal as any).pages.length - 1;
+  const savedPage = (doc as any).getCurrentPageInfo().pageNumber;
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    hLine(doc, pageH-12);
+    doc.setFontSize(5.5); setRgb(doc, [160,160,160] as [number,number,number]);
+    doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.", margin, pageH-16, { maxWidth: cw });
+    doc.setFontSize(6.5); setRgb(doc, MUTED);
+    doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
+    doc.text(`Page ${p}`, pw-margin, pageH-8, { align: "right" });
+  }
+  doc.setPage(savedPage);
 }
 
-// ─── Shared: signature block — anchored to bottom of current page ─────────────
+// ─── Shared: signature block — always anchored to bottom of page 1 ───────────
+// Call this AFTER all content is written. It switches to page 1, places the
+// signature at the fixed bottom position, then returns to the last page.
 function pdfSignatureBlock(doc: jsPDF, study: Study, _y: number, pw: number, margin: number, contentW: number): number {
-  // Always pin to the bottom of whatever page the content just finished on
+  const lastPage = (doc.internal as any).pages.length - 1;
   const pageH = doc.internal.pageSize.height;
-  const sigY = pageH - 42; // fixed distance from bottom, above footer
+  const sigY = pageH - 42; // fixed: above the footer disclaimer
+  // Switch to page 1 to place signature
+  doc.setPage(1);
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text("Accepted by:", margin, sigY);
   const lineY = sigY + 9;
@@ -271,6 +279,8 @@ function pdfSignatureBlock(doc: jsPDF, study: Study, _y: number, pw: number, mar
   doc.setFontSize(7.5); setRgb(doc, MUTED); doc.setFont("helvetica","normal");
   doc.text("Signature / Name & Title", margin, lineY + 4);
   doc.text("Date", pw - margin - contentW * 0.28, lineY + 4);
+  // Return to last page so subsequent calls render correctly
+  doc.setPage(lastPage);
   return lineY + 12;
 }
 
