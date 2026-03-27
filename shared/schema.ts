@@ -53,6 +53,15 @@ export const contactMessages = sqliteTable("contact_messages", {
 export const insertContactSchema = createInsertSchema(contactMessages).omit({ id: true, createdAt: true });
 export type InsertContact = z.infer<typeof insertContactSchema>;
 
+// Password reset tokens
+export const resetTokens = sqliteTable("reset_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
+});
+
 // DataPoint shape (JSON)
 export interface DataPoint {
   level: number;

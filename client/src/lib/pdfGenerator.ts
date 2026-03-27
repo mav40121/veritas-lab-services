@@ -249,6 +249,10 @@ function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
   const pageH = doc.internal.pageSize.height;
   hLine(doc, pageH-12);
   doc.setFontSize(6.5); setRgb(doc, MUTED);
+  // Disclaimer line above the footer bar
+  doc.setFontSize(5.5); setRgb(doc, [160,160,160]);
+  doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.", margin, pageH-16, { maxWidth: contentW });
+  doc.setFontSize(6.5); setRgb(doc, MUTED);
   doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
   doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });
 }

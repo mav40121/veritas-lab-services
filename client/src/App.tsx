@@ -16,6 +16,9 @@ import DashboardPage from "@/pages/DashboardPage";
 import ContactPage from "@/pages/ContactPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/not-found";
+import TermsPage from "@/pages/TermsPage";
+import PrivacyPage from "@/pages/PrivacyPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 
 function SiteFooter() {
   return (
@@ -46,7 +49,18 @@ function SiteFooter() {
             </div>
           </div>
         </div>
-        <div className="border-t border-border pt-5 flex flex-col sm:flex-row justify-between items-center gap-3">
+        {/* Disclaimer */}
+        <div className="border-t border-border pt-4 mb-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            <strong>Disclaimer:</strong> VeritaCheck is a statistical analysis tool intended for use by qualified laboratory professionals.
+            Results require interpretation by a licensed laboratory director or clinical consultant and do not constitute medical advice, diagnosis, or treatment.
+            Veritas Lab Services, LLC assumes no liability for clinical decisions made based on VeritaCheck output.
+            By using this tool you agree to our{" "}
+            <a href="/#/terms" className="text-primary hover:underline">Terms of Service</a>{" "}and{" "}
+            <a href="/#/privacy" className="text-primary hover:underline">Privacy Policy</a>.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
           <p className="text-xs text-muted-foreground">© 2026 Veritas Lab Services, LLC — All Rights Reserved</p>
           <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             Created with Perplexity Computer
@@ -72,6 +86,9 @@ function AppContent() {
           <Route path="/dashboard" component={DashboardPage} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/login" component={LoginPage} />
+          <Route path="/terms" component={TermsPage} />
+          <Route path="/privacy" component={PrivacyPage} />
+          <Route path="/reset-password" component={ResetPasswordPage} />
           <Route component={NotFound} />
         </Switch>
       </main>

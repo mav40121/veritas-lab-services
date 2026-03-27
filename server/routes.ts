@@ -3,7 +3,12 @@ import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
+import { db } from "./db";
 import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
+import crypto from "crypto";
+import { Resend } from "resend";
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
 
 const JWT_SECRET = process.env.JWT_SECRET || "veritas-lab-services-secret-2026";
@@ -143,6 +148,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── STRIPE ────────────────────────────────────────────────────────────────
   // Create a checkout session for per-study ($9) or annual ($149/yr)
+  // ── PASSWORD RESET ────────────────────────────────────────────────────────
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const user = storage.getUserByEmail(email.toLowerCase());
+    // Always return 200 to prevent user enumeration
+    if (!user) return res.json({ ok: true });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    db.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
+
+    const resetUrl = `${FRONTEND_URL}/#/reset-password?token=${token}`;
+
+    if (resend) {
+      await resend.emails.send({
+        from: "VeritaCheck <noreply@veritaslabservices.com>",
+        to: user.email,
+        subject: "Reset your VeritaCheck password",
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+            <h2 style="color:#0e8a82">VeritaCheck Password Reset</h2>
+            <p>Hi ${user.name},</p>
+            <p>We received a request to reset your password. Click the button below to set a new password. This link expires in 1 hour.</p>
+            <a href="${resetUrl}" style="display:inline-block;background:#0e8a82;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Reset Password</a>
+            <p style="color:#666;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
+            <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+            <p style="color:#999;font-size:12px">Veritas Lab Services, LLC · veritaslabservices.com</p>
+          </div>
+        `,
+      });
+    } else {
+      console.log(`[password-reset] Token for ${email}: ${token} (Resend not configured)`);
+    }
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { token, password } = req.body;
+    if (!token || !password || password.length < 6) return res.status(400).json({ error: "Token and password (min 6 chars) required" });
+
+    const row = db.prepare("SELECT * FROM reset_tokens WHERE token = ? AND used_at IS NULL").get(token) as any;
+    if (!row) return res.status(400).json({ error: "Invalid or expired reset link" });
+    if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: "Reset link has expired. Please request a new one." });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
+    db.prepare("UPDATE reset_tokens SET used_at = ? WHERE token = ?").run(new Date().toISOString(), token);
+
+    const user = storage.getUserById(row.user_id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const newToken = signToken(user.id);
+    res.json({ ok: true, token: newToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits } });
+  });
+
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
     if (!stripe) return res.status(503).json({ error: "Payments not configured" });
     const { priceType } = req.body; // "perStudy" | "annual"

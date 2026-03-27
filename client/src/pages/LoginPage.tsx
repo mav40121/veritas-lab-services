@@ -66,6 +66,7 @@ export default function LoginPage() {
                   <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={loginForm.email} onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
                   <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={loginForm.password} onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} required /></div>
                   <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">{loading ? "Signing in…" : "Sign In"}</Button>
+                  <p className="text-center text-xs text-muted-foreground"><a href="/#/reset-password" className="text-primary hover:underline">Forgot your password?</a></p>
                 </form>
               </TabsContent>
               <TabsContent value="register">

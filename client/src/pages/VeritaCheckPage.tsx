@@ -293,7 +293,7 @@ export default function VeritaCheckPage() {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "—",
       date, studyType, cliaAllowableError: cliaValue, dataPoints: JSON.stringify(dataPoints),
       instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
-      createdAt: new Date().toISOString(), userId: null,
+      createdAt: new Date().toISOString(),
     };
     saveMutation.mutate(study);
   };
