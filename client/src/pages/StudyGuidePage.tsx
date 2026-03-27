@@ -324,7 +324,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; after major maintenance"
             regulation="42 CFR §493.941"
-            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director reviews and approves all precision data before the method enters clinical use. Note: some commercial tools (including EP Evaluator) evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa — VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
+            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa — VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493941,
