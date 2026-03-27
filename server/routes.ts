@@ -54,6 +54,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
+  // ── DISCOUNT CODES (admin) ───────────────────────────────────────────────
+  app.get("/api/admin/discount-codes", (req, res) => {
+    const { secret } = req.query as any;
+    if (secret !== ADMIN_SECRET) {
+      const body = req.body;
+      if (body?.secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    }
+    const codes = db.$client.prepare("SELECT * FROM discount_codes ORDER BY id DESC").all();
+    res.json(codes);
+  });
+
+  app.post("/api/admin/discount-codes", (req, res) => {
+    const { secret, code, partnerName, discountPct, appliesTo, maxUses } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!code || !partnerName) return res.status(400).json({ error: "code and partnerName required" });
+    try {
+      db.$client.prepare(
+        "INSERT INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at) VALUES (?, ?, ?, ?, ?, 0, 1, ?)"
+      ).run(code.toUpperCase(), partnerName, discountPct || 10, appliesTo || "annual", maxUses ?? null, new Date().toISOString());
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(409).json({ error: "Code already exists" });
+    }
+  });
+
+  app.patch("/api/admin/discount-codes/:id", (req, res) => {
+    const { secret, active, discountPct, appliesTo, maxUses } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const id = parseInt(req.params.id);
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (active !== undefined) { sets.push("active = ?"); vals.push(active ? 1 : 0); }
+    if (discountPct !== undefined) { sets.push("discount_pct = ?"); vals.push(discountPct); }
+    if (appliesTo !== undefined) { sets.push("applies_to = ?"); vals.push(appliesTo); }
+    if (maxUses !== undefined) { sets.push("max_uses = ?"); vals.push(maxUses); }
+    if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
+    vals.push(id);
+    db.$client.prepare(`UPDATE discount_codes SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    const updated = db.$client.prepare("SELECT * FROM discount_codes WHERE id = ?").get(id);
+    res.json(updated);
+  });
+
+  // ── DISCOUNT CODE VALIDATION (public) ──────────────────────────────────
+  app.post("/api/discount/validate", (req, res) => {
+    const { code, priceType } = req.body;
+    if (!code) return res.json({ valid: false, message: "No code provided" });
+
+    const row = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(code.trim()) as any;
+    if (!row) return res.json({ valid: false, message: "Invalid discount code" });
+    if (!row.active) return res.json({ valid: false, message: "This code is no longer active" });
+    if (row.max_uses !== null && row.uses >= row.max_uses) return res.json({ valid: false, message: "This code has reached its usage limit" });
+    if (row.applies_to !== "all" && row.applies_to !== priceType) {
+      return res.json({ valid: false, message: `This code applies to ${row.applies_to} plans only` });
+    }
+
+    res.json({ valid: true, discountPct: row.discount_pct, partnerName: row.partner_name, message: `${row.discount_pct}% discount applied` });
+  });
+
   // ── HEALTH CHECK ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "veritas-lab-services", timestamp: new Date().toISOString() });
@@ -225,7 +283,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
     if (!stripe) return res.status(503).json({ error: "Payments not configured" });
-    const { priceType } = req.body; // "perStudy" | "annual" | "lab"
+    const { priceType, discountCode } = req.body; // "perStudy" | "annual" | "lab"
     if (!priceType || !PRICES[priceType as keyof typeof PRICES]) {
       return res.status(400).json({ error: "Invalid price type" });
     }
@@ -236,6 +294,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isSubscription = priceType === "annual" || priceType === "lab";
     const successUrl = `${FRONTEND_URL}/#/veritacheck?payment=success&type=${priceType}`;
     const cancelUrl = `${FRONTEND_URL}/#/veritacheck?payment=cancelled`;
+
+    // Validate discount code if provided
+    let couponId: string | undefined;
+    let discountRow: any = null;
+    if (discountCode) {
+      discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
+      if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType)) {
+        try {
+          const coupon = await stripe.coupons.create({
+            percent_off: discountRow.discount_pct,
+            duration: "once",
+            name: `${discountRow.partner_name} - ${discountRow.discount_pct}% off`,
+          });
+          couponId = coupon.id;
+        } catch (err: any) {
+          console.error("Stripe coupon creation error:", err.message);
+          // Continue without discount if coupon creation fails
+        }
+      }
+    }
 
     try {
       // Reuse or create Stripe customer
@@ -250,14 +328,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         storage.updateUserStripe(user.id, { stripeCustomerId: customerId });
       }
 
-      const session = await stripe.checkout.sessions.create({
+      const sessionParams: any = {
         customer: customerId,
         mode: isSubscription ? "subscription" : "payment",
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: successUrl,
         cancel_url: cancelUrl,
         metadata: { userId: String(user.id), priceType },
-      });
+      };
+      if (couponId) {
+        sessionParams.discounts = [{ coupon: couponId }];
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
+
+      // Increment discount code usage after successful session creation
+      if (couponId && discountRow) {
+        db.$client.prepare("UPDATE discount_codes SET uses = uses + 1 WHERE id = ?").run(discountRow.id);
+      }
 
       res.json({ url: session.url });
     } catch (err: any) {

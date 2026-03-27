@@ -54,6 +54,26 @@ sqlite.exec(`
     expires_at TEXT NOT NULL,
     used_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS discount_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    partner_name TEXT NOT NULL,
+    discount_pct INTEGER NOT NULL DEFAULT 10,
+    applies_to TEXT NOT NULL DEFAULT 'annual',
+    max_uses INTEGER,
+    uses INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+`);
+
+// Seed discount codes (safe — INSERT OR IGNORE won't duplicate)
+sqlite.exec(`
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at)
+  VALUES ('MEDLAB10', 'Medical Lab Management', 10, 'annual', NULL, 0, 1, '${new Date().toISOString()}');
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at)
+  VALUES ('DARK10', 'Dark Report', 10, 'annual', NULL, 0, 1, '${new Date().toISOString()}');
 `);
 
 // Step 2: Add Stripe columns if upgrading from older schema (safe migration)

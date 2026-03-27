@@ -144,6 +144,10 @@ export default function VeritaCheckPage() {
   const { isLoggedIn } = useAuth();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string } | null>(null);
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [discountError, setDiscountError] = useState("");
 
   // Check URL params for payment result after Stripe redirect
   useEffect(() => {
@@ -169,7 +173,7 @@ export default function VeritaCheckPage() {
       const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ priceType }),
+        body: JSON.stringify({ priceType, discountCode: discountApplied?.code || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Checkout failed");
@@ -178,6 +182,31 @@ export default function VeritaCheckPage() {
     } catch (err: any) {
       toast({ title: "Payment error", description: err.message, variant: "destructive" });
       setCheckoutLoading(null);
+    }
+  };
+
+  const applyDiscount = async (priceType: string) => {
+    if (!discountCode.trim()) return;
+    setDiscountLoading(true);
+    setDiscountError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/discount/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: discountCode.trim(), priceType }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName });
+        setDiscountError("");
+      } else {
+        setDiscountError(data.message || "Invalid code");
+        setDiscountApplied(null);
+      }
+    } catch {
+      setDiscountError("Could not validate code");
+    } finally {
+      setDiscountLoading(false);
     }
   };
 
@@ -719,6 +748,11 @@ export default function VeritaCheckPage() {
                     {plan.priceType === "annual" && (
                       <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">Increases to $179 after {EARLY_ADOPTER_DEADLINE}</p>
                     )}
+                    {discountApplied && (plan.priceType === "annual" || plan.priceType === "lab") && (
+                      <p className="text-xs text-green-600 dark:text-green-400 font-semibold mb-1">
+                        {discountApplied.pct}% off → ${(parseInt(plan.price.replace("$", "")) * (1 - discountApplied.pct / 100)).toFixed(0)} with code {discountApplied.code}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
                     <ul className="space-y-2 mb-5">
                       {plan.features.map(f => <li key={f} className="flex items-center gap-2 text-sm"><CheckCircle2 size={13} className="text-primary shrink-0" />{f}</li>)}
@@ -736,6 +770,38 @@ export default function VeritaCheckPage() {
               );
             })}
           </div>
+          {/* Discount code input */}
+          <div className="max-w-sm mx-auto mt-6">
+            <p className="text-xs text-center text-muted-foreground mb-2">Have a discount code?</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter code"
+                value={discountCode}
+                onChange={e => { setDiscountCode(e.target.value.toUpperCase()); setDiscountApplied(null); setDiscountError(""); }}
+                className="text-sm uppercase"
+                maxLength={20}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={discountLoading || !discountCode.trim()}
+                onClick={() => applyDiscount("annual")}
+                className="shrink-0"
+              >
+                {discountLoading ? <Loader2 size={13} className="animate-spin" /> : "Apply"}
+              </Button>
+            </div>
+            {discountApplied && (
+              <div className="mt-2 flex items-center gap-1.5 text-green-600 dark:text-green-400 text-sm">
+                <CheckCircle2 size={13} />
+                <span><strong>{discountApplied.code}</strong> — {discountApplied.pct}% off applied via {discountApplied.partnerName}</span>
+              </div>
+            )}
+            {discountError && (
+              <p className="mt-2 text-sm text-red-500">{discountError}</p>
+            )}
+          </div>
+
           <p className="text-center text-xs text-muted-foreground mt-6">
             Questions? <a href="/#/contact" className="text-primary hover:underline">Contact us</a> — we're happy to help.
           </p>
