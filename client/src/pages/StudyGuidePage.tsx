@@ -176,12 +176,10 @@ function StudyCard({
 
         {/* CTA */}
         <div className="pt-1">
-          <Link href={`/veritacheck`}>
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline cursor-pointer">
-              <FlaskConical size={14} />
-              Run a {title} in VeritaCheck
-              <ChevronRight size={13} />
-            </span>
+          <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+            <FlaskConical size={14} />
+            Run a {title} in VeritaCheck
+            <ChevronRight size={13} />
           </Link>
         </div>
       </div>
@@ -362,11 +360,9 @@ export default function StudyGuidePage() {
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
           <p className="text-muted-foreground mb-6">VeritaCheck automates all three study types — no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
-          <Link href="/veritacheck">
-            <span className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm cursor-pointer transition-colors">
-              <FlaskConical size={16} />
-              Open VeritaCheck
-            </span>
+          <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
+            <FlaskConical size={16} />
+            Open VeritaCheck
           </Link>
         </div>
       </section>

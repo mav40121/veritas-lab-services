@@ -404,11 +404,9 @@ export default function BookPage() {
                   </div>
                 ))}
                 <div className="pt-2">
-                  <Link href="/veritacheck">
-                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline cursor-pointer">
-                      <FlaskConical size={14} />
-                      Try VeritaCheck now
-                    </span>
+                  <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                    <FlaskConical size={14} />
+                    Try VeritaCheck now
                   </Link>
                 </div>
               </CardContent>
