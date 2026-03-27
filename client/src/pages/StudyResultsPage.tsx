@@ -43,8 +43,13 @@ async function downloadPDF(study: Study, results: StudyResults) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];
@@ -627,6 +632,9 @@ function BottomPDFButton({ study, results }: { study: Study; results: StudyResul
 export default function StudyResults() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id || "0");
+
+  // Scroll to top whenever study ID changes
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [id]);
 
   const { data: study, isLoading } = useQuery<Study>({
     queryKey: ["/api/studies", id],
