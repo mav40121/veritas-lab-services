@@ -7,6 +7,7 @@ import { db } from "./db";
 import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
+import { generatePDFBuffer } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
@@ -136,6 +137,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/studies/:id", (req, res) => {
     storage.deleteStudy(parseInt(req.params.id));
     res.json({ success: true });
+  });
+
+  // ── PDF GENERATION ────────────────────────────────────────────────────────
+  // Accepts { study, results } JSON, returns a PDF binary.
+  // Auth optional — guests can generate PDFs for studies they can view.
+  app.post("/api/generate-pdf", async (req: any, res) => {
+    try {
+      const { study, results } = req.body;
+      if (!study || !results) return res.status(400).json({ error: "study and results required" });
+      const pdfBuffer = await generatePDFBuffer(study, results);
+      const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("PDF generation error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // ── CONTACT ───────────────────────────────────────────────────────────────

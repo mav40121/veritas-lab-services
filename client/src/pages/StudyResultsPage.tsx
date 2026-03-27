@@ -28,13 +28,37 @@ import {
   Line,
   ResponsiveContainer,
 } from "recharts";
-import { FileDown, ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
-import { generatePDF } from "@/lib/pdfGenerator";
+import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { API_BASE } from "@/lib/queryClient";
+
+async function downloadPDF(study: Study, results: StudyResults) {
+  const res = await fetch(`${API_BASE}/api/generate-pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ study, results }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];
 
 // ─── Shared header / pass-fail ────────────────────────────────────────────────
 function StudyHeader({ study, results }: { study: Study; results: StudyResults }) {
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const handlePDF = useCallback(async () => {
+    setPdfLoading(true);
+    try { await downloadPDF(study, results); }
+    catch (e) { alert("PDF generation failed. Please try again."); }
+    finally { setPdfLoading(false); }
+  }, [study, results]);
+
   return (
     <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
       <div>
@@ -68,11 +92,13 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
           </Badge>
         )}
         <Button
-          onClick={() => generatePDF(study, results)}
+          onClick={handlePDF}
+          disabled={pdfLoading}
           className="bg-primary hover:bg-primary/90 text-primary-foreground"
           data-testid="button-download-pdf"
         >
-          <FileDown size={14} className="mr-1.5" />Download PDF
+          {pdfLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <FileDown size={14} className="mr-1.5" />}
+          {pdfLoading ? "Generating…" : "Download PDF"}
         </Button>
       </div>
     </div>
@@ -582,6 +608,22 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
 }
 
 // ─── Root page ────────────────────────────────────────────────────────────────
+function BottomPDFButton({ study, results }: { study: Study; results: StudyResults }) {
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const handlePDF = useCallback(async () => {
+    setPdfLoading(true);
+    try { await downloadPDF(study, results); }
+    catch (e) { alert("PDF generation failed. Please try again."); }
+    finally { setPdfLoading(false); }
+  }, [study, results]);
+  return (
+    <Button onClick={handlePDF} disabled={pdfLoading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+      {pdfLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <FileDown size={14} className="mr-1.5" />}
+      {pdfLoading ? "Generating…" : "Download PDF Report"}
+    </Button>
+  );
+}
+
 export default function StudyResults() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id || "0");
@@ -628,12 +670,7 @@ export default function StudyResults() {
         <Button asChild variant="outline">
           <Link href="/study/new">Run Another Study</Link>
         </Button>
-        <Button
-          onClick={() => generatePDF(study, results)}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-        >
-          <FileDown size={14} className="mr-1.5" />Download PDF Report
-        </Button>
+        <BottomPDFButton study={study} results={results} />
       </div>
     </div>
   );
