@@ -398,15 +398,17 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
     y += 5;
   });
 
-  // Start statistical analysis on new page only if it won't fit — otherwise use remaining space
   const pageH_cv = doc.internal.pageSize.height;
   const rowH_cv = 5;
   const nRows = results.levelResults.length;
-  const evalH = 35; // approximate height for eval section + PASS bar
-  const sigH = 30;  // signature block
-  const footerReserve = 15;
-  const neededH = 10 + (nRows * rowH_cv) + evalH + sigH + footerReserve;
-  if (y + neededH > pageH_cv) { doc.addPage(); y = 20; }
+  const evalH = 32;  // eval title + text + PASS bar
+  const sigH = 28;   // accepted by block
+  const footerH_cv = 28; // disclaimer + footer line
+  // Available space remaining on this page
+  const spaceLeft = pageH_cv - y - footerH_cv;
+  const totalNeeded = 12 + (nRows * rowH_cv) + evalH + sigH;
+  // Only break to new page if the whole block won't fit
+  if (totalNeeded > spaceLeft) { doc.addPage(); y = 20; }
 
   sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
   const cols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
@@ -415,8 +417,10 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   y += 4;
   doc.setFont("helvetica","normal");
   results.levelResults.forEach((r, ri) => {
-    // Page break mid-table if needed
-    if (y > pageH_cv - evalH - sigH - footerReserve) { doc.addPage(); y = 20; }
+    // Mid-table page break: only break if the remaining rows + eval won't fit
+    const rowsLeft = nRows - ri;
+    const remainingNeeded = (rowsLeft * rowH_cv) + evalH + sigH + footerH_cv;
+    if (y + remainingNeeded > pageH_cv) { doc.addPage(); y = 20; }
     if (ri%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
     setRgb(doc, DARK);
     const row = [
