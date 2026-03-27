@@ -318,17 +318,19 @@ export default function VeritaCheckPage() {
       <section className="section-padding border-b border-border">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-serif text-2xl font-bold">New Study</h2>
-            <div className="flex items-center gap-3">
-              {!isLoggedIn && (
-                <p className="text-xs text-muted-foreground">
-                  <a href="/#/login" className="text-primary hover:underline">Sign in</a> to save study history
-                </p>
-              )}
-              <Button asChild variant="outline" size="sm" className="gap-1.5 font-medium">
-                <a href="/#/dashboard"><LayoutDashboard size={13} />My Studies</a>
-              </Button>
+            <div className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
+              <span className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium bg-background text-foreground shadow">
+                New Study
+              </span>
+              <a href="/#/dashboard" className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
+                <LayoutDashboard size={13} />My Studies
+              </a>
             </div>
+            {!isLoggedIn && (
+              <p className="text-xs text-muted-foreground">
+                <a href="/#/login" className="text-primary hover:underline">Sign in</a> to save study history
+              </p>
+            )}
           </div>
 
           <Tabs defaultValue="setup" className="space-y-6">
