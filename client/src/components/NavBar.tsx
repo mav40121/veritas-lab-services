@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/services", label: "Services" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck", highlight: true },
+  { href: "/veritascan", label: "VeritaScan", badge: "Coming Soon" },
   { href: "/book", label: "Book", badge: "Coming Soon" },
   { href: "/contact", label: "Contact" },
 ];

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -800,6 +800,25 @@ export default function VeritaCheckPage() {
             {discountError && (
               <p className="mt-2 text-sm text-red-500">{discountError}</p>
             )}
+          </div>
+
+          {/* Bundle callout */}
+          <div className="max-w-5xl mx-auto mt-8">
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 flex items-start gap-4">
+              <Shield size={20} className="text-primary mt-0.5 shrink-0" />
+              <div>
+                <div className="font-semibold text-sm mb-1">
+                  Add VeritaScan — <span className="text-primary">$199/year for both</span>
+                  <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Save $49</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Pair VeritaCheck with VeritaScan — the self-inspection and compliance audit tool mapped to TJC CAMLAB 2024, CAP checklists, and 42 CFR Part 493. Buying separately: $248/year. Bundle saves $49.
+                </p>
+                <Link href="/veritascan" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                  Learn about VeritaScan <ChevronRight size={13} />
+                </Link>
+              </div>
+            </div>
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
