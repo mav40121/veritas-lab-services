@@ -33,7 +33,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 
 async function downloadPDF(study: Study, results: StudyResults) {
