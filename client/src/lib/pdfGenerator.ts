@@ -356,10 +356,6 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   const instrumentNames: string[] = JSON.parse(study.instruments);
   let y = pdfHeader(doc, study, pw, margin);
 
-  // Signature block at top — before data, just like EP Evaluator
-  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
-  hLine(doc, y); y += 5;
-
   // Section title
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text("Calibration Verification / Linearity", margin, y); y += 6;
@@ -437,6 +433,7 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
   pdfPageFooter(doc, pw, margin);
   pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
 }
@@ -448,10 +445,6 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   const xRange = (results as any).xRange as { min: number; max: number } | undefined;
   const yRange = (results as any).yRange as { [name: string]: { min: number; max: number } } | undefined;
   let y = pdfHeader(doc, study, pw, margin);
-
-  // Signature block at top — before data, just like EP Evaluator
-  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
-  hLine(doc, y); y += 5;
 
   doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
   doc.text("Correlation / Method Comparison", margin, y); y += 6;
@@ -621,6 +614,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   });
 
   y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
   pdfPageFooter(doc, pw, margin);
   pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
 }
