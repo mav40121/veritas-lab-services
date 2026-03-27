@@ -372,7 +372,7 @@ export default function VeritaCheckPage() {
             </div>
             <Link href="/study-guide" className="inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors">
               <BookOpen size={14} />
-              Study Guide
+              Study Guide: Which study do I need?
               <ChevronRight size={13} />
             </Link>
           </div>
