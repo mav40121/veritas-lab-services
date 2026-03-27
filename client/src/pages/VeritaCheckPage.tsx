@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -19,13 +19,88 @@ import type { InsertStudy } from "@shared/schema";
 
 const API_BASE = "https://www.veritaslabservices.com";
 
+// CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart I)
 const CLIA_PRESETS = [
-  { label: "Creatinine (±0.3 mg/dL or 7.5%)", value: 0.075, cfr: "CFR 493.931" },
-  { label: "Glucose (±10%)", value: 0.10, cfr: "CFR 493.931" },
-  { label: "Hemoglobin (±7%)", value: 0.07, cfr: "CFR 493.941" },
-  { label: "Sodium (±4 mEq/L or 4%)", value: 0.04, cfr: "CFR 493.931" },
-  { label: "Potassium (±5%)", value: 0.05, cfr: "CFR 493.931" },
-  { label: "TSH (±3 SDs or 3 mIU/L)", value: 0.10, cfr: "CFR 493.933" },
+  // ── Routine Chemistry §493.931 ──────────────────────────────────────────
+  { label: "ALT/SGPT (±15% or ±6 U/L)",              value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Albumin (±8%)",                            value: 0.08,  cfr: "42 CFR §493.931" },
+  { label: "Alkaline Phosphatase (±20%)",              value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "Amylase (±20%)",                           value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "AST (±15% or ±6 U/L)",                    value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Bilirubin, Total (±20% or ±0.4 mg/dL)",   value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "BNP (±30%)",                               value: 0.30,  cfr: "42 CFR §493.931" },
+  { label: "proBNP (±30%)",                            value: 0.30,  cfr: "42 CFR §493.931" },
+  { label: "Blood Gas pCO2 (±8%)",                     value: 0.08,  cfr: "42 CFR §493.931" },
+  { label: "Blood Gas pO2 (±15%)",                     value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Blood Gas pH (±0.04)",                     value: 0.04,  cfr: "42 CFR §493.931" },
+  { label: "Calcium, Total (±1.0 mg/dL)",              value: 0.10,  cfr: "42 CFR §493.931" },
+  { label: "Carbon Dioxide (±20%)",                    value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "Chloride (±5%)",                           value: 0.05,  cfr: "42 CFR §493.931" },
+  { label: "Cholesterol, Total (±10%)",                value: 0.10,  cfr: "42 CFR §493.931" },
+  { label: "Cholesterol, HDL (±20% or ±6 mg/dL)",     value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "Cholesterol, LDL Direct (±20%)",           value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "CK (±20%)",                                value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "CK-MB (±25% or ±3 ng/mL)",                value: 0.25,  cfr: "42 CFR §493.931" },
+  { label: "Creatinine (±10% or ±0.2 mg/dL)",         value: 0.10,  cfr: "42 CFR §493.931" },
+  { label: "Ferritin (±20%)",                          value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "GGT (±15% or ±5 U/L)",                    value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Glucose (±8% or ±6 mg/dL)",               value: 0.08,  cfr: "42 CFR §493.931" },
+  { label: "Hemoglobin A1c (±8%)",                     value: 0.08,  cfr: "42 CFR §493.931" },
+  { label: "Iron, Total (±15%)",                       value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "LDH (±15%)",                               value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Magnesium (±15%)",                         value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Phosphorus (±10% or ±0.3 mg/dL)",         value: 0.10,  cfr: "42 CFR §493.931" },
+  { label: "Potassium (±0.3 mmol/L)",                  value: 0.05,  cfr: "42 CFR §493.931" },
+  { label: "PSA, Total (±20% or ±0.2 ng/mL)",         value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "Sodium (±4 mmol/L)",                       value: 0.04,  cfr: "42 CFR §493.931" },
+  { label: "TIBC Direct (±20%)",                       value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "Total Protein (±8%)",                      value: 0.08,  cfr: "42 CFR §493.931" },
+  { label: "Triglycerides (±15%)",                     value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Troponin I (±30% or ±0.9 ng/mL)",         value: 0.30,  cfr: "42 CFR §493.931" },
+  { label: "Troponin T (±30% or ±0.2 ng/mL)",         value: 0.30,  cfr: "42 CFR §493.931" },
+  { label: "Urea Nitrogen/BUN (±9% or ±2 mg/dL)",     value: 0.09,  cfr: "42 CFR §493.931" },
+  { label: "Uric Acid (±10%)",                         value: 0.10,  cfr: "42 CFR §493.931" },
+  // ── Endocrinology §493.933 ───────────────────────────────────────────────
+  { label: "CA-125 (±20%)",                            value: 0.20,  cfr: "42 CFR §493.933" },
+  { label: "CEA (±15% or ±1 ng/dL)",                  value: 0.15,  cfr: "42 CFR §493.933" },
+  { label: "Cortisol (±20%)",                          value: 0.20,  cfr: "42 CFR §493.933" },
+  { label: "Estradiol (±30%)",                         value: 0.30,  cfr: "42 CFR §493.933" },
+  { label: "Folate, Serum (±30% or ±1 ng/mL)",        value: 0.30,  cfr: "42 CFR §493.933" },
+  { label: "FSH (±18% or ±2 IU/L)",                   value: 0.18,  cfr: "42 CFR §493.933" },
+  { label: "Free T4 (±15% or ±0.3 ng/dL)",            value: 0.15,  cfr: "42 CFR §493.933" },
+  { label: "hCG (±18% or ±3 mIU/mL)",                 value: 0.18,  cfr: "42 CFR §493.933" },
+  { label: "LH (±20%)",                                value: 0.20,  cfr: "42 CFR §493.933" },
+  { label: "Parathyroid Hormone (±30%)",               value: 0.30,  cfr: "42 CFR §493.933" },
+  { label: "Progesterone (±25%)",                      value: 0.25,  cfr: "42 CFR §493.933" },
+  { label: "Prolactin (±20%)",                         value: 0.20,  cfr: "42 CFR §493.933" },
+  { label: "Testosterone (±30% or ±20 ng/dL)",        value: 0.30,  cfr: "42 CFR §493.933" },
+  { label: "T3 Uptake (±18%)",                         value: 0.18,  cfr: "42 CFR §493.933" },
+  { label: "T3, Total (±30%)",                         value: 0.30,  cfr: "42 CFR §493.933" },
+  { label: "TSH (±20% or ±0.2 mIU/L)",                value: 0.20,  cfr: "42 CFR §493.933" },
+  { label: "T4, Thyroxine (±20% or ±1.0 mcg/dL)",    value: 0.20,  cfr: "42 CFR §493.933" },
+  { label: "Vitamin B12 (±25% or ±30 pg/mL)",         value: 0.25,  cfr: "42 CFR §493.933" },
+  // ── Toxicology §493.935 ──────────────────────────────────────────────────
+  { label: "Acetaminophen (±15% or ±3 mcg/mL)",       value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Alcohol, Blood (±20%)",                    value: 0.20,  cfr: "42 CFR §493.935" },
+  { label: "Blood Lead (±10% or ±2 mcg/dL)",          value: 0.10,  cfr: "42 CFR §493.935" },
+  { label: "Carbamazepine (±20% or ±1.0 mcg/mL)",     value: 0.20,  cfr: "42 CFR §493.935" },
+  { label: "Digoxin (±15% or ±0.2 ng/mL)",            value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Gentamicin (±25%)",                        value: 0.25,  cfr: "42 CFR §493.935" },
+  { label: "Lithium (±15% or ±0.3 mmol/L)",           value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Phenobarbital (±15% or ±2 mcg/mL)",       value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Phenytoin (±15% or ±2 mcg/mL)",           value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Salicylate (±15% or ±2 mcg/mL)",          value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Theophylline (±20%)",                      value: 0.20,  cfr: "42 CFR §493.935" },
+  // ── Hematology §493.941 ──────────────────────────────────────────────────
+  { label: "Erythrocyte Count / RBC (±4%)",            value: 0.04,  cfr: "42 CFR §493.941" },
+  { label: "Fibrinogen (±20%)",                        value: 0.20,  cfr: "42 CFR §493.941" },
+  { label: "Hematocrit (±4%)",                         value: 0.04,  cfr: "42 CFR §493.941" },
+  { label: "Hemoglobin (±4%)",                         value: 0.04,  cfr: "42 CFR §493.941" },
+  { label: "Leukocyte Count / WBC (±10%)",             value: 0.10,  cfr: "42 CFR §493.941" },
+  { label: "Partial Thromboplastin Time (±15%)",       value: 0.15,  cfr: "42 CFR §493.941" },
+  { label: "Platelet Count (±25%)",                    value: 0.25,  cfr: "42 CFR §493.941" },
+  { label: "Prothrombin Time / PT (±15%)",             value: 0.15,  cfr: "42 CFR §493.941" },
+  // ── Custom ───────────────────────────────────────────────────────────────
   { label: "Custom", value: 0, cfr: "" },
 ];
 const MIN_LEVELS = 3;
@@ -299,7 +374,23 @@ export default function VeritaCheckPage() {
                 <CardContent className="space-y-3">
                   <Select value={String(cliaPreset)} onValueChange={v => setCliaPreset(parseInt(v))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{CLIA_PRESETS.map((p, i) => <SelectItem key={i} value={String(i)}>{p.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Routine Chemistry §493.931</SelectLabel>
+                        {CLIA_PRESETS.slice(0, 37).map((p, i) => <SelectItem key={i} value={String(i)}>{p.label}</SelectItem>)}
+                      </SelectGroup>
+                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Endocrinology §493.933</SelectLabel>
+                        {CLIA_PRESETS.slice(37, 55).map((p, i) => <SelectItem key={37+i} value={String(37+i)}>{p.label}</SelectItem>)}
+                      </SelectGroup>
+                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Toxicology §493.935</SelectLabel>
+                        {CLIA_PRESETS.slice(55, 66).map((p, i) => <SelectItem key={55+i} value={String(55+i)}>{p.label}</SelectItem>)}
+                      </SelectGroup>
+                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Hematology §493.941</SelectLabel>
+                        {CLIA_PRESETS.slice(66, 74).map((p, i) => <SelectItem key={66+i} value={String(66+i)}>{p.label}</SelectItem>)}
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectItem key={74} value={String(74)}>Custom</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
                   </Select>
                   {CLIA_PRESETS[cliaPreset].value === 0 && (
                     <div className="flex items-center gap-2">

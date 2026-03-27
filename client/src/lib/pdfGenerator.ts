@@ -277,17 +277,17 @@ function pdfSupportingPage(doc: jsPDF, study: Study, instrumentNames: string[], 
   hLine(doc, y); y += 6;
 
   const cliaP = (study.cliaAllowableError*100).toFixed(1);
-  // CFR citations with direct section URLs
-  const cfrMap: { [key: string]: { citation: string; url: string } } = {
-    "7.5":  { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
-    "10.0": { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
-    "7.0":  { citation: "42 CFR §493.941", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941" },
-    "4.0":  { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
-    "5.0":  { citation: "42 CFR §493.931", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931" },
+  // Map CFR section from study's stored cfr field, fall back to §493 Subpart I
+  // The cfr field is stored on the study from the preset selection
+  const storedCfr: string = (study as any).cfr || "";
+  let cfrCitation = storedCfr || "42 CFR §493 Subpart I";
+  const cfrSectionMap: { [key: string]: string } = {
+    "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931",
+    "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.933",
+    "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.935",
+    "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941",
   };
-  const cfrEntry = cfrMap[cliaP] || { citation: "42 CFR §493 Subpart I", url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I" };
-  const cfrCitation = cfrEntry.citation;
-  const cfrUrl = cfrEntry.url;
+  const cfrUrl = cfrSectionMap[cfrCitation] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I";
 
   // Two-column layout: specs left, supporting right
   doc.setFontSize(8); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
