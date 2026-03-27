@@ -91,7 +91,7 @@ function drawScatterPlot(
     doc.line(cx(xMin), cy(xMin), cx(xMax), cy(xMax));
   }
 
-  const colors: readonly [number,number,number][] = [TEAL, [70,140,230], [100,200,120]];
+  const colors: [number,number,number][] = [[14,165,150], [70,140,230], [100,200,120]];
   series.forEach(({ points }, ci) => {
     const col = colors[ci % colors.length];
     setFillRgb(doc, col); setDrawRgb(doc, col); doc.setLineWidth(0);
@@ -247,11 +247,12 @@ function pdfEvalSection(doc: jsPDF, results: StudyResults, study: Study, y: numb
 // ─── Shared: page footer bar (appears on every page) ─────────────────────────
 function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
   const pageH = doc.internal.pageSize.height;
+  const _contentW = pw - 2*margin;
   hLine(doc, pageH-12);
   doc.setFontSize(6.5); setRgb(doc, MUTED);
   // Disclaimer line above the footer bar
-  doc.setFontSize(5.5); setRgb(doc, [160,160,160]);
-  doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.", margin, pageH-16, { maxWidth: contentW });
+  doc.setFontSize(5.5); setRgb(doc, [160,160,160] as [number,number,number]);
+  doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.", margin, pageH-16, { maxWidth: _contentW });
   doc.setFontSize(6.5); setRgb(doc, MUTED);
   doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
   doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });

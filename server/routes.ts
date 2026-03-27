@@ -158,7 +158,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
-    db.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
+    db.$client.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
 
     const resetUrl = `${FRONTEND_URL}/#/reset-password?token=${token}`;
 
@@ -189,13 +189,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { token, password } = req.body;
     if (!token || !password || password.length < 6) return res.status(400).json({ error: "Token and password (min 6 chars) required" });
 
-    const row = db.prepare("SELECT * FROM reset_tokens WHERE token = ? AND used_at IS NULL").get(token) as any;
+    const row = db.$client.prepare("SELECT * FROM reset_tokens WHERE token = ? AND used_at IS NULL").get(token) as any;
     if (!row) return res.status(400).json({ error: "Invalid or expired reset link" });
     if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: "Reset link has expired. Please request a new one." });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
-    db.prepare("UPDATE reset_tokens SET used_at = ? WHERE token = ?").run(new Date().toISOString(), token);
+    db.$client.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
+    db.$client.prepare("UPDATE reset_tokens SET used_at = ? WHERE token = ?").run(new Date().toISOString(), token);
 
     const user = storage.getUserById(row.user_id);
     if (!user) return res.status(404).json({ error: "User not found" });
