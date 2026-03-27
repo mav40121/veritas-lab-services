@@ -258,17 +258,20 @@ function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
   doc.text(`Page ${doc.internal.pages.length - 1}`, pw-margin, pageH-8, { align: "right" });
 }
 
-// ─── Shared: signature block — placed inline at given Y position ──────────────
-function pdfSignatureBlock(doc: jsPDF, study: Study, y: number, pw: number, margin: number, contentW: number): number {
+// ─── Shared: signature block — anchored to bottom of current page ─────────────
+function pdfSignatureBlock(doc: jsPDF, study: Study, _y: number, pw: number, margin: number, contentW: number): number {
+  // Always pin to the bottom of whatever page the content just finished on
+  const pageH = doc.internal.pageSize.height;
+  const sigY = pageH - 42; // fixed distance from bottom, above footer
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Accepted by:", margin, y); y += 9;
-  // Signature line (left two-thirds) + Date line (right third)
-  hLine(doc, y, margin, margin + contentW * 0.55);
-  hLine(doc, y, pw - margin - contentW * 0.28, pw - margin);
+  doc.text("Accepted by:", margin, sigY);
+  const lineY = sigY + 9;
+  hLine(doc, lineY, margin, margin + contentW * 0.55);
+  hLine(doc, lineY, pw - margin - contentW * 0.28, pw - margin);
   doc.setFontSize(7.5); setRgb(doc, MUTED); doc.setFont("helvetica","normal");
-  doc.text("Signature / Name & Title", margin, y + 4);
-  doc.text("Date", pw - margin - contentW * 0.28, y + 4);
-  return y + 12;
+  doc.text("Signature / Name & Title", margin, lineY + 4);
+  doc.text("Date", pw - margin - contentW * 0.28, lineY + 4);
+  return lineY + 12;
 }
 
 // ─── Shared: supporting data page (page 2) ───────────────────────────────────
