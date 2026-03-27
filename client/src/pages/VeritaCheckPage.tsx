@@ -354,13 +354,7 @@ export default function VeritaCheckPage() {
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             Calibration verification, method comparison, and precision studies — automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation — no desktop software required.
           </p>
-          <div className="mt-5">
-            <Link href="/study-guide" className="inline-flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg px-4 py-2.5 text-base font-semibold transition-colors">
-              <BookOpen size={16} />
-              Not sure which study you need? Read the Study Guide
-              <ChevronRight size={15} />
-            </Link>
-          </div>
+
         </div>
       </section>
 
@@ -376,11 +370,11 @@ export default function VeritaCheckPage() {
                 <LayoutDashboard size={13} />My Studies
               </Link>
             </div>
-            {!isLoggedIn && (
-              <p className="text-xs text-muted-foreground">
-                <a href="/#/login" className="text-primary hover:underline">Sign in</a> to save study history
-              </p>
-            )}
+            <Link href="/study-guide" className="inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors">
+              <BookOpen size={14} />
+              Study Guide
+              <ChevronRight size={13} />
+            </Link>
           </div>
 
           <Tabs defaultValue="setup" className="space-y-6">
