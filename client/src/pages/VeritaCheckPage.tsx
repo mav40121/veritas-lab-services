@@ -129,10 +129,12 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
   return prev.slice(0, newCount).map((dp, i) => ({ ...dp, level: i + 1 }));
 }
 
+const EARLY_ADOPTER_DEADLINE = "May 1, 2026";
+
 const plans = [
-  { priceType: "perStudy", name: "Per Study",       price: "$9",   unit: "per report", description: "Pay only when you need a study.",                     features: ["Single study run", "Full PDF report", "Cal Ver + Method Comparison", "CLIA pass/fail evaluation"],                                                         cta: "Buy a Study",             highlight: false, badge: null },
-  { priceType: "annual",   name: "Individual",      price: "$149", unit: "per year",   description: "Unlimited studies for one analyst.",                 features: ["Unlimited studies", "All PDF reports", "Multi-instrument comparison", "Study history dashboard", "Priority support"],                                  cta: "Subscribe",               highlight: false, badge: null },
-  { priceType: "lab",      name: "Lab Account",     price: "$499", unit: "per year",   description: "Unlimited studies for your entire lab — up to 5 analysts.", features: ["Everything in Individual", "Up to 5 analyst accounts", "Shared study dashboard", "All PDF reports", "Priority support", "Best value for labs"], cta: "Subscribe — Best Value",   highlight: true,  badge: "Best Value" },
+  { priceType: "perStudy", name: "Per Study",   price: "$9",   unit: "per report", description: "Pay only when you need a study.",                        features: ["Single study run", "Full PDF report", "Cal Ver, Method Comp & Precision", "CLIA pass/fail evaluation"],                                                          cta: "Buy a Study",           highlight: false, badge: null },
+  { priceType: "annual",   name: "Individual",  price: "$149", unit: "per year",   description: "Unlimited studies for one analyst.",                    features: ["Unlimited studies", "All 3 study types", "Full PDF reports", "Study history dashboard", "Priority support"],                                             cta: "Subscribe — Lock In $149", highlight: true,  badge: "Early Adopter" },
+  { priceType: "lab",      name: "Lab Account", price: "$499", unit: "per year",   description: "Unlimited studies for your entire lab — up to 5 analysts.", features: ["Everything in Individual", "Up to 5 analyst accounts", "Shared study dashboard", "All PDF reports", "Priority support"],                             cta: "Subscribe",             highlight: false, badge: null },
 ];
 
 export default function VeritaCheckPage() {
@@ -669,7 +671,17 @@ export default function VeritaCheckPage() {
             <DollarSign size={18} className="text-primary" />
             <h2 className="font-serif text-2xl font-bold">Simple Pricing</h2>
           </div>
-          <p className="text-muted-foreground text-center mb-6">No hidden fees. Cancel anytime.</p>
+          <p className="text-muted-foreground text-center mb-4">No hidden fees. Cancel anytime.</p>
+
+          {/* Early adopter banner */}
+          <div className="max-w-2xl mx-auto mb-6">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+              <span className="text-lg">⏰</span>
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                <strong>Early adopter pricing ends {EARLY_ADOPTER_DEADLINE}.</strong> The Individual plan increases to $179/year after that date. Subscribe now to lock in $149/year for life.
+              </p>
+            </div>
+          </div>
 
           {/* Payment result banners */}
           {paymentStatus === "success" && (
@@ -697,10 +709,16 @@ export default function VeritaCheckPage() {
                   {plan.badge && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><Badge className="bg-primary text-primary-foreground">{plan.badge}</Badge></div>}
                   <CardContent className="p-6">
                     <h3 className="font-bold text-lg mb-1">{plan.name}</h3>
-                    <div className="flex items-baseline gap-1 mb-2">
+                    <div className="flex items-baseline gap-1.5 mb-1">
                       <span className="text-3xl font-bold">{plan.price}</span>
                       <span className="text-sm text-muted-foreground">/{plan.unit.split("per ")[1]}</span>
+                      {plan.priceType === "annual" && (
+                        <span className="text-xs text-muted-foreground line-through ml-1">$179</span>
+                      )}
                     </div>
+                    {plan.priceType === "annual" && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">Increases to $179 after {EARLY_ADOPTER_DEADLINE}</p>
+                    )}
                     <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
                     <ul className="space-y-2 mb-5">
                       {plan.features.map(f => <li key={f} className="flex items-center gap-2 text-sm"><CheckCircle2 size={13} className="text-primary shrink-0" />{f}</li>)}
