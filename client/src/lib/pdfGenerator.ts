@@ -385,16 +385,19 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   drawRecoveryPlot(doc, assignedVals, recoveries, study.cliaAllowableError, margin+chartW+6, y, chartW, chartH);
   y += chartH + 6;
 
-  // Linearity table
+  // Linearity table — wider label column to fit long instrument names
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Linearity Summary", y, pw); y += 5;
   const linCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R", "R²"];
-  const linColX  = [margin, margin+30, margin+65, margin+105, margin+145, margin+168, margin+191];
+  const linColX  = [margin, margin+52, margin+78, margin+113, margin+148, margin+168, margin+185];
   tableHeader(doc, linCols, linColX, y, contentW, margin);
   y += 4;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+  doc.setFontSize(8); // slightly smaller so long names fit
   Object.entries(results.regression).forEach(([name, reg]) => {
-    doc.text(name, linColX[0], y);
+    // Truncate name to fit in label column (max ~50mm at 8pt)
+    const label = name.length > 28 ? name.substring(0, 26) + "…" : name;
+    doc.text(label, linColX[0], y);
     doc.text(String(reg.n), linColX[1], y, { align: "right" });
     doc.text(reg.slope.toFixed(4), linColX[2], y, { align: "right" });
     doc.text(reg.intercept.toFixed(4), linColX[3], y, { align: "right" });
@@ -406,6 +409,10 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
     doc.text(reg.r2.toFixed(4), linColX[6], y, { align: "right" });
     y += 5;
   });
+  doc.setFontSize(9);
+
+  // Separator and spacing before statistical data
+  y += 3; hLine(doc, y); y += 5;
 
   const pageH_cv = doc.internal.pageSize.height;
   const rowH_cv = 5;
