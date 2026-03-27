@@ -391,9 +391,9 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   const linCols  = ["", "N", "Slope", "Intercept", "Prop. Bias", "R", "R²"];
   const linColX  = [margin, margin+52, margin+78, margin+113, margin+148, margin+168, margin+185];
   tableHeader(doc, linCols, linColX, y, contentW, margin);
-  y += 4;
+  y += 7;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
-  doc.setFontSize(8); // slightly smaller so long names fit
+  doc.setFontSize(8);
   Object.entries(results.regression).forEach(([name, reg]) => {
     // Truncate name to fit in label column (max ~50mm at 8pt)
     const label = name.length > 28 ? name.substring(0, 26) + "…" : name;
@@ -411,7 +411,7 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   });
   doc.setFontSize(9);
 
-  // Separator and spacing before statistical data
+  // Separator before statistical data
   y += 3; hLine(doc, y); y += 5;
 
   const pageH_cv = doc.internal.pageSize.height;
@@ -420,12 +420,16 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   const evalH = 32;
   const sigH = 28;
   const footerH_cv = 28;
+  // Section title + header + all rows + eval + sig — if won't fit, break first
+  const spaceLeft_cv = pageH_cv - y - footerH_cv;
+  const totalNeeded_cv = 12 + (nRows * rowH_cv) + evalH + sigH;
+  if (totalNeeded_cv > spaceLeft_cv) { doc.addPage(); y = 20; }
 
   sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
   const cols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
   const colW = contentW / cols.length;
   tableHeader(doc, cols, cols.map((_, i) => margin + i*colW + (i===0?2:colW-2)), y, contentW, margin);
-  y += 4;
+  y += 7;
   doc.setFont("helvetica","normal");
   results.levelResults.forEach((r, ri) => {
     // Mid-table page break: only break if the remaining rows + eval won't fit
@@ -528,7 +532,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   const regCols  = ["Method", "N", "Slope (95% CI)", "Intercept (95% CI)", "SEE", "Prop. Bias", "R", "R²"];
   const regColX  = [margin, margin+28, margin+55, margin+105, margin+148, margin+163, margin+178, margin+191];
   tableHeader(doc, regCols, regColX, y, contentW, margin);
-  y += 4;
+  y += 7;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
   Object.entries(results.regression).forEach(([name, reg]) => {
     // Shorten name: "CENTAUR SERUM vs. Reference (Deming)" -> "Deming"
@@ -564,7 +568,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   const baCols = ["Instrument", "Mean Bias", "Mean % Bias", "SD of Diff", "95% LoA Lower", "95% LoA Upper"];
   const baColX = [margin, margin+38, margin+75, margin+110, margin+145, margin+178];
   tableHeader(doc, baCols, baColX, y, contentW, margin);
-  y += 4;
+  y += 7;
   doc.setFont("helvetica","normal"); setRgb(doc, DARK);
   Object.entries(results.blandAltman).forEach(([name, ba], bi) => {
     if (bi%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
@@ -601,7 +605,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   y += 4;
   doc.setFontSize(9);
   tableHeader(doc, dataHeaders2, dataColX2, y, contentW, margin, 1);
-  y += 4;
+  y += 7;
   doc.setFont("helvetica","normal");
   const pageH = 279; // letter page height mm
   const footerH = 68; // reserve space for eval section + signature + footer
@@ -611,7 +615,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
       doc.addPage();
       y = 20;
       tableHeader(doc, dataHeaders2, dataColX2, y, contentW, margin, 1);
-      y += 4;
+      y += 7;
       doc.setFont("helvetica","normal");
     }
     if (ri%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
