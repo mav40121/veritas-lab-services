@@ -427,17 +427,26 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
 
   sectionTitle(doc, "Statistical Analysis and Experimental Results", y, pw); y += 5;
   // Fixed column positions: Level | Assigned | Mean | % Rec | Obs Err | Pass? | Instrument(s)
-  // Instrument column gets the remainder of the row after fixed columns
-  const statFixedCols = ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?", ...instrumentNames];
-  // Fixed X positions for first 6 cols; instrument columns share remaining space
-  // Column anchors (right-aligned text): Level@17, Assigned@67, Mean@99, %Rec@127, ObsErr@153, Pass?@176
-  // Instrument cols split remaining space from x=176 to x=198 (right margin)
-  const statColX: number[] = [margin+2, margin+52, margin+84, margin+112, margin+138, margin+161];
-  const instrStart = margin + 161;
-  const instrEnd = pw - margin; // = 200.9
+  // Right-anchors for first 6 cols; instrument column(s) left-aligned after a gap
+  const statColX: number[] = [margin+2, margin+52, margin+84, margin+112, margin+138, margin+158];
+  const instrStart = margin + 163; // left edge for instrument header (8mm gap after Pass?)
+  const instrEnd = pw - margin;     // = 200.9
   const instrColW = (instrEnd - instrStart) / instrumentNames.length;
+  // Data columns right-align at right edge of each instrument slot
   instrumentNames.forEach((_, ii) => statColX.push(instrStart + (ii+1)*instrColW - 2));
-  tableHeader(doc, statFixedCols, statColX, y, contentW, margin);
+  // Draw header row manually to allow mixed alignment (right for stats cols, left for instrument cols)
+  setFillRgb(doc, LIGHT_GRAY);
+  doc.rect(margin, y-3, contentW, 6, "F");
+  doc.setFontSize(7.5); doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+  ["", "Assigned", "Mean", "% Rec", "Obs Err", "Pass?"].forEach((col, i) => {
+    doc.text(col, statColX[i], y, { align: i >= 1 ? "right" : "left" });
+  });
+  instrumentNames.forEach((name, ii) => {
+    // Truncate to fit column width: ~1.7mm per char at 7.5pt, leave 1mm padding
+    const maxChars = Math.max(4, Math.floor((instrColW - 2) / 1.7));
+    const truncName = name.length > maxChars ? name.substring(0, maxChars - 1) + "…" : name;
+    doc.text(truncName, instrStart + ii * instrColW + 1, y, { align: "left" });
+  });
   y += 7;
   doc.setFont("helvetica","normal");
   results.levelResults.forEach((r, ri) => {
