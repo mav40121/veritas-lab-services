@@ -18,6 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
@@ -27,6 +33,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import fdaData from "@/lib/fdaInstrumentData.json";
@@ -363,6 +370,26 @@ export default function VeritaMapBuildPage() {
     Record<number, TestToggle[]>
   >({});
 
+  // Freemium limits
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState("");
+
+  const { data: limits } = useQuery<{
+    isFree: boolean;
+    instrumentCount: number;
+    analyteCount: number;
+    instrumentLimit: number | null;
+    analyteLimit: number | null;
+  }>({
+    queryKey: [`/api/veritamap/maps/${mapId}/limits`],
+    enabled: !!mapId,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/limits`, { headers: authHeaders() });
+      if (!res.ok) return { isFree: false, instrumentCount: 0, analyteCount: 0, instrumentLimit: null, analyteLimit: null };
+      return res.json();
+    },
+  });
+
   // Fetch existing instruments
   const { data: instruments = [], isLoading: loadingInstruments } = useQuery<
     InstrumentEntry[]
@@ -422,8 +449,11 @@ export default function VeritaMapBuildPage() {
         }
       );
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to add instrument");
+        const data = await res.json().catch(() => null);
+        if (data?.limitReached) {
+          throw Object.assign(new Error(data.error), { limitReached: true, type: data.type, limit: data.limit });
+        }
+        throw new Error(data?.error || "Failed to add instrument");
       }
       return res.json() as Promise<InstrumentEntry>;
     },
@@ -431,6 +461,7 @@ export default function VeritaMapBuildPage() {
       qc.invalidateQueries({
         queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
       });
+      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/limits`] });
       setInstrumentName("");
       setInstrumentSearch("");
       // Initialize tests for new instrument
@@ -450,8 +481,13 @@ export default function VeritaMapBuildPage() {
       }
       toast({ title: "Instrument added" });
     },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    onError: (err: any) => {
+      if (err.limitReached) {
+        setUpgradeMessage(`You've reached the free plan limit of ${err.limit} ${err.type}. Upgrade to VeritaMap\u2122 for unlimited instruments, analytes, and full intelligence features.`);
+        setUpgradeOpen(true);
+      } else {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+      }
     },
   });
 
@@ -468,6 +504,7 @@ export default function VeritaMapBuildPage() {
       qc.invalidateQueries({
         queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
       });
+      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/limits`] });
       setTestsByInstrument((prev) => {
         const next = { ...prev };
         delete next[instId];
@@ -495,16 +532,24 @@ export default function VeritaMapBuildPage() {
           }
         );
         if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || `Failed to save tests for ${instr.instrument_name}`);
+          const data = await res.json().catch(() => null);
+          if (data?.limitReached) {
+            throw Object.assign(new Error(data.error), { limitReached: true, type: data.type, limit: data.limit });
+          }
+          throw new Error(data?.error || `Failed to save tests for ${instr.instrument_name}`);
         }
       }
     },
     onSuccess: () => {
       navigate(`/veritamap-app/${mapId}`);
     },
-    onError: (err: Error) => {
-      toast({ title: "Error saving tests", description: err.message, variant: "destructive" });
+    onError: (err: any) => {
+      if (err.limitReached) {
+        setUpgradeMessage(`You've reached the free plan limit of ${err.limit} ${err.type}. Upgrade to VeritaMap\u2122 for unlimited instruments, analytes, and full intelligence features.`);
+        setUpgradeOpen(true);
+      } else {
+        toast({ title: "Error saving tests", description: err.message, variant: "destructive" });
+      }
     },
   });
 
@@ -579,10 +624,16 @@ export default function VeritaMapBuildPage() {
 
         <StepIndicator step={1} />
         <h1 className="text-2xl font-bold mt-2 mb-1">Step 1: Add Your Instruments</h1>
-        <p className="text-sm text-muted-foreground mb-7 max-w-2xl">
+        <p className="text-sm text-muted-foreground mb-3 max-w-2xl">
           Add every instrument your lab uses for each test — including primary AND backup
           analyzers. Even if two instruments are the same model, add them separately.
         </p>
+        {limits?.isFree && (
+          <div className="mb-4 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+            <Lock size={12} />
+            <span>Instruments: <span className="font-semibold">{instruments.length}</span>/{limits.instrumentLimit} (free plan) — <Link href="/veritamap" className="underline hover:no-underline">upgrade for unlimited</Link></span>
+          </div>
+        )}
 
         {/* Add instrument form */}
         <Card className="mb-6">
@@ -737,6 +788,26 @@ export default function VeritaMapBuildPage() {
             <ArrowRight size={14} className="ml-1.5" />
           </Button>
         </div>
+
+        {/* Upgrade dialog */}
+        <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock size={16} className="text-primary" /> Free Plan Limit Reached
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">{upgradeMessage}</p>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="outline" size="sm" onClick={() => setUpgradeOpen(false)}>
+                Close
+              </Button>
+              <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
+                <Link href="/veritamap">Upgrade Now</Link>
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -760,6 +831,12 @@ export default function VeritaMapBuildPage() {
         For each instrument, select only the tests your lab actually runs. Deactivate tests
         you don't perform.
       </p>
+      {limits?.isFree && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+          <Lock size={12} />
+          <span>Analytes: <span className="font-semibold">{totalActiveTests}</span>/{limits.analyteLimit} (free plan) — <Link href="/veritamap" className="underline hover:no-underline">upgrade for unlimited</Link></span>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="flex items-center gap-3 mb-6 text-sm">
@@ -801,6 +878,26 @@ export default function VeritaMapBuildPage() {
           )}
         </Button>
       </div>
+
+      {/* Upgrade dialog */}
+      <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock size={16} className="text-primary" /> Free Plan Limit Reached
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{upgradeMessage}</p>
+          <div className="flex justify-end gap-2 mt-3">
+            <Button variant="outline" size="sm" onClick={() => setUpgradeOpen(false)}>
+              Close
+            </Button>
+            <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
+              <Link href="/veritamap">Upgrade Now</Link>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

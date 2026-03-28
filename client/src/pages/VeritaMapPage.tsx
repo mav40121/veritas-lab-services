@@ -64,7 +64,7 @@ export default function VeritaMapPage() {
               <div className="flex flex-wrap gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">Free</div>
-                  <div className="text-xs text-muted-foreground">Up to 25 tests</div>
+                  <div className="text-xs text-muted-foreground">Up to 4 instruments & 10 analytes</div>
                 </div>
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">$149</div>
@@ -209,10 +209,10 @@ export default function VeritaMapPage() {
                   <span className="text-4xl font-bold">Free</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Map up to 25 tests. See the tool in action before committing.
+                  Try free — up to 4 instruments and 10 analytes per map.
                 </p>
                 <ul className="space-y-2 mb-6">
-                  {["Up to 25 tests","All 12 regulatory columns","Regulatory gap tracking","Export summary"].map(f => (
+                  {["Up to 4 instruments per map","Up to 10 analytes per map","All 12 regulatory columns","Regulatory gap tracking"].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
                     </li>
@@ -235,10 +235,10 @@ export default function VeritaMapPage() {
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Unlimited tests. Full regulatory gap report. Integrates with VeritaCheck and VeritaScan.
+                  Unlimited instruments and analytes. Full regulatory gap report. Integrates with VeritaCheck and VeritaScan.
                 </p>
                 <ul className="space-y-2 mb-6">
-                  {["Unlimited tests","Full regulatory gap report PDF","VeritaCheck + VeritaScan integration","Annual review cycle tracking","Priority support"].map(f => (
+                  {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck + VeritaScan integration","Annual review cycle tracking","Priority support"].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
                     </li>

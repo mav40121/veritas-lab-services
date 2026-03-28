@@ -117,7 +117,7 @@ export default function VeritaMapAppPage() {
   // Fetch maps
   const { data: maps, isLoading } = useQuery<MapSummary[]>({
     queryKey: ["/api/veritamap/maps"],
-    enabled: isLoggedIn && hasPlanAccess,
+    enabled: isLoggedIn,
   });
 
   // Create map
@@ -177,27 +177,6 @@ export default function VeritaMapAppPage() {
           </p>
           <Button asChild>
             <Link href="/login">Sign In</Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── No plan access ────────────────────────────────────────────────────────
-  if (!hasPlanAccess) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center px-4">
-        <div className="text-center max-w-sm">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 mb-4">
-            <Map className="h-7 w-7 text-amber-600" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2">VeritaMap Access Required</h1>
-          <p className="text-muted-foreground text-sm mb-6">
-            Your current plan doesn't include VeritaMap™. Upgrade to access the
-            regulatory test menu mapping tool.
-          </p>
-          <Button asChild>
-            <Link href="/veritamap">View Plans</Link>
           </Button>
         </div>
       </div>
@@ -276,6 +255,16 @@ export default function VeritaMapAppPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Free tier banner */}
+      {!hasPlanAccess && (
+        <div className="mb-6 p-3.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 flex items-center justify-between gap-3">
+          <div className="text-sm text-amber-800 dark:text-amber-200">
+            <span className="font-semibold">Free plan:</span> up to 4 instruments and 10 analytes per map.{" "}
+            <Link href="/veritamap" className="underline hover:no-underline font-medium">Upgrade for unlimited</Link>
+          </div>
+        </div>
+      )}
 
       {/* Maps list */}
       {isLoading ? (

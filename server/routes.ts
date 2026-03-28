@@ -252,7 +252,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const maps = (db as any).$client.prepare(
       "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
     ).all(req.user.userId);
@@ -272,7 +271,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create map
   app.post("/api/veritamap/maps", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Map name required" });
     const now = new Date().toISOString();
@@ -284,7 +282,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete map
   app.delete("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
@@ -294,7 +291,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get map with all tests
   app.get("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const tests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
@@ -303,7 +299,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Bulk upsert tests (used when building from instrument or updating)
   app.put("/api/veritamap/maps/:id/tests", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { tests } = req.body;
@@ -337,7 +332,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get all instruments for a map
   app.get("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const instruments = (db as any).$client.prepare(
@@ -355,9 +349,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Add instrument to map
   app.post("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
+    // Freemium limit: 4 instruments per map for free users
+    if (!hasMapAccess(req.user)) {
+      const count = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(req.params.id).cnt;
+      if (count >= 4) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 4 instruments", limitReached: true, limit: 4, type: "instruments" });
+    }
     const { instrument_name, role, category } = req.body;
     if (!instrument_name?.trim()) return res.status(400).json({ error: "Instrument name required" });
     const now = new Date().toISOString();
@@ -369,7 +367,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update instrument role/name
   app.put("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { instrument_name, role, category } = req.body;
@@ -381,7 +378,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete instrument (cascades to its tests)
   app.delete("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
@@ -391,11 +387,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Set tests for an instrument (replaces all)
   app.put("/api/veritamap/maps/:id/instruments/:instId/tests", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { tests } = req.body; // [{ analyte, specialty, complexity, active }]
     if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
+    // Freemium limit: 10 total analytes across all instruments for free users
+    if (!hasMapAccess(req.user)) {
+      // Count active analytes from OTHER instruments (not the one being replaced)
+      const otherCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ? AND active = 1"
+      ).get(req.params.id, req.params.instId).cnt;
+      const newActive = tests.filter((t: any) => t.active !== 0 && t.active !== false).length;
+      if (otherCount + newActive > 10) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 10 analytes", limitReached: true, limit: 10, type: "analytes", current: otherCount + newActive });
+    }
     // Replace all tests for this instrument
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
     const stmt = (db as any).$client.prepare(
@@ -414,7 +418,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Intelligence endpoint: compute correlation + cal ver requirements
   app.get("/api/veritamap/maps/:id/intelligence", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
 
@@ -461,6 +464,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ intelligence, correlationCount, calVerCount, totalAnalytes: Object.keys(intelligence).length });
   });
 
+  // Freemium limits info for a map
+  app.get("/api/veritamap/maps/:id/limits", authMiddleware, (req: any, res) => {
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const isFree = !hasMapAccess(req.user);
+    const instrumentCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(req.params.id).cnt;
+    const analyteCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE map_id = ? AND active = 1").get(req.params.id).cnt;
+    res.json({
+      isFree,
+      instrumentCount,
+      analyteCount,
+      instrumentLimit: isFree ? 4 : null,
+      analyteLimit: isFree ? 10 : null,
+    });
+  });
+
   // Helper: rebuild merged map tests from instrument tests
   function rebuildMapTests(mapId: string | number) {
     const rows = (db as any).$client.prepare(`
@@ -486,7 +505,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update single test
   app.put("/api/veritamap/maps/:id/tests/:analyte", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { active, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
