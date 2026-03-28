@@ -507,7 +507,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   drawBlandAltman(doc, baData, study.cliaAllowableError, meanBias, margin+chartW+6, y, chartW, chartH);
   y += chartH + 6;
 
-  // Supporting statistics row (matches EP Evaluator layout)
+  // Supporting statistics row
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Supporting Statistics", y, pw); y += 5;
   doc.setFont("helvetica","normal"); doc.setFontSize(8); setRgb(doc, DARK);

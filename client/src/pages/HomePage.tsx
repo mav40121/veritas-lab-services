@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight } from "lucide-react";
+import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight, Briefcase, Wrench, Handshake } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const services = [
@@ -11,7 +11,7 @@ const services = [
   { icon: BarChart3, title: "Productivity Analysis", desc: "Expert on-site assessment of workflows, staffing, and resources using industry benchmarks. Actionable reports with data-driven recommendations." },
   { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation — tailored to your team's needs." },
   { icon: Award, title: "Interim Lab Director", desc: "Experienced interim Lab Administrative Directors who ensure uninterrupted operations and regulatory compliance during leadership transitions." },
-  { icon: FlaskConical, title: "VeritaCheck — Lab Study Platform", desc: "Our new web-based EP evaluation tool — automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck Free" },
+  { icon: FlaskConical, title: "VeritaCheck™ — Lab Study Platform", desc: "Our web-based EP evaluation tool — automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck™ Free" },
 ];
 
 const stats = [
@@ -33,17 +33,20 @@ export default function HomePage() {
               Clinical Laboratory Consulting
             </Badge>
             <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight text-foreground">
-              Your partner in laboratory excellence and regulatory compliance.
+              VeritaAssure: Lab Compliance, Built for the Real World
             </h1>
-            <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
-              Veritas Lab Services provides expert consulting in leadership coaching, productivity analysis, inspection readiness, and regulatory compliance — backed by over two decades of clinical laboratory and healthcare quality expertise.
+            <p className="text-lg text-muted-foreground mb-3 leading-relaxed max-w-2xl">
+              Expert consulting and purpose-built software to keep your lab inspection-ready and confidently compliant with CLIA, CAP, COLA, TJC, and FDA requirements.
+            </p>
+            <p className="text-sm text-muted-foreground mb-8 leading-relaxed max-w-2xl">
+              Built by working lab leaders who know what surveyors actually look for.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                <Link href="/contact">Tell Us About Your Needs <ChevronRight size={16} className="ml-1" /></Link>
+                <Link href="/services">Explore VeritaAssure <ChevronRight size={16} className="ml-1" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link href="/services">View All Services</Link>
+                <Link href="/veritacheck">Try VeritaCheck™ Free</Link>
               </Button>
             </div>
           </div>
@@ -59,6 +62,62 @@ export default function HomePage() {
               <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Meet VeritaAssure */}
+      <section className="section-padding border-b border-border">
+        <div className="container-default">
+          <div className="text-center mb-10">
+            <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure</h2>
+            <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              VeritaAssure is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools — VeritaCheck™, VeritaMap™, and VeritaScan™ — to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure brings the expertise and the tools together so your team isn't scrambling before the next inspection.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <Briefcase size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure Consulting</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  Structured mock surveys, regulatory gap analysis, productivity and workflow assessments, leadership coaching, and CLIA Laboratory Director services. On-site expertise aligned with CLIA, CAP, COLA, TJC, and FDA expectations.
+                </p>
+                <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
+                  <Link href="/services">View Services →</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <Wrench size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure Tools</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  VeritaCheck™, VeritaMap™, and VeritaScan™ are the software instruments of the VeritaAssure suite — built for lab directors who want data-driven compliance without waiting on a consultant.
+                </p>
+                <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
+                  <Link href="/veritacheck">Explore the Tools →</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <Handshake size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure Together</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  For labs that want both: consulting engagements that use the same tools your team works in every day, so the findings don't disappear when the engagement ends.
+                </p>
+                <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
+                  <Link href="/contact">Contact Us →</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

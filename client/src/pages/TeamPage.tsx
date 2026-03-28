@@ -7,7 +7,6 @@ const publications = [
   { title: "Laboratory Leadership's View of Accreditation", url: "https://www.medlabmag.com/article/1766", journal: "Medical Lab Management" },
   { title: "Forming a Blood Utilization and Management Program", url: "https://www.medlabmag.com/article/1732", journal: "Medical Lab Management" },
   { title: "Capturing Productivity in the Laboratory", url: "https://www.medlabmag.com/article/1575", journal: "Medical Lab Management" },
-  { title: "Lab Management 101: A Free 30-Episode Webinar Series", url: "https://www.labvinelearning.com/VineStream", journal: "LabVine Learning" },
 ];
 
 const credentials = [
