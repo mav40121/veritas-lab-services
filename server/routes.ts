@@ -7,7 +7,7 @@ import { db } from "./db";
 import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
@@ -983,6 +983,139 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     res.json({ received: true });
+  });
+
+  // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
+  function hasCheckAccess(user: any) {
+    return ["annual", "lab", "per_study"].includes(user?.plan) || (user?.userId && user.userId <= 11);
+  }
+
+  // List trackers for user
+  app.get("/api/cumsum/trackers", authMiddleware, (req: any, res) => {
+    if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
+    const trackers = (db as any).$client.prepare(
+      "SELECT * FROM cumsum_trackers WHERE user_id = ? ORDER BY created_at DESC"
+    ).all(req.user.userId);
+    // Attach last entry info to each tracker
+    const result = trackers.map((t: any) => {
+      const lastEntry = (db as any).$client.prepare(
+        "SELECT cumsum, verdict, created_at FROM cumsum_entries WHERE tracker_id = ? ORDER BY id DESC LIMIT 1"
+      ).get(t.id);
+      return { ...t, lastCumsum: lastEntry?.cumsum ?? 0, lastVerdict: lastEntry?.verdict ?? "N/A", lastEntryDate: lastEntry?.created_at ?? null };
+    });
+    res.json(result);
+  });
+
+  // Create tracker
+  app.post("/api/cumsum/trackers", authMiddleware, (req: any, res) => {
+    if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
+    const { instrumentName, analyte } = req.body;
+    if (!instrumentName?.trim()) return res.status(400).json({ error: "Instrument name required" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO cumsum_trackers (user_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?)"
+    ).run(req.user.userId, instrumentName.trim(), analyte || "PTT", now);
+    res.json({ id: result.lastInsertRowid, user_id: req.user.userId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
+  });
+
+  // Delete tracker
+  app.delete("/api/cumsum/trackers/:id", authMiddleware, (req: any, res) => {
+    const tracker = (db as any).$client.prepare("SELECT id FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!tracker) return res.status(404).json({ error: "Tracker not found" });
+    (db as any).$client.prepare("DELETE FROM cumsum_entries WHERE tracker_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM cumsum_trackers WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Get tracker with all entries
+  app.get("/api/cumsum/trackers/:id", authMiddleware, (req: any, res) => {
+    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!tracker) return res.status(404).json({ error: "Tracker not found" });
+    const entries = (db as any).$client.prepare(
+      "SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC"
+    ).all(req.params.id);
+    res.json({ ...tracker, entries });
+  });
+
+  // Add entry to tracker
+  app.post("/api/cumsum/trackers/:id/entries", authMiddleware, (req: any, res) => {
+    if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
+    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!tracker) return res.status(404).json({ error: "Tracker not found" });
+    const { year, lotLabel, oldLotNumber, newLotNumber, oldLotGeomean, newLotGeomean, difference, cumsum, verdict, specimenData, notes } = req.body;
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      `INSERT INTO cumsum_entries (tracker_id, year, lot_label, old_lot_number, new_lot_number, old_lot_geomean, new_lot_geomean, difference, cumsum, verdict, specimen_data, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(req.params.id, year, lotLabel, oldLotNumber || null, newLotNumber || null, oldLotGeomean ?? null, newLotGeomean ?? null, difference ?? null, cumsum ?? null, verdict || null, specimenData ? JSON.stringify(specimenData) : null, notes || null, now);
+    res.json({ id: result.lastInsertRowid, tracker_id: parseInt(req.params.id), year, lot_label: lotLabel, old_lot_number: oldLotNumber, new_lot_number: newLotNumber, old_lot_geomean: oldLotGeomean, new_lot_geomean: newLotGeomean, difference, cumsum, verdict, specimen_data: specimenData, notes, created_at: now });
+  });
+
+  // Delete entry
+  app.delete("/api/cumsum/entries/:id", authMiddleware, (req: any, res) => {
+    const entry = (db as any).$client.prepare(
+      "SELECT e.id, t.user_id FROM cumsum_entries e JOIN cumsum_trackers t ON e.tracker_id = t.id WHERE e.id = ?"
+    ).get(req.params.id);
+    if (!entry || entry.user_id !== req.user.userId) return res.status(404).json({ error: "Entry not found" });
+    (db as any).$client.prepare("DELETE FROM cumsum_entries WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // CUMSUM Excel export
+  app.get("/api/cumsum/trackers/:id/excel", authMiddleware, async (req: any, res) => {
+    if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
+    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!tracker) return res.status(404).json({ error: "Tracker not found" });
+    const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
+    try {
+      const XLSX = await import("xlsx");
+      const rows = entries.map((e: any) => ({
+        "Year": e.year,
+        "Lot Label": e.lot_label,
+        "Old Lot #": e.old_lot_number || "",
+        "New Lot #": e.new_lot_number || "",
+        "Old GeoMean (sec)": e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : "",
+        "New GeoMean (sec)": e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : "",
+        "Difference (sec)": e.difference != null ? Number(e.difference).toFixed(1) : "",
+        "CumSum (sec)": e.cumsum != null ? Number(e.cumsum).toFixed(1) : "",
+        "Verdict": e.verdict || "",
+        "Notes": e.notes || "",
+      }));
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [{ wch: 8 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, ws, "CUMSUM");
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(Buffer.from(buffer));
+    } catch (e: any) {
+      console.error("CUMSUM Excel error:", e);
+      res.status(500).json({ error: "Excel generation failed" });
+    }
+  });
+
+  // CUMSUM PDF export
+  app.post("/api/cumsum/trackers/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
+    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!tracker) return res.status(404).json({ error: "Tracker not found" });
+    const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
+    const { currentSpecimens } = req.body || {};
+    try {
+      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens);
+      const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (e: any) {
+      console.error("CUMSUM PDF error:", e);
+      res.status(500).json({ error: "PDF generation failed" });
+    }
   });
 
   return httpServer;

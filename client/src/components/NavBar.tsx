@@ -20,6 +20,7 @@ const allMobileLinks = [
   { href: "/services", label: "Services" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck™" },
+  { href: "/cumsum", label: "CUMSUM Tracker" },
   { href: "/veritascan", label: "VeritaScan™" },
   { href: "/veritamap", label: "VeritaMap™" },
   { href: "/book", label: "Book" },
@@ -73,7 +74,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritacheck","/veritascan","/veritamap","/book"].includes(location)
+                ["/veritacheck","/veritascan","/veritamap","/book","/cumsum"].includes(location)
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>

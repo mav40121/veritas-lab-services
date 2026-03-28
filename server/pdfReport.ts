@@ -266,6 +266,8 @@ function headerHTML(study: Study): string {
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Lot-to-Lot Verification",
     pt_coag: "PT/Coag New Lot Validation",
+    qc_range: "QC Range Establishment",
+    multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
   };
   const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
   return `
@@ -1206,6 +1208,201 @@ const FOOTER_TEMPLATE = `
   </div>
 </div>`;
 
+// ─── QC RANGE ESTABLISHMENT HTML ──────────────────────────────────────────────
+function buildQCRangeHTML(study: Study, results: any): string {
+  const r = results;
+  const analytes = Array.from(new Set((r.levelResults || []).map((lr: any) => lr.analyte)));
+  const tableRows = (r.levelResults || []).map((lr: any) => `
+    <tr style="${lr.flagShift ? 'background:#fef2f2;' : ''}">
+      <td>${lr.analyzer}</td><td>${lr.analyte}</td><td>${lr.level}</td>
+      <td style="text-align:right">${lr.n}</td>
+      <td style="text-align:right">${lr.newMean.toFixed(2)}</td>
+      <td style="text-align:right">${lr.newSD.toFixed(3)}</td>
+      <td style="text-align:right">${lr.cv.toFixed(1)}%</td>
+      <td style="text-align:right">${lr.oldMean != null ? lr.oldMean.toFixed(2) : '—'}</td>
+      <td style="text-align:right;${lr.flagShift ? 'color:#dc2626;font-weight:600;' : ''}">${lr.pctDiffFromOld != null ? lr.pctDiffFromOld.toFixed(1) + '%' : '—'}${lr.flagShift ? ' ⚠' : ''}</td>
+    </tr>`).join("");
+
+  const narrative = `New QC ranges have been established for ${analytes.join(", ")}. ` +
+    `Runs were performed across ${r.dateRange?.start || ''} to ${r.dateRange?.end || ''} on ${study.instrument}. ` +
+    (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  body { counter-reset: page; }
+  </style></head><body>
+    ${headerHTML(study)}
+    ${signatureHTML()}
+    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
+    <div class="narrative-section">
+      <div class="eval-title">Narrative Summary</div>
+      <div class="eval-text">${narrative}</div>
+    </div>
+    <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot — the historical/peer-derived SD should be used for control limits.</div>
+    <div style="page-break-before:always"></div>
+    ${headerHTML(study)}
+    <div class="eval-title" style="margin-top:8px">Statistical Results</div>
+    <table class="data-table"><thead><tr>
+      <th>Analyzer</th><th>Analyte</th><th>Level</th><th style="text-align:right">N</th>
+      <th style="text-align:right">New Mean</th><th style="text-align:right">New SD</th><th style="text-align:right">CV%</th>
+      <th style="text-align:right">Old Mean</th><th style="text-align:right">% Diff</th>
+    </tr></thead><tbody>${tableRows}</tbody></table>
+    ${supportingPageHTML(study, JSON.parse(study.instruments))}
+  </body></html>`;
+}
+
+// ─── MULTI-ANALYTE LOT COMPARISON HTML ────────────────────────────────────────
+function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
+  const r = results;
+  const rawDP = JSON.parse(study.dataPoints);
+  const summaryRows = (r.analyteResults || []).filter((ar: any) => ar.n > 0).map((ar: any) => `
+    <tr style="${!ar.pass ? 'background:#fef2f2;' : ''}">
+      <td>${ar.analyte}</td><td style="text-align:right">${ar.n}</td>
+      <td style="text-align:right">${ar.meanNew.toFixed(2)}</td>
+      <td style="text-align:right">${ar.meanOld.toFixed(2)}</td>
+      <td style="text-align:right">${ar.meanPctDiff.toFixed(1)}%</td>
+      <td style="text-align:right">${ar.sdPctDiff.toFixed(2)}</td>
+      <td style="text-align:right">${ar.r.toFixed(4)}</td>
+      <td style="text-align:right">${(ar.tea * 100).toFixed(0)}%</td>
+      <td style="text-align:center;${ar.pass ? 'color:#059669;' : 'color:#dc2626;'}font-weight:600">${ar.pass ? 'PASS' : 'FAIL'}</td>
+    </tr>`).join("");
+
+  const specimenRows = (r.specimens || []).map((s: any) => `
+    <tr>
+      <td>${s.specimenId}</td>
+      <td style="text-align:right">${s.ptNew != null ? s.ptNew.toFixed(1) : '—'}</td>
+      <td style="text-align:right">${s.ptNewINR != null ? s.ptNewINR.toFixed(2) : '—'}</td>
+      <td style="text-align:right">${s.ptOld != null ? s.ptOld.toFixed(1) : '—'}</td>
+      <td style="text-align:right">${s.ptPctDiff != null ? s.ptPctDiff.toFixed(1) + '%' : '—'}</td>
+      <td style="text-align:right">${s.apttNew != null ? s.apttNew.toFixed(1) : '—'}</td>
+      <td style="text-align:right">${s.apttOld != null ? s.apttOld.toFixed(1) : '—'}</td>
+      <td style="text-align:right">${s.apttPctDiff != null ? s.apttPctDiff.toFixed(1) + '%' : '—'}</td>
+      <td style="text-align:right">${s.fibNew != null ? s.fibNew.toFixed(1) : '—'}</td>
+      <td style="text-align:right">${s.fibOld != null ? s.fibOld.toFixed(1) : '—'}</td>
+      <td style="text-align:right">${s.fibPctDiff != null ? s.fibPctDiff.toFixed(1) + '%' : '—'}</td>
+    </tr>`).join("");
+
+  const sampleLabel = rawDP.sampleType === "normal" ? "normal" : "random";
+  const validAnalytes = (r.analyteResults || []).filter((ar: any) => ar.n > 0);
+  const narrative = `${(r.specimens || []).length} ${sampleLabel} specimens were compared between old lot and new lot on ${study.instrument}. ` +
+    validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${(ar.tea * 100).toFixed(0)}% TEa).`).join(" ");
+
+  const isiNote = r.ptINRValidation ? `<div class="eval-text" style="margin:8px 0;font-size:7.5px">${r.ptINRValidation.isiCheck}</div>` : '';
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  body { counter-reset: page; }
+  </style></head><body>
+    ${headerHTML(study)}
+    ${signatureHTML()}
+    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
+    <div class="narrative-section">
+      <div class="eval-title">Narrative Summary</div>
+      <div class="eval-text">${narrative}</div>
+    </div>
+    ${isiNote}
+    <div style="page-break-before:always"></div>
+    ${headerHTML(study)}
+    <div class="eval-title" style="margin-top:8px">Per-Analyte Summary</div>
+    <table class="data-table"><thead><tr>
+      <th>Analyte</th><th style="text-align:right">N</th><th style="text-align:right">Mean New</th>
+      <th style="text-align:right">Mean Old</th><th style="text-align:right">Mean %Diff</th>
+      <th style="text-align:right">SD</th><th style="text-align:right">R</th>
+      <th style="text-align:right">TEa</th><th style="text-align:center">Result</th>
+    </tr></thead><tbody>${summaryRows}</tbody></table>
+    <div class="eval-title" style="margin-top:12px">Specimen Data</div>
+    <table class="data-table" style="font-size:6.5px"><thead><tr>
+      <th>ID</th><th style="text-align:right">New PT</th><th style="text-align:right">INR</th>
+      <th style="text-align:right">Old PT</th><th style="text-align:right">PT %Diff</th>
+      <th style="text-align:right">New APTT</th><th style="text-align:right">Old APTT</th>
+      <th style="text-align:right">APTT %Diff</th><th style="text-align:right">New Fib</th>
+      <th style="text-align:right">Old Fib</th><th style="text-align:right">Fib %Diff</th>
+    </tr></thead><tbody>${specimenRows}</tbody></table>
+    ${supportingPageHTML(study, JSON.parse(study.instruments))}
+  </body></html>`;
+}
+
+// ─── CUMSUM PDF GENERATOR ─────────────────────────────────────────────────────
+export async function generateCumsumPDF(tracker: any, entries: any[], currentSpecimens?: any[]): Promise<Buffer> {
+  const historyRows = entries.map((e: any) => `
+    <tr style="${e.verdict === 'ACTION REQUIRED' ? 'background:#fef2f2;' : e.verdict === 'ACCEPT' ? 'background:#f0fdf4;' : ''}">
+      <td>${e.year}</td>
+      <td>${e.old_lot_number || '—'}</td>
+      <td>${e.new_lot_number || '—'}</td>
+      <td style="text-align:right">${e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : '—'}</td>
+      <td style="text-align:right">${e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : '—'}</td>
+      <td style="text-align:right">${e.difference != null ? (e.difference >= 0 ? '+' : '') + Number(e.difference).toFixed(1) : '—'}</td>
+      <td style="text-align:right;font-weight:600">${e.cumsum != null ? Number(e.cumsum).toFixed(1) : '—'}</td>
+      <td style="${e.verdict === 'ACTION REQUIRED' ? 'color:#dc2626;font-weight:600' : e.verdict === 'ACCEPT' ? 'color:#059669;font-weight:600' : ''}">${e.verdict || '—'}</td>
+    </tr>`).join("");
+
+  let specimenSection = '';
+  if (currentSpecimens && currentSpecimens.length > 0) {
+    const specRows = currentSpecimens.map((s: any) => `<tr><td>${s.specimenId}</td><td style="text-align:right">${s.oldLot || '—'}</td><td style="text-align:right">${s.newLot || '—'}</td></tr>`).join("");
+    specimenSection = `
+      <div style="page-break-before:always"></div>
+      <div style="font-size:9px;font-weight:600;margin:10px 0 6px">Current Lot Change — Specimen Data</div>
+      <table class="data-table"><thead><tr><th>Specimen ID</th><th style="text-align:right">Old Lot (sec)</th><th style="text-align:right">New Lot (sec)</th></tr></thead><tbody>${specRows}</tbody></table>`;
+  }
+
+  const lastEntry = entries.length > 0 ? entries[entries.length - 1] : null;
+  const currentVerdict = lastEntry ? lastEntry.verdict : 'N/A';
+  const currentCumsum = lastEntry ? Number(lastEntry.cumsum).toFixed(1) : '0.0';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  body { counter-reset: page; }
+  </style></head><body>
+    <div class="report-header">
+      <div>
+        <div class="logo">VeritaCheck™</div>
+        <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+      </div>
+      <div class="header-right">Instrument: ${tracker.instrument_name}</div>
+    </div>
+    <div class="report-title">CUMSUM Tracker — ${tracker.instrument_name} (${tracker.analyte})</div>
+    <hr class="divider">
+    <div class="signature-block">
+      <div class="accepted-label">Accepted by:</div>
+      <div class="sig-lines">
+        <div class="sig-line" style="flex:2"><div class="line"></div><div class="label">Signature / Name &amp; Title</div></div>
+        <div class="sig-line sig-date"><div class="line"></div><div class="label">Date</div></div>
+      </div>
+    </div>
+    <div class="eval-section">
+      <hr class="divider">
+      <div class="eval-title">Current Status</div>
+      <div class="eval-text">Current CumSum: <strong>${currentCumsum} sec</strong> — Verdict: <strong style="${currentVerdict === 'ACTION REQUIRED' ? 'color:#dc2626' : currentVerdict === 'ACCEPT' ? 'color:#059669' : ''}">${currentVerdict}</strong></div>
+      <div class="eval-text" style="margin-top:4px">Threshold: |CumSum| ≤ 7.0 seconds → ACCEPT. Exceeds threshold → ACTION REQUIRED (new Heparin Response Curve needed).</div>
+      <div class="verdict" style="background:${currentVerdict === 'ACTION REQUIRED' ? '#fef2f2;border-color:#fca5a5;color:#dc2626' : '#f0fdf4;border-color:#86efac;color:#059669'}">${currentVerdict === 'ACTION REQUIRED' ? '✗ ACTION REQUIRED' : currentVerdict === 'ACCEPT' ? '✓ ACCEPT' : currentVerdict}</div>
+    </div>
+    <div class="eval-title" style="margin-top:12px">CUMSUM History</div>
+    <table class="data-table"><thead><tr>
+      <th>Year</th><th>Old Lot</th><th>New Lot</th>
+      <th style="text-align:right">Old GeoMean</th><th style="text-align:right">New GeoMean</th>
+      <th style="text-align:right">New−Old</th><th style="text-align:right">CumSum</th><th>Verdict</th>
+    </tr></thead><tbody>${historyRows}</tbody></table>
+    ${specimenSection}
+  </body></html>`;
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: FOOTER_TEMPLATE,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
+
 export async function generatePDFBuffer(study: Study, results: any): Promise<Buffer> {
   const html = study.studyType === "cal_ver"
     ? buildCalVerHTML(study, results)
@@ -1215,6 +1412,10 @@ export async function generatePDFBuffer(study: Study, results: any): Promise<Buf
     ? buildLotToLotHTML(study, results)
     : study.studyType === "pt_coag"
     ? buildPTCoagHTML(study, results)
+    : study.studyType === "qc_range"
+    ? buildQCRangeHTML(study, results)
+    : study.studyType === "multi_analyte_coag"
+    ? buildMultiAnalyteCoagHTML(study, results)
     : buildMethodCompHTML(study, results);
 
   const browser = await getBrowser();

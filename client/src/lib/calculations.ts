@@ -732,8 +732,195 @@ export function calculatePTCoag(
   return { type: "pt_coag", module1, module2, module3, overallPass, summary };
 }
 
+// ─── QC RANGE ESTABLISHMENT ─────────────────────────────────────────────────
+
+export interface QCRangeLevelResult {
+  analyte: string;
+  level: string;
+  analyzer: string;
+  n: number;
+  newMean: number;
+  newSD: number;
+  cv: number;
+  oldMean: number | null;
+  oldSD: number | null;
+  pctDiffFromOld: number | null;
+  flagShift: boolean; // >10% shift
+}
+
+export interface QCRangeResults {
+  type: "qc_range";
+  levelResults: QCRangeLevelResult[];
+  overallShiftCount: number;
+  totalLevels: number;
+  dateRange: { start: string; end: string };
+  overallPass: boolean;
+  passCount: number;
+  totalCount: number;
+  summary: string;
+}
+
+export interface QCRangeDataPoint {
+  analyte: string;
+  level: string;
+  analyzer: string;
+  runs: number[];
+  oldMean?: number | null;
+  oldSD?: number | null;
+}
+
+export function calculateQCRange(dataPoints: QCRangeDataPoint[], dateRange: { start: string; end: string }): QCRangeResults {
+  const levelResults: QCRangeLevelResult[] = dataPoints.map(dp => {
+    const valid = dp.runs.filter(v => v !== null && v !== undefined && !isNaN(v));
+    const n = valid.length;
+    const newMean = n > 0 ? mean(valid) : 0;
+    const newSD = n > 1 ? stddev(valid) : 0;
+    const cv = newMean !== 0 ? (newSD / newMean) * 100 : 0;
+    const pctDiffFromOld = dp.oldMean != null && dp.oldMean !== 0
+      ? ((newMean - dp.oldMean) / dp.oldMean) * 100
+      : null;
+    const flagShift = pctDiffFromOld !== null ? Math.abs(pctDiffFromOld) > 10 : false;
+    return {
+      analyte: dp.analyte, level: dp.level, analyzer: dp.analyzer,
+      n, newMean, newSD, cv,
+      oldMean: dp.oldMean ?? null, oldSD: dp.oldSD ?? null,
+      pctDiffFromOld, flagShift,
+    };
+  });
+
+  const overallShiftCount = levelResults.filter(r => r.flagShift).length;
+  const totalLevels = levelResults.length;
+
+  const analytes = Array.from(new Set(levelResults.map(r => r.analyte)));
+  const analyzers = Array.from(new Set(levelResults.map(r => r.analyzer)));
+  const summary = `New QC ranges have been established for ${analytes.join(", ")}. ` +
+    `${levelResults.reduce((max, r) => Math.max(max, r.n), 0)} runs were performed across ${dateRange.start} to ${dateRange.end} ` +
+    `on ${analyzers.join(", ")}. ` +
+    (overallShiftCount > 0
+      ? `${overallShiftCount} of ${totalLevels} analyte-level combinations showed >10% shift from previous lot.`
+      : `All means are within 10% of previous lot values.`) +
+    ` Per policy, SD should not change lot to lot — the historical/peer-derived SD should be used for control limits.`;
+
+  const passCount = totalLevels - overallShiftCount;
+  const overallPass = overallShiftCount === 0;
+  return { type: "qc_range", levelResults, overallShiftCount, totalLevels, dateRange, overallPass, passCount, totalCount: totalLevels, summary };
+}
+
+// ─── MULTI-ANALYTE LOT COMPARISON (COAG) ────────────────────────────────────
+
+export interface MultiAnalyteSpecimen {
+  specimenId: string;
+  ptNew: number | null;
+  ptOld: number | null;
+  ptNewINR: number | null;
+  ptOldINR: number | null;
+  ptPctDiff: number | null;
+  apttNew: number | null;
+  apttOld: number | null;
+  apttPctDiff: number | null;
+  fibNew: number | null;
+  fibOld: number | null;
+  fibPctDiff: number | null;
+}
+
+export interface MultiAnalyteAnalyteResult {
+  analyte: string;
+  n: number;
+  meanNew: number;
+  meanOld: number;
+  meanPctDiff: number;
+  sdPctDiff: number;
+  r: number;
+  tea: number;
+  pass: boolean;
+  specimens: { specimenId: string; newVal: number; oldVal: number; pctDiff: number; flagged: boolean }[];
+}
+
+export interface MultiAnalyteResults {
+  type: "multi_analyte_coag";
+  specimens: MultiAnalyteSpecimen[];
+  analyteResults: MultiAnalyteAnalyteResult[];
+  ptINRValidation: { meanNewINR: number; meanOldINR: number; isiCheck: string } | null;
+  overallPass: boolean;
+  passCount: number;
+  totalCount: number;
+  summary: string;
+}
+
+export function calculateMultiAnalyteCoag(
+  rawSpecimens: { specimenId: string; ptNew: number | null; ptOld: number | null; apttNew: number | null; apttOld: number | null; fibNew: number | null; fibOld: number | null }[],
+  isi: number,
+  normalMeanPT: number,
+  teas: { pt: number; aptt: number; fib: number }
+): MultiAnalyteResults {
+  // Build enriched specimens with auto-calculated INR and % diff
+  const specimens: MultiAnalyteSpecimen[] = rawSpecimens.map(s => {
+    const ptNewINR = s.ptNew != null && normalMeanPT > 0 ? calculateINR(s.ptNew, normalMeanPT, isi) : null;
+    const ptOldINR = s.ptOld != null && normalMeanPT > 0 ? calculateINR(s.ptOld, normalMeanPT, isi) : null;
+    const ptPctDiff = s.ptNew != null && s.ptOld != null && s.ptOld !== 0 ? ((s.ptNew - s.ptOld) / s.ptOld) * 100 : null;
+    const apttPctDiff = s.apttNew != null && s.apttOld != null && s.apttOld !== 0 ? ((s.apttNew - s.apttOld) / s.apttOld) * 100 : null;
+    const fibPctDiff = s.fibNew != null && s.fibOld != null && s.fibOld !== 0 ? ((s.fibNew - s.fibOld) / s.fibOld) * 100 : null;
+    return { specimenId: s.specimenId, ptNew: s.ptNew, ptOld: s.ptOld, ptNewINR, ptOldINR, ptPctDiff, apttNew: s.apttNew, apttOld: s.apttOld, apttPctDiff, fibNew: s.fibNew, fibOld: s.fibOld, fibPctDiff };
+  });
+
+  function calcAnalyte(name: string, getNew: (s: MultiAnalyteSpecimen) => number | null, getOld: (s: MultiAnalyteSpecimen) => number | null, tea: number): MultiAnalyteAnalyteResult {
+    const valid = specimens.filter(s => getNew(s) != null && getOld(s) != null);
+    const newVals = valid.map(s => getNew(s)!);
+    const oldVals = valid.map(s => getOld(s)!);
+    const n = valid.length;
+    const meanNew = n > 0 ? mean(newVals) : 0;
+    const meanOld = n > 0 ? mean(oldVals) : 0;
+    const pctDiffs = valid.map(s => ((getNew(s)! - getOld(s)!) / getOld(s)!) * 100);
+    const meanPctDiff = n > 0 ? mean(pctDiffs) : 0;
+    const sdPctDiff = n > 1 ? stddev(pctDiffs) : 0;
+    const r = n >= 2 ? Math.sqrt(rsq(oldVals, newVals)) * Math.sign(slopeFn(oldVals, newVals)) : 0;
+    const pass = Math.abs(meanPctDiff) <= tea * 100;
+    const specimenResults = valid.map((s, i) => ({
+      specimenId: s.specimenId,
+      newVal: getNew(s)!,
+      oldVal: getOld(s)!,
+      pctDiff: pctDiffs[i],
+      flagged: Math.abs(pctDiffs[i]) > tea * 100,
+    }));
+    return { analyte: name, n, meanNew, meanOld, meanPctDiff, sdPctDiff, r, tea, pass, specimens: specimenResults };
+  }
+
+  const analyteResults: MultiAnalyteAnalyteResult[] = [
+    calcAnalyte("PT", s => s.ptNew, s => s.ptOld, teas.pt),
+    calcAnalyte("APTT", s => s.apttNew, s => s.apttOld, teas.aptt),
+    calcAnalyte("Fibrinogen", s => s.fibNew, s => s.fibOld, teas.fib),
+  ];
+
+  // PT INR validation
+  let ptINRValidation: MultiAnalyteResults["ptINRValidation"] = null;
+  const ptResult = analyteResults[0];
+  if (ptResult.n > 0 && normalMeanPT > 0) {
+    const inrNewVals = specimens.filter(s => s.ptNewINR != null).map(s => s.ptNewINR!);
+    const inrOldVals = specimens.filter(s => s.ptOldINR != null).map(s => s.ptOldINR!);
+    const meanNewINR = inrNewVals.length ? mean(inrNewVals) : 0;
+    const meanOldINR = inrOldVals.length ? mean(inrOldVals) : 0;
+    const avgNewPT = ptResult.meanNew;
+    const ratio = normalMeanPT > 0 ? avgNewPT / normalMeanPT : 0;
+    const expectedINR = ratio > 0 ? Math.pow(ratio, isi) : 0;
+    const isiCheck = Math.abs(meanNewINR - expectedINR) < 0.15
+      ? `ISI validated: ratio ${ratio.toFixed(3)} → expected INR ${expectedINR.toFixed(2)}, observed ${meanNewINR.toFixed(2)}`
+      : `ISI check: ratio ${ratio.toFixed(3)} → expected INR ${expectedINR.toFixed(2)}, observed ${meanNewINR.toFixed(2)} — review ISI value`;
+    ptINRValidation = { meanNewINR, meanOldINR, isiCheck };
+  }
+
+  const validAnalytes = analyteResults.filter(r => r.n > 0);
+  const overallPass = validAnalytes.every(r => r.pass);
+  const passCount = validAnalytes.filter(r => r.pass).length;
+  const totalCount = validAnalytes.length;
+  const summary = validAnalytes.map(r =>
+    `${r.analyte} showed a mean difference of ${r.meanPctDiff.toFixed(1)}% (${r.pass ? "PASS" : "FAIL"} at ${(r.tea * 100).toFixed(0)}% TEa).`
+  ).join(" ") + ` Overall: ${overallPass ? "PASS" : "FAIL"}.`;
+
+  return { type: "multi_analyte_coag", specimens, analyteResults, ptINRValidation, overallPass, passCount, totalCount, summary };
+}
+
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults | LotToLotResults | PTCoagResults;
+export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -756,3 +943,5 @@ export function isMethodComp(r: StudyResults): r is MethodCompResults { return r
 export function isPrecision(r: StudyResults): r is PrecisionResults { return r.type === "precision"; }
 export function isLotToLot(r: StudyResults): r is LotToLotResults { return r.type === "lot_to_lot"; }
 export function isPTCoag(r: StudyResults): r is PTCoagResults { return r.type === "pt_coag"; }
+export function isQCRange(r: StudyResults): r is QCRangeResults { return r.type === "qc_range"; }
+export function isMultiAnalyteCoag(r: StudyResults): r is MultiAnalyteResults { return r.type === "multi_analyte_coag"; }

@@ -142,6 +142,32 @@ sqlite.exec(`
     unsubscribed_at TEXT,
     active INTEGER NOT NULL DEFAULT 1
   );
+
+  CREATE TABLE IF NOT EXISTS cumsum_trackers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    instrument_name TEXT NOT NULL,
+    analyte TEXT NOT NULL DEFAULT 'PTT',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS cumsum_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tracker_id INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    lot_label TEXT NOT NULL,
+    old_lot_number TEXT,
+    new_lot_number TEXT,
+    old_lot_geomean REAL,
+    new_lot_geomean REAL,
+    difference REAL,
+    cumsum REAL,
+    verdict TEXT,
+    specimen_data TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (tracker_id) REFERENCES cumsum_trackers(id)
+  );
 `);
 
 // Seed discount codes (safe — INSERT OR IGNORE won't duplicate)

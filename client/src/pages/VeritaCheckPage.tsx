@@ -12,7 +12,7 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, calculateINR } from "@/lib/calculations";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
@@ -213,7 +213,7 @@ export default function VeritaCheckPage() {
   const [testName, setTestName] = useState("");
   const [analyst, setAnalyst] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag">("cal_ver");
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag">("cal_ver");
   const [instrumentNames, setInstrumentNames] = useState<string[]>(["Instrument 1", "Instrument 2"]);
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
@@ -271,6 +271,36 @@ export default function VeritaCheckPage() {
   const [ptModule3TEa, setPtModule3TEa] = useState(0.20);
   const [ptModule3Data, setPtModule3Data] = useState<{ id: string; x: number | null; y: number | null }[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null, y: null }))
+  );
+
+  // QC Range Establishment state
+  const [qcAnalytes, setQcAnalytes] = useState<string[]>(["PT", "APTT"]);
+  const [qcAnalyteCustom, setQcAnalyteCustom] = useState("");
+  const [qcAnalyzers, setQcAnalyzers] = useState<string[]>(["TOP 351"]);
+  const [qcLevels, setQcLevels] = useState<string[]>(["Normal", "Abnormal"]);
+  const [qcDateStart, setQcDateStart] = useState("");
+  const [qcDateEnd, setQcDateEnd] = useState("");
+  const [qcRunData, setQcRunData] = useState<Record<string, number[]>>({});
+  const [qcOldLotData, setQcOldLotData] = useState<Record<string, { mean: number | null; sd: number | null }>>({});
+  const [qcNumRuns, setQcNumRuns] = useState(15);
+
+  // Multi-Analyte Lot Comparison state
+  const [maInstrument, setMaInstrument] = useState("ACL TOP 351");
+  const [maNewLotPT, setMaNewLotPT] = useState("");
+  const [maOldLotPT, setMaOldLotPT] = useState("");
+  const [maNewLotAPTT, setMaNewLotAPTT] = useState("");
+  const [maOldLotAPTT, setMaOldLotAPTT] = useState("");
+  const [maNewLotFib, setMaNewLotFib] = useState("");
+  const [maOldLotFib, setMaOldLotFib] = useState("");
+  const [maISI, setMaISI] = useState(0.97);
+  const [maNormalMeanPT, setMaNormalMeanPT] = useState(12.0);
+  const [maSampleType, setMaSampleType] = useState<"normal" | "random">("random");
+  const [maTeaPT, setMaTeaPT] = useState(0.20);
+  const [maTeaAPTT, setMaTeaAPTT] = useState(0.15);
+  const [maTeaFib, setMaTeaFib] = useState(0.20);
+  const [maNumSpecimens, setMaNumSpecimens] = useState(20);
+  const [maSpecimens, setMaSpecimens] = useState<{ id: string; ptNew: string; ptOld: string; apttNew: string; apttOld: string; fibNew: string; fibOld: string }[]>(
+    Array.from({ length: 24 }, (_, i) => ({ id: `S${String(i + 1).padStart(3, "0")}`, ptNew: "", ptOld: "", apttNew: "", apttOld: "", fibNew: "", fibOld: "" }))
   );
 
   const handleNumLevelsChange = (val: string) => {
@@ -363,6 +393,10 @@ export default function VeritaCheckPage() {
     ? lotData.filter(dp => dp.currentLot !== null && dp.newLot !== null).length + (lotSampleType === "both" ? lotDataAbnormal.filter(dp => dp.currentLot !== null && dp.newLot !== null).length : 0)
     : studyType === "pt_coag"
     ? ptModule1Data.filter(v => v !== null && !isNaN(v)).length
+    : studyType === "qc_range"
+    ? Object.values(qcRunData).filter(arr => arr.filter(v => !isNaN(v)).length >= 3).length
+    : studyType === "multi_analyte_coag"
+    ? maSpecimens.filter(s => (s.ptNew && s.ptOld) || (s.apttNew && s.apttOld) || (s.fibNew && s.fibOld)).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
 
   const saveMutation = useMutation({
@@ -426,6 +460,62 @@ export default function VeritaCheckPage() {
           instrument: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp
         }),
         instruments: JSON.stringify([ptInstrumentName, ptInstrument2Name]),
+        status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "qc_range") {
+      const dataPoints: QCRangeDataPoint[] = [];
+      for (const analyte of qcAnalytes) {
+        for (const level of qcLevels) {
+          for (const analyzer of qcAnalyzers) {
+            const key = `${analyte}|${level}|${analyzer}`;
+            const runs = (qcRunData[key] || []).filter(v => !isNaN(v));
+            if (runs.length === 0) continue;
+            const old = qcOldLotData[key];
+            dataPoints.push({ analyte, level, analyzer, runs, oldMean: old?.mean, oldSD: old?.sd });
+          }
+        }
+      }
+      if (dataPoints.length === 0) { toast({ title: "Enter run data for at least one analyte/level", variant: "destructive" }); return; }
+      const results = calculateQCRange(dataPoints, { start: qcDateStart, end: qcDateEnd });
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "—",
+        date, studyType: "qc_range", cliaAllowableError: 0.10,
+        dataPoints: JSON.stringify({ dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels, dateRange: { start: qcDateStart, end: qcDateEnd }, oldLotData: qcOldLotData }),
+        instruments: JSON.stringify(qcAnalyzers),
+        status: results.overallShiftCount === 0 ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "multi_analyte_coag") {
+      const rawSpecimens = maSpecimens.map(s => ({
+        specimenId: s.id,
+        ptNew: s.ptNew ? parseFloat(s.ptNew) : null,
+        ptOld: s.ptOld ? parseFloat(s.ptOld) : null,
+        apttNew: s.apttNew ? parseFloat(s.apttNew) : null,
+        apttOld: s.apttOld ? parseFloat(s.apttOld) : null,
+        fibNew: s.fibNew ? parseFloat(s.fibNew) : null,
+        fibOld: s.fibOld ? parseFloat(s.fibOld) : null,
+      })).filter(s => (s.ptNew != null && s.ptOld != null) || (s.apttNew != null && s.apttOld != null) || (s.fibNew != null && s.fibOld != null));
+      if (rawSpecimens.length < 3) { toast({ title: "Enter at least 3 specimen pairs", variant: "destructive" }); return; }
+      const results = calculateMultiAnalyteCoag(rawSpecimens, maISI, maNormalMeanPT, { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib });
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: maInstrument, analyst: analyst.trim() || "—",
+        date, studyType: "multi_analyte_coag", cliaAllowableError: maTeaPT,
+        dataPoints: JSON.stringify({
+          specimens: rawSpecimens, isi: maISI, normalMeanPT: maNormalMeanPT,
+          teas: { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib },
+          lots: { ptNew: maNewLotPT, ptOld: maOldLotPT, apttNew: maNewLotAPTT, apttOld: maOldLotAPTT, fibNew: maNewLotFib, fibOld: maOldLotFib },
+          instrument: maInstrument, sampleType: maSampleType,
+        }),
+        instruments: JSON.stringify([maInstrument]),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
       };
@@ -529,6 +619,8 @@ export default function VeritaCheckPage() {
                           <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
                           <SelectItem value="lot_to_lot">Lot-to-Lot Verification</SelectItem>
                           <SelectItem value="pt_coag">PT/Coag New Lot Validation</SelectItem>
+                          <SelectItem value="qc_range">QC Range Establishment</SelectItem>
+                          <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -777,6 +869,204 @@ export default function VeritaCheckPage() {
                         </div>
                       </CardContent>
                     )}
+                  </Card>
+                </div>
+              ) : studyType === "qc_range" ? (
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">QC Range Establishment Setup</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Analytes</Label>
+                        <div className="flex flex-wrap gap-3">
+                          {["PT", "APTT", "Fibrinogen"].map(a => (
+                            <label key={a} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                              <input type="checkbox" checked={qcAnalytes.includes(a)} onChange={e => {
+                                setQcAnalytes(prev => e.target.checked ? [...prev, a] : prev.filter(x => x !== a));
+                              }} className="rounded" />{a}
+                            </label>
+                          ))}
+                          <div className="flex items-center gap-1.5">
+                            <Input placeholder="Other analyte" value={qcAnalyteCustom} onChange={e => setQcAnalyteCustom(e.target.value)} className="h-7 text-xs w-32" />
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+                              if (qcAnalyteCustom.trim() && !qcAnalytes.includes(qcAnalyteCustom.trim())) {
+                                setQcAnalytes([...qcAnalytes, qcAnalyteCustom.trim()]); setQcAnalyteCustom("");
+                              }
+                            }}>Add</Button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label>Analyzers (up to 4)</Label>
+                          {qcAnalyzers.map((az, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <Input value={az} onChange={e => { const a = [...qcAnalyzers]; a[i] = e.target.value; setQcAnalyzers(a); }} className="h-8 text-sm" />
+                              {qcAnalyzers.length > 1 && <Button variant="ghost" size="icon" onClick={() => setQcAnalyzers(qcAnalyzers.filter((_, j) => j !== i))} className="w-7 h-7"><Trash2 size={12} /></Button>}
+                            </div>
+                          ))}
+                          {qcAnalyzers.length < 4 && <Button variant="outline" size="sm" onClick={() => setQcAnalyzers([...qcAnalyzers, `TOP ${qcAnalyzers.length + 351}`])}><PlusCircle size={12} className="mr-1" />Add Analyzer</Button>}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Control Levels</Label>
+                          {qcLevels.map((lv, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <Input value={lv} onChange={e => { const l = [...qcLevels]; l[i] = e.target.value; setQcLevels(l); }} className="h-8 text-sm" />
+                              {qcLevels.length > 1 && <Button variant="ghost" size="icon" onClick={() => setQcLevels(qcLevels.filter((_, j) => j !== i))} className="w-7 h-7"><Trash2 size={12} /></Button>}
+                            </div>
+                          ))}
+                          {qcLevels.length < 6 && <Button variant="outline" size="sm" onClick={() => setQcLevels([...qcLevels, `Level ${qcLevels.length + 1}`])}><PlusCircle size={12} className="mr-1" />Add Level</Button>}
+                        </div>
+                      </div>
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>Date Range Start</Label><Input type="date" value={qcDateStart} onChange={e => setQcDateStart(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Date Range End</Label><Input type="date" value={qcDateEnd} onChange={e => setQcDateEnd(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Runs per Level</Label><Input type="number" min={5} max={30} value={qcNumRuns} onChange={e => setQcNumRuns(Math.max(5, Math.min(30, parseInt(e.target.value) || 15)))} /></div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Data entry grids per analyte/level/analyzer */}
+                  {qcAnalytes.map(analyte => (
+                    <Card key={analyte}>
+                      <CardHeader className="pb-3"><CardTitle className="text-base">{analyte} — QC Run Data</CardTitle></CardHeader>
+                      <CardContent className="space-y-4">
+                        {qcLevels.map(level => (
+                          <div key={level} className="space-y-2">
+                            <div className="text-sm font-medium">{level}</div>
+                            {qcAnalyzers.map(analyzer => {
+                              const key = `${analyte}|${level}|${analyzer}`;
+                              const runs = qcRunData[key] || Array(qcNumRuns).fill(NaN);
+                              return (
+                                <div key={analyzer} className="space-y-1">
+                                  <div className="text-xs text-muted-foreground">{analyzer}</div>
+                                  <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
+                                    {Array.from({ length: qcNumRuns }).map((_, ri) => (
+                                      <Input key={ri} type="number" step="any" placeholder="—"
+                                        value={!isNaN(runs[ri]) ? runs[ri] : ""}
+                                        onChange={e => {
+                                          const updated = [...(qcRunData[key] || Array(qcNumRuns).fill(NaN))];
+                                          updated[ri] = e.target.value === "" ? NaN : parseFloat(e.target.value);
+                                          setQcRunData({ ...qcRunData, [key]: updated });
+                                        }}
+                                        className="h-7 text-xs text-center" />
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-4 mt-1">
+                                    <div className="text-xs text-muted-foreground">Old lot mean:</div>
+                                    <Input type="number" step="any" placeholder="—"
+                                      value={qcOldLotData[key]?.mean ?? ""}
+                                      onChange={e => setQcOldLotData({ ...qcOldLotData, [key]: { ...qcOldLotData[key], mean: e.target.value === "" ? null : parseFloat(e.target.value), sd: qcOldLotData[key]?.sd ?? null } })}
+                                      className="h-7 text-xs w-24" />
+                                    <div className="text-xs text-muted-foreground">Old lot SD:</div>
+                                    <Input type="number" step="any" placeholder="—"
+                                      value={qcOldLotData[key]?.sd ?? ""}
+                                      onChange={e => setQcOldLotData({ ...qcOldLotData, [key]: { ...qcOldLotData[key], sd: e.target.value === "" ? null : parseFloat(e.target.value), mean: qcOldLotData[key]?.mean ?? null } })}
+                                      className="h-7 text-xs w-24" />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                        {qcNumRuns < 10 && <p className="text-xs text-amber-500">Minimum 10 runs recommended per level</p>}
+                      </CardContent>
+                    </Card>
+                  ))}
+                  <Alert>
+                    <Shield size={14} />
+                    <AlertDescription className="text-xs">Per policy, SD does not change lot to lot. Use the historical/peer-derived SD for control limits, not the SD calculated here unless it represents a significant change.</AlertDescription>
+                  </Alert>
+                </div>
+              ) : studyType === "multi_analyte_coag" ? (
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Multi-Analyte Lot Comparison Setup</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>Instrument</Label><Input value={maInstrument} onChange={e => setMaInstrument(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>ISI (New Lot)</Label><Input type="number" step="0.01" value={maISI} onChange={e => setMaISI(parseFloat(e.target.value) || 0.97)} /></div>
+                        <div className="space-y-1.5"><Label>Normal Patient Mean PT (sec)</Label><Input type="number" step="0.1" value={maNormalMeanPT} onChange={e => setMaNormalMeanPT(parseFloat(e.target.value) || 12)} /></div>
+                      </div>
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>New PT Lot #</Label><Input value={maNewLotPT} onChange={e => setMaNewLotPT(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>New APTT Lot #</Label><Input value={maNewLotAPTT} onChange={e => setMaNewLotAPTT(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>New Fib Lot #</Label><Input value={maNewLotFib} onChange={e => setMaNewLotFib(e.target.value)} /></div>
+                      </div>
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>Old PT Lot #</Label><Input value={maOldLotPT} onChange={e => setMaOldLotPT(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Old APTT Lot #</Label><Input value={maOldLotAPTT} onChange={e => setMaOldLotAPTT(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Old Fib Lot #</Label><Input value={maOldLotFib} onChange={e => setMaOldLotFib(e.target.value)} /></div>
+                      </div>
+                      <div className="grid sm:grid-cols-4 gap-4">
+                        <div className="space-y-1.5"><Label>Sample Type</Label>
+                          <Select value={maSampleType} onValueChange={v => setMaSampleType(v as any)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="normal">Normal Specimens</SelectItem>
+                              <SelectItem value="random">Random Patients (20+)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5"><Label>PT TEa %</Label><Input type="number" step="1" value={maTeaPT * 100} onChange={e => setMaTeaPT((parseFloat(e.target.value) || 20) / 100)} /></div>
+                        <div className="space-y-1.5"><Label>APTT TEa %</Label><Input type="number" step="1" value={maTeaAPTT * 100} onChange={e => setMaTeaAPTT((parseFloat(e.target.value) || 15) / 100)} /></div>
+                        <div className="space-y-1.5"><Label>Fib TEa %</Label><Input type="number" step="1" value={maTeaFib * 100} onChange={e => setMaTeaFib((parseFloat(e.target.value) || 20) / 100)} /></div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Specimen Data — PT + APTT + Fibrinogen</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border">
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium w-16">ID</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">New PT</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">New INR</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">Old PT</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">PT %Diff</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">New APTT</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">Old APTT</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">APTT %Diff</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">New Fib</th>
+                              <th className="text-left py-2 pr-2 text-xs text-muted-foreground font-medium">Old Fib</th>
+                              <th className="text-left py-2 text-xs text-muted-foreground font-medium">Fib %Diff</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {maSpecimens.map((s, idx) => {
+                              const ptN = parseFloat(s.ptNew), ptO = parseFloat(s.ptOld);
+                              const apttN = parseFloat(s.apttNew), apttO = parseFloat(s.apttOld);
+                              const fibN = parseFloat(s.fibNew), fibO = parseFloat(s.fibOld);
+                              const ptINR = !isNaN(ptN) && maNormalMeanPT > 0 ? calculateINR(ptN, maNormalMeanPT, maISI) : null;
+                              const ptPct = !isNaN(ptN) && !isNaN(ptO) && ptO !== 0 ? ((ptN - ptO) / ptO * 100) : null;
+                              const apttPct = !isNaN(apttN) && !isNaN(apttO) && apttO !== 0 ? ((apttN - apttO) / apttO * 100) : null;
+                              const fibPct = !isNaN(fibN) && !isNaN(fibO) && fibO !== 0 ? ((fibN - fibO) / fibO * 100) : null;
+                              return (
+                                <tr key={idx} className="border-b border-border/50">
+                                  <td className="py-1 pr-2"><span className="text-xs font-mono text-muted-foreground">{s.id}</span></td>
+                                  <td className="py-1 pr-2"><Input value={s.ptNew} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], ptNew: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
+                                  <td className="py-1 pr-2"><span className="text-xs font-mono">{ptINR != null ? ptINR.toFixed(2) : "—"}</span></td>
+                                  <td className="py-1 pr-2"><Input value={s.ptOld} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], ptOld: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
+                                  <td className="py-1 pr-2"><span className={`text-xs font-mono ${ptPct != null && Math.abs(ptPct) > maTeaPT * 100 ? "text-red-500 font-semibold" : ""}`}>{ptPct != null ? ptPct.toFixed(1) + "%" : "—"}</span></td>
+                                  <td className="py-1 pr-2"><Input value={s.apttNew} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], apttNew: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
+                                  <td className="py-1 pr-2"><Input value={s.apttOld} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], apttOld: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
+                                  <td className="py-1 pr-2"><span className={`text-xs font-mono ${apttPct != null && Math.abs(apttPct) > maTeaAPTT * 100 ? "text-red-500 font-semibold" : ""}`}>{apttPct != null ? apttPct.toFixed(1) + "%" : "—"}</span></td>
+                                  <td className="py-1 pr-2"><Input value={s.fibNew} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], fibNew: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
+                                  <td className="py-1 pr-2"><Input value={s.fibOld} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], fibOld: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
+                                  <td className="py-1"><span className={`text-xs font-mono ${fibPct != null && Math.abs(fibPct) > maTeaFib * 100 ? "text-red-500 font-semibold" : ""}`}>{fibPct != null ? fibPct.toFixed(1) + "%" : "—"}</span></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <Button variant="outline" size="sm" className="mt-2" onClick={() => setMaSpecimens([...maSpecimens, { id: `S${String(maSpecimens.length + 1).padStart(3, "0")}`, ptNew: "", ptOld: "", apttNew: "", apttOld: "", fibNew: "", fibOld: "" }])}>
+                        <PlusCircle size={12} className="mr-1" />Add Row
+                      </Button>
+                    </CardContent>
                   </Card>
                 </div>
               ) : studyType === "precision" ? (

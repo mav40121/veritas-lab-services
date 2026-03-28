@@ -12,19 +12,26 @@ import {
   calculatePrecision,
   calculateLotToLot,
   calculatePTCoag,
+  calculateQCRange,
+  calculateMultiAnalyteCoag,
   isCalVer,
   isMethodComp,
   isPrecision,
   isLotToLot,
   isPTCoag,
+  isQCRange,
+  isMultiAnalyteCoag,
   type StudyResults,
   type CalVerResults,
   type MethodCompResults,
   type PrecisionResults,
   type LotToLotResults,
   type PTCoagResults,
+  type QCRangeResults,
+  type MultiAnalyteResults,
   type PrecisionDataPoint,
   type DataPoint,
+  type QCRangeDataPoint,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
 import {
@@ -52,7 +59,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   // Use ArrayBuffer → base64 data URI to bypass Adobe Acrobat's
@@ -101,7 +108,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -211,6 +218,167 @@ function generateNarrative(results: StudyResults, study: Study): string {
   return narrative;
 }
 
+function QCRangeReport({ study, results }: { study: Study; results: QCRangeResults }) {
+  const analytes = Array.from(new Set(results.levelResults.map(r => r.analyte)));
+  return (
+    <div className="space-y-6">
+      {analytes.map(analyte => {
+        const rows = results.levelResults.filter(r => r.analyte === analyte);
+        return (
+          <Card key={analyte}>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">{analyte} — QC Range Summary</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Analyzer</th>
+                      <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Level</th>
+                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">N</th>
+                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">New Mean</th>
+                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">New SD</th>
+                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">CV%</th>
+                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Old Mean</th>
+                      <th className="text-right py-2 text-xs text-muted-foreground font-medium">% Diff</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={i} className={`border-b border-border/50 ${r.flagShift ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                        <td className="py-1.5 pr-3">{r.analyzer}</td>
+                        <td className="py-1.5 pr-3">{r.level}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono">{r.newMean.toFixed(2)}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono">{r.newSD.toFixed(3)}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono">{r.cv.toFixed(1)}%</td>
+                        <td className="py-1.5 pr-3 text-right font-mono">{r.oldMean != null ? r.oldMean.toFixed(2) : "—"}</td>
+                        <td className={`py-1.5 text-right font-mono ${r.flagShift ? "text-red-500 font-semibold" : ""}`}>
+                          {r.pctDiffFromOld != null ? r.pctDiffFromOld.toFixed(1) + "%" : "—"}
+                          {r.flagShift && " ⚠"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {rows.some(r => r.n < 10) && <p className="text-xs text-amber-500 mt-2">Some levels have fewer than 10 runs.</p>}
+            </CardContent>
+          </Card>
+        );
+      })}
+      <div className="rounded-md bg-muted/50 border p-3">
+        <p className="text-xs text-muted-foreground italic">Per policy, SD should not change lot to lot — the historical/peer-derived SD should be used for control limits, not the SD calculated here unless it represents a significant change.</p>
+      </div>
+    </div>
+  );
+}
+
+function MultiAnalyteCoagReport({ study, results }: { study: Study; results: MultiAnalyteResults }) {
+  return (
+    <div className="space-y-6">
+      {/* Per-analyte summary */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Per-Analyte Summary</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Analyte</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">N</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Mean New</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Mean Old</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Mean %Diff</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">SD</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">R</th>
+                  <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">TEa</th>
+                  <th className="text-left py-2 text-xs text-muted-foreground font-medium">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.analyteResults.filter(r => r.n > 0).map(r => (
+                  <tr key={r.analyte} className={`border-b border-border/50 ${!r.pass ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                    <td className="py-1.5 pr-3 font-medium">{r.analyte}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{r.meanNew.toFixed(2)}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{r.meanOld.toFixed(2)}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{r.meanPctDiff.toFixed(1)}%</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{r.sdPctDiff.toFixed(2)}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{r.r.toFixed(4)}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono">{(r.tea * 100).toFixed(0)}%</td>
+                    <td className="py-1.5">
+                      {r.pass
+                        ? <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">PASS</Badge>
+                        : <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0">FAIL</Badge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ISI validation */}
+      {results.ptINRValidation && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">PT/INR — ISI Validation</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div><span className="text-muted-foreground">Mean New INR:</span> <span className="font-mono font-semibold">{results.ptINRValidation.meanNewINR.toFixed(2)}</span></div>
+              <div><span className="text-muted-foreground">Mean Old INR:</span> <span className="font-mono font-semibold">{results.ptINRValidation.meanOldINR.toFixed(2)}</span></div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">{results.ptINRValidation.isiCheck}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Full specimen table */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Specimen Data</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-1.5 pr-2 font-medium">ID</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">New PT</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">INR</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">Old PT</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">PT %Diff</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">New APTT</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">Old APTT</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">APTT %Diff</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">New Fib</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">Old Fib</th>
+                  <th className="text-right py-1.5 font-medium">Fib %Diff</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.specimens.map((s, i) => (
+                  <tr key={i} className="border-b border-border/30">
+                    <td className="py-1 pr-2 font-mono">{s.specimenId}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptNew != null ? s.ptNew.toFixed(1) : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptNewINR != null ? s.ptNewINR.toFixed(2) : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptOld != null ? s.ptOld.toFixed(1) : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptPctDiff != null ? s.ptPctDiff.toFixed(1) + "%" : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.apttNew != null ? s.apttNew.toFixed(1) : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.apttOld != null ? s.apttOld.toFixed(1) : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.apttPctDiff != null ? s.apttPctDiff.toFixed(1) + "%" : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.fibNew != null ? s.fibNew.toFixed(1) : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.fibOld != null ? s.fibOld.toFixed(1) : "—"}</td>
+                    <td className="py-1 text-right font-mono">{s.fibPctDiff != null ? s.fibPctDiff.toFixed(1) + "%" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
   const narrative = generateNarrative(results, study);
   return (
@@ -257,7 +425,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", `±${cliaPercent}%`],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -1145,6 +1313,12 @@ export default function StudyResults() {
       { xValues: m2Valid.map((d: any) => d.x), yValues: m2Valid.map((d: any) => d.y), specimenIds: m2Valid.map((d: any) => d.id), tea: module2.tea },
       module3Data
     );
+  } else if (study.studyType === "qc_range") {
+    const { dataPoints: dp, dateRange } = rawDataPoints;
+    results = calculateQCRange(dp as QCRangeDataPoint[], dateRange);
+  } else if (study.studyType === "multi_analyte_coag") {
+    const { specimens, isi, normalMeanPT, teas } = rawDataPoints;
+    results = calculateMultiAnalyteCoag(specimens, isi, normalMeanPT, teas);
   } else {
     results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
   }
@@ -1158,6 +1332,20 @@ export default function StudyResults() {
       {isPrecision(results) && <PrecisionReport study={study} results={results} />}
       {isLotToLot(results) && <LotToLotReport study={study} results={results} />}
       {isPTCoag(results) && <PTCoagReport study={study} results={results} />}
+      {isQCRange(results) && <QCRangeReport study={study} results={results} />}
+      {isMultiAnalyteCoag(results) && <MultiAnalyteCoagReport study={study} results={results} />}
+
+      {/* Related Tools for PT/Coag studies */}
+      {(study.studyType === "pt_coag" || study.studyType === "multi_analyte_coag" || study.studyType === "qc_range") && (
+        <Card className="mt-6">
+          <CardHeader className="pb-3"><CardTitle className="text-base">Related Tools</CardTitle></CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button asChild variant="outline" size="sm"><Link href="/cumsum">Run CUMSUM Tracker →</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href="/veritacheck">Establish QC Ranges →</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href="/veritacheck">Run Multi-Analyte Comparison →</Link></Button>
+          </CardContent>
+        </Card>
+      )}
 
       <EvalBox results={results} study={study} />
       <UserSpecs study={study} instrumentNames={instrumentNames} />

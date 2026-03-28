@@ -34,6 +34,7 @@ import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
 import VeritaMapAppPage from "@/pages/VeritaMapAppPage";
 import VeritaMapBuildPage from "@/pages/VeritaMapBuildPage";
 import VeritaMapMapPage from "@/pages/VeritaMapMapPage";
+import CumsumPage from "@/pages/CumsumPage";
 
 function SiteFooter() {
   return (
@@ -136,6 +137,7 @@ function AppContent() {
           <Route path="/veritamap-app" component={VeritaMapAppPage} />
           <Route path="/veritamap-app/:id/build" component={VeritaMapBuildPage} />
           <Route path="/veritamap-app/:id" component={VeritaMapMapPage} />
+          <Route path="/cumsum" component={CumsumPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
