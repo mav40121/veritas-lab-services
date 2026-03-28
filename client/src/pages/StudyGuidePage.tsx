@@ -260,7 +260,7 @@ export default function StudyGuidePage() {
             title="Calibration Verification / Linearity"
             subtitle="Verify your instrument reads accurately from low to high"
             what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range — from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values."
-            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels — low, mid, high). VeritaCheck calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict."
+            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels — low, mid, high). VeritaCheck calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default — minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Every 6 months (required by CLIA for all non-waived tests)",
               "Whenever calibration is performed",
@@ -287,7 +287,7 @@ export default function StudyGuidePage() {
             title="Correlation / Method Comparison"
             subtitle="Confirm two methods or instruments agree before reporting patient results"
             what="A method comparison study determines whether two measurement procedures (or two instruments running the same assay) produce equivalent results on the same patient samples. It is required any time a laboratory introduces a new test method, adds an instrument, or begins reporting results from a second analyzer."
-            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table."
+            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table. Deming regression is used because both methods carry measurement error. Other evaluation tools and software may use different regression methods by default — minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Before putting a new instrument or analyzer into service",
               "When introducing a new test method or reagent system",

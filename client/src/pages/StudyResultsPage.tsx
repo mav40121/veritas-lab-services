@@ -587,7 +587,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                 ))}
               </tbody>
             </table>
-            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only)</p>
+            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only). VeritaCheck uses OLS regression for calibration verification (where calibrator assigned values are treated as exact) and Deming regression for method comparison (where both methods carry measurement error). Other evaluation tools and software may use different regression methods by default — minor slope differences between tools are expected and do not affect pass/fail evaluation against CLIA TEa.</p>
           </div>
         </CardContent>
       </Card>
