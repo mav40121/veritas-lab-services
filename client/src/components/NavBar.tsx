@@ -7,16 +7,24 @@ import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDash
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-const navLinks = [
+// Products dropdown items
+const productLinks = [
+  { href: "/veritacheck", label: "VeritaCheck™", desc: "EP Study Analysis", highlight: true },
+  { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness", badge: "Coming Soon" },
+  { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Coming Soon" },
+  { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
+];
+
+const allMobileLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
   { href: "/team", label: "Our Team" },
-  { href: "/veritacheck", label: "VeritaCheck", highlight: true },
-  { href: "/veritascan", label: "VeritaScan", badge: "Coming Soon" },
-  { href: "/veritamap", label: "VeritaMap", badge: "Coming Soon" },
-  { href: "/book", label: "Book", badge: "Coming Soon" },
+  { href: "/veritacheck", label: "VeritaCheck™" },
+  { href: "/veritascan", label: "VeritaScan™" },
+  { href: "/veritamap", label: "VeritaMap™" },
+  { href: "/book", label: "Book" },
   { href: "/resources", label: "Resources" },
-  { href: "/demo", label: "Live Demo", highlight2: true },
+  { href: "/demo", label: "Live Demo" },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -26,9 +34,12 @@ export function NavBar() {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const isActive = (href: string) => location === href;
+
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/90 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
           <svg viewBox="0 0 36 36" width="32" height="32" fill="none" aria-label="Veritas Lab Services">
@@ -43,31 +54,74 @@ export function NavBar() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map(({ href, label, highlight, highlight2, badge }: any) => (
-            <Link key={href} href={href} className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors font-medium",
-              highlight
-                ? "bg-primary/10 text-primary hover:bg-primary/20"
-                : highlight2
-                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
-                  : location === href
-                    ? "text-foreground bg-secondary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            )}>
-              {highlight && <FlaskConical size={13} />}
-              {highlight2 && <Play size={11} />}
-              {label}
-              {badge && (
-                <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-500/25 rounded px-1.5 py-0.5 leading-none">
-                  {badge}
-                </span>
-              )}
-            </Link>
-          ))}
+        <nav className="hidden lg:flex items-center gap-0.5">
+
+          {/* Home */}
+          <Link href="/" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            isActive("/") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+            Home
+          </Link>
+
+          {/* Services */}
+          <Link href="/services" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            isActive("/services") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+            Services
+          </Link>
+
+          {/* Products dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                ["/veritacheck","/veritascan","/veritamap","/book"].includes(location)
+                  ? "text-foreground bg-secondary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}>
+                <FlaskConical size={13} className="text-primary" />
+                Products
+                <ChevronDown size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {productLinks.map(({ href, label, desc, badge, highlight }) => (
+                <DropdownMenuItem key={href} asChild>
+                  <Link href={href} className="flex items-start gap-2 py-2">
+                    <div>
+                      <div className={cn("text-sm font-medium flex items-center gap-1.5", highlight && "text-primary")}>
+                        {label}
+                        {badge && (
+                          <span className="text-[9px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-500/25 rounded px-1 py-0.5 leading-none">
+                            {badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{desc}</div>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Resources */}
+          <Link href="/resources" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            isActive("/resources") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+            Resources
+          </Link>
+
+          {/* Live Demo */}
+          <Link href="/demo" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">
+            <Play size={11} /> Live Demo
+          </Link>
+
+          {/* Contact */}
+          <Link href="/contact" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            isActive("/contact") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+            Contact
+          </Link>
         </nav>
 
-        {/* Right */}
+        {/* Right side */}
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="w-8 h-8" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
@@ -76,7 +130,7 @@ export function NavBar() {
           {isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden md:flex gap-1.5">
+                <Button variant="outline" size="sm" className="hidden lg:flex gap-1.5">
                   <User size={13} />
                   {user?.name.split(" ")[0]}
                   <ChevronDown size={12} />
@@ -91,26 +145,26 @@ export function NavBar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild size="sm" variant="outline" className="hidden md:flex">
+            <Button asChild size="sm" variant="outline" className="hidden lg:flex">
               <Link href="/login">Sign in</Link>
             </Button>
           )}
 
           {isLoggedIn && (
             <Button asChild size="sm" variant="outline" className={cn(
-              "hidden md:flex gap-1.5 font-medium",
+              "hidden lg:flex gap-1.5 font-medium",
               location === "/dashboard" && "bg-secondary text-foreground border-border"
             )}>
               <Link href="/dashboard"><LayoutDashboard size={13} />My Studies</Link>
             </Button>
           )}
 
-          <Button asChild size="sm" className="hidden md:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
+          <Button asChild size="sm" className="hidden lg:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
 
           {/* Mobile menu toggle */}
-          <Button variant="ghost" size="icon" className="md:hidden w-8 h-8" onClick={() => setMobileOpen(o => !o)}>
+          <Button variant="ghost" size="icon" className="lg:hidden w-8 h-8" onClick={() => setMobileOpen(o => !o)}>
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </Button>
         </div>
@@ -118,8 +172,8 @@ export function NavBar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border bg-card px-4 py-3 flex flex-col gap-1">
-          {navLinks.map(({ href, label }) => (
+        <div className="lg:hidden border-t border-border bg-card px-4 py-3 flex flex-col gap-1">
+          {allMobileLinks.map(({ href, label }) => (
             <Link key={href} href={href} onClick={() => setMobileOpen(false)}
               className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
               {label}
