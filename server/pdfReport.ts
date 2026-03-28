@@ -361,6 +361,115 @@ function evalHTML(summary: string, overallPass: boolean, passCount: number, tota
   </div>`;
 }
 
+// ─── Narrative generator ─────────────────────────────────────────────────────
+function narrativeHTML(
+  studyType: "cal_ver" | "method_comp" | "precision",
+  results: any,
+  cliaError: number,
+  analyteName: string
+): string {
+  const cliaPct = (cliaError * 100).toFixed(1);
+  const adlmPct = (cliaError * 50).toFixed(1); // ADLM = half of CLIA TEa
+  let narrative = "";
+
+  if (studyType === "cal_ver") {
+    const maxErr = Math.max(...results.levelResults.map((r: any) => Math.abs(r.obsError * 100)));
+    const meetsAdlm = maxErr <= cliaError * 50;
+    const slope = Object.values(results.regression as any)[0] as any;
+    const slopeVal: number = slope?.slope ?? 1;
+    const interceptVal: number = slope?.intercept ?? 0;
+    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
+      ? "minimal proportional bias"
+      : slopeVal > 1
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias — results trend slightly high at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias — results trend slightly low at upper concentrations`;
+    const interceptInterp = Math.abs(interceptVal) < cliaError * 100 * 0.1
+      ? "a negligible constant offset"
+      : interceptVal > 0
+        ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
+        : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
+
+    if (results.overallPass) {
+      narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      if (meetsAdlm) {
+        narrative += `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `;
+      } else {
+        narrative += `The maximum observed error of ${maxErr.toFixed(1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+      }
+      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range.`;
+    } else {
+      const failCount = results.totalCount - results.passCount;
+      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative += `Do not report patient results until the cause has been identified, corrective action has been taken, and the study is repeated with passing results. `;
+      narrative += `The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
+    }
+  }
+
+  if (studyType === "method_comp") {
+    const firstReg: any = Object.values(results.regression as any).find((r: any) => (r as any).regressionType === "Deming") ||
+      Object.values(results.regression as any)[0];
+    const slopeVal: number = firstReg?.slope ?? 1;
+    const interceptVal: number = firstReg?.intercept ?? 0;
+    const r2Val: number = firstReg?.r2 ?? 1;
+    const rVal = Math.sqrt(r2Val);
+    const ba: any = results.blandAltman ? Object.values(results.blandAltman)[0] : null;
+    const meanBiasPct: number = ba?.meanPctBias ?? 0;
+
+    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline — review carefully";
+    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
+      ? "minimal proportional bias between methods"
+      : slopeVal > 1
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference — the test method reads slightly higher than the reference at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference — the test method reads slightly lower than the reference at upper concentrations`;
+    const biasInterp = Math.abs(meanBiasPct) <= cliaError * 100
+      ? `within the CLIA total allowable error of ±${cliaPct}%`
+      : `exceeds the CLIA total allowable error of ±${cliaPct}% and requires investigation`;
+
+    if (results.overallPass) {
+      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${analyteName}. `;
+      narrative += `The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. `;
+      narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. `;
+      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
+    } else {
+      narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
+      narrative += `The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: ±${cliaPct}%) indicate unacceptable agreement between methods. `;
+      narrative += `Do not report patient results from the test method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
+    }
+  }
+
+  if (studyType === "precision") {
+    const levels = results.levelResults;
+    const maxCV: number = Math.max(...levels.map((r: any) => r.totalCV ?? r.cv ?? 0));
+    const meetsAdlm = maxCV <= cliaError * 50;
+    const isAdvanced = results.mode === "advanced";
+
+    if (results.overallPass) {
+      narrative = `The precision study for ${analyteName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      if (meetsAdlm) {
+        narrative += `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `;
+      } else {
+        narrative += `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
+      }
+      if (isAdvanced && levels[0]?.withinRunCV !== undefined) {
+        const wrCV = levels[0].withinRunCV?.toFixed(2) ?? "—";
+        const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "—";
+        narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
+      }
+      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
+    } else {
+      narrative = `The precision study for ${analyteName} did not meet acceptance criteria. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. `;
+      narrative += `Do not rely on this instrument for patient reporting until the cause of imprecision has been identified, corrective action has been taken, and the study is repeated with passing results. `;
+      narrative += `Review reagent lot, instrument maintenance, and QC trends for contributing factors.`;
+    }
+  }
+
+  return `
+  <div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrative}</p>
+  </div>`;
+}
+
 // ─── CAL VER HTML report ──────────────────────────────────────────────────────
 interface CalVerData {
   levelResults: Array<{
@@ -441,6 +550,8 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
     </tr></thead>
     <tbody>${linRows}</tbody>
   </table>
+
+  ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName)}
 
   ${signatureHTML()}
 
@@ -610,6 +721,8 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     <tbody>${baRows}</tbody>
   </table>
 
+  ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
+
   ${signatureHTML()}
 
   <div class="stats-section">
@@ -707,6 +820,8 @@ function buildPrecisionHTML(study: Study, results: any): string {
   </table>
 
   ${anovaSection}
+
+  ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName)}
 
   ${signatureHTML()}
 

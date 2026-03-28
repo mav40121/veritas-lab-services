@@ -34,7 +34,7 @@ import {
   Line,
   ResponsiveContainer,
 } from "recharts";
-import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 
@@ -130,8 +130,85 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
   );
 }
 
-function EvalBox({ results }: { results: StudyResults }) {
-  const cliaPercent = (0).toFixed(1); // placeholder — not used directly here
+function generateNarrative(results: StudyResults, study: Study): string {
+  const cliaPct = (study.cliaAllowableError * 100).toFixed(1);
+  const adlmPct = (study.cliaAllowableError * 50).toFixed(1);
+  let narrative = "";
+
+  if (isCalVer(results)) {
+    const cv = results as CalVerResults;
+    const maxErr = Math.max(...cv.levelResults.map(r => Math.abs(r.obsError * 100)));
+    const meetsAdlm = maxErr <= study.cliaAllowableError * 50;
+    const slope = Object.values(cv.regression)[0];
+    const slopeVal = slope?.slope ?? 1;
+    const interceptVal = slope?.intercept ?? 0;
+    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
+      ? "minimal proportional bias"
+      : slopeVal > 1
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias — results trend slightly high at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias — results trend slightly low at upper concentrations`;
+    const interceptInterp = Math.abs(interceptVal) < study.cliaAllowableError * 100 * 0.1
+      ? "a negligible constant offset"
+      : interceptVal > 0
+        ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
+        : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
+    if (cv.overallPass) {
+      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative += meetsAdlm
+        ? `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `
+        : `The maximum observed error of ${maxErr.toFixed(1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range.`;
+    } else {
+      const failCount = cv.totalCount - cv.passCount;
+      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). Do not report patient results until the cause has been identified, corrective action has been taken, and the study is repeated with passing results. The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
+    }
+  } else if (isMethodComp(results)) {
+    const mc = results as MethodCompResults;
+    const firstReg = Object.values(mc.regression).find(r => (r as any).regressionType === "Deming") || Object.values(mc.regression)[0];
+    const slopeVal = firstReg?.slope ?? 1;
+    const r2Val = firstReg?.r2 ?? 1;
+    const rVal = Math.sqrt(r2Val);
+    const ba = mc.blandAltman ? Object.values(mc.blandAltman)[0] : null;
+    const meanBiasPct: number = (ba as any)?.meanPctBias ?? 0;
+    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline — review carefully";
+    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
+      ? "minimal proportional bias between methods"
+      : slopeVal > 1
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference — the test method reads slightly higher than the reference at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference — the test method reads slightly lower than the reference at upper concentrations`;
+    const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
+      ? `within the CLIA total allowable error of ±${cliaPct}%`
+      : `exceeds the CLIA total allowable error of ±${cliaPct}% and requires investigation`;
+    if (mc.overallPass) {
+      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
+    } else {
+      narrative = `The method comparison for ${study.testName} did not meet acceptance criteria. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: ±${cliaPct}%) indicate unacceptable agreement between methods. Do not report patient results from the test method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
+    }
+  } else if (isPrecision(results)) {
+    const pr = results as PrecisionResults;
+    const maxCV = Math.max(...pr.levelResults.map(r => (r as any).totalCV ?? r.cv ?? 0));
+    const meetsAdlm = maxCV <= study.cliaAllowableError * 50;
+    const isAdvanced = (pr as any).mode === "advanced";
+    if (pr.overallPass) {
+      narrative = `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative += meetsAdlm
+        ? `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `
+        : `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
+      if (isAdvanced && (pr.levelResults[0] as any)?.withinRunCV !== undefined) {
+        const wrCV = ((pr.levelResults[0] as any).withinRunCV ?? 0).toFixed(2);
+        const bdCV = ((pr.levelResults[0] as any).betweenDayCV ?? 0).toFixed(2);
+        narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system. `;
+      }
+      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
+    } else {
+      narrative = `The precision study for ${study.testName} did not meet acceptance criteria. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. Do not rely on this instrument for patient reporting until the cause of imprecision has been identified, corrective action has been taken, and the study is repeated with passing results. Review reagent lot, instrument maintenance, and QC trends for contributing factors.`;
+    }
+  }
+  return narrative;
+}
+
+function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
+  const narrative = generateNarrative(results, study);
   return (
     <Card className="mb-6">
       <CardHeader className="pb-2">
@@ -139,6 +216,18 @@ function EvalBox({ results }: { results: StudyResults }) {
       </CardHeader>
       <CardContent>
         <p className="text-sm leading-relaxed text-muted-foreground">{results.summary}</p>
+
+        {/* Narrative summary */}
+        {narrative && (
+          <div className="mt-4 p-4 rounded-lg border border-primary/20 bg-primary/5">
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen size={13} className="text-primary" />
+              <span className="text-xs font-semibold text-primary uppercase tracking-wide">Study Narrative Summary</span>
+            </div>
+            <p className="text-sm leading-relaxed text-foreground">{narrative}</p>
+          </div>
+        )}
+
         <div className={`mt-4 p-3 rounded-lg border ${results.overallPass ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"}`}>
           <div className="flex items-center gap-2">
             {results.overallPass
@@ -845,7 +934,7 @@ export default function StudyResults() {
       {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
       {isPrecision(results) && <PrecisionReport study={study} results={results} />}
 
-      <EvalBox results={results} />
+      <EvalBox results={results} study={study} />
       <UserSpecs study={study} instrumentNames={instrumentNames} />
 
       <div className="mt-6 flex gap-3 justify-end">
