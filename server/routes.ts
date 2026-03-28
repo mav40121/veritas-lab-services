@@ -23,7 +23,10 @@ function authMiddleware(req: any, res: any, next: any) {
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   try {
     const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-    req.userId = payload.userId;
+    const user = storage.getUserById(payload.userId);
+    if (!user) return res.status(401).json({ error: "User not found" });
+    req.userId = user.id;
+    req.user = { userId: user.id, plan: user.plan, email: user.email, name: user.name, studyCredits: user.studyCredits };
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
