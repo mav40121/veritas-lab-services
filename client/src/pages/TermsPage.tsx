@@ -8,12 +8,13 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">1. Acceptance of Terms</h2>
-          <p>By accessing or using VeritaCheck ("Service"), provided by Veritas Lab Services, LLC ("Company," "we," "us"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+          <p>By accessing or using any product provided by Veritas Lab Services, LLC — including VeritaCheck™ and VeritaScan™ (collectively, the "Service") — you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-base mb-2">2. Description of Service</h2>
-          <p>VeritaCheck is a web-based statistical analysis tool designed to assist qualified laboratory professionals in performing calibration verification, linearity, and method comparison studies in accordance with CLIA, CAP, and CLSI guidelines. The Service generates statistical calculations and PDF reports based on data entered by the user.</p>
+          <p><strong>VeritaCheck™</strong> is a web-based statistical analysis tool designed to assist qualified laboratory professionals in performing calibration verification, linearity, method comparison, and precision studies in accordance with CLIA, CAP, and CLSI guidelines. It generates statistical calculations and PDF reports based on data entered by the user.</p>
+          <p className="mt-2"><strong>VeritaScan™</strong> is a self-inspection and compliance audit tool that enables laboratory professionals to assess laboratory compliance against TJC, CAP, and federal CLIA requirements. VeritaScan citations reference TJC standards (copyright © The Joint Commission) and CAP checklist numbers (copyright © College of American Pathologists) for educational and navigational purposes only. VeritaScan does not reproduce the text of those standards and is not affiliated with, endorsed by, or sponsored by The Joint Commission or the College of American Pathologists.</p>
         </section>
 
         <section>
@@ -23,7 +24,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">4. Disclaimer of Medical Advice</h2>
-          <p>VeritaCheck is a statistical computation tool only. Nothing produced by this Service constitutes medical advice, diagnosis, treatment, or a clinical recommendation of any kind. All output must be reviewed and interpreted by a qualified laboratory director or clinical consultant before being used to make any clinical, regulatory, or operational decision. The Company expressly disclaims any liability for clinical decisions made in reliance on VeritaCheck output.</p>
+          <p>The Service is a professional reference and statistical computation tool only. Nothing produced by VeritaCheck™ or VeritaScan™ constitutes medical advice, diagnosis, treatment, a clinical recommendation, or a substitute for official accreditation review or regulatory inspection of any kind. All output must be reviewed and interpreted by a qualified laboratory director or clinical consultant before being used to make any clinical, regulatory, or operational decision. The Company expressly disclaims any liability for clinical or regulatory decisions made in reliance on Service output.</p>
         </section>
 
         <section>
@@ -63,7 +64,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">12. Governing Law</h2>
-          <p>These Terms are governed by the laws of the State of Arizona, without regard to conflict of law principles. Any disputes shall be resolved in the state or federal courts located in Maricopa County, Arizona.</p>
+          <p>These Terms are governed by the laws of the Commonwealth of Massachusetts, without regard to conflict of law principles. Any disputes shall be resolved in the state or federal courts located in Massachusetts, and each party consents to the personal jurisdiction of such courts.</p>
         </section>
 
         <section>

@@ -80,7 +80,7 @@ export default function VeritaScanPage() {
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 border">Coming Soon</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaScan®</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaScan™</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 Self-Inspection & Compliance Audit Tool
               </p>
@@ -115,7 +115,7 @@ export default function VeritaScanPage() {
                 <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                   <Shield size={40} className="text-white/80 mb-4" />
                   <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                    VeritaScan®
+                    VeritaScan™
                   </div>
                   <div className="text-sm text-white/70 text-center mb-4">Self-Inspection &<br />Compliance Audit Tool</div>
                   <div className="w-12 h-0.5 bg-white/40 mb-4" />

@@ -206,7 +206,7 @@ function pdfHeader(doc: jsPDF, study: Study, pw: number, margin: number): number
   let y = 14;
   // Left: VeritaCheck logo
   doc.setFontSize(18); doc.setFont("helvetica","bold"); setRgb(doc, TEAL);
-  doc.text("VeritaCheck®", margin, y);
+  doc.text("VeritaCheck™", margin, y);
   doc.setFontSize(7.5); doc.setFont("helvetica","normal"); setRgb(doc, MUTED);
   doc.text("by Veritas Lab Services · veritaslabservices.com", margin, y+5);
   // Right: instrument only on top line

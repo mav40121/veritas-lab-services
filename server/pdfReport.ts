@@ -264,7 +264,7 @@ function headerHTML(study: Study): string {
   return `
   <div class="report-header">
     <div>
-      <div class="logo">VeritaCheck®</div>
+      <div class="logo">VeritaCheck™</div>
       <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
     </div>
     <div class="header-right">Instrument: ${study.instrument}</div>

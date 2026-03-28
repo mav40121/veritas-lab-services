@@ -231,7 +231,7 @@ export default function BookPage() {
                 Michael Veri brings more than a decade of director-level leadership in civilian healthcare and twenty-two years of service in the United States Army. He has served as a laboratory director, regional laboratory director, and for four years as a surveyor for The Joint Commission — conducting inspections at more than 200 healthcare facilities across the country.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Recognizing that laboratory administrative leaders often have the least access to practical mentorship, Michael created a 30-episode free webinar series on laboratory management through LabVine Learning, with more than 1,500 downloads per episode. He founded Veritas Lab Services to extend that mission.
+                Recognizing that laboratory administrative leaders often have the least access to practical mentorship, Michael created a 30-episode free webinar series on laboratory management that has reached more than 1,500 downloads per episode. He founded Veritas Lab Services to extend that mission.
               </p>
               <div className="space-y-2.5">
                 {CREDENTIALS.map((c, i) => (
