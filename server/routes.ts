@@ -610,6 +610,79 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, count: items.length });
   });
 
+  // ── VERITASCAN EXCEL EXPORT ──────────────────────────────────────────────
+  app.post("/api/veritascan/excel/:scanId", authMiddleware, async (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const scanId = req.params.scanId;
+    const scan = (db as any).$client.prepare("SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE id = ? AND user_id = ?").get(scanId, req.user.userId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+
+    // Get saved items from DB
+    const dbItems = (db as any).$client.prepare(
+      "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+    ).all(scanId);
+    const itemMap: Record<number, any> = {};
+    for (const row of dbItems) {
+      itemMap[row.item_id] = row;
+    }
+
+    // Client sends the reference data (questions, citations) so server doesn't need to duplicate it
+    const { referenceItems } = req.body; // Array of { id, domain, question, tjc, cap, cfr }
+    if (!Array.isArray(referenceItems) || referenceItems.length === 0) {
+      return res.status(400).json({ error: "referenceItems array required" });
+    }
+
+    try {
+      const XLSX = await import("xlsx");
+      const rows = referenceItems.map((ref: any) => {
+        const saved = itemMap[ref.id] || {};
+        return {
+          "Item #": ref.id,
+          "Domain": ref.domain,
+          "Compliance Question": ref.question,
+          "TJC Standard": ref.tjc || "",
+          "CAP Requirement": ref.cap || "",
+          "42 CFR Citation": ref.cfr || "",
+          "Status": saved.status || "Not Assessed",
+          "Owner": saved.owner || "",
+          "Due Date": saved.due_date || "",
+          "Notes": saved.notes || "",
+        };
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Set column widths
+      ws["!cols"] = [
+        { wch: 8 },   // Item #
+        { wch: 28 },  // Domain
+        { wch: 80 },  // Question
+        { wch: 22 },  // TJC
+        { wch: 16 },  // CAP
+        { wch: 24 },  // CFR
+        { wch: 18 },  // Status
+        { wch: 20 },  // Owner
+        { wch: 14 },  // Due Date
+        { wch: 40 },  // Notes
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "VeritaScan");
+
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `VeritaScan_${safeName}_${date}.xlsx`;
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(Buffer.from(buffer));
+    } catch (e: any) {
+      console.error("Excel generation error:", e);
+      res.status(500).json({ error: "Excel generation failed" });
+    }
+  });
+
   // ── NEWSLETTER ────────────────────────────────────────────────────────────
   app.post("/api/newsletter/subscribe", async (req, res) => {
     const { email, name, source } = req.body;

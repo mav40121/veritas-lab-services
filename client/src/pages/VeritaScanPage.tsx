@@ -65,12 +65,8 @@ export default function VeritaScanPage() {
               {/* Pricing */}
               <div className="flex flex-wrap gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">$69</div>
-                  <div className="text-xs text-muted-foreground">Excel download</div>
-                </div>
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center relative">
                   <div className="text-2xl font-bold text-primary">$99</div>
-                  <div className="text-xs text-muted-foreground">Web version / year</div>
+                  <div className="text-xs text-muted-foreground">/year — Excel export included</div>
                 </div>
               </div>
 
@@ -213,46 +209,31 @@ export default function VeritaScanPage() {
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
-          <p className="text-muted-foreground mb-8">One tool. Two formats. Both far less than a single consultant day.</p>
-          <div className="grid sm:grid-cols-2 gap-6 max-w-2xl">
-            <Card className="border-2 border-border">
-              <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Excel Download</div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-4xl font-bold">$69</span>
-                  <span className="text-sm text-muted-foreground">one-time</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-5">
-                  The complete VeritaScan workbook — all 10 domains, 168 questions, live compliance dashboard.
-                </p>
-                <ul className="space-y-2 mb-6">
-                  {["All 10 domains, 168 items","Triple-mapped citations","Live compliance dashboard","Immediate download"].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <Link href="/veritascan-app" className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
-                  Launch VeritaScan
-                </Link>
-              </CardContent>
-            </Card>
-
+          <p className="text-muted-foreground mb-8">One plan. Everything included. Far less than a single consultant day.</p>
+          <div className="max-w-md">
             <Card className="border-2 border-primary bg-primary/5 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <Badge className="bg-emerald-500 text-white border-0">Now Live</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Web Version</div>
+                <div className="font-bold text-lg mb-1">VeritaScan™</div>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-4xl font-bold">$99</span>
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Always-current web app — standards update automatically, history tracking, exportable PDF reports.
+                  Full web access to all 168 checklist items across 10 domains — with Excel export included.
                 </p>
                 <ul className="space-y-2 mb-6">
-                  {["Everything in Excel","Always current standards","Progress tracking over time","Exportable PDF mock survey report","Integrates with VeritaCheck"].map(f => (
+                  {[
+                    "All 168 items across 10 domains",
+                    "Assign owner and due dates per item",
+                    "Auto-save progress",
+                    "PDF reports (executive summary + full detail)",
+                    "Excel export included — download your full scan at any time",
+                    "Always current standards",
+                    "Integrates with VeritaCheck",
+                  ].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
                     </li>
@@ -275,7 +256,7 @@ export default function VeritaScanPage() {
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. Purchased separately: $397/year. Bundle saves $48.
+                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. VeritaScan includes full web access and Excel export. Purchased separately: $347/year. Bundle saves $48.
                 </p>
                 <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   Learn about VeritaMap <ChevronRight size={13} />

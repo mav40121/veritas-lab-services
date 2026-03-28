@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   Download,
   FileText,
+  FileSpreadsheet,
   Save,
   Check,
   ChevronDown,
@@ -406,6 +407,7 @@ export default function VeritaScanScanPage() {
   const [items, setItems] = useState<Record<number, ItemState>>(buildInitialItems);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [pdfLoading, setPdfLoading] = useState<"executive" | "full" | null>(null);
+  const [excelLoading, setExcelLoading] = useState(false);
 
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -540,6 +542,46 @@ export default function VeritaScanScanPage() {
       console.error("PDF error:", e);
     } finally {
       setPdfLoading(null);
+    }
+  };
+
+  // ── Excel download ───────────────────────────────────────────────────────
+  const downloadExcel = async () => {
+    setExcelLoading(true);
+    try {
+      const referenceItems = SCAN_ITEMS.map((item) => ({
+        id: item.id,
+        domain: item.domain,
+        question: item.question,
+        tjc: item.tjc,
+        cap: item.cap,
+        cfr: item.cfr,
+      }));
+      const res = await fetch(
+        `${API_BASE}/api/veritascan/excel/${scanId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token ?? localStorage.getItem("veritas_token")}`,
+          },
+          body: JSON.stringify({ referenceItems }),
+        }
+      );
+      if (!res.ok) throw new Error("Excel generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      a.download = `VeritaScan_${safeName}_${date}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Excel error:", e);
+    } finally {
+      setExcelLoading(false);
     }
   };
 
@@ -690,6 +732,21 @@ export default function VeritaScanScanPage() {
             )}
             Full Report
           </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full h-8 text-xs gap-1.5"
+            onClick={downloadExcel}
+            disabled={excelLoading}
+          >
+            {excelLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+            )}
+            Excel Export
+          </Button>
         </div>
       </aside>
 
@@ -736,7 +793,7 @@ export default function VeritaScanScanPage() {
         </div>
 
         {/* Mobile download buttons */}
-        <div className="flex gap-2 mb-4 lg:hidden">
+        <div className="flex gap-2 mb-4 lg:hidden flex-wrap">
           <Button
             size="sm"
             variant="outline"
@@ -756,6 +813,16 @@ export default function VeritaScanScanPage() {
           >
             <FileText className="h-3.5 w-3.5" />
             Full PDF
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 text-xs h-8 gap-1.5"
+            onClick={downloadExcel}
+            disabled={excelLoading}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            Excel
           </Button>
         </div>
 
