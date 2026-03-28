@@ -241,6 +241,114 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── VERITASCAN ───────────────────────────────────────────────────────────
+
+  // Check access: annual, lab, or veritascan plan
+  function hasScanAccess(user: any) {
+    return ["annual", "lab", "veritascan"].includes(user?.plan);
+  }
+
+  // List scans for current user
+  app.get("/api/veritascan/scans", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const scans = (db as any).$client.prepare(
+      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE user_id = ? ORDER BY updated_at DESC"
+    ).all(req.user.userId);
+    // For each scan, add completion stats
+    const result = scans.map((s: any) => {
+      const items = (db as any).$client.prepare(
+        "SELECT status FROM veritascan_items WHERE scan_id = ?"
+      ).all(s.id);
+      const total = 168;
+      const assessed = items.filter((i: any) => i.status !== 'Not Assessed').length;
+      const compliant = items.filter((i: any) => i.status === 'Compliant').length;
+      const issues = items.filter((i: any) => ['Needs Attention','Immediate Action'].includes(i.status)).length;
+      return { ...s, total, assessed, compliant, issues };
+    });
+    res.json(result);
+  });
+
+  // Create new scan
+  app.post("/api/veritascan/scans", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+    ).run(req.user.userId, name.trim(), now, now);
+    res.json({ id: result.lastInsertRowid, name: name.trim(), created_at: now, updated_at: now });
+  });
+
+  // Delete scan
+  app.delete("/api/veritascan/scans/:id", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    (db as any).$client.prepare("DELETE FROM veritascan_items WHERE scan_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritascan_scans WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Get all items for a scan
+  app.get("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const items = (db as any).$client.prepare(
+      "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+    ).all(req.params.id);
+    res.json(items);
+  });
+
+  // Upsert item status/notes/owner/due_date
+  app.put("/api/veritascan/scans/:id/items/:itemId", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const { status, notes, owner, due_date } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(scan_id, item_id) DO UPDATE SET
+        status = excluded.status,
+        notes = excluded.notes,
+        owner = excluded.owner,
+        due_date = excluded.due_date,
+        updated_at = excluded.updated_at
+    `).run(req.params.id, req.params.itemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, now);
+    // Update scan updated_at
+    (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Bulk update items (for efficient auto-save)
+  app.put("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const { items } = req.body; // Array of { item_id, status, notes, owner, due_date }
+    if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
+    const now = new Date().toISOString();
+    const stmt = (db as any).$client.prepare(`
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(scan_id, item_id) DO UPDATE SET
+        status = excluded.status, notes = excluded.notes,
+        owner = excluded.owner, due_date = excluded.due_date,
+        updated_at = excluded.updated_at
+    `);
+    const bulkUpdate = (db as any).$client.transaction((items: any[]) => {
+      for (const item of items) {
+        stmt.run(req.params.id, item.item_id, item.status || 'Not Assessed', item.notes || null, item.owner || null, item.due_date || null, now);
+      }
+    });
+    bulkUpdate(items);
+    (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true, count: items.length });
+  });
+
   // ── NEWSLETTER ────────────────────────────────────────────────────────────
   app.post("/api/newsletter/subscribe", async (req, res) => {
     const { email, name, source } = req.body;

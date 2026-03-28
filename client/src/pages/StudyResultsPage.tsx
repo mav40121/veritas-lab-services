@@ -169,7 +169,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
     const r2Val = firstReg?.r2 ?? 1;
     const rVal = Math.sqrt(r2Val);
     const ba = mc.blandAltman ? Object.values(mc.blandAltman)[0] : null;
-    const meanBiasPct: number = (ba as any)?.meanPctBias ?? 0;
+    const meanBiasPct: number = (ba as any)?.pctMeanDiff ?? (ba as any)?.meanPctBias ?? 0;
     const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline — review carefully";
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias between methods"

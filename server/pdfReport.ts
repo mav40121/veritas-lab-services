@@ -413,7 +413,7 @@ function narrativeHTML(
     const r2Val: number = firstReg?.r2 ?? 1;
     const rVal = Math.sqrt(r2Val);
     const ba: any = results.blandAltman ? Object.values(results.blandAltman)[0] : null;
-    const meanBiasPct: number = ba?.meanPctBias ?? 0;
+    const meanBiasPct: number = ba?.pctMeanDiff ?? ba?.meanPctBias ?? 0;
 
     const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline — review carefully";
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 // Products dropdown items
 const productLinks = [
   { href: "/veritacheck", label: "VeritaCheck™", desc: "EP Study Analysis", highlight: true },
-  { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness", badge: "Coming Soon" },
+  { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness" },
   { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Coming Soon" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];

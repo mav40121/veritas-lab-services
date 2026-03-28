@@ -67,6 +67,26 @@ sqlite.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS veritascan_scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS veritascan_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Not Assessed',
+    notes TEXT,
+    owner TEXT,
+    due_date TEXT,
+    updated_at TEXT NOT NULL,
+    UNIQUE(scan_id, item_id)
+  );
+
   CREATE TABLE IF NOT EXISTS newsletter_subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE,

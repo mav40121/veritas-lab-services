@@ -78,7 +78,7 @@ export default function VeritaScanPage() {
               <div className="flex items-center gap-2 mb-4">
                 <Shield size={20} className="text-primary" />
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
-                <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 border">Coming Soon</Badge>
+                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaScan™</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
@@ -351,15 +351,22 @@ export default function VeritaScanPage() {
       {/* CTA */}
       <section className="section-padding">
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="font-serif text-2xl font-bold mb-3">Be the first to know</h2>
+          <h2 className="font-serif text-2xl font-bold mb-3">Ready to assess your lab?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaScan is completing final review. Enter your email and we'll notify you the moment it's available.
+            VeritaScan is live. Sign in and run your first self-inspection today.
           </p>
-          <NotifyForm />
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+              <Link href="/veritascan-app">Launch VeritaScan <ChevronRight size={15} className="ml-1" /></Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/login">Sign In / Create Account</Link>
+            </Button>
+          </div>
           <div className="mt-6">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <FlaskConical size={14} />
-              Try VeritaCheck now — EP studies available today
+              Also try VeritaCheck — EP studies
               <ChevronRight size={13} />
             </Link>
           </div>
