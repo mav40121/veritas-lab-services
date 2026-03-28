@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/veritascan", label: "VeritaScan", badge: "Coming Soon" },
   { href: "/veritamap", label: "VeritaMap", badge: "Coming Soon" },
   { href: "/book", label: "Book", badge: "Coming Soon" },
+  { href: "/resources", label: "Resources" },
   { href: "/demo", label: "Live Demo", highlight2: true },
   { href: "/contact", label: "Contact" },
 ];

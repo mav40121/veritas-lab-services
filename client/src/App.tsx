@@ -25,6 +25,8 @@ import BookPage from "@/pages/BookPage";
 import VeritaScanPage from "@/pages/VeritaScanPage";
 import VeritaMapPage from "@/pages/VeritaMapPage";
 import DemoPage from "@/pages/DemoPage";
+import ResourcesPage from "@/pages/ResourcesPage";
+import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
 
 function SiteFooter() {
   return (
@@ -48,6 +50,7 @@ function SiteFooter() {
             <div className="mt-3">
               <div className="font-semibold text-sm mb-2">Resources</div>
               <ul className="space-y-1 text-sm text-muted-foreground">
+                <li><a href="/#/resources" className="hover:text-primary transition-colors">Resources — Clinical Lab Knowledge Base</a></li>
                 <li><a href="/#/veritamap" className="hover:text-primary transition-colors">VeritaMap — Test Menu Regulatory Mapping</a></li>
                 <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan — Compliance Audit Tool</a></li>
                 <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101 — New Book</a></li>
@@ -117,6 +120,8 @@ function AppContent() {
           <Route path="/veritascan" component={VeritaScanPage} />
           <Route path="/veritamap" component={VeritaMapPage} />
           <Route path="/demo" component={DemoPage} />
+          <Route path="/resources" component={ResourcesPage} />
+          <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
