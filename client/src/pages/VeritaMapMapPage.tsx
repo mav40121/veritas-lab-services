@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ArrowLeft,
   Download,
   Edit,
@@ -14,21 +20,29 @@ import {
   AlertTriangle,
   CheckCircle2,
   AlertOctagon,
+  AlertCircle,
   ChevronRight,
   Filter,
+  GitMerge,
+  Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Complexity = "MODERATE" | "HIGH" | "WAIVED";
+type Role = "Primary" | "Backup" | "Satellite" | "Reference" | "POC";
+
+interface InstrumentOnTest {
+  instrument_name: string;
+  role: Role;
+}
 
 interface TestRecord {
   analyte: string;
   specialty: string;
   complexity: Complexity;
-  active?: boolean;
-  instrument_source?: string;
+  instruments: InstrumentOnTest[];
   last_cal_ver?: string | null;
   last_method_comp?: string | null;
   last_precision?: string | null;
@@ -41,6 +55,12 @@ interface MapDetail {
   name: string;
   updated_at: string;
   tests: TestRecord[];
+}
+
+interface IntelligenceData {
+  correlationsRequired: { analyte: string; instruments: InstrumentOnTest[] }[];
+  calVerRequired: number;
+  compliantTests: number;
 }
 
 // ── CFR mapping ───────────────────────────────────────────────────────────────
@@ -64,7 +84,10 @@ function getCFR(specialty: string): string {
 
 // ── Specialty styling ─────────────────────────────────────────────────────────
 
-const SPECIALTY_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
+const SPECIALTY_COLORS: Record<
+  string,
+  { bg: string; text: string; badge: string }
+> = {
   "General Chemistry": {
     bg: "bg-blue-50 dark:bg-blue-950/20",
     text: "text-blue-700 dark:text-blue-300",
@@ -83,32 +106,38 @@ const SPECIALTY_COLORS: Record<string, { bg: string; text: string; badge: string
   Coagulation: {
     bg: "bg-orange-50 dark:bg-orange-950/20",
     text: "text-orange-700 dark:text-orange-300",
-    badge: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
+    badge:
+      "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
   },
   "General Immunology": {
     bg: "bg-purple-50 dark:bg-purple-950/20",
     text: "text-purple-700 dark:text-purple-300",
-    badge: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
+    badge:
+      "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
   },
   Endocrinology: {
     bg: "bg-violet-50 dark:bg-violet-950/20",
     text: "text-violet-700 dark:text-violet-300",
-    badge: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+    badge:
+      "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   },
   Toxicology: {
     bg: "bg-amber-50 dark:bg-amber-950/20",
     text: "text-amber-700 dark:text-amber-300",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    badge:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   },
   Immunohematology: {
     bg: "bg-pink-50 dark:bg-pink-950/20",
     text: "text-pink-700 dark:text-pink-300",
-    badge: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
+    badge:
+      "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
   },
   Urinalysis: {
     bg: "bg-yellow-50 dark:bg-yellow-950/20",
     text: "text-yellow-700 dark:text-yellow-300",
-    badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
+    badge:
+      "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
   },
   "Blood Gas": {
     bg: "bg-sky-50 dark:bg-sky-950/20",
@@ -118,7 +147,8 @@ const SPECIALTY_COLORS: Record<string, { bg: string; text: string; badge: string
   Microbiology: {
     bg: "bg-green-50 dark:bg-green-950/20",
     text: "text-green-700 dark:text-green-300",
-    badge: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
+    badge:
+      "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
   },
 };
 
@@ -132,15 +162,32 @@ function getSpecialtyStyle(specialty: string) {
   );
 }
 
+// ── Role badge ────────────────────────────────────────────────────────────────
+
+const ROLE_STYLES: Record<Role, string> = {
+  Primary: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+  Backup: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
+  Satellite: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+  Reference: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300",
+  POC: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
+};
+
+function InstrumentBadge({ instr }: { instr: InstrumentOnTest }) {
+  const roleStyle = ROLE_STYLES[instr.role] ?? "bg-muted text-muted-foreground";
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border border-border bg-muted/50 whitespace-nowrap mr-1 mb-0.5">
+      <span className="truncate max-w-[90px]">{instr.instrument_name}</span>
+      <span className={`ml-1 px-1 py-0 rounded text-[9px] font-semibold ${roleStyle}`}>
+        {instr.role}
+      </span>
+    </span>
+  );
+}
+
 // ── Date status logic ─────────────────────────────────────────────────────────
 
 type DateStatus = "ok" | "due-soon" | "overdue" | "missing";
 
-/**
- * @param dateStr ISO date string or null
- * @param maxMonths months before overdue (6 = cal ver / method comp, 24 = SOP)
- * @param warningDays days before expiry to show amber
- */
 function getDateStatus(
   dateStr: string | null | undefined,
   maxMonths: number,
@@ -152,7 +199,7 @@ function getDateStatus(
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  const maxDays = maxMonths * 30.44 + 20; // +20 days grace for cal ver
+  const maxDays = maxMonths * 30.44 + 20;
   if (diffDays > maxDays) return "overdue";
   if (diffDays > maxDays - warningDays) return "due-soon";
   return "ok";
@@ -160,18 +207,14 @@ function getDateStatus(
 
 function StatusDot({ status }: { status: DateStatus }) {
   if (status === "ok")
-    return (
-      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-    );
+    return <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" />;
   if (status === "due-soon")
-    return (
-      <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
-    );
+    return <span className="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0" />;
   if (status === "overdue")
-    return (
-      <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
-    );
-  return <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/40 border border-muted-foreground/30" />;
+    return <span className="inline-block w-2 h-2 rounded-full bg-red-500 shrink-0" />;
+  return (
+    <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/40 border border-muted-foreground/30 shrink-0" />
+  );
 }
 
 function DateCell({
@@ -187,7 +230,9 @@ function DateCell({
   warningDays?: number;
   disabled?: boolean;
 }) {
-  const status = disabled ? ("ok" as DateStatus) : getDateStatus(value, maxMonths, warningDays);
+  const status = disabled
+    ? ("ok" as DateStatus)
+    : getDateStatus(value, maxMonths, warningDays);
   const borderClass =
     !disabled && status === "overdue"
       ? "border-red-400 focus:ring-red-400/30"
@@ -205,7 +250,9 @@ function DateCell({
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className={`h-7 text-xs px-1.5 w-[120px] ${borderClass} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+        className={`h-7 text-xs px-1.5 w-[118px] ${borderClass} ${
+          disabled ? "opacity-40 cursor-not-allowed" : ""
+        }`}
       />
     </div>
   );
@@ -233,14 +280,123 @@ function ComplexityBadge({ complexity }: { complexity: Complexity }) {
   );
 }
 
+// ── Intelligence Banner ───────────────────────────────────────────────────────
+
+function IntelligenceBanner({
+  intelligence,
+  onAnalyteClick,
+}: {
+  intelligence: IntelligenceData;
+  onAnalyteClick: (analyte: string) => void;
+}) {
+  const { correlationsRequired, calVerRequired, compliantTests } = intelligence;
+
+  return (
+    <div className="rounded-xl border-2 border-red-200 dark:border-red-900/60 bg-gradient-to-br from-red-50 to-amber-50/30 dark:from-red-950/30 dark:to-amber-950/10 overflow-hidden mb-5 shadow-sm">
+      {/* Banner header */}
+      <div className="px-4 pt-3 pb-2 flex items-center gap-2 border-b border-red-200/60 dark:border-red-900/40">
+        <GitMerge size={15} className="text-red-600 dark:text-red-400 shrink-0" />
+        <span className="text-sm font-bold text-red-800 dark:text-red-200">
+          VeritaMap Intelligence
+        </span>
+        <span className="text-xs text-red-600/70 dark:text-red-400/70 ml-1">
+          — Cross-instrument correlation & compliance engine
+        </span>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-red-200/50 dark:divide-red-900/30">
+        {/* Correlations */}
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+            <span className="text-sm font-bold text-red-700 dark:text-red-300">
+              {correlationsRequired.length} Correlation
+              {correlationsRequired.length !== 1 ? "s" : ""} Required
+            </span>
+          </div>
+          {correlationsRequired.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {correlationsRequired.slice(0, 8).map(({ analyte }) => (
+                <button
+                  key={analyte}
+                  type="button"
+                  onClick={() => onAnalyteClick(analyte)}
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors border border-red-200/60 dark:border-red-800/40"
+                >
+                  {analyte}
+                </button>
+              ))}
+              {correlationsRequired.length > 8 && (
+                <span className="text-[11px] text-red-600/70 dark:text-red-400/70 px-1 py-0.5">
+                  +{correlationsRequired.length - 8} more
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              No correlations required
+            </p>
+          )}
+          <p className="text-[10px] text-muted-foreground mt-1.5">
+            Click any analyte to jump to its row
+          </p>
+        </div>
+
+        {/* Cal Ver */}
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
+            <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
+              {calVerRequired} Cal Verification
+              {calVerRequired !== 1 ? "s" : ""} Required
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Non-waived tests require cal ver every 6 months.
+          </p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            42 CFR §493.1255
+          </p>
+        </div>
+
+        {/* Compliant */}
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+              {compliantTests} Tests Fully Compliant
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Dates on file and within schedule.
+          </p>
+          <div className="mt-2">
+            <Link
+              href="/veritacheck"
+              className="inline-flex items-center text-[11px] font-semibold text-primary hover:underline"
+            >
+              <FlaskConical size={10} className="mr-1" />
+              Run a Study in VeritaCheck
+              <ChevronRight size={10} className="ml-0.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CSV Export ────────────────────────────────────────────────────────────────
 
 function exportCSV(mapName: string, tests: TestRecord[]) {
   const headers = [
     "Analyte",
+    "Instruments",
     "Specialty",
     "Complexity",
     "CFR Section",
+    "Correlation Required",
     "Last Cal Ver",
     "Cal Ver Status",
     "Last Method Comp",
@@ -253,19 +409,37 @@ function exportCSV(mapName: string, tests: TestRecord[]) {
   ];
 
   function statusLabel(s: DateStatus): string {
-    return { ok: "Compliant", "due-soon": "Due Soon", overdue: "Overdue", missing: "Missing" }[s];
+    return {
+      ok: "Compliant",
+      "due-soon": "Due Soon",
+      overdue: "Overdue",
+      missing: "Missing",
+    }[s];
   }
 
   const rows = tests.map((t) => {
-    const calVerStatus = t.complexity !== "WAIVED" ? statusLabel(getDateStatus(t.last_cal_ver, 6)) : "N/A (Waived)";
-    const mcStatus = t.complexity !== "WAIVED" ? statusLabel(getDateStatus(t.last_method_comp, 6)) : "N/A (Waived)";
-    const precStatus = t.complexity !== "WAIVED" ? statusLabel(getDateStatus(t.last_precision, 6)) : "N/A (Waived)";
+    const instrList = t.instruments.map((i) => `${i.instrument_name} [${i.role}]`).join("; ");
+    const correlReq = t.complexity !== "WAIVED" && t.instruments.length >= 2 ? "Yes" : "No";
+    const calVerStatus =
+      t.complexity !== "WAIVED"
+        ? statusLabel(getDateStatus(t.last_cal_ver, 6))
+        : "N/A (Waived)";
+    const mcStatus =
+      t.complexity !== "WAIVED"
+        ? statusLabel(getDateStatus(t.last_method_comp, 6))
+        : "N/A (Waived)";
+    const precStatus =
+      t.complexity !== "WAIVED"
+        ? statusLabel(getDateStatus(t.last_precision, 6))
+        : "N/A (Waived)";
     const sopStatus = statusLabel(getDateStatus(t.last_sop_review, 24));
     return [
       t.analyte,
+      instrList,
       t.specialty,
       t.complexity,
       getCFR(t.specialty),
+      correlReq,
       t.last_cal_ver || "",
       calVerStatus,
       t.last_method_comp || "",
@@ -275,7 +449,9 @@ function exportCSV(mapName: string, tests: TestRecord[]) {
       t.last_sop_review || "",
       sopStatus,
       t.notes || "",
-    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    ]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",");
   });
 
   const csv = [headers.map((h) => `"${h}"`).join(","), ...rows].join("\n");
@@ -283,7 +459,9 @@ function exportCSV(mapName: string, tests: TestRecord[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `VeritaMap_${mapName.replace(/[^a-z0-9]/gi, "_")}_${new Date().toISOString().split("T")[0]}.csv`;
+  a.download = `VeritaMap_${mapName.replace(/[^a-z0-9]/gi, "_")}_${
+    new Date().toISOString().split("T")[0]
+  }.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -297,10 +475,9 @@ function calcCompliance(tests: TestRecord[]): {
   sopOverdue: number;
 } {
   const nonWaived = tests.filter((t) => t.complexity !== "WAIVED");
-  if (nonWaived.length === 0) return { score: 100, calVerOverdue: 0, methodCompMissing: 0, sopOverdue: 0 };
+  if (nonWaived.length === 0)
+    return { score: 100, calVerOverdue: 0, methodCompMissing: 0, sopOverdue: 0 };
 
-  let calVerOk = 0;
-  let mcOk = 0;
   let calVerOverdue = 0;
   let methodCompMissing = 0;
   let sopOverdue = 0;
@@ -309,9 +486,7 @@ function calcCompliance(tests: TestRecord[]): {
     const cvStatus = getDateStatus(t.last_cal_ver, 6);
     const mcStatus = getDateStatus(t.last_method_comp, 6);
     const sopStatus = getDateStatus(t.last_sop_review, 24);
-    if (cvStatus === "ok") calVerOk++;
     if (cvStatus === "overdue" || cvStatus === "missing") calVerOverdue++;
-    if (mcStatus === "ok") mcOk++;
     if (mcStatus === "missing") methodCompMissing++;
     if (sopStatus === "overdue" || sopStatus === "missing") sopOverdue++;
   }
@@ -323,41 +498,100 @@ function calcCompliance(tests: TestRecord[]): {
   ).length;
 
   const score =
-    nonWaived.length > 0 ? Math.round((bothOk / nonWaived.length) * 100) : 100;
+    nonWaived.length > 0
+      ? Math.round((bothOk / nonWaived.length) * 100)
+      : 100;
 
   return { score, calVerOverdue, methodCompMissing, sopOverdue };
 }
 
-// ── Test row ──────────────────────────────────────────────────────────────────
+// ── Intelligence computation (client-side fallback) ───────────────────────────
+
+function computeIntelligence(tests: TestRecord[]): IntelligenceData {
+  const correlationsRequired = tests
+    .filter(
+      (t) => t.complexity !== "WAIVED" && t.instruments && t.instruments.length >= 2
+    )
+    .map((t) => ({ analyte: t.analyte, instruments: t.instruments }));
+
+  const calVerRequired = tests.filter(
+    (t) => t.complexity !== "WAIVED"
+  ).length;
+
+  const compliantTests = tests.filter(
+    (t) =>
+      t.complexity !== "WAIVED" &&
+      getDateStatus(t.last_cal_ver, 6) === "ok" &&
+      getDateStatus(t.last_method_comp, 6) === "ok"
+  ).length;
+
+  return { correlationsRequired, calVerRequired, compliantTests };
+}
+
+// ── Test Row ──────────────────────────────────────────────────────────────────
 
 interface TestRowProps {
   test: TestRecord;
   onChange: (analyte: string, field: string, value: string) => void;
+  onRowMount?: (el: HTMLTableRowElement | null) => void;
 }
 
-function TestRow({ test, onChange }: TestRowProps) {
+function TestRow({ test, onChange, onRowMount }: TestRowProps) {
   const isWaived = test.complexity === "WAIVED";
   const specialtyStyle = getSpecialtyStyle(test.specialty);
+  const instruments = test.instruments ?? [];
 
-  const calVerStatus = isWaived ? ("ok" as DateStatus) : getDateStatus(test.last_cal_ver, 6);
-  const mcStatus = isWaived ? ("ok" as DateStatus) : getDateStatus(test.last_method_comp, 6);
+  const correlationRequired =
+    !isWaived && instruments.length >= 2;
 
-  const hasGap =
+  const calVerStatus = isWaived
+    ? ("ok" as DateStatus)
+    : getDateStatus(test.last_cal_ver, 6);
+  const mcStatus = isWaived
+    ? ("ok" as DateStatus)
+    : getDateStatus(test.last_method_comp, 6);
+
+  // Row border logic
+  const correlNoMethodComp =
+    correlationRequired &&
+    (mcStatus === "missing" || mcStatus === "overdue");
+  const calVerOverdue =
     !isWaived &&
-    (calVerStatus === "overdue" ||
-      calVerStatus === "missing" ||
-      mcStatus === "overdue" ||
-      mcStatus === "missing");
+    (calVerStatus === "overdue" || calVerStatus === "missing");
+
+  const borderClass = isWaived
+    ? "border-l-2 border-l-transparent"
+    : correlNoMethodComp
+    ? "border-l-2 border-l-red-500"
+    : calVerOverdue
+    ? "border-l-2 border-l-amber-400"
+    : mcStatus === "ok" && calVerStatus === "ok"
+    ? "border-l-2 border-l-emerald-400/40"
+    : "border-l-2 border-l-transparent";
 
   return (
     <tr
-      className={`border-b border-border text-xs group transition-colors hover:bg-muted/30 ${
-        hasGap ? "border-l-2 border-l-red-400" : "border-l-2 border-l-transparent"
-      }`}
+      ref={onRowMount}
+      className={`border-b border-border text-xs group transition-colors hover:bg-muted/30 ${borderClass}`}
     >
       {/* Analyte */}
-      <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap max-w-[220px] truncate">
+      <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap max-w-[180px] truncate">
         {test.analyte}
+      </td>
+
+      {/* Instruments */}
+      <td className="px-3 py-2 min-w-[160px] max-w-[220px]">
+        <div className="flex flex-wrap">
+          {instruments.length > 0 ? (
+            instruments.map((instr, i) => (
+              <InstrumentBadge key={i} instr={instr} />
+            ))
+          ) : (
+            <span className="text-muted-foreground text-[10px] italic">
+              No instruments
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Specialty */}
@@ -379,18 +613,62 @@ function TestRow({ test, onChange }: TestRowProps) {
         {getCFR(test.specialty)}
       </td>
 
-      {/* Cal Ver */}
+      {/* Correlation Required */}
       <td className="px-3 py-2 whitespace-nowrap">
-        <DateCell
-          value={test.last_cal_ver}
-          onChange={(v) => onChange(test.analyte, "last_cal_ver", v)}
-          maxMonths={6}
-          warningDays={30}
-          disabled={isWaived}
-        />
+        {isWaived ? (
+          <span className="text-[10px] text-muted-foreground">N/A</span>
+        ) : correlationRequired ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="inline-flex items-center gap-1 cursor-help">
+                  <Badge className="text-[10px] px-1.5 py-0.5 border-0 bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300 font-semibold">
+                    Required
+                  </Badge>
+                  <Info size={10} className="text-red-500/70" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-[220px] text-xs">
+                <p className="font-semibold mb-1">
+                  {instruments.length} instruments running this test:
+                </p>
+                <ul className="space-y-0.5 mb-2">
+                  {instruments.map((instr, i) => (
+                    <li key={i}>
+                      {instr.instrument_name}{" "}
+                      <span className="text-muted-foreground">[{instr.role}]</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-muted-foreground">42 CFR §493.1213</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">Not Required</span>
+        )}
       </td>
 
-      {/* Method Comp */}
+      {/* Cal Ver */}
+      <td className="px-3 py-2 whitespace-nowrap">
+        {isWaived ? (
+          <span className="text-[10px] text-muted-foreground">Exempt</span>
+        ) : (
+          <div>
+            <DateCell
+              value={test.last_cal_ver}
+              onChange={(v) => onChange(test.analyte, "last_cal_ver", v)}
+              maxMonths={6}
+              warningDays={30}
+            />
+            <div className="text-[9px] text-muted-foreground/70 mt-0.5 pl-3.5">
+              Every 6 mo · 42 CFR §493.1255
+            </div>
+          </div>
+        )}
+      </td>
+
+      {/* Last Method Comp */}
       <td className="px-3 py-2 whitespace-nowrap">
         <DateCell
           value={test.last_method_comp}
@@ -401,7 +679,7 @@ function TestRow({ test, onChange }: TestRowProps) {
         />
       </td>
 
-      {/* Precision */}
+      {/* Last Precision */}
       <td className="px-3 py-2 whitespace-nowrap">
         <DateCell
           value={test.last_precision}
@@ -423,7 +701,7 @@ function TestRow({ test, onChange }: TestRowProps) {
       </td>
 
       {/* Notes */}
-      <td className="px-3 py-2 min-w-[140px]">
+      <td className="px-3 py-2 min-w-[130px]">
         <Input
           type="text"
           value={test.notes || ""}
@@ -433,19 +711,36 @@ function TestRow({ test, onChange }: TestRowProps) {
         />
       </td>
 
-      {/* Run Study */}
+      {/* Actions */}
       <td className="px-3 py-2 whitespace-nowrap">
-        <Button
-          asChild
-          size="sm"
-          variant="ghost"
-          className="h-7 text-[10px] px-2 text-primary hover:bg-primary/10 hover:text-primary"
-        >
-          <Link href="/veritacheck">
-            <FlaskConical size={11} className="mr-1" />
-            Run Study
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-0.5">
+          {correlationRequired && (
+            <Button
+              asChild
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[10px] px-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-700"
+            >
+              <Link href="/veritacheck">
+                <GitMerge size={10} className="mr-1" />
+                Run Correlation →
+              </Link>
+            </Button>
+          )}
+          {!isWaived && (
+            <Button
+              asChild
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[10px] px-2 text-primary hover:bg-primary/10 hover:text-primary"
+            >
+              <Link href="/veritacheck">
+                <FlaskConical size={10} className="mr-1" />
+                Run Cal Ver →
+              </Link>
+            </Button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -462,10 +757,15 @@ export default function VeritaMapMapPage() {
 
   const [localTests, setLocalTests] = useState<TestRecord[]>([]);
   const [filterSpecialty, setFilterSpecialty] = useState<string>("all");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Debounce timer refs keyed by analyte+field
-  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Refs for row scrolling (keyed by analyte)
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+
+  // Debounce timers
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
 
   // Fetch map detail
   const { data: mapDetail, isLoading } = useQuery<MapDetail>({
@@ -473,12 +773,32 @@ export default function VeritaMapMapPage() {
     enabled: !!mapId,
   });
 
-  // Sync local tests from server data on first load
+  // Fetch intelligence data
+  const { data: intelligenceRaw } = useQuery<IntelligenceData>({
+    queryKey: [`/api/veritamap/maps/${mapId}/intelligence`],
+    enabled: !!mapId,
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/intelligence`,
+        { headers: authHeaders() }
+      );
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  // Sync local tests from server
   useEffect(() => {
     if (mapDetail?.tests) {
       setLocalTests(mapDetail.tests);
     }
   }, [mapDetail?.tests]);
+
+  // Intelligence — use API data or compute client-side from localTests
+  const intelligence: IntelligenceData = useMemo(
+    () => intelligenceRaw ?? computeIntelligence(localTests),
+    [intelligenceRaw, localTests]
+  );
 
   // Auto-save mutation
   const saveMutation = useMutation({
@@ -506,17 +826,14 @@ export default function VeritaMapMapPage() {
     },
   });
 
-  // Field change handler with 1.5s debounce
+  // Field change with 1.5s debounce
   const handleFieldChange = useCallback(
     (analyte: string, field: string, value: string) => {
-      // Update local state immediately
       setLocalTests((prev) =>
         prev.map((t) =>
           t.analyte === analyte ? { ...t, [field]: value || null } : t
         )
       );
-
-      // Debounce API call
       const key = `${analyte}::${field}`;
       const existing = debounceTimers.current.get(key);
       if (existing) clearTimeout(existing);
@@ -528,6 +845,18 @@ export default function VeritaMapMapPage() {
     },
     [saveMutation]
   );
+
+  // Scroll to analyte row
+  function scrollToAnalyte(analyte: string) {
+    const el = rowRefs.current.get(analyte);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("bg-yellow-50", "dark:bg-yellow-950/20");
+      setTimeout(() => {
+        el.classList.remove("bg-yellow-50", "dark:bg-yellow-950/20");
+      }, 1800);
+    }
+  }
 
   // Derived data
   const specialties = useMemo(() => {
@@ -570,6 +899,8 @@ export default function VeritaMapMapPage() {
       ? "bg-amber-400"
       : "bg-red-500";
 
+  // ── Loading / error states ───────────────────────────────────────────────
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
@@ -592,7 +923,6 @@ export default function VeritaMapMapPage() {
     );
   }
 
-  // If map has no tests, redirect to build
   if (localTests.length === 0 && !isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh] flex-col gap-4">
@@ -612,10 +942,10 @@ export default function VeritaMapMapPage() {
 
   return (
     <div className="flex flex-col lg:flex-row min-h-[calc(100vh-64px)]">
-      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <aside
         className={`lg:sticky lg:top-16 lg:h-[calc(100vh-64px)] lg:overflow-y-auto border-b lg:border-b-0 lg:border-r border-border bg-card shrink-0 flex flex-col transition-all ${
-          sidebarCollapsed ? "lg:w-12" : "lg:w-56"
+          sidebarOpen ? "lg:w-56" : "lg:w-56"
         }`}
       >
         {/* Mobile top bar */}
@@ -625,15 +955,17 @@ export default function VeritaMapMapPage() {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => setSidebarCollapsed((v) => !v)}
+            onClick={() => setSidebarOpen((v) => !v)}
           >
             <Filter size={13} />
           </Button>
         </div>
 
-        {/* Mobile collapsible content */}
+        {/* Sidebar content */}
         <div
-          className={`${sidebarCollapsed ? "hidden lg:hidden" : "flex flex-col gap-4 px-4 pb-4 lg:px-3 lg:py-4"}`}
+          className={`${
+            !sidebarOpen ? "hidden lg:flex" : "flex"
+          } flex-col gap-4 px-4 pb-4 lg:px-3 lg:py-4`}
         >
           {/* Back */}
           <Button
@@ -660,7 +992,7 @@ export default function VeritaMapMapPage() {
           {/* Compliance score */}
           <div className="rounded-lg border border-border bg-background p-3">
             <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide font-medium">
-              Compliance
+              Compliance Score
             </div>
             <div className={`text-2xl font-bold tabular-nums ${scoreColor}`}>
               {compliance.score}%
@@ -700,6 +1032,17 @@ export default function VeritaMapMapPage() {
             </div>
           </div>
 
+          {/* Edit Instruments */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs justify-start"
+            onClick={() => navigate(`/veritamap-app/${mapId}/build`)}
+          >
+            <Edit size={11} className="mr-1.5" />
+            Edit Instruments
+          </Button>
+
           {/* Specialty filter */}
           <div>
             <div className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wide font-medium">
@@ -735,27 +1078,16 @@ export default function VeritaMapMapPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col gap-1.5 mt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs justify-start"
-              onClick={() => navigate(`/veritamap-app/${mapId}/build`)}
-            >
-              <Edit size={11} className="mr-1.5" />
-              Edit Test Menu
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs justify-start"
-              onClick={() => exportCSV(mapDetail.name, localTests)}
-            >
-              <Download size={11} className="mr-1.5" />
-              Download CSV
-            </Button>
-          </div>
+          {/* Download CSV */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs justify-start"
+            onClick={() => exportCSV(mapDetail.name, localTests)}
+          >
+            <Download size={11} className="mr-1.5" />
+            Download CSV
+          </Button>
 
           {/* VeritaCheck CTA */}
           <Button
@@ -765,13 +1097,13 @@ export default function VeritaMapMapPage() {
           >
             <Link href="/veritacheck">
               <FlaskConical size={11} className="mr-1.5" />
-              Run Study in VeritaCheck
+              Run a Study in VeritaCheck
             </Link>
           </Button>
         </div>
       </aside>
 
-      {/* ── Main content ───────────────────────────────────────────────────── */}
+      {/* ── Main content ──────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="px-4 sm:px-6 py-5">
           {/* Mobile header */}
@@ -779,7 +1111,13 @@ export default function VeritaMapMapPage() {
             <h1 className="font-bold text-lg">{mapDetail.name}</h1>
           </div>
 
-          {/* Table header info */}
+          {/* Intelligence Banner — HERO */}
+          <IntelligenceBanner
+            intelligence={intelligence}
+            onAnalyteClick={scrollToAnalyte}
+          />
+
+          {/* Table meta row */}
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm text-muted-foreground">
               Showing{" "}
@@ -804,7 +1142,7 @@ export default function VeritaMapMapPage() {
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-4 mb-3 text-[10px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
               Compliant
@@ -817,6 +1155,18 @@ export default function VeritaMapMapPage() {
               <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
               Overdue / Missing
             </span>
+            <span className="flex items-center gap-1.5 border-l border-border pl-4">
+              <span className="inline-block w-0.5 h-3 rounded-full bg-red-500" />
+              Correlation gap
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-0.5 h-3 rounded-full bg-amber-400" />
+              Cal Ver overdue
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-0.5 h-3 rounded-full bg-emerald-400/60" />
+              Fully compliant
+            </span>
           </div>
 
           {/* Table */}
@@ -828,6 +1178,9 @@ export default function VeritaMapMapPage() {
                     Analyte
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
+                    Instruments
+                  </th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                     Specialty
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
@@ -835,6 +1188,12 @@ export default function VeritaMapMapPage() {
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                     CFR
+                  </th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      <AlertCircle size={10} className="text-red-500" />
+                      Correlation Req'd
+                    </span>
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                     Cal Ver
@@ -852,7 +1211,7 @@ export default function VeritaMapMapPage() {
                     Notes
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Action
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -862,6 +1221,10 @@ export default function VeritaMapMapPage() {
                     key={test.analyte}
                     test={test}
                     onChange={handleFieldChange}
+                    onRowMount={(el) => {
+                      if (el) rowRefs.current.set(test.analyte, el);
+                      else rowRefs.current.delete(test.analyte);
+                    }}
                   />
                 ))}
               </tbody>
@@ -874,11 +1237,12 @@ export default function VeritaMapMapPage() {
             )}
           </div>
 
-          {/* Footer note */}
+          {/* Footer */}
           <p className="text-[10px] text-muted-foreground mt-3">
-            Changes auto-save after 1.5 seconds. Cal Ver and Method Comp are
-            required for non-waived tests. SOP review cadence is 2 years per
-            CLIA guidance.
+            Changes auto-save after 1.5 seconds. Cal Ver and Method Comp required
+            for non-waived tests (42 CFR §493.1255). SOP review cadence: 2 years.
+            Correlations required when 2+ instruments run the same analyte (42 CFR
+            §493.1213).
           </p>
         </div>
       </div>

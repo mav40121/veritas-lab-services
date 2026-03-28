@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,24 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   FlaskConical,
   Search,
-  Check,
+  Trash2,
+  Plus,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import fdaData from "@/lib/fdaInstrumentData.json";
@@ -22,6 +34,7 @@ import fdaData from "@/lib/fdaInstrumentData.json";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Complexity = "MODERATE" | "HIGH" | "WAIVED";
+type Role = "Primary" | "Backup" | "Satellite" | "Reference" | "POC";
 
 interface FDATest {
   complexity: Complexity;
@@ -34,12 +47,18 @@ interface FDAInstrument {
   tests: Record<string, FDATest>;
 }
 
-interface ActiveTest {
+interface InstrumentEntry {
+  id: number;
+  instrument_name: string;
+  role: Role;
+  category: string;
+}
+
+interface TestToggle {
   analyte: string;
   specialty: string;
   complexity: Complexity;
   active: boolean;
-  instrument_source: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,22 +75,25 @@ const CATEGORY_ORDER = [
   "Microbiology",
 ];
 
+const ROLES: Role[] = ["Primary", "Backup", "Satellite", "Reference", "POC"];
+
+const ROLE_STYLES: Record<Role, string> = {
+  Primary: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border-teal-200 dark:border-teal-800",
+  Backup: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+  Satellite: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+  Reference: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border-purple-200 dark:border-purple-800",
+  POC: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300 border-green-200 dark:border-green-800",
+};
+
 function getCategoryColor(category: string): string {
   const map: Record<string, string> = {
-    Chemistry:
-      "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-    Immunoassay:
-      "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
-    Hematology:
-      "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-    Coagulation:
-      "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
-    "Blood Gas":
-      "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
-    Urinalysis:
-      "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
-    Microbiology:
-      "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
+    Chemistry: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+    Immunoassay: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
+    Hematology: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+    Coagulation: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
+    "Blood Gas": "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+    Urinalysis: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
+    Microbiology: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300",
   };
   return map[category] ?? "bg-muted text-muted-foreground";
 }
@@ -113,75 +135,210 @@ function getSpecialtyColor(specialty: string): string {
   return map[specialty] ?? "text-muted-foreground";
 }
 
-/** Merge selected instruments into a deduplicated test list */
-function buildTestList(selectedInstruments: string[]): ActiveTest[] {
-  const seen = new Map<string, ActiveTest>();
-  for (const instrName of selectedInstruments) {
-    const instr = INSTRUMENT_DATA[instrName];
-    if (!instr) continue;
-    for (const [analyte, testInfo] of Object.entries(instr.tests)) {
-      if (!seen.has(analyte)) {
-        seen.set(analyte, {
-          analyte,
-          specialty: testInfo.specialty,
-          complexity: testInfo.complexity as Complexity,
-          active: true,
-          instrument_source: instrName,
-        });
-      }
-    }
-  }
-  return Array.from(seen.values()).sort((a, b) =>
-    a.analyte.localeCompare(b.analyte)
+// ── Step indicator ─────────────────────────────────────────────────────────────
+
+function StepIndicator({ step }: { step: 1 | 2 }) {
+  return (
+    <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-1.5">
+        <div
+          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+            step >= 1 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          1
+        </div>
+        <span
+          className={`text-xs font-medium ${
+            step === 1 ? "text-foreground" : "text-muted-foreground"
+          }`}
+        >
+          Add Instruments
+        </span>
+      </div>
+      <ChevronRight size={12} className="text-muted-foreground" />
+      <div className="flex items-center gap-1.5">
+        <div
+          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+            step >= 2 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          2
+        </div>
+        <span
+          className={`text-xs font-medium ${
+            step === 2 ? "text-foreground" : "text-muted-foreground"
+          }`}
+        >
+          Select Tests
+        </span>
+      </div>
+    </div>
   );
 }
 
-// ── Instrument Card ───────────────────────────────────────────────────────────
+// ── RoleBadge ─────────────────────────────────────────────────────────────────
 
-function InstrumentCard({
-  name,
-  instrument,
-  selected,
-  onToggle,
-}: {
-  name: string;
-  instrument: FDAInstrument;
-  selected: boolean;
-  onToggle: () => void;
-}) {
+function RoleBadge({ role }: { role: Role }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`w-full text-left rounded-xl border p-3.5 transition-all ${
-        selected
-          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-          : "border-border hover:border-primary/30 hover:bg-muted/40"
-      }`}
+    <span
+      className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ROLE_STYLES[role]}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="font-medium text-sm leading-tight mb-1">{name}</div>
+      {role}
+    </span>
+  );
+}
+
+// ── Instrument section for Step 2 ─────────────────────────────────────────────
+
+function InstrumentTestSection({
+  instrument,
+  tests,
+  onToggle,
+  onSelectAll,
+  onDeselectAll,
+}: {
+  instrument: InstrumentEntry;
+  tests: TestToggle[];
+  onToggle: (analyte: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return tests;
+    const q = search.toLowerCase();
+    return tests.filter(
+      (t) =>
+        t.analyte.toLowerCase().includes(q) ||
+        t.specialty.toLowerCase().includes(q)
+    );
+  }, [tests, search]);
+
+  const activeCount = tests.filter((t) => t.active).length;
+
+  // Group by specialty
+  const bySpecialty = useMemo(() => {
+    const grouped: Record<string, TestToggle[]> = {};
+    for (const t of filtered) {
+      if (!grouped[t.specialty]) grouped[t.specialty] = [];
+      grouped[t.specialty].push(t);
+    }
+    return grouped;
+  }, [filtered]);
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Section header */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <ChevronDown
+            size={14}
+            className={`shrink-0 text-muted-foreground transition-transform ${
+              expanded ? "" : "-rotate-90"
+            }`}
+          />
+          <span className="font-semibold text-sm truncate">{instrument.instrument_name}</span>
+          <RoleBadge role={instrument.role} />
           <Badge className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(instrument.category)}`}>
             {instrument.category}
           </Badge>
         </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <div
-            className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-              selected
-                ? "bg-primary text-primary-foreground"
-                : "border-2 border-muted-foreground/30"
-            }`}
-          >
-            {selected && <Check size={11} strokeWidth={3} />}
-          </div>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {instrument.testCount} tests
+        <div className="flex items-center gap-2 shrink-0 ml-3">
+          <span className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{activeCount}</span>/{tests.length} active
           </span>
         </div>
-      </div>
-    </button>
+      </button>
+
+      {expanded && (
+        <CardContent className="p-0 border-t border-border">
+          {/* Controls */}
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30 border-b border-border">
+            <div className="relative flex-1 max-w-xs">
+              <Search
+                size={12}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                placeholder="Search tests…"
+                className="pl-7 h-7 text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={onSelectAll}
+            >
+              Select All
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={onDeselectAll}
+            >
+              Deselect All
+            </Button>
+          </div>
+
+          {/* Tests grouped by specialty */}
+          <div className="divide-y divide-border">
+            {Object.entries(bySpecialty)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([specialty, specialtyTests]) => (
+                <div key={specialty}>
+                  <div className="px-4 pt-2.5 pb-1">
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide ${getSpecialtyColor(specialty)}`}>
+                      {specialty}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground ml-2">
+                      ({specialtyTests.filter((t) => t.active).length}/{specialtyTests.length})
+                    </span>
+                  </div>
+                  {specialtyTests.map((test) => (
+                    <div
+                      key={test.analyte}
+                      className={`flex items-center gap-3 px-4 py-2 transition-colors ${
+                        !test.active ? "opacity-50 bg-muted/20" : "hover:bg-muted/20"
+                      }`}
+                    >
+                      <Switch
+                        checked={test.active}
+                        onCheckedChange={() => onToggle(test.analyte)}
+                        className="data-[state=checked]:bg-primary shrink-0"
+                      />
+                      <span className="text-sm font-medium flex-1 min-w-0 truncate">
+                        {test.analyte}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {getComplexityBadge(test.complexity)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+          </div>
+
+          {Object.keys(bySpecialty).length === 0 && (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              No tests match "{search}"
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
@@ -192,175 +349,391 @@ export default function VeritaMapBuildPage() {
   const mapId = params?.id;
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const qc = useQueryClient();
 
   const [step, setStep] = useState<1 | 2>(1);
-  const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
-  const [search, setSearch] = useState("");
-  const [tests, setTests] = useState<ActiveTest[]>([]);
 
-  // Group instruments by category
-  const instrumentsByCategory = useMemo(() => {
-    const grouped: Record<string, string[]> = {};
-    for (const [name, info] of Object.entries(INSTRUMENT_DATA)) {
-      const cat = info.category;
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(name);
-    }
-    return grouped;
-  }, []);
+  // Step 1 state
+  const [instrumentName, setInstrumentName] = useState<string>("");
+  const [instrumentSearch, setInstrumentSearch] = useState("");
+  const [role, setRole] = useState<Role>("Primary");
 
-  const sortedCategories = CATEGORY_ORDER.filter((c) => instrumentsByCategory[c]);
+  // Step 2 state: map from instId → test toggles
+  const [testsByInstrument, setTestsByInstrument] = useState<
+    Record<number, TestToggle[]>
+  >({});
 
-  function toggleInstrument(name: string) {
-    setSelectedInstruments((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
-  }
+  // Fetch existing instruments
+  const { data: instruments = [], isLoading: loadingInstruments } = useQuery<
+    InstrumentEntry[]
+  >({
+    queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+    enabled: !!mapId,
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+        { headers: authHeaders() }
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
 
-  function handleProceedToStep2() {
-    if (selectedInstruments.length === 0) {
-      toast({ title: "Select at least one instrument", variant: "destructive" });
-      return;
-    }
-    const merged = buildTestList(selectedInstruments);
-    setTests(merged);
-    setStep(2);
-  }
+  // Initialize test toggles when instruments load or change
+  useEffect(() => {
+    if (!instruments.length) return;
+    setTestsByInstrument((prev) => {
+      const next = { ...prev };
+      for (const instr of instruments) {
+        if (!next[instr.id]) {
+          const fdaInstr = INSTRUMENT_DATA[instr.instrument_name];
+          if (fdaInstr) {
+            next[instr.id] = Object.entries(fdaInstr.tests).map(
+              ([analyte, info]) => ({
+                analyte,
+                specialty: info.specialty,
+                complexity: info.complexity as Complexity,
+                active: true,
+              })
+            );
+          } else {
+            next[instr.id] = [];
+          }
+        }
+      }
+      return next;
+    });
+  }, [instruments]);
 
-  function toggleTest(analyte: string) {
-    setTests((prev) =>
-      prev.map((t) =>
-        t.analyte === analyte ? { ...t, active: !t.active } : t
-      )
-    );
-  }
-
-  // Group tests by specialty for step 2 display
-  const testsBySpecialty = useMemo(() => {
-    const filtered = search.trim()
-      ? tests.filter((t) =>
-          t.analyte.toLowerCase().includes(search.toLowerCase()) ||
-          t.specialty.toLowerCase().includes(search.toLowerCase())
-        )
-      : tests;
-    const grouped: Record<string, ActiveTest[]> = {};
-    for (const t of filtered) {
-      if (!grouped[t.specialty]) grouped[t.specialty] = [];
-      grouped[t.specialty].push(t);
-    }
-    return grouped;
-  }, [tests, search]);
-
-  const activeCount = tests.filter((t) => t.active).length;
-
-  // Save tests mutation
-  const saveMutation = useMutation({
+  // Add instrument mutation
+  const addInstrumentMutation = useMutation({
     mutationFn: async () => {
-      const activeParts = tests.filter((t) => t.active);
-      const res = await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/tests`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ tests: activeParts }),
-      });
+      const fdaInstr = INSTRUMENT_DATA[instrumentName];
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            instrument_name: instrumentName,
+            role,
+            category: fdaInstr?.category ?? "Unknown",
+          }),
+        }
+      );
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(text || "Failed to save test menu");
+        throw new Error(text || "Failed to add instrument");
       }
-      return res.json();
+      return res.json() as Promise<InstrumentEntry>;
+    },
+    onSuccess: (newInstr) => {
+      qc.invalidateQueries({
+        queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+      });
+      setInstrumentName("");
+      setInstrumentSearch("");
+      // Initialize tests for new instrument
+      const fdaInstr = INSTRUMENT_DATA[newInstr.instrument_name];
+      if (fdaInstr) {
+        setTestsByInstrument((prev) => ({
+          ...prev,
+          [newInstr.id]: Object.entries(fdaInstr.tests).map(
+            ([analyte, info]) => ({
+              analyte,
+              specialty: info.specialty,
+              complexity: info.complexity as Complexity,
+              active: true,
+            })
+          ),
+        }));
+      }
+      toast({ title: "Instrument added" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Delete instrument mutation
+  const deleteInstrumentMutation = useMutation({
+    mutationFn: async (instId: number) => {
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instId}`,
+        { method: "DELETE", headers: authHeaders() }
+      );
+      if (!res.ok) throw new Error("Failed to delete instrument");
+    },
+    onSuccess: (_, instId) => {
+      qc.invalidateQueries({
+        queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+      });
+      setTestsByInstrument((prev) => {
+        const next = { ...prev };
+        delete next[instId];
+        return next;
+      });
+      toast({ title: "Instrument removed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove instrument", variant: "destructive" });
+    },
+  });
+
+  // Save all tests mutation
+  const saveAllMutation = useMutation({
+    mutationFn: async () => {
+      for (const instr of instruments) {
+        const tests = testsByInstrument[instr.id] ?? [];
+        const activeParts = tests.filter((t) => t.active);
+        const res = await fetch(
+          `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            body: JSON.stringify({ tests: activeParts }),
+          }
+        );
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `Failed to save tests for ${instr.instrument_name}`);
+        }
+      }
     },
     onSuccess: () => {
       navigate(`/veritamap-app/${mapId}`);
     },
     onError: (err: Error) => {
-      toast({ title: "Error saving test menu", description: err.message, variant: "destructive" });
+      toast({ title: "Error saving tests", description: err.message, variant: "destructive" });
     },
   });
+
+  // Group instruments by category for the dropdown
+  const instrumentsByCategory = useMemo(() => {
+    const grouped: Record<string, string[]> = {};
+    for (const [name, info] of Object.entries(INSTRUMENT_DATA)) {
+      if (
+        !instrumentSearch.trim() ||
+        name.toLowerCase().includes(instrumentSearch.toLowerCase())
+      ) {
+        const cat = info.category;
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(name);
+      }
+    }
+    return grouped;
+  }, [instrumentSearch]);
+
+  const sortedCategories = CATEGORY_ORDER.filter(
+    (c) => instrumentsByCategory[c]
+  );
+
+  // Toggle a test for a specific instrument
+  function toggleTest(instId: number, analyte: string) {
+    setTestsByInstrument((prev) => ({
+      ...prev,
+      [instId]: (prev[instId] ?? []).map((t) =>
+        t.analyte === analyte ? { ...t, active: !t.active } : t
+      ),
+    }));
+  }
+
+  function selectAll(instId: number) {
+    setTestsByInstrument((prev) => ({
+      ...prev,
+      [instId]: (prev[instId] ?? []).map((t) => ({ ...t, active: true })),
+    }));
+  }
+
+  function deselectAll(instId: number) {
+    setTestsByInstrument((prev) => ({
+      ...prev,
+      [instId]: (prev[instId] ?? []).map((t) => ({ ...t, active: false })),
+    }));
+  }
+
+  // Total active tests count across all instruments
+  const totalActiveTests = useMemo(() => {
+    let count = 0;
+    for (const tests of Object.values(testsByInstrument)) {
+      count += tests.filter((t) => t.active).length;
+    }
+    return count;
+  }, [testsByInstrument]);
 
   // ── Step 1 ────────────────────────────────────────────────────────────────
   if (step === 1) {
     return (
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="mb-4 -ml-2 text-muted-foreground"
-          >
-            <Link href="/veritamap-app">
-              <ArrowLeft size={14} className="mr-1" /> Back to Maps
-            </Link>
-          </Button>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              Step 1 of 2
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold mb-1.5">Build Your Test Menu</h1>
-          <p className="text-muted-foreground text-sm max-w-2xl">
-            Select the analyzers your lab uses. VeritaMap will pull the
-            FDA-cleared test menu for each instrument.
-          </p>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="mb-5 -ml-2 text-muted-foreground"
+        >
+          <Link href="/veritamap-app">
+            <ArrowLeft size={14} className="mr-1" /> Back to Maps
+          </Link>
+        </Button>
 
-        {/* Selected count */}
-        {selectedInstruments.length > 0 && (
-          <div className="flex items-center gap-2 mb-5 text-sm">
-            <CheckCircle2 size={14} className="text-primary" />
-            <span className="font-medium text-primary">
-              {selectedInstruments.length} instrument
-              {selectedInstruments.length !== 1 ? "s" : ""} selected
-            </span>
-            <span className="text-muted-foreground">
-              (
-              {buildTestList(selectedInstruments).length} unique tests)
-            </span>
+        <StepIndicator step={1} />
+        <h1 className="text-2xl font-bold mt-2 mb-1">Step 1: Add Your Instruments</h1>
+        <p className="text-sm text-muted-foreground mb-7 max-w-2xl">
+          Add every instrument your lab uses for each test — including primary AND backup
+          analyzers. Even if two instruments are the same model, add them separately.
+        </p>
+
+        {/* Add instrument form */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <h2 className="text-sm font-semibold mb-3">Add Instrument</h2>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Instrument select */}
+              <div className="flex-1 min-w-0">
+                <Select
+                  value={instrumentName}
+                  onValueChange={(v) => setInstrumentName(v)}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select instrument…" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {/* Search box at top */}
+                    <div className="px-2 pt-2 pb-1 sticky top-0 bg-popover z-10">
+                      <div className="relative">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          className="w-full pl-7 pr-2 py-1.5 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Search instruments…"
+                          value={instrumentSearch}
+                          onChange={(e) => setInstrumentSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    {sortedCategories.map((cat) => (
+                      <SelectGroup key={cat}>
+                        <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {cat}
+                        </SelectLabel>
+                        {instrumentsByCategory[cat].map((name) => (
+                          <SelectItem key={name} value={name} className="text-sm">
+                            {name}
+                            <span className="ml-2 text-[10px] text-muted-foreground">
+                              ({INSTRUMENT_DATA[name].testCount} tests)
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                    {sortedCategories.length === 0 && (
+                      <div className="text-center py-4 text-xs text-muted-foreground">
+                        No instruments match
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Role select */}
+              <div className="w-36 shrink-0">
+                <Select
+                  value={role}
+                  onValueChange={(v) => setRole(v as Role)}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r} value={r} className="text-sm">
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Add button */}
+              <Button
+                className="h-9 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground"
+                disabled={!instrumentName || addInstrumentMutation.isPending}
+                onClick={() => addInstrumentMutation.mutate()}
+              >
+                <Plus size={14} className="mr-1" />
+                Add Instrument
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Added instruments list */}
+        {loadingInstruments ? (
+          <div className="space-y-2">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : instruments.length > 0 ? (
+          <div className="space-y-2 mb-6">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              {instruments.length} instrument{instruments.length !== 1 ? "s" : ""} added
+            </h2>
+            {instruments.map((instr) => {
+              const fdaInstr = INSTRUMENT_DATA[instr.instrument_name];
+              return (
+                <div
+                  key={instr.id}
+                  className="flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/20 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm truncate">{instr.instrument_name}</span>
+                      <RoleBadge role={instr.role} />
+                      <Badge className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(instr.category)}`}>
+                        {instr.category}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {fdaInstr?.testCount ?? 0} FDA-cleared tests
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                    onClick={() => deleteInstrumentMutation.mutate(instr.id)}
+                    disabled={deleteInstrumentMutation.isPending}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 border-2 border-dashed border-border rounded-xl mb-6 text-sm text-muted-foreground">
+            <FlaskConical size={24} className="mx-auto mb-2 opacity-40" />
+            No instruments added yet — select one above to start.
           </div>
         )}
 
-        {/* Instruments by category */}
-        <div className="space-y-8">
-          {sortedCategories.map((category) => (
-            <div key={category}>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-sm font-semibold">{category}</h2>
-                <Badge
-                  className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(category)}`}
-                >
-                  {instrumentsByCategory[category].length}
-                </Badge>
-              </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                {instrumentsByCategory[category].map((name) => (
-                  <InstrumentCard
-                    key={name}
-                    name={name}
-                    instrument={INSTRUMENT_DATA[name]}
-                    selected={selectedInstruments.includes(name)}
-                    onToggle={() => toggleInstrument(name)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Custom tests note */}
-        <div className="mt-8 p-3.5 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground">
+        {/* Tip */}
+        <div className="p-3.5 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground mb-6">
           <FlaskConical size={13} className="inline mr-1.5 text-primary" />
-          You can also add custom tests (send-outs, reference methods) after
-          building the initial map.
+          Tip: Add duplicate analyzers of the same model separately — the intelligence engine
+          will identify correlation requirements between them.
         </div>
 
         {/* Next button */}
-        <div className="flex justify-end mt-6">
+        <div className="flex justify-end">
           <Button
-            onClick={handleProceedToStep2}
-            disabled={selectedInstruments.length === 0}
+            disabled={instruments.length === 0}
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            onClick={() => setStep(2)}
           >
-            Review Test Menu
+            Next: Select Tests
             <ArrowRight size={14} className="ml-1.5" />
           </Button>
         </div>
@@ -370,119 +743,60 @@ export default function VeritaMapBuildPage() {
 
   // ── Step 2 ────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setStep(1)}
-          className="mb-4 -ml-2 text-muted-foreground"
-        >
-          <ArrowLeft size={14} className="mr-1" /> Back to Instrument Selection
-        </Button>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            Step 2 of 2
-          </span>
-        </div>
-        <h1 className="text-2xl font-bold mb-1.5">Review & Deactivate Tests</h1>
-        <p className="text-muted-foreground text-sm">
-          Your merged test menu from {selectedInstruments.length} instrument
-          {selectedInstruments.length !== 1 ? "s" : ""}. Toggle off tests your
-          lab doesn't perform.
-        </p>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setStep(1)}
+        className="mb-5 -ml-2 text-muted-foreground"
+      >
+        <ArrowLeft size={14} className="mr-1" /> Back to Instrument Selection
+      </Button>
+
+      <StepIndicator step={2} />
+      <h1 className="text-2xl font-bold mt-2 mb-1">Step 2: Select Your Test Menu</h1>
+      <p className="text-sm text-muted-foreground mb-2 max-w-2xl">
+        For each instrument, select only the tests your lab actually runs. Deactivate tests
+        you don't perform.
+      </p>
+
+      {/* Summary */}
+      <div className="flex items-center gap-3 mb-6 text-sm">
+        <CheckCircle2 size={14} className="text-primary" />
+        <span className="text-muted-foreground">
+          <span className="font-semibold text-foreground">{totalActiveTests}</span> tests active
+          across <span className="font-semibold text-foreground">{instruments.length}</span>{" "}
+          instruments
+        </span>
       </div>
 
-      {/* Stats + search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-3 text-sm">
-          <span className="font-semibold text-foreground">
-            {activeCount} tests selected
-          </span>
-          <span className="text-muted-foreground">from {tests.length} total</span>
-        </div>
-        <div className="relative max-w-xs w-full">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+      {/* One section per instrument */}
+      <div className="space-y-3 mb-8">
+        {instruments.map((instr) => (
+          <InstrumentTestSection
+            key={instr.id}
+            instrument={instr}
+            tests={testsByInstrument[instr.id] ?? []}
+            onToggle={(analyte) => toggleTest(instr.id, analyte)}
+            onSelectAll={() => selectAll(instr.id)}
+            onDeselectAll={() => deselectAll(instr.id)}
           />
-          <Input
-            placeholder="Search analytes or specialties…"
-            className="pl-8 h-8 text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        ))}
       </div>
-
-      {/* Test list by specialty */}
-      <div className="space-y-6">
-        {Object.entries(testsBySpecialty)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([specialty, specialtyTests]) => (
-            <div key={specialty}>
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className={`text-xs font-semibold uppercase tracking-wide ${getSpecialtyColor(specialty)}`}>
-                  {specialty}
-                </h3>
-                <span className="text-xs text-muted-foreground">
-                  ({specialtyTests.filter((t) => t.active).length}/
-                  {specialtyTests.length})
-                </span>
-              </div>
-              <Card>
-                <CardContent className="p-0 divide-y divide-border">
-                  {specialtyTests.map((test) => (
-                    <div
-                      key={test.analyte}
-                      className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
-                        !test.active ? "opacity-50 bg-muted/30" : ""
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium truncate block">
-                          {test.analyte}
-                        </span>
-                        <span className="text-xs text-muted-foreground truncate block">
-                          {test.instrument_source}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {getComplexityBadge(test.complexity)}
-                        <Switch
-                          checked={test.active}
-                          onCheckedChange={() => toggleTest(test.analyte)}
-                          className="data-[state=checked]:bg-primary"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-          ))}
-      </div>
-
-      {Object.keys(testsBySpecialty).length === 0 && search && (
-        <div className="text-center py-12 text-muted-foreground text-sm">
-          No tests match "{search}"
-        </div>
-      )}
 
       {/* Build button */}
-      <div className="flex justify-between items-center mt-8 pt-6 border-t border-border">
+      <div className="flex items-center justify-between pt-6 border-t border-border">
         <span className="text-sm text-muted-foreground">
-          {activeCount} test{activeCount !== 1 ? "s" : ""} will be added to your
-          map.
+          {totalActiveTests} test{totalActiveTests !== 1 ? "s" : ""} will be saved to your map.
         </span>
         <Button
-          onClick={() => saveMutation.mutate()}
-          disabled={activeCount === 0 || saveMutation.isPending}
+          onClick={() => saveAllMutation.mutate()}
+          disabled={totalActiveTests === 0 || saveAllMutation.isPending}
           className="bg-primary hover:bg-primary/90 text-primary-foreground"
         >
-          {saveMutation.isPending ? "Building…" : "Build My Map"}
-          {!saveMutation.isPending && (
+          {saveAllMutation.isPending ? "Building…" : "Build My Map"}
+          {!saveAllMutation.isPending && (
             <ArrowRight size={14} className="ml-1.5" />
           )}
         </Button>
