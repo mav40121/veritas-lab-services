@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookOpen, ChevronRight, Clock, FlaskConical, User } from "lucide-react";
+import { BookOpen, ChevronRight, Clock, FlaskConical, User, Search, Wrench } from "lucide-react";
 
 const articles = [
   {
@@ -15,6 +15,26 @@ const articles = [
     date: "March 2026",
     tags: ["CLIA", "Calibration Verification", "Method Comparison", "Compliance"],
     featured: true,
+  },
+  {
+    slug: "clia-tea-what-lab-directors-dont-know",
+    title: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
+    summary: "In 200+ inspections as a Joint Commission surveyor, most lab directors evaluated calibration verification against manufacturer criteria — unaware that the regulatory standard lives in federal law. Here's where to find it and how to use it.",
+    category: "Regulatory Compliance",
+    readTime: "10 min read",
+    author: "Michael Veri",
+    date: "March 2026",
+    tags: ["CLIA TEa", "Allowable Error", "Calibration Verification", "CFR"],
+    featured: false,
+  },
+];
+
+const tools = [
+  {
+    slug: "clia-tea-lookup",
+    title: "CLIA TEa Lookup Tool",
+    description: "Search the complete 2025 CLIA acceptable performance criteria for 76+ analytes. Free, no login required.",
+    badge: "Free Tool",
   },
 ];
 
@@ -80,6 +100,53 @@ export default function ResourcesPage() {
             </Link>
           ))}
         </section>
+
+        {/* Tools */}
+        <section>
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Free Tools</div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {tools.map(({ slug, title, description, badge }) => (
+              <Link key={slug} href={`/resources/${slug}`}>
+                <Card className="hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group h-full">
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Search size={16} className="text-primary" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-sm group-hover:text-primary transition-colors">{title}</span>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">{badge}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* Second article */}
+        {articles.filter(a => !a.featured).map(article => (
+          <Link key={article.slug} href={`/resources/${article.slug}`}>
+            <Card className="hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group">
+              <CardContent className="p-5 sm:p-6">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 text-xs">{article.category}</Badge>
+                </div>
+                <h3 className="font-serif text-lg font-bold mb-2 group-hover:text-primary transition-colors leading-tight">{article.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-3">{article.summary}</p>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><User size={11} /> {article.author}</span>
+                  <span className="flex items-center gap-1"><Clock size={11} /> {article.readTime}</span>
+                  <span>{article.date}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
 
         {/* Coming soon */}
         <section>

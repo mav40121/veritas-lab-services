@@ -27,6 +27,8 @@ import VeritaMapPage from "@/pages/VeritaMapPage";
 import DemoPage from "@/pages/DemoPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
+import ArticleTeaPage from "@/pages/ArticleTeaPage";
+import TeaLookupPage from "@/pages/TeaLookupPage";
 
 function SiteFooter() {
   return (
@@ -122,6 +124,8 @@ function AppContent() {
           <Route path="/demo" component={DemoPage} />
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
+          <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
+          <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
