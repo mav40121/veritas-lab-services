@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 const productLinks = [
   { href: "/veritacheck", label: "VeritaCheck™", desc: "EP Study Analysis", highlight: true },
   { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness" },
-  { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Coming Soon" },
+  { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];
 

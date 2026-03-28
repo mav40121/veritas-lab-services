@@ -241,6 +241,113 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── VERITAMAP ───────────────────────────────────────────────────────────
+
+  function hasMapAccess(user: any) {
+    return ["annual", "lab", "veritamap"].includes(user?.plan);
+  }
+
+  // List maps
+  app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const maps = (db as any).$client.prepare(
+      "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
+    ).all(req.user.userId);
+    const result = maps.map((m: any) => {
+      const tests = (db as any).$client.prepare(
+        "SELECT active, last_cal_ver, last_method_comp, complexity FROM veritamap_tests WHERE map_id = ?"
+      ).all(m.id);
+      const activeTests = tests.filter((t: any) => t.active);
+      const gaps = activeTests.filter((t: any) =>
+        (t.complexity === 'MODERATE' || t.complexity === 'HIGH') &&
+        (!t.last_cal_ver || !t.last_method_comp)
+      ).length;
+      return { ...m, totalTests: activeTests.length, gaps };
+    });
+    res.json(result);
+  });
+
+  // Create map
+  app.post("/api/veritamap/maps", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Map name required" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
+    ).run(req.user.userId, name.trim(), now, now);
+    res.json({ id: result.lastInsertRowid, name: name.trim(), created_at: now, updated_at: now });
+  });
+
+  // Delete map
+  app.delete("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Get map with all tests
+  app.get("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const tests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
+    res.json({ ...map, tests });
+  });
+
+  // Bulk upsert tests (used when building from instrument or updating)
+  app.put("/api/veritamap/maps/:id/tests", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const { tests } = req.body;
+    if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
+    const now = new Date().toISOString();
+    const stmt = (db as any).$client.prepare(`
+      INSERT INTO veritamap_tests (map_id, analyte, specialty, complexity, active, instrument_source,
+        last_cal_ver, last_method_comp, last_precision, last_sop_review, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, analyte) DO UPDATE SET
+        specialty=excluded.specialty, complexity=excluded.complexity, active=excluded.active,
+        instrument_source=excluded.instrument_source, last_cal_ver=excluded.last_cal_ver,
+        last_method_comp=excluded.last_method_comp, last_precision=excluded.last_precision,
+        last_sop_review=excluded.last_sop_review, notes=excluded.notes, updated_at=excluded.updated_at
+    `);
+    const bulk = (db as any).$client.transaction((tests: any[]) => {
+      for (const t of tests) {
+        stmt.run(req.params.id, t.analyte, t.specialty, t.complexity,
+          t.active ?? 1, t.instrument_source ?? null,
+          t.last_cal_ver ?? null, t.last_method_comp ?? null,
+          t.last_precision ?? null, t.last_sop_review ?? null,
+          t.notes ?? null, now);
+      }
+    });
+    bulk(tests);
+    (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true, count: tests.length });
+  });
+
+  // Update single test
+  app.put("/api/veritamap/maps/:id/tests/:analyte", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const { active, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
+        last_precision=?, last_sop_review=?, notes=?, updated_at=?
+      WHERE map_id=? AND analyte=?
+    `).run(active, last_cal_ver ?? null, last_method_comp ?? null,
+      last_precision ?? null, last_sop_review ?? null, notes ?? null, now,
+      req.params.id, decodeURIComponent(req.params.analyte));
+    (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true });
+  });
+
   // ── VERITASCAN ───────────────────────────────────────────────────────────
 
   // Check access: annual, lab, or veritascan plan

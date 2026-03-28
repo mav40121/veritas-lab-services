@@ -76,7 +76,7 @@ export default function VeritaMapPage() {
               <div className="flex items-center gap-2 mb-4">
                 <Map size={20} className="text-primary" />
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
-                <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 border">Coming Soon</Badge>
+                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaMap™</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
@@ -341,17 +341,24 @@ export default function VeritaMapPage() {
       {/* CTA */}
       <section className="section-padding">
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="font-serif text-2xl font-bold mb-3">Be the first to know</h2>
+          <h2 className="font-serif text-2xl font-bold mb-3">Ready to map your test menu?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaMap is completing final review. Enter your email and we'll notify you the moment it's available.
+            VeritaMap is live. Select your instruments, pull the FDA-cleared test menu, and have a compliance map for your lab in minutes.
           </p>
-          <NotifyForm />
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+              <Link href="/veritamap-app">Launch VeritaMap <ChevronRight size={15} className="ml-1" /></Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/login">Sign In / Create Account</Link>
+            </Button>
+          </div>
           <div className="mt-6 flex flex-col gap-2 items-center">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
-              <FlaskConical size={14} />Try VeritaCheck now — EP studies available today<ChevronRight size={13} />
+              <FlaskConical size={14} />Also try VeritaCheck — EP studies<ChevronRight size={13} />
             </Link>
             <Link href="/veritascan" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
-              <Shield size={14} />Learn about VeritaScan — self-inspection tool<ChevronRight size={13} />
+              <Shield size={14} />Also try VeritaScan — inspection readiness<ChevronRight size={13} />
             </Link>
           </div>
         </div>

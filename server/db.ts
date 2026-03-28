@@ -67,6 +67,32 @@ sqlite.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS veritamap_maps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    instruments TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS veritamap_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    map_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    specialty TEXT NOT NULL,
+    complexity TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    instrument_source TEXT,
+    last_cal_ver TEXT,
+    last_method_comp TEXT,
+    last_precision TEXT,
+    last_sop_review TEXT,
+    notes TEXT,
+    updated_at TEXT NOT NULL,
+    UNIQUE(map_id, analyte)
+  );
+
   CREATE TABLE IF NOT EXISTS veritascan_scans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

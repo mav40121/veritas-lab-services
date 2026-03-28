@@ -31,6 +31,9 @@ import ArticleTeaPage from "@/pages/ArticleTeaPage";
 import TeaLookupPage from "@/pages/TeaLookupPage";
 import VeritaScanAppPage from "@/pages/VeritaScanAppPage";
 import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
+import VeritaMapAppPage from "@/pages/VeritaMapAppPage";
+import VeritaMapBuildPage from "@/pages/VeritaMapBuildPage";
+import VeritaMapMapPage from "@/pages/VeritaMapMapPage";
 
 function SiteFooter() {
   return (
@@ -130,6 +133,9 @@ function AppContent() {
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route path="/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/veritascan-app/:id" component={VeritaScanScanPage} />
+          <Route path="/veritamap-app" component={VeritaMapAppPage} />
+          <Route path="/veritamap-app/:id/build" component={VeritaMapBuildPage} />
+          <Route path="/veritamap-app/:id" component={VeritaMapMapPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
