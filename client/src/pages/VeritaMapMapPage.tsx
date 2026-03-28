@@ -798,7 +798,26 @@ export default function VeritaMapMapPage() {
         { headers: authHeaders() }
       );
       if (!res.ok) return null;
-      return res.json();
+      const data = await res.json();
+      // The API returns { intelligence: {...}, correlationCount, calVerCount, totalAnalytes }
+      // Transform to IntelligenceData shape expected by components
+      if (data?.intelligence && !Array.isArray(data.intelligence)) {
+        const byAnalyte = data.intelligence as Record<string, any>;
+        const correlationsRequired = Object.entries(byAnalyte)
+          .filter(([, v]) => v.correlationRequired)
+          .map(([analyte, v]) => ({
+            analyte,
+            instruments: (v.instruments ?? []).map((i: any) => ({
+              id: i.id,
+              instrument_name: i.name ?? i.instrument_name,
+              role: i.role,
+              category: i.category ?? '',
+            })),
+          }));
+        const calVerRequired = Object.values(byAnalyte).filter((v) => v.calVerRequired).length;
+        return { correlationsRequired, calVerRequired, compliantTests: 0 } as IntelligenceData;
+      }
+      return data as IntelligenceData;
     },
   });
 
