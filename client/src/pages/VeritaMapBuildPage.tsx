@@ -526,7 +526,7 @@ export default function VeritaMapBuildPage() {
         const res = await fetch(
           `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
           {
-            method: "POST",
+            method: "PUT",
             headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ tests: activeParts }),
           }

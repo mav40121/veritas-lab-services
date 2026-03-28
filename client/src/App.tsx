@@ -139,6 +139,7 @@ function AppContent() {
           <Route path="/dashboard" component={DashboardPage} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/login" component={LoginPage} />
+          <Route path="/register">{() => { window.location.hash = "#/login"; return null; }}</Route>
           <Route path="/terms" component={TermsPage} />
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
