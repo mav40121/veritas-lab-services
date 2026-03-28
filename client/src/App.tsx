@@ -1,13 +1,14 @@
 import { Switch, Route, Router, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { AuthProvider } from "@/components/AuthContext";
+import { AuthProvider, useAuth } from "@/components/AuthContext";
 import { NavBar } from "@/components/NavBar";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import HomePage from "@/pages/HomePage";
 import ServicesPage from "@/pages/ServicesPage";
 import TeamPage from "@/pages/TeamPage";
@@ -24,7 +25,7 @@ import StudyGuidePage from "@/pages/StudyGuidePage";
 import BookPage from "@/pages/BookPage";
 import VeritaScanPage from "@/pages/VeritaScanPage";
 import VeritaMapPage from "@/pages/VeritaMapPage";
-import DemoPage from "@/pages/DemoPage";
+import DemoLabPage from "@/pages/DemoLabPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
 import ArticleTeaPage from "@/pages/ArticleTeaPage";
@@ -104,11 +105,29 @@ function ScrollToTop() {
   return null;
 }
 
+function OnboardingGuard() {
+  const { user, isLoggedIn } = useAuth();
+  const [showWizard, setShowWizard] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (isLoggedIn && user && (user as any).hasCompletedOnboarding === false && !dismissed) {
+      setShowWizard(true);
+    } else {
+      setShowWizard(false);
+    }
+  }, [isLoggedIn, user, dismissed]);
+
+  if (!showWizard) return null;
+  return <OnboardingWizard onComplete={() => { setDismissed(true); setShowWizard(false); }} />;
+}
+
 function AppContent() {
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
       <NavBar />
+      <OnboardingGuard />
       <main className="flex-1">
         <Switch>
           <Route path="/" component={HomePage} />
@@ -127,7 +146,7 @@ function AppContent() {
           <Route path="/book" component={BookPage} />
           <Route path="/veritascan" component={VeritaScanPage} />
           <Route path="/veritamap" component={VeritaMapPage} />
-          <Route path="/demo" component={DemoPage} />
+          <Route path="/demo" component={DemoLabPage} />
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />

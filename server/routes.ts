@@ -11,6 +11,7 @@ import { generatePDFBuffer, generateCumsumPDF } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
+import { autoCompleteVeritaScanItems } from "./integrations";
 
 const JWT_SECRET = process.env.JWT_SECRET || "veritas-lab-services-secret-2026";
 
@@ -129,7 +130,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
     const token = signToken(user.id);
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits } });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false } });
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -141,13 +142,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
     const token = signToken(user.id);
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits } });
+    const hasCompletedOnboarding = (db as any).$client.prepare("SELECT has_completed_onboarding FROM users WHERE id = ?").get(user.id)?.has_completed_onboarding ?? 1;
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding } });
   });
 
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {
     const user = storage.getUserById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits });
+    const hasCompletedOnboarding = (db as any).$client.prepare("SELECT has_completed_onboarding FROM users WHERE id = ?").get(user.id)?.has_completed_onboarding ?? 1;
+    res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding });
   });
 
   // ── STUDIES ───────────────────────────────────────────────────────────────
@@ -209,6 +212,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const study = storage.createStudy({ ...parsed.data, userId });
+
+    // VeritaCheck → VeritaScan integration bridge
+    try {
+      autoCompleteVeritaScanItems({
+        id: study.id,
+        userId: study.userId,
+        testName: study.testName,
+        studyType: study.studyType,
+        instruments: study.instruments,
+      });
+    } catch (err: any) {
+      console.error("[integration] VeritaScan auto-complete error:", err.message);
+    }
+
     res.status(201).json(study);
   });
 
@@ -576,7 +593,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const items = (db as any).$client.prepare(
-      "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
     ).all(req.params.id);
     res.json(items);
   });
@@ -1095,6 +1112,90 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("CUMSUM Excel error:", e);
       res.status(500).json({ error: "Excel generation failed" });
     }
+  });
+
+  // ── ONBOARDING ──────────────────────────────────────────────────────────
+  app.post("/api/auth/complete-onboarding", authMiddleware, (req: any, res) => {
+    (db as any).$client.prepare("UPDATE users SET has_completed_onboarding = 1 WHERE id = ?").run(req.userId);
+    res.json({ ok: true });
+  });
+
+  // ── DEMO DATA API (public, read-only) ──────────────────────────────────
+  app.get("/api/demo/data", (_req, res) => {
+    // Find the demo user
+    const demoUser = (db as any).$client.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get();
+    if (!demoUser) return res.json({ maps: [], scans: [], studies: [], cumsumTrackers: [] });
+
+    const userId = demoUser.id;
+
+    // VeritaMap maps
+    const maps = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").all(userId);
+    const mapsWithData = maps.map((m: any) => {
+      const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(m.id);
+      const instrumentsWithTests = instruments.map((inst: any) => {
+        const tests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(inst.id);
+        return { ...inst, tests };
+      });
+      const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(m.id);
+
+      // Compute intelligence
+      const rows = (db as any).$client.prepare(`
+        SELECT it.analyte, it.specialty, it.complexity,
+               i.instrument_name, i.role, i.id as instrument_id
+        FROM veritamap_instrument_tests it
+        JOIN veritamap_instruments i ON i.id = it.instrument_id
+        WHERE it.map_id = ? AND it.active = 1
+      `).all(m.id);
+
+      const byAnalyte: Record<string, any[]> = {};
+      for (const row of rows) {
+        if (!byAnalyte[row.analyte]) byAnalyte[row.analyte] = [];
+        byAnalyte[row.analyte].push(row);
+      }
+      const intelligence: Record<string, any> = {};
+      for (const [analyte, insts] of Object.entries(byAnalyte)) {
+        const complexity = insts[0].complexity;
+        const isWaived = complexity === 'WAIVED';
+        intelligence[analyte] = {
+          complexity,
+          isWaived,
+          calVerRequired: !isWaived,
+          correlationRequired: insts.length >= 2,
+          instruments: insts.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
+        };
+      }
+
+      return { ...m, instruments: instrumentsWithTests, tests: mapTests, intelligence };
+    });
+
+    // VeritaScan scans
+    const scans = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").all(userId);
+    const scansWithItems = scans.map((s: any) => {
+      const items = (db as any).$client.prepare(
+        "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+      ).all(s.id);
+      const total = 168;
+      const assessed = items.filter((i: any) => i.status !== 'Not Assessed').length;
+      const compliant = items.filter((i: any) => i.status === 'Compliant').length;
+      return { ...s, items, total, assessed, compliant };
+    });
+
+    // Studies
+    const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
+
+    // CUMSUM trackers
+    const trackers = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE user_id = ?").all(userId);
+    const trackersWithEntries = trackers.map((t: any) => {
+      const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(t.id);
+      return { ...t, entries };
+    });
+
+    res.json({
+      maps: mapsWithData,
+      scans: scansWithItems,
+      studies,
+      cumsumTrackers: trackersWithEntries,
+    });
   });
 
   // CUMSUM PDF export

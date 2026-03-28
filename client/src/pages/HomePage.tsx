@@ -43,7 +43,7 @@ export default function HomePage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                <Link href="/services">Explore VeritaAssure <ChevronRight size={16} className="ml-1" /></Link>
+                <Link href="/demo">Explore VeritaAssure <ChevronRight size={16} className="ml-1" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link href="/veritacheck">Try VeritaCheck™ Free</Link>

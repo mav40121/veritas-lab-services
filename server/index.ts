@@ -86,6 +86,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Seed demo data
+  try {
+    const { seedDemoData } = await import("./seedDemo");
+    await seedDemoData();
+  } catch (err: any) {
+    console.error("[seed] Demo data seed error:", err.message);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

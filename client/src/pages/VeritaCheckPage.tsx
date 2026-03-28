@@ -210,11 +210,35 @@ export default function VeritaCheckPage() {
     }
   };
 
-  const [testName, setTestName] = useState("");
+  // VeritaMap pre-population: read URL params
+  const prePopParams = new URLSearchParams(search);
+  const prePopStudyType = prePopParams.get("studyType");
+  const prePopAnalyte = prePopParams.get("analyte");
+  const prePopInst1 = prePopParams.get("instrument1");
+  const prePopInst2 = prePopParams.get("instrument2");
+
+  const [testName, setTestName] = useState(prePopAnalyte || "");
   const [analyst, setAnalyst] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag">("cal_ver");
-  const [instrumentNames, setInstrumentNames] = useState<string[]>(["Instrument 1", "Instrument 2"]);
+
+  const studyTypeMap: Record<string, any> = {
+    "method_comparison": "method_comparison",
+    "method-comparison": "method_comparison",
+    "correlation": "method_comparison",
+    "cal_ver": "cal_ver",
+    "calibration-verification": "cal_ver",
+    "precision": "precision",
+    "accuracy": "precision",
+    "lot_to_lot": "lot_to_lot",
+    "lot-to-lot": "lot_to_lot",
+    "pt_coag": "pt_coag",
+    "pt-coag": "pt_coag",
+  };
+  const initialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
+  const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
+
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag">(initialStudyType);
+  const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);

@@ -20,6 +20,7 @@ export interface AuthUser {
   name: string;
   plan: string;
   studyCredits: number;
+  hasCompletedOnboarding?: boolean;
 }
 
 export function setAuth(token: string, user: AuthUser) {

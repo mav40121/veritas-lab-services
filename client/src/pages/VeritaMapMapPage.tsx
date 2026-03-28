@@ -372,14 +372,25 @@ function IntelligenceBanner({
             Dates on file and within schedule.
           </p>
           <div className="mt-2">
-            <Link
-              href="/veritacheck"
-              className="inline-flex items-center text-[11px] font-semibold text-primary hover:underline"
-            >
-              <FlaskConical size={10} className="mr-1" />
-              Run a Study in VeritaCheck
-              <ChevronRight size={10} className="ml-0.5" />
-            </Link>
+            {correlationsRequired.length > 0 ? (
+              <Link
+                href={`/veritacheck?studyType=method_comparison&analyte=${encodeURIComponent(correlationsRequired[0].analyte)}&instrument1=${encodeURIComponent(correlationsRequired[0].instruments[0]?.instrument_name || "")}&instrument2=${encodeURIComponent(correlationsRequired[0].instruments[1]?.instrument_name || "")}`}
+                className="inline-flex items-center text-[11px] font-semibold text-primary hover:underline"
+              >
+                <FlaskConical size={10} className="mr-1" />
+                Run Study &rarr;
+                <ChevronRight size={10} className="ml-0.5" />
+              </Link>
+            ) : (
+              <Link
+                href="/veritacheck"
+                className="inline-flex items-center text-[11px] font-semibold text-primary hover:underline"
+              >
+                <FlaskConical size={10} className="mr-1" />
+                Run a Study in VeritaCheck
+                <ChevronRight size={10} className="ml-0.5" />
+              </Link>
+            )}
           </div>
         </div>
       </div>

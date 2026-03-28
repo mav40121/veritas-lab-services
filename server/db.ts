@@ -129,6 +129,9 @@ sqlite.exec(`
     notes TEXT,
     owner TEXT,
     due_date TEXT,
+    completion_source TEXT DEFAULT 'manual',
+    completion_link TEXT,
+    completion_note TEXT,
     updated_at TEXT NOT NULL,
     UNIQUE(scan_id, item_id)
   );
@@ -178,11 +181,23 @@ sqlite.exec(`
   VALUES ('DARK10', 'Dark Report', 10, 'annual', NULL, 0, 1, '${new Date().toISOString()}');
 `);
 
-// Step 2: Add Stripe columns if upgrading from older schema (safe migration)
+// Step 2: Add columns if upgrading from older schema (safe migration)
 const existingCols = sqlite.prepare("PRAGMA table_info(users)").all() as { name: string }[];
 const colNames = existingCols.map((c) => c.name);
 if (!colNames.includes("stripe_customer_id")) sqlite.exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
 if (!colNames.includes("stripe_subscription_id")) sqlite.exec("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT");
+if (!colNames.includes("has_completed_onboarding")) {
+  sqlite.exec("ALTER TABLE users ADD COLUMN has_completed_onboarding INTEGER NOT NULL DEFAULT 0");
+  // Migrate existing users: set has_completed_onboarding = 1 (don't show wizard to pre-existing accounts)
+  sqlite.exec("UPDATE users SET has_completed_onboarding = 1 WHERE has_completed_onboarding = 0");
+}
+
+// Add VeritaScan item columns if upgrading
+const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
+const scanColNames = scanItemCols.map((c) => c.name);
+if (!scanColNames.includes("completion_source")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_source TEXT DEFAULT 'manual'");
+if (!scanColNames.includes("completion_link")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_link TEXT");
+if (!scanColNames.includes("completion_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_note TEXT");
 
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {

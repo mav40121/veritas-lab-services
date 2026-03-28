@@ -12,10 +12,11 @@ export const users = sqliteTable("users", {
   studyCredits: integer("study_credits").notNull().default(0),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  hasCompletedOnboarding: integer("has_completed_onboarding").notNull().default(0),
   createdAt: text("created_at").notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, passwordHash: true, createdAt: true, plan: true, studyCredits: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, passwordHash: true, createdAt: true, plan: true, studyCredits: true, hasCompletedOnboarding: true });
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(6) });
 export const registerSchema = z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1) });
 export type InsertUser = z.infer<typeof insertUserSchema>;

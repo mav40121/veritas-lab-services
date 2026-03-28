@@ -35,6 +35,7 @@ import {
   ChevronUp,
   Loader2,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,9 @@ interface ItemState {
   notes: string;
   owner: string;
   dueDate: string;
+  completionSource?: string;
+  completionLink?: string;
+  completionNote?: string;
 }
 
 // Build the initial flat map of all 168 items
@@ -202,6 +206,28 @@ function ItemRow({
 
           {/* Citation badges */}
           <CitationRow item={item} expanded={citExpanded} />
+
+          {/* VC auto-completion badge */}
+          {state.completionSource === "veritacheck_auto" && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 cursor-help">
+                    VC
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-xs font-medium">Auto-completed by VeritaCheck&#8482;</p>
+                  {state.completionNote && <p className="text-xs text-muted-foreground mt-0.5">{state.completionNote}</p>}
+                  {state.completionLink && (
+                    <Link href={state.completionLink} className="text-xs text-primary mt-1 block hover:underline">
+                      Click to view study &rarr;
+                    </Link>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {/* Controls row */}
           <div className="flex flex-wrap items-start gap-2 mt-2">
@@ -438,12 +464,17 @@ export default function VeritaScanScanPage() {
     setItems((prev) => {
       const next = { ...prev };
       for (const apiItem of rawItemData) {
-        next[apiItem.itemId] = {
-          itemId: apiItem.itemId,
+        const id = (apiItem as any).item_id ?? apiItem.itemId;
+        if (!id) continue;
+        next[id] = {
+          itemId: id,
           status: (apiItem.status as ScanStatus) || "Not Assessed",
-          notes: apiItem.notes || "",
-          owner: apiItem.owner || "",
-          dueDate: apiItem.dueDate || "",
+          notes: apiItem.notes || (apiItem as any).notes || "",
+          owner: apiItem.owner || (apiItem as any).owner || "",
+          dueDate: apiItem.dueDate || (apiItem as any).due_date || "",
+          completionSource: (apiItem as any).completion_source || (apiItem as any).completionSource || undefined,
+          completionLink: (apiItem as any).completion_link || (apiItem as any).completionLink || undefined,
+          completionNote: (apiItem as any).completion_note || (apiItem as any).completionNote || undefined,
         };
       }
       return next;
