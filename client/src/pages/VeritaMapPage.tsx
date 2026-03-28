@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Map, ChevronRight, FlaskConical, Shield, ExternalLink } from "lucide-react";
