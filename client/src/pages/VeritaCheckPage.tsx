@@ -234,7 +234,9 @@ export default function VeritaCheckPage() {
     "pt_coag": "pt_coag",
     "pt-coag": "pt_coag",
   };
-  const initialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
+  const GATED_STUDY_TYPES = new Set(["pt_coag"]); // Coming Soon — pending regulatory review
+  const rawInitialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
+  const initialStudyType = GATED_STUDY_TYPES.has(rawInitialStudyType) ? "cal_ver" : rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
   const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag">(initialStudyType);
@@ -642,7 +644,9 @@ export default function VeritaCheckPage() {
                           <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
                           <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
                           <SelectItem value="lot_to_lot">Lot-to-Lot Verification</SelectItem>
-                          <SelectItem value="pt_coag">PT/Coag New Lot Validation</SelectItem>
+                          <SelectItem value="pt_coag" disabled className="pointer-events-auto cursor-not-allowed opacity-60" title="PT/Coag New Lot Validation — Coming Soon. Join the newsletter to be notified.">
+                            <span className="flex items-center gap-2">PT/Coag New Lot Validation <span className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30 px-1.5 py-0 text-[10px] font-semibold leading-4">Coming Soon</span></span>
+                          </SelectItem>
                           <SelectItem value="qc_range">QC Range Establishment</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
                         </SelectContent>
