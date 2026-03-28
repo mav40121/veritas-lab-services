@@ -541,6 +541,9 @@ export default function VeritaMapBuildPage() {
       }
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
+      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
       navigate(`/veritamap-app/${mapId}`);
     },
     onError: (err: any) => {

@@ -295,7 +295,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
     ).run(req.user.userId, name.trim(), now, now);
-    res.json({ id: result.lastInsertRowid, name: name.trim(), created_at: now, updated_at: now });
+    res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
   });
 
   // Delete map
@@ -334,8 +334,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     `);
     const bulk = (db as any).$client.transaction((tests: any[]) => {
       for (const t of tests) {
+        const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
         stmt.run(req.params.id, t.analyte, t.specialty, t.complexity,
-          t.active ?? 1, t.instrument_source ?? null,
+          active, t.instrument_source ?? null,
           t.last_cal_ver ?? null, t.last_method_comp ?? null,
           t.last_precision ?? null, t.last_sop_review ?? null,
           t.notes ?? null, now);
@@ -380,7 +381,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, created_at) VALUES (?, ?, ?, ?, ?)"
     ).run(req.params.id, instrument_name.trim(), role || 'Primary', category || 'Chemistry', now);
-    res.json({ id: result.lastInsertRowid, instrument_name: instrument_name.trim(), role: role || 'Primary', category: category || 'Chemistry', tests: [] });
+    res.json({ id: Number(result.lastInsertRowid), instrument_name: instrument_name.trim(), role: role || 'Primary', category: category || 'Chemistry', tests: [] });
   });
 
   // Update instrument role/name
@@ -405,34 +406,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Set tests for an instrument (replaces all)
   app.put("/api/veritamap/maps/:id/instruments/:instId/tests", authMiddleware, (req: any, res) => {
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
-    if (!map) return res.status(404).json({ error: "Map not found" });
-    const { tests } = req.body; // [{ analyte, specialty, complexity, active }]
-    if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
-    // Freemium limit: 10 total analytes across all instruments for free users
-    if (!hasMapAccess(req.user)) {
-      // Count active analytes from OTHER instruments (not the one being replaced)
-      const otherCount = (db as any).$client.prepare(
-        "SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ? AND active = 1"
-      ).get(req.params.id, req.params.instId).cnt;
-      const newActive = tests.filter((t: any) => t.active !== 0 && t.active !== false).length;
-      if (otherCount + newActive > 10) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 10 analytes", limitReached: true, limit: 10, type: "analytes", current: otherCount + newActive });
-    }
-    // Replace all tests for this instrument
-    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
-    const stmt = (db as any).$client.prepare(
-      "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
-    );
-    const bulk = (db as any).$client.transaction((tests: any[]) => {
-      for (const t of tests) {
-        const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
-        stmt.run(req.params.instId, req.params.id, t.analyte, t.specialty, t.complexity, active);
+    try {
+      const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+      if (!map) return res.status(404).json({ error: "Map not found" });
+      const { tests } = req.body; // [{ analyte, specialty, complexity, active }]
+      if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
+      console.log(`[VeritaMap] Saving ${tests.length} tests for instrument ${req.params.instId} on map ${req.params.id}`);
+      // Freemium limit: 10 total analytes across all instruments for free users
+      if (!hasMapAccess(req.user)) {
+        // Count active analytes from OTHER instruments (not the one being replaced)
+        const otherCount = (db as any).$client.prepare(
+          "SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ? AND active = 1"
+        ).get(req.params.id, req.params.instId).cnt;
+        const newActive = tests.filter((t: any) => t.active !== 0 && t.active !== false).length;
+        if (otherCount + newActive > 10) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 10 analytes", limitReached: true, limit: 10, type: "analytes", current: otherCount + newActive });
       }
-    });
-    bulk(tests);
-    // Rebuild the merged veritamap_tests from all instruments
-    rebuildMapTests(req.params.id);
-    res.json({ ok: true, count: tests.length });
+      // Replace all tests for this instrument
+      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+      const stmt = (db as any).$client.prepare(
+        "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      const bulk = (db as any).$client.transaction((tests: any[]) => {
+        for (const t of tests) {
+          const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
+          stmt.run(req.params.instId, req.params.id, String(t.analyte || ''), String(t.specialty || ''), String(t.complexity || ''), active);
+        }
+      });
+      bulk(tests);
+      // Rebuild the merged veritamap_tests from all instruments
+      rebuildMapTests(req.params.id);
+      const savedCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").get(req.params.instId, req.params.id).cnt;
+      console.log(`[VeritaMap] Saved ${savedCount} instrument tests, rebuilding map tests`);
+      const mapTestCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_tests WHERE map_id = ?").get(req.params.id).cnt;
+      console.log(`[VeritaMap] Map ${req.params.id} now has ${mapTestCount} total tests in veritamap_tests`);
+      res.json({ ok: true, count: tests.length });
+    } catch (err: any) {
+      console.error(`[VeritaMap] Error saving instrument tests:`, err);
+      res.status(500).json({ error: err.message || "Failed to save tests" });
+    }
   });
 
   // Intelligence endpoint: compute correlation + cal ver requirements
@@ -576,7 +587,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
     ).run(req.user.userId, name.trim(), now, now);
-    res.json({ id: result.lastInsertRowid, name: name.trim(), created_at: now, updated_at: now });
+    res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
   });
 
   // Delete scan
@@ -1034,7 +1045,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO cumsum_trackers (user_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?)"
     ).run(req.user.userId, instrumentName.trim(), analyte || "PTT", now);
-    res.json({ id: result.lastInsertRowid, user_id: req.user.userId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
+    res.json({ id: Number(result.lastInsertRowid), user_id: req.user.userId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
   });
 
   // Delete tracker
@@ -1067,7 +1078,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       `INSERT INTO cumsum_entries (tracker_id, year, lot_label, old_lot_number, new_lot_number, old_lot_geomean, new_lot_geomean, difference, cumsum, verdict, specimen_data, notes, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(req.params.id, year, lotLabel, oldLotNumber || null, newLotNumber || null, oldLotGeomean ?? null, newLotGeomean ?? null, difference ?? null, cumsum ?? null, verdict || null, specimenData ? JSON.stringify(specimenData) : null, notes || null, now);
-    res.json({ id: result.lastInsertRowid, tracker_id: parseInt(req.params.id), year, lot_label: lotLabel, old_lot_number: oldLotNumber, new_lot_number: newLotNumber, old_lot_geomean: oldLotGeomean, new_lot_geomean: newLotGeomean, difference, cumsum, verdict, specimen_data: specimenData, notes, created_at: now });
+    res.json({ id: Number(result.lastInsertRowid), tracker_id: parseInt(req.params.id), year, lot_label: lotLabel, old_lot_number: oldLotNumber, new_lot_number: newLotNumber, old_lot_geomean: oldLotGeomean, new_lot_geomean: newLotGeomean, difference, cumsum, verdict, specimen_data: specimenData, notes, created_at: now });
   });
 
   // Delete entry
