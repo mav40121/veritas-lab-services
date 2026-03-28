@@ -536,7 +536,7 @@ export default function VeritaMapBuildPage() {
           if (data?.limitReached) {
             throw Object.assign(new Error(data.error), { limitReached: true, type: data.type, limit: data.limit });
           }
-          throw new Error(data?.error || `Failed to save tests for ${instr.instrument_name}`);
+          throw new Error(data?.error || data?.message || `Failed to save tests for ${instr.instrument_name}`);
         }
       }
     },

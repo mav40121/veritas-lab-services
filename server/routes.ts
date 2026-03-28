@@ -425,7 +425,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     const bulk = (db as any).$client.transaction((tests: any[]) => {
       for (const t of tests) {
-        stmt.run(req.params.instId, req.params.id, t.analyte, t.specialty, t.complexity, t.active ?? 1);
+        const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
+        stmt.run(req.params.instId, req.params.id, t.analyte, t.specialty, t.complexity, active);
       }
     });
     bulk(tests);
@@ -525,7 +526,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritamap/maps/:id/tests/:analyte", authMiddleware, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const { active, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
+    const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
+    const active = typeof rawActive === 'boolean' ? (rawActive ? 1 : 0) : rawActive;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
       UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
