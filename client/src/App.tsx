@@ -23,6 +23,7 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import StudyGuidePage from "@/pages/StudyGuidePage";
 import BookPage from "@/pages/BookPage";
 import VeritaScanPage from "@/pages/VeritaScanPage";
+import VeritaMapPage from "@/pages/VeritaMapPage";
 
 function SiteFooter() {
   return (
@@ -46,6 +47,7 @@ function SiteFooter() {
             <div className="mt-3">
               <div className="font-semibold text-sm mb-2">Resources</div>
               <ul className="space-y-1 text-sm text-muted-foreground">
+                <li><a href="/#/veritamap" className="hover:text-primary transition-colors">VeritaMap — Test Menu Regulatory Mapping</a></li>
                 <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan — Compliance Audit Tool</a></li>
                 <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101 — New Book</a></li>
                 <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide — Which study do I need?</a></li>
@@ -112,6 +114,7 @@ function AppContent() {
           <Route path="/study-guide" component={StudyGuidePage} />
           <Route path="/book" component={BookPage} />
           <Route path="/veritascan" component={VeritaScanPage} />
+          <Route path="/veritamap" component={VeritaMapPage} />
           <Route component={NotFound} />
         </Switch>
       </main>

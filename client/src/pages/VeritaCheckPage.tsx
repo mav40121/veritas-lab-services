@@ -808,15 +808,20 @@ export default function VeritaCheckPage() {
               <Shield size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  Add VeritaScan — <span className="text-primary">$199/year for both</span>
-                  <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Save $49</Badge>
+                  Veritas Complete Suite — <span className="text-primary">$349/year for all three tools</span>
+                  <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Pair VeritaCheck with VeritaScan — the self-inspection and compliance audit tool mapped to TJC CAMLAB 2024, CAP checklists, and 42 CFR Part 493. Buying separately: $248/year. Bundle saves $49.
+                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. Purchased separately: $397/year. Bundle saves $48.
                 </p>
-                <Link href="/veritascan" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-                  Learn about VeritaScan <ChevronRight size={13} />
-                </Link>
+                <div className="flex gap-4">
+                  <Link href="/veritascan" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                    VeritaScan <ChevronRight size={13} />
+                  </Link>
+                  <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                    VeritaMap <ChevronRight size={13} />
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

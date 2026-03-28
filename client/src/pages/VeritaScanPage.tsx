@@ -302,14 +302,14 @@ export default function VeritaScanPage() {
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  VeritaCheck + VeritaScan Bundle — <span className="text-primary">$199/year</span>
+                  Veritas Complete Suite — <span className="text-primary">$349/year for all three tools</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  The complete lab compliance suite. Unlimited VeritaCheck studies (Cal Ver, Method Comparison, Precision) plus VeritaScan web. Buying separately: $248/yr — bundle saves $49.
+                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. Purchased separately: $397/year. Bundle saves $48.
                 </p>
-                <Link href="/veritacheck" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-                  See VeritaCheck <ChevronRight size={13} />
+                <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                  Learn about VeritaMap <ChevronRight size={13} />
                 </Link>
               </div>
             </div>
