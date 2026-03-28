@@ -496,8 +496,244 @@ export function calculatePrecision(
   return { type: "precision", mode, levelResults, overallPass, passCount, totalCount, summary };
 }
 
+// ─── LOT-TO-LOT VERIFICATION ─────────────────────────────────────────────────
+
+export interface LotToLotSpecimen {
+  specimenId: string;
+  currentLot: number;
+  newLot: number;
+  pctDifference: number;
+  absPctDifference: number;
+  passFail: "Pass" | "Fail";
+}
+
+export interface LotToLotCohortResult {
+  cohort: "Normal" | "Abnormal";
+  n: number;
+  specimens: LotToLotSpecimen[];
+  meanPctDiff: number;
+  sdPctDiff: number;
+  meanAbsPctDiff: number;
+  maxAbsPctDiff: number;
+  coverage: number; // % of specimens within TEa
+  pass: boolean;
+}
+
+export interface LotToLotResults {
+  type: "lot_to_lot";
+  cohorts: LotToLotCohortResult[];
+  overallPass: boolean;
+  passCount: number;
+  totalCount: number;
+  tea: number;
+  summary: string;
+}
+
+export interface LotToLotDataPoint {
+  specimenId: string;
+  currentLot: number | null;
+  newLot: number | null;
+  cohort: "Normal" | "Abnormal";
+}
+
+export function calculateLotToLot(
+  dataPoints: LotToLotDataPoint[],
+  tea: number, // fraction, e.g. 0.10 for 10%
+  sampleType: "normal" | "abnormal" | "both"
+): LotToLotResults {
+  const cohorts: ("Normal" | "Abnormal")[] = sampleType === "both" ? ["Normal", "Abnormal"] : [sampleType === "normal" ? "Normal" : "Abnormal"];
+
+  const cohortResults: LotToLotCohortResult[] = cohorts.map(cohort => {
+    const valid = dataPoints.filter(dp => dp.cohort === cohort && dp.currentLot !== null && dp.newLot !== null);
+    const specimens: LotToLotSpecimen[] = valid.map(dp => {
+      const pctDiff = dp.currentLot !== 0 ? ((dp.newLot! - dp.currentLot!) / dp.currentLot!) * 100 : 0;
+      const absPct = Math.abs(pctDiff);
+      return {
+        specimenId: dp.specimenId,
+        currentLot: dp.currentLot!,
+        newLot: dp.newLot!,
+        pctDifference: pctDiff,
+        absPctDifference: absPct,
+        passFail: absPct <= tea * 100 ? "Pass" : "Fail",
+      };
+    });
+    const pctDiffs = specimens.map(s => s.pctDifference);
+    const absPctDiffs = specimens.map(s => s.absPctDifference);
+    const n = specimens.length;
+    const meanPctDiff = n > 0 ? mean(pctDiffs) : 0;
+    const sdPctDiff = n > 1 ? stddev(pctDiffs) : 0;
+    const meanAbsPctDiff = n > 0 ? mean(absPctDiffs) : 0;
+    const maxAbsPctDiff = n > 0 ? Math.max(...absPctDiffs) : 0;
+    const withinTea = specimens.filter(s => s.passFail === "Pass").length;
+    const coverage = n > 0 ? (withinTea / n) * 100 : 0;
+    const pass = meanAbsPctDiff <= tea * 100 && coverage >= 90;
+
+    return { cohort, n, specimens, meanPctDiff, sdPctDiff, meanAbsPctDiff, maxAbsPctDiff, coverage, pass };
+  });
+
+  const totalSpecimens = cohortResults.reduce((s, c) => s + c.n, 0);
+  const totalPass = cohortResults.reduce((s, c) => s + c.specimens.filter(sp => sp.passFail === "Pass").length, 0);
+  const overallPass = cohortResults.every(c => c.pass);
+  const teaPct = (tea * 100).toFixed(1);
+
+  const summary = cohortResults.map(c =>
+    `${c.cohort} cohort (N=${c.n}): Mean |%Diff| = ${c.meanAbsPctDiff.toFixed(1)}%, Coverage = ${c.coverage.toFixed(0)}% within TEa of ±${teaPct}%. ${c.pass ? "PASS" : "FAIL"}.`
+  ).join(" ") + ` Overall: ${overallPass ? "PASS" : "FAIL"} — ${totalPass}/${totalSpecimens} specimens within TEa.`;
+
+  return { type: "lot_to_lot", cohorts: cohortResults, overallPass, passCount: totalPass, totalCount: totalSpecimens, tea, summary };
+}
+
+// ─── PT/COAG NEW LOT VALIDATION ──────────────────────────────────────────────
+
+export function geometricMean(values: number[]): number {
+  if (values.length === 0) return 0;
+  const logSum = values.reduce((s, v) => s + Math.log(v), 0);
+  return Math.exp(logSum / values.length);
+}
+
+export function calculateINR(pt: number, normalMeanPT: number, isi: number): number {
+  return Math.pow(pt / normalMeanPT, isi);
+}
+
+export interface Module1Result {
+  geoMeanPT: number;
+  geoMeanINR: number;
+  specimens: { id: string; pt: number; inr: number; ptInRI: boolean; inrInRI: boolean }[];
+  n: number;
+  ptRIPass: boolean; // ≤10% outside PT RI
+  inrRIPass: boolean; // ≤10% outside INR RI
+  ptOutsideRI: number;
+  inrOutsideRI: number;
+  ptRI: { low: number; high: number };
+  inrRI: { low: number; high: number };
+  pass: boolean;
+}
+
+export interface DemingRegressionResult {
+  slope: number;
+  intercept: number;
+  r: number;
+  r2: number;
+  n: number;
+  see: number;
+  slopeLo?: number;
+  slopeHi?: number;
+}
+
+export interface ErrorIndexResult {
+  specimenId: string;
+  x: number;
+  y: number;
+  errorIndex: number;
+  pass: boolean;
+}
+
+export interface Module2or3Result {
+  regression: DemingRegressionResult;
+  errorIndexResults: ErrorIndexResult[];
+  averageErrorIndex: number;
+  errorIndexRange: { min: number; max: number };
+  coverage: number; // % with |EI| ≤ 1.0
+  pass: boolean; // coverage ≥ 90%
+  tea: number;
+}
+
+export interface PTCoagResults {
+  type: "pt_coag";
+  module1: Module1Result;
+  module2: Module2or3Result;
+  module3: Module2or3Result | null; // null if skipped
+  overallPass: boolean;
+  summary: string;
+}
+
+export function calculateModule1(
+  ptValues: number[],
+  isi: number,
+  ptRI: { low: number; high: number },
+  inrRI: { low: number; high: number }
+): Module1Result {
+  const geoMeanPT = geometricMean(ptValues);
+  const specimens = ptValues.map((pt, i) => {
+    const inr = calculateINR(pt, geoMeanPT, isi);
+    return {
+      id: `S${String(i + 1).padStart(5, "0")}`,
+      pt,
+      inr,
+      ptInRI: pt >= ptRI.low && pt <= ptRI.high,
+      inrInRI: inr >= inrRI.low && inr <= inrRI.high,
+    };
+  });
+  const geoMeanINR = geometricMean(specimens.map(s => s.inr));
+  const n = specimens.length;
+  const ptOutsideRI = specimens.filter(s => !s.ptInRI).length;
+  const inrOutsideRI = specimens.filter(s => !s.inrInRI).length;
+  const ptRIPass = n > 0 ? (ptOutsideRI / n) <= 0.10 : false;
+  const inrRIPass = n > 0 ? (inrOutsideRI / n) <= 0.10 : false;
+  return { geoMeanPT, geoMeanINR, specimens, n, ptRIPass, inrRIPass, ptOutsideRI, inrOutsideRI, ptRI, inrRI, pass: ptRIPass && inrRIPass };
+}
+
+export function calculateDemingModule(
+  xValues: number[],
+  yValues: number[],
+  specimenIds: string[],
+  tea: number // fraction, e.g. 0.20 for 20%
+): Module2or3Result {
+  const dem = demingRegression(xValues, yValues);
+  const xm = mean(xValues), ym = mean(yValues);
+  const n = xValues.length;
+  const Sxx = xValues.reduce((s, xi) => s + (xi - xm) ** 2, 0);
+  const Syy = yValues.reduce((s, yi) => s + (yi - ym) ** 2, 0);
+  const Sxy = xValues.reduce((s, xi, i) => s + (xi - xm) * (yValues[i] - ym), 0);
+  const r = Sxx > 0 && Syy > 0 ? Sxy / Math.sqrt(Sxx * Syy) : 1;
+  const see = seeFn(xValues, yValues);
+
+  const errorIndexResults: ErrorIndexResult[] = xValues.map((x, i) => {
+    const y = yValues[i];
+    const ei = tea > 0 && x !== 0 ? (y - x) / (tea * x) : 0;
+    return { specimenId: specimenIds[i], x, y, errorIndex: ei, pass: Math.abs(ei) <= 1.0 };
+  });
+
+  const eiValues = errorIndexResults.map(r => r.errorIndex);
+  const averageErrorIndex = mean(eiValues);
+  const eiAbsValues = eiValues.map(Math.abs);
+  const errorIndexRange = { min: Math.min(...eiValues), max: Math.max(...eiValues) };
+  const passCount = errorIndexResults.filter(r => r.pass).length;
+  const coverage = n > 0 ? (passCount / n) * 100 : 0;
+
+  return {
+    regression: { slope: dem.slope, intercept: dem.intercept, r, r2: r * r, n, see },
+    errorIndexResults,
+    averageErrorIndex,
+    errorIndexRange,
+    coverage,
+    pass: coverage >= 90,
+    tea,
+  };
+}
+
+export function calculatePTCoag(
+  module1Data: { ptValues: number[]; isi: number; ptRI: { low: number; high: number }; inrRI: { low: number; high: number } },
+  module2Data: { xValues: number[]; yValues: number[]; specimenIds: string[]; tea: number },
+  module3Data: { xValues: number[]; yValues: number[]; specimenIds: string[]; tea: number } | null
+): PTCoagResults {
+  const module1 = calculateModule1(module1Data.ptValues, module1Data.isi, module1Data.ptRI, module1Data.inrRI);
+  const module2 = calculateDemingModule(module2Data.xValues, module2Data.yValues, module2Data.specimenIds, module2Data.tea);
+  const module3 = module3Data ? calculateDemingModule(module3Data.xValues, module3Data.yValues, module3Data.specimenIds, module3Data.tea) : null;
+
+  const overallPass = module1.pass && module2.pass && (module3 ? module3.pass : true);
+
+  const m1Summary = `Module 1: Geometric Mean PT = ${module1.geoMeanPT.toFixed(1)} sec, INR = ${module1.geoMeanINR.toFixed(2)}. PT RI verification: ${module1.ptRIPass ? "PASS" : "FAIL"} (${module1.ptOutsideRI}/${module1.n} outside). INR RI verification: ${module1.inrRIPass ? "PASS" : "FAIL"} (${module1.inrOutsideRI}/${module1.n} outside).`;
+  const m2Summary = `Module 2: Two-Instrument Comparison — R=${module2.regression.r.toFixed(4)}, Slope=${module2.regression.slope.toFixed(3)}, Coverage=${module2.coverage.toFixed(0)}% within TEa. ${module2.pass ? "PASS" : "FAIL"}.`;
+  const m3Summary = module3 ? `Module 3: Old Lot vs New Lot — R=${module3.regression.r.toFixed(4)}, Slope=${module3.regression.slope.toFixed(3)}, Coverage=${module3.coverage.toFixed(0)}% within TEa. ${module3.pass ? "PASS" : "FAIL"}.` : "Module 3: Skipped (single analyzer lab).";
+
+  const summary = `${m1Summary} ${m2Summary} ${m3Summary} Overall: ${overallPass ? "PASS" : "FAIL"}.`;
+
+  return { type: "pt_coag", module1, module2, module3, overallPass, summary };
+}
+
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults;
+export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults | LotToLotResults | PTCoagResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -511,7 +747,12 @@ export function calculateStudy(
   return calculateCalVer(dataPoints, instrumentNames, cliaError);
 }
 
+// ─── Export Deming for reuse ──────────────────────────────────────────────────
+export { demingRegression };
+
 // ─── Type guards ──────────────────────────────────────────────────────────────
 export function isCalVer(r: StudyResults): r is CalVerResults { return r.type === "cal_ver"; }
 export function isMethodComp(r: StudyResults): r is MethodCompResults { return r.type === "method_comparison"; }
 export function isPrecision(r: StudyResults): r is PrecisionResults { return r.type === "precision"; }
+export function isLotToLot(r: StudyResults): r is LotToLotResults { return r.type === "lot_to_lot"; }
+export function isPTCoag(r: StudyResults): r is PTCoagResults { return r.type === "pt_coag"; }

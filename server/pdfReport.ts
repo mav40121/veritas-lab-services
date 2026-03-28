@@ -260,7 +260,14 @@ const CSS = `
 
 // ─── Shared header HTML ───────────────────────────────────────────────────────
 function headerHTML(study: Study): string {
-  const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison";
+  const typeLabelMap: Record<string, string> = {
+    cal_ver: "Calibration Verification / Linearity",
+    precision: "Precision Verification (EP15)",
+    method_comparison: "Correlation / Method Comparison",
+    lot_to_lot: "Lot-to-Lot Verification",
+    pt_coag: "PT/Coag New Lot Validation",
+  };
+  const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
   return `
   <div class="report-header">
     <div>
@@ -835,6 +842,345 @@ function buildPrecisionHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+// ─── Error Index Plot SVG ────────────────────────────────────────────────────
+function errorIndexSVG(
+  xVals: number[], eiVals: number[], title: string, xLabel: string, w = 320, h = 220
+): string {
+  if (!xVals.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const padX = (Math.max(...xVals) - Math.min(...xVals)) * 0.1 || 1;
+  const minEI = Math.min(...eiVals, -1.5), maxEI = Math.max(...eiVals, 1.5);
+  const xMin = Math.min(...xVals) - padX, xMax = Math.max(...xVals) + padX;
+  const cx = (v: number) => ml + ((v - xMin) / (xMax - xMin)) * pw;
+  const cy = (v: number) => mt + ph - ((v - minEI) / (maxEI - minEI)) * ph;
+
+  let grid = "";
+  for (let i = 0; i <= 4; i++) {
+    const gx = ml + (i / 4) * pw, gy = mt + (i / 4) * ph;
+    grid += `<line x1="${gx}" y1="${mt}" x2="${gx}" y2="${mt + ph}" stroke="#dde1e6" stroke-width="0.6"/>`;
+    grid += `<line x1="${ml}" y1="${gy}" x2="${ml + pw}" y2="${gy}" stroke="#dde1e6" stroke-width="0.6"/>`;
+  }
+
+  const zeroLine = `<line x1="${ml}" y1="${cy(0)}" x2="${ml + pw}" y2="${cy(0)}" stroke="#a0a8b0" stroke-width="0.8"/>`;
+  const upper = `<line x1="${ml}" y1="${cy(1)}" x2="${ml + pw}" y2="${cy(1)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  const lower = `<line x1="${ml}" y1="${cy(-1)}" x2="${ml + pw}" y2="${cy(-1)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  const dots = xVals.map((x, i) => {
+    const pass = Math.abs(eiVals[i]) <= 1.0;
+    return `<circle cx="${cx(x)}" cy="${cy(eiVals[i])}" r="4" fill="${pass ? "#0e8a82" : "#dc5050"}" opacity="0.85"/>`;
+  }).join("");
+
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">${title}</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${grid}${zeroLine}${upper}${lower}${dots}
+  <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">${xLabel}</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">Error Index</text>
+  <text x="${ml + pw + 4}" y="${cy(1) + 3}" font-size="7" fill="#dc5050">+1.0</text>
+  <text x="${ml + pw + 4}" y="${cy(-1) + 3}" font-size="7" fill="#dc5050">-1.0</text>
+</svg>`;
+}
+
+// ─── Difference Plot SVG (for Lot-to-Lot) ────────────────────────────────────
+function differencePlotSVG(
+  specimens: number[], pctDiffs: number[], tea: number, w = 320, h = 220
+): string {
+  if (!specimens.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const teaPct = tea * 100;
+  const minY = Math.min(...pctDiffs, -teaPct - 2), maxY = Math.max(...pctDiffs, teaPct + 2);
+  const cx = (v: number) => ml + ((v - 0.5) / (specimens.length + 0.5)) * pw;
+  const cy = (v: number) => mt + ph - ((v - minY) / (maxY - minY)) * ph;
+
+  let grid = "";
+  for (let i = 0; i <= 4; i++) grid += `<line x1="${ml}" y1="${mt + (i / 4) * ph}" x2="${ml + pw}" y2="${mt + (i / 4) * ph}" stroke="#dde1e6" stroke-width="0.6"/>`;
+
+  const zeroLine = `<line x1="${ml}" y1="${cy(0)}" x2="${ml + pw}" y2="${cy(0)}" stroke="#a0a8b0" stroke-width="0.8"/>`;
+  const upper = `<line x1="${ml}" y1="${cy(teaPct)}" x2="${ml + pw}" y2="${cy(teaPct)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  const lower = `<line x1="${ml}" y1="${cy(-teaPct)}" x2="${ml + pw}" y2="${cy(-teaPct)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  const dots = specimens.map((s, i) => {
+    const pass = Math.abs(pctDiffs[i]) <= teaPct;
+    return `<circle cx="${cx(s)}" cy="${cy(pctDiffs[i])}" r="4" fill="${pass ? "#0e8a82" : "#dc5050"}" opacity="0.85"/>`;
+  }).join("");
+
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Difference Plot</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${grid}${zeroLine}${upper}${lower}${dots}
+  <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Specimen Number</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">% Diff</text>
+</svg>`;
+}
+
+// ─── LOT-TO-LOT HTML report ──────────────────────────────────────────────────
+function buildLotToLotHTML(study: Study, results: any): string {
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const rawData = JSON.parse(study.dataPoints);
+  const teaPct = (study.cliaAllowableError * 100).toFixed(1);
+
+  let cohortSections = "";
+  for (const cohort of results.cohorts) {
+    const currentVals = cohort.specimens.map((s: any) => s.currentLot);
+    const newVals = cohort.specimens.map((s: any) => s.newLot);
+    const pctDiffs = cohort.specimens.map((s: any) => s.pctDifference);
+    const specimenNums = cohort.specimens.map((_: any, i: number) => i + 1);
+
+    const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} — Scatter`, true);
+    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError);
+
+    const summaryRows = `
+      <tr><td style="color:${MUTED};font-weight:700">N</td><td>${cohort.n}</td>
+          <td style="color:${MUTED};font-weight:700">Mean Bias</td><td>${cohort.meanPctDiff.toFixed(2)}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">SD</td><td>${cohort.sdPctDiff.toFixed(2)}%</td>
+          <td style="color:${MUTED};font-weight:700">Mean |%Diff|</td><td>${cohort.meanAbsPctDiff.toFixed(2)}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Max |%Diff|</td><td>${cohort.maxAbsPctDiff.toFixed(2)}%</td>
+          <td style="color:${MUTED};font-weight:700">Coverage</td><td class="${cohort.coverage >= 90 ? "pass" : "fail"}">${cohort.coverage.toFixed(0)}%</td></tr>
+    `;
+
+    const dataRows = cohort.specimens.map((s: any, i: number) => {
+      const pfClass = s.passFail === "Pass" ? "pass" : "fail";
+      return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+        <td>${s.specimenId}</td>
+        <td class="text-right">${s.currentLot.toFixed(3)}</td>
+        <td class="text-right">${s.newLot.toFixed(3)}</td>
+        <td class="text-right">${s.pctDifference.toFixed(2)}%</td>
+        <td class="text-right ${pfClass}">${s.passFail}</td>
+      </tr>`;
+    }).join("");
+
+    cohortSections += `
+      <div class="section-label">${cohort.cohort} Cohort</div>
+      <div class="charts">${scatter}${diffPlot}</div>
+      <hr class="divider">
+      <table style="font-size:8pt;margin-bottom:8px"><tbody>${summaryRows}</tbody></table>
+      <div class="section-label">${cohort.cohort} — ${cohort.pass ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}</div>
+    `;
+
+    cohortSections += `
+      <div class="stats-section">
+        <div class="section-label">${cohort.cohort} Cohort — Individual Results</div>
+        <table>
+          <thead><tr><th>Specimen</th><th class="text-right">Current Lot</th><th class="text-right">New Lot</th><th class="text-right">% Diff</th><th class="text-right">Pass?</th></tr></thead>
+          <tbody>${dataRows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  const lotInfo = rawData.currentLot ? `<div style="font-size:8pt;margin-bottom:6px">Current Lot: ${rawData.currentLot} · New Lot: ${rawData.newLot} · Analyte: ${rawData.analyte || study.testName} ${rawData.units ? `(${rawData.units})` : ""}</div>` : "";
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary}</p>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study)}
+  <div class="section-heading">Lot-to-Lot Verification</div>
+  ${lotInfo}
+  ${cohortSections}
+  ${narrative}
+  ${signatureHTML()}
+  ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+  ${supportingPageHTML(study, instrumentNames)}
+  </body></html>`;
+}
+
+// ─── PT/COAG HTML report ─────────────────────────────────────────────────────
+function geometricMean(values: number[]): number {
+  if (values.length === 0) return 0;
+  const logSum = values.reduce((s: number, v: number) => s + Math.log(v), 0);
+  return Math.exp(logSum / values.length);
+}
+
+function buildPTCoagHTML(study: Study, results: any): string {
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const rawData = JSON.parse(study.dataPoints);
+  const { module1, module2, module3 } = results;
+
+  // Module 1 section
+  const m1DataRows = module1.specimens.map((s: any, i: number) => {
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${s.id}</td>
+      <td class="text-right">${s.pt.toFixed(1)}</td>
+      <td class="text-right">${s.inr.toFixed(2)}</td>
+      <td class="text-right ${s.ptInRI ? "pass" : "fail"}">${s.ptInRI ? "Yes" : "No"}</td>
+      <td class="text-right ${s.inrInRI ? "pass" : "fail"}">${s.inrInRI ? "Yes" : "No"}</td>
+    </tr>`;
+  }).join("");
+
+  const m1Section = `
+    <div class="section-heading">Module 1: Normal Patient Mean & Reference Interval Verification</div>
+    <div class="supp-stats">
+      <span class="key">N:</span><span>${module1.n}</span>
+      <span class="key">Geometric Mean PT:</span><span>${module1.geoMeanPT.toFixed(2)} sec</span>
+      <span class="key">Geometric Mean INR:</span><span>${module1.geoMeanINR.toFixed(3)}</span>
+      <span class="key">ISI:</span><span>${rawData.module1?.isi ?? "—"}</span>
+      <span class="key">PT RI:</span><span>${module1.ptRI.low}–${module1.ptRI.high} sec</span>
+      <span class="key">INR RI:</span><span>${module1.inrRI.low}–${module1.inrRI.high}</span>
+      <span class="key">PT Outside RI:</span><span class="${module1.ptRIPass ? "pass" : "fail"}">${module1.ptOutsideRI}/${module1.n} (${module1.ptRIPass ? "PASS" : "FAIL"})</span>
+      <span class="key">INR Outside RI:</span><span class="${module1.inrRIPass ? "pass" : "fail"}">${module1.inrOutsideRI}/${module1.n} (${module1.inrRIPass ? "PASS" : "FAIL"})</span>
+    </div>
+  `;
+
+  // Module 2 section — Deming with Error Index
+  const m2 = module2;
+  const m2Scatter = scatterSVG(
+    m2.errorIndexResults.map((r: any) => r.x),
+    m2.errorIndexResults.map((r: any) => r.y),
+    rawData.module2?.inst1 || instrumentNames[0] || "Inst 1",
+    rawData.module2?.inst2 || instrumentNames[1] || "Inst 2",
+    "Two-Instrument Correlation", true
+  );
+  const m2EI = errorIndexSVG(
+    m2.errorIndexResults.map((r: any) => r.x),
+    m2.errorIndexResults.map((r: any) => r.errorIndex),
+    "Error Index Plot", "Concentration (X)"
+  );
+
+  const m2DataRows = m2.errorIndexResults.map((r: any, i: number) => {
+    const pfClass = r.pass ? "pass" : "fail";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${r.specimenId}</td>
+      <td class="text-right">${r.x.toFixed(1)}</td>
+      <td class="text-right">${r.y.toFixed(1)}</td>
+      <td class="text-right">${r.errorIndex.toFixed(3)}</td>
+      <td class="text-right ${pfClass}">${r.pass ? "Pass" : "Fail"}</td>
+    </tr>`;
+  }).join("");
+
+  const m2Section = `
+    <div class="section-heading" style="page-break-before:always">Module 2: Two-Instrument Comparison (Deming Regression)</div>
+    <div class="charts">${m2Scatter}${m2EI}</div>
+    <hr class="divider">
+    <div class="section-label">Deming Regression Statistics</div>
+    <table>
+      <thead><tr><th>Statistic</th><th class="text-right">Value</th></tr></thead>
+      <tbody>
+        <tr><td>R (Correlation)</td><td class="text-right">${m2.regression.r.toFixed(4)}</td></tr>
+        <tr class="stripe"><td>Slope</td><td class="text-right">${m2.regression.slope.toFixed(4)}</td></tr>
+        <tr><td>Intercept</td><td class="text-right">${m2.regression.intercept.toFixed(4)}</td></tr>
+        <tr class="stripe"><td>Std Error of Estimate</td><td class="text-right">${m2.regression.see.toFixed(4)}</td></tr>
+        <tr><td>N</td><td class="text-right">${m2.regression.n}</td></tr>
+        <tr class="stripe"><td>Average Error Index</td><td class="text-right">${m2.averageErrorIndex.toFixed(3)}</td></tr>
+        <tr><td>Error Index Range</td><td class="text-right">${m2.errorIndexRange.min.toFixed(3)} to ${m2.errorIndexRange.max.toFixed(3)}</td></tr>
+        <tr class="stripe"><td>Coverage (|EI| ≤ 1.0)</td><td class="text-right ${m2.pass ? "pass" : "fail"}">${m2.coverage.toFixed(0)}% (${m2.pass ? "PASS" : "FAIL"})</td></tr>
+        <tr><td>TEa</td><td class="text-right">±${(m2.tea * 100).toFixed(0)}%</td></tr>
+      </tbody>
+    </table>
+  `;
+
+  // Module 3 section (if present)
+  let m3Section = "";
+  if (module3) {
+    const m3 = module3;
+    const m3Scatter = scatterSVG(
+      m3.errorIndexResults.map((r: any) => r.x),
+      m3.errorIndexResults.map((r: any) => r.y),
+      "Old Lot", "New Lot", "Old vs New Lot Correlation", true
+    );
+    const m3EI = errorIndexSVG(
+      m3.errorIndexResults.map((r: any) => r.x),
+      m3.errorIndexResults.map((r: any) => r.errorIndex),
+      "Error Index Plot", "Concentration (X)"
+    );
+
+    const m3DataRows = m3.errorIndexResults.map((r: any, i: number) => {
+      const pfClass = r.pass ? "pass" : "fail";
+      return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+        <td>${r.specimenId}</td>
+        <td class="text-right">${r.x.toFixed(1)}</td>
+        <td class="text-right">${r.y.toFixed(1)}</td>
+        <td class="text-right">${r.errorIndex.toFixed(3)}</td>
+        <td class="text-right ${pfClass}">${r.pass ? "Pass" : "Fail"}</td>
+      </tr>`;
+    }).join("");
+
+    m3Section = `
+      <div class="section-heading" style="page-break-before:always">Module 3: Old Lot vs New Lot Comparison (Deming Regression)</div>
+      <div class="charts">${m3Scatter}${m3EI}</div>
+      <hr class="divider">
+      <div class="section-label">Deming Regression Statistics</div>
+      <table>
+        <thead><tr><th>Statistic</th><th class="text-right">Value</th></tr></thead>
+        <tbody>
+          <tr><td>R (Correlation)</td><td class="text-right">${m3.regression.r.toFixed(4)}</td></tr>
+          <tr class="stripe"><td>Slope</td><td class="text-right">${m3.regression.slope.toFixed(4)}</td></tr>
+          <tr><td>Intercept</td><td class="text-right">${m3.regression.intercept.toFixed(4)}</td></tr>
+          <tr class="stripe"><td>Std Error of Estimate</td><td class="text-right">${m3.regression.see.toFixed(4)}</td></tr>
+          <tr><td>N</td><td class="text-right">${m3.regression.n}</td></tr>
+          <tr class="stripe"><td>Coverage (|EI| ≤ 1.0)</td><td class="text-right ${m3.pass ? "pass" : "fail"}">${m3.coverage.toFixed(0)}% (${m3.pass ? "PASS" : "FAIL"})</td></tr>
+        </tbody>
+      </table>
+      <div class="stats-section">
+        <div class="section-label">Module 3 — Experimental Results</div>
+        <table>
+          <thead><tr><th>Specimen</th><th class="text-right">Old Lot</th><th class="text-right">New Lot</th><th class="text-right">Error Index</th><th class="text-right">Pass?</th></tr></thead>
+          <tbody>${m3DataRows}</tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    m3Section = `<div class="section-heading" style="page-break-before:always">Module 3: Old Lot vs New Lot Comparison</div>
+      <p style="font-size:9pt;color:${MUTED};margin:8px 0">Module 3 skipped — single analyzer lab.</p>`;
+  }
+
+  // Narrative
+  const overallVerdict = results.overallPass ? "PASS" : "FAIL";
+  const narrativeText = results.summary;
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText}</p>
+  </div>`;
+
+  // Overall verdict
+  const verdictHtml = `<div class="verdict ${results.overallPass ? "pass-bg" : "fail-bg"}" style="margin-top:12px">
+    Overall: ${overallVerdict} — Module 1: ${module1.pass ? "PASS" : "FAIL"}, Module 2: ${module2.pass ? "PASS" : "FAIL"}${module3 ? `, Module 3: ${module3.pass ? "PASS" : "FAIL"}` : ""}
+  </div>`;
+
+  const reagentInfo = rawData.reagentLot ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "—"} · ISI: ${rawData.module1?.isi ?? "—"}</div>` : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study)}
+  <div class="section-heading">PT/Coag New Lot Validation</div>
+  ${reagentInfo}
+
+  ${m1Section}
+
+  ${narrative}
+  ${signatureHTML()}
+
+  ${m2Section}
+  <div class="stats-section">
+    <div class="section-label">Module 2 — Experimental Results</div>
+    <table>
+      <thead><tr><th>Specimen</th><th class="text-right">Inst 1</th><th class="text-right">Inst 2</th><th class="text-right">Error Index</th><th class="text-right">Pass?</th></tr></thead>
+      <tbody>${m2DataRows}</tbody>
+    </table>
+  </div>
+
+  ${m3Section}
+
+  <div class="stats-section">
+    <div class="section-label">Module 1 — Individual Results</div>
+    <table>
+      <thead><tr><th>Specimen</th><th class="text-right">PT (sec)</th><th class="text-right">INR</th><th class="text-right">PT in RI?</th><th class="text-right">INR in RI?</th></tr></thead>
+      <tbody>${m1DataRows}</tbody>
+    </table>
+    ${verdictHtml}
+  </div>
+
+  ${supportingPageHTML(study, instrumentNames)}
+  </body></html>`;
+}
+
 // ─── Puppeteer renderer ───────────────────────────────────────────────────────
 let _browser: any = null;
 async function getBrowser() {
@@ -865,6 +1211,10 @@ export async function generatePDFBuffer(study: Study, results: any): Promise<Buf
     ? buildCalVerHTML(study, results)
     : study.studyType === "precision"
     ? buildPrecisionHTML(study, results)
+    : study.studyType === "lot_to_lot"
+    ? buildLotToLotHTML(study, results)
+    : study.studyType === "pt_coag"
+    ? buildPTCoagHTML(study, results)
     : buildMethodCompHTML(study, results);
 
   const browser = await getBrowser();

@@ -10,13 +10,19 @@ import { useLocation } from "wouter";
 import {
   calculateStudy,
   calculatePrecision,
+  calculateLotToLot,
+  calculatePTCoag,
   isCalVer,
   isMethodComp,
   isPrecision,
+  isLotToLot,
+  isPTCoag,
   type StudyResults,
   type CalVerResults,
   type MethodCompResults,
   type PrecisionResults,
+  type LotToLotResults,
+  type PTCoagResults,
   type PrecisionDataPoint,
   type DataPoint,
 } from "@/lib/calculations";
@@ -46,10 +52,8 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const filename = `VeritaCheck_${
-    study.studyType === "cal_ver" ? "CalVer" :
-    study.studyType === "precision" ? "Precision" : "MethodComp"
-  }_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
+  const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   // Use ArrayBuffer → base64 data URI to bypass Adobe Acrobat's
   // blob-URL interception which strips the filename and shows about:blank
@@ -97,7 +101,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -253,7 +257,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", `±${cliaPercent}%`],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -836,6 +840,207 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
   );
 }
 
+// ─── LOT-TO-LOT VERIFICATION results ────────────────────────────────────────
+function LotToLotReport({ study, results }: { study: Study; results: LotToLotResults }) {
+  const teaPct = (results.tea * 100).toFixed(1);
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Total Specimens", value: results.totalCount },
+          { label: "Specimens Passing", value: `${results.passCount} / ${results.totalCount}` },
+          { label: "TEa", value: `±${teaPct}%` },
+          { label: "Cohorts", value: results.cohorts.length },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      {results.cohorts.map(cohort => (
+        <div key={cohort.cohort}>
+          <Card className="mb-6">
+            <CardHeader className="pb-2"><CardTitle className="text-sm">{cohort.cohort} Cohort — Summary</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-4">
+                <div><span className="text-muted-foreground">N: </span><span className="font-mono">{cohort.n}</span></div>
+                <div><span className="text-muted-foreground">Mean Bias: </span><span className="font-mono">{cohort.meanPctDiff.toFixed(2)}%</span></div>
+                <div><span className="text-muted-foreground">SD: </span><span className="font-mono">{cohort.sdPctDiff.toFixed(2)}%</span></div>
+                <div><span className="text-muted-foreground">Mean |%Diff|: </span><span className="font-mono">{cohort.meanAbsPctDiff.toFixed(2)}%</span></div>
+                <div><span className="text-muted-foreground">Max |%Diff|: </span><span className="font-mono">{cohort.maxAbsPctDiff.toFixed(2)}%</span></div>
+                <div><span className="text-muted-foreground">Coverage: </span><span className={`font-mono font-semibold ${cohort.coverage >= 90 ? "text-green-400" : "text-red-400"}`}>{cohort.coverage.toFixed(0)}%</span></div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-border">
+                    <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Current Lot</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Lot</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">% Diff</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
+                  </tr></thead>
+                  <tbody>
+                    {cohort.specimens.map((s, i) => (
+                      <tr key={i} className="border-b border-border/40">
+                        <td className="py-2 pr-3 font-mono">{s.specimenId}</td>
+                        <td className="text-right py-2 pr-3 font-mono">{s.currentLot.toFixed(3)}</td>
+                        <td className="text-right py-2 pr-3 font-mono">{s.newLot.toFixed(3)}</td>
+                        <td className="text-right py-2 pr-3 font-mono">{s.pctDifference.toFixed(2)}%</td>
+                        <td className="text-right py-2 pr-3"><span className={s.passFail === "Pass" ? "pass-badge" : "fail-badge"}>{s.passFail}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ─── PT/COAG NEW LOT VALIDATION results ─────────────────────────────────────
+function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults }) {
+  const { module1, module2, module3 } = results;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Geometric Mean PT", value: `${module1.geoMeanPT.toFixed(1)} sec` },
+          { label: "Geometric Mean INR", value: module1.geoMeanINR.toFixed(2) },
+          { label: "Module 2 Coverage", value: `${module2.coverage.toFixed(0)}%` },
+          { label: "Overall", value: results.overallPass ? "PASS" : "FAIL" },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      {/* Module 1 */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Module 1: Normal Patient Mean & RI Verification</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div><span className="text-muted-foreground">N: </span><span className="font-mono">{module1.n}</span></div>
+            <div><span className="text-muted-foreground">Geo Mean PT: </span><span className="font-mono">{module1.geoMeanPT.toFixed(2)} sec</span></div>
+            <div><span className="text-muted-foreground">Geo Mean INR: </span><span className="font-mono">{module1.geoMeanINR.toFixed(3)}</span></div>
+            <div><span className="text-muted-foreground">PT RI: </span><span className="font-mono">{module1.ptRI.low}–{module1.ptRI.high} sec</span></div>
+            <div><span className="text-muted-foreground">INR RI: </span><span className="font-mono">{module1.inrRI.low}–{module1.inrRI.high}</span></div>
+            <div><span className="text-muted-foreground">PT Outside RI: </span><span className={`font-mono font-semibold ${module1.ptRIPass ? "text-green-400" : "text-red-400"}`}>{module1.ptOutsideRI}/{module1.n}</span></div>
+            <div><span className="text-muted-foreground">INR Outside RI: </span><span className={`font-mono font-semibold ${module1.inrRIPass ? "text-green-400" : "text-red-400"}`}>{module1.inrOutsideRI}/{module1.n}</span></div>
+            <div><span className="text-muted-foreground">Module 1: </span><span className={`font-semibold ${module1.pass ? "text-green-400" : "text-red-400"}`}>{module1.pass ? "PASS" : "FAIL"}</span></div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border">
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">PT (sec)</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">INR</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">PT in RI?</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">INR in RI?</th>
+              </tr></thead>
+              <tbody>
+                {module1.specimens.map((s, i) => (
+                  <tr key={i} className="border-b border-border/40">
+                    <td className="py-2 pr-3 font-mono">{s.id}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{s.pt.toFixed(1)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{s.inr.toFixed(2)}</td>
+                    <td className="text-right py-2 pr-3"><span className={s.ptInRI ? "text-green-400" : "text-red-400"}>{s.ptInRI ? "Yes" : "No"}</span></td>
+                    <td className="text-right py-2 pr-3"><span className={s.inrInRI ? "text-green-400" : "text-red-400"}>{s.inrInRI ? "Yes" : "No"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Module 2 */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Module 2: Two-Instrument Comparison (Deming Regression)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div><span className="text-muted-foreground">R: </span><span className="font-mono">{module2.regression.r.toFixed(4)}</span></div>
+            <div><span className="text-muted-foreground">Slope: </span><span className="font-mono">{module2.regression.slope.toFixed(3)}</span></div>
+            <div><span className="text-muted-foreground">Intercept: </span><span className="font-mono">{module2.regression.intercept.toFixed(3)}</span></div>
+            <div><span className="text-muted-foreground">N: </span><span className="font-mono">{module2.regression.n}</span></div>
+            <div><span className="text-muted-foreground">Avg Error Index: </span><span className="font-mono">{module2.averageErrorIndex.toFixed(3)}</span></div>
+            <div><span className="text-muted-foreground">Coverage: </span><span className={`font-mono font-semibold ${module2.pass ? "text-green-400" : "text-red-400"}`}>{module2.coverage.toFixed(0)}%</span></div>
+            <div><span className="text-muted-foreground">TEa: </span><span className="font-mono">±{(module2.tea * 100).toFixed(0)}%</span></div>
+            <div><span className="text-muted-foreground">Module 2: </span><span className={`font-semibold ${module2.pass ? "text-green-400" : "text-red-400"}`}>{module2.pass ? "PASS" : "FAIL"}</span></div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border">
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">X (Inst 1)</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Y (Inst 2)</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Error Index</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
+              </tr></thead>
+              <tbody>
+                {module2.errorIndexResults.map((r, i) => (
+                  <tr key={i} className="border-b border-border/40">
+                    <td className="py-2 pr-3 font-mono">{r.specimenId}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.x.toFixed(1)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.y.toFixed(1)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{r.errorIndex.toFixed(3)}</td>
+                    <td className="text-right py-2 pr-3"><span className={r.pass ? "text-green-400" : "text-red-400"}>{r.pass ? "Pass" : "Fail"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Module 3 */}
+      {module3 && (
+        <Card className="mb-6">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Module 3: Old Lot vs New Lot (Deming Regression)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div><span className="text-muted-foreground">R: </span><span className="font-mono">{module3.regression.r.toFixed(4)}</span></div>
+              <div><span className="text-muted-foreground">Slope: </span><span className="font-mono">{module3.regression.slope.toFixed(3)}</span></div>
+              <div><span className="text-muted-foreground">Intercept: </span><span className="font-mono">{module3.regression.intercept.toFixed(3)}</span></div>
+              <div><span className="text-muted-foreground">Coverage: </span><span className={`font-mono font-semibold ${module3.pass ? "text-green-400" : "text-red-400"}`}>{module3.coverage.toFixed(0)}%</span></div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Old Lot</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Lot</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Error Index</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
+                </tr></thead>
+                <tbody>
+                  {module3.errorIndexResults.map((r, i) => (
+                    <tr key={i} className="border-b border-border/40">
+                      <td className="py-2 pr-3 font-mono">{r.specimenId}</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.x.toFixed(1)}</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.y.toFixed(1)}</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.errorIndex.toFixed(3)}</td>
+                      <td className="text-right py-2 pr-3"><span className={r.pass ? "text-green-400" : "text-red-400"}>{r.pass ? "Pass" : "Fail"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
 // ─── Root page ────────────────────────────────────────────────────────────────
 function BottomPDFButton({ study, results }: { study: Study; results: StudyResults }) {
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -922,9 +1127,27 @@ export default function StudyResults() {
 
   const instrumentNames: string[] = JSON.parse(study.instruments);
   const rawDataPoints = JSON.parse(study.dataPoints);
-  const results: StudyResults = study.studyType === "precision"
-    ? calculatePrecision(rawDataPoints as PrecisionDataPoint[], study.cliaAllowableError, (rawDataPoints[0]?.days ? "advanced" : "simple"))
-    : calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
+  let results: StudyResults;
+  if (study.studyType === "precision") {
+    results = calculatePrecision(rawDataPoints as PrecisionDataPoint[], study.cliaAllowableError, (rawDataPoints[0]?.days ? "advanced" : "simple"));
+  } else if (study.studyType === "lot_to_lot") {
+    const { data, sampleType } = rawDataPoints;
+    results = calculateLotToLot(data, study.cliaAllowableError, sampleType);
+  } else if (study.studyType === "pt_coag") {
+    const { module1, module2, module3: m3Raw } = rawDataPoints;
+    const m2Valid = module2.data.filter((d: any) => d.x !== null && d.y !== null);
+    const module3Data = m3Raw ? (() => {
+      const m3Valid = m3Raw.data.filter((d: any) => d.x !== null && d.y !== null);
+      return m3Valid.length >= 3 ? { xValues: m3Valid.map((d: any) => d.x), yValues: m3Valid.map((d: any) => d.y), specimenIds: m3Valid.map((d: any) => d.id), tea: m3Raw.tea } : null;
+    })() : null;
+    results = calculatePTCoag(
+      module1,
+      { xValues: m2Valid.map((d: any) => d.x), yValues: m2Valid.map((d: any) => d.y), specimenIds: m2Valid.map((d: any) => d.id), tea: module2.tea },
+      module3Data
+    );
+  } else {
+    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -933,6 +1156,8 @@ export default function StudyResults() {
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
       {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
       {isPrecision(results) && <PrecisionReport study={study} results={results} />}
+      {isLotToLot(results) && <LotToLotReport study={study} results={results} />}
+      {isPTCoag(results) && <PTCoagReport study={study} results={results} />}
 
       <EvalBox results={results} study={study} />
       <UserSpecs study={study} instrumentNames={instrumentNames} />

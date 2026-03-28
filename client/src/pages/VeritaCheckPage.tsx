@@ -12,7 +12,7 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, type DataPoint, type PrecisionDataPoint } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint } from "@/lib/calculations";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
@@ -213,7 +213,7 @@ export default function VeritaCheckPage() {
   const [testName, setTestName] = useState("");
   const [analyst, setAnalyst] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision">("cal_ver");
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag">("cal_ver");
   const [instrumentNames, setInstrumentNames] = useState<string[]>(["Instrument 1", "Instrument 2"]);
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
@@ -231,6 +231,47 @@ export default function VeritaCheckPage() {
   const [precisionRunsPerDay, setPrecisionRunsPerDay] = useState(1);
   const [precisionReplicatesPerRun, setPrecisionReplicatesPerRun] = useState(2);
   const [precisionAdvancedData, setPrecisionAdvancedData] = useState<number[][][]>([[], [], []]);
+
+  // Lot-to-Lot state
+  const [lotSampleType, setLotSampleType] = useState<"normal" | "abnormal" | "both">("normal");
+  const [lotCurrentLotNum, setLotCurrentLotNum] = useState("");
+  const [lotCurrentLotExp, setLotCurrentLotExp] = useState("");
+  const [lotNewLotNum, setLotNewLotNum] = useState("");
+  const [lotNewLotExp, setLotNewLotExp] = useState("");
+  const [lotAnalyte, setLotAnalyte] = useState("");
+  const [lotUnits, setLotUnits] = useState("");
+  const [lotNumSpecimens, setLotNumSpecimens] = useState(20);
+  const [lotData, setLotData] = useState<LotToLotDataPoint[]>(
+    Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Normal" as const }))
+  );
+  const [lotDataAbnormal, setLotDataAbnormal] = useState<LotToLotDataPoint[]>(
+    Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Abnormal" as const }))
+  );
+
+  // PT/Coag state
+  const [ptInstrumentName, setPtInstrumentName] = useState("ACL TOP 351");
+  const [ptReagentLot, setPtReagentLot] = useState("");
+  const [ptReagentExp, setPtReagentExp] = useState("");
+  const [ptISI, setPtISI] = useState(0.97);
+  const [ptRILow, setPtRILow] = useState(10.0);
+  const [ptRIHigh, setPtRIHigh] = useState(14.0);
+  const [ptINRRILow, setPtINRRILow] = useState(0.9);
+  const [ptINRRIHigh, setPtINRRIHigh] = useState(1.2);
+  const [ptModule1Data, setPtModule1Data] = useState<number[]>(Array(20).fill(null));
+  // Module 2
+  const [ptInstrument2Name, setPtInstrument2Name] = useState("ACL TOP 352");
+  const [ptModule2TEa, setPtModule2TEa] = useState(0.20);
+  const [ptModule2Data, setPtModule2Data] = useState<{ id: string; x: number | null; y: number | null }[]>(
+    Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null, y: null }))
+  );
+  // Module 3
+  const [ptSkipModule3, setPtSkipModule3] = useState(false);
+  const [ptOldLotNum, setPtOldLotNum] = useState("");
+  const [ptOldLotExp, setPtOldLotExp] = useState("");
+  const [ptModule3TEa, setPtModule3TEa] = useState(0.20);
+  const [ptModule3Data, setPtModule3Data] = useState<{ id: string; x: number | null; y: number | null }[]>(
+    Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null, y: null }))
+  );
 
   const handleNumLevelsChange = (val: string) => {
     const n = parseInt(val);
@@ -318,6 +359,10 @@ export default function VeritaCheckPage() {
     ? (precisionMode === "simple"
       ? precisionValues.slice(0, precisionLevels).filter(arr => (arr || []).filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length
       : precisionAdvancedData.slice(0, precisionLevels).filter(days => (days || []).flat().filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length)
+    : studyType === "lot_to_lot"
+    ? lotData.filter(dp => dp.currentLot !== null && dp.newLot !== null).length + (lotSampleType === "both" ? lotDataAbnormal.filter(dp => dp.currentLot !== null && dp.newLot !== null).length : 0)
+    : studyType === "pt_coag"
+    ? ptModule1Data.filter(v => v !== null && !isNaN(v)).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
 
   const saveMutation = useMutation({
@@ -335,6 +380,59 @@ export default function VeritaCheckPage() {
 
   const handleSubmit = () => {
     if (!testName.trim()) { toast({ title: "Please enter a test name", variant: "destructive" }); return; }
+
+    if (studyType === "lot_to_lot") {
+      const allData = lotSampleType === "both" ? [...lotData, ...lotDataAbnormal] : lotData;
+      const validData = allData.filter(dp => dp.currentLot !== null && dp.newLot !== null);
+      if (validData.length < 3) { toast({ title: "Please enter at least 3 specimen pairs", variant: "destructive" }); return; }
+      const results = calculateLotToLot(allData, cliaValue, lotSampleType);
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: instrumentNames[0] || "—", analyst: analyst.trim() || "—",
+        date, studyType: "lot_to_lot", cliaAllowableError: cliaValue,
+        dataPoints: JSON.stringify({ data: allData, sampleType: lotSampleType, currentLot: lotCurrentLotNum, newLot: lotNewLotNum, analyte: lotAnalyte, units: lotUnits }),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
+        status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "pt_coag") {
+      const m1Valid = ptModule1Data.filter(v => v !== null && !isNaN(v));
+      if (m1Valid.length < 3) { toast({ title: "Please enter at least 3 PT values for Module 1", variant: "destructive" }); return; }
+      const m2Valid = ptModule2Data.filter(d => d.x !== null && d.y !== null);
+      if (m2Valid.length < 3) { toast({ title: "Please enter at least 3 paired values for Module 2", variant: "destructive" }); return; }
+      const module3Data = ptSkipModule3 ? null : (() => {
+        const m3Valid = ptModule3Data.filter(d => d.x !== null && d.y !== null);
+        if (m3Valid.length < 3) return null;
+        return {
+          xValues: m3Valid.map(d => d.x!), yValues: m3Valid.map(d => d.y!),
+          specimenIds: m3Valid.map(d => d.id), tea: ptModule3TEa
+        };
+      })();
+      const results = calculatePTCoag(
+        { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
+        { xValues: m2Valid.map(d => d.x!), yValues: m2Valid.map(d => d.y!), specimenIds: m2Valid.map(d => d.id), tea: ptModule2TEa },
+        module3Data
+      );
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "—",
+        date, studyType: "pt_coag", cliaAllowableError: ptModule2TEa,
+        dataPoints: JSON.stringify({
+          module1: { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
+          module2: { data: m2Valid, tea: ptModule2TEa, inst1: ptInstrumentName, inst2: ptInstrument2Name },
+          module3: ptSkipModule3 ? null : { data: ptModule3Data.filter(d => d.x !== null && d.y !== null), tea: ptModule3TEa, oldLot: ptOldLotNum, newLot: ptReagentLot },
+          instrument: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp
+        }),
+        instruments: JSON.stringify([ptInstrumentName, ptInstrument2Name]),
+        status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
     if (studyType === "precision") {
       if (filledLevels < 1) { toast({ title: "Please enter at least 3 measurements for one level", variant: "destructive" }); return; }
       const precDataPoints: PrecisionDataPoint[] = precisionLevelNames.slice(0, precisionLevels).map((name, i) => {
@@ -429,6 +527,8 @@ export default function VeritaCheckPage() {
                           <SelectItem value="cal_ver">Calibration Verification / Linearity</SelectItem>
                           <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
                           <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
+                          <SelectItem value="lot_to_lot">Lot-to-Lot Verification</SelectItem>
+                          <SelectItem value="pt_coag">PT/Coag New Lot Validation</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -490,7 +590,196 @@ export default function VeritaCheckPage() {
             </TabsContent>
 
             <TabsContent value="data">
-              {studyType === "precision" ? (
+              {studyType === "lot_to_lot" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Lot-to-Lot Verification Data Entry</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Fibrinogen" value={lotAnalyte} onChange={e => setLotAnalyte(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mg/dL" value={lotUnits} onChange={e => setLotUnits(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Current Lot #</Label><Input value={lotCurrentLotNum} onChange={e => setLotCurrentLotNum(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Current Lot Expiration</Label><Input type="date" value={lotCurrentLotExp} onChange={e => setLotCurrentLotExp(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>New Lot #</Label><Input value={lotNewLotNum} onChange={e => setLotNewLotNum(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>New Lot Expiration</Label><Input type="date" value={lotNewLotExp} onChange={e => setLotNewLotExp(e.target.value)} /></div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5"><Label>Sample Type</Label>
+                        <Select value={lotSampleType} onValueChange={v => setLotSampleType(v as any)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="normal">Normal Only</SelectItem>
+                            <SelectItem value="abnormal">Abnormal Only</SelectItem>
+                            <SelectItem value="both">Both (Normal + Abnormal)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5"><Label>Number of Specimens</Label>
+                        <Input type="number" min={3} max={100} value={lotNumSpecimens} onChange={e => {
+                          const n = Math.max(3, Math.min(100, parseInt(e.target.value) || 20));
+                          setLotNumSpecimens(n);
+                          setLotData(prev => {
+                            if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, (_, i) => ({ specimenId: `S${String(prev.length + i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Normal" as const }))];
+                            return prev.slice(0, n);
+                          });
+                          setLotDataAbnormal(prev => {
+                            if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, (_, i) => ({ specimenId: `S${String(prev.length + i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Abnormal" as const }))];
+                            return prev.slice(0, n);
+                          });
+                        }} />
+                        {lotNumSpecimens < 20 && <p className="text-xs text-amber-500">Minimum 20 specimens recommended</p>}
+                      </div>
+                    </div>
+                    {/* Normal cohort table */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">{lotSampleType === "both" ? "Normal Cohort" : "Specimen Data"}</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-border">
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-24">Specimen ID</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Current Lot</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">New Lot</th>
+                          </tr></thead>
+                          <tbody>
+                            {lotData.map((dp, idx) => (
+                              <tr key={idx} className="border-b border-border/50">
+                                <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotData(d); }} className="h-8 text-sm w-24" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.newLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    {lotSampleType === "both" && (
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium">Abnormal Cohort</div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead><tr className="border-b border-border">
+                              <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-24">Specimen ID</th>
+                              <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Current Lot</th>
+                              <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">New Lot</th>
+                            </tr></thead>
+                            <tbody>
+                              {lotDataAbnormal.map((dp, idx) => (
+                                <tr key={idx} className="border-b border-border/50">
+                                  <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotDataAbnormal(d); }} className="h-8 text-sm w-24" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.newLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : studyType === "pt_coag" ? (
+                <div className="space-y-6">
+                  {/* Module 1: Normal Patient Mean */}
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Module 1: Normal Patient Mean & Reference Interval Verification</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>Instrument</Label><Input value={ptInstrumentName} onChange={e => setPtInstrumentName(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Reagent Lot (New)</Label><Input value={ptReagentLot} onChange={e => setPtReagentLot(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Reagent Expiration</Label><Input type="date" value={ptReagentExp} onChange={e => setPtReagentExp(e.target.value)} /></div>
+                      </div>
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>ISI Value</Label><Input type="number" step="0.01" value={ptISI} onChange={e => setPtISI(parseFloat(e.target.value) || 0.97)} /></div>
+                        <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><Input type="number" step="0.1" value={ptRILow} onChange={e => setPtRILow(parseFloat(e.target.value) || 10)} /></div>
+                        <div className="space-y-1.5"><Label>PT RI High (sec)</Label><Input type="number" step="0.1" value={ptRIHigh} onChange={e => setPtRIHigh(parseFloat(e.target.value) || 14)} /></div>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5"><Label>INR RI Low</Label><Input type="number" step="0.1" value={ptINRRILow} onChange={e => setPtINRRILow(parseFloat(e.target.value) || 0.9)} /></div>
+                        <div className="space-y-1.5"><Label>INR RI High</Label><Input type="number" step="0.1" value={ptINRRIHigh} onChange={e => setPtINRRIHigh(parseFloat(e.target.value) || 1.2)} /></div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
+                        <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                          {ptModule1Data.map((v, i) => (
+                            <Input key={i} type="number" step="any" placeholder="—" value={v ?? ""}
+                              onChange={e => { const d = [...ptModule1Data]; d[i] = e.target.value === "" ? null as any : parseFloat(e.target.value); setPtModule1Data(d); }}
+                              className="h-8 text-xs text-center" />
+                          ))}
+                        </div>
+                        {ptModule1Data.filter(v => v !== null && !isNaN(v)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Module 2: Two-Instrument Comparison */}
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Module 2: Two-Instrument Comparison (Deming Regression)</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5"><Label>Instrument 1 (X)</Label><Input value={ptInstrumentName} onChange={e => setPtInstrumentName(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>Instrument 2 (Y)</Label><Input value={ptInstrument2Name} onChange={e => setPtInstrument2Name(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label>TEa %</Label><Input type="number" step="1" value={(ptModule2TEa * 100)} onChange={e => setPtModule2TEa((parseFloat(e.target.value) || 20) / 100)} /><span className="text-xs text-muted-foreground">Default: 20% for PT</span></div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-border">
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-24">Specimen ID</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{ptInstrumentName} PT</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{ptInstrument2Name} PT</th>
+                          </tr></thead>
+                          <tbody>
+                            {ptModule2Data.map((dp, idx) => (
+                              <tr key={idx} className="border-b border-border/50">
+                                <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.x ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.y ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Module 3: Old Lot vs New Lot */}
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
+                      <span>Module 3: Old Lot vs New Lot Comparison</span>
+                      <label className="flex items-center gap-2 text-sm font-normal cursor-pointer">
+                        <input type="checkbox" checked={ptSkipModule3} onChange={e => setPtSkipModule3(e.target.checked)} className="rounded" />
+                        Skip (single analyzer lab)
+                      </label>
+                    </CardTitle></CardHeader>
+                    {!ptSkipModule3 && (
+                      <CardContent className="space-y-4">
+                        <div className="grid sm:grid-cols-3 gap-4">
+                          <div className="space-y-1.5"><Label>Old Lot #</Label><Input value={ptOldLotNum} onChange={e => setPtOldLotNum(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label>Old Lot Expiration</Label><Input type="date" value={ptOldLotExp} onChange={e => setPtOldLotExp(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label>TEa %</Label><Input type="number" step="1" value={(ptModule3TEa * 100)} onChange={e => setPtModule3TEa((parseFloat(e.target.value) || 20) / 100)} /></div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Run old lot first, then new lot on same specimens sequentially.</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead><tr className="border-b border-border">
+                              <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-24">Specimen ID</th>
+                              <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Old Lot PT</th>
+                              <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">New Lot PT</th>
+                            </tr></thead>
+                            <tbody>
+                              {ptModule3Data.map((dp, idx) => (
+                                <tr key={idx} className="border-b border-border/50">
+                                  <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.x ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.y ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    )}
+                  </Card>
+                </div>
+              ) : studyType === "precision" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                     <span>Precision Data Entry</span>
@@ -684,9 +973,9 @@ export default function VeritaCheckPage() {
 
           <div className="mt-8 flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {filledLevels >= (studyType === "precision" ? 1 : 3) ? <span className="text-green-600 dark:text-green-400">✓ {filledLevels} level{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : 3} minimum levels filled</span>}
+              {filledLevels >= (studyType === "precision" ? 1 : 3) ? <span className="text-green-600 dark:text-green-400">✓ {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" ? "specimen" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : 3} minimum filled</span>}
             </div>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "precision" ? 1 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < 3 || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
               {saveMutation.isPending ? "Calculating…" : "Run Study & Generate Report"}
             </Button>
           </div>
