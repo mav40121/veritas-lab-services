@@ -45,7 +45,7 @@ function NotifyForm() {
         onSubmit={e => {
           e.preventDefault();
           const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:VeriLabGuy@gmail.com?subject=VeritaScan — Notify Me&body=Please notify me when VeritaScan is available. My email is: ${email}`;
+          window.location.href = `mailto:info@veritaslabservices.com?subject=VeritaScan — Notify Me&body=Please notify me when VeritaScan is available. My email is: ${email}`;
         }}
         className="flex gap-2 max-w-sm mx-auto"
       >
@@ -317,7 +317,7 @@ export default function VeritaScanPage() {
 
           <p className="text-xs text-muted-foreground mt-5">
             Questions?{" "}
-            <a href="mailto:VeriLabGuy@gmail.com?subject=VeritaScan Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=VeritaScan Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>{" "}
             — we're happy to help.

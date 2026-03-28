@@ -42,7 +42,7 @@ function NotifyForm() {
         onSubmit={e => {
           e.preventDefault();
           const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:VeriLabGuy@gmail.com?subject=Lab Management 101 — Notify Me&body=Please notify me when the book is available. My email is: ${email}`;
+          window.location.href = `mailto:info@veritaslabservices.com?subject=Lab Management 101 — Notify Me&body=Please notify me when the book is available. My email is: ${email}`;
         }}
         className="flex gap-2 max-w-sm mx-auto"
       >
@@ -359,8 +359,8 @@ export default function BookPage() {
           </div>
           <p className="text-xs text-muted-foreground mt-5">
             Notify us at{" "}
-            <a href="mailto:VeriLabGuy@gmail.com?subject=Lab Management 101 — Purchase Inquiry" className="text-primary hover:underline">
-              VeriLabGuy@gmail.com
+            <a href="mailto:info@veritaslabservices.com?subject=Lab Management 101 — Purchase Inquiry" className="text-primary hover:underline">
+              info@veritaslabservices.com
             </a>{" "}
             if you'd like to be contacted when the book is available.
           </p>

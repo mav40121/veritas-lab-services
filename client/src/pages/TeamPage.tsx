@@ -47,7 +47,7 @@ export default function TeamPage() {
                 <p className="text-sm text-primary font-medium mt-0.5">MBA, MS, CPHQ, MLS (ASCP)</p>
                 <p className="text-sm text-muted-foreground mt-0.5">Owner & CEO</p>
               </div>
-              <a href="mailto:VeriLabGuy@gmail.com" className="text-sm text-primary hover:underline">VeriLabGuy@gmail.com</a>
+              <a href="mailto:info@veritaslabservices.com" className="text-sm text-primary hover:underline">info@veritaslabservices.com</a>
             </div>
 
             <div className="sm:col-span-2 space-y-5">

@@ -40,7 +40,7 @@ export default function ContactPage() {
                 <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
                   <CheckCircle2 size={40} className="text-primary" />
                   <h3 className="font-semibold text-lg">Message sent!</h3>
-                  <p className="text-sm text-muted-foreground">We'll respond promptly. For urgent matters, email VeriLabGuy@gmail.com directly.</p>
+                  <p className="text-sm text-muted-foreground">We'll respond promptly. For urgent matters, email info@veritaslabservices.com directly.</p>
                   <Button variant="outline" onClick={() => setSent(false)} className="mt-2">Send another message</Button>
                 </div>
               ) : (
@@ -70,7 +70,7 @@ export default function ContactPage() {
                 <Mail size={18} className="text-primary shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold text-sm">Email</div>
-                  <a href="mailto:VeriLabGuy@gmail.com" className="text-sm text-muted-foreground hover:text-primary transition-colors">VeriLabGuy@gmail.com</a>
+                  <a href="mailto:info@veritaslabservices.com" className="text-sm text-muted-foreground hover:text-primary transition-colors">info@veritaslabservices.com</a>
                 </div>
               </CardContent></Card>
               <Card><CardContent className="p-5 flex gap-3">

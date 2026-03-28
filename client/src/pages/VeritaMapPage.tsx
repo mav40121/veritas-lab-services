@@ -43,7 +43,7 @@ function NotifyForm() {
         onSubmit={e => {
           e.preventDefault();
           const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:VeriLabGuy@gmail.com?subject=VeritaMap — Notify Me&body=Please notify me when VeritaMap is available. My email is: ${email}`;
+          window.location.href = `mailto:info@veritaslabservices.com?subject=VeritaMap — Notify Me&body=Please notify me when VeritaMap is available. My email is: ${email}`;
         }}
         className="flex gap-2 max-w-sm mx-auto"
       >
@@ -308,7 +308,7 @@ export default function VeritaMapPage() {
 
           <p className="text-xs text-muted-foreground mt-5">
             Questions?{" "}
-            <a href="mailto:VeriLabGuy@gmail.com?subject=VeritaMap Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=VeritaMap Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>
           </p>

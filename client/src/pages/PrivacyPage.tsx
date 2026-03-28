@@ -78,7 +78,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">12. Contact</h2>
-          <p>Privacy questions or data requests: <a href="mailto:VeriLabGuy@gmail.com" className="text-primary hover:underline">VeriLabGuy@gmail.com</a><br />Veritas Lab Services, LLC · Arizona, United States</p>
+          <p>Privacy questions or data requests: <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a><br />Veritas Lab Services, LLC · Upton, Massachusetts</p>
         </section>
 
       </div>

@@ -42,7 +42,7 @@ function SiteFooter() {
           </div>
           <div>
             <div className="font-semibold text-sm mb-3">Contact</div>
-            <p className="text-sm text-muted-foreground">VeriLabGuy@gmail.com</p>
+            <p className="text-sm text-muted-foreground">info@veritaslabservices.com</p>
             <p className="text-sm text-muted-foreground mt-1">We respond to emails promptly.</p>
             <div className="mt-3">
               <div className="font-semibold text-sm mb-2">Resources</div>

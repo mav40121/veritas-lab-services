@@ -69,7 +69,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">13. Contact</h2>
-          <p>Questions regarding these Terms may be directed to: <a href="mailto:VeriLabGuy@gmail.com" className="text-primary hover:underline">VeriLabGuy@gmail.com</a></p>
+          <p>Questions regarding these Terms may be directed to: <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a></p>
         </section>
 
       </div>
