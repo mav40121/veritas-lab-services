@@ -275,6 +275,9 @@ export default function ArticleCalVerPage() {
             The goal isn't just compliance — it's intelligent compliance that enhances quality without unnecessary burden.
           </p>
 
+          {/* Newsletter */}
+          <NewsletterSignup variant="inline" source="article-calver" />
+
           {/* Final CTA */}
           <div className="rounded-xl bg-primary text-primary-foreground p-7 mt-10 text-center">
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />

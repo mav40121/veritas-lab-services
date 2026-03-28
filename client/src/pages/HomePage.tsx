@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight } from "lucide-react";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const services = [
   { icon: Users, title: "Leadership Coaching", desc: "One-on-one coaching for lab directors and managers. You pick the topics — C-suite relationships, team development, career advancement." },
@@ -208,6 +209,13 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Newsletter */}
+      <section className="section-padding border-b border-border">
+        <div className="container-default max-w-2xl">
+          <NewsletterSignup variant="banner" source="homepage" />
         </div>
       </section>
 

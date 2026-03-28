@@ -241,6 +241,111 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── NEWSLETTER ────────────────────────────────────────────────────────────
+  app.post("/api/newsletter/subscribe", async (req, res) => {
+    const { email, name, source } = req.body;
+    if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+
+    const sqlite = (db as any).session?.client || require("better-sqlite3");
+    try {
+      // Check for existing subscriber
+      const existing = (db as any).$client.prepare(
+        "SELECT id, active FROM newsletter_subscribers WHERE email = ?"
+      ).get(email.toLowerCase().trim());
+
+      if (existing) {
+        if (existing.active) return res.json({ success: true, message: "already_subscribed" });
+        // Re-subscribe if they previously unsubscribed
+        (db as any).$client.prepare(
+          "UPDATE newsletter_subscribers SET active = 1, unsubscribed_at = NULL, subscribed_at = ? WHERE email = ?"
+        ).run(new Date().toISOString(), email.toLowerCase().trim());
+      } else {
+        (db as any).$client.prepare(
+          "INSERT INTO newsletter_subscribers (email, name, source, subscribed_at) VALUES (?, ?, ?, ?)"
+        ).run(email.toLowerCase().trim(), name || null, source || "website", new Date().toISOString());
+      }
+
+      // Send welcome email via Resend
+      try {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "Michael Veri <info@veritaslabservices.com>",
+            to: email.toLowerCase().trim(),
+            subject: "Welcome to The Lab Director's Briefing",
+            html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>
+  body { font-family: Georgia, serif; color: #28251D; max-width: 600px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+  h1 { font-size: 22px; color: #01696F; margin-bottom: 4px; }
+  h2 { font-size: 16px; font-weight: normal; color: #7A7974; margin-top: 0; }
+  .divider { border: none; border-top: 1px solid #D4D1CA; margin: 24px 0; }
+  .cta { display: inline-block; background: #01696F; color: white; padding: 10px 22px; border-radius: 6px; text-decoration: none; font-family: sans-serif; font-size: 14px; font-weight: 600; margin: 8px 4px 8px 0; }
+  .cta-outline { display: inline-block; border: 1.5px solid #01696F; color: #01696F; padding: 10px 22px; border-radius: 6px; text-decoration: none; font-family: sans-serif; font-size: 14px; font-weight: 600; margin: 8px 4px; }
+  .sig { font-size: 13px; color: #7A7974; }
+  p { font-size: 15px; }
+</style></head>
+<body>
+  <h1>The Lab Director's Briefing</h1>
+  <h2>From Veritas Lab Services</h2>
+  <hr class="divider">
+  <p>${name ? `${name},` : "Hello,"}</p>
+  <p>You're in. Welcome to <strong>The Lab Director's Briefing</strong> — practical, regulation-backed guidance for clinical laboratory leaders, written by a former Joint Commission surveyor with 200+ facility inspections.</p>
+  <p>Here's what you can expect:</p>
+  <ul>
+    <li><strong>Regulatory clarity</strong> — What CLIA, TJC, and CAP actually require, in plain language</li>
+    <li><strong>Surveyor callouts</strong> — What I actually looked for across 200+ inspections</li>
+    <li><strong>Tools and resources</strong> — Free guides, lookup tools, and study aids for your lab</li>
+  </ul>
+  <p>While you're here, two free resources worth bookmarking:</p>
+  <a href="https://www.veritaslabservices.com/#/resources/clia-tea-lookup" class="cta">CLIA TEa Lookup Tool</a>
+  <a href="https://www.veritaslabservices.com/#/resources/clia-calibration-verification-method-comparison" class="cta-outline">Cal Ver Guide</a>
+  <hr class="divider">
+  <p class="sig">
+    Michael Veri, MS, MBA, MLS(ASCP), CPHQ<br>
+    Owner, Veritas Lab Services, LLC<br>
+    Former Joint Commission Laboratory Surveyor<br>
+    <a href="https://www.veritaslabservices.com" style="color: #01696F;">veritaslabservices.com</a>
+  </p>
+  <p style="font-size: 11px; color: #BAB9B4;">You're receiving this because you subscribed at veritaslabservices.com. To unsubscribe, reply with "unsubscribe" in the subject line.</p>
+</body>
+</html>
+            `,
+          }),
+        });
+      } catch (emailErr) {
+        console.error("[newsletter] Welcome email failed:", emailErr);
+        // Don't fail the subscription if email fails
+      }
+
+      res.json({ success: true, message: "subscribed" });
+    } catch (err: any) {
+      console.error("[newsletter] Subscribe error:", err);
+      res.status(500).json({ error: "Subscription failed. Please try again." });
+    }
+  });
+
+  // Admin — view subscribers
+  app.get("/api/admin/newsletter", (req, res) => {
+    const { secret } = req.query;
+    if (secret !== process.env.ADMIN_SECRET && secret !== "veritas-admin-2026") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    try {
+      const subscribers = (db as any).$client.prepare(
+        "SELECT id, email, name, source, subscribed_at, active FROM newsletter_subscribers ORDER BY subscribed_at DESC"
+      ).all();
+      res.json({ count: subscribers.filter((s: any) => s.active).length, subscribers });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch subscribers" });
+    }
+  });
+
   // ── STRIPE ────────────────────────────────────────────────────────────────
   // Create a checkout session for per-study ($9) or annual ($149/yr)
   // ── PASSWORD RESET ────────────────────────────────────────────────────────

@@ -66,6 +66,16 @@ sqlite.exec(`
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT,
+    source TEXT NOT NULL DEFAULT 'website',
+    subscribed_at TEXT NOT NULL,
+    unsubscribed_at TEXT,
+    active INTEGER NOT NULL DEFAULT 1
+  );
 `);
 
 // Seed discount codes (safe — INSERT OR IGNORE won't duplicate)

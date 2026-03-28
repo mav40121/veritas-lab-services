@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookOpen, ChevronRight, Clock, FlaskConical, User, Search, Wrench } from "lucide-react";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const articles = [
   {
@@ -162,6 +163,9 @@ export default function ResourcesPage() {
             ))}
           </div>
         </section>
+
+        {/* Newsletter */}
+        <NewsletterSignup variant="card" source="resources-page" />
 
         {/* CTA */}
         <section className="rounded-2xl bg-primary text-primary-foreground p-8 text-center">

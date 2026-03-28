@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, AlertTriangle, ExternalLink, Search } from "lucide-react";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -251,6 +252,9 @@ export default function ArticleTeaPage() {
           <p>
             Now you know where it is. Use the lookup tool to find your analytes. Update your calibration verification templates. Cite the CFR in your study reports. When a surveyor asks how you determined your acceptability criteria, you'll have the answer.
           </p>
+
+          {/* Newsletter */}
+          <NewsletterSignup variant="inline" source="article-tea" />
 
           {/* Final CTA */}
           <div className="rounded-xl bg-primary text-primary-foreground p-7 mt-10 text-center">
