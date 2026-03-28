@@ -782,12 +782,16 @@ export default function VeritaMapMapPage() {
   const { data: mapDetail, isLoading } = useQuery<MapDetail>({
     queryKey: [`/api/veritamap/maps/${mapId}`],
     enabled: !!mapId,
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   // Fetch intelligence data
   const { data: intelligenceRaw } = useQuery<IntelligenceData>({
     queryKey: [`/api/veritamap/maps/${mapId}/intelligence`],
     enabled: !!mapId,
+    staleTime: 0,
+    refetchOnMount: true,
     queryFn: async () => {
       const res = await fetch(
         `${API_BASE}/api/veritamap/maps/${mapId}/intelligence`,
