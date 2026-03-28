@@ -3,7 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard, Play } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/veritascan", label: "VeritaScan", badge: "Coming Soon" },
   { href: "/veritamap", label: "VeritaMap", badge: "Coming Soon" },
   { href: "/book", label: "Book", badge: "Coming Soon" },
+  { href: "/demo", label: "Live Demo", highlight2: true },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -42,16 +43,19 @@ export function NavBar() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map(({ href, label, highlight, badge }: any) => (
+          {navLinks.map(({ href, label, highlight, highlight2, badge }: any) => (
             <Link key={href} href={href} className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors font-medium",
               highlight
                 ? "bg-primary/10 text-primary hover:bg-primary/20"
-                : location === href
-                  ? "text-foreground bg-secondary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                : highlight2
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
+                  : location === href
+                    ? "text-foreground bg-secondary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             )}>
               {highlight && <FlaskConical size={13} />}
+              {highlight2 && <Play size={11} />}
               {label}
               {badge && (
                 <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-500/25 rounded px-1.5 py-0.5 leading-none">

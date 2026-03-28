@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star } from "lucide-react";
+import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight } from "lucide-react";
 
 const services = [
   { icon: Users, title: "Leadership Coaching", desc: "One-on-one coaching for lab directors and managers. You pick the topics — C-suite relationships, team development, career advancement." },
@@ -147,6 +147,66 @@ export default function HomePage() {
             <Button asChild variant="outline" size="lg">
               <Link href="/veritacheck">See Pricing</Link>
             </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Demo Teaser ── */}
+      <section className="section-padding border-b border-border">
+        <div className="container-default">
+          <div className="rounded-2xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-transparent overflow-hidden">
+            <div className="grid sm:grid-cols-2 gap-0">
+              {/* Left — copy */}
+              <div className="p-8 sm:p-10">
+                <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5 font-medium">
+                  See It In Action
+                </Badge>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 leading-tight">
+                  Watch the entire compliance workflow — live.
+                </h2>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-5">
+                  Follow a real hospital lab from test menu mapping to flagged compliance gaps — then watch those gaps get closed with EP studies and an inspection readiness score. No login. No demo call. Just the product.
+                </p>
+                <div className="space-y-2 mb-6">
+                  {[
+                    { icon: MapPin, text: "VeritaMap surfaces 2 compliance gaps across 5 analytes" },
+                    { icon: FlaskConical, text: "VeritaCheck runs the EP studies and generates signed PDF reports" },
+                    { icon: Shield, text: "VeritaScan scores inspection readiness across CLIA, TJC & CAP" },
+                  ].map(({ icon: Icon, text }) => (
+                    <div key={text} className="flex items-center gap-2.5 text-sm">
+                      <Icon size={14} className="text-primary shrink-0" />
+                      <span>{text}</span>
+                    </div>
+                  ))}
+                </div>
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                  <Link href="/demo"><Play size={15} className="mr-2" />Launch Interactive Demo</Link>
+                </Button>
+              </div>
+              {/* Right — preview cards */}
+              <div className="bg-muted/30 border-l border-border p-6 flex flex-col justify-center gap-3">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Demo Preview — Riverside Regional Medical Center</div>
+                {[
+                  { analyte: "Glucose", status: "PASS", color: "emerald" },
+                  { analyte: "Hemoglobin", status: "OVERDUE", color: "red" },
+                  { analyte: "Prothrombin Time", status: "GAP", color: "amber" },
+                  { analyte: "Creatinine", status: "PASS", color: "emerald" },
+                  { analyte: "Urine hCG", status: "PASS", color: "emerald" },
+                ].map(({ analyte, status, color }) => (
+                  <div key={analyte} className="flex items-center justify-between bg-card rounded-lg border border-border px-3 py-2 text-sm">
+                    <span className="font-medium">{analyte}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                      color === "emerald" ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
+                      color === "red" ? "text-red-700 bg-red-50 border-red-200" :
+                      "text-amber-700 bg-amber-50 border-amber-200"
+                    }`}>{status}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 text-xs text-amber-600 font-medium mt-1">
+                  <AlertTriangle size={12} /> 2 compliance gaps detected — click to resolve
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

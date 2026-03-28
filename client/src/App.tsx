@@ -24,6 +24,7 @@ import StudyGuidePage from "@/pages/StudyGuidePage";
 import BookPage from "@/pages/BookPage";
 import VeritaScanPage from "@/pages/VeritaScanPage";
 import VeritaMapPage from "@/pages/VeritaMapPage";
+import DemoPage from "@/pages/DemoPage";
 
 function SiteFooter() {
   return (
@@ -115,6 +116,7 @@ function AppContent() {
           <Route path="/book" component={BookPage} />
           <Route path="/veritascan" component={VeritaScanPage} />
           <Route path="/veritamap" component={VeritaMapPage} />
+          <Route path="/demo" component={DemoPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
