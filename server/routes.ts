@@ -311,7 +311,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const tests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
+    // Fetch tests with per-analyte instrument list (needed for intelligence/correlation)
+    const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
+    // For each test, attach the list of instruments running it
+    const instrByAnalyte = (db as any).$client.prepare(`
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category
+      FROM veritamap_instrument_tests it
+      JOIN veritamap_instruments i ON i.id = it.instrument_id
+      WHERE it.map_id = ? AND it.active = 1
+    `).all(req.params.id);
+    const instrMap: Record<string, any[]> = {};
+    for (const row of instrByAnalyte) {
+      if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
+      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category });
+    }
+    const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
     res.json({ ...map, tests });
   });
 
