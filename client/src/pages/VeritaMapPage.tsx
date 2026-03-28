@@ -32,40 +32,6 @@ const FEATURES = [
   "Built on CLIA '88 (42 CFR Part 493), CAP LAP standards, and TJC CAMLAB",
 ];
 
-function NotifyForm() {
-  return (
-    <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 text-center">
-      <div className="text-2xl mb-2">📬</div>
-      <div className="font-bold text-lg mb-1">Notify me when it's available</div>
-      <p className="text-sm text-muted-foreground mb-4">
-        VeritaMap is in final review. Leave your email and we'll reach out the moment it's ready.
-      </p>
-      <form
-        onSubmit={e => {
-          e.preventDefault();
-          const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:info@veritaslabservices.com?subject=VeritaMap — Notify Me&body=Please notify me when VeritaMap is available. My email is: ${email}`;
-        }}
-        className="flex gap-2 max-w-sm mx-auto"
-      >
-        <input
-          name="email"
-          type="email"
-          required
-          placeholder="your@email.com"
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-        />
-        <button
-          type="submit"
-          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-        >
-          Notify Me
-        </button>
-      </form>
-    </div>
-  );
-}
-
 export default function VeritaMapPage() {
   return (
     <div>
@@ -106,7 +72,14 @@ export default function VeritaMapPage() {
                 </div>
               </div>
 
-              <NotifyForm />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link href="/veritamap-app" className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
+                  Launch VeritaMap →
+                </Link>
+                <Link href="/login" className="inline-flex items-center justify-center gap-2 border border-border hover:bg-secondary text-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
+                  Sign In / Create Account
+                </Link>
+              </div>
             </div>
 
             {/* Right: visual */}
@@ -245,9 +218,9 @@ export default function VeritaMapPage() {
                     </li>
                   ))}
                 </ul>
-                <button disabled className="w-full border border-border rounded-lg py-2.5 text-sm font-semibold text-muted-foreground bg-muted/50 cursor-not-allowed">
-                  Available Soon
-                </button>
+                <Link href="/veritamap-app" className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
+                  Launch VeritaMap
+                </Link>
               </CardContent>
             </Card>
 
@@ -271,9 +244,9 @@ export default function VeritaMapPage() {
                     </li>
                   ))}
                 </ul>
-                <button disabled className="w-full bg-primary/40 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground cursor-not-allowed">
-                  Available Soon
-                </button>
+                <Link href="/veritamap-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
+                  Launch VeritaMap →
+                </Link>
               </CardContent>
             </Card>
           </div>

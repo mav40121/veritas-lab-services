@@ -34,39 +34,7 @@ const FEATURES = [
   "Exportable — share with medical director, CNO, or consulting team",
 ];
 
-function NotifyForm() {
-  return (
-    <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 text-center">
-      <div className="text-2xl mb-2">📬</div>
-      <div className="font-bold text-lg mb-1">Notify me when it's available</div>
-      <p className="text-sm text-muted-foreground mb-4">
-        VeritaScan is in final review. Leave your email and we'll reach out the moment it's ready.
-      </p>
-      <form
-        onSubmit={e => {
-          e.preventDefault();
-          const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:info@veritaslabservices.com?subject=VeritaScan — Notify Me&body=Please notify me when VeritaScan is available. My email is: ${email}`;
-        }}
-        className="flex gap-2 max-w-sm mx-auto"
-      >
-        <input
-          name="email"
-          type="email"
-          required
-          placeholder="your@email.com"
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-        />
-        <button
-          type="submit"
-          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-        >
-          Notify Me
-        </button>
-      </form>
-    </div>
-  );
-}
+
 
 export default function VeritaScanPage() {
   return (
@@ -103,11 +71,17 @@ export default function VeritaScanPage() {
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center relative">
                   <div className="text-2xl font-bold text-primary">$99</div>
                   <div className="text-xs text-muted-foreground">Web version / year</div>
-                  <div className="text-xs text-muted-foreground">(coming soon)</div>
                 </div>
               </div>
 
-              <NotifyForm />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                  <Link href="/veritascan-app">Launch VeritaScan <ChevronRight size={15} className="ml-1" /></Link>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/login">Sign In / Create Account</Link>
+                </Button>
+              </div>
             </div>
 
             {/* Right: visual */}
@@ -258,18 +232,15 @@ export default function VeritaScanPage() {
                     </li>
                   ))}
                 </ul>
-                <button
-                  disabled
-                  className="w-full border border-border rounded-lg py-2.5 text-sm font-semibold text-muted-foreground bg-muted/50 cursor-not-allowed"
-                >
-                  Available Soon
-                </button>
+                <Link href="/veritascan-app" className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
+                  Launch VeritaScan
+                </Link>
               </CardContent>
             </Card>
 
             <Card className="border-2 border-primary bg-primary/5 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="bg-amber-500 text-white border-0">Coming Soon</Badge>
+                <Badge className="bg-emerald-500 text-white border-0">Now Live</Badge>
               </div>
               <CardContent className="p-6">
                 <div className="font-bold text-lg mb-1">Web Version</div>
@@ -287,12 +258,9 @@ export default function VeritaScanPage() {
                     </li>
                   ))}
                 </ul>
-                <button
-                  disabled
-                  className="w-full bg-primary/40 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground cursor-not-allowed"
-                >
-                  In Development
-                </button>
+                <Link href="/veritascan-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
+                  Launch VeritaScan →
+                </Link>
               </CardContent>
             </Card>
           </div>
