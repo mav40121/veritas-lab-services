@@ -31,6 +31,7 @@ import DemoLabPage from "@/pages/DemoLabPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
 import ArticleTeaPage from "@/pages/ArticleTeaPage";
+import ArticleTrainingPage from "@/pages/ArticleTrainingPage";
 import TeaLookupPage from "@/pages/TeaLookupPage";
 import VeritaScanAppPage from "@/pages/VeritaScanAppPage";
 import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
@@ -175,6 +176,7 @@ function AppContent() {
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
+          <Route path="/resources/how-veritaassure-trains-lab-leaders" component={ArticleTrainingPage} />
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route path="/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/veritascan-app/:id" component={VeritaScanScanPage} />

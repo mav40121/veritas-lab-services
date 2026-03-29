@@ -163,6 +163,16 @@ export default function VeritaCompPage() {
         </div>
       </section>
 
+      {/* Training Angle */}
+      <section className="section-padding border-b border-border bg-primary/5">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <h2 className="font-serif text-3xl font-bold mb-4">VeritaComp Teaches the Six CLIA Elements</h2>
+          <p className="text-muted-foreground leading-relaxed max-w-3xl">
+            Most staff who complete competency assessments have never read 42 CFR 493.1451. They fill out the form because their supervisor told them to. VeritaComp shows them why each element exists. A supervisor building their first competency program in VeritaComp learns the regulatory basis for each field they complete. That understanding is what distinguishes a compliant lab from an inspection-ready one.
+          </p>
+        </div>
+      </section>
+
       {/* What it does */}
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">

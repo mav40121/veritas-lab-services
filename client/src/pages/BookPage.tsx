@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookOpen, CheckCircle2, FlaskConical, Users, Award, Mic } from "lucide-react";
+import { BookOpen, CheckCircle2, FlaskConical, Users, Award, Mic, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 
 const CHAPTERS = [
@@ -194,6 +194,64 @@ export default function BookPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Book + Software Curriculum */}
+      <section className="section-padding border-b border-border bg-primary/5">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <h2 className="font-serif text-3xl font-bold mb-6 text-center">The Book and the Software: A Complete Curriculum</h2>
+          <p className="text-muted-foreground leading-relaxed text-center max-w-3xl mx-auto mb-10">
+            Lab Management 101 explains the why behind laboratory leadership. VeritaAssure builds the habit of doing it correctly. Together they form a practical curriculum for clinical lab leadership: the regulatory landscape, the C-suite relationships, the documentation infrastructure, and the career development framework, all in one place.
+          </p>
+          <div className="grid lg:grid-cols-2 gap-8 items-start">
+            {/* Left: Book cover card */}
+            <Card className="border-primary/20">
+              <CardContent className="p-6 flex flex-col items-center text-center">
+                <div className="w-40 h-52 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-lg flex flex-col items-center justify-center p-5 text-white mb-4">
+                  <div className="font-serif text-xl font-bold leading-tight mb-2">Lab<br />Management<br />101</div>
+                  <div className="text-xs text-white/70 mb-3">A Guide to Laboratory Leadership</div>
+                  <div className="w-8 h-0.5 bg-white/40 mb-2" />
+                  <div className="text-xs font-semibold">Michael Veri</div>
+                </div>
+                <div className="font-semibold text-sm mb-1">Lab Management 101</div>
+                <p className="text-xs text-muted-foreground">The regulatory landscape, C-suite relationships, and career development framework that no MLS or MBA program offers.</p>
+              </CardContent>
+            </Card>
+            {/* Right: VeritaAssure suite */}
+            <Card className="border-primary/20">
+              <CardContent className="p-6">
+                <div className="font-semibold text-lg mb-3">VeritaAssure Suite</div>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                  Every concept in the book has a corresponding workflow in the software. A new director who reads the book learns the regulatory landscape. A new director who uses the software builds the documentation habits that make that knowledge durable.
+                </p>
+                <div className="space-y-3 mb-5">
+                  {[
+                    { name: "VeritaMap", desc: "Build your test menu map and learn every regulatory obligation your lab carries." },
+                    { name: "VeritaCheck", desc: "Run EP studies with guided methodology that teaches the science behind each calculation." },
+                    { name: "VeritaScan", desc: "Walk 168 compliance items and learn how a surveyor thinks." },
+                    { name: "VeritaComp", desc: "Build competency programs that teach the six CLIA elements by doing them." },
+                  ].map(({ name, desc }) => (
+                    <div key={name} className="flex items-start gap-2.5 text-sm">
+                      <CheckCircle2 size={15} className="text-primary mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-medium">{name}:</span>{" "}
+                        <span className="text-muted-foreground">{desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link href="/demo" className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                    Explore the Demo <ChevronRight size={13} />
+                  </Link>
+                  <Link href="/veritacheck#pricing" className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                    View Pricing <ChevronRight size={13} />
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>

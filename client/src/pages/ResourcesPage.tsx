@@ -7,6 +7,17 @@ import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const articles = [
   {
+    slug: "how-veritaassure-trains-lab-leaders",
+    title: "How VeritaAssure Trains the Next Generation of Lab Leaders",
+    summary: "Most lab directors learn compliance the hard way. VeritaAssure changes that. Here is how the modules work as a leadership development curriculum.",
+    category: "Leadership Development",
+    readTime: "14 min read",
+    author: "Michael Veri",
+    date: "March 2026",
+    tags: ["Leadership Development", "Lab Director", "CLIA", "VeritaAssure"],
+    featured: true,
+  },
+  {
     slug: "clia-calibration-verification-method-comparison",
     title: "CLIA Calibration Verification and Method Comparison: What Lab Managers Actually Need to Know",
     summary: "Calibration verification is an accuracy study. Correlation is a precision study. Most labs are doing both wrong. Spending money on kits they don't need and missing the 6-month-plus-20-day compliance window that would eliminate the stress entirely.",
@@ -15,7 +26,7 @@ const articles = [
     author: "Michael Veri",
     date: "March 2026",
     tags: ["CLIA", "Calibration Verification", "Method Comparison", "Compliance"],
-    featured: true,
+    featured: false,
   },
   {
     slug: "clia-tea-what-lab-directors-dont-know",

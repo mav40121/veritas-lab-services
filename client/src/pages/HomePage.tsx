@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight, Briefcase, Wrench, Handshake } from "lucide-react";
+import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight, Briefcase, Wrench, Handshake, GraduationCap, Building2, UserCheck } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const services = [
@@ -242,6 +242,58 @@ export default function HomePage() {
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/veritacheck">See Pricing</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Training Section */}
+      <section className="section-padding border-b border-border">
+        <div className="container-default">
+          <div className="text-center mb-10">
+            <h2 className="font-serif text-3xl font-bold mb-4">Built to Teach. Built to Lead.</h2>
+            <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              Most lab directors learn compliance the hard way. VeritaAssure changes that. Every module is built around the regulatory requirements it satisfies, so using the software teaches you why each requirement exists, not just how to document it. New directors build institutional knowledge. Supervisors develop inspection readiness. Health systems create a shared compliance foundation across every lab they run.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <GraduationCap size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">For New Directors</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Build your test menu map, run your first EP study, and establish your compliance baseline in your first 90 days.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <UserCheck size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">For Developing Leaders</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Assign supervisors to own one module at a time. They learn the regulatory framework by doing the work, not reading about it.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <Building2 size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">For Health Systems</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  A shared compliance environment across multiple labs. Standards, documentation, and knowledge that survives leadership transitions.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="text-center mt-8">
+            <Button asChild variant="outline">
+              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1" /></Link>
             </Button>
           </div>
         </div>
