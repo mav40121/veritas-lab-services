@@ -34,6 +34,7 @@ import {
   ChevronDown,
   ChevronRight,
   Lock,
+  Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import fdaData from "@/lib/fdaInstrumentData.json";
@@ -67,6 +68,7 @@ interface TestToggle {
   specialty: string;
   complexity: Complexity;
   active: boolean;
+  isCustom?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -105,6 +107,26 @@ const CHEMISTRY_SPECIALTY_ORDER = [
   "Microbiology",
   "Blood Bank",
 ];
+
+const CUSTOM_TEST_SPECIALTIES = [
+  "Electrolytes",
+  "General Chemistry",
+  "Hematology",
+  "Coagulation",
+  "Urinalysis",
+  "Blood Gas",
+  "Blood Bank",
+  "Microbiology",
+  "Immunology",
+  "Endocrinology",
+  "Toxicology",
+  "Molecular",
+  "Other",
+];
+
+const OTHER_DEPARTMENT_VALUE = "__other__";
+const OTHER_VENDOR_VALUE = "__other__";
+const OTHER_INSTRUMENT_VALUE = "__other__";
 
 function getSpecialtyOrder(specialty: string, isChemistry: boolean): number {
   if (!isChemistry) return 999;
@@ -181,6 +203,10 @@ function getSpecialtyColor(specialty: string): string {
   return map[specialty] ?? "text-muted-foreground";
 }
 
+function isCustomInstrument(instrumentName: string): boolean {
+  return !INSTRUMENT_DATA[instrumentName];
+}
+
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
@@ -235,6 +261,106 @@ function RoleBadge({ role }: { role: Role }) {
   );
 }
 
+// ── Add Custom Test Dialog ───────────────────────────────────────────────────
+
+function AddCustomTestDialog({
+  open,
+  onOpenChange,
+  onAdd,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdd: (test: TestToggle) => void;
+}) {
+  const [testName, setTestName] = useState("");
+  const [specialty, setSpecialty] = useState("General Chemistry");
+  const [complexity, setComplexity] = useState<Complexity>("MODERATE");
+
+  function handleSubmit() {
+    if (!testName.trim()) return;
+    onAdd({
+      analyte: testName.trim(),
+      specialty,
+      complexity,
+      active: true,
+      isCustom: true,
+    });
+    setTestName("");
+    setSpecialty("General Chemistry");
+    setComplexity("MODERATE");
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Plus size={16} className="text-primary" /> Add Custom Test
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">
+              Test Name *
+            </label>
+            <Input
+              className="h-9 text-sm"
+              placeholder='e.g. "SARS-CoV-2 EUA", "Lab-developed Toxicology Panel"'
+              value={testName}
+              onChange={(e) => setTestName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">
+              Specialty
+            </label>
+            <Select value={specialty} onValueChange={setSpecialty}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {CUSTOM_TEST_SPECIALTIES.map((s) => (
+                  <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">
+              Complexity
+            </label>
+            <Select value={complexity} onValueChange={(v) => setComplexity(v as Complexity)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="WAIVED" className="text-sm">WAIVED</SelectItem>
+                <SelectItem value="MODERATE" className="text-sm">MODERATE</SelectItem>
+                <SelectItem value="HIGH" className="text-sm">HIGH</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={!testName.trim()}
+            onClick={handleSubmit}
+          >
+            <Plus size={14} className="mr-1" /> Add Test
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Instrument section for Step 2 ─────────────────────────────────────────────
 
 function InstrumentTestSection({
@@ -243,17 +369,21 @@ function InstrumentTestSection({
   onToggle,
   onSelectAll,
   onDeselectAll,
+  onAddCustomTest,
 }: {
   instrument: InstrumentEntry;
   tests: TestToggle[];
   onToggle: (analyte: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  onAddCustomTest: (test: TestToggle) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [search, setSearch] = useState("");
+  const [customTestOpen, setCustomTestOpen] = useState(false);
 
   const isChemistry = instrument.category === "Chemistry";
+  const isCustom = isCustomInstrument(instrument.instrument_name);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return tests;
@@ -302,6 +432,11 @@ function InstrumentTestSection({
           <Badge className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(instrument.category)}`}>
             {instrument.category}
           </Badge>
+          {isCustom && (
+            <Badge className="text-[10px] px-1.5 py-0 border-0 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+              Other
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-3">
           <span className="text-xs text-muted-foreground">
@@ -346,56 +481,108 @@ function InstrumentTestSection({
             </Button>
           </div>
 
-          {/* Tests grouped by specialty */}
-          <div className="divide-y divide-border">
-            {Object.entries(bySpecialty)
-              .sort(([a], [b]) => {
-                const orderA = getSpecialtyOrder(a, isChemistry);
-                const orderB = getSpecialtyOrder(b, isChemistry);
-                if (orderA !== orderB) return orderA - orderB;
-                return a.localeCompare(b);
-              })
-              .map(([specialty, specialtyTests]) => (
-                <div key={specialty}>
-                  <div className="px-4 pt-2.5 pb-1">
-                    <span className={`text-[10px] font-semibold uppercase tracking-wide ${getSpecialtyColor(specialty)}`}>
-                      {specialty}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground ml-2">
-                      ({specialtyTests.filter((t) => t.active).length}/{specialtyTests.length})
-                    </span>
-                  </div>
-                  {specialtyTests.map((test) => (
-                    <div
-                      key={test.analyte}
-                      className={`flex items-center gap-3 px-4 py-2 transition-colors ${
-                        !test.active ? "opacity-50 bg-muted/20" : "hover:bg-muted/20"
-                      }`}
-                    >
-                      <Switch
-                        checked={test.active}
-                        onCheckedChange={() => onToggle(test.analyte)}
-                        className="data-[state=checked]:bg-primary shrink-0"
-                      />
-                      <span className="text-sm font-medium flex-1 min-w-0 truncate">
-                        {test.analyte}
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {getComplexityBadge(test.complexity)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-          </div>
+          {/* Empty state for custom instruments with no tests */}
+          {isCustom && tests.length === 0 && (
+            <div className="text-center py-8 px-4">
+              <FlaskConical size={24} className="mx-auto mb-2 opacity-40" />
+              <p className="text-sm text-muted-foreground mb-3">
+                No pre-defined tests for this custom instrument.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={(e) => { e.stopPropagation(); setCustomTestOpen(true); }}
+              >
+                <Plus size={14} className="mr-1" /> Add Custom Test
+              </Button>
+            </div>
+          )}
 
-          {Object.keys(bySpecialty).length === 0 && (
+          {/* Tests grouped by specialty */}
+          {(tests.length > 0 || !isCustom) && (
+            <div className="divide-y divide-border">
+              {Object.entries(bySpecialty)
+                .sort(([a], [b]) => {
+                  const orderA = getSpecialtyOrder(a, isChemistry);
+                  const orderB = getSpecialtyOrder(b, isChemistry);
+                  if (orderA !== orderB) return orderA - orderB;
+                  return a.localeCompare(b);
+                })
+                .map(([specialty, specialtyTests]) => (
+                  <div key={specialty}>
+                    <div className="px-4 pt-2.5 pb-1">
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide ${getSpecialtyColor(specialty)}`}>
+                        {specialty}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground ml-2">
+                        ({specialtyTests.filter((t) => t.active).length}/{specialtyTests.length})
+                      </span>
+                    </div>
+                    {specialtyTests.map((test) => (
+                      <div
+                        key={test.analyte}
+                        className={`flex items-center gap-3 px-4 py-2 transition-colors ${
+                          !test.active ? "opacity-50 bg-muted/20" : "hover:bg-muted/20"
+                        }`}
+                      >
+                        <Switch
+                          checked={test.active}
+                          onCheckedChange={() => onToggle(test.analyte)}
+                          className="data-[state=checked]:bg-primary shrink-0"
+                        />
+                        <span className="text-sm font-medium flex-1 min-w-0 truncate">
+                          {test.analyte}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {test.isCustom && (
+                            <Badge className="text-[10px] px-1.5 py-0 border-0 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                              Custom
+                            </Badge>
+                          )}
+                          {getComplexityBadge(test.complexity)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {Object.keys(bySpecialty).length === 0 && tests.length > 0 && (
             <div className="text-center py-8 text-sm text-muted-foreground">
               No tests match "{search}"
             </div>
           )}
+
+          {/* Add Custom Test button — always shown at bottom */}
+          <div className="px-4 py-3 border-t border-border bg-muted/20">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={(e) => { e.stopPropagation(); setCustomTestOpen(true); }}
+            >
+              <Plus size={12} className="mr-1" /> Add Custom Test
+            </Button>
+          </div>
+
+          {/* EUA/LDT info note */}
+          <div className="px-4 py-2.5 bg-muted/10 border-t border-border">
+            <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+              <Info size={12} className="shrink-0 mt-0.5" />
+              Running an EUA test or lab-developed test (LDT) not listed above? Use 'Add Custom Test' to include it in your compliance map.
+            </p>
+          </div>
         </CardContent>
       )}
+
+      <AddCustomTestDialog
+        open={customTestOpen}
+        onOpenChange={setCustomTestOpen}
+        onAdd={onAddCustomTest}
+      />
     </Card>
   );
 }
@@ -418,6 +605,11 @@ export default function VeritaMapBuildPage() {
   const [manualEntry, setManualEntry] = useState(false);
   const [manualInstrumentName, setManualInstrumentName] = useState("");
   const [role, setRole] = useState<Role>("Primary");
+
+  // "Other" write-in state for cascade
+  const [customDepartment, setCustomDepartment] = useState("");
+  const [customVendor, setCustomVendor] = useState("");
+  const [customInstrument, setCustomInstrument] = useState("");
 
   // Step 2 state: map from instId → test toggles
   const [testsByInstrument, setTestsByInstrument] = useState<
@@ -486,15 +678,27 @@ export default function VeritaMapBuildPage() {
     });
   }, [instruments]);
 
-  // Resolve the effective instrument name (from dropdown or manual entry)
-  const effectiveInstrumentName = manualEntry ? manualInstrumentName.trim() : instrumentName;
+  // Determine effective instrument name based on cascade state
+  const isOtherDepartment = selectedDepartment === OTHER_DEPARTMENT_VALUE;
+  const isOtherVendor = selectedVendor === OTHER_VENDOR_VALUE;
+  const isOtherInstrument = instrumentName === OTHER_INSTRUMENT_VALUE;
+
+  const effectiveInstrumentName = manualEntry
+    ? manualInstrumentName.trim()
+    : isOtherInstrument
+      ? customInstrument.trim()
+      : instrumentName;
+
+  const effectiveCategory = isOtherDepartment
+    ? customDepartment.trim()
+    : selectedDepartment || "Unknown";
 
   // Add instrument mutation
   const addInstrumentMutation = useMutation({
     mutationFn: async () => {
       const name = effectiveInstrumentName;
       const fdaInstr = INSTRUMENT_DATA[name];
-      const category = fdaInstr?.category ?? (selectedDepartment || "Unknown");
+      const category = fdaInstr?.category ?? effectiveCategory;
       const res = await fetch(
         `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
         {
@@ -525,6 +729,9 @@ export default function VeritaMapBuildPage() {
       setSelectedVendor("");
       setManualInstrumentName("");
       setManualEntry(false);
+      setCustomDepartment("");
+      setCustomVendor("");
+      setCustomInstrument("");
       // Initialize tests for new instrument
       const fdaInstr = INSTRUMENT_DATA[newInstr.instrument_name];
       if (fdaInstr) {
@@ -538,6 +745,12 @@ export default function VeritaMapBuildPage() {
               active: true,
             })
           ),
+        }));
+      } else {
+        // Custom instrument — no FDA tests, start empty
+        setTestsByInstrument((prev) => ({
+          ...prev,
+          [newInstr.id]: [],
         }));
       }
       toast({ title: "Instrument added" });
@@ -646,15 +859,15 @@ export default function VeritaMapBuildPage() {
 
   // Vendors filtered by selected department
   const vendorsForDept = useMemo(() => {
-    if (!selectedDepartment || !cascade[selectedDepartment]) return [];
+    if (!selectedDepartment || isOtherDepartment || !cascade[selectedDepartment]) return [];
     return Object.keys(cascade[selectedDepartment]).sort();
-  }, [selectedDepartment, cascade]);
+  }, [selectedDepartment, cascade, isOtherDepartment]);
 
   // Instruments filtered by selected department + vendor
   const instrumentsForVendor = useMemo(() => {
-    if (!selectedDepartment || !selectedVendor) return [];
+    if (!selectedDepartment || !selectedVendor || isOtherDepartment || isOtherVendor) return [];
     return cascade[selectedDepartment]?.[selectedVendor] ?? [];
-  }, [selectedDepartment, selectedVendor, cascade]);
+  }, [selectedDepartment, selectedVendor, cascade, isOtherDepartment, isOtherVendor]);
 
   // Toggle a test for a specific instrument
   function toggleTest(instId: number, analyte: string) {
@@ -680,6 +893,13 @@ export default function VeritaMapBuildPage() {
     }));
   }
 
+  function addCustomTest(instId: number, test: TestToggle) {
+    setTestsByInstrument((prev) => ({
+      ...prev,
+      [instId]: [...(prev[instId] ?? []), test],
+    }));
+  }
+
   // Total active tests count across all instruments
   const totalActiveTests = useMemo(() => {
     let count = 0;
@@ -688,6 +908,48 @@ export default function VeritaMapBuildPage() {
     }
     return count;
   }, [testsByInstrument]);
+
+  // Reset cascade fields when department changes
+  function handleDepartmentChange(v: string) {
+    setSelectedDepartment(v);
+    setSelectedVendor("");
+    setInstrumentName("");
+    setManualEntry(false);
+    setManualInstrumentName("");
+    setCustomDepartment("");
+    setCustomVendor("");
+    setCustomInstrument("");
+
+    if (v === OTHER_DEPARTMENT_VALUE) {
+      // "Other" department — skip to free-text
+      return;
+    }
+
+    // Auto-select vendor if only one option (e.g., Manual Procedures)
+    const vendors = cascade[v] ? Object.keys(cascade[v]) : [];
+    if (vendors.length === 1) {
+      setSelectedVendor(vendors[0]);
+    }
+    // Default role to Reference for Manual Procedures
+    if (v === "Manual Procedures") {
+      setRole("Reference");
+    } else {
+      setRole("Primary");
+    }
+  }
+
+  function handleVendorChange(v: string) {
+    setSelectedVendor(v);
+    setInstrumentName("");
+    setManualEntry(false);
+    setManualInstrumentName("");
+    setCustomInstrument("");
+  }
+
+  function handleInstrumentChange(v: string) {
+    setInstrumentName(v);
+    setCustomInstrument("");
+  }
 
   // ── Step 1 ────────────────────────────────────────────────────────────────
   if (step === 1) {
@@ -722,137 +984,219 @@ export default function VeritaMapBuildPage() {
         <Card className="mb-6">
           <CardContent className="p-4">
             <h2 className="text-sm font-semibold mb-3">Add Instrument</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Step 1: Department */}
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Department</label>
-                <Select
-                  value={selectedDepartment}
-                  onValueChange={(v) => {
-                    setSelectedDepartment(v);
-                    setSelectedVendor("");
-                    setInstrumentName("");
-                    setManualEntry(false);
-                    setManualInstrumentName("");
-                    // Auto-select vendor if only one option (e.g., Manual Procedures)
-                    const vendors = cascade[v] ? Object.keys(cascade[v]) : [];
-                    if (vendors.length === 1) {
-                      setSelectedVendor(vendors[0]);
-                    }
-                    // Default role to Reference for Manual Procedures
-                    if (v === "Manual Procedures") {
-                      setRole("Reference");
-                    } else {
-                      setRole("Primary");
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Select department…" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {departments.map((dept) => (
-                      <SelectItem key={dept} value={dept} className="text-sm">
-                        {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              {/* Step 2: Vendor (filtered) */}
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Vendor</label>
-                <Select
-                  value={selectedVendor}
-                  onValueChange={(v) => {
-                    setSelectedVendor(v);
-                    setInstrumentName("");
-                    setManualEntry(false);
-                    setManualInstrumentName("");
-                  }}
-                  disabled={!selectedDepartment || manualEntry}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder={selectedDepartment ? "Select vendor…" : "Select department first"} />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {vendorsForDept.map((vendor) => (
-                      <SelectItem key={vendor} value={vendor} className="text-sm">
-                        {vendor}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Other Department write-in mode */}
+            {isOtherDepartment ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* Department dropdown showing "Other" */}
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Department</label>
+                    <Select value={selectedDepartment} onValueChange={handleDepartmentChange}>
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Select department…" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {departments.map((dept) => (
+                          <SelectItem key={dept} value={dept} className="text-sm">{dept}</SelectItem>
+                        ))}
+                        <SelectItem value={OTHER_DEPARTMENT_VALUE} className="text-sm text-muted-foreground">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Custom department name */}
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Department Name</label>
+                    <Input
+                      className="h-9 text-sm"
+                      placeholder="Type department name…"
+                      value={customDepartment}
+                      onChange={(e) => setCustomDepartment(e.target.value)}
+                    />
+                  </div>
+                  {/* Custom instrument name */}
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Instrument Name</label>
+                    <Input
+                      className="h-9 text-sm"
+                      placeholder="Type instrument name…"
+                      value={customInstrument}
+                      onChange={(e) => setCustomInstrument(e.target.value)}
+                    />
+                  </div>
+                  {/* Role select */}
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Role</label>
+                    <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map((r) => (
+                          <SelectItem key={r} value={r} className="text-sm">{r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                  <Info size={12} className="shrink-0 mt-0.5" />
+                  Use this for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.
+                </p>
               </div>
-
-              {/* Step 3: Instrument (filtered) — or manual entry */}
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Instrument</label>
-                {manualEntry ? (
-                  <Input
-                    className="h-9 text-sm"
-                    placeholder="Type instrument name…"
-                    value={manualInstrumentName}
-                    onChange={(e) => setManualInstrumentName(e.target.value)}
-                  />
-                ) : (
-                  <Select
-                    value={instrumentName}
-                    onValueChange={(v) => setInstrumentName(v)}
-                    disabled={!selectedVendor}
-                  >
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Step 1: Department */}
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Department</label>
+                  <Select value={selectedDepartment} onValueChange={handleDepartmentChange}>
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder={selectedVendor ? "Select instrument…" : "Select vendor first"} />
+                      <SelectValue placeholder="Select department…" />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
-                      {instrumentsForVendor.map((name) => (
-                        <SelectItem key={name} value={name} className="text-sm">
-                          {name}
-                          <span className="ml-2 text-[10px] text-muted-foreground">
-                            ({INSTRUMENT_DATA[name].testCount} tests)
-                          </span>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept} className="text-sm">{dept}</SelectItem>
+                      ))}
+                      <SelectItem value={OTHER_DEPARTMENT_VALUE} className="text-sm text-muted-foreground">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Step 2: Vendor (filtered) */}
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Vendor</label>
+                  {isOtherVendor ? (
+                    <Input
+                      className="h-9 text-sm"
+                      placeholder="Type vendor / manufacturer name…"
+                      value={customVendor}
+                      onChange={(e) => setCustomVendor(e.target.value)}
+                    />
+                  ) : (
+                    <Select
+                      value={selectedVendor}
+                      onValueChange={handleVendorChange}
+                      disabled={!selectedDepartment || manualEntry}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder={selectedDepartment ? "Select vendor…" : "Select department first"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {vendorsForDept.map((vendor) => (
+                          <SelectItem key={vendor} value={vendor} className="text-sm">{vendor}</SelectItem>
+                        ))}
+                        {selectedDepartment && (
+                          <SelectItem value={OTHER_VENDOR_VALUE} className="text-sm text-muted-foreground">Other / Not Listed</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                {/* Step 3: Instrument (filtered) — or manual/other entry */}
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Instrument</label>
+                  {manualEntry || isOtherVendor || isOtherInstrument ? (
+                    <Input
+                      className="h-9 text-sm"
+                      placeholder="Type instrument name…"
+                      value={manualEntry ? manualInstrumentName : customInstrument}
+                      onChange={(e) => manualEntry ? setManualInstrumentName(e.target.value) : setCustomInstrument(e.target.value)}
+                    />
+                  ) : (
+                    <Select
+                      value={instrumentName}
+                      onValueChange={handleInstrumentChange}
+                      disabled={!selectedVendor}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder={selectedVendor ? "Select instrument…" : "Select vendor first"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {instrumentsForVendor.map((name) => (
+                          <SelectItem key={name} value={name} className="text-sm">
+                            {name}
+                            <span className="ml-2 text-[10px] text-muted-foreground">
+                              ({INSTRUMENT_DATA[name].testCount} tests)
+                            </span>
+                          </SelectItem>
+                        ))}
+                        {selectedVendor && (
+                          <SelectItem value={OTHER_INSTRUMENT_VALUE} className="text-sm text-muted-foreground">Other / Not Listed</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                {/* Role select */}
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Role</label>
+                  <Select
+                    value={role}
+                    onValueChange={(v) => setRole(v as Role)}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r} className="text-sm">
+                          {r}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                </div>
               </div>
+            )}
 
-              {/* Role select */}
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Role</label>
-                <Select
-                  value={role}
-                  onValueChange={(v) => setRole(v as Role)}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map((r) => (
-                      <SelectItem key={r} value={r} className="text-sm">
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            {/* Helper note for Other instrument */}
+            {(isOtherInstrument || isOtherVendor) && !isOtherDepartment && (
+              <p className="text-[11px] text-muted-foreground flex items-start gap-1.5 mt-2">
+                <Info size={12} className="shrink-0 mt-0.5" />
+                Use this for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.
+              </p>
+            )}
 
-            {/* Manual entry toggle + Add button row */}
+            {/* Manual entry toggle + other vendor back link + Add button row */}
             <div className="flex items-center justify-between mt-3">
-              <button
-                type="button"
-                className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
-                onClick={() => {
-                  setManualEntry(!manualEntry);
-                  setInstrumentName("");
-                  setManualInstrumentName("");
-                }}
-              >
-                {manualEntry ? "Back to instrument list" : "Don't see your instrument? Add it manually"}
-              </button>
+              <div className="flex items-center gap-3">
+                {isOtherVendor && !isOtherDepartment ? (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
+                    onClick={() => {
+                      setSelectedVendor("");
+                      setCustomVendor("");
+                      setCustomInstrument("");
+                    }}
+                  >
+                    Back to vendor list
+                  </button>
+                ) : isOtherInstrument && !isOtherDepartment ? (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
+                    onClick={() => {
+                      setInstrumentName("");
+                      setCustomInstrument("");
+                    }}
+                  >
+                    Back to instrument list
+                  </button>
+                ) : !isOtherDepartment ? (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
+                    onClick={() => {
+                      setManualEntry(!manualEntry);
+                      setInstrumentName("");
+                      setManualInstrumentName("");
+                    }}
+                  >
+                    {manualEntry ? "Back to instrument list" : "Don't see your instrument? Add it manually"}
+                  </button>
+                ) : null}
+              </div>
               <Button
                 className="h-9 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground"
                 disabled={!effectiveInstrumentName || addInstrumentMutation.isPending}
@@ -879,6 +1223,7 @@ export default function VeritaMapBuildPage() {
             </h2>
             {instruments.map((instr) => {
               const fdaInstr = INSTRUMENT_DATA[instr.instrument_name];
+              const isOther = !fdaInstr;
               return (
                 <div
                   key={instr.id}
@@ -897,9 +1242,16 @@ export default function VeritaMapBuildPage() {
                           {instr.category}
                         </Badge>
                       )}
+                      {isOther && (
+                        <Badge className="text-[10px] px-1.5 py-0 border-0 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                          Other
+                        </Badge>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {fdaInstr?.testCount ?? 0} {instr.category === "Manual Procedures" ? "tests" : "FDA-cleared tests"}
+                      {isOther
+                        ? "Custom instrument — add tests in Step 2"
+                        : `${fdaInstr?.testCount ?? 0} ${instr.category === "Manual Procedures" ? "tests" : "FDA-cleared tests"}`}
                     </span>
                   </div>
                   <Button
@@ -1010,6 +1362,7 @@ export default function VeritaMapBuildPage() {
             onToggle={(analyte) => toggleTest(instr.id, analyte)}
             onSelectAll={() => selectAll(instr.id)}
             onDeselectAll={() => deselectAll(instr.id)}
+            onAddCustomTest={(test) => addCustomTest(instr.id, test)}
           />
         ))}
       </div>
