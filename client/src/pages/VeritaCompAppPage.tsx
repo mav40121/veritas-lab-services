@@ -288,10 +288,48 @@ export default function VeritaCompAppPage() {
   }
 
   if (programId) {
-    return <ProgramDetailView programId={programId} />;
+    return (
+      <>
+        <WipBanner />
+        <ProgramDetailView programId={programId} />
+      </>
+    );
   }
 
-  return <ProgramListView />;
+  return (
+    <>
+      <WipBanner />
+      <ProgramListView />
+    </>
+  );
+}
+
+// ── WIP Banner (dismissible) ──────────────────────────────────────────
+
+function WipBanner() {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem("veritacomp-wip-dismissed") === "1"; } catch { return false; }
+  });
+
+  if (dismissed) return null;
+
+  return (
+    <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-400/50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-start gap-3">
+        <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed flex-1">
+          <span className="font-semibold">Work in Progress:</span> VeritaComp{"\u2122"} is actively being developed. You may encounter incomplete features or changes. Your data is safe and saved.
+        </p>
+        <button
+          onClick={() => { setDismissed(true); try { sessionStorage.setItem("veritacomp-wip-dismissed", "1"); } catch {} }}
+          className="text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 shrink-0 mt-0.5"
+          aria-label="Dismiss"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ── Program List View ──────────────────────────────────────────────────

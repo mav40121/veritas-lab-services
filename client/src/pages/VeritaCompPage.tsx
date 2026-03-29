@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
-import { CheckCircle2, Shield, ChevronRight, Users, ClipboardCheck, FlaskConical, BookOpen, Stethoscope } from "lucide-react";
+import { CheckCircle2, Shield, ChevronRight, Users, ClipboardCheck, FlaskConical, BookOpen, Stethoscope, AlertTriangle } from "lucide-react";
 
 const COMPETENCY_TYPES = [
   {
@@ -126,6 +126,16 @@ export default function VeritaCompPage() {
           </div>
         </div>
       </section>
+
+      {/* WIP Banner */}
+      <div className="bg-amber-50 dark:bg-amber-950/30 border-y border-amber-400/50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+            VeritaComp{"\u2122"} is currently in active development. You may access the module and explore its features, but some functionality is still being refined. Thank you for your patience as we build this out.
+          </p>
+        </div>
+      </div>
 
       {/* Three competency types */}
       <section className="section-padding border-b border-border">
