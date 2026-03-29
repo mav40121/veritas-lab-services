@@ -243,7 +243,6 @@ export default function VeritaCompAppPage() {
   const [location, navigate] = useLocation();
   const params = useParams<{ programId?: string }>();
   const programId = params?.programId ? parseInt(params.programId) : null;
-  const readOnly = useIsReadOnly();
 
   const hasPlanAccess =
     user?.plan === "annual" ||
@@ -300,6 +299,7 @@ export default function VeritaCompAppPage() {
 function ProgramListView() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const readOnly = useIsReadOnly();
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: programs, isLoading, error } = useQuery<Program[]>({
