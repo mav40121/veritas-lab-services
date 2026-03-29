@@ -6,6 +6,15 @@ import { createServer } from "http";
 const app = express();
 const httpServer = createServer(app);
 
+// Force non-www → www with 301 permanent redirect (fixes Google Search Console "Page with redirect")
+app.use((req, res, next) => {
+  const host = req.headers.host;
+  if (host && !host.startsWith('www.') && !host.includes('localhost') && !host.includes('railway')) {
+    return res.redirect(301, `https://www.${host}${req.url}`);
+  }
+  next();
+});
+
 // CORS — allow requests from the deployed frontend and localhost
 app.use((req, res, next) => {
   const allowedOrigins = [
