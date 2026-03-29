@@ -35,8 +35,8 @@ import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
 import VeritaMapAppPage from "@/pages/VeritaMapAppPage";
 import VeritaMapBuildPage from "@/pages/VeritaMapBuildPage";
 import VeritaMapMapPage from "@/pages/VeritaMapMapPage";
-import VeritaCompetencyPage from "@/pages/VeritaCompetencyPage";
-import VeritaCompetencyAppPage from "@/pages/VeritaCompetencyAppPage";
+import VeritaCompPage from "@/pages/VeritaCompPage";
+import VeritaCompAppPage from "@/pages/VeritaCompAppPage";
 import CumsumPage from "@/pages/CumsumPage";
 
 function SiteFooter() {
@@ -64,7 +64,7 @@ function SiteFooter() {
                 <li><a href="/#/resources" className="hover:text-primary transition-colors">Resources — Clinical Lab Knowledge Base</a></li>
                 <li><a href="/#/veritamap" className="hover:text-primary transition-colors">VeritaMap — Test Menu Regulatory Mapping</a></li>
                 <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan — Compliance Audit Tool</a></li>
-                <li><a href="/#/veritacompetency" className="hover:text-primary transition-colors">VeritaCompetency — Competency Management</a></li>
+                <li><a href="/#/veritacomp" className="hover:text-primary transition-colors">VeritaComp — Competency Management</a></li>
                 <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101 — New Book</a></li>
                 <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide — Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
@@ -160,9 +160,9 @@ function AppContent() {
           <Route path="/veritamap-app" component={VeritaMapAppPage} />
           <Route path="/veritamap-app/:id/build" component={VeritaMapBuildPage} />
           <Route path="/veritamap-app/:id" component={VeritaMapMapPage} />
-          <Route path="/veritacompetency" component={VeritaCompetencyPage} />
-          <Route path="/veritacompetency-app" component={VeritaCompetencyAppPage} />
-          <Route path="/veritacompetency-app/:programId" component={VeritaCompetencyAppPage} />
+          <Route path="/veritacomp" component={VeritaCompPage} />
+          <Route path="/veritacomp-app" component={VeritaCompAppPage} />
+          <Route path="/veritacomp-app/:programId" component={VeritaCompAppPage} />
           <Route path="/cumsum" component={CumsumPage} />
           <Route component={NotFound} />
         </Switch>

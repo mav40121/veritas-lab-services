@@ -237,7 +237,7 @@ function typeLabel(type: string) {
 
 // ── Main Component ──────────────────────────────────────────────────────
 
-export default function VeritaCompetencyAppPage() {
+export default function VeritaCompAppPage() {
   const { user, isLoggedIn } = useAuth();
   const [location, navigate] = useLocation();
   const params = useParams<{ programId?: string }>();
@@ -250,7 +250,7 @@ export default function VeritaCompetencyAppPage() {
     user?.plan === "complete" ||
     user?.plan === "veritamap" ||
     user?.plan === "veritascan" ||
-    user?.plan === "veritacompetency";
+    user?.plan === "veritacomp";
 
   if (!isLoggedIn) {
     return (
@@ -259,9 +259,9 @@ export default function VeritaCompetencyAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaCompetency{"\u2122"}</h1>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaComp{"\u2122"}</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            VeritaCompetency{"\u2122"} requires an account. Sign in to continue.
+            VeritaComp{"\u2122"} requires an account. Sign in to continue.
           </p>
           <Button asChild><Link href="/login">Sign In</Link></Button>
         </div>
@@ -276,11 +276,11 @@ export default function VeritaCompetencyAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 mb-4">
             <Users className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">VeritaCompetency{"\u2122"} Access Required</h1>
+          <h1 className="text-2xl font-bold mb-2">VeritaComp{"\u2122"} Access Required</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            Your current plan doesn't include VeritaCompetency{"\u2122"}. Upgrade to access competency assessment management.
+            Your current plan doesn't include VeritaComp{"\u2122"}. Upgrade to access competency assessment management.
           </p>
-          <Button asChild><Link href="/veritacompetency">View Plans</Link></Button>
+          <Button asChild><Link href="/veritacomp">View Plans</Link></Button>
         </div>
       </div>
     );
@@ -320,11 +320,11 @@ function ProgramListView() {
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight">VeritaCompetency{"\u2122"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">VeritaComp{"\u2122"}</h1>
             <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">Beta</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            TJC/CLIA Competency Assessment Management
+            TJC/CLIA/CAP Competency Assessment Management
           </p>
         </div>
         <Button className="shrink-0" onClick={() => setWizardOpen(true)}>
@@ -399,7 +399,7 @@ function ProgramListView() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => navigate(`/veritacompetency-app/${p.id}`)}
+                      onClick={() => navigate(`/veritacomp-app/${p.id}`)}
                       className="gap-1"
                     >
                       Open
@@ -419,7 +419,7 @@ function ProgramListView() {
           onCreated={(id) => {
             setWizardOpen(false);
             qc.invalidateQueries({ queryKey: ["/api/competency/programs"] });
-            navigate(`/veritacompetency-app/${id}`);
+            navigate(`/veritacomp-app/${id}`);
           }}
         />
       )}
@@ -786,7 +786,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 text-center">
         <p className="text-muted-foreground">Program not found.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/veritacompetency-app")}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate("/veritacomp-app")}>
           <ChevronLeft className="h-4 w-4 mr-1" /> Back to Programs
         </Button>
       </div>
@@ -803,7 +803,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       {/* Back + Header */}
-      <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate("/veritacompetency-app")}>
+      <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate("/veritacomp-app")}>
         <ChevronLeft className="h-4 w-4 mr-1" /> All Programs
       </Button>
       <div className="flex items-start justify-between gap-4 mb-6">
@@ -984,7 +984,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `VeritaCompetency_Assessment_${assessmentId}.pdf`;
+    a.download = `VeritaComp_Assessment_${assessmentId}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   };

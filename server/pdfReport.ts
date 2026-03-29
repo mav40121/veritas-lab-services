@@ -1679,7 +1679,7 @@ export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "exec
   }
 }
 
-// ─── VeritaCompetency PDF ────────────────────────────────────────────────────
+// ─── VeritaComp PDF ────────────────────────────────────────────────────
 
 const CLIA_METHODS = [
   "1. Direct observations of routine patient test performance, including, as applicable, patient identification and preparation; specimen collection, handling, processing and testing",
@@ -1751,7 +1751,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
 
   // Header
   html += `<div class="header">
-    <h1>VeritaCompetency\u2122</h1>
+    <h1>VeritaComp\u2122</h1>
     <div class="sub">${typeLabel}</div>
     <div class="standard">${standardRef}</div>
   </div>`;
@@ -1913,7 +1913,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
 
   // Footer
   html += `<div class="footer-note">
-    VeritaCompetency\u2122 by Veritas Lab Services, LLC &middot; veritaslabservices.com &middot; Generated ${new Date().toISOString().split("T")[0]}<br>
+    VeritaComp\u2122 by Veritas Lab Services, LLC &middot; veritaslabservices.com &middot; Generated ${new Date().toISOString().split("T")[0]}<br>
     This document is produced for internal quality assurance and regulatory compliance purposes. It does not constitute legal advice. Governed by the laws of the Commonwealth of Massachusetts.
   </div>`;
 
@@ -1923,9 +1923,9 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
 
 const COMPETENCY_FOOTER = `<div style="width:100%;padding:4px 15mm;font-family:sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
-    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCompetency\u2122 is a competency management tool for qualified laboratory professionals. Results require review by laboratory leadership and do not constitute legal or regulatory advice.</div>
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaComp\u2122 is a competency management tool for qualified laboratory professionals. Results require review by laboratory leadership and do not constitute legal or regulatory advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaCompetency\u2122 by Veritas Lab Services &middot; veritaslabservices.com &middot; Generated <span class="date"></span></span>
+      <span>VeritaComp\u2122 by Veritas Lab Services &middot; veritaslabservices.com &middot; Generated <span class="date"></span></span>
       <span>Page <span class="pageNumber"></span></span>
     </div>
   </div>

@@ -1546,15 +1546,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // ── VERITACOMPETENCY ───────────────────────────────────────────────────
+  // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacompetency"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp"].includes(user?.plan);
   }
 
   // List programs
   app.get("/api/competency/programs", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const programs = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE user_id = ? ORDER BY updated_at DESC"
     ).all(req.user.userId);
@@ -1578,7 +1578,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create program
   app.post("/api/competency/programs", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
     if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
@@ -1613,7 +1613,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get single program with full data
   app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const program = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE id = ? AND user_id = ?"
     ).get(req.params.id, req.user.userId);
@@ -1646,7 +1646,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete program
   app.delete("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!program) return res.status(404).json({ error: "Program not found" });
     // Cascade delete
@@ -1663,7 +1663,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update program settings (method groups, checklist items, name)
   app.put("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const program = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const { name, department, methodGroups, checklistItems } = req.body;
@@ -1697,7 +1697,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── EMPLOYEES ─────────────────────────────────────────────────────────────
 
   app.get("/api/competency/employees", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const employees = (db as any).$client.prepare(
       "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
     ).all(req.user.userId);
@@ -1705,7 +1705,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/competency/employees", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const { name, title, hireDate, lisInitials } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Employee name required" });
     const now = new Date().toISOString();
@@ -1716,7 +1716,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/competency/employees/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const { name, title, hireDate, lisInitials, status } = req.body;
@@ -1735,7 +1735,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/competency/employees/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     (db as any).$client.prepare("UPDATE competency_employees SET status = 'inactive' WHERE id = ?").run(req.params.id);
@@ -1745,7 +1745,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
 
   app.post("/api/competency/assessments", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
     // Verify program and employee belong to user
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(programId, req.user.userId);
@@ -1783,7 +1783,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update assessment
   app.put("/api/competency/assessments/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.id, p.user_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -1820,7 +1820,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete assessment
   app.delete("/api/competency/assessments/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.id, p.user_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -1834,7 +1834,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // VeritaMap integration — get instruments from a map for method group suggestions
   app.get("/api/competency/map-instruments/:mapId", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.mapId, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const instruments = (db as any).$client.prepare(
@@ -1851,7 +1851,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PDF generation for competency assessments
   app.post("/api/competency/pdf/:assessmentId", authMiddleware, async (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
@@ -1890,7 +1890,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
-      const filename = `VeritaCompetency_${typeLabel}_${safeName}_${date}.pdf`;
+      const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -1922,17 +1922,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     if (itemIds.length === 0) return;
 
-    const completionNote = `Auto-completed by VeritaCompetency\u2122: ${competencyType} assessment on ${now.split("T")[0]}`;
+    const completionNote = `Auto-completed by VeritaComp\u2122: ${competencyType} assessment on ${now.split("T")[0]}`;
     const upsertStmt = (db as any).$client.prepare(`
       INSERT INTO veritascan_items (scan_id, item_id, status, notes, completion_source, completion_link, completion_note, updated_at)
-      VALUES (?, ?, 'Compliant', ?, 'veritacompetency_auto', '/veritacompetency-app', ?, ?)
+      VALUES (?, ?, 'Compliant', ?, 'veritacomp_auto', '/veritacomp-app', ?, ?)
       ON CONFLICT(scan_id, item_id) DO UPDATE SET
         status = 'Compliant',
-        completion_source = 'veritacompetency_auto',
-        completion_link = '/veritacompetency-app',
+        completion_source = 'veritacomp_auto',
+        completion_link = '/veritacomp-app',
         completion_note = excluded.completion_note,
         updated_at = excluded.updated_at
-      WHERE status != 'Compliant' OR completion_source != 'veritacompetency_auto'
+      WHERE status != 'Compliant' OR completion_source != 'veritacomp_auto'
     `);
 
     const bulkUpdate = (db as any).$client.transaction(() => {
