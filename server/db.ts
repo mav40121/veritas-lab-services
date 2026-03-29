@@ -246,7 +246,125 @@ sqlite.exec(`
     sort_order INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (program_id) REFERENCES competency_programs(id)
   );
+
+  CREATE TABLE IF NOT EXISTS staff_labs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    lab_name TEXT NOT NULL,
+    clia_number TEXT NOT NULL,
+    lab_address_street TEXT,
+    lab_address_city TEXT,
+    lab_address_state TEXT,
+    lab_address_zip TEXT,
+    lab_phone TEXT,
+    certificate_type TEXT NOT NULL DEFAULT 'compliance',
+    accreditation_body TEXT NOT NULL DEFAULT 'CLIA_ONLY',
+    accreditation_body_other TEXT,
+    includes_nys INTEGER NOT NULL DEFAULT 0,
+    complexity TEXT NOT NULL DEFAULT 'high',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS staff_employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    last_name TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    middle_initial TEXT,
+    title TEXT,
+    hire_date TEXT,
+    qualifications_text TEXT,
+    highest_complexity TEXT NOT NULL DEFAULT 'H',
+    performs_testing INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS staff_roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    specialty_number INTEGER,
+    FOREIGN KEY (employee_id) REFERENCES staff_employees(id),
+    FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS staff_competency_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    initial_completed_at TEXT,
+    initial_signed_by TEXT,
+    six_month_due_at TEXT,
+    six_month_completed_at TEXT,
+    six_month_signed_by TEXT,
+    first_annual_due_at TEXT,
+    first_annual_completed_at TEXT,
+    first_annual_signed_by TEXT,
+    annual_due_at TEXT,
+    last_annual_completed_at TEXT,
+    last_annual_signed_by TEXT,
+    nys_six_month_due_at TEXT,
+    notes TEXT,
+    FOREIGN KEY (employee_id) REFERENCES staff_employees(id),
+    FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
+  );
 `);
+
+// Seed VeritaStaff demo data for Riverside Regional (user_id = 1)
+{
+  const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE clia_number = '05D2187634'").get() as any;
+  if (!existingStaffLab) {
+    const now = new Date().toISOString();
+    const labResult = sqlite.prepare(
+      "INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, includes_nys, complexity, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(1, 'Riverside Regional Medical Center', '05D2187634', '1 Riverside Drive', 'Riverside', 'CA', '92501', '', 'accreditation', 'TJC', 0, 'high', now, now);
+    const labId = labResult.lastInsertRowid;
+
+    // Employee 1: Laboratory Director
+    const emp1 = sqlite.prepare(
+      "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(labId, 1, 'Director', 'Laboratory', null, 'MD', '2010-01-01', 'Board certified CP and AP', 'H', 1, 'active', now, now);
+    const emp1Id = emp1.lastInsertRowid;
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp1Id, labId, 'LD', null);
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp1Id, labId, 'TP', null);
+    sqlite.prepare(
+      "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, annual_due_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(emp1Id, labId, '2010-01-15', 'Lab Director', '2010-07-15', '2010-07-10', 'Lab Director', '2011-01-10', '2026-07-10', null);
+
+    // Employee 2: Michael Veri — TS (specialties 1,7,8,9) + GS + TP
+    const emp2 = sqlite.prepare(
+      "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(labId, 1, 'Veri', 'Michael', null, 'MLS(ASCP)', '2015-06-01', 'MS Chem, 20 years exp', 'H', 1, 'active', now, now);
+    const emp2Id = emp2.lastInsertRowid;
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp2Id, labId, 'TS', 1);
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp2Id, labId, 'TS', 7);
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp2Id, labId, 'TS', 8);
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp2Id, labId, 'TS', 9);
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp2Id, labId, 'GS', null);
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp2Id, labId, 'TP', null);
+    sqlite.prepare(
+      "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, annual_due_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(emp2Id, labId, '2015-06-05', 'Lab Director', '2015-12-05', '2015-12-01', 'Lab Director', '2016-06-01', '2026-06-01', null);
+
+    // Employee 3: Staff Member — TP only
+    const emp3 = sqlite.prepare(
+      "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(labId, 1, 'Member', 'Staff', null, 'MLT(ASCP)', '2022-03-15', 'A.S. Clin Lab Science (NAACLS)', 'H', 1, 'active', now, now);
+    const emp3Id = emp3.lastInsertRowid;
+    sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?, ?, ?, ?)").run(emp3Id, labId, 'TP', null);
+    sqlite.prepare(
+      "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, annual_due_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(emp3Id, labId, '2022-03-20', 'Lab Director', '2022-09-20', '2022-09-15', 'Lab Director', '2023-03-15', '2026-03-15', null);
+
+    console.log('[seed] VeritaStaff demo data seeded for Riverside Regional');
+  }
+}
 
 // Seed discount codes (safe — INSERT OR IGNORE won't duplicate)
 sqlite.exec(`

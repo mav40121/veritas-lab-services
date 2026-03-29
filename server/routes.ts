@@ -7,7 +7,7 @@ import { db } from "./db";
 import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
@@ -2049,6 +2049,365 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("CUMSUM PDF error:", e);
       res.status(500).json({ error: "PDF generation failed" });
     }
+  });
+
+  // ── VERITASTAFF ──────────────────────────────────────────────────────────
+
+  function hasStaffAccess(user: any) {
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp"].includes(user?.plan);
+  }
+
+  // CMS specialty list (for validation and labels)
+  const CMS_SPECIALTIES: Record<number, string> = {
+    1: "Bacteriology", 2: "Mycobacteriology", 3: "Mycology", 4: "Parasitology",
+    5: "Virology", 6: "Diagnostic Immunology", 7: "Chemistry", 8: "Hematology",
+    9: "Immunohematology", 10: "Radiobioassay", 11: "Cytology", 12: "Histopathology",
+    13: "Dermatopathology", 14: "Ophthalmic Pathology", 15: "Oral Pathology",
+    16: "Histocompatibility", 17: "Clinical Cytogenetics",
+  };
+
+  // VeritaMap department to CMS specialty mapping
+  const VERITAMAP_DEPT_TO_CMS: Record<string, number[]> = {
+    "Chemistry": [7], "Hematology": [8], "Blood Bank": [9], "Coagulation": [7],
+    "Microbiology": [1], "Urinalysis": [7], "Molecular": [1, 6],
+    "Immunology / Protein": [6], "Blood Gas": [7], "Point of Care": [7],
+    "Histology / Pathology": [12], "Cytology": [11],
+  };
+
+  // Get or create staff lab
+  app.get("/api/staff/lab", authMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(req.user.userId);
+    res.json(lab || null);
+  });
+
+  app.post("/api/staff/lab", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const { labName, cliaNumber, street, city, state, zip, phone, certificateType, accreditationBody, accreditationBodyOther, includesNys, complexity } = req.body;
+    if (!labName?.trim() || !cliaNumber?.trim()) return res.status(400).json({ error: "Lab name and CLIA number required" });
+    const now = new Date().toISOString();
+
+    const existing = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(req.user.userId);
+    if (existing) {
+      (db as any).$client.prepare(
+        "UPDATE staff_labs SET lab_name=?, clia_number=?, lab_address_street=?, lab_address_city=?, lab_address_state=?, lab_address_zip=?, lab_phone=?, certificate_type=?, accreditation_body=?, accreditation_body_other=?, includes_nys=?, complexity=?, updated_at=? WHERE id=?"
+      ).run(labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, existing.id);
+      const updated = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(existing.id);
+      return res.json(updated);
+    }
+
+    const result = (db as any).$client.prepare(
+      "INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, accreditation_body_other, includes_nys, complexity, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(req.user.userId, labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(result.lastInsertRowid);
+    res.json(lab);
+  });
+
+  // Get VeritaMap department suggestions
+  app.get("/api/staff/veritamap-suggestions", authMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const maps = (db as any).$client.prepare("SELECT id, name FROM veritamap_maps WHERE user_id = ?").all(req.user.userId) as any[];
+    const suggestions: { department: string; specialties: { number: number; name: string }[] }[] = [];
+    const seenDepts = new Set<string>();
+
+    for (const map of maps) {
+      const instruments = (db as any).$client.prepare("SELECT id, category FROM veritamap_instruments WHERE map_id = ?").all(map.id) as any[];
+      for (const inst of instruments) {
+        const dept = inst.category;
+        if (seenDepts.has(dept)) continue;
+        seenDepts.add(dept);
+        const cmsNums = VERITAMAP_DEPT_TO_CMS[dept];
+        if (cmsNums) {
+          suggestions.push({
+            department: dept,
+            specialties: cmsNums.map(n => ({ number: n, name: CMS_SPECIALTIES[n] })),
+          });
+        }
+      }
+    }
+    res.json(suggestions);
+  });
+
+  // List employees for a lab
+  app.get("/api/staff/employees", authMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.json([]);
+
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM staff_employees WHERE lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+    ).all(lab.id) as any[];
+
+    const result = employees.map((emp: any) => {
+      const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
+      const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
+      return { ...emp, roles, competencySchedule: schedule || null };
+    });
+    res.json(result);
+  });
+
+  // Get single employee
+  app.get("/api/staff/employees/:id", authMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+
+    const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
+    const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
+    res.json({ ...emp, roles, competencySchedule: schedule || null });
+  });
+
+  // Create employee
+  app.post("/api/staff/employees", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.status(400).json({ error: "Set up your lab first" });
+
+    const { lastName, firstName, middleInitial, title, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
+    if (!lastName?.trim() || !firstName?.trim()) return res.status(400).json({ error: "Name required" });
+
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(lab.id, req.user.userId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, hireDate || null, qualificationsText || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
+    const empId = result.lastInsertRowid;
+
+    // Insert roles
+    if (roles && Array.isArray(roles)) {
+      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
+      for (const r of roles) {
+        roleStmt.run(empId, lab.id, r.role, r.specialtyNumber || null);
+      }
+    }
+
+    // Create competency schedule if performs testing
+    if (performsTesting) {
+      const accreditor = lab.accreditation_body;
+      const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
+      const includesNYS = lab.includes_nys === 1;
+      const hire = hireDate ? new Date(hireDate) : new Date();
+
+      let sixMonthDue: string | null = null;
+      let nysSixMonthDue: string | null = null;
+
+      if (includesTJCorCAP && !includesNYS) {
+        // 6-month due from initial completion (set later), leave null for now
+        sixMonthDue = null;
+      } else {
+        // CLIA only or NYS: 6 months from hire
+        const sixFromHire = new Date(hire);
+        sixFromHire.setMonth(sixFromHire.getMonth() + 6);
+        sixMonthDue = sixFromHire.toISOString().split('T')[0];
+      }
+
+      if (includesNYS) {
+        const nysSix = new Date(hire);
+        nysSix.setMonth(nysSix.getMonth() + 6);
+        nysSixMonthDue = nysSix.toISOString().split('T')[0];
+      }
+
+      if (includesTJCorCAP && includesNYS) {
+        // TJC/CAP + NYS: 6 months from hire satisfies both
+        const sixFromHire = new Date(hire);
+        sixFromHire.setMonth(sixFromHire.getMonth() + 6);
+        sixMonthDue = sixFromHire.toISOString().split('T')[0];
+      }
+
+      (db as any).$client.prepare(
+        "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
+      ).run(empId, lab.id, sixMonthDue, nysSixMonthDue);
+    }
+
+    // Return the created employee with roles
+    const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
+    const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
+    const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
+    res.json({ ...emp, roles: empRoles, competencySchedule: schedule || null });
+  });
+
+  // Update employee
+  app.put("/api/staff/employees/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.status(400).json({ error: "Lab not found" });
+
+    const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    const { lastName, firstName, middleInitial, title, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
+    const now = new Date().toISOString();
+
+    (db as any).$client.prepare(
+      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
+    ).run(
+      lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
+      middleInitial !== undefined ? middleInitial : emp.middle_initial,
+      title !== undefined ? title : emp.title,
+      hireDate !== undefined ? hireDate : emp.hire_date,
+      qualificationsText !== undefined ? qualificationsText : emp.qualifications_text,
+      highestComplexity || emp.highest_complexity,
+      performsTesting !== undefined ? (performsTesting ? 1 : 0) : emp.performs_testing,
+      now, req.params.id
+    );
+
+    // Replace roles
+    if (roles && Array.isArray(roles)) {
+      (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
+      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
+      for (const r of roles) {
+        roleStmt.run(req.params.id, lab.id, r.role, r.specialtyNumber || null);
+      }
+    }
+
+    const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
+    const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
+    const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
+    res.json({ ...updated, roles: updRoles, competencySchedule: schedule || null });
+  });
+
+  // Delete employee (soft delete)
+  app.delete("/api/staff/employees/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.status(400).json({ error: "Lab not found" });
+    const emp = (db as any).$client.prepare("SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    (db as any).$client.prepare("UPDATE staff_employees SET status = 'inactive', updated_at = ? WHERE id = ?").run(new Date().toISOString(), req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Update competency schedule
+  app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.status(400).json({ error: "Lab not found" });
+
+    const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.employeeId, lab.id) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
+
+    const accreditor = lab.accreditation_body;
+    const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
+
+    // Recalculate due dates based on completions
+    let sixMonthDue: string | null = null;
+    let firstAnnualDue: string | null = null;
+    let annualDue: string | null = null;
+
+    if (includesTJCorCAP && initialCompletedAt) {
+      // 6-month due = 6 months from initial completion
+      const d = new Date(initialCompletedAt);
+      d.setMonth(d.getMonth() + 6);
+      sixMonthDue = d.toISOString().split('T')[0];
+    } else if (emp.hire_date) {
+      const d = new Date(emp.hire_date);
+      d.setMonth(d.getMonth() + 6);
+      sixMonthDue = d.toISOString().split('T')[0];
+    }
+
+    const actualSixMonth = sixMonthCompletedAt;
+    if (actualSixMonth) {
+      if (includesTJCorCAP) {
+        // 1st annual = 6 months after 6-month completion
+        const d = new Date(actualSixMonth);
+        d.setMonth(d.getMonth() + 6);
+        firstAnnualDue = d.toISOString().split('T')[0];
+      } else {
+        // CLIA only: annual = 12 months after 6-month completion
+        const d = new Date(actualSixMonth);
+        d.setMonth(d.getMonth() + 12);
+        annualDue = d.toISOString().split('T')[0];
+      }
+    }
+
+    if (firstAnnualCompletedAt) {
+      const d = new Date(firstAnnualCompletedAt);
+      d.setMonth(d.getMonth() + 12);
+      annualDue = d.toISOString().split('T')[0];
+    }
+
+    if (lastAnnualCompletedAt) {
+      const d = new Date(lastAnnualCompletedAt);
+      d.setMonth(d.getMonth() + 12);
+      annualDue = d.toISOString().split('T')[0];
+    }
+
+    // NYS six-month due
+    let nysSixMonthDue: string | null = null;
+    if (lab.includes_nys === 1 && emp.hire_date) {
+      const d = new Date(emp.hire_date);
+      d.setMonth(d.getMonth() + 6);
+      nysSixMonthDue = d.toISOString().split('T')[0];
+    }
+
+    const existing = (db as any).$client.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId) as any;
+    if (existing) {
+      (db as any).$client.prepare(
+        `UPDATE staff_competency_schedules SET initial_completed_at=?, initial_signed_by=?, six_month_due_at=?, six_month_completed_at=?, six_month_signed_by=?, first_annual_due_at=?, first_annual_completed_at=?, first_annual_signed_by=?, annual_due_at=?, last_annual_completed_at=?, last_annual_signed_by=?, nys_six_month_due_at=?, notes=? WHERE employee_id=?`
+      ).run(
+        initialCompletedAt || null, initialSignedBy || null,
+        sixMonthDue, actualSixMonth || null, sixMonthSignedBy || null,
+        firstAnnualDue, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
+        annualDue, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
+        nysSixMonthDue, notes || null, req.params.employeeId
+      );
+    } else {
+      (db as any).$client.prepare(
+        "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, first_annual_completed_at, first_annual_signed_by, annual_due_at, last_annual_completed_at, last_annual_signed_by, nys_six_month_due_at, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(
+        req.params.employeeId, lab.id,
+        initialCompletedAt || null, initialSignedBy || null,
+        sixMonthDue, actualSixMonth || null, sixMonthSignedBy || null,
+        firstAnnualDue, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
+        annualDue, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
+        nysSixMonthDue, notes || null
+      );
+    }
+
+    const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId);
+    res.json(schedule);
+  });
+
+  // Generate CMS 209 PDF
+  app.post("/api/staff/cms209", authMiddleware, async (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
+    if (!lab) return res.status(400).json({ error: "Lab not set up" });
+
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM staff_employees WHERE lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+    ).all(lab.id) as any[];
+
+    const employeesWithRoles = employees.map((emp: any) => {
+      const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
+      return { ...emp, roles };
+    });
+
+    try {
+      const pdfBuffer = await generateCMS209PDF({
+        lab,
+        employees: employeesWithRoles,
+        specialties: CMS_SPECIALTIES,
+      });
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("CMS 209 PDF generation error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // Get CMS specialties reference
+  app.get("/api/staff/specialties", (_req: any, res) => {
+    res.json(CMS_SPECIALTIES);
   });
 
   return httpServer;

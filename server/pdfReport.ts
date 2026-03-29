@@ -1950,3 +1950,251 @@ export async function generateCompetencyPDF(input: CompetencyPDFInput): Promise<
     await page.close();
   }
 }
+
+// ─── CMS 209 Laboratory Personnel Report ────────────────────────────────────
+
+interface CMS209Input {
+  lab: {
+    lab_name: string;
+    clia_number: string;
+    lab_address_street: string;
+    lab_address_city: string;
+    lab_address_state: string;
+    lab_address_zip: string;
+  };
+  employees: {
+    last_name: string;
+    first_name: string;
+    middle_initial: string | null;
+    highest_complexity: string;
+    performs_testing: number;
+    qualifications_text: string | null;
+    roles: { role: string; specialty_number: number | null }[];
+  }[];
+  specialties: Record<number, string>;
+}
+
+function buildCMS209HTML(input: CMS209Input): string {
+  const { lab, employees, specialties } = input;
+  const address = [lab.lab_address_street, lab.lab_address_city, lab.lab_address_state, lab.lab_address_zip].filter(Boolean).join(", ");
+
+  // Build rows: one row per person, but TC/TS get separate rows per specialty
+  interface Row {
+    lastName: string;
+    firstName: string;
+    mi: string;
+    ld: boolean;
+    cc: boolean;
+    tc: string; // specialty number or empty
+    ts: string; // specialty number or empty
+    gs: boolean;
+    tp: boolean;
+    ctGs: boolean;
+    ct: boolean;
+    mh: string; // M or H
+    quals: string;
+  }
+
+  const rows: Row[] = [];
+  for (const emp of employees) {
+    if (!emp.performs_testing && !emp.roles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) continue;
+
+    const roleSet = new Set(emp.roles.map(r => r.role));
+    const tcSpecs = emp.roles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
+    const tsSpecs = emp.roles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
+
+    // If the employee has TC or TS with specialties, create one row per specialty
+    const specRows: { tc: string; ts: string }[] = [];
+
+    if (tcSpecs.length > 0 || tsSpecs.length > 0) {
+      // Combine: for each specialty, show which role(s) apply
+      const allSpecs = new Set([...tcSpecs, ...tsSpecs]);
+      for (const spec of allSpecs) {
+        specRows.push({
+          tc: tcSpecs.includes(spec) ? String(spec) : "",
+          ts: tsSpecs.includes(spec) ? String(spec) : "",
+        });
+      }
+    }
+
+    if (specRows.length === 0) {
+      // Single row (no TC/TS specialties)
+      rows.push({
+        lastName: emp.last_name,
+        firstName: emp.first_name,
+        mi: emp.middle_initial || "",
+        ld: roleSet.has("LD"),
+        cc: roleSet.has("CC"),
+        tc: "",
+        ts: "",
+        gs: roleSet.has("GS"),
+        tp: roleSet.has("TP") || emp.performs_testing === 1,
+        ctGs: roleSet.has("CT_GS"),
+        ct: roleSet.has("CT"),
+        mh: emp.highest_complexity === "M" ? "M" : "H",
+        quals: emp.qualifications_text || "",
+      });
+    } else {
+      for (let i = 0; i < specRows.length; i++) {
+        rows.push({
+          lastName: i === 0 ? emp.last_name : "",
+          firstName: i === 0 ? emp.first_name : "",
+          mi: i === 0 ? (emp.middle_initial || "") : "",
+          ld: i === 0 ? roleSet.has("LD") : false,
+          cc: i === 0 ? roleSet.has("CC") : false,
+          tc: specRows[i].tc,
+          ts: specRows[i].ts,
+          gs: i === 0 ? roleSet.has("GS") : false,
+          tp: i === 0 ? (roleSet.has("TP") || emp.performs_testing === 1) : false,
+          ctGs: i === 0 ? roleSet.has("CT_GS") : false,
+          ct: i === 0 ? roleSet.has("CT") : false,
+          mh: i === 0 ? (emp.highest_complexity === "M" ? "M" : "H") : "",
+          quals: i === 0 ? (emp.qualifications_text || "") : "",
+        });
+      }
+    }
+  }
+
+  const check = (v: boolean) => v ? "X" : "";
+  const dataRows = rows.map(r => `
+    <tr>
+      <td>${r.lastName}</td>
+      <td>${r.firstName}</td>
+      <td class="ctr">${r.mi}</td>
+      <td class="ctr">${check(r.ld)}</td>
+      <td class="ctr">${check(r.cc)}</td>
+      <td class="ctr">${r.tc}</td>
+      <td class="ctr">${r.ts}</td>
+      <td class="ctr">${check(r.gs)}</td>
+      <td class="ctr">${check(r.tp)}</td>
+      <td class="ctr">${check(r.ctGs)}</td>
+      <td class="ctr">${check(r.ct)}</td>
+      <td class="ctr">${r.mh}</td>
+      <td class="quals">${r.quals}</td>
+    </tr>`).join("");
+
+  // Add empty rows to fill at least 20 total
+  const emptyCount = Math.max(0, 20 - rows.length);
+  const emptyRows = Array.from({ length: emptyCount }, () => `
+    <tr>
+      <td>&nbsp;</td><td></td><td class="ctr"></td>
+      <td class="ctr"></td><td class="ctr"></td><td class="ctr"></td>
+      <td class="ctr"></td><td class="ctr"></td><td class="ctr"></td>
+      <td class="ctr"></td><td class="ctr"></td><td class="ctr"></td>
+      <td class="quals"></td>
+    </tr>`).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9pt; color: #1a1a1a; background: white; }
+    @page { size: letter landscape; margin: 10mm 12mm 14mm 12mm; }
+
+    .header { margin-bottom: 8px; }
+    .form-title { font-size: 13pt; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .form-subtitle { font-size: 8pt; text-align: center; color: #555; margin-bottom: 10px; }
+    .lab-info { display: flex; gap: 20px; margin-bottom: 8px; font-size: 8.5pt; }
+    .lab-info .field { display: flex; gap: 4px; }
+    .lab-info .label { font-weight: 700; }
+
+    table.cms209 { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 6px; }
+    table.cms209 th { background: #f0f2f5; font-weight: 700; padding: 3px 4px; border: 0.5px solid #ccc; font-size: 6.5pt; text-align: center; vertical-align: bottom; }
+    table.cms209 td { padding: 2px 4px; border: 0.5px solid #ccc; vertical-align: top; }
+    table.cms209 td.ctr { text-align: center; font-weight: 600; }
+    table.cms209 td.quals { font-size: 6.5pt; }
+
+    .col-header-group { text-align: center; font-weight: 700; font-size: 7pt; padding: 2px 0; }
+
+    .specialty-legend { margin-top: 10px; font-size: 6.5pt; color: #555; columns: 3; column-gap: 16px; }
+    .specialty-legend div { margin-bottom: 1px; }
+
+    .certification { margin-top: 16px; font-size: 7.5pt; line-height: 1.5; }
+    .sig-section { margin-top: 20px; display: flex; gap: 30px; }
+    .sig-block { flex: 1; }
+    .sig-line { border-bottom: 1px solid #1a1a1a; height: 22px; margin-bottom: 2px; }
+    .sig-label { font-size: 7pt; color: #666; }
+
+    .footer-form { margin-top: 16px; text-align: center; font-size: 7pt; color: #888; }
+  </style></head><body>
+    <div class="header">
+      <div class="form-title">DEPARTMENT OF HEALTH AND HUMAN SERVICES</div>
+      <div class="form-subtitle">CENTERS FOR MEDICARE &amp; MEDICAID SERVICES / LABORATORY PERSONNEL REPORT</div>
+
+      <div class="lab-info">
+        <div class="field"><span class="label">Laboratory Name:</span> ${lab.lab_name}</div>
+        <div class="field"><span class="label">CLIA Number:</span> ${lab.clia_number}</div>
+        <div class="field"><span class="label">Address:</span> ${address}</div>
+      </div>
+    </div>
+
+    <table class="cms209">
+      <thead>
+        <tr>
+          <th rowspan="2" style="width:12%">Last Name</th>
+          <th rowspan="2" style="width:10%">First Name</th>
+          <th rowspan="2" style="width:3%">MI</th>
+          <th colspan="9" class="col-header-group">Position/Duties (Check applicable)</th>
+          <th rowspan="2" style="width:3%">M/H</th>
+          <th rowspan="2" style="width:20%">Qualifications</th>
+        </tr>
+        <tr>
+          <th style="width:3%">LD</th>
+          <th style="width:3%">CC</th>
+          <th style="width:3%">TC</th>
+          <th style="width:3%">TS</th>
+          <th style="width:3%">GS</th>
+          <th style="width:3%">TP</th>
+          <th style="width:4%">CT/GS</th>
+          <th style="width:3%">CT</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataRows}
+        ${emptyRows}
+      </tbody>
+    </table>
+
+    <div class="specialty-legend">
+      <div style="font-weight:700;margin-bottom:3px;column-span:all">CMS Specialty Numbers (for TC/TS columns):</div>
+      ${Object.entries(specialties).map(([n, name]) => `<div>${n} = ${name}</div>`).join("")}
+    </div>
+
+    <div class="certification">
+      <strong>Certification:</strong> I certify that the information provided on this form is accurate and complete to the best of my knowledge. I understand that this information is required for compliance with CLIA regulations (42 CFR Part 493) and that falsification of this information may result in sanctions.
+    </div>
+
+    <div class="sig-section">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">Laboratory Director Signature</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">Printed Name</div>
+      </div>
+      <div class="sig-block" style="flex:0 0 25%">
+        <div class="sig-line"></div>
+        <div class="sig-label">Date</div>
+      </div>
+    </div>
+
+    <div class="footer-form">FORM CMS-209 (09/2025)</div>
+  </body></html>`;
+}
+
+export async function generateCMS209PDF(input: CMS209Input): Promise<Buffer> {
+  const html = buildCMS209HTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      landscape: true,
+      printBackground: true,
+      margin: { top: "10mm", right: "12mm", bottom: "14mm", left: "12mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}

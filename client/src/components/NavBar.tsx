@@ -13,6 +13,7 @@ const productLinks = [
   { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness" },
   { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping" },
   { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management" },
+  { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];
 
@@ -25,6 +26,7 @@ const allMobileLinks = [
   { href: "/veritascan", label: "VeritaScan™" },
   { href: "/veritamap", label: "VeritaMap™" },
   { href: "/veritacomp", label: "VeritaComp™" },
+  { href: "/veritastaff", label: "VeritaStaff™" },
   { href: "/book", label: "Book" },
   { href: "/resources", label: "Resources" },
   { href: "/demo", label: "Live Demo" },
@@ -121,7 +123,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritacheck","/veritascan","/veritamap","/veritacomp","/book","/cumsum"].includes(location)
+                ["/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/book","/cumsum"].includes(location)
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
