@@ -406,6 +406,11 @@ if (!scanColNames.includes("completion_source")) sqlite.exec("ALTER TABLE verita
 if (!scanColNames.includes("completion_link")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_link TEXT");
 if (!scanColNames.includes("completion_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_note TEXT");
 
+// Add specimen_info column to competency_assessment_items if upgrading
+const compItemCols = sqlite.prepare("PRAGMA table_info(competency_assessment_items)").all() as { name: string }[];
+const compItemColNames = compItemCols.map((c) => c.name);
+if (!compItemColNames.includes("specimen_info")) sqlite.exec("ALTER TABLE competency_assessment_items ADD COLUMN specimen_info TEXT");
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");

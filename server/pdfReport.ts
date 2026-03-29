@@ -1831,7 +1831,8 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         const passed = cell?.passed;
         html += `<td class="${passed ? 'pass-cell' : cell ? 'fail-cell' : ''}">
           ${cell?.evidence || "—"}<br>
-          <span style="font-size:6.5pt;color:#888">${cell?.supervisor_initials || ""} ${cell?.date_met || ""}</span>
+          ${cell?.specimen_info ? `<span style="font-size:6.5pt;color:#0e8a82"><strong>Specimen:</strong> ${cell.specimen_info}</span><br>` : ""}
+          <span style="font-size:6.5pt;color:#888"><strong>Date:</strong> ${cell?.date_met || "—"} &middot; <strong>Init:</strong> ${cell?.supervisor_initials || "—"}</span>
           ${passed ? ' \u2713' : cell ? ' \u2717' : ''}
         </td>`;
       }
@@ -1856,12 +1857,13 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     html += `<div class="section">
       <div class="section-title">Waived Testing Competency &mdash; 2 of 4 Methods Required Per Test</div>
       <table>
-        <tr><th>Assessment Method</th><th>Evidence</th><th>Date</th><th>Initials</th><th>Pass</th></tr>`;
+        <tr><th>Assessment Method</th><th>Evidence</th><th>Specimen/Sample</th><th>Date</th><th>Initials</th><th>Pass</th></tr>`;
     for (const item of items) {
       const methodLabel = WAIVED_METHODS[(item.method_number || 1) - 1] || `Method ${item.method_number}`;
       html += `<tr>
         <td>${methodLabel}</td>
         <td>${item.evidence || "—"}</td>
+        <td>${item.specimen_info || "—"}</td>
         <td>${item.date_met || "—"}</td>
         <td>${item.supervisor_initials || "—"}</td>
         <td class="${item.passed ? 'pass-cell' : 'fail-cell'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>
@@ -1874,12 +1876,13 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     html += `<div class="section">
       <div class="section-title">Non-Technical Competency Checklist &mdash; ${assessment.department}</div>
       <table>
-        <tr><th style="width:5%">#</th><th>Competency Item</th><th style="width:12%">Date Met</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
+        <tr><th style="width:5%">#</th><th>Competency Item</th><th style="width:12%">Date Met</th><th style="width:14%">Specimen/Scenario</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
     for (const item of items) {
       html += `<tr>
         <td><strong>${item.item_label || ""}</strong></td>
         <td>${item.item_description || "—"}</td>
         <td>${item.date_met || "—"}</td>
+        <td>${item.specimen_info || "—"}</td>
         <td>${item.employee_initials || "—"}</td>
         <td>${item.supervisor_initials || "—"}</td>
       </tr>`;

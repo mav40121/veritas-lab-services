@@ -1291,17 +1291,17 @@ function NewAssessmentDialog({
   const [creating, setCreating] = useState(false);
 
   // Items state based on type
-  const [techItems, setTechItems] = useState<Record<string, { evidence: string; passed: boolean; initials: string; date: string }>>({});
+  const [techItems, setTechItems] = useState<Record<string, { evidence: string; passed: boolean; initials: string; date: string; specimen: string }>>({});
   const [waivedMethods, setWaivedMethods] = useState<number[]>([1, 2]);
-  const [waivedItems, setWaivedItems] = useState<Record<number, { evidence: string; passed: boolean; initials: string; date: string }>>({});
-  const [nonTechItems, setNonTechItems] = useState<Record<string, { dateMet: string; empInitials: string; supInitials: string }>>({});
+  const [waivedItems, setWaivedItems] = useState<Record<number, { evidence: string; passed: boolean; initials: string; date: string; specimen: string }>>({});
+  const [nonTechItems, setNonTechItems] = useState<Record<string, { dateMet: string; empInitials: string; supInitials: string; specimen: string }>>({});
 
   // Initialize nontechnical items
   useEffect(() => {
     if (program.type === "nontechnical" && program.checklistItems) {
-      const init: Record<string, { dateMet: string; empInitials: string; supInitials: string }> = {};
+      const init: Record<string, { dateMet: string; empInitials: string; supInitials: string; specimen: string }> = {};
       for (const item of program.checklistItems) {
-        init[item.label] = { dateMet: "", empInitials: "", supInitials: "" };
+        init[item.label] = { dateMet: "", empInitials: "", supInitials: "", specimen: "" };
       }
       setNonTechItems(init);
     }
@@ -1317,37 +1317,40 @@ function NewAssessmentDialog({
       for (const mg of (program.methodGroups || [])) {
         for (let m = 1; m <= 6; m++) {
           const key = `${m}-${mg.id}`;
-          const cell = techItems[key] || { evidence: "", passed: false, initials: "", date: "" };
+          const cell = techItems[key] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
           items.push({
             methodNumber: m,
             methodGroupId: mg.id,
             evidence: cell.evidence,
             dateMet: cell.date || assessmentDate,
             supervisorInitials: cell.initials || evaluatorInitials,
+            specimenInfo: cell.specimen,
             passed: cell.passed,
           });
         }
       }
     } else if (program.type === "waived") {
       for (const methodNum of waivedMethods) {
-        const cell = waivedItems[methodNum] || { evidence: "", passed: false, initials: "", date: "" };
+        const cell = waivedItems[methodNum] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
         items.push({
           methodNumber: methodNum,
           evidence: cell.evidence,
           dateMet: cell.date || assessmentDate,
           supervisorInitials: cell.initials || evaluatorInitials,
+          specimenInfo: cell.specimen,
           passed: cell.passed,
         });
       }
     } else {
       for (const item of (program.checklistItems || [])) {
-        const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
+        const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "", specimen: "" };
         items.push({
           itemLabel: item.label,
           itemDescription: item.description,
           dateMet: cell.dateMet || assessmentDate,
           employeeInitials: cell.empInitials,
           supervisorInitials: cell.supInitials || evaluatorInitials,
+          specimenInfo: cell.specimen,
           passed: !!(cell.dateMet && cell.empInitials && cell.supInitials),
         });
       }
@@ -1460,11 +1463,12 @@ function NewAssessmentDialog({
           {program.type === "technical" && program.methodGroups && program.methodGroups.length > 0 && (
             <div>
               <div className="text-sm font-semibold mb-2">Assessment Matrix</div>
+              <p className="text-[10px] text-muted-foreground mb-2">For each method/group, record the observation date, specimen or sample used, evidence, and evaluator initials. These are required for CLIA/CAP compliance.</p>
               <div className="overflow-x-auto border border-border rounded-lg">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-primary/5">
-                      <th className="p-2 text-left font-medium text-xs w-[40%]">CLIA Method</th>
+                      <th className="p-2 text-left font-medium text-xs w-[35%]">CLIA Method</th>
                       {program.methodGroups.map(g => (
                         <th key={g.id} className="p-2 text-left font-medium text-xs">{g.name}</th>
                       ))}
@@ -1476,26 +1480,47 @@ function NewAssessmentDialog({
                         <td className="p-2 text-xs leading-tight">{method}</td>
                         {program.methodGroups!.map(g => {
                           const key = `${mIdx + 1}-${g.id}`;
-                          const cell = techItems[key] || { evidence: "", passed: false, initials: "", date: "" };
+                          const cell = techItems[key] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
                           return (
                             <td key={g.id} className="p-1.5 border-l border-border">
                               <Input
-                                className="text-xs h-7 mb-1"
+                                className="text-xs h-6 mb-1"
                                 placeholder="Evidence..."
                                 value={cell.evidence}
                                 onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, evidence: e.target.value } }))}
                               />
-                              <div className="flex items-center gap-1">
-                                <label className="flex items-center gap-1 text-[10px] cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={cell.passed}
-                                    onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, passed: e.target.checked } }))}
-                                    className="w-3 h-3"
-                                  />
-                                  Pass
-                                </label>
+                              <Input
+                                className="text-xs h-6 mb-1"
+                                placeholder="Specimen/sample ID..."
+                                value={cell.specimen}
+                                onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, specimen: e.target.value } }))}
+                              />
+                              <div className="flex gap-1 mb-1">
+                                <Input
+                                  type="date"
+                                  className="text-[10px] h-6 flex-1"
+                                  value={cell.date}
+                                  onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, date: e.target.value } }))}
+                                  title="Observation date"
+                                />
+                                <Input
+                                  className="text-[10px] h-6 w-14"
+                                  placeholder="Init"
+                                  value={cell.initials}
+                                  onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, initials: e.target.value } }))}
+                                  maxLength={10}
+                                  title="Evaluator initials"
+                                />
                               </div>
+                              <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={cell.passed}
+                                  onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, passed: e.target.checked } }))}
+                                  className="w-3 h-3"
+                                />
+                                Pass
+                              </label>
                             </td>
                           );
                         })}
@@ -1511,11 +1536,12 @@ function NewAssessmentDialog({
           {program.type === "waived" && (
             <div>
               <div className="text-sm font-semibold mb-2">Select 2 of 4 Methods</div>
+              <p className="text-[10px] text-muted-foreground mb-2">For each selected method, record the date performed, specimen/sample used, evidence, and evaluator initials.</p>
               <div className="space-y-2">
                 {WAIVED_METHODS.map((method, mIdx) => {
                   const num = mIdx + 1;
                   const selected = waivedMethods.includes(num);
-                  const cell = waivedItems[num] || { evidence: "", passed: false, initials: "", date: "" };
+                  const cell = waivedItems[num] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
                   return (
                     <div key={num} className={`border rounded-lg p-3 ${selected ? "border-primary bg-primary/5" : "border-border"}`}>
                       <label className="flex items-start gap-2 cursor-pointer">
@@ -1534,22 +1560,47 @@ function NewAssessmentDialog({
                         <div className="flex-1">
                           <div className="text-xs font-medium">{method}</div>
                           {selected && (
-                            <div className="mt-2 flex gap-2">
-                              <Input
-                                className="text-xs h-7 flex-1"
-                                placeholder="Evidence..."
-                                value={cell.evidence}
-                                onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, evidence: e.target.value } }))}
-                              />
-                              <label className="flex items-center gap-1 text-[10px] shrink-0">
-                                <input
-                                  type="checkbox"
-                                  checked={cell.passed}
-                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, passed: e.target.checked } }))}
-                                  className="w-3 h-3"
+                            <div className="mt-2 space-y-1.5">
+                              <div className="flex gap-2">
+                                <Input
+                                  className="text-xs h-7 flex-1"
+                                  placeholder="Evidence..."
+                                  value={cell.evidence}
+                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, evidence: e.target.value } }))}
                                 />
-                                Pass
-                              </label>
+                                <label className="flex items-center gap-1 text-[10px] shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={cell.passed}
+                                    onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, passed: e.target.checked } }))}
+                                    className="w-3 h-3"
+                                  />
+                                  Pass
+                                </label>
+                              </div>
+                              <div className="flex gap-2">
+                                <Input
+                                  className="text-xs h-7 flex-1"
+                                  placeholder="Specimen/sample ID..."
+                                  value={cell.specimen}
+                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, specimen: e.target.value } }))}
+                                />
+                                <Input
+                                  type="date"
+                                  className="text-xs h-7 w-36"
+                                  value={cell.date}
+                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, date: e.target.value } }))}
+                                  title="Date performed"
+                                />
+                                <Input
+                                  className="text-xs h-7 w-16"
+                                  placeholder="Init"
+                                  value={cell.initials}
+                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, initials: e.target.value } }))}
+                                  maxLength={10}
+                                  title="Evaluator initials"
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1575,13 +1626,14 @@ function NewAssessmentDialog({
                       <th className="p-2 text-left w-8">#</th>
                       <th className="p-2 text-left">Item</th>
                       <th className="p-2 text-left w-28">Date Met</th>
+                      <th className="p-2 text-left w-28">Specimen/Scenario</th>
                       <th className="p-2 text-left w-20">Emp Init</th>
                       <th className="p-2 text-left w-20">Sup Init</th>
                     </tr>
                   </thead>
                   <tbody>
                     {program.checklistItems.map(item => {
-                      const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
+                      const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "", specimen: "" };
                       return (
                         <tr key={item.label} className="border-t border-border">
                           <td className="p-2 font-bold">{item.label}.</td>
@@ -1592,6 +1644,14 @@ function NewAssessmentDialog({
                               className="text-xs h-7"
                               value={cell.dateMet}
                               onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, dateMet: e.target.value } }))}
+                            />
+                          </td>
+                          <td className="p-1.5">
+                            <Input
+                              className="text-xs h-7"
+                              placeholder="Specimen/scenario..."
+                              value={cell.specimen}
+                              onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, specimen: e.target.value } }))}
                             />
                           </td>
                           <td className="p-1.5">

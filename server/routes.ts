@@ -1992,11 +1992,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Insert assessment items
     if (Array.isArray(items)) {
       const stmt = (db as any).$client.prepare(
-        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
-        stmt.run(assessmentId, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0);
+        stmt.run(assessmentId, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0, item.specimenInfo ?? null);
       }
     }
 
@@ -2038,11 +2038,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (Array.isArray(items)) {
       (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
       const stmt = (db as any).$client.prepare(
-        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
-        stmt.run(req.params.id, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0);
+        stmt.run(req.params.id, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0, item.specimenInfo ?? null);
       }
     }
     res.json({ ok: true });
