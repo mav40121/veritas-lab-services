@@ -398,82 +398,28 @@ function IntelligenceBanner({
   );
 }
 
-// ── CSV Export ────────────────────────────────────────────────────────────────
+// ── Excel Export ──────────────────────────────────────────────────────────────
 
-function exportCSV(mapName: string, tests: TestRecord[]) {
-  const headers = [
-    "Analyte",
-    "Instruments",
-    "Specialty",
-    "Complexity",
-    "CFR Section",
-    "Correlation Required",
-    "Last Cal Ver",
-    "Cal Ver Status",
-    "Last Method Comp",
-    "Method Comp Status",
-    "Last Precision",
-    "Precision Status",
-    "Last SOP Review",
-    "SOP Review Status",
-    "Notes",
-  ];
-
-  function statusLabel(s: DateStatus): string {
-    return {
-      ok: "Compliant",
-      "due-soon": "Due Soon",
-      overdue: "Overdue",
-      missing: "Missing",
-    }[s];
-  }
-
-  const sortedTests = [...tests].sort((a, b) => a.analyte.localeCompare(b.analyte));
-  const rows = sortedTests.map((t) => {
-    const instrList = t.instruments.map((i) => `${i.instrument_name} [${i.role}]`).join("; ");
-    const correlReq = t.complexity !== "WAIVED" && t.instruments.length >= 2 ? "Yes" : "No";
-    const calVerStatus =
-      t.complexity !== "WAIVED"
-        ? statusLabel(getDateStatus(t.last_cal_ver, 6))
-        : "N/A (Waived)";
-    const mcStatus =
-      t.complexity !== "WAIVED"
-        ? statusLabel(getDateStatus(t.last_method_comp, 6))
-        : "N/A (Waived)";
-    const precStatus =
-      t.complexity !== "WAIVED"
-        ? statusLabel(getDateStatus(t.last_precision, 6))
-        : "N/A (Waived)";
-    const sopStatus = statusLabel(getDateStatus(t.last_sop_review, 24));
-    return [
-      t.analyte,
-      instrList,
-      t.specialty,
-      t.complexity,
-      getCFR(t.specialty),
-      correlReq,
-      t.last_cal_ver || "",
-      calVerStatus,
-      t.last_method_comp || "",
-      mcStatus,
-      t.last_precision || "",
-      precStatus,
-      t.last_sop_review || "",
-      sopStatus,
-      t.notes || "",
-    ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(",");
-  });
-
-  const csv = [headers.map((h) => `"${h}"`).join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+async function exportExcel(mapId: number, mapName: string): Promise<void> {
+  const token = localStorage.getItem("veritas_token");
+  const res = await fetch(
+    `${API_BASE}/api/veritamap/maps/${mapId}/excel`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  if (!res.ok) throw new Error("Excel generation failed");
+  const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `VeritaMap_${mapName.replace(/[^a-z0-9]/gi, "_")}_${
-    new Date().toISOString().split("T")[0]
-  }.csv`;
+  const date = new Date().toISOString().split("T")[0];
+  const safeName = mapName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+  a.download = `VeritaMap_${safeName}_${date}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -770,6 +716,7 @@ export default function VeritaMapMapPage() {
   const [localTests, setLocalTests] = useState<TestRecord[]>([]);
   const [filterSpecialty, setFilterSpecialty] = useState<string>("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
 
   // Refs for row scrolling (keyed by analyte)
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -1113,15 +1060,26 @@ export default function VeritaMapMapPage() {
             </div>
           </div>
 
-          {/* Download CSV */}
+          {/* Export Excel */}
           <Button
             variant="outline"
             size="sm"
             className="h-8 text-xs justify-start"
-            onClick={() => exportCSV(mapDetail.name, localTests)}
+            disabled={excelLoading}
+            onClick={async () => {
+              setExcelLoading(true);
+              try {
+                await exportExcel(mapDetail.id, mapDetail.name);
+              } catch (e) {
+                console.error("Excel export error:", e);
+                toast({ title: "Export failed", description: "Could not generate Excel file.", variant: "destructive" });
+              } finally {
+                setExcelLoading(false);
+              }
+            }}
           >
             <Download size={11} className="mr-1.5" />
-            Download CSV
+            {excelLoading ? "Exporting..." : "Export Excel"}
           </Button>
 
           {/* VeritaCheck CTA */}

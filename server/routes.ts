@@ -12,6 +12,10 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF } from "./p
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
 import { autoCompleteVeritaScanItems } from "./integrations";
+import {
+  MAYO_CRITICAL_VALUES, UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
+  CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
+} from "./veritamapData";
 
 const JWT_SECRET = process.env.JWT_SECRET || "veritas-lab-services-secret-2026";
 
@@ -567,6 +571,230 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       req.params.id, decodeURIComponent(req.params.analyte));
     (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
+  });
+
+  // ── VERITAMAP EXCEL EXPORT ────────────────────────────────────────────────
+  app.post("/api/veritamap/maps/:id/excel", authMiddleware, async (req: any, res) => {
+    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+
+    // Fetch tests (same as map detail endpoint)
+    const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id);
+    const instrByAnalyte = (db as any).$client.prepare(`
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category
+      FROM veritamap_instrument_tests it
+      JOIN veritamap_instruments i ON i.id = it.instrument_id
+      WHERE it.map_id = ? AND it.active = 1
+    `).all(req.params.id);
+    const instrMap: Record<string, any[]> = {};
+    for (const row of instrByAnalyte) {
+      if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
+      instrMap[row.analyte].push(row);
+    }
+    const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
+
+    // Sort by Department → Specialty → Analyte (A-Z)
+    tests.sort((a: any, b: any) => {
+      const catA = (a.instruments[0]?.category || "").toLowerCase();
+      const catB = (b.instruments[0]?.category || "").toLowerCase();
+      if (catA !== catB) return catA.localeCompare(catB);
+      const specA = (a.specialty || "").toLowerCase();
+      const specB = (b.specialty || "").toLowerCase();
+      if (specA !== specB) return specA.localeCompare(specB);
+      return (a.analyte || "").toLowerCase().localeCompare((b.analyte || "").toLowerCase());
+    });
+
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+
+      // ── Sheet 1: Compliance Map ──
+      const headers = [
+        "Analyte", "Department", "Specialty", "Complexity", "Instruments",
+        "Number of Instruments", "CFR Section", "Correlation Required",
+        "Typical Unit of Measure", "Typical Adult Reference Range", "Typical AMR",
+        "Mayo Recommended Critical Low", "Mayo Recommended Critical High", "Mayo Critical Value Units",
+        "Lab Critical Low", "Lab Critical High", "Lab AMR Low", "Lab AMR High",
+        "Last Cal Ver Date", "Cal Ver Status", "Last Method Comp Date", "Method Comp Status",
+        "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
+        "Notes",
+      ];
+
+      const rows = tests.map((t: any) => {
+        const instruments = t.instruments || [];
+        const instrList = instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join("; ");
+        const instrCount = instruments.length;
+        const department = instruments[0]?.category || t.specialty || "";
+        const isWaived = t.complexity === "WAIVED";
+        const correlReq = !isWaived && instrCount >= 2 ? "Yes" : "No";
+        const cfr = VERITAMAP_CFR_MAP[t.specialty] ?? "§493.945";
+        const mayo = lookupAnalyte(MAYO_CRITICAL_VALUES, t.analyte);
+        const unit = lookupAnalyte(UNITS_LOOKUP, t.analyte) || "";
+        const refRange = lookupAnalyte(REFERENCE_RANGES, t.analyte) || "";
+        const amr = lookupAnalyte(AMR_LOOKUP, t.analyte) || "";
+        const calVerStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_cal_ver, 6);
+        const mcStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_method_comp, 6);
+        const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
+        const sopStatus = getComplianceStatus(t.last_sop_review, 24);
+
+        return [
+          t.analyte,
+          department,
+          t.specialty,
+          t.complexity,
+          instrList,
+          instrCount,
+          cfr,
+          correlReq,
+          unit ? `${unit}` : "",
+          refRange ? `${refRange} — Typical (verify w/ package insert)` : "",
+          amr ? `${amr} — Typical (verify w/ package insert)` : "",
+          mayo?.low || "",
+          mayo?.high || "",
+          mayo?.units || "",
+          "", // Lab Critical Low (blank for lab to fill)
+          "", // Lab Critical High (blank for lab to fill)
+          "", // Lab AMR Low (blank for lab to fill)
+          "", // Lab AMR High (blank for lab to fill)
+          t.last_cal_ver || "",
+          calVerStatus,
+          t.last_method_comp || "",
+          mcStatus,
+          t.last_precision || "",
+          precStatus,
+          t.last_sop_review || "",
+          sopStatus,
+          t.notes || "",
+        ];
+      });
+
+      const sheetData = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+      // Column widths
+      ws["!cols"] = [
+        { wch: 25 },  // Analyte
+        { wch: 18 },  // Department
+        { wch: 18 },  // Specialty
+        { wch: 12 },  // Complexity
+        { wch: 40 },  // Instruments
+        { wch: 10 },  // # of Instruments
+        { wch: 16 },  // CFR Section
+        { wch: 14 },  // Correlation Required
+        { wch: 16 },  // Unit of Measure
+        { wch: 36 },  // Reference Range
+        { wch: 32 },  // AMR
+        { wch: 20 },  // Mayo Critical Low
+        { wch: 20 },  // Mayo Critical High
+        { wch: 16 },  // Mayo Critical Units
+        { wch: 14 },  // Lab Critical Low
+        { wch: 14 },  // Lab Critical High
+        { wch: 14 },  // Lab AMR Low
+        { wch: 14 },  // Lab AMR High
+        { wch: 14 },  // Last Cal Ver Date
+        { wch: 14 },  // Cal Ver Status
+        { wch: 16 },  // Last Method Comp Date
+        { wch: 16 },  // Method Comp Status
+        { wch: 14 },  // Last Precision Date
+        { wch: 14 },  // Precision Status
+        { wch: 16 },  // Last SOP Review Date
+        { wch: 16 },  // SOP Review Status
+        { wch: 30 },  // Notes
+      ];
+
+      // Freeze header row
+      ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+      // Apply cell styles (xlsx community edition has limited style support, but we set what we can)
+      // Header row styling
+      for (let c = 0; c < headers.length; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+        if (!ws[cellRef]) continue;
+        ws[cellRef].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "006064" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } },
+          },
+        };
+      }
+
+      // Data row styling
+      for (let r = 1; r <= rows.length; r++) {
+        const isOddRow = r % 2 === 1;
+        for (let c = 0; c < headers.length; c++) {
+          const cellRef = XLSX.utils.encode_cell({ r, c });
+          if (!ws[cellRef]) {
+            ws[cellRef] = { v: "", t: "s" };
+          }
+          const style: any = {
+            border: {
+              top: { style: "thin", color: { rgb: "D0D0D0" } },
+              bottom: { style: "thin", color: { rgb: "D0D0D0" } },
+              left: { style: "thin", color: { rgb: "D0D0D0" } },
+              right: { style: "thin", color: { rgb: "D0D0D0" } },
+            },
+            alignment: { vertical: "center", wrapText: true },
+          };
+
+          // Alternating row shading
+          if (isOddRow) {
+            style.fill = { fgColor: { rgb: "F9F9F9" } };
+          }
+
+          // Lab fill-in columns (14-17, 0-indexed = columns O-R) — light blue
+          if (c >= 14 && c <= 17) {
+            style.fill = { fgColor: { rgb: "E3F2FD" } };
+          }
+
+          // Status columns: color-code based on value
+          const statusCols = [19, 21, 23, 25]; // Cal Ver Status, Method Comp Status, Precision Status, SOP Status
+          if (statusCols.includes(c)) {
+            const val = String(ws[cellRef].v || "");
+            if (val === "Overdue") {
+              style.fill = { fgColor: { rgb: "FFCCCC" } };
+            } else if (val === "Due Soon") {
+              style.fill = { fgColor: { rgb: "FFF3CD" } };
+            } else if (val === "Missing") {
+              style.fill = { fgColor: { rgb: "F5F5F5" } };
+            }
+          }
+
+          ws[cellRef].s = style;
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, "Compliance Map");
+
+      // ── Sheet 2: Instructions ──
+      const ws2 = XLSX.utils.aoa_to_sheet(INSTRUCTIONS_CONTENT);
+      ws2["!cols"] = [{ wch: 100 }];
+      // Style the title row
+      const titleRef = XLSX.utils.encode_cell({ r: 0, c: 0 });
+      if (ws2[titleRef]) {
+        ws2[titleRef].s = {
+          font: { bold: true, sz: 14, color: { rgb: "006064" } },
+        };
+      }
+      XLSX.utils.book_append_sheet(wb, ws2, "Instructions");
+
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const safeName = (map.name || "Map").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `VeritaMap_${safeName}_${date}.xlsx`;
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(Buffer.from(buffer));
+    } catch (e: any) {
+      console.error("VeritaMap Excel generation error:", e);
+      res.status(500).json({ error: "Excel generation failed" });
+    }
   });
 
   // ── VERITASCAN ───────────────────────────────────────────────────────────
