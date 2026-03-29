@@ -611,7 +611,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // ── Sheet 1: Compliance Map ──
       const headers = [
-        "Analyte", "Department", "Specialty", "Complexity", "Instruments",
+        "Analyte", "Instruments", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Typical Unit of Measure", "Typical Adult Reference Range", "Typical AMR",
         "Mayo Recommended Critical Low", "Mayo Recommended Critical High", "Mayo Critical Value Units",
@@ -640,10 +640,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         return [
           t.analyte,
+          instrList,
           department,
           t.specialty,
           t.complexity,
-          instrList,
           instrCount,
           cfr,
           correlReq,
@@ -703,11 +703,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         { wch: 30 },  // Notes
       ];
 
-      // Freeze at D2: freeze rows above row 2 (header) AND columns left of column D
-      // Columns: A=Analyte, B=Department, C=Specialty, D=Complexity, E=Instruments
-      // xSplit=3 freezes columns A, B, C (Analyte, Department, Specialty)
-      // ySplit=1 freezes row 1 (header)
-      ws["!freeze"] = { xSplit: 3, ySplit: 1 };
+      // Freeze at C2: columns A (Analyte) and B (Instruments) stay pinned, plus header row
+      ws["!freeze"] = { xSplit: 2, ySplit: 1 };
 
       // Apply cell styles (xlsx community edition has limited style support, but we set what we can)
       // Header row styling
