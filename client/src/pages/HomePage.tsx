@@ -16,9 +16,9 @@ const services = [
 
 const stats = [
   { value: "200+", label: "Facilities surveyed" },
-  { value: "22 yrs", label: "Military leadership" },
-  { value: "4 yrs", label: "Joint Commission surveyor" },
-  { value: "CPHQ", label: "Healthcare quality certified" },
+  { value: "4", label: "Software products" },
+  { value: "168", label: "Compliance items tracked" },
+  { value: "22 yrs", label: "Industry experience" },
 ];
 
 export default function HomePage() {
@@ -29,9 +29,14 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
           <div className="max-w-3xl">
-            <Badge variant="outline" className="mb-5 text-primary border-primary/30 bg-primary/5 font-medium">
-              Clinical Laboratory Consulting
-            </Badge>
+            <div className="flex gap-2 mb-5">
+              <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 font-medium">
+                Consulting
+              </Badge>
+              <Badge className="bg-primary text-primary-foreground font-medium">
+                Software Suite
+              </Badge>
+            </div>
             <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight text-foreground">
               VeritaAssure: Lab Compliance, Built for the Real World
             </h1>
@@ -42,13 +47,44 @@ export default function HomePage() {
               Built by working lab leaders who know what surveyors actually look for.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+              {/* Mobile: VeritaCheck primary, Explore secondary */}
+              <Button asChild size="lg" className="sm:hidden bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                <Link href="/veritacheck">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="sm:hidden">
+                <Link href="/demo">Explore VeritaAssure</Link>
+              </Button>
+              {/* Desktop: Explore primary, VeritaCheck secondary */}
+              <Button asChild size="lg" className="hidden sm:inline-flex bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                 <Link href="/demo">Explore VeritaAssure <ChevronRight size={16} className="ml-1" /></Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button asChild variant="outline" size="lg" className="hidden sm:inline-flex">
                 <Link href="/veritacheck">Try VeritaCheck™ Free</Link>
               </Button>
             </div>
+            <Link href="/demo" className="sm:hidden inline-flex items-center gap-1 text-sm text-primary font-medium mt-3 hover:underline">
+              See it in action — no login required <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Mobile Product Strip */}
+      <section className="border-b border-border bg-card sm:hidden">
+        <div className="px-4 py-3 overflow-x-auto">
+          <div className="flex gap-2 whitespace-nowrap">
+            {[
+              { name: "VeritaCheck™", href: "/veritacheck" },
+              { name: "VeritaMap™", href: "/veritamap" },
+              { name: "VeritaScan™", href: "/veritascan" },
+              { name: "VeritaComp™", href: "/veritacomp" },
+            ].map(({ name, href }) => (
+              <Link key={name} href={href}>
+                <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-primary/30 text-primary text-xs font-medium bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
+                  {name}
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
@@ -78,6 +114,20 @@ export default function HomePage() {
             <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
               <CardContent className="p-5">
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
+                  <Wrench size={18} />
+                </div>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure Tools</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  VeritaCheck™, VeritaMap™, VeritaScan™, and VeritaComp™ are the software instruments of the VeritaAssure suite, built for lab directors who want data-driven compliance without waiting on a consultant.
+                </p>
+                <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
+                  <Link href="/veritacheck">Explore the Tools →</Link>
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
+              <CardContent className="p-5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Briefcase size={18} />
                 </div>
                 <h3 className="font-semibold text-sm mb-2">VeritaAssure Consulting</h3>
@@ -86,20 +136,6 @@ export default function HomePage() {
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/services">View Services →</Link>
-                </Button>
-              </CardContent>
-            </Card>
-            <Card className="border-border hover:border-primary/30 transition-colors group bg-card">
-              <CardContent className="p-5">
-                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
-                  <Wrench size={18} />
-                </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure Tools</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  VeritaCheck™, VeritaMap™, and VeritaScan™ are the software instruments of the VeritaAssure suite, built for lab directors who want data-driven compliance without waiting on a consultant.
-                </p>
-                <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
-                  <Link href="/veritacheck">Explore the Tools →</Link>
                 </Button>
               </CardContent>
             </Card>
