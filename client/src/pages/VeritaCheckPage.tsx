@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -128,6 +129,33 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
   // Trim rows from the end, renumber
   return prev.slice(0, newCount).map((dp, i) => ({ ...dp, level: i + 1 }));
 }
+
+const featureTooltips: Record<string, string> = {
+  // Per Study
+  "Single study run": "Run one calibration verification, method comparison, or other EP study. Generates a complete signed PDF report.",
+  "Full PDF report": "Audit-ready PDF with scatter plots, statistical analysis, pass/fail verdict, narrative summary, and lab director signature on page 1.",
+  "Cal Ver, Method Comp, Precision & Lot-to-Lot": "Covers calibration verification/linearity, correlation/method comparison, accuracy & precision, and lot-to-lot verification study types.",
+  "CLIA pass/fail evaluation": "Each study is automatically evaluated against CLIA allowable total error (TEa) and returns a clear Pass or Fail result.",
+  // Starter
+  "Unlimited studies": "Run as many EP studies as your lab needs — no per-study charges.",
+  "All VeritaCheck study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
+  "Full PDF reports": "Every study generates a signed, audit-ready PDF report suitable for surveyor review.",
+  "Study history dashboard": "View, search, and re-download all past studies from your personal dashboard.",
+  // Professional
+  "Everything in Starter": "Includes all features from the Starter plan.",
+  "VeritaMap regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
+  "VeritaScan self-inspection audit": "168-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck automatically check off corresponding items.",
+  "Priority support": "Dedicated email support with same-day responses during business hours.",
+  // Lab
+  "Everything in Professional": "Includes all features from the Professional plan.",
+  "Up to 10 analyst accounts": "Share one account with up to 10 staff members across your department.",
+  "Shared study dashboard": "All team members see the same studies, maps, scans, and competency records in a shared workspace.",
+  "Lab branding on PDF reports": "Add your laboratory name and logo to all generated PDF reports.",
+  // VeritaAssure Complete
+  "Everything in Lab": "Includes all features from the Lab plan.",
+  "Consulting access": "Direct access to Michael Veri for compliance questions — the same expertise behind 200+ facility inspections as a Joint Commission Surveyor.",
+  "Lab Management 101 book included": "Digital copy of Lab Management 101 by Michael Veri included with your subscription.",
+};
 
 const plans = [
   { priceType: "perStudy",     name: "Per Study",             price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                                 features: ["Single study run", "Full PDF report", "Cal Ver, Method Comp, Precision & Lot-to-Lot", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
@@ -1429,9 +1457,38 @@ export default function VeritaCheckPage() {
                       </p>
                     )}
                     <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                    <ul className="space-y-2 mb-5">
-                      {plan.features.map(f => <li key={f} className="flex items-center gap-2 text-sm"><CheckCircle2 size={13} className="text-primary shrink-0" />{f}</li>)}
-                    </ul>
+                    <TooltipProvider delayDuration={150}>
+                      <ul className="space-y-2 mb-5">
+                        {plan.features.map(f => {
+                          const tip = featureTooltips[f];
+                          return (
+                            <li key={f} className="flex items-center gap-2 text-sm">
+                              <CheckCircle2 size={13} className="text-primary shrink-0" />
+                              {tip ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="cursor-help border-b border-dotted border-muted-foreground/40 inline-flex items-center gap-1">
+                                      {f}
+                                      <HelpCircle size={11} className="text-muted-foreground/50 shrink-0" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent
+                                    side="top"
+                                    collisionPadding={8}
+                                    showArrow
+                                    className="max-w-[250px] bg-zinc-900 dark:bg-zinc-800 text-white text-xs leading-relaxed border-zinc-700 px-3 py-2"
+                                  >
+                                    {tip}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <span>{f}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </TooltipProvider>
                     <Button
                       className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
                       variant={plan.highlight ? "default" : "outline"}
