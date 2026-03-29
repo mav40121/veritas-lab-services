@@ -180,16 +180,6 @@ export default function DemoLabPage() {
               ═══════════════════════════════════════════════════════════ */}
           {activeTab === "veritamap" && (
             <div className="space-y-5">
-              {/* Narrative intro callout */}
-              <div className="border-l-4 border-[#006064] bg-card rounded-r-lg p-4">
-                <div className="flex items-start gap-2">
-                  <Info size={16} className="text-primary mt-0.5 shrink-0" />
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    VeritaMap identified <strong className="text-foreground">{correlationAnalytes} analytes</strong> requiring correlation studies across Riverside Regional's instruments. {studies.length} correlation studies have already been completed and auto-verified in VeritaScan. {Math.max(0, correlationAnalytes - studies.length)} are pending &mdash; click "Run Study" on any analyte to see how VeritaCheck pre-populates the study.
-                  </p>
-                </div>
-              </div>
-
               {map ? (
                 <>
                   <div className="flex items-center justify-between">
@@ -201,6 +191,48 @@ export default function DemoLabPage() {
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
                       <Eye size={12} />
                       Read-only demo &mdash; <button onClick={blockAction} className="text-primary hover:underline font-semibold">Sign up to build your own map</button>
+                    </div>
+                  </div>
+
+                  {/* Instruments */}
+                  <div className="grid gap-3">
+                    {(map.instruments || []).map((inst: any) => (
+                      <Card key={inst.id} className="overflow-hidden">
+                        <CardHeader className="py-3 px-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="text-sm font-semibold">{inst.instrument_name}</CardTitle>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-xs">{inst.role}</Badge>
+                                <span className="text-xs text-muted-foreground">{inst.category}</span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{inst.tests?.length || 0} tests</span>
+                          </div>
+                        </CardHeader>
+                        {inst.tests?.length > 0 && (
+                          <CardContent className="py-2 px-4 border-t">
+                            <div className="flex flex-wrap gap-1.5">
+                              {inst.tests.map((t: any) => (
+                                <Badge key={t.analyte} variant="secondary" className="text-xs">
+                                  {t.analyte}
+                                  <span className="ml-1 text-[9px] opacity-60">{t.complexity}</span>
+                                </Badge>
+                              ))}
+                            </div>
+                          </CardContent>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Narrative intro callout */}
+                  <div className="border-l-4 border-[#006064] bg-card rounded-r-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <Info size={16} className="text-primary mt-0.5 shrink-0" />
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        VeritaMap identified <strong className="text-foreground">{correlationAnalytes} analytes</strong> requiring correlation studies across Riverside Regional's instruments. {studies.length} correlation studies have already been completed and auto-verified in VeritaScan. {Math.max(0, correlationAnalytes - studies.length)} are pending &mdash; click "Run Study" on any analyte to see how VeritaCheck pre-populates the study.
+                      </p>
                     </div>
                   </div>
 
@@ -236,38 +268,6 @@ export default function DemoLabPage() {
                       </div>
                     </div>
                   )}
-
-                  {/* Instruments */}
-                  <div className="grid gap-3">
-                    {(map.instruments || []).map((inst: any) => (
-                      <Card key={inst.id} className="overflow-hidden">
-                        <CardHeader className="py-3 px-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-sm font-semibold">{inst.instrument_name}</CardTitle>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-xs">{inst.role}</Badge>
-                                <span className="text-xs text-muted-foreground">{inst.category}</span>
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{inst.tests?.length || 0} tests</span>
-                          </div>
-                        </CardHeader>
-                        {inst.tests?.length > 0 && (
-                          <CardContent className="py-2 px-4 border-t">
-                            <div className="flex flex-wrap gap-1.5">
-                              {inst.tests.map((t: any) => (
-                                <Badge key={t.analyte} variant="secondary" className="text-xs">
-                                  {t.analyte}
-                                  <span className="ml-1 text-[9px] opacity-60">{t.complexity}</span>
-                                </Badge>
-                              ))}
-                            </div>
-                          </CardContent>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
                 </>
               ) : (
                 <div className="text-center text-muted-foreground py-12">No map data available</div>
