@@ -20,42 +20,42 @@ const REFS = {
     source: "CMS.gov",
   },
   cfr493931: {
-    label: "42 CFR §493.931 — Calibration Verification",
+    label: "42 CFR §493.931 - Calibration Verification",
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931",
     source: "eCFR",
   },
   cfr493933: {
-    label: "42 CFR §493.933 — Method Comparison & Bias",
+    label: "42 CFR §493.933 - Method Comparison & Bias",
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.933",
     source: "eCFR",
   },
   cfr493941: {
-    label: "42 CFR §493.941 — Precision & Accuracy",
+    label: "42 CFR §493.941 - Precision & Accuracy",
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941",
     source: "eCFR",
   },
   clsiEP6: {
-    label: "CLSI EP06 — Evaluation of Linearity",
+    label: "CLSI EP06 - Evaluation of Linearity",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep06/",
     source: "CLSI",
   },
   clsiEP9: {
-    label: "CLSI EP09 — Measurement Procedure Comparison (Method Comparison)",
+    label: "CLSI EP09 - Measurement Procedure Comparison (Method Comparison)",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep09/",
     source: "CLSI",
   },
   clsiEP15: {
-    label: "CLSI EP15-A3 — User Verification of Precision and Estimation of Bias",
+    label: "CLSI EP15-A3 - User Verification of Precision and Estimation of Bias",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep15/",
     source: "CLSI",
   },
   clsiOverview: {
-    label: "CLSI EP Documents — Verifying Performance Claims (Overview)",
+    label: "CLSI EP Documents - Verifying Performance Claims (Overview)",
     url: "https://clsi.org/resources/insights-blog/verifying-performance-claims-for-medical-laboratory-tests/",
     source: "CLSI",
   },
   qso2025: {
-    label: "CMS QSO-25-10 — Updated CLIA Survey Guidance (2025)",
+    label: "CMS QSO-25-10 - Updated CLIA Survey Guidance (2025)",
     url: "https://www.cms.gov/files/document/qso-25-10-clia-revised.pdf",
     source: "CMS.gov",
   },
@@ -200,12 +200,12 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains the three core study types — what they are, when CLIA requires them, and how VeritaCheck automates each one.
+            This guide explains the three core study types, what they are, when CLIA requires them, and how VeritaCheck automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">42 CFR Part 493</a>{" "}
-            and official CMS CLIA guidance. This page is an educational summary — always consult your laboratory director and the full regulation for compliance decisions.
+            and official CMS CLIA guidance. This page is an educational summary. Always consult your laboratory director and the full regulation for compliance decisions.
           </p>
         </div>
       </section>
@@ -259,8 +259,8 @@ export default function StudyGuidePage() {
             badge="Most Common"
             title="Calibration Verification / Linearity"
             subtitle="Verify your instrument reads accurately from low to high"
-            what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range — from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values."
-            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels — low, mid, high). VeritaCheck calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default — minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range, from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values."
+            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Every 6 months (required by CLIA for all non-waived tests)",
               "Whenever calibration is performed",
@@ -287,7 +287,7 @@ export default function StudyGuidePage() {
             title="Correlation / Method Comparison"
             subtitle="Confirm two methods or instruments agree before reporting patient results"
             what="A method comparison study determines whether two measurement procedures (or two instruments running the same assay) produce equivalent results on the same patient samples. It is required any time a laboratory introduces a new test method, adds an instrument, or begins reporting results from a second analyzer."
-            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table. Deming regression is used because both methods carry measurement error. Other evaluation tools and software may use different regression methods by default — minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table. Deming regression is used because both methods carry measurement error. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Before putting a new instrument or analyzer into service",
               "When introducing a new test method or reagent system",
@@ -314,7 +314,7 @@ export default function StudyGuidePage() {
             title="Precision Verification (EP15)"
             subtitle="Confirm your instrument is producing reproducible, consistent results"
             what="Precision verification measures how consistently an instrument produces the same result when the same sample is tested multiple times. Imprecision (variability) is expressed as a standard deviation (SD) or coefficient of variation (CV%). CLIA requires laboratories to verify that their instruments meet the manufacturer's stated precision claims before reporting patient results."
-            howIt="You run control materials repeatedly — typically 20 times over multiple days or runs — and VeritaCheck calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to your CLIA allowable imprecision (CV%) for each analyte."
+            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to your CLIA allowable imprecision (CV%) for each analyte."
             when={[
               "Before introducing any new test method into service (CLIA required)",
               "After a major instrument repair or component replacement",
@@ -324,7 +324,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; after major maintenance"
             regulation="42 CFR §493.941"
-            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa — VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
+            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa. VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493941,
@@ -359,7 +359,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck automates all three study types — no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck automates all three study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck

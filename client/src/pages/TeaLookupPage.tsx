@@ -48,11 +48,11 @@ export default function TeaLookupPage() {
             CLIA Allowable Error (TEa) Lookup
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-4">
-            The complete 2025 CLIA acceptable performance criteria for {stats.total} analytes — directly from 42 CFR Part 493. Search any analyte and get the exact regulatory standard in seconds.
+            The complete 2025 CLIA acceptable performance criteria for {stats.total} analytes, directly from 42 CFR Part 493. Search any analyte and get the exact regulatory standard in seconds.
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Updated July 2024 (2025 CLIA Final Rule)</span>
-            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Public domain — 42 CFR Part 493</span>
+            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Public domain: 42 CFR Part 493</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> No login required</span>
           </div>
         </div>
@@ -64,7 +64,7 @@ export default function TeaLookupPage() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4 mb-6 flex gap-3 text-sm">
           <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-amber-800 dark:text-amber-300">
-            <strong>Important:</strong> CLIA TEa values govern proficiency testing (PT) acceptable performance and calibration verification pass/fail evaluation. These values are the <em>regulatory floor</em> — your lab may adopt tighter internal criteria (ADLM recommends half of CLIA TEa for enhanced quality). Always verify against the current{" "}
+            <strong>Important:</strong> CLIA TEa values govern proficiency testing (PT) acceptable performance and calibration verification pass/fail evaluation. These values are the <em>regulatory floor</em>. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA TEa for enhanced quality). Always verify against the current{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">eCFR</a> before use in compliance decisions.
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function TeaLookupPage() {
                 <div>
                   <div className="font-semibold text-sm mb-1">VeritaCheck™ applies these automatically</div>
                   <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                    Every CLIA TEa value in this table is built into VeritaCheck. Select your analyte, enter your data, and the pass/fail evaluation is done for you — with the CFR citation in the report.
+                    Every CLIA TEa value in this table is built into VeritaCheck. Select your analyte, enter your data, and the pass/fail evaluation is done for you, with the CFR citation in the report.
                   </p>
                   <Button asChild size="sm" className="w-full bg-primary text-primary-foreground text-xs">
                     <Link href="/veritacheck">Run a Free Study <ChevronRight size={11} className="ml-1" /></Link>
@@ -239,13 +239,13 @@ export default function TeaLookupPage() {
           <div>
             <div className="font-semibold mb-2">Why use CLIA TEa for cal ver?</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              Many labs use manufacturer-stated allowable error for calibration verification instead of CLIA TEa. CLIA TEa is the regulatory floor — using it ensures your acceptance criteria are defensible to any accreditation surveyor. Manufacturer claims may be more or less stringent depending on the analyte.
+              Many labs use manufacturer-stated allowable error for calibration verification instead of CLIA TEa. CLIA TEa is the regulatory floor. Using it ensures your acceptance criteria are defensible to any accreditation surveyor. Manufacturer claims may be more or less stringent depending on the analyte.
             </p>
           </div>
           <div>
             <div className="font-semibold mb-2">ADLM recommendation</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              The Association for Diagnostics & Laboratory Medicine (ADLM) recommends using half of the CLIA TEa as internal quality goals — providing a safety margin that keeps results well within acceptable performance even under normal analytical variation.
+              The Association for Diagnostics & Laboratory Medicine (ADLM) recommends using half of the CLIA TEa as internal quality goals, providing a safety margin that keeps results well within acceptable performance even under normal analytical variation.
             </p>
           </div>
         </div>
@@ -254,7 +254,7 @@ export default function TeaLookupPage() {
         <div className="mt-8 rounded-xl bg-primary text-primary-foreground p-6 text-center">
           <h2 className="font-serif text-xl font-bold mb-2">Want to understand how TEa applies to your studies?</h2>
           <p className="text-primary-foreground/80 text-sm max-w-lg mx-auto mb-4">
-            Read our in-depth guide on CLIA calibration verification requirements — including how TEa is applied, what your lab is probably doing wrong, and how to fix it.
+            Read our in-depth guide on CLIA calibration verification requirements, including how TEa is applied, what your lab is probably doing wrong, and how to fix it.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="sm" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -268,7 +268,7 @@ export default function TeaLookupPage() {
 
         {/* Source attribution */}
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart H</a> — U.S. Government publication, public domain. Last updated per the 2025 CLIA Final Rule (effective July 11, 2024). Always verify against the current eCFR before use in compliance decisions.
+          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart H</a>. U.S. Government publication, public domain. Last updated per the 2025 CLIA Final Rule (effective July 11, 2024). Always verify against the current eCFR before use in compliance decisions.
         </p>
       </div>
     </div>

@@ -45,7 +45,7 @@ const demoTests = [
     precisionStatus: "PASS",
     precisionDate: "2025-10-20",
     scanCompliance: 68,
-    gap: "Calibration verification overdue — last performed 6 months ago. CLIA §493.1255 requires verification at least every 6 months.",
+    gap: "Calibration verification overdue, last performed 6 months ago. CLIA §493.1255 requires verification at least every 6 months.",
     color: "red",
   },
   {
@@ -176,19 +176,19 @@ export default function DemoPage() {
             See the Veritas Suite in action.
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mb-6 leading-relaxed">
-            Follow a real compliance workflow for <strong>{LAB_NAME}</strong> — from test menu mapping, to flagged gaps, to running the actual EP studies, to an overall inspection readiness score.
+            Follow a real compliance workflow for <strong>{LAB_NAME}</strong>, from test menu mapping, to flagged gaps, to running the actual EP studies, to an overall inspection readiness score.
           </p>
           <div className="flex flex-wrap gap-3">
             <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 text-sm font-medium">
-              <MapPin size={14} className="text-primary" /> VeritaMap™ — Test Menu
+              <MapPin size={14} className="text-primary" /> VeritaMap™ - Test Menu
             </div>
             <ArrowRight size={16} className="text-muted-foreground self-center" />
             <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 text-sm font-medium">
-              <FlaskConical size={14} className="text-primary" /> VeritaCheck™ — EP Studies
+              <FlaskConical size={14} className="text-primary" /> VeritaCheck™ - EP Studies
             </div>
             <ArrowRight size={16} className="text-muted-foreground self-center" />
             <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 text-sm font-medium">
-              <Shield size={14} className="text-primary" /> VeritaScan™ — Inspection Readiness
+              <Shield size={14} className="text-primary" /> VeritaScan™ - Inspection Readiness
             </div>
           </div>
         </div>
@@ -197,14 +197,14 @@ export default function DemoPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-14">
 
         {/* ══════════════════════════════════════════════
-            STEP 1 — VERITAMAP
+            STEP 1 - VERITAMAP
         ══════════════════════════════════════════════ */}
         <section>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">1</div>
             <div>
               <h2 className="font-serif text-2xl font-bold flex items-center gap-2">
-                <MapPin size={20} className="text-primary" /> VeritaMap™ — Test Menu Regulatory Map
+                <MapPin size={20} className="text-primary" /> VeritaMap™ - Test Menu Regulatory Map
               </h2>
               <p className="text-muted-foreground text-sm">Map every test to CLIA, TJC, and CAP requirements. Surface gaps instantly.</p>
             </div>
@@ -325,7 +325,7 @@ export default function DemoPage() {
           <p className="text-sm font-semibold text-primary mb-1">VeritaMap found 2 compliance gaps.</p>
           <p className="text-muted-foreground text-sm">
             Hemoglobin calibration verification is overdue. PT/INR method comparison is not on file.
-            VeritaCheck runs the actual EP study and generates a CLIA-compliant PDF report — closing both gaps in minutes.
+            VeritaCheck runs the actual EP study and generates a CLIA-compliant PDF report, closing both gaps in minutes.
           </p>
           <Button
             size="sm"
@@ -337,14 +337,14 @@ export default function DemoPage() {
         </div>
 
         {/* ══════════════════════════════════════════════
-            STEP 2 — VERITACHECK
+            STEP 2 - VERITACHECK
         ══════════════════════════════════════════════ */}
         <section>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">2</div>
             <div>
               <h2 className="font-serif text-2xl font-bold flex items-center gap-2">
-                <FlaskConical size={20} className="text-primary" /> VeritaCheck™ — EP Study Analysis
+                <FlaskConical size={20} className="text-primary" /> VeritaCheck™ - EP Study Analysis
               </h2>
               <p className="text-muted-foreground text-sm">Enter your data. Get CLIA-compliant statistical analysis and a signed PDF report in minutes.</p>
             </div>
@@ -379,9 +379,9 @@ export default function DemoPage() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <FlaskConical size={15} className="text-primary" />
-                    {activeStudy === "calver" && "Calibration Verification — Hemoglobin"}
-                    {activeStudy === "methodcomp" && "Correlation / Method Comparison — PT/INR"}
-                    {activeStudy === "precision" && "Precision Verification (EP15) — Creatinine"}
+                    {activeStudy === "calver" && "Calibration Verification - Hemoglobin"}
+                    {activeStudy === "methodcomp" && "Correlation / Method Comparison - PT/INR"}
+                    {activeStudy === "precision" && "Precision Verification (EP15) - Creatinine"}
                   </CardTitle>
                   <Badge variant="outline" className="text-primary border-primary/30">Demo Study</Badge>
                 </div>
@@ -471,7 +471,7 @@ export default function DemoPage() {
                     </div>
                     {/* Mini scatter viz */}
                     <div className="bg-muted/30 rounded-lg border border-border p-4">
-                      <div className="text-xs font-semibold text-muted-foreground mb-2 text-center">Correlation Scatter — PT/INR (sec) · Reference vs New Method</div>
+                      <div className="text-xs font-semibold text-muted-foreground mb-2 text-center">Correlation Scatter - PT/INR (sec) · Reference vs New Method</div>
                       <svg viewBox="0 0 300 180" className="w-full max-w-sm mx-auto">
                         <line x1="30" y1="150" x2="280" y2="150" stroke="hsl(var(--border))" strokeWidth="1" />
                         <line x1="30" y1="150" x2="30" y2="10" stroke="hsl(var(--border))" strokeWidth="1" />
@@ -513,7 +513,7 @@ export default function DemoPage() {
                 {activeStudy === "precision" && (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      EP15 precision verification — 5 replicates/day × 5 days = 25 total results. Evaluated against manufacturer's claimed SD and CLIA TEa.
+                      EP15 precision verification: 5 replicates/day × 5 days = 25 total results. Evaluated against manufacturer's claimed SD and CLIA TEa.
                     </p>
                     <div className="grid sm:grid-cols-4 gap-3">
                       {[
@@ -583,9 +583,9 @@ export default function DemoPage() {
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-background px-3">
             <ArrowRight size={18} className="text-primary rotate-90" />
           </div>
-          <p className="text-sm font-semibold text-primary mb-1">Studies complete. Gaps closed. Now — are you truly inspection-ready?</p>
+          <p className="text-sm font-semibold text-primary mb-1">Studies complete. Gaps closed. Now, are you truly inspection-ready?</p>
           <p className="text-muted-foreground text-sm">
-            VeritaScan scores your lab across 168 TJC, CAP, and CLIA checkpoints — identifying every remaining vulnerability before a surveyor does.
+            VeritaScan scores your lab across 168 TJC, CAP, and CLIA checkpoints, identifying every remaining vulnerability before a surveyor does.
           </p>
           <Button size="sm" className="mt-4 bg-primary text-primary-foreground" onClick={() => setShowVeritaScan(true)}>
             <Shield size={13} className="mr-1.5" /> See Your Inspection Readiness Score
@@ -593,14 +593,14 @@ export default function DemoPage() {
         </div>
 
         {/* ══════════════════════════════════════════════
-            STEP 3 — VERITASCAN
+            STEP 3 - VERITASCAN
         ══════════════════════════════════════════════ */}
         <section>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">3</div>
             <div>
               <h2 className="font-serif text-2xl font-bold flex items-center gap-2">
-                <Shield size={20} className="text-primary" /> VeritaScan™ — Inspection Readiness
+                <Shield size={20} className="text-primary" /> VeritaScan™ - Inspection Readiness
               </h2>
               <p className="text-muted-foreground text-sm">168 checkpoints across CLIA, TJC, and CAP. Know where you stand before a surveyor arrives.</p>
             </div>
@@ -622,7 +622,7 @@ export default function DemoPage() {
 
                 <Card className="sm:col-span-2">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-muted-foreground font-medium">Checklist — Sample Section (CLIA Quality Systems)</CardTitle>
+                    <CardTitle className="text-sm text-muted-foreground font-medium">Checklist - Sample Section (CLIA Quality Systems)</CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0 space-y-2">
                     {scanQuestions.map(q => (
@@ -646,11 +646,11 @@ export default function DemoPage() {
                 </div>
                 <ul className="text-sm text-red-700 dark:text-red-400 space-y-1 list-disc list-inside">
                   <li>Competency assessments missing from personnel files</li>
-                  <li>Calibration verification not performed within required intervals (Hemoglobin — now corrected via VeritaCheck)</li>
+                  <li>Calibration verification not performed within required intervals (Hemoglobin, now corrected via VeritaCheck)</li>
                   <li>Method comparison not on file for PT/INR analyzer (now corrected via VeritaCheck)</li>
                 </ul>
                 <div className="mt-3 text-xs text-muted-foreground">
-                  VeritaScan generates a prioritized action plan with specific CFR citations for each deficiency — ready to hand to your lab director.
+                  VeritaScan generates a prioritized action plan with specific CFR citations for each deficiency, ready to hand to your lab director.
                 </div>
               </div>
 
@@ -686,7 +686,7 @@ export default function DemoPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
-              <Link href="/veritacheck">Start with VeritaCheck — Free Study <ChevronRight size={16} className="ml-1" /></Link>
+              <Link href="/veritacheck">Start with VeritaCheck - Free Study <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
               <Link href="/study-guide">Which study do I need? <ExternalLink size={14} className="ml-1" /></Link>

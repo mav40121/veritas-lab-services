@@ -6,12 +6,12 @@ import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, 
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const services = [
-  { icon: Users, title: "Leadership Coaching", desc: "One-on-one coaching for lab directors and managers. You pick the topics — C-suite relationships, team development, career advancement." },
+  { icon: Users, title: "Leadership Coaching", desc: "One-on-one coaching for lab directors and managers. You pick the topics: C-suite relationships, team development, career advancement." },
   { icon: Shield, title: "Inspection Readiness", desc: "Mock regulatory surveys simulating CLIA, TJC, CAP, COLA, and FDA inspections. Led by a former Joint Commission Surveyor with 200+ facility inspections." },
   { icon: BarChart3, title: "Productivity Analysis", desc: "Expert on-site assessment of workflows, staffing, and resources using industry benchmarks. Actionable reports with data-driven recommendations." },
-  { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation — tailored to your team's needs." },
+  { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation, tailored to your team's needs." },
   { icon: Award, title: "Interim Lab Director", desc: "Experienced interim Lab Administrative Directors who ensure uninterrupted operations and regulatory compliance during leadership transitions." },
-  { icon: FlaskConical, title: "VeritaCheck™ — Lab Study Platform", desc: "Our web-based EP evaluation tool — automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck™ Free" },
+  { icon: FlaskConical, title: "VeritaCheck™ - Lab Study Platform", desc: "Our web-based EP evaluation tool, automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck™ Free" },
 ];
 
 const stats = [
@@ -71,7 +71,7 @@ export default function HomePage() {
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure</h2>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              VeritaAssure is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools — VeritaCheck™, VeritaMap™, and VeritaScan™ — to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure brings the expertise and the tools together so your team isn't scrambling before the next inspection.
+              VeritaAssure is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools (VeritaCheck™, VeritaMap™, and VeritaScan™) to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure brings the expertise and the tools together so your team isn't scrambling before the next inspection.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -96,7 +96,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold text-sm mb-2">VeritaAssure Tools</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  VeritaCheck™, VeritaMap™, and VeritaScan™ are the software instruments of the VeritaAssure suite — built for lab directors who want data-driven compliance without waiting on a consultant.
+                  VeritaCheck™, VeritaMap™, and VeritaScan™ are the software instruments of the VeritaAssure suite, built for lab directors who want data-driven compliance without waiting on a consultant.
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/veritacheck">Explore the Tools →</Link>
@@ -131,7 +131,7 @@ export default function HomePage() {
                 Veritas Lab Services' mission is to empower clinical laboratories by providing expert consulting in leadership coaching, comprehensive productivity analysis, and strategic regulatory readiness solutions, ensuring operational excellence and compliance with CLIA standards within every client organization.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                Founded by Michael Veri — a US Army veteran, former Joint Commission Surveyor, and published author — VLS was built on the recognition that administrative lab leaders lacked accessible avenues for growth and mentorship.
+                Founded by Michael Veri, a US Army veteran, former Joint Commission Surveyor, and published author. VLS was built on the recognition that administrative lab leaders lacked accessible avenues for growth and mentorship.
               </p>
               <Button asChild variant="outline" className="mt-6">
                 <Link href="/team">Meet Michael Veri <ChevronRight size={14} className="ml-1" /></Link>
@@ -161,7 +161,7 @@ export default function HomePage() {
         <div className="container-default">
           <div className="text-center mb-12">
             <h2 className="font-serif text-3xl font-bold mb-3">Available Services</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">From on-site inspections to digital EP analysis — comprehensive support for your laboratory.</p>
+            <p className="text-muted-foreground max-w-xl mx-auto">From on-site inspections to digital EP analysis, comprehensive support for your laboratory.</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {services.map(({ icon: Icon, title, desc, link, linkLabel }) => (
@@ -194,11 +194,11 @@ export default function HomePage() {
         <div className="container-default text-center">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <FlaskConical size={14} />
-            New Tool — VeritaCheck
+            New Tool - VeritaCheck
           </div>
-          <h2 className="font-serif text-3xl font-bold mb-3">The studies your lab has always run — finally done right.</h2>
+          <h2 className="font-serif text-3xl font-bold mb-3">The studies your lab has always run, finally done right.</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6 leading-relaxed">
-            Calibration verification and method comparison, automated and browser-based. CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation — no desktop software required.
+            Calibration verification and method comparison, automated and browser-based. CLIA-compliant PDF reports with scatter plots, percent recovery charts, and pass/fail evaluation, no desktop software required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
@@ -222,10 +222,10 @@ export default function HomePage() {
                   See It In Action
                 </Badge>
                 <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 leading-tight">
-                  Watch the entire compliance workflow — live.
+                  Watch the entire compliance workflow, live.
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-5">
-                  Follow a real hospital lab from test menu mapping to flagged compliance gaps — then watch those gaps get closed with EP studies and an inspection readiness score. No login. No demo call. Just the product.
+                  Follow a real hospital lab from test menu mapping to flagged compliance gaps, then watch those gaps get closed with EP studies and an inspection readiness score. No login. No demo call. Just the product.
                 </p>
                 <div className="space-y-2 mb-6">
                   {[
@@ -245,7 +245,7 @@ export default function HomePage() {
               </div>
               {/* Right — preview cards */}
               <div className="bg-muted/30 border-l border-border p-6 flex flex-col justify-center gap-3">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Demo Preview — Riverside Regional Medical Center</div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Demo Preview - Riverside Regional Medical Center</div>
                 {[
                   { analyte: "Glucose", status: "PASS", color: "emerald" },
                   { analyte: "Hemoglobin", status: "OVERDUE", color: "red" },
@@ -263,7 +263,7 @@ export default function HomePage() {
                   </div>
                 ))}
                 <div className="flex items-center gap-2 text-xs text-amber-600 font-medium mt-1">
-                  <AlertTriangle size={12} /> 2 compliance gaps detected — click to resolve
+                  <AlertTriangle size={12} /> 2 compliance gaps detected, click to resolve
                 </div>
               </div>
             </div>

@@ -156,8 +156,8 @@ function generateNarrative(results: StudyResults, study: Study): string {
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias — results trend slightly high at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias — results trend slightly low at upper concentrations`;
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias, results trend slightly high at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias, results trend slightly low at upper concentrations`;
     const interceptInterp = Math.abs(interceptVal) < study.cliaAllowableError * 100 * 0.1
       ? "a negligible constant offset"
       : interceptVal > 0
@@ -181,12 +181,12 @@ function generateNarrative(results: StudyResults, study: Study): string {
     const rVal = Math.sqrt(r2Val);
     const ba = mc.blandAltman ? Object.values(mc.blandAltman)[0] : null;
     const meanBiasPct: number = (ba as any)?.pctMeanDiff ?? (ba as any)?.meanPctBias ?? 0;
-    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline — review carefully";
+    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline, review carefully";
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias between methods"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference — the test method reads slightly higher than the reference at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference — the test method reads slightly lower than the reference at upper concentrations`;
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the test method reads slightly higher than the reference at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the test method reads slightly lower than the reference at upper concentrations`;
     const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
       ? `within the CLIA total allowable error of ±${cliaPct}%`
       : `exceeds the CLIA total allowable error of ±${cliaPct}% and requires investigation`;
@@ -226,7 +226,7 @@ function QCRangeReport({ study, results }: { study: Study; results: QCRangeResul
         const rows = results.levelResults.filter(r => r.analyte === analyte);
         return (
           <Card key={analyte}>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">{analyte} — QC Range Summary</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">{analyte} - QC Range Summary</CardTitle></CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -267,7 +267,7 @@ function QCRangeReport({ study, results }: { study: Study; results: QCRangeResul
         );
       })}
       <div className="rounded-md bg-muted/50 border p-3">
-        <p className="text-xs text-muted-foreground italic">Per policy, SD should not change lot to lot — the historical/peer-derived SD should be used for control limits, not the SD calculated here unless it represents a significant change.</p>
+        <p className="text-xs text-muted-foreground italic">Per policy, SD should not change lot to lot. The historical/peer-derived SD should be used for control limits, not the SD calculated here unless it represents a significant change.</p>
       </div>
     </div>
   );
@@ -322,7 +322,7 @@ function MultiAnalyteCoagReport({ study, results }: { study: Study; results: Mul
       {/* ISI validation */}
       {results.ptINRValidation && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">PT/INR — ISI Validation</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">PT/INR - ISI Validation</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div><span className="text-muted-foreground">Mean New INR:</span> <span className="font-mono font-semibold">{results.ptINRValidation.meanNewINR.toFixed(2)}</span></div>
@@ -406,7 +406,7 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
               ? <CheckCircle2 size={16} className="text-green-400" />
               : <XCircle size={16} className="text-red-400" />}
             <span className={`text-sm font-semibold ${results.overallPass ? "text-green-400" : "text-red-400"}`}>
-              Overall: {results.overallPass ? "PASS" : "FAIL"} — {results.passCount}/{results.totalCount} {isPrecision(results) ? "levels within allowable CV" : "results within TEa"}
+              Overall: {results.overallPass ? "PASS" : "FAIL"}, {results.passCount}/{results.totalCount} {isPrecision(results) ? "levels within allowable CV" : "results within TEa"}
             </span>
           </div>
         </div>
@@ -481,7 +481,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
       {/* Charts */}
       <div className="grid sm:grid-cols-2 gap-5 mb-6">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Scatter Plot — Measured vs. Assigned</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Scatter Plot - Measured vs. Assigned</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
               <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
@@ -532,7 +532,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
 
       {/* Data table */}
       <Card className="mb-6">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Statistical Analysis — Level-by-Level Results</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Statistical Analysis - Level-by-Level Results</CardTitle></CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -686,7 +686,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
       <div className="grid sm:grid-cols-2 gap-5 mb-6">
         {/* Correlation scatter */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Correlation — Test vs. Reference Method</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Correlation - Test vs. Reference Method</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
               <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
@@ -715,7 +715,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
 
         {/* Bland-Altman: % difference vs. average */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Bland-Altman — % Difference vs. Mean</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Bland-Altman - % Difference vs. Mean</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
               <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
@@ -1031,7 +1031,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
       {results.cohorts.map(cohort => (
         <div key={cohort.cohort}>
           <Card className="mb-6">
-            <CardHeader className="pb-2"><CardTitle className="text-sm">{cohort.cohort} Cohort — Summary</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">{cohort.cohort} Cohort - Summary</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-4">
                 <div><span className="text-muted-foreground">N: </span><span className="font-mono">{cohort.n}</span></div>

@@ -15,7 +15,7 @@ const serviceGroups = [
         title: "On-Site Inspection Readiness",
         duration: "24 hrs",
         pricing: "Project Based",
-        description: "An on-site mock inspection service for laboratory management — a realistic, supportive simulation of a regulatory survey experience, guiding laboratories through the inspection process and fostering team confidence for official inspections.",
+        description: "An on-site mock inspection service for laboratory management, a realistic, supportive simulation of a regulatory survey experience, guiding laboratories through the inspection process and fostering team confidence for official inspections.",
         details: [
           "Expert-led walkthrough emulating real regulatory inspections (CLIA, TJC, CAP, COLA, FDA)",
           "Detailed review of policies, procedures, and quality documentation",
@@ -29,7 +29,7 @@ const serviceGroups = [
   },
   {
     heading: "Productivity and Workflow Optimization",
-    leadIn: "Our on-site assessments connect operational performance with regulatory expectations — helping you optimize staffing, processes, and turnaround times without compromising compliance.",
+    leadIn: "Our on-site assessments connect operational performance with regulatory expectations, helping you optimize staffing, processes, and turnaround times without compromising compliance.",
     services: [
       {
         icon: BarChart3,
@@ -42,7 +42,7 @@ const serviceGroups = [
           "Industry-standard benchmarking of staffing and workflows",
           "Identification of inefficiencies from staffing gaps, outdated processes, or resource misallocation",
           "Customized analysis reports with clear, actionable recommendations",
-          "C-suite communication support — data-driven staffing rationales",
+          "C-suite communication support: data-driven staffing rationales",
           "Authored by Michael Veri, author of \"Capturing Productivity in the Laboratory\"",
         ],
         cta: "Start a productivity analysis",
@@ -59,7 +59,7 @@ const serviceGroups = [
         title: "Leadership Coaching",
         duration: "1 hr sessions",
         pricing: "Email us!",
-        description: "VLS offers coaching services to laboratory leaders. You pick the topics — whether improving your lab, C-suite relationships, or learning how to advance into laboratory leadership.",
+        description: "VLS offers coaching services to laboratory leaders. You pick the topics, whether improving your lab, C-suite relationships, or learning how to advance into laboratory leadership.",
         details: [
           "Single 1-hour sessions or blocks of 10",
           "Topics entirely chosen by you",
@@ -81,7 +81,7 @@ const serviceGroups = [
           "QC/QA review and implementation",
           "Delegation of authority",
           "Introduction to Lab Survey Process for Nursing",
-          "Custom topics upon request — researched and tailored to your team",
+          "Custom topics upon request, researched and tailored to your team",
         ],
         cta: "Request a webinar",
       },
@@ -136,7 +136,7 @@ export default function ServicesPage() {
           <Badge variant="outline" className="mb-4 text-primary border-primary/30">VeritaAssure Suite</Badge>
           <h1 className="font-serif text-4xl font-bold mb-3">Laboratory Consulting Services</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Veritas Lab Services delivers VeritaAssure — integrated support for regulatory readiness, mock inspections, productivity analysis, leadership coaching, and CLIA laboratory director services. Our approach combines on-site expertise with practical compliance tools so your lab stays ahead of CLIA, CAP, COLA, TJC, and FDA expectations year-round, not just right before surveyors arrive.
+            Veritas Lab Services delivers VeritaAssure, integrated support for regulatory readiness, mock inspections, productivity analysis, leadership coaching, and CLIA laboratory director services. Our approach combines on-site expertise with practical compliance tools so your lab stays ahead of CLIA, CAP, COLA, TJC, and FDA expectations year-round, not just right before surveyors arrive.
           </p>
         </div>
       </section>
@@ -206,10 +206,10 @@ export default function ServicesPage() {
                     </div>
                     <Badge className="text-xs bg-primary text-primary-foreground">VeritaAssure Tool</Badge>
                   </div>
-                  <h3 className="font-serif text-xl font-bold mb-2">VeritaCheck™ — Lab Study Platform</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">Automated calibration verification and method comparison studies with CLIA-compliant PDF reports. Scatter plots, percent recovery charts, pass/fail evaluation — all in under 60 seconds.</p>
+                  <h3 className="font-serif text-xl font-bold mb-2">VeritaCheck™ - Lab Study Platform</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">Automated calibration verification and method comparison studies with CLIA-compliant PDF reports. Scatter plots, percent recovery charts, pass/fail evaluation, all in under 60 seconds.</p>
                   <ul className="space-y-1.5">
-                    {["Calibration verification (linearity)", "Method comparison (up to 3 instruments)", "Slope, intercept, R², proportional bias", "CLIA TEa presets for major analytes", "Professional PDF report — printable and signable"].map(d => (
+                    {["Calibration verification (linearity)", "Method comparison (up to 3 instruments)", "Slope, intercept, R², proportional bias", "CLIA TEa presets for major analytes", "Professional PDF report, printable and signable"].map(d => (
                       <li key={d} className="flex items-start gap-2 text-sm"><span className="text-primary mt-0.5 shrink-0">→</span><span>{d}</span></li>
                     ))}
                   </ul>
@@ -234,7 +234,7 @@ export default function ServicesPage() {
         <div className="container-default text-center max-w-3xl">
           <h2 className="font-serif text-3xl font-bold mb-4">Why VeritaAssure</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Laboratory compliance isn't a one-time event. VeritaAssure is built on the belief that inspection readiness should be a permanent state — not a sprint. Whether you engage us for a single mock survey or an ongoing partnership, every service we deliver is designed to leave your lab more prepared, more documented, and more confident than when we arrived.
+            Laboratory compliance isn't a one-time event. VeritaAssure is built on the belief that inspection readiness should be a permanent state, not a sprint. Whether you engage us for a single mock survey or an ongoing partnership, every service we deliver is designed to leave your lab more prepared, more documented, and more confident than when we arrived.
           </p>
         </div>
       </section>

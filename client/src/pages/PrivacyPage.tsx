@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="font-semibold text-base mb-2">2. Information We Collect</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Account information:</strong> Name, email address, and password (hashed — we never store plaintext passwords)</li>
+            <li><strong>Account information:</strong> Name, email address, and password (hashed, we never store plaintext passwords)</li>
             <li><strong>Study data:</strong> Analyte names, instrument names, analyst initials, dates, and numerical concentration values you enter when running studies</li>
             <li><strong>Payment information:</strong> Processed entirely by Stripe. We do not store card numbers or full payment details</li>
             <li><strong>Usage data:</strong> Standard server logs including IP addresses and browser type, retained for up to 90 days</li>
@@ -45,9 +45,9 @@ export default function PrivacyPage() {
         <section>
           <h2 className="font-semibold text-base mb-2">6. Third-Party Services</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Stripe</strong> — Payment processing. Subject to <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Stripe's Privacy Policy</a></li>
-            <li><strong>Railway</strong> — Server hosting. Subject to <a href="https://railway.app/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway's Privacy Policy</a></li>
-            <li><strong>Resend</strong> — Transactional email delivery</li>
+            <li><strong>Stripe</strong> - Payment processing. Subject to <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Stripe's Privacy Policy</a></li>
+            <li><strong>Railway</strong> - Server hosting. Subject to <a href="https://railway.app/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway's Privacy Policy</a></li>
+            <li><strong>Resend</strong> - Transactional email delivery</li>
           </ul>
         </section>
 

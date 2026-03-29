@@ -341,12 +341,12 @@ export default function CumsumPage() {
                 {selectedTracker.entries.length > 0 && !isInstallLot && (
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={isInstallLot} onChange={e => setIsInstallLot(e.target.checked)} className="rounded" />
-                    This is an install lot (baseline — no comparison)
+                    This is an install lot (baseline, no comparison)
                   </label>
                 )}
 
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">Specimen Data — {selectedTracker.analyte} (seconds)</div>
+                  <div className="text-sm font-medium">Specimen Data - {selectedTracker.analyte} (seconds)</div>
                   <p className="text-xs text-muted-foreground">Enter &gt;150 to exclude a specimen from geometric mean calculation. Minimum 15 specimens recommended.</p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -399,10 +399,10 @@ export default function CumsumPage() {
                     {!isInstallLot && (
                       <div className="mt-2">
                         {preview.verdict === "ACCEPT" ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"><CheckCircle2 size={12} className="mr-1" />ACCEPT — |CumSum| ≤ 7.0 sec</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0"><CheckCircle2 size={12} className="mr-1" />ACCEPT - |CumSum| ≤ 7.0 sec</Badge>
                         ) : (
                           <div className="space-y-2">
-                            <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0"><XCircle size={12} className="mr-1" />ACTION REQUIRED — |CumSum| &gt; 7.0 sec</Badge>
+                            <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0"><XCircle size={12} className="mr-1" />ACTION REQUIRED - |CumSum| &gt; 7.0 sec</Badge>
                             <Alert variant="destructive">
                               <AlertTriangle size={14} />
                               <AlertDescription>A new Heparin Response Curve is required. Contact instrument technical support.</AlertDescription>
@@ -415,7 +415,7 @@ export default function CumsumPage() {
                 )}
 
                 {!isInstallLot && specimens.filter(s => s.oldLot.trim() || s.newLot.trim()).length < 15 && (
-                  <p className="text-xs text-amber-500 flex items-center gap-1"><AlertTriangle size={12} />Fewer than 15 specimens entered — minimum 15 recommended</p>
+                  <p className="text-xs text-amber-500 flex items-center gap-1"><AlertTriangle size={12} />Fewer than 15 specimens entered. Minimum 15 recommended</p>
                 )}
 
                 <Button onClick={saveEntry} disabled={saving || !preview} className="w-full">

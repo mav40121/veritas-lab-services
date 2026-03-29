@@ -9,7 +9,7 @@ const articles = [
   {
     slug: "clia-calibration-verification-method-comparison",
     title: "CLIA Calibration Verification and Method Comparison: What Lab Managers Actually Need to Know",
-    summary: "Calibration verification is an accuracy study. Correlation is a precision study. Most labs are doing both wrong — spending money on kits they don't need and missing the 6-month-plus-20-day compliance window that would eliminate the stress entirely.",
+    summary: "Calibration verification is an accuracy study. Correlation is a precision study. Most labs are doing both wrong. Spending money on kits they don't need and missing the 6-month-plus-20-day compliance window that would eliminate the stress entirely.",
     category: "Regulatory Compliance",
     readTime: "12 min read",
     author: "Michael Veri",
@@ -20,7 +20,7 @@ const articles = [
   {
     slug: "clia-tea-what-lab-directors-dont-know",
     title: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
-    summary: "In 200+ inspections as a Joint Commission surveyor, most lab directors evaluated calibration verification against manufacturer criteria — unaware that the regulatory standard lives in federal law. Here's where to find it and how to use it.",
+    summary: "In 200+ inspections as a Joint Commission surveyor, most lab directors evaluated calibration verification against manufacturer criteria, unaware that the regulatory standard lives in federal law. Here's where to find it and how to use it.",
     category: "Regulatory Compliance",
     readTime: "10 min read",
     author: "Michael Veri",
@@ -42,7 +42,7 @@ const tools = [
 const comingSoon = [
   { title: "EP15 Precision Verification: A Step-by-Step Guide for Clinical Labs", category: "EP Studies" },
   { title: "How to Run a CLIA-Compliant Method Comparison Without Commercial Kits", category: "Cost Savings" },
-  { title: "The 10 Most Cited CLIA Deficiencies — and How to Fix Them Before Your Survey", category: "Inspection Readiness" },
+  { title: "The 10 Most Cited CLIA Deficiencies: and How to Fix Them Before Your Survey", category: "Inspection Readiness" },
   { title: "Understanding CLIA Allowable Error (TEa): A Practical Reference for Lab Directors", category: "Regulatory Compliance" },
 ];
 
@@ -60,7 +60,7 @@ export default function ResourcesPage() {
             Clinical Laboratory Knowledge Base
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Practical, regulation-backed guidance for lab directors and managers — written by a former Joint Commission Surveyor with 200+ facility inspections. No filler, no generic advice.
+            Practical, regulation-backed guidance for lab directors and managers, written by a former Joint Commission Surveyor with 200+ facility inspections. No filler, no generic advice.
           </p>
         </div>
       </section>
@@ -172,7 +172,7 @@ export default function ResourcesPage() {
           <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
           <h2 className="font-serif text-xl font-bold mb-2">Put the knowledge to work.</h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-            VeritaCheck runs the studies described in these articles automatically — calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
+            VeritaCheck runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
           </p>
           <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
             <Link href="/veritacheck">Run a Free Study <ChevronRight size={15} className="ml-1" /></Link>
