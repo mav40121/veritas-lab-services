@@ -89,7 +89,7 @@ const CATEGORY_ORDER = [
   "Toxicology / TDM",
   "ESR",
   "Fecal Testing",
-  "Manual / Kit Tests",
+  "Manual Procedures",
 ];
 
 const CHEMISTRY_SPECIALTY_ORDER = [
@@ -139,7 +139,7 @@ function getCategoryColor(category: string): string {
     "Toxicology / TDM": "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
     ESR: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
     "Fecal Testing": "bg-lime-100 text-lime-700 dark:bg-lime-950/40 dark:text-lime-300",
-    "Manual / Kit Tests": "bg-stone-100 text-stone-700 dark:bg-stone-950/40 dark:text-stone-300",
+    "Manual Procedures": "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   };
   return map[category] ?? "bg-muted text-muted-foreground";
 }
@@ -734,6 +734,17 @@ export default function VeritaMapBuildPage() {
                     setInstrumentName("");
                     setManualEntry(false);
                     setManualInstrumentName("");
+                    // Auto-select vendor if only one option (e.g., Manual Procedures)
+                    const vendors = cascade[v] ? Object.keys(cascade[v]) : [];
+                    if (vendors.length === 1) {
+                      setSelectedVendor(vendors[0]);
+                    }
+                    // Default role to Reference for Manual Procedures
+                    if (v === "Manual Procedures") {
+                      setRole("Reference");
+                    } else {
+                      setRole("Primary");
+                    }
                   }}
                 >
                   <SelectTrigger className="h-9 text-sm">
@@ -877,12 +888,18 @@ export default function VeritaMapBuildPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium text-sm truncate">{instr.instrument_name}</span>
                       <RoleBadge role={instr.role} />
-                      <Badge className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(instr.category)}`}>
-                        {instr.category}
-                      </Badge>
+                      {instr.category === "Manual Procedures" ? (
+                        <Badge className="text-[10px] px-1.5 py-0 border-0 bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                          Manual
+                        </Badge>
+                      ) : (
+                        <Badge className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(instr.category)}`}>
+                          {instr.category}
+                        </Badge>
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {fdaInstr?.testCount ?? 0} FDA-cleared tests
+                      {fdaInstr?.testCount ?? 0} {instr.category === "Manual Procedures" ? "tests" : "FDA-cleared tests"}
                     </span>
                   </div>
                   <Button
