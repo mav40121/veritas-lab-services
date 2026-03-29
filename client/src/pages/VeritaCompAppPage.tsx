@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -242,6 +243,7 @@ export default function VeritaCompAppPage() {
   const [location, navigate] = useLocation();
   const params = useParams<{ programId?: string }>();
   const programId = params?.programId ? parseInt(params.programId) : null;
+  const readOnly = useIsReadOnly();
 
   const hasPlanAccess =
     user?.plan === "annual" ||
@@ -327,7 +329,7 @@ function ProgramListView() {
             TJC/CLIA/CAP Competency Assessment Management
           </p>
         </div>
-        <Button className="shrink-0" onClick={() => setWizardOpen(true)}>
+        <Button className="shrink-0" onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
           <Plus className="h-4 w-4 mr-1.5" />
           New Program
         </Button>
@@ -352,7 +354,7 @@ function ProgramListView() {
           <p className="text-sm text-muted-foreground mb-5">
             Create your first competency program to get started.
           </p>
-          <Button onClick={() => setWizardOpen(true)}>
+          <Button onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
             <Plus className="h-4 w-4 mr-1.5" />
             New Program
           </Button>

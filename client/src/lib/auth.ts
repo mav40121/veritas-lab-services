@@ -21,6 +21,9 @@ export interface AuthUser {
   plan: string;
   studyCredits: number;
   hasCompletedOnboarding?: boolean;
+  subscriptionExpiresAt?: string | null;
+  subscriptionStatus?: string;
+  accessLevel?: 'full' | 'read_only' | 'locked' | 'free';
 }
 
 export function setAuth(token: string, user: AuthUser) {

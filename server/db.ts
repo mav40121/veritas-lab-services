@@ -268,6 +268,18 @@ if (!colNames.includes("has_completed_onboarding")) {
   // Migrate existing users: set has_completed_onboarding = 1 (don't show wizard to pre-existing accounts)
   sqlite.exec("UPDATE users SET has_completed_onboarding = 1 WHERE has_completed_onboarding = 0");
 }
+if (!colNames.includes("subscription_expires_at")) sqlite.exec("ALTER TABLE users ADD COLUMN subscription_expires_at TEXT");
+if (!colNames.includes("subscription_status")) {
+  sqlite.exec("ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'free'");
+  // Migrate existing paid users: set subscription_status = 'active' for users with an active plan
+  sqlite.exec("UPDATE users SET subscription_status = 'active' WHERE plan IN ('starter', 'professional', 'lab', 'complete', 'annual')");
+}
+
+// Set test accounts (userId 1-11) to active with subscription_expires_at = 2 years from now
+const twoYearsFromNow = new Date();
+twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
+const twoYearsISO = twoYearsFromNow.toISOString();
+sqlite.exec(`UPDATE users SET subscription_status = 'active', subscription_expires_at = '${twoYearsISO}' WHERE id <= 11 AND plan = 'lab'`);
 
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];

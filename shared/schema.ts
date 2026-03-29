@@ -13,6 +13,8 @@ export const users = sqliteTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   hasCompletedOnboarding: integer("has_completed_onboarding").notNull().default(0),
+  subscriptionExpiresAt: text("subscription_expires_at"),
+  subscriptionStatus: text("subscription_status").notNull().default("free"),
   createdAt: text("created_at").notNull(),
 });
 

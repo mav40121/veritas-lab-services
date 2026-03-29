@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { authHeaders } from "./auth";
+import { triggerSubscriptionError } from "@/components/SubscriptionModal";
 
 const RAILWAY_URL = "https://www.veritaslabservices.com";
 export const API_BASE = "__PORT_5000__".startsWith("__") ? RAILWAY_URL : "__PORT_5000__";
@@ -7,6 +8,13 @@ export const API_BASE = "__PORT_5000__".startsWith("__") ? RAILWAY_URL : "__PORT
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    // Check for subscription-related errors
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.code === 'SUBSCRIPTION_EXPIRED_READ_ONLY' || parsed.code === 'DATA_RETENTION_EXPIRED') {
+        triggerSubscriptionError(parsed.code, parsed.error);
+      }
+    } catch {}
     throw new Error(`${res.status}: ${text}`);
   }
 }

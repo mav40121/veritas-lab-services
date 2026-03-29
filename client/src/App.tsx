@@ -8,6 +8,8 @@ import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
 import { NavBar } from "@/components/NavBar";
+import { SubscriptionBanner } from "@/components/SubscriptionBanner";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import HomePage from "@/pages/HomePage";
 import ServicesPage from "@/pages/ServicesPage";
@@ -148,6 +150,7 @@ function AppContent() {
       <ScrollToTop />
       <GATracker />
       <NavBar />
+      <SubscriptionBanner />
       <OnboardingGuard />
       <main className="flex-1">
         <Switch>
@@ -187,6 +190,7 @@ function AppContent() {
       </main>
       <SiteFooter />
       <Toaster />
+      <SubscriptionModal />
       <PerplexityAttribution />
     </div>
   );

@@ -8,9 +8,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
 import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 
 export default function Dashboard() {
   const { toast } = useToast();
+  const readOnly = useIsReadOnly();
 
   const { data: studies, isLoading } = useQuery<Study[]>({
     queryKey: ["/api/studies"],
@@ -37,12 +39,19 @@ export default function Dashboard() {
             All saved studies
           </p>
         </div>
-        <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <Link href="/study/new">
+        {readOnly ? (
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="Resubscribe to add new records">
             <PlusCircle size={14} className="mr-1.5" />
             New Study
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Link href="/study/new">
+              <PlusCircle size={14} className="mr-1.5" />
+              New Study
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Stats */}

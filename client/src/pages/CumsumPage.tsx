@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthContext";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ interface SpecimenRow {
 export default function CumsumPage() {
   const { isLoggedIn } = useAuth();
   const { toast } = useToast();
+  const readOnly = useIsReadOnly();
 
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [selectedTracker, setSelectedTracker] = useState<(Tracker & { entries: Entry[] }) | null>(null);
@@ -446,7 +448,7 @@ export default function CumsumPage() {
 
       <section className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="flex items-center gap-3">
-          <Button onClick={() => setShowNewTracker(true)} disabled={showNewTracker}>
+          <Button onClick={() => setShowNewTracker(true)} disabled={showNewTracker || readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
             <PlusCircle size={14} className="mr-1.5" />New Tracker
           </Button>
           <Button asChild variant="outline"><Link href="/veritacheck">Back to VeritaCheck</Link></Button>

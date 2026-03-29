@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,7 @@ export default function VeritaScanAppPage() {
   const { user, isLoggedIn } = useAuth();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const readOnly = useIsReadOnly();
 
   const [newScanName, setNewScanName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -252,7 +254,7 @@ export default function VeritaScanAppPage() {
         {/* New Scan button + dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="shrink-0">
+            <Button className="shrink-0" disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
               <Plus className="h-4 w-4 mr-1.5" />
               New Scan
             </Button>
@@ -337,7 +339,7 @@ export default function VeritaScanAppPage() {
           <p className="text-sm text-muted-foreground mb-5">
             Create your first inspection readiness scan to get started.
           </p>
-          <Button onClick={() => setDialogOpen(true)}>
+          <Button onClick={() => setDialogOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
             <Plus className="h-4 w-4 mr-1.5" />
             New Scan
           </Button>

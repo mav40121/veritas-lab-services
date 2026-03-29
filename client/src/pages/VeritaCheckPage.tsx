@@ -1520,6 +1520,19 @@ export default function VeritaCheckPage() {
               </div>
             </div>
           </div>
+
+          {/* Data retention trust signal */}
+          <div className="max-w-5xl mx-auto mt-6">
+            <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-center">
+              <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">
+                All plans include 2 years of read-only data access after cancellation.
+              </p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                Your data is always safe. Cancel anytime and keep viewing your studies, maps, scans, and reports.
+              </p>
+            </div>
+          </div>
+
           {/* Discount code input */}
           <div className="max-w-sm mx-auto mt-6">
             <p className="text-xs text-center text-muted-foreground mb-2">Have a discount code?</p>

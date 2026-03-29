@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,7 @@ export default function VeritaMapAppPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const readOnly = useIsReadOnly();
 
   const [newMapName, setNewMapName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -207,7 +209,7 @@ export default function VeritaMapAppPage() {
         {/* New Map button + dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0" disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
               <Plus className="h-4 w-4 mr-1.5" />
               New Map
             </Button>
@@ -288,6 +290,8 @@ export default function VeritaMapAppPage() {
           <Button
             onClick={() => setDialogOpen(true)}
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={readOnly}
+            title={readOnly ? "Resubscribe to add new records" : undefined}
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Create Your First Map

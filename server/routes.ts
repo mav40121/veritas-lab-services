@@ -23,6 +23,44 @@ function signToken(userId: number) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "30d" });
 }
 
+// ── SUBSCRIPTION ACCESS LEVEL ──────────────────────────────────────────
+function getAccessLevel(user: any): 'full' | 'read_only' | 'locked' | 'free' {
+  if (!user.subscription_expires_at && !user.subscriptionExpiresAt) return 'free';
+
+  const now = new Date();
+  const expiry = new Date(user.subscription_expires_at || user.subscriptionExpiresAt);
+  const twoYearsAfterExpiry = new Date(expiry);
+  twoYearsAfterExpiry.setFullYear(twoYearsAfterExpiry.getFullYear() + 2);
+
+  if (now < expiry) return 'full'; // active subscription
+  if (now < twoYearsAfterExpiry) return 'read_only'; // within 2-year retention
+  return 'locked'; // beyond 2-year retention
+}
+
+function requireWriteAccess(req: any, res: any, next: any) {
+  const fullUser = storage.getUserById(req.userId);
+  if (!fullUser) return res.status(401).json({ error: "User not found" });
+
+  const accessLevel = getAccessLevel(fullUser);
+  if (accessLevel === 'read_only') {
+    const expiry = new Date(fullUser.subscriptionExpiresAt!);
+    const retentionEnd = new Date(expiry);
+    retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
+    return res.status(403).json({
+      error: "Your subscription has expired. Your data is available in read-only mode for 2 years. Resubscribe to add new records.",
+      code: "SUBSCRIPTION_EXPIRED_READ_ONLY",
+      retentionEndsAt: retentionEnd.toISOString(),
+    });
+  }
+  if (accessLevel === 'locked') {
+    return res.status(403).json({
+      error: "Your data retention period has ended. Please resubscribe to regain access to your account.",
+      code: "DATA_RETENTION_EXPIRED",
+    });
+  }
+  next();
+}
+
 function authMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
@@ -134,7 +172,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
     const token = signToken(user.id);
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false } });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: 'free', accessLevel: 'free' } });
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -146,15 +184,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
     const token = signToken(user.id);
-    const hasCompletedOnboarding = (db as any).$client.prepare("SELECT has_completed_onboarding FROM users WHERE id = ?").get(user.id)?.has_completed_onboarding ?? 1;
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding } });
+    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status FROM users WHERE id = ?").get(user.id);
+    const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding, subscriptionExpiresAt: userRow?.subscription_expires_at || null, subscriptionStatus: userRow?.subscription_status || 'free', accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }) } });
   });
 
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {
     const user = storage.getUserById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const hasCompletedOnboarding = (db as any).$client.prepare("SELECT has_completed_onboarding FROM users WHERE id = ?").get(user.id)?.has_completed_onboarding ?? 1;
-    res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding });
+    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status FROM users WHERE id = ?").get(user.id);
+    const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
+    res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding, subscriptionExpiresAt: userRow?.subscription_expires_at || null, subscriptionStatus: userRow?.subscription_status || 'free', accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }) });
   });
 
   // ── STUDIES ───────────────────────────────────────────────────────────────
@@ -214,6 +254,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       try {
         const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
         userId = payload.userId;
+        // Check subscription write access for authenticated users
+        const fullUser = storage.getUserById(payload.userId);
+        if (fullUser) {
+          const accessLevel = getAccessLevel(fullUser);
+          if (accessLevel === 'read_only') {
+            const expiry = new Date(fullUser.subscriptionExpiresAt!);
+            const retentionEnd = new Date(expiry);
+            retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
+            return res.status(403).json({ error: "Your subscription has expired. Your data is available in read-only mode for 2 years. Resubscribe to add new records.", code: "SUBSCRIPTION_EXPIRED_READ_ONLY", retentionEndsAt: retentionEnd.toISOString() });
+          }
+          if (accessLevel === 'locked') {
+            return res.status(403).json({ error: "Your data retention period has ended. Please resubscribe to regain access to your account.", code: "DATA_RETENTION_EXPIRED" });
+          }
+        }
       } catch {}
     }
 
@@ -235,7 +289,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(201).json(study);
   });
 
-  app.delete("/api/studies/:id", (req, res) => {
+  app.delete("/api/studies/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     storage.deleteStudy(parseInt(req.params.id));
     res.json({ success: true });
   });
@@ -296,7 +350,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Create map
-  app.post("/api/veritamap/maps", authMiddleware, (req: any, res) => {
+  app.post("/api/veritamap/maps", authMiddleware, requireWriteAccess, (req: any, res) => {
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Map name required" });
     const now = new Date().toISOString();
@@ -307,7 +361,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete map
-  app.delete("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/veritamap/maps/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
@@ -338,7 +392,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Bulk upsert tests (used when building from instrument or updating)
-  app.put("/api/veritamap/maps/:id/tests", authMiddleware, (req: any, res) => {
+  app.put("/api/veritamap/maps/:id/tests", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { tests } = req.body;
@@ -389,7 +443,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Add instrument to map
-  app.post("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
+  app.post("/api/veritamap/maps/:id/instruments", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     // Freemium limit: 4 instruments per map for free users
@@ -407,7 +461,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Update instrument role/name
-  app.put("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, (req: any, res) => {
+  app.put("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { instrument_name, role, category } = req.body;
@@ -418,7 +472,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete instrument (cascades to its tests)
-  app.delete("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, (req: any, res) => {
+  app.delete("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
@@ -427,7 +481,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Set tests for an instrument (replaces all)
-  app.put("/api/veritamap/maps/:id/instruments/:instId/tests", authMiddleware, (req: any, res) => {
+  app.put("/api/veritamap/maps/:id/instruments/:instId/tests", authMiddleware, requireWriteAccess, (req: any, res) => {
     try {
       const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
       if (!map) return res.status(404).json({ error: "Map not found" });
@@ -556,7 +610,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   // Update single test
-  app.put("/api/veritamap/maps/:id/tests/:analyte", authMiddleware, (req: any, res) => {
+  app.put("/api/veritamap/maps/:id/tests/:analyte", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
@@ -825,7 +879,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Create new scan
-  app.post("/api/veritascan/scans", authMiddleware, (req: any, res) => {
+  app.post("/api/veritascan/scans", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
@@ -837,7 +891,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete scan
-  app.delete("/api/veritascan/scans/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/veritascan/scans/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -858,7 +912,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Upsert item status/notes/owner/due_date
-  app.put("/api/veritascan/scans/:id/items/:itemId", authMiddleware, (req: any, res) => {
+  app.put("/api/veritascan/scans/:id/items/:itemId", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -880,7 +934,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Bulk update items (for efficient auto-save)
-  app.put("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
+  app.put("/api/veritascan/scans/:id/items", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -1305,6 +1359,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const userId = parseInt(session.metadata?.userId || "0");
         const priceType = session.metadata?.priceType;
         if (userId) {
+          // Calculate subscription expiry (1 year from now for annual plans)
+          const expiresAt = new Date();
+          expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+          const expiresAtISO = expiresAt.toISOString();
+
           if (priceType === "perStudy") {
             // Add 1 study credit
             storage.addStudyCredits(userId, 1);
@@ -1313,22 +1372,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               stripeSubscriptionId: session.subscription,
               plan: "starter",
             });
+            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
           } else if (priceType === "professional" && session.subscription) {
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
               plan: "professional",
             });
+            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
           } else if ((priceType === "lab" || priceType === "complete") && session.subscription) {
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
               plan: priceType === "complete" ? "lab" : "lab",
             });
+            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
           } else if (priceType === "annual" && session.subscription) {
             // Backward compatibility for existing annual subscribers
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
               plan: "annual",
             });
+            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
           }
         }
       } else if (event.type === "customer.subscription.deleted") {
@@ -1336,11 +1399,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const user = storage.getUserByStripeCustomerId(sub.customer);
         if (user) {
           storage.updateUserStripe(user.id, { stripeSubscriptionId: null, plan: "free" });
+          // Set expiry to now and status to expired for data retention policy
+          const nowISO = new Date().toISOString();
+          (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'expired' WHERE id = ?").run(nowISO, user.id);
+        }
+      } else if (event.type === "customer.subscription.updated") {
+        // Subscription renewed — update expiry
+        const sub = event.data.object as any;
+        const user = storage.getUserByStripeCustomerId(sub.customer);
+        if (user && sub.current_period_end) {
+          const newExpiry = new Date(sub.current_period_end * 1000).toISOString();
+          (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(newExpiry, user.id);
         }
       } else if (event.type === "invoice.payment_failed") {
-        // Log but don't downgrade immediately — Stripe will retry
+        // Set payment_failed status — grace period of 7 days, then read_only
         const invoice = event.data.object as any;
         console.warn("Payment failed for customer:", invoice.customer);
+        const user = storage.getUserByStripeCustomerId(invoice.customer);
+        if (user) {
+          // Set expiry to 7 days from now (grace period)
+          const gracePeriod = new Date();
+          gracePeriod.setDate(gracePeriod.getDate() + 7);
+          (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?").run(gracePeriod.toISOString(), user.id);
+        }
       }
     } catch (err: any) {
       console.error("Webhook processing error:", err.message);
@@ -1372,7 +1453,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Create tracker
-  app.post("/api/cumsum/trackers", authMiddleware, (req: any, res) => {
+  app.post("/api/cumsum/trackers", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
     const { instrumentName, analyte } = req.body;
     if (!instrumentName?.trim()) return res.status(400).json({ error: "Instrument name required" });
@@ -1384,7 +1465,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete tracker
-  app.delete("/api/cumsum/trackers/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/cumsum/trackers/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     const tracker = (db as any).$client.prepare("SELECT id FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     (db as any).$client.prepare("DELETE FROM cumsum_entries WHERE tracker_id = ?").run(req.params.id);
@@ -1403,7 +1484,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Add entry to tracker
-  app.post("/api/cumsum/trackers/:id/entries", authMiddleware, (req: any, res) => {
+  app.post("/api/cumsum/trackers/:id/entries", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCheckAccess(req.user)) return res.status(403).json({ error: "Subscription required" });
     const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
@@ -1417,7 +1498,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete entry
-  app.delete("/api/cumsum/entries/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/cumsum/entries/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     const entry = (db as any).$client.prepare(
       "SELECT e.id, t.user_id FROM cumsum_entries e JOIN cumsum_trackers t ON e.tracker_id = t.id WHERE e.id = ?"
     ).get(req.params.id);
@@ -1577,7 +1658,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Create program
-  app.post("/api/competency/programs", authMiddleware, (req: any, res) => {
+  app.post("/api/competency/programs", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
@@ -1645,7 +1726,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete program
-  app.delete("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/competency/programs/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -1662,7 +1743,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Update program settings (method groups, checklist items, name)
-  app.put("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
+  app.put("/api/competency/programs/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const program = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -1704,7 +1785,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(employees);
   });
 
-  app.post("/api/competency/employees", authMiddleware, (req: any, res) => {
+  app.post("/api/competency/employees", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const { name, title, hireDate, lisInitials } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Employee name required" });
@@ -1715,7 +1796,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ id: Number(result.lastInsertRowid), user_id: req.user.userId, name: name.trim(), title: title || "", hire_date: hireDate || null, lis_initials: lisInitials || null, status: "active", created_at: now });
   });
 
-  app.put("/api/competency/employees/:id", authMiddleware, (req: any, res) => {
+  app.put("/api/competency/employees/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
@@ -1734,7 +1815,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
-  app.delete("/api/competency/employees/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/competency/employees/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
@@ -1744,7 +1825,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
 
-  app.post("/api/competency/assessments", authMiddleware, (req: any, res) => {
+  app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
     // Verify program and employee belong to user
@@ -1782,7 +1863,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Update assessment
-  app.put("/api/competency/assessments/:id", authMiddleware, (req: any, res) => {
+  app.put("/api/competency/assessments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.id, p.user_id FROM competency_assessments a
@@ -1819,7 +1900,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete assessment
-  app.delete("/api/competency/assessments/:id", authMiddleware, (req: any, res) => {
+  app.delete("/api/competency/assessments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.id, p.user_id FROM competency_assessments a
