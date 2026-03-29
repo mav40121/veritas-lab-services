@@ -73,7 +73,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Rheumatoid factor (RF)": {
         "complexity": "MODERATE",
@@ -93,11 +93,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, direct": {
         "complexity": "MODERATE",
@@ -125,7 +125,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -141,7 +141,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -153,7 +153,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Cholinesterase": {
         "complexity": "MODERATE",
@@ -217,7 +217,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron": {
         "complexity": "MODERATE",
@@ -421,7 +421,7 @@
       },
       "pH, urine": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, urine": {
         "complexity": "MODERATE",
@@ -643,7 +643,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -675,15 +675,15 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, direct": {
         "complexity": "MODERATE",
@@ -711,7 +711,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -735,7 +735,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -751,7 +751,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -943,7 +943,7 @@
       },
       "pH, urine": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, urine": {
         "complexity": "MODERATE",
@@ -1149,7 +1149,7 @@
       },
       "pH, urine": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, urine": {
         "complexity": "MODERATE",
@@ -1493,7 +1493,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Aspartate aminotransferase (AST) (SGOT)": {
         "complexity": "MODERATE",
@@ -1505,7 +1505,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -1533,7 +1533,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -1565,7 +1565,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Uric acid": {
         "complexity": "MODERATE",
@@ -1597,15 +1597,15 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -1803,7 +1803,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Parathyroid hormone - intact": {
         "complexity": "MODERATE",
@@ -1831,7 +1831,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -1843,11 +1843,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -1887,7 +1887,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -1907,7 +1907,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -1919,7 +1919,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -2289,7 +2289,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Parathyroid hormone - intact": {
         "complexity": "MODERATE",
@@ -2317,7 +2317,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -2329,11 +2329,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -2373,7 +2373,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -2393,7 +2393,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -2405,7 +2405,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -2735,7 +2735,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -2767,7 +2767,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -2779,11 +2779,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, direct": {
         "complexity": "MODERATE",
@@ -2811,7 +2811,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -2835,7 +2835,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Carbamazepine": {
         "complexity": "MODERATE",
@@ -2859,7 +2859,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Uric acid": {
         "complexity": "MODERATE",
@@ -3093,7 +3093,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -3125,7 +3125,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -3165,7 +3165,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -3205,7 +3205,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -3419,7 +3419,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -3463,7 +3463,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Digoxin": {
         "complexity": "MODERATE",
@@ -3475,7 +3475,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, unsat. (UIBC) no pretreatment": {
         "complexity": "MODERATE",
@@ -3639,15 +3639,15 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Immunoglobulins IgG": {
         "complexity": "MODERATE",
@@ -3707,7 +3707,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Cholesterol": {
         "complexity": "MODERATE",
@@ -3849,7 +3849,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Aspartate aminotransferase (AST) (SGOT)": {
         "complexity": "MODERATE",
@@ -3869,7 +3869,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Ferritin": {
         "complexity": "MODERATE",
@@ -3897,7 +3897,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -3929,7 +3929,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -4111,7 +4111,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -4139,7 +4139,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -4147,11 +4147,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -4171,7 +4171,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -4187,7 +4187,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Carbamazepine": {
         "complexity": "MODERATE",
@@ -4203,7 +4203,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -4497,7 +4497,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -4525,7 +4525,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -4533,11 +4533,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, direct": {
         "complexity": "MODERATE",
@@ -4557,7 +4557,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -4581,7 +4581,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein A1": {
         "complexity": "MODERATE",
@@ -4597,7 +4597,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -4839,7 +4839,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Immunoglobulins IgE": {
         "complexity": "MODERATE",
@@ -4951,7 +4951,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, total": {
         "complexity": "MODERATE",
@@ -5075,7 +5075,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Urea (BUN)": {
         "complexity": "MODERATE",
@@ -5083,7 +5083,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Prealbumin": {
         "complexity": "MODERATE",
@@ -5155,15 +5155,15 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       }
     }
   },
@@ -5381,7 +5381,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -5409,7 +5409,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -5425,11 +5425,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -5461,7 +5461,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -5481,7 +5481,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -5501,7 +5501,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -5839,7 +5839,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -5863,7 +5863,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -5875,11 +5875,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -5915,7 +5915,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -5935,7 +5935,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -5955,7 +5955,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -6381,7 +6381,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Uric acid": {
         "complexity": "MODERATE",
@@ -6429,7 +6429,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Lipoprotein(a) (Lp(a))": {
         "complexity": "MODERATE",
@@ -6461,7 +6461,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -6541,7 +6541,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Albumin": {
         "complexity": "MODERATE",
@@ -6549,15 +6549,15 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Vancomycin": {
         "complexity": "MODERATE",
@@ -6679,7 +6679,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Ferritin": {
         "complexity": "MODERATE",
@@ -6699,7 +6699,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -6711,7 +6711,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -6783,7 +6783,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Apolipoprotein B": {
         "complexity": "MODERATE",
@@ -6791,11 +6791,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Lipoprotein(a) (Lp(a))": {
         "complexity": "MODERATE",
@@ -6811,7 +6811,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -6941,7 +6941,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Aspartate aminotransferase (AST) (SGOT)": {
         "complexity": "MODERATE",
@@ -6953,15 +6953,15 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Creatinine": {
         "complexity": "MODERATE",
@@ -6977,7 +6977,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -6997,7 +6997,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -7419,7 +7419,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Aspartate aminotransferase (AST) (SGOT)": {
         "complexity": "MODERATE",
@@ -7435,7 +7435,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -7451,11 +7451,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -7495,7 +7495,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -7515,7 +7515,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -7539,7 +7539,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -8045,7 +8045,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Triglyceride": {
         "complexity": "MODERATE",
@@ -8213,7 +8213,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -8225,11 +8225,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -8245,7 +8245,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -8377,11 +8377,11 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, total": {
         "complexity": "MODERATE",
@@ -8579,7 +8579,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Cerebrospinal fluid (CSF) protein": {
         "complexity": "MODERATE",
@@ -8587,7 +8587,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Cholesterol": {
         "complexity": "MODERATE",
@@ -8643,7 +8643,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Microalbumin": {
         "complexity": "MODERATE",
@@ -8683,7 +8683,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Homocysteine": {
         "complexity": "MODERATE",
@@ -8879,15 +8879,15 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       }
     }
   },
@@ -9081,7 +9081,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Complement C3": {
         "complexity": "MODERATE",
@@ -9109,7 +9109,7 @@
       },
       "Phosphorus": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Thyroxine (T4)": {
         "complexity": "MODERATE",
@@ -9125,11 +9125,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Iron binding capacity, total": {
         "complexity": "MODERATE",
@@ -9161,7 +9161,7 @@
       },
       "Magnesium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Amylase": {
         "complexity": "MODERATE",
@@ -9181,7 +9181,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glycosylated Hemoglobin (Hgb A1c)": {
         "complexity": "MODERATE",
@@ -9201,7 +9201,7 @@
       },
       "Carbon dioxide, total (CO2)": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
@@ -12405,7 +12405,7 @@
       },
       "Calcium, total": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Glucose": {
         "complexity": "MODERATE",
@@ -12413,11 +12413,11 @@
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, total": {
         "complexity": "MODERATE",
@@ -12425,7 +12425,7 @@
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Blood gases": {
         "complexity": "MODERATE",
@@ -12447,7 +12447,7 @@
     "tests": {
       "pH": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Lactic acid (lactate)": {
         "complexity": "MODERATE",
@@ -12463,27 +12463,27 @@
       },
       "PCO2": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "PO2": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Calcium, ionized": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Chloride": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Hemoglobin fractions": {
         "complexity": "MODERATE",
@@ -12529,27 +12529,27 @@
       },
       "pH": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "PCO2": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "PO2": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Sodium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Potassium": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Calcium, ionized": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Hematocrit": {
         "complexity": "MODERATE",
@@ -12595,7 +12595,7 @@
       },
       "pH, urine": {
         "complexity": "MODERATE",
-        "specialty": "General Chemistry"
+        "specialty": "Electrolytes"
       },
       "Bilirubin, urine": {
         "complexity": "MODERATE",
