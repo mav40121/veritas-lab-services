@@ -114,7 +114,7 @@ export default function BookPage() {
                 Every laboratory director knows the feeling: degrees earned, certifications passed, years logged, and still unprepared for the actual job. The regulations read like a foreign language. The C-suite speaks finance, not science. Accreditors are coming. There is no manual.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                <em>Lab Management 101</em> is that manual. Written by a laboratory director, regional director, and four-year Joint Commission surveyor who has walked into more than 200 facilities and seen exactly what goes wrong, and why.
+                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure and the VeritaCheck, VeritaMap, VeritaScan, and VeritaComp compliance software suite. The same knowledge that built the software is in this book.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-8">
@@ -126,9 +126,9 @@ export default function BookPage() {
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
                     <Badge className="bg-amber-500 text-white border-0 text-xs">Best Value</Badge>
                   </div>
-                  <div className="text-2xl font-bold">$348</div>
-                  <div className="text-xs opacity-80">Book + 1-Year Starter Plan</div>
-                  <div className="text-xs opacity-60">($69 + $299, save $20)</div>
+                  <div className="text-2xl font-bold">$599<span className="text-sm font-normal opacity-80">/yr</span></div>
+                  <div className="text-xs opacity-80">Professional Plan + Book Included</div>
+                  <div className="text-xs opacity-60">Book free with Professional subscription</div>
                 </div>
               </div>
               <NotifyForm />
@@ -292,7 +292,7 @@ export default function BookPage() {
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
-          <p className="text-muted-foreground mb-8">Choose the option that fits your needs. Both include the complete book.</p>
+          <p className="text-muted-foreground mb-8">Choose the option that fits your needs.</p>
           <div className="grid sm:grid-cols-2 gap-6 max-w-2xl">
 
             {/* Book only */}
@@ -321,39 +321,40 @@ export default function BookPage() {
               </CardContent>
             </Card>
 
-            {/* Book + VeritaCheck */}
+            {/* Book + Professional Plan */}
             <Card className="border-2 border-primary bg-primary/5 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <Badge className="bg-primary text-primary-foreground">Best Value</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Book + Starter Plan</div>
+                <div className="font-bold text-lg mb-1">Best Value: Professional Plan + Book Included</div>
                 <div className="flex items-baseline gap-2 mb-1">
-                  <span className="text-4xl font-bold">$348</span>
+                  <span className="text-4xl font-bold">$599</span>
+                  <span className="text-sm text-muted-foreground">/yr</span>
                 </div>
-                <div className="text-xs text-muted-foreground mb-3">$69 book + $299 Starter annual plan, save $20</div>
+                <div className="text-xs text-muted-foreground mb-3">Book included free with Professional subscription</div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Everything in the book, plus a full year of VeritaCheck to run the calibration verification, method comparison, and precision studies Chapter 9 covers.
+                  Full VeritaAssure suite (VeritaCheck, VeritaMap, VeritaScan, VeritaComp) plus Lab Management 101 at no extra cost.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
-                    "Everything in Book Only",
-                    "1-year VeritaCheck Starter plan",
-                    "Unlimited Cal Ver, Method Comp & Precision studies",
-                    "CLIA-compliant PDF reports",
-                    "Chapter 9 comes to life in your lab",
+                    "Lab Management 101 included at no extra cost",
+                    "Full VeritaAssure suite access for 1 year",
+                    "VeritaCheck, VeritaMap, VeritaScan, VeritaComp",
+                    "Unlimited studies and PDF reports",
+                    "Priority support",
                   ].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
                     </li>
                   ))}
                 </ul>
-                <button
-                  disabled
-                  className="w-full bg-primary/40 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground cursor-not-allowed"
+                <Link
+                  href="/veritacheck#pricing"
+                  className="w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center block transition-colors"
                 >
-                  Available Soon
-                </button>
+                  Get Professional Plan
+                </Link>
               </CardContent>
             </Card>
           </div>

@@ -1478,7 +1478,7 @@ export default function VeritaCheckPage() {
                 variant="outline"
                 size="sm"
                 disabled={discountLoading || !discountCode.trim()}
-                onClick={() => applyDiscount("annual")}
+                onClick={() => applyDiscount("professional")}
                 className="shrink-0"
               >
                 {discountLoading ? <Loader2 size={13} className="animate-spin" /> : "Apply"}
