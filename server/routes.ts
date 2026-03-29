@@ -52,7 +52,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/set-plan", (req, res) => {
     const { secret, userId, plan, credits } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const planCredits = plan === "annual" ? 99999 : (credits ?? 0);
+    const planCredits = ["annual", "starter", "professional", "lab", "complete"].includes(plan) ? 99999 : (credits ?? 0);
     storage.updateUserPlan(Number(userId), plan, planCredits);
     const user = storage.getUserById(Number(userId));
     res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
@@ -269,7 +269,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITAMAP ───────────────────────────────────────────────────────────
 
   function hasMapAccess(user: any) {
-    return ["annual", "lab", "veritamap"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap"].includes(user?.plan);
   }
 
   // List maps
@@ -573,7 +573,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Check access: annual, lab, or veritascan plan
   function hasScanAccess(user: any) {
-    return ["annual", "lab", "veritascan"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritascan"].includes(user?.plan);
   }
 
   // List scans for current user
@@ -856,7 +856,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── STRIPE ────────────────────────────────────────────────────────────────
-  // Create a checkout session for per-study ($9) or annual ($149/yr)
+  // Create a checkout session for per-study ($25) or subscription plans
   // ── PASSWORD RESET ────────────────────────────────────────────────────────
   app.post("/api/auth/forgot-password", async (req, res) => {
     const { email } = req.body;
@@ -914,7 +914,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
     if (!stripe) return res.status(503).json({ error: "Payments not configured" });
-    const { priceType, discountCode } = req.body; // "perStudy" | "annual" | "lab"
+    const { priceType, discountCode } = req.body; // "perStudy" | "starter" | "professional" | "lab" | "complete"
     if (!priceType || !PRICES[priceType as keyof typeof PRICES]) {
       return res.status(400).json({ error: "Invalid price type" });
     }
@@ -922,7 +922,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const priceId = PRICES[priceType as keyof typeof PRICES];
-    const isSubscription = priceType === "annual" || priceType === "lab";
+    const isSubscription = priceType !== "perStudy";
     const successUrl = `${FRONTEND_URL}/#/veritacheck?payment=success&type=${priceType}`;
     const cancelUrl = `${FRONTEND_URL}/#/veritacheck?payment=cancelled`;
 
@@ -1006,11 +1006,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (priceType === "perStudy") {
             // Add 1 study credit
             storage.addStudyCredits(userId, 1);
-          } else if ((priceType === "annual" || priceType === "lab") && session.subscription) {
-            // Activate annual or lab plan
+          } else if (priceType === "starter" && session.subscription) {
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
-              plan: priceType, // "annual" or "lab"
+              plan: "starter",
+            });
+          } else if (priceType === "professional" && session.subscription) {
+            storage.updateUserStripe(userId, {
+              stripeSubscriptionId: session.subscription,
+              plan: "professional",
+            });
+          } else if ((priceType === "lab" || priceType === "complete") && session.subscription) {
+            storage.updateUserStripe(userId, {
+              stripeSubscriptionId: session.subscription,
+              plan: priceType === "complete" ? "lab" : "lab",
+            });
+          } else if (priceType === "annual" && session.subscription) {
+            // Backward compatibility for existing annual subscribers
+            storage.updateUserStripe(userId, {
+              stripeSubscriptionId: session.subscription,
+              plan: "annual",
             });
           }
         }
@@ -1035,7 +1050,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
   function hasCheckAccess(user: any) {
-    return ["annual", "lab", "per_study"].includes(user?.plan) || (user?.userId && user.userId <= 11);
+    return ["annual", "starter", "professional", "lab", "complete", "per_study"].includes(user?.plan) || (user?.userId && user.userId <= 11);
   }
 
   // List trackers for user

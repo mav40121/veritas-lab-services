@@ -67,8 +67,8 @@ export default function VeritaMapPage() {
                   <div className="text-xs text-muted-foreground">Up to 4 instruments & 10 analytes</div>
                 </div>
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">$149</div>
-                  <div className="text-xs text-muted-foreground">per year · unlimited</div>
+                  <div className="text-2xl font-bold text-primary">Included</div>
+                  <div className="text-xs text-muted-foreground">in Professional ($599/yr) and above</div>
                 </div>
               </div>
 
@@ -229,23 +229,23 @@ export default function VeritaMapPage() {
                 <Badge className="bg-primary text-primary-foreground">Full Access</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Standard</div>
+                <div className="font-bold text-lg mb-1">Professional</div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-4xl font-bold">$149</span>
+                  <span className="text-4xl font-bold">$599</span>
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Unlimited instruments and analytes. Full regulatory gap report. Integrates with VeritaCheck and VeritaScan.
+                  Unlimited instruments and analytes. Full regulatory gap report. Full suite — VeritaCheck, VeritaMap, and VeritaScan.
                 </p>
                 <ul className="space-y-2 mb-6">
-                  {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck + VeritaScan integration","Annual review cycle tracking","Priority support"].map(f => (
+                  {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck + VeritaScan included","Annual review cycle tracking","Priority support"].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
                     </li>
                   ))}
                 </ul>
-                <Link href="/veritamap-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
-                  Launch VeritaMap →
+                <Link href="/veritacheck#pricing" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
+                  View All Plans →
                 </Link>
               </CardContent>
             </Card>
@@ -255,28 +255,27 @@ export default function VeritaMapPage() {
           <div className="mt-6 max-w-2xl">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5">
               <div className="font-bold text-base mb-1">
-                Veritas Complete Suite — <span className="text-primary">$349/year</span>
-                <Badge className="ml-2 bg-primary text-primary-foreground text-xs">Best Value</Badge>
+                Professional Plan — <span className="text-primary">$599/year</span>
+                <Badge className="ml-2 bg-primary text-primary-foreground text-xs">Full Suite</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">
-                The complete clinical laboratory regulatory compliance platform. All three tools together for less than half the cost of most single-tool competitors.
+                The complete clinical laboratory regulatory compliance platform. All three tools — VeritaCheck, VeritaScan, and VeritaMap — in one plan.
               </p>
               <div className="grid sm:grid-cols-3 gap-3 mb-3">
                 {[
-                  { icon: <FlaskConical size={14} />, name: "VeritaCheck™", desc: "Unlimited EP studies", price: "$149/yr" },
-                  { icon: <Shield size={14} />, name: "VeritaScan™", desc: "Self-inspection audit", price: "$99/yr" },
-                  { icon: <Map size={14} />, name: "VeritaMap™", desc: "Test menu mapping", price: "$149/yr" },
+                  { icon: <FlaskConical size={14} />, name: "VeritaCheck™", desc: "Unlimited EP studies" },
+                  { icon: <Shield size={14} />, name: "VeritaScan™", desc: "Self-inspection audit" },
+                  { icon: <Map size={14} />, name: "VeritaMap™", desc: "Test menu mapping" },
                 ].map((t, i) => (
                   <div key={i} className="bg-card border border-border rounded-lg p-3 text-center">
                     <div className="flex items-center justify-center gap-1 text-primary mb-1">{t.icon}<span className="font-semibold text-xs">{t.name}</span></div>
                     <div className="text-xs text-muted-foreground">{t.desc}</div>
-                    <div className="text-xs text-muted-foreground line-through mt-0.5">{t.price}</div>
                   </div>
                 ))}
               </div>
-              <div className="text-xs text-muted-foreground">
-                Purchased separately: $397/yr · <strong className="text-foreground">Bundle saves $48</strong>
-              </div>
+              <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                View all plans <ChevronRight size={13} />
+              </Link>
             </div>
           </div>
 

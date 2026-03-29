@@ -216,8 +216,8 @@ export default function ServicesPage() {
                 </div>
                 <div className="flex flex-col justify-between border-l border-border pl-6">
                   <div className="space-y-3">
-                    <div><div className="text-xs text-muted-foreground">Per Study</div><div className="font-bold text-xl text-primary">$9</div></div>
-                    <div><div className="text-xs text-muted-foreground">Annual Unlimited</div><div className="font-bold text-xl text-primary">$149<span className="text-sm font-normal text-muted-foreground">/yr</span></div></div>
+                    <div><div className="text-xs text-muted-foreground">Per Study</div><div className="font-bold text-xl text-primary">$25</div></div>
+                    <div><div className="text-xs text-muted-foreground">Starter</div><div className="font-bold text-xl text-primary">$299<span className="text-sm font-normal text-muted-foreground">/yr</span></div></div>
                   </div>
                   <Button asChild className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground" size="sm">
                     <Link href="/veritacheck">Try VeritaCheck™ Free <ChevronRight size={13} className="ml-1" /></Link>

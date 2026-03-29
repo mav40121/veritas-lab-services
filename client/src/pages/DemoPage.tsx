@@ -682,7 +682,7 @@ export default function DemoPage() {
         <section className="rounded-2xl bg-primary text-primary-foreground p-8 sm:p-10 text-center">
           <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Ready to run this for your lab?</h2>
           <p className="text-primary-foreground/80 max-w-xl mx-auto mb-6 text-sm leading-relaxed">
-            VeritaCheck is live now. VeritaScan and VeritaMap are coming soon. Early adopters lock in $149/year before prices rise June 15.
+            VeritaCheck, VeritaScan, and VeritaMap are all live now. Plans start at $25 per study or $299/year for unlimited access.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

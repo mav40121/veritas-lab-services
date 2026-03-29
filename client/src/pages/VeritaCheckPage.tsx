@@ -129,12 +129,12 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
   return prev.slice(0, newCount).map((dp, i) => ({ ...dp, level: i + 1 }));
 }
 
-const EARLY_ADOPTER_DEADLINE = "June 15, 2026";
-
 const plans = [
-  { priceType: "perStudy", name: "Per Study",   price: "$9",   unit: "per report", description: "Pay only when you need a study.",                        features: ["Single study run", "Full PDF report", "Cal Ver, Method Comp & Precision", "CLIA pass/fail evaluation"],                                                          cta: "Buy a Study",           highlight: false, badge: null },
-  { priceType: "annual",   name: "Individual",  price: "$149", unit: "per year",   description: "Unlimited studies for one analyst.",                    features: ["Unlimited studies", "All 3 study types", "Full PDF reports", "Study history dashboard", "Priority support"],                                             cta: "Subscribe — Lock In $149", highlight: true,  badge: "Early Adopter" },
-  { priceType: "lab",      name: "Lab Account", price: "$499", unit: "per year",   description: "Unlimited studies for your entire lab — up to 5 analysts.", features: ["Everything in Individual", "Up to 5 analyst accounts", "Shared study dashboard", "All PDF reports", "Priority support"],                             cta: "Subscribe",             highlight: false, badge: null },
+  { priceType: "perStudy",     name: "Per Study",             price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                                 features: ["Single study run", "Full PDF report", "Cal Ver, Method Comp, Precision & Lot-to-Lot", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
+  { priceType: "starter",      name: "Starter",               price: "$299",   unit: "per year",  description: "1 user. VeritaCheck calibration verification, method comparison, accuracy and precision, and lot-to-lot studies.",         features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "professional", name: "Professional",          price: "$599",   unit: "per year",  description: "1 user. Full suite — VeritaCheck, VeritaMap, and VeritaScan.",                                                           features: ["Everything in Starter", "VeritaMap regulatory mapping", "VeritaScan self-inspection audit", "Priority support"],                                                                                      cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
+  { priceType: "lab",          name: "Lab",                   price: "$2,499", unit: "per year",  description: "Up to 10 users. Full suite with multi-user access and lab branding on PDF reports.",                                      features: ["Everything in Professional", "Up to 10 analyst accounts", "Shared study dashboard", "Lab branding on PDF reports"],                                                                                   cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "complete",     name: "VeritaAssure Complete", price: "$3,999", unit: "per year",  description: "Up to 10 users. Full suite + priority support + consulting access + Lab Management 101 book.",                            features: ["Everything in Lab", "Priority support", "Consulting access", "Lab Management 101 book included"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
 ];
 
 export default function VeritaCheckPage() {
@@ -162,7 +162,7 @@ export default function VeritaCheckPage() {
     }
   }, [search]);
 
-  const handleBuy = async (priceType: "perStudy" | "annual" | "lab") => {
+  const handleBuy = async (priceType: "perStudy" | "starter" | "professional" | "lab" | "complete") => {
     if (!isLoggedIn) {
       toast({ title: "Sign in required", description: "Please create a free account to purchase.", variant: "destructive" });
       navigate("/login");
@@ -1309,16 +1309,6 @@ export default function VeritaCheckPage() {
           </div>
           <p className="text-muted-foreground text-center mb-4">No hidden fees. Cancel anytime.</p>
 
-          {/* Early adopter banner */}
-          <div className="max-w-2xl mx-auto mb-6">
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
-              <span className="text-lg">⏰</span>
-              <p className="text-sm text-amber-700 dark:text-amber-400">
-                <strong>Early adopter pricing ends {EARLY_ADOPTER_DEADLINE}.</strong> The Individual plan increases to $179/year after that date. Subscribe now to lock in $149/year for life.
-              </p>
-            </div>
-          </div>
-
           {/* Payment result banners */}
           {paymentStatus === "success" && (
             <Alert className="mb-6 max-w-2xl mx-auto border-green-500/30 bg-green-500/10">
@@ -1337,7 +1327,7 @@ export default function VeritaCheckPage() {
             </Alert>
           )}
 
-          <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {plans.map(plan => {
               const isLoading = checkoutLoading === plan.priceType;
               return (
@@ -1347,17 +1337,11 @@ export default function VeritaCheckPage() {
                     <h3 className="font-bold text-lg mb-1">{plan.name}</h3>
                     <div className="flex items-baseline gap-1.5 mb-1">
                       <span className="text-3xl font-bold">{plan.price}</span>
-                      <span className="text-sm text-muted-foreground">/{plan.unit.split("per ")[1]}</span>
-                      {plan.priceType === "annual" && (
-                        <span className="text-xs text-muted-foreground line-through ml-1">$179</span>
-                      )}
+                      {plan.unit !== "one-time" && <span className="text-sm text-muted-foreground">/{plan.unit.split("per ")[1]}</span>}
                     </div>
-                    {plan.priceType === "annual" && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">Increases to $179 after {EARLY_ADOPTER_DEADLINE}</p>
-                    )}
-                    {discountApplied && (plan.priceType === "annual" || plan.priceType === "lab") && (
+                    {discountApplied && plan.priceType !== "perStudy" && (
                       <p className="text-xs text-green-600 dark:text-green-400 font-semibold mb-1">
-                        {discountApplied.pct}% off → ${(parseInt(plan.price.replace("$", "")) * (1 - discountApplied.pct / 100)).toFixed(0)} with code {discountApplied.code}
+                        {discountApplied.pct}% off with code {discountApplied.code}
                       </p>
                     )}
                     <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
@@ -1368,7 +1352,7 @@ export default function VeritaCheckPage() {
                       className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
                       variant={plan.highlight ? "default" : "outline"}
                       disabled={isLoading || checkoutLoading !== null}
-                      onClick={() => handleBuy(plan.priceType as "perStudy" | "annual" | "lab")}
+                      onClick={() => handleBuy(plan.priceType as "perStudy" | "starter" | "professional" | "lab" | "complete")}
                     >
                       {isLoading ? <><Loader2 size={14} className="mr-2 animate-spin" />Redirecting…</> : plan.cta}
                     </Button>
@@ -1376,6 +1360,24 @@ export default function VeritaCheckPage() {
                 </Card>
               );
             })}
+          </div>
+
+          {/* Enterprise callout */}
+          <div className="max-w-5xl mx-auto mt-8">
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 flex items-start gap-4">
+              <Shield size={20} className="text-primary mt-0.5 shrink-0" />
+              <div>
+                <div className="font-semibold text-sm mb-1">
+                  Enterprise — <span className="text-primary">Custom pricing</span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Unlimited users, multiple sites. Contact us for a custom quote.
+                </p>
+                <Link href="/contact" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                  Contact Us <ChevronRight size={13} />
+                </Link>
+              </div>
+            </div>
           </div>
           {/* Discount code input */}
           <div className="max-w-sm mx-auto mt-6">
@@ -1409,28 +1411,14 @@ export default function VeritaCheckPage() {
             )}
           </div>
 
-          {/* Bundle callout */}
-          <div className="max-w-5xl mx-auto mt-8">
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 flex items-start gap-4">
-              <Shield size={20} className="text-primary mt-0.5 shrink-0" />
-              <div>
-                <div className="font-semibold text-sm mb-1">
-                  Veritas Complete Suite — <span className="text-primary">$349/year for all three tools</span>
-                  <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. Purchased separately: $397/year. Bundle saves $48.
-                </p>
-                <div className="flex gap-4">
-                  <Link href="/veritascan" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-                    VeritaScan <ChevronRight size={13} />
-                  </Link>
-                  <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-                    VeritaMap <ChevronRight size={13} />
-                  </Link>
-                </div>
-              </div>
-            </div>
+          {/* Suite links */}
+          <div className="max-w-5xl mx-auto mt-4 flex justify-center gap-6">
+            <Link href="/veritascan" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+              VeritaScan <ChevronRight size={13} />
+            </Link>
+            <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+              VeritaMap <ChevronRight size={13} />
+            </Link>
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">

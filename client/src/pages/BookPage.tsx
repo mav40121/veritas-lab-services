@@ -126,9 +126,9 @@ export default function BookPage() {
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
                     <Badge className="bg-amber-500 text-white border-0 text-xs">Best Value</Badge>
                   </div>
-                  <div className="text-2xl font-bold">$198</div>
-                  <div className="text-xs opacity-80">Book + 1-Year VeritaCheck</div>
-                  <div className="text-xs opacity-60">($69 + $149 — save $20)</div>
+                  <div className="text-2xl font-bold">$348</div>
+                  <div className="text-xs opacity-80">Book + 1-Year Starter Plan</div>
+                  <div className="text-xs opacity-60">($69 + $299 — save $20)</div>
                 </div>
               </div>
               <NotifyForm />
@@ -327,18 +327,18 @@ export default function BookPage() {
                 <Badge className="bg-primary text-primary-foreground">Best Value</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Book + VeritaCheck</div>
+                <div className="font-bold text-lg mb-1">Book + Starter Plan</div>
                 <div className="flex items-baseline gap-2 mb-1">
-                  <span className="text-4xl font-bold">$198</span>
+                  <span className="text-4xl font-bold">$348</span>
                 </div>
-                <div className="text-xs text-muted-foreground mb-3">$69 book + $149 Individual annual plan — save $20</div>
+                <div className="text-xs text-muted-foreground mb-3">$69 book + $299 Starter annual plan — save $20</div>
                 <p className="text-sm text-muted-foreground mb-5">
                   Everything in the book, plus a full year of VeritaCheck to run the calibration verification, method comparison, and precision studies Chapter 9 covers.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
                     "Everything in Book Only",
-                    "1-year VeritaCheck Individual plan",
+                    "1-year VeritaCheck Starter plan",
                     "Unlimited Cal Ver, Method Comp & Precision studies",
                     "CLIA-compliant PDF reports",
                     "Chapter 9 comes to life in your lab",

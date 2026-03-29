@@ -65,8 +65,8 @@ export default function VeritaScanPage() {
               {/* Pricing */}
               <div className="flex flex-wrap gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">$99</div>
-                  <div className="text-xs text-muted-foreground">/year — Excel export included</div>
+                  <div className="text-2xl font-bold text-primary">Included</div>
+                  <div className="text-xs text-muted-foreground">in Professional ($599/yr) and above</div>
                 </div>
               </div>
 
@@ -218,11 +218,10 @@ export default function VeritaScanPage() {
               <CardContent className="p-6">
                 <div className="font-bold text-lg mb-1">VeritaScan™</div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-4xl font-bold">$99</span>
-                  <span className="text-sm text-muted-foreground">/year</span>
+                  <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Full web access to all 168 checklist items across 10 domains — with Excel export included.
+                  Included in Professional ($599/yr) and above. Full web access to all 168 checklist items across 10 domains — with Excel export included.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
@@ -252,14 +251,14 @@ export default function VeritaScanPage() {
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  Veritas Complete Suite — <span className="text-primary">$349/year for all three tools</span>
+                  Professional Plan — <span className="text-primary">$599/year for the full suite</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. VeritaScan includes full web access and Excel export. Purchased separately: $347/year. Bundle saves $48.
+                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
-                <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-                  Learn about VeritaMap <ChevronRight size={13} />
+                <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                  View all plans <ChevronRight size={13} />
                 </Link>
               </div>
             </div>
