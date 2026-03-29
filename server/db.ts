@@ -171,6 +171,81 @@ sqlite.exec(`
     created_at TEXT NOT NULL,
     FOREIGN KEY (tracker_id) REFERENCES cumsum_trackers(id)
   );
+
+  CREATE TABLE IF NOT EXISTS competency_programs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    department TEXT NOT NULL DEFAULT 'Chemistry',
+    type TEXT NOT NULL DEFAULT 'technical',
+    map_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_method_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    program_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    instruments TEXT NOT NULL DEFAULT '[]',
+    analytes TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    FOREIGN KEY (program_id) REFERENCES competency_programs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    hire_date TEXT,
+    lis_initials TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_assessments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    program_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    assessment_type TEXT NOT NULL DEFAULT 'initial',
+    assessment_date TEXT NOT NULL,
+    evaluator_name TEXT,
+    evaluator_title TEXT,
+    evaluator_initials TEXT,
+    competency_type TEXT NOT NULL DEFAULT 'technical',
+    status TEXT NOT NULL DEFAULT 'pass',
+    remediation_plan TEXT,
+    employee_acknowledged INTEGER NOT NULL DEFAULT 0,
+    supervisor_acknowledged INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (program_id) REFERENCES competency_programs(id),
+    FOREIGN KEY (employee_id) REFERENCES competency_employees(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_assessment_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL,
+    method_number INTEGER,
+    method_group_id INTEGER,
+    item_label TEXT,
+    item_description TEXT,
+    evidence TEXT,
+    date_met TEXT,
+    employee_initials TEXT,
+    supervisor_initials TEXT,
+    passed INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (assessment_id) REFERENCES competency_assessments(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS competency_checklist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    program_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    description TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (program_id) REFERENCES competency_programs(id)
+  );
 `);
 
 // Seed discount codes (safe — INSERT OR IGNORE won't duplicate)

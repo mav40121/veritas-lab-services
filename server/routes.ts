@@ -7,7 +7,7 @@ import { db } from "./db";
 import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
@@ -1545,6 +1545,409 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cumsumTrackers: trackersWithEntries,
     });
   });
+
+  // ── VERITACOMPETENCY ───────────────────────────────────────────────────
+
+  function hasCompetencyAccess(user: any) {
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacompetency"].includes(user?.plan);
+  }
+
+  // List programs
+  app.get("/api/competency/programs", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const programs = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE user_id = ? ORDER BY updated_at DESC"
+    ).all(req.user.userId);
+    const result = programs.map((p: any) => {
+      const employeeCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM competency_employees WHERE user_id = ? AND status = 'active'"
+      ).get(req.user.userId)?.cnt || 0;
+      const assessmentCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM competency_assessments WHERE program_id = ?"
+      ).get(p.id)?.cnt || 0;
+      const methodGroups = (db as any).$client.prepare(
+        "SELECT * FROM competency_method_groups WHERE program_id = ?"
+      ).all(p.id);
+      const checklistItems = (db as any).$client.prepare(
+        "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
+      ).all(p.id);
+      return { ...p, employeeCount, assessmentCount, methodGroups, checklistItems };
+    });
+    res.json(result);
+  });
+
+  // Create program
+  app.post("/api/competency/programs", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
+    if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(req.user.userId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
+    const programId = Number(result.lastInsertRowid);
+
+    // Insert method groups for technical type
+    if (type === "technical" && Array.isArray(methodGroups)) {
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+      );
+      for (const g of methodGroups) {
+        stmt.run(programId, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+      }
+    }
+
+    // Insert checklist items for nontechnical type
+    if (type === "nontechnical" && Array.isArray(checklistItems)) {
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+      );
+      checklistItems.forEach((item: any, idx: number) => {
+        stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
+      });
+    }
+
+    res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
+  });
+
+  // Get single program with full data
+  app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const program = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const methodGroups = (db as any).$client.prepare(
+      "SELECT * FROM competency_method_groups WHERE program_id = ?"
+    ).all(program.id);
+    const checklistItems = (db as any).$client.prepare(
+      "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
+    ).all(program.id);
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
+    ).all(req.user.userId);
+    const assessments = (db as any).$client.prepare(
+      `SELECT a.*, e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE a.program_id = ?
+       ORDER BY a.created_at DESC`
+    ).all(program.id);
+    // Attach items to each assessment
+    const assessmentsWithItems = assessments.map((a: any) => {
+      const items = (db as any).$client.prepare(
+        "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
+      ).all(a.id);
+      return { ...a, items };
+    });
+    res.json({ ...program, methodGroups, checklistItems, employees, assessments: assessmentsWithItems });
+  });
+
+  // Delete program
+  app.delete("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    // Cascade delete
+    const assessments = (db as any).$client.prepare("SELECT id FROM competency_assessments WHERE program_id = ?").all(req.params.id);
+    for (const a of assessments) {
+      (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(a.id);
+    }
+    (db as any).$client.prepare("DELETE FROM competency_assessments WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Update program settings (method groups, checklist items, name)
+  app.put("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const program = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const { name, department, methodGroups, checklistItems } = req.body;
+    const now = new Date().toISOString();
+    if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
+    if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
+    // Replace method groups
+    if (Array.isArray(methodGroups)) {
+      (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+      );
+      for (const g of methodGroups) {
+        stmt.run(req.params.id, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+      }
+    }
+    // Replace checklist items
+    if (Array.isArray(checklistItems)) {
+      (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+      );
+      checklistItems.forEach((item: any, idx: number) => {
+        stmt.run(req.params.id, item.label || String.fromCharCode(65 + idx), item.description, idx);
+      });
+    }
+    (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ── EMPLOYEES ─────────────────────────────────────────────────────────────
+
+  app.get("/api/competency/employees", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
+    ).all(req.user.userId);
+    res.json(employees);
+  });
+
+  app.post("/api/competency/employees", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const { name, title, hireDate, lisInitials } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Employee name required" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
+    ).run(req.user.userId, name.trim(), title || "", hireDate || null, lisInitials || null, now);
+    res.json({ id: Number(result.lastInsertRowid), user_id: req.user.userId, name: name.trim(), title: title || "", hire_date: hireDate || null, lis_initials: lisInitials || null, status: "active", created_at: now });
+  });
+
+  app.put("/api/competency/employees/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const { name, title, hireDate, lisInitials, status } = req.body;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (name !== undefined) { sets.push("name = ?"); vals.push(name.trim()); }
+    if (title !== undefined) { sets.push("title = ?"); vals.push(title); }
+    if (hireDate !== undefined) { sets.push("hire_date = ?"); vals.push(hireDate); }
+    if (lisInitials !== undefined) { sets.push("lis_initials = ?"); vals.push(lisInitials); }
+    if (status !== undefined) { sets.push("status = ?"); vals.push(status); }
+    if (sets.length) {
+      vals.push(req.params.id);
+      (db as any).$client.prepare(`UPDATE competency_employees SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    }
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/competency/employees/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    (db as any).$client.prepare("UPDATE competency_employees SET status = 'inactive' WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ── ASSESSMENTS ───────────────────────────────────────────────────────────
+
+  app.post("/api/competency/assessments", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
+    // Verify program and employee belong to user
+    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(programId, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(employeeId, req.user.userId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(programId, employeeId, assessmentType || "initial", assessmentDate || now.split("T")[0], evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, now);
+    const assessmentId = Number(result.lastInsertRowid);
+
+    // Insert assessment items
+    if (Array.isArray(items)) {
+      const stmt = (db as any).$client.prepare(
+        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const item of items) {
+        stmt.run(assessmentId, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0);
+      }
+    }
+
+    // Update program updated_at
+    (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
+
+    // VeritaScan integration: auto-complete competency items
+    if (status === "pass") {
+      autoCompleteCompetencyScanItems(req.user.userId, competencyType || "technical");
+    }
+
+    res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
+  });
+
+  // Update assessment
+  app.put("/api/competency/assessments/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.id, p.user_id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ?`
+    ).get(req.params.id);
+    if (!assessment || assessment.user_id !== req.user.userId) return res.status(404).json({ error: "Assessment not found" });
+    const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (status !== undefined) { sets.push("status = ?"); vals.push(status); }
+    if (evaluatorName !== undefined) { sets.push("evaluator_name = ?"); vals.push(evaluatorName); }
+    if (evaluatorTitle !== undefined) { sets.push("evaluator_title = ?"); vals.push(evaluatorTitle); }
+    if (evaluatorInitials !== undefined) { sets.push("evaluator_initials = ?"); vals.push(evaluatorInitials); }
+    if (remediationPlan !== undefined) { sets.push("remediation_plan = ?"); vals.push(remediationPlan); }
+    if (employeeAcknowledged !== undefined) { sets.push("employee_acknowledged = ?"); vals.push(employeeAcknowledged ? 1 : 0); }
+    if (supervisorAcknowledged !== undefined) { sets.push("supervisor_acknowledged = ?"); vals.push(supervisorAcknowledged ? 1 : 0); }
+    if (sets.length) {
+      vals.push(req.params.id);
+      (db as any).$client.prepare(`UPDATE competency_assessments SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    }
+    // Replace items if provided
+    if (Array.isArray(items)) {
+      (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+      const stmt = (db as any).$client.prepare(
+        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const item of items) {
+        stmt.run(req.params.id, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0);
+      }
+    }
+    res.json({ ok: true });
+  });
+
+  // Delete assessment
+  app.delete("/api/competency/assessments/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.id, p.user_id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ?`
+    ).get(req.params.id);
+    if (!assessment || assessment.user_id !== req.user.userId) return res.status(404).json({ error: "Assessment not found" });
+    (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // VeritaMap integration — get instruments from a map for method group suggestions
+  app.get("/api/competency/map-instruments/:mapId", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.mapId, req.user.userId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const instruments = (db as any).$client.prepare(
+      "SELECT id, instrument_name, role, category FROM veritamap_instruments WHERE map_id = ?"
+    ).all(req.params.mapId);
+    const instrumentsWithTests = instruments.map((inst: any) => {
+      const tests = (db as any).$client.prepare(
+        "SELECT analyte, specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1"
+      ).all(inst.id);
+      return { ...inst, tests };
+    });
+    res.json(instrumentsWithTests);
+  });
+
+  // PDF generation for competency assessments
+  app.post("/api/competency/pdf/:assessmentId", authMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaCompetency subscription required" });
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE a.id = ? AND p.user_id = ?`
+    ).get(req.params.assessmentId, req.user.userId);
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+
+    const items = (db as any).$client.prepare(
+      "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
+    ).all(assessment.id);
+
+    const methodGroups = (db as any).$client.prepare(
+      "SELECT * FROM competency_method_groups WHERE program_id = ?"
+    ).all(assessment.program_id);
+
+    const checklistItems = (db as any).$client.prepare(
+      "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
+    ).all(assessment.program_id);
+
+    // Get user info for lab name
+    const labUser = storage.getUserById(req.user.userId);
+    const labName = labUser?.name || "Clinical Laboratory";
+
+    try {
+      const pdfBuffer = await generateCompetencyPDF({
+        assessment,
+        items,
+        methodGroups,
+        checklistItems,
+        labName,
+      });
+
+      const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
+      const filename = `VeritaCompetency_${typeLabel}_${safeName}_${date}.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("Competency PDF generation error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // VeritaScan integration for competency
+  function autoCompleteCompetencyScanItems(userId: number, competencyType: string) {
+    const scans = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE user_id = ?"
+    ).all(userId) as { id: number }[];
+    if (scans.length === 0) return;
+
+    const now = new Date().toISOString();
+    // Domain IX (Personnel & Competency) items: 54-72
+    // Map competency type to specific items
+    const itemIds: number[] = [];
+    if (competencyType === "technical") {
+      itemIds.push(60, 61, 62, 63); // 6 CLIA methods, semiannual, annual, documentation
+    } else if (competencyType === "waived") {
+      itemIds.push(64, 65); // waived testing competency
+    } else if (competencyType === "nontechnical") {
+      itemIds.push(66, 67); // nontechnical competency
+    }
+    if (itemIds.length === 0) return;
+
+    const completionNote = `Auto-completed by VeritaCompetency\u2122: ${competencyType} assessment on ${now.split("T")[0]}`;
+    const upsertStmt = (db as any).$client.prepare(`
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, completion_source, completion_link, completion_note, updated_at)
+      VALUES (?, ?, 'Compliant', ?, 'veritacompetency_auto', '/veritacompetency-app', ?, ?)
+      ON CONFLICT(scan_id, item_id) DO UPDATE SET
+        status = 'Compliant',
+        completion_source = 'veritacompetency_auto',
+        completion_link = '/veritacompetency-app',
+        completion_note = excluded.completion_note,
+        updated_at = excluded.updated_at
+      WHERE status != 'Compliant' OR completion_source != 'veritacompetency_auto'
+    `);
+
+    const bulkUpdate = (db as any).$client.transaction(() => {
+      for (const scan of scans) {
+        for (const itemId of itemIds) {
+          upsertStmt.run(scan.id, itemId, completionNote, completionNote, now);
+        }
+      }
+    });
+    bulkUpdate();
+
+    for (const scan of scans) {
+      (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, scan.id);
+    }
+  }
 
   // CUMSUM PDF export
   app.post("/api/cumsum/trackers/:id/pdf", authMiddleware, async (req: any, res) => {
