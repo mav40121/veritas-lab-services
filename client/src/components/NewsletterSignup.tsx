@@ -73,7 +73,7 @@ export function NewsletterSignup({ variant = "card", source = "website" }: Newsl
         <Mail size={28} className="mx-auto mb-3 opacity-80" />
         <h2 className="font-serif text-xl sm:text-2xl font-bold mb-2">The Lab Director's Briefing</h2>
         <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-6 leading-relaxed">
-          Regulatory clarity, surveyor callouts, and practical tools — from a former Joint Commission surveyor with 200+ inspections. Free. No spam. Unsubscribe anytime.
+          Regulatory clarity, surveyor callouts, and practical tools from a former Joint Commission surveyor with 200+ inspections. Free. No spam. Unsubscribe anytime.
         </p>
         <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
           <Input

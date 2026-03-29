@@ -216,7 +216,7 @@ function pdfHeader(doc: jsPDF, study: Study, pw: number, margin: number): number
   y += 10; hLine(doc, y); y += 5;
   const typeLabel = study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison";
   doc.setFontSize(12); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text(`${typeLabel} — ${study.testName}`, pw/2, y, { align: "center" });
+  doc.text(`${typeLabel}: ${study.testName}`, pw/2, y, { align: "center" });
   y += 7; hLine(doc, y); y += 5;
   return y;
 }
@@ -237,8 +237,8 @@ function pdfEvalSection(doc: jsPDF, results: StudyResults, study: Study, y: numb
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, WHITE);
   const cliaP = (study.cliaAllowableError*100).toFixed(1);
   const verdict = results.overallPass
-    ? `PASS — ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`
-    : `FAIL — ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`;
+    ? `PASS: ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`
+    : `FAIL: ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`;
   doc.text(verdict, pw/2, y+2, { align: "center" });
   y += 16;
   return y;

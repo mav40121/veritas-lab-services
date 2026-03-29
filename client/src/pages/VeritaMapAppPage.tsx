@@ -199,7 +199,7 @@ export default function VeritaMapAppPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Test Menu Regulatory Mapping — track calibration verification,
+            Test Menu Regulatory Mapping: track calibration verification,
             method comparison, and SOP compliance.
           </p>
         </div>

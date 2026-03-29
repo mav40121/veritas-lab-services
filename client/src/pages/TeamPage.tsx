@@ -10,13 +10,13 @@ const publications = [
 ];
 
 const credentials = [
-  { icon: Award, text: "MBA — Master of Business Administration" },
-  { icon: Award, text: "MS — Master of Science in Chemistry" },
-  { icon: Award, text: "MLS (ASCP) — Medical Laboratory Scientist" },
-  { icon: Award, text: "CPHQ — Certified Professional in Healthcare Quality" },
+  { icon: Award, text: "MBA - Master of Business Administration" },
+  { icon: Award, text: "MS - Master of Science in Chemistry" },
+  { icon: Award, text: "MLS (ASCP) - Medical Laboratory Scientist" },
+  { icon: Award, text: "CPHQ - Certified Professional in Healthcare Quality" },
   { icon: Shield, text: "4 years as Joint Commission (TJC) Surveyor" },
   { icon: Star, text: "200+ healthcare facility inspections" },
-  { icon: BookOpen, text: "Published author — Medical Lab Management" },
+  { icon: BookOpen, text: "Published author, Medical Lab Management" },
   { icon: BookOpen, text: "30-episode free webinar series on lab management" },
 ];
 
@@ -51,7 +51,7 @@ export default function TeamPage() {
 
             <div className="sm:col-span-2 space-y-5">
               <p className="text-foreground leading-relaxed">
-                Michael founded VLS out of the recognition that <strong>administrative lab leaders lacked accessible avenues for growth and mentorship</strong> — especially for directors and managers who are often the most senior in their organizations and have limited options to advance their expertise or gain outside perspective.
+                Michael founded VLS out of the recognition that <strong>administrative lab leaders lacked accessible avenues for growth and mentorship</strong>, especially for directors and managers who are often the most senior in their organizations and have limited options to advance their expertise or gain outside perspective.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 By establishing VLS, he aimed to create a supportive, external resource <strong>dedicated to education, confidence-building, and sustainable leadership development</strong> for those steering the future of laboratory medicine.

@@ -578,7 +578,7 @@ export function calculateLotToLot(
 
   const summary = cohortResults.map(c =>
     `${c.cohort} cohort (N=${c.n}): Mean |%Diff| = ${c.meanAbsPctDiff.toFixed(1)}%, Coverage = ${c.coverage.toFixed(0)}% within TEa of ±${teaPct}%. ${c.pass ? "PASS" : "FAIL"}.`
-  ).join(" ") + ` Overall: ${overallPass ? "PASS" : "FAIL"} — ${totalPass}/${totalSpecimens} specimens within TEa.`;
+  ).join(" ") + ` Overall: ${overallPass ? "PASS" : "FAIL"}: ${totalPass}/${totalSpecimens} specimens within TEa.`;
 
   return { type: "lot_to_lot", cohorts: cohortResults, overallPass, passCount: totalPass, totalCount: totalSpecimens, tea, summary };
 }
@@ -724,8 +724,8 @@ export function calculatePTCoag(
   const overallPass = module1.pass && module2.pass && (module3 ? module3.pass : true);
 
   const m1Summary = `Module 1: Geometric Mean PT = ${module1.geoMeanPT.toFixed(1)} sec, INR = ${module1.geoMeanINR.toFixed(2)}. PT RI verification: ${module1.ptRIPass ? "PASS" : "FAIL"} (${module1.ptOutsideRI}/${module1.n} outside). INR RI verification: ${module1.inrRIPass ? "PASS" : "FAIL"} (${module1.inrOutsideRI}/${module1.n} outside).`;
-  const m2Summary = `Module 2: Two-Instrument Comparison — R=${module2.regression.r.toFixed(4)}, Slope=${module2.regression.slope.toFixed(3)}, Coverage=${module2.coverage.toFixed(0)}% within TEa. ${module2.pass ? "PASS" : "FAIL"}.`;
-  const m3Summary = module3 ? `Module 3: Old Lot vs New Lot — R=${module3.regression.r.toFixed(4)}, Slope=${module3.regression.slope.toFixed(3)}, Coverage=${module3.coverage.toFixed(0)}% within TEa. ${module3.pass ? "PASS" : "FAIL"}.` : "Module 3: Skipped (single analyzer lab).";
+  const m2Summary = `Module 2: Two-Instrument Comparison. R=${module2.regression.r.toFixed(4)}, Slope=${module2.regression.slope.toFixed(3)}, Coverage=${module2.coverage.toFixed(0)}% within TEa. ${module2.pass ? "PASS" : "FAIL"}.`;
+  const m3Summary = module3 ? `Module 3: Old Lot vs New Lot. R=${module3.regression.r.toFixed(4)}, Slope=${module3.regression.slope.toFixed(3)}, Coverage=${module3.coverage.toFixed(0)}% within TEa. ${module3.pass ? "PASS" : "FAIL"}.` : "Module 3: Skipped (single analyzer lab).";
 
   const summary = `${m1Summary} ${m2Summary} ${m3Summary} Overall: ${overallPass ? "PASS" : "FAIL"}.`;
 
@@ -799,7 +799,7 @@ export function calculateQCRange(dataPoints: QCRangeDataPoint[], dateRange: { st
     (overallShiftCount > 0
       ? `${overallShiftCount} of ${totalLevels} analyte-level combinations showed >10% shift from previous lot.`
       : `All means are within 10% of previous lot values.`) +
-    ` Per policy, SD should not change lot to lot — the historical/peer-derived SD should be used for control limits.`;
+    ` Per policy, SD should not change lot to lot. The historical/peer-derived SD should be used for control limits.`;
 
   const passCount = totalLevels - overallShiftCount;
   const overallPass = overallShiftCount === 0;
@@ -904,7 +904,7 @@ export function calculateMultiAnalyteCoag(
     const expectedINR = ratio > 0 ? Math.pow(ratio, isi) : 0;
     const isiCheck = Math.abs(meanNewINR - expectedINR) < 0.15
       ? `ISI validated: ratio ${ratio.toFixed(3)} → expected INR ${expectedINR.toFixed(2)}, observed ${meanNewINR.toFixed(2)}`
-      : `ISI check: ratio ${ratio.toFixed(3)} → expected INR ${expectedINR.toFixed(2)}, observed ${meanNewINR.toFixed(2)} — review ISI value`;
+      : `ISI check: ratio ${ratio.toFixed(3)} → expected INR ${expectedINR.toFixed(2)}, observed ${meanNewINR.toFixed(2)}. Review ISI value`;
     ptINRValidation = { meanNewINR, meanOldINR, isiCheck };
   }
 

@@ -50,16 +50,16 @@ const COMPETENCY_TYPES = [
 ];
 
 const FEATURES = [
-  "Three competency types in one system \u2014 technical, waived, and non-technical",
+  "Three competency types in one system: technical, waived, and non-technical",
   "6-method \u00D7 method-group matrix for technical competency (EP 18)",
-  "VeritaMap integration \u2014 auto-import instruments and suggest method groups",
+  "VeritaMap integration: auto-import instruments and suggest method groups",
   "Employee roster with hire date, LIS initials, and status tracking",
   "Pre-populated department checklists (Chemistry, Phlebotomy, Hematology, Microbiology)",
   "Assessment history per employee with due-date tracking",
   "PDF reports with signature on page 1, matrix/checklist at end, Pass/Fail verdict",
-  "VeritaScan integration \u2014 completed assessments auto-check Domain IX items",
+  "VeritaScan integration: completed assessments auto-check Domain IX items",
   "Remediation tracking with action plans and timelines",
-  "Written by a former TJC laboratory surveyor \u2014 200+ facility inspections",
+  "Written by a former TJC laboratory surveyor with 200+ facility inspections",
 ];
 
 export default function VeritaCompPage() {
@@ -81,12 +81,12 @@ export default function VeritaCompPage() {
               </p>
               <div className="border-l-4 border-primary pl-4 mb-6">
                 <p className="text-base leading-relaxed italic text-foreground/90">
-                  "Manage all three competency types \u2014 technical, waived, and non-technical \u2014 in one system, linked directly to your test menu."
+                  "Manage all three competency types, technical, waived, and non-technical, in one system, linked directly to your test menu."
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Every non-waived laboratory must demonstrate staff competency using the 6 CLIA-required methods. Every facility performing waived testing must document 2-of-4 methods per test. And every lab must assess non-technical duties at orientation and biennially.
-                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"\u2122"} provides the documentation framework your surveyors expect \u2014 with direct integration to VeritaMap{"\u2122"} for automatic instrument and method group setup.
+                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"\u2122"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"\u2122"} for automatic instrument and method group setup.
               </p>
 
               {/* Pricing */}
@@ -262,11 +262,11 @@ export default function VeritaCompPage() {
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  Professional Plan {"\u2014"} <span className="text-primary">$599/year for the full suite</span>
+                  Professional Plan: <span className="text-primary">$599/year for the full suite</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck{"\u2122"} + VeritaScan{"\u2122"} + VeritaMap{"\u2122"} + VeritaComp{"\u2122"} {"\u2014"} the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  VeritaCheck{"\u2122"} + VeritaScan{"\u2122"} + VeritaMap{"\u2122"} + VeritaComp{"\u2122"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
                 <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
@@ -318,12 +318,12 @@ export default function VeritaCompPage() {
           <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/veritascan" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <Shield size={14} />
-              VeritaScan{"\u2122"} {"\u2014"} Inspection Readiness
+              VeritaScan{"\u2122"} - Inspection Readiness
               <ChevronRight size={13} />
             </Link>
             <Link href="/veritamap" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <ClipboardCheck size={14} />
-              VeritaMap{"\u2122"} {"\u2014"} Test Menu Mapping
+              VeritaMap{"\u2122"} - Test Menu Mapping
               <ChevronRight size={13} />
             </Link>
           </div>

@@ -26,12 +26,12 @@ const STANDARDS = [
 const FEATURES = [
   "168 compliance questions across 10 laboratory domains",
   "Triple-mapped to TJC CAMLAB 2024, CAP checklists, and 42 CFR §493",
-  "Live compliance dashboard — real-time scores by domain",
+  "Live compliance dashboard with real-time scores by domain",
   "Status tracking: Compliant / Needs Attention / Immediate Action / N/A",
   "Finding documentation fields with owner assignment and due dates",
   "Blood bank / transfusion service coverage (Domain X)",
-  "Written by a 4-year TJC surveyor — 200+ facility inspections",
-  "Exportable — share with medical director, CNO, or consulting team",
+  "Written by a 4-year TJC surveyor with 200+ facility inspections",
+  "Exportable: share with medical director, CNO, or consulting team",
 ];
 
 
@@ -55,7 +55,7 @@ export default function VeritaScanPage() {
               </p>
               <div className="border-l-4 border-primary pl-4 mb-6">
                 <p className="text-base leading-relaxed italic text-foreground/90">
-                  "Assess your laboratory the way a Joint Commission, CAP, or CMS surveyor would — domain by domain, standard by standard."
+                  "Assess your laboratory the way a Joint Commission, CAP, or CMS surveyor would. Domain by domain, standard by standard."
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
@@ -110,13 +110,13 @@ export default function VeritaScanPage() {
                 Every non-waived laboratory in the United States operates under the same fundamental anxiety: the survey is coming. Whether it arrives from The Joint Commission, the College of American Pathologists, or CMS directly, the inspector will walk through your laboratory domain by domain, standard by standard, and they will find what you haven't looked for.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaScan gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses — before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance from the 2024 CAMLAB, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan more than a checklist — it is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
+                VeritaScan gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance from the 2024 CAMLAB, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director, your CNO, or your accreditation body as evidence of proactive self-assessment.
               </p>
               <p className="text-base font-semibold text-foreground">
-                Written by a former TJC laboratory surveyor. Used from the same vantage point as an inspection — because it was built from one.
+                Written by a former TJC laboratory surveyor. Used from the same vantage point as an inspection, because it was built from one.
               </p>
             </div>
 
@@ -159,7 +159,7 @@ export default function VeritaScanPage() {
       {/* 10 domains */}
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <h2 className="font-serif text-3xl font-bold mb-2">10 Domains — 168 Items</h2>
+          <h2 className="font-serif text-3xl font-bold mb-2">10 Domains, 168 Items</h2>
           <p className="text-muted-foreground mb-8">Every domain a surveyor will inspect. No gaps.</p>
           <div className="grid sm:grid-cols-2 gap-4">
             {DOMAINS.map((d, i) => (
@@ -221,7 +221,7 @@ export default function VeritaScanPage() {
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in Professional ($599/yr) and above. Full web access to all 168 checklist items across 10 domains — with Excel export included.
+                  Included in Professional ($599/yr) and above. Full web access to all 168 checklist items across 10 domains, with Excel export included.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
@@ -229,7 +229,7 @@ export default function VeritaScanPage() {
                     "Assign owner and due dates per item",
                     "Auto-save progress",
                     "PDF reports (executive summary + full detail)",
-                    "Excel export included — download your full scan at any time",
+                    "Excel export included: download your full scan at any time",
                     "Always current standards",
                     "Integrates with VeritaCheck",
                   ].map(f => (
@@ -251,11 +251,11 @@ export default function VeritaScanPage() {
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  Professional Plan — <span className="text-primary">$599/year for the full suite</span>
+                  Professional Plan: <span className="text-primary">$599/year for the full suite</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck™ + VeritaScan™ + VeritaMap™ — the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  VeritaCheck™ + VeritaScan™ + VeritaMap™: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
                 <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
@@ -269,7 +269,7 @@ export default function VeritaScanPage() {
             <a href="mailto:info@veritaslabservices.com?subject=VeritaScan Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>{" "}
-            — we're happy to help.
+            - we're happy to help.
           </p>
         </div>
       </section>
@@ -315,7 +315,7 @@ export default function VeritaScanPage() {
           <div className="mt-6">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <FlaskConical size={14} />
-              Also try VeritaCheck — EP studies
+              Also try VeritaCheck - EP studies
               <ChevronRight size={13} />
             </Link>
           </div>

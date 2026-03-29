@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -132,7 +132,7 @@ function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: nu
 const plans = [
   { priceType: "perStudy",     name: "Per Study",             price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                                 features: ["Single study run", "Full PDF report", "Cal Ver, Method Comp, Precision & Lot-to-Lot", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
   { priceType: "starter",      name: "Starter",               price: "$299",   unit: "per year",  description: "1 user. VeritaCheck calibration verification, method comparison, accuracy and precision, and lot-to-lot studies.",         features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "professional", name: "Professional",          price: "$599",   unit: "per year",  description: "1 user. Full suite — VeritaCheck, VeritaMap, and VeritaScan.",                                                           features: ["Everything in Starter", "VeritaMap regulatory mapping", "VeritaScan self-inspection audit", "Priority support"],                                                                                      cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
+  { priceType: "professional", name: "Professional",          price: "$599",   unit: "per year",  description: "1 user. Full suite: VeritaCheck, VeritaMap, and VeritaScan.",                                                            features: ["Everything in Starter", "VeritaMap regulatory mapping", "VeritaScan self-inspection audit", "Priority support"],                                                                                      cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
   { priceType: "lab",          name: "Lab",                   price: "$2,499", unit: "per year",  description: "Up to 10 users. Full suite with multi-user access and lab branding on PDF reports.",                                      features: ["Everything in Professional", "Up to 10 analyst accounts", "Shared study dashboard", "Lab branding on PDF reports"],                                                                                   cta: "Subscribe",      highlight: false, badge: null },
   { priceType: "complete",     name: "VeritaAssure Complete", price: "$3,999", unit: "per year",  description: "Up to 10 users. Full suite + priority support + consulting access + Lab Management 101 book.",                            features: ["Everything in Lab", "Priority support", "Consulting access", "Lab Management 101 book included"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
 ];
@@ -588,20 +588,98 @@ export default function VeritaCheckPage() {
 
   return (
     <div>
-      {/* Hero */}
-      <section className="border-b border-border bg-primary/5">
-        <div className="container-default py-14">
-          <div className="flex items-center gap-2 mb-4">
-            <FlaskConical size={20} className="text-primary" />
-            <Badge className="bg-primary/10 text-primary border-0">VeritaCheck</Badge>
-          </div>
-          <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run — finally done right.</h1>
-          <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Calibration verification, method comparison, and precision studies — automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation — no desktop software required.
-          </p>
+      {!isLoggedIn ? (
+        <>
+          {/* Landing Hero for unauthenticated visitors */}
+          <section className="border-b border-border bg-primary/5">
+            <div className="container-default py-16">
+              <div className="grid lg:grid-cols-2 gap-12 items-center max-w-5xl mx-auto">
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <FlaskConical size={20} className="text-primary" />
+                    <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
+                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
+                  </div>
+                  <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"\u2122"}</h1>
+                  <p className="text-xl text-muted-foreground font-medium mb-5">
+                    EP Evaluation and Study Management Platform
+                  </p>
+                  <div className="border-l-4 border-primary pl-4 mb-6">
+                    <p className="text-base leading-relaxed italic text-foreground/90">
+                      "The studies your lab has already been running, finally documented the way surveyors expect."
+                    </p>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    VeritaCheck automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC CAMLAB 2024, and CAP checklists.
+                  </p>
+                  <p className="text-muted-foreground leading-relaxed mb-6">
+                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
+                  </p>
 
-        </div>
-      </section>
+                  {/* Pricing */}
+                  <div className="flex flex-wrap gap-3 mb-8">
+                    <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                      <div className="text-2xl font-bold text-primary">$25</div>
+                      <div className="text-xs text-muted-foreground">Per Study - Pay only when you need it</div>
+                    </div>
+                    <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                      <div className="text-2xl font-bold text-primary">Included</div>
+                      <div className="text-xs text-muted-foreground">in Professional ($599/yr) and above</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                      <Link href="/login">Launch VeritaCheck <ChevronRight size={15} className="ml-1" /></Link>
+                    </Button>
+                    <Button asChild variant="outline" size="lg">
+                      <Link href="/login">Sign In / Create Account</Link>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Right: teal card */}
+                <div className="flex justify-center lg:justify-end">
+                  <div className="relative">
+                    <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
+                      <FlaskConical size={40} className="text-white/80 mb-4" />
+                      <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
+                        VeritaCheck{"\u2122"}
+                      </div>
+                      <div className="text-xs text-white/70 text-center space-y-1 mb-4">
+                        <div>Calibration Verification / Linearity</div>
+                        <div>Correlation / Method Comparison</div>
+                        <div>Accuracy and Precision</div>
+                        <div>Lot-to-Lot Verification</div>
+                        <div className="flex items-center justify-center gap-1">PT/Coag New Lot Validation <span className="inline-flex items-center rounded-full bg-amber-500/30 text-amber-200 px-1.5 py-0 text-[9px] font-semibold leading-4">Soon</span></div>
+                      </div>
+                      <div className="w-12 h-0.5 bg-white/40 mb-4" />
+                      <div className="text-xs text-white/60 text-center">42 CFR {"\u00A7"}493 {"\u00B7"} TJC {"\u00B7"} CAP</div>
+                    </div>
+                    <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          {/* Hero for logged-in users */}
+          <section className="border-b border-border bg-primary/5">
+            <div className="container-default py-14">
+              <div className="flex items-center gap-2 mb-4">
+                <FlaskConical size={20} className="text-primary" />
+                <Badge className="bg-primary/10 text-primary border-0">VeritaCheck</Badge>
+              </div>
+              <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run, finally done right.</h1>
+              <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
+                Calibration verification, method comparison, and precision studies, automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation mapped to 42 CFR Part 493, TJC CAMLAB 2024, and CAP checklists.
+              </p>
+            </div>
+          </section>
+        </>
+      )}
 
       {/* Study Tool */}
       <section className="section-padding border-b border-border">
@@ -644,13 +722,19 @@ export default function VeritaCheckPage() {
                           <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
                           <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
                           <SelectItem value="lot_to_lot">Lot-to-Lot Verification</SelectItem>
-                          <SelectItem value="pt_coag" disabled className="pointer-events-auto cursor-not-allowed opacity-60" title="PT/Coag New Lot Validation — Coming Soon. Join the newsletter to be notified.">
+                          <SelectItem value="pt_coag" disabled className="pointer-events-auto cursor-not-allowed opacity-60" title="PT/Coag New Lot Validation - Coming Soon. Join the newsletter to be notified.">
                             <span className="flex items-center gap-2">PT/Coag New Lot Validation <span className="inline-flex items-center rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30 px-1.5 py-0 text-[10px] font-semibold leading-4">Coming Soon</span></span>
                           </SelectItem>
                           <SelectItem value="qc_range">QC Range Establishment</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
                         </SelectContent>
                       </Select>
+                      {studyType === "cal_ver" && (
+                        <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                          <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                          <span>Calibration verification is required by CLIA even when your analyzer uses manufacturer-assigned calibration. VeritaCheck documents the verification process, not the calibration itself, which is what 42 CFR {"\u00A7"}493.1255 actually requires.</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -957,7 +1041,7 @@ export default function VeritaCheckPage() {
                   {/* Data entry grids per analyte/level/analyzer */}
                   {qcAnalytes.map(analyte => (
                     <Card key={analyte}>
-                      <CardHeader className="pb-3"><CardTitle className="text-base">{analyte} — QC Run Data</CardTitle></CardHeader>
+                      <CardHeader className="pb-3"><CardTitle className="text-base">{analyte}: QC Run Data</CardTitle></CardHeader>
                       <CardContent className="space-y-4">
                         {qcLevels.map(level => (
                           <div key={level} className="space-y-2">
@@ -1044,7 +1128,7 @@ export default function VeritaCheckPage() {
                   </Card>
 
                   <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">Specimen Data — PT + APTT + Fibrinogen</CardTitle></CardHeader>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Specimen Data: PT + APTT + Fibrinogen</CardTitle></CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -1124,7 +1208,7 @@ export default function VeritaCheckPage() {
                   <CardContent className="space-y-6">
                     {precisionMode === "advanced" && (
                       <div className="rounded-md bg-muted/50 border p-3 space-y-3">
-                        <p className="text-xs font-medium">Advanced — EP15 ANOVA</p>
+                        <p className="text-xs font-medium">Advanced: EP15 ANOVA</p>
                         <p className="text-xs text-muted-foreground">For structured multi-day precision studies per CLSI EP15. Specify days, runs per day, and replicates per run.</p>
                         <div className="grid grid-cols-3 gap-3">
                           <div className="space-y-1"><Label className="text-xs">Days</Label>
@@ -1314,7 +1398,7 @@ export default function VeritaCheckPage() {
             <Alert className="mb-6 max-w-2xl mx-auto border-green-500/30 bg-green-500/10">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-700 dark:text-green-400 font-medium">
-                Payment successful — your account has been updated. Thank you!
+                Payment successful. Your account has been updated. Thank you!
               </AlertDescription>
             </Alert>
           )}
@@ -1322,7 +1406,7 @@ export default function VeritaCheckPage() {
             <Alert className="mb-6 max-w-2xl mx-auto border-yellow-500/30 bg-yellow-500/10">
               <XCircle className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                Payment cancelled — no charge was made.
+                Payment cancelled. No charge was made.
               </AlertDescription>
             </Alert>
           )}
@@ -1368,7 +1452,7 @@ export default function VeritaCheckPage() {
               <Shield size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  Enterprise — <span className="text-primary">Custom pricing</span>
+                  Enterprise: <span className="text-primary">Custom pricing</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
                   Unlimited users, multiple sites. Contact us for a custom quote.
@@ -1403,7 +1487,7 @@ export default function VeritaCheckPage() {
             {discountApplied && (
               <div className="mt-2 flex items-center gap-1.5 text-green-600 dark:text-green-400 text-sm">
                 <CheckCircle2 size={13} />
-                <span><strong>{discountApplied.code}</strong> — {discountApplied.pct}% off applied via {discountApplied.partnerName}</span>
+                <span><strong>{discountApplied.code}</strong>: {discountApplied.pct}% off applied via {discountApplied.partnerName}</span>
               </div>
             )}
             {discountError && (
@@ -1422,7 +1506,7 @@ export default function VeritaCheckPage() {
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
-            Questions? <a href="/#/contact" className="text-primary hover:underline">Contact us</a> — we're happy to help.
+            Questions? <a href="/#/contact" className="text-primary hover:underline">Contact us</a> - we're happy to help.
           </p>
         </div>
       </section>

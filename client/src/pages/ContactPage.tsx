@@ -77,12 +77,12 @@ export default function ContactPage() {
                 <Clock size={18} className="text-primary shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold text-sm">Response Time</div>
-                  <p className="text-sm text-muted-foreground">We respond to emails promptly — typically within one business day.</p>
+                  <p className="text-sm text-muted-foreground">We respond to emails promptly, typically within one business day.</p>
                 </div>
               </CardContent></Card>
               <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
                 <p className="text-sm font-medium text-primary mb-1">Not sure which service fits?</p>
-                <p className="text-sm text-muted-foreground">Describe your laboratory and current challenges. We'll help identify the best solution for your situation — no commitment required.</p>
+                <p className="text-sm text-muted-foreground">Describe your laboratory and current challenges. We'll help identify the best solution for your situation. No commitment required.</p>
               </div>
             </div>
           </div>

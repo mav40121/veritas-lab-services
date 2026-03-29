@@ -970,13 +970,13 @@ export default function VeritaMapBuildPage() {
         <StepIndicator step={1} />
         <h1 className="text-2xl font-bold mt-2 mb-1">Step 1: Add Your Instruments</h1>
         <p className="text-sm text-muted-foreground mb-3 max-w-2xl">
-          Add every instrument your lab uses for each test — including primary AND backup
+          Add every instrument your lab uses for each test, including primary AND backup
           analyzers. Even if two instruments are the same model, add them separately.
         </p>
         {limits?.isFree && (
           <div className="mb-4 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
             <Lock size={12} />
-            <span>Instruments: <span className="font-semibold">{instruments.length}</span>/{limits.instrumentLimit} (free plan) — <Link href="/veritamap" className="underline hover:no-underline">upgrade for unlimited</Link></span>
+            <span>Instruments: <span className="font-semibold">{instruments.length}</span>/{limits.instrumentLimit} (free plan). <Link href="/veritamap" className="underline hover:no-underline">Upgrade for unlimited</Link></span>
           </div>
         )}
 
@@ -1250,7 +1250,7 @@ export default function VeritaMapBuildPage() {
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {isOther
-                        ? "Custom instrument — add tests in Step 2"
+                        ? "Custom instrument - add tests in Step 2"
                         : `${fdaInstr?.testCount ?? 0} ${instr.category === "Manual Procedures" ? "tests" : "FDA-cleared tests"}`}
                     </span>
                   </div>
@@ -1270,14 +1270,14 @@ export default function VeritaMapBuildPage() {
         ) : (
           <div className="text-center py-12 border-2 border-dashed border-border rounded-xl mb-6 text-sm text-muted-foreground">
             <FlaskConical size={24} className="mx-auto mb-2 opacity-40" />
-            No instruments added yet — select one above to start.
+            No instruments added yet. Select one above to start.
           </div>
         )}
 
         {/* Tip */}
         <div className="p-3.5 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground mb-6">
           <FlaskConical size={13} className="inline mr-1.5 text-primary" />
-          Tip: Add duplicate analyzers of the same model separately — the intelligence engine
+          Tip: Add duplicate analyzers of the same model separately. The intelligence engine
           will identify correlation requirements between them.
         </div>
 
@@ -1338,7 +1338,7 @@ export default function VeritaMapBuildPage() {
       {limits?.isFree && (
         <div className="mb-3 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
           <Lock size={12} />
-          <span>Analytes: <span className="font-semibold">{totalActiveTests}</span>/{limits.analyteLimit} (free plan) — <Link href="/veritamap" className="underline hover:no-underline">upgrade for unlimited</Link></span>
+          <span>Analytes: <span className="font-semibold">{totalActiveTests}</span>/{limits.analyteLimit} (free plan). <Link href="/veritamap" className="underline hover:no-underline">Upgrade for unlimited</Link></span>
         </div>
       )}
 

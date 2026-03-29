@@ -245,7 +245,7 @@ export default function VeritaScanAppPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Inspection Readiness Self-Assessment — 168 items across 10 domains
+            Inspection Readiness Self-Assessment: 168 items across 10 domains
           </p>
         </div>
 
@@ -262,7 +262,7 @@ export default function VeritaScanAppPage() {
               <DialogTitle>Create New Scan</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              Give this scan a name — e.g. "Annual Mock Inspection Q1 2026" or
+              Give this scan a name, e.g. "Annual Mock Inspection Q1 2026" or
               "Pre-TJC Survey Mar 2026".
             </p>
             <form

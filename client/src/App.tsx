@@ -46,7 +46,7 @@ function SiteFooter() {
         <div className="grid sm:grid-cols-3 gap-8 mb-8">
           <div>
             <div className="font-serif font-bold text-base mb-2">Veritas Lab Services, LLC</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting — leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck study analysis.</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting: leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck study analysis.</p>
           </div>
           <div>
             <div className="font-semibold text-sm mb-3">Services</div>
@@ -61,12 +61,12 @@ function SiteFooter() {
             <div className="mt-3">
               <div className="font-semibold text-sm mb-2">Resources</div>
               <ul className="space-y-1 text-sm text-muted-foreground">
-                <li><a href="/#/resources" className="hover:text-primary transition-colors">Resources — Clinical Lab Knowledge Base</a></li>
-                <li><a href="/#/veritamap" className="hover:text-primary transition-colors">VeritaMap — Test Menu Regulatory Mapping</a></li>
-                <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan — Compliance Audit Tool</a></li>
-                <li><a href="/#/veritacomp" className="hover:text-primary transition-colors">VeritaComp — Competency Management</a></li>
-                <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101 — New Book</a></li>
-                <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide — Which study do I need?</a></li>
+                <li><a href="/#/resources" className="hover:text-primary transition-colors">Resources: Clinical Lab Knowledge Base</a></li>
+                <li><a href="/#/veritamap" className="hover:text-primary transition-colors">VeritaMap: Test Menu Regulatory Mapping</a></li>
+                <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan: Compliance Audit Tool</a></li>
+                <li><a href="/#/veritacomp" className="hover:text-primary transition-colors">VeritaComp: Competency Management</a></li>
+                <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
+                <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
                 <li><a href="https://www.cms.gov/medicare/quality/clinical-laboratory-improvement-amendments/brochures" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Brochures (CMS)</a></li>
                 <li><a href="https://www.medlabmag.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Medical Lab Management</a></li>
@@ -86,7 +86,7 @@ function SiteFooter() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-          <p className="text-xs text-muted-foreground">© 2026 Veritas Lab Services, LLC — All Rights Reserved</p>
+          <p className="text-xs text-muted-foreground">© 2026 Veritas Lab Services, LLC. All Rights Reserved</p>
           <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             Created with Perplexity Computer
           </a>

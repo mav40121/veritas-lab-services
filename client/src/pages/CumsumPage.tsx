@@ -439,7 +439,7 @@ export default function CumsumPage() {
           </div>
           <h1 className="font-serif text-4xl font-bold mb-3">CUMSUM Tracker</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Persistent cumulative summation tracking for PTT lot-to-lot changes. Monitor heparin sensitivity across the instrument lifecycle — ACCEPT when |CumSum| ≤ 7.0 seconds, ACTION REQUIRED otherwise.
+            Persistent cumulative summation tracking for PTT lot-to-lot changes. Monitor heparin sensitivity across the instrument lifecycle. ACCEPT when |CumSum| ≤ 7.0 seconds, ACTION REQUIRED otherwise.
           </p>
         </div>
       </section>

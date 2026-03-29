@@ -300,7 +300,7 @@ function IntelligenceBanner({
           VeritaMap Intelligence
         </span>
         <span className="text-xs text-red-600/70 dark:text-red-400/70 ml-1">
-          — Cross-instrument correlation & compliance engine
+          - Cross-instrument correlation & compliance engine
         </span>
       </div>
 

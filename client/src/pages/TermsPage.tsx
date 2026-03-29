@@ -8,7 +8,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">1. Acceptance of Terms</h2>
-          <p>By accessing or using any product provided by Veritas Lab Services, LLC — including VeritaCheck™ and VeritaScan™ (collectively, the "Service") — you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+          <p>By accessing or using any product provided by Veritas Lab Services, LLC, including VeritaCheck™ and VeritaScan™ (collectively, the "Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
         </section>
 
         <section>

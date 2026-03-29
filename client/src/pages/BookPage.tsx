@@ -24,10 +24,10 @@ const CHAPTERS = [
 
 const CREDENTIALS = [
   { icon: <Award size={15} />, text: "MS, MBA, MLS(ASCP), CPHQ" },
-  { icon: <Users size={15} />, text: "TJC Surveyor — 200+ facility inspections" },
+  { icon: <Users size={15} />, text: "TJC Surveyor, 200+ facility inspections" },
   { icon: <Mic size={15} />, text: "Speaker: TJC BAMM, CLMA Knowledge Lab, ASCLS Annual Meeting" },
-  { icon: <BookOpen size={15} />, text: "Published author — Medical Lab Management magazine" },
-  { icon: <FlaskConical size={15} />, text: "30-episode webinar series — 1,500+ downloads per episode" },
+  { icon: <BookOpen size={15} />, text: "Published author, Medical Lab Management magazine" },
+  { icon: <FlaskConical size={15} />, text: "30-episode webinar series, 1,500+ downloads per episode" },
 ];
 
 function NotifyForm() {
@@ -42,7 +42,7 @@ function NotifyForm() {
         onSubmit={e => {
           e.preventDefault();
           const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:info@veritaslabservices.com?subject=Lab Management 101 — Notify Me&body=Please notify me when the book is available. My email is: ${email}`;
+          window.location.href = `mailto:info@veritaslabservices.com?subject=Lab Management 101 - Notify Me&body=Please notify me when the book is available. My email is: ${email}`;
         }}
         className="flex gap-2 max-w-sm mx-auto"
       >
@@ -78,7 +78,7 @@ const PULL_QUOTES = [
     context: "Chapter 1",
   },
   {
-    quote: "Personnel competency documentation is the single most common deficiency across all accrediting organizations — and it is squarely the director's responsibility.",
+    quote: "Personnel competency documentation is the single most common deficiency across all accrediting organizations, and it is squarely the director's responsibility.",
     context: "Chapter 2",
   },
 ];
@@ -107,14 +107,14 @@ export default function BookPage() {
                 <p className="text-base leading-relaxed italic text-foreground/90">
                   "I became a laboratory director without ever being taught how."
                 </p>
-                <p className="text-sm text-muted-foreground mt-1">— Michael Veri, Introduction</p>
+                <p className="text-sm text-muted-foreground mt-1">- Michael Veri, Introduction</p>
               </div>
 
               <p className="text-muted-foreground leading-relaxed mb-4">
-                Every laboratory director knows the feeling: degrees earned, certifications passed, years logged — and still unprepared for the actual job. The regulations read like a foreign language. The C-suite speaks finance, not science. Accreditors are coming. There is no manual.
+                Every laboratory director knows the feeling: degrees earned, certifications passed, years logged, and still unprepared for the actual job. The regulations read like a foreign language. The C-suite speaks finance, not science. Accreditors are coming. There is no manual.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                <em>Lab Management 101</em> is that manual. Written by a laboratory director, regional director, and four-year Joint Commission surveyor who has walked into more than 200 facilities and seen exactly what goes wrong — and why.
+                <em>Lab Management 101</em> is that manual. Written by a laboratory director, regional director, and four-year Joint Commission surveyor who has walked into more than 200 facilities and seen exactly what goes wrong, and why.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-8">
@@ -128,7 +128,7 @@ export default function BookPage() {
                   </div>
                   <div className="text-2xl font-bold">$348</div>
                   <div className="text-xs opacity-80">Book + 1-Year Starter Plan</div>
-                  <div className="text-xs opacity-60">($69 + $299 — save $20)</div>
+                  <div className="text-xs opacity-60">($69 + $299, save $20)</div>
                 </div>
               </div>
               <NotifyForm />
@@ -162,22 +162,22 @@ export default function BookPage() {
               <h2 className="font-serif text-3xl font-bold">About the Book</h2>
 
               <p className="text-muted-foreground leading-relaxed">
-                There is a gap in laboratory medicine that nobody talks about openly. Clinical training produces exceptional scientists. It does not produce laboratory directors. The skills required to pass boards — chemistry, microbiology, immunology, hematology — have almost no overlap with the skills required to manage sixty employees, defend a budget to a CFO, survive a Joint Commission inspection, or navigate the regulatory exposure that comes with your name on a CLIA certificate.
+                There is a gap in laboratory medicine that nobody talks about openly. Clinical training produces exceptional scientists. It does not produce laboratory directors. The skills required to pass boards (chemistry, microbiology, immunology, hematology) have almost no overlap with the skills required to manage sixty employees, defend a budget to a CFO, survive a Joint Commission inspection, or navigate the regulatory exposure that comes with your name on a CLIA certificate.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 Most laboratory directors learn the job by accumulating scar tissue. A surveyor finds a deficiency you didn't know existed. A medical director signs a plan of correction they never read. A staffing shortage leads to a competency documentation gap that turns into a condition-level finding. A QC deviation that could have been caught in week one isn't found until month six. <em>Lab Management 101</em> exists to shorten that learning curve.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                Each chapter is built around a core principle that the regulatory documents technically require but rarely explain in plain language. Chapter 1 establishes what CLIA actually is — a set of laws, not an organization — and why the difference matters every time someone says "CLIA says" without a CFR citation. Chapter 2 addresses what most pathologists who sign CLIA certificates don't know: that their name carries personal regulatory exposure, including a two-year bar from operating any CLIA-certified laboratory if a certificate is revoked.
+                Each chapter is built around a core principle that the regulatory documents technically require but rarely explain in plain language. Chapter 1 establishes what CLIA actually is, a set of laws, not an organization, and why the difference matters every time someone says "CLIA says" without a CFR citation. Chapter 2 addresses what most pathologists who sign CLIA certificates don't know: that their name carries personal regulatory exposure, including a two-year bar from operating any CLIA-certified laboratory if a certificate is revoked.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                The productivity chapters give directors the formula, the benchmarks, and the language to make capital arguments to administration. The staffing chapter walks through what CLIA actually permits — and what it doesn't — when workforce shortages force qualification decisions that sit in regulatory gray zones. The QC chapter doesn't just explain Westgard rules; it shows you how to read what your QC data is actually telling you before an accreditor reads it for you.
+                The productivity chapters give directors the formula, the benchmarks, and the language to make capital arguments to administration. The staffing chapter walks through what CLIA actually permits, and what it doesn't, when workforce shortages force qualification decisions that sit in regulatory gray zones. The QC chapter doesn't just explain Westgard rules; it shows you how to read what your QC data is actually telling you before an accreditor reads it for you.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                Woven throughout every chapter are <strong>Surveyor Callout boxes</strong> — drawn from real inspections at real facilities. These are not hypotheticals. They are direct observations from the other side of the table: what was found, what it looked like from the inspector's vantage point, and what happened next. No other laboratory management resource offers this perspective.
+                Woven throughout every chapter are <strong>Surveyor Callout boxes</strong>, drawn from real inspections at real facilities. These are not hypotheticals. They are direct observations from the other side of the table: what was found, what it looked like from the inspector's vantage point, and what happened next. No other laboratory management resource offers this perspective.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                The final chapters cover the emerging pressures — laboratory outreach as a revenue strategy, the transfusion committee politics that determine whether blood management becomes a quality win or a liability, and the practical questions AI is already forcing laboratory leaders to answer whether they feel ready or not.
+                The final chapters cover the emerging pressures: laboratory outreach as a revenue strategy, the transfusion committee politics that determine whether blood management becomes a quality win or a liability, and the practical questions AI is already forcing laboratory leaders to answer whether they feel ready or not.
               </p>
               <p className="text-base font-semibold text-foreground">
                 This is the book laboratory directors have been finding their way to through hard experience. Now it exists.
@@ -206,7 +206,7 @@ export default function BookPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { title: "New Laboratory Directors", desc: "You just sat down in the chair and realized the regulations are a foreign language. This book is your orientation." },
-              { title: "Experienced Directors Preparing for Survey", desc: "You know your lab. This book gives you the surveyor's vantage point — what they look for, what they find, and why." },
+              { title: "Experienced Directors Preparing for Survey", desc: "You know your lab. This book gives you the surveyor's vantage point: what they look for, what they find, and why." },
               { title: "Administrative Directors", desc: "You run the operation. This book gives you the regulatory fluency to lead your medical director conversation from a position of authority." },
               { title: "Laboratory Managers Moving Up", desc: "You're managing people and processes. This book prepares you for the director-level responsibilities you'll be taking on." },
               { title: "Medical Directors New to Clinical Labs", desc: "You trained in pathology. This book explains the clinical laboratory regulatory environment you now personally own." },
@@ -228,7 +228,7 @@ export default function BookPage() {
             <div className="lg:col-span-2">
               <h2 className="font-serif text-3xl font-bold mb-4">About the Author</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                Michael Veri brings more than a decade of director-level leadership in civilian healthcare and twenty-two years of service in the United States Army. He has served as a laboratory director, regional laboratory director, and for four years as a surveyor for The Joint Commission — conducting inspections at more than 200 healthcare facilities across the country.
+                Michael Veri brings more than a decade of director-level leadership in civilian healthcare and twenty-two years of service in the United States Army. He has served as a laboratory director, regional laboratory director, and for four years as a surveyor for The Joint Commission, conducting inspections at more than 200 healthcare facilities across the country.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Recognizing that laboratory administrative leaders often have the least access to practical mentorship, Michael created a 30-episode free webinar series on laboratory management that has reached more than 1,500 downloads per episode. He founded Veritas Lab Services to extend that mission.
@@ -247,7 +247,7 @@ export default function BookPage() {
                 <CardContent className="p-5">
                   <div className="font-semibold text-sm mb-1">Surveyor Callout Boxes</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Every chapter includes real observations from 200+ TJC facility inspections — intelligence from the other side of the table.
+                    Every chapter includes real observations from 200+ TJC facility inspections: intelligence from the other side of the table.
                   </p>
                 </CardContent>
               </Card>
@@ -255,7 +255,7 @@ export default function BookPage() {
                 <CardContent className="p-5">
                   <div className="font-semibold text-sm mb-1">Worked Examples</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Numbers, tables, regulatory citations, and week-by-week scenarios — principles with the proof built in.
+                    Numbers, tables, regulatory citations, and week-by-week scenarios: principles with the proof built in.
                   </p>
                 </CardContent>
               </Card>
@@ -263,7 +263,7 @@ export default function BookPage() {
                 <CardContent className="p-5">
                   <div className="font-semibold text-sm mb-1">16 Chapters</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Covers the full scope of laboratory leadership — law, staffing, QC, productivity, blood management, outreach, and AI.
+                    Covers the full scope of laboratory leadership: law, staffing, QC, productivity, blood management, outreach, and AI.
                   </p>
                 </CardContent>
               </Card>
@@ -276,7 +276,7 @@ export default function BookPage() {
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">What's Inside</h2>
-          <p className="text-muted-foreground mb-8">16 chapters covering everything the job actually requires — with real examples, not theory.</p>
+          <p className="text-muted-foreground mb-8">16 chapters covering everything the job actually requires, with real examples, not theory.</p>
           <div className="grid sm:grid-cols-2 gap-3">
             {CHAPTERS.map((ch, i) => (
               <div key={i} className="flex items-start gap-2.5 text-sm">
@@ -303,7 +303,7 @@ export default function BookPage() {
                   <span className="text-4xl font-bold">$69</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  The complete Lab Management 101 guide — all 16 chapters, surveyor callouts, and worked examples.
+                  The complete Lab Management 101 guide: all 16 chapters, surveyor callouts, and worked examples.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {["Complete 16-chapter guide", "Surveyor Callout boxes throughout", "Worked examples with real numbers", "Regulatory citations for every claim"].map(f => (
@@ -331,7 +331,7 @@ export default function BookPage() {
                 <div className="flex items-baseline gap-2 mb-1">
                   <span className="text-4xl font-bold">$348</span>
                 </div>
-                <div className="text-xs text-muted-foreground mb-3">$69 book + $299 Starter annual plan — save $20</div>
+                <div className="text-xs text-muted-foreground mb-3">$69 book + $299 Starter annual plan, save $20</div>
                 <p className="text-sm text-muted-foreground mb-5">
                   Everything in the book, plus a full year of VeritaCheck to run the calibration verification, method comparison, and precision studies Chapter 9 covers.
                 </p>
@@ -359,7 +359,7 @@ export default function BookPage() {
           </div>
           <p className="text-xs text-muted-foreground mt-5">
             Notify us at{" "}
-            <a href="mailto:info@veritaslabservices.com?subject=Lab Management 101 — Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=Lab Management 101 - Purchase Inquiry" className="text-primary hover:underline">
               info@veritaslabservices.com
             </a>{" "}
             if you'd like to be contacted when the book is available.
@@ -377,7 +377,7 @@ export default function BookPage() {
                 Accuracy and Precision Studies:<br />What the Regulations Actually Require
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                Chapter 9 walks through calibration verification, method comparison, and precision studies — what CLIA actually mandates, how the math works, and what surveyors look for in your documentation.
+                Chapter 9 walks through calibration verification, method comparison, and precision studies: what CLIA actually mandates, how the math works, and what surveyors look for in your documentation.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 VeritaCheck automates every calculation in that chapter. The book explains the why. The software handles the how.
@@ -420,7 +420,7 @@ export default function BookPage() {
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Be the first to know</h2>
           <p className="text-muted-foreground mb-6">
-            The book is in final production. Enter your email and we'll notify you the moment it's available — no spam, just one email when it ships.
+            The book is in final production. Enter your email and we'll notify you the moment it's available. No spam, just one email when it ships.
           </p>
           <NotifyForm />
         </div>

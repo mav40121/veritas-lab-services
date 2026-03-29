@@ -23,10 +23,10 @@ const FEATURES = [
   "Map every test to CLIA complexity, PT enrollment, and competency assignment",
   "Identify linearity and correlation gaps across the entire test menu",
   "Track QC requirements, IQCP status, and reference range sources",
-  "Document SOP locations for every test — surveyors ask, you answer",
+  "Document SOP locations for every test. Surveyors ask, you answer",
   "Regulatory gap column links directly to VeritaScan findings",
-  "Filter by specialty/section — focus on one department at a time",
-  "Sort by complexity — see all high-complexity tests instantly",
+  "Filter by specialty/section: focus on one department at a time",
+  "Sort by complexity: see all high-complexity tests instantly",
   "Know your PT obligations before the enrollment deadline",
   "Last Verified and Verified By columns for review cycle tracking",
   "Built on CLIA '88 (42 CFR Part 493), CAP LAP standards, and TJC CAMLAB",
@@ -55,7 +55,7 @@ export default function VeritaMapPage() {
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                VeritaMap is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location — all mapped to the exact CFR and TJC standard that requires it.
+                VeritaMap is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standard that requires it.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Most laboratories discover regulatory gaps during inspections. VeritaMap finds them first.
@@ -116,13 +116,13 @@ export default function VeritaMapPage() {
             <div className="lg:col-span-2 space-y-5">
               <h2 className="font-serif text-3xl font-bold">What is VeritaMap?</h2>
               <p className="text-muted-foreground leading-relaxed">
-                Every clinical laboratory has a test menu. Every test on that menu carries a specific set of regulatory obligations — a CLIA complexity designation, a proficiency testing requirement, a competency assessment obligation, a linearity or correlation study requirement, a quality control standard, a reference range verification requirement, and a written procedure. Most laboratories track these obligations inconsistently, if at all.
+                Every clinical laboratory has a test menu. Every test on that menu carries a specific set of regulatory obligations: a CLIA complexity designation, a proficiency testing requirement, a competency assessment obligation, a linearity or correlation study requirement, a quality control standard, a reference range verification requirement, and a written procedure. Most laboratories track these obligations inconsistently, if at all.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standard that mandates it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu — and a clear view of where the gaps are before a surveyor finds them.
+                VeritaMap is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standard that mandates it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap can answer any regulatory question about any test in seconds — because the documentation is already there.
+                VeritaMap is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap can answer any regulatory question about any test in seconds, because the documentation is already there.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 When VeritaMap identifies that a test requires linearity verification, one click opens VeritaCheck to run the study. When it flags a competency gap, it links directly to the corresponding VeritaScan finding for the corrective action workflow. The three tools are designed to work together.
@@ -137,7 +137,7 @@ export default function VeritaMapPage() {
               {[
                 { stat: "12", label: "Regulatory data points per test" },
                 { stat: "3", label: "Regulatory authorities mapped (CLIA, CAP, TJC)" },
-                { stat: "∞", label: "Tests supported — no menu size limit" },
+                { stat: "∞", label: "Tests supported, no menu size limit" },
               ].map((s, i) => (
                 <div key={i} className="bg-muted/30 border border-border rounded-xl p-4 text-center">
                   <div className="font-serif text-4xl font-bold text-primary mb-1">{s.stat}</div>
@@ -148,10 +148,10 @@ export default function VeritaMapPage() {
                 <div className="text-xs font-semibold text-primary mb-1">Integrates with</div>
                 <div className="space-y-1.5">
                   <Link href="/veritacheck" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                    <FlaskConical size={12} />VeritaCheck™ — run linearity & correlation studies
+                    <FlaskConical size={12} />VeritaCheck™ - run linearity & correlation studies
                   </Link>
                   <Link href="/veritascan" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                    <Shield size={12} />VeritaScan™ — link gaps to domain findings
+                    <Shield size={12} />VeritaScan™ - link gaps to domain findings
                   </Link>
                 </div>
               </div>
@@ -209,7 +209,7 @@ export default function VeritaMapPage() {
                   <span className="text-4xl font-bold">Free</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Try free — up to 4 instruments and 10 analytes per map.
+                  Try free: up to 4 instruments and 10 analytes per map.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {["Up to 4 instruments per map","Up to 10 analytes per map","All 12 regulatory columns","Regulatory gap tracking"].map(f => (
@@ -235,7 +235,7 @@ export default function VeritaMapPage() {
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Unlimited instruments and analytes. Full regulatory gap report. Full suite — VeritaCheck, VeritaMap, and VeritaScan.
+                  Unlimited instruments and analytes. Full regulatory gap report. Full suite: VeritaCheck, VeritaMap, and VeritaScan.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck + VeritaScan included","Annual review cycle tracking","Priority support"].map(f => (
@@ -255,11 +255,11 @@ export default function VeritaMapPage() {
           <div className="mt-6 max-w-2xl">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5">
               <div className="font-bold text-base mb-1">
-                Professional Plan — <span className="text-primary">$599/year</span>
+                Professional Plan: <span className="text-primary">$599/year</span>
                 <Badge className="ml-2 bg-primary text-primary-foreground text-xs">Full Suite</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">
-                The complete clinical laboratory regulatory compliance platform. All three tools — VeritaCheck, VeritaScan, and VeritaMap — in one plan.
+                The complete clinical laboratory regulatory compliance platform. All three tools, VeritaCheck, VeritaScan, and VeritaMap, in one plan.
               </p>
               <div className="grid sm:grid-cols-3 gap-3 mb-3">
                 {[
@@ -292,14 +292,14 @@ export default function VeritaMapPage() {
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Who This Is For</h2>
-          <p className="text-muted-foreground mb-8">Any laboratory that wants to know its regulatory obligations — before a surveyor does.</p>
+          <p className="text-muted-foreground mb-8">Any laboratory that wants to know its regulatory obligations, before a surveyor does.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { title: "Laboratory Directors", desc: "You're responsible for every test on that menu. Know what each one requires and where your documentation lives." },
               { title: "Quality Managers", desc: "Your QA program can't monitor what it can't see. VeritaMap makes every obligation visible and trackable." },
               { title: "New Lab Administrators", desc: "Inherited a test menu with unknown compliance status? VeritaMap tells you where you stand for every test, fast." },
               { title: "Lab Compliance Consultants", desc: "Deploy VeritaMap at every client engagement. Consistent, defensible, citation-mapped. The same tool every time." },
-              { title: "Survey-Prep Teams", desc: "Surveyors ask about specific tests. VeritaMap means you can answer — with documentation — for any test in seconds." },
+              { title: "Survey-Prep Teams", desc: "Surveyors ask about specific tests. VeritaMap means you can answer, with documentation, for any test in seconds." },
               { title: "Growing Laboratories", desc: "Adding tests? VeritaMap ensures every new test is mapped to its regulatory obligations before the first patient result." },
             ].map((item, i) => (
               <div key={i} className="bg-card border border-border rounded-xl p-4">
@@ -328,10 +328,10 @@ export default function VeritaMapPage() {
           </div>
           <div className="mt-6 flex flex-col gap-2 items-center">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
-              <FlaskConical size={14} />Also try VeritaCheck — EP studies<ChevronRight size={13} />
+              <FlaskConical size={14} />Also try VeritaCheck - EP studies<ChevronRight size={13} />
             </Link>
             <Link href="/veritascan" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
-              <Shield size={14} />Also try VeritaScan — inspection readiness<ChevronRight size={13} />
+              <Shield size={14} />Also try VeritaScan - inspection readiness<ChevronRight size={13} />
             </Link>
           </div>
         </div>
