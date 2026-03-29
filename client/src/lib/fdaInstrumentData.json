@@ -12696,5 +12696,147 @@
         "specialty": "Urinalysis"
       }
     }
+  },
+  "Instrumentation Laboratory GEM Premier 4000": {
+    "category": "Blood Gas",
+    "tests": {
+      "Lactic acid (lactate)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "pH": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "PCO2": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "PO2": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Calcium, ionized": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Carboxyhemoglobin": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Methemoglobin": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Oxyhemoglobin/oxygen saturation": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Hemoglobin": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Chloride": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      }
+    }
+  },
+  "Instrumentation Laboratory GEM Premier 5000": {
+    "category": "Blood Gas",
+    "tests": {
+      "Lactic acid (lactate)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "pH": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "PCO2": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "PO2": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Calcium, ionized": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Carboxyhemoglobin": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Methemoglobin": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Oxyhemoglobin/oxygen saturation": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Hemoglobin": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Chloride": {
+        "specialty": "Electrolytes",
+        "complexity": "MODERATE"
+      },
+      "Bilirubin, neonatal": {
+        "specialty": "General Chemistry",
+        "complexity": "MODERATE"
+      },
+      "Bilirubin, total": {
+        "specialty": "General Chemistry",
+        "complexity": "MODERATE"
+      },
+      "Sulfhemoglobin": {
+        "specialty": "General Chemistry",
+        "complexity": "MODERATE"
+      },
+      "Urea (BUN)": {
+        "specialty": "General Chemistry",
+        "complexity": "MODERATE"
+      },
+      "Creatinine": {
+        "specialty": "General Chemistry",
+        "complexity": "MODERATE"
+      }
+    }
   }
 }
