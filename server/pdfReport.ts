@@ -1435,3 +1435,246 @@ export async function generatePDFBuffer(study: Study, results: any): Promise<Buf
     await page.close();
   }
 }
+
+// ─── VERITASCAN PDF GENERATOR ────────────────────────────────────────────────
+
+interface VeritaScanPDFItem {
+  id: number;
+  domain: string;
+  question: string;
+  tjc: string;
+  cap: string;
+  cfr: string;
+  status: string;
+  notes?: string;
+  owner?: string;
+  due_date?: string;
+}
+
+interface VeritaScanPDFData {
+  scanName: string;
+  createdAt: string;
+  updatedAt: string;
+  items: VeritaScanPDFItem[];
+}
+
+const SCAN_STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
+  "Compliant":        { bg: "#dcfce7", fg: "#166534" },
+  "Needs Attention":  { bg: "#fef9c3", fg: "#854d0e" },
+  "Immediate Action": { bg: "#fee2e2", fg: "#991b1b" },
+  "N/A":              { bg: "#f1f5f9", fg: "#475569" },
+  "Not Assessed":     { bg: "#f8fafc", fg: "#94a3b8" },
+};
+
+function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
+  const { scanName, createdAt, updatedAt, items } = data;
+  const total = items.length;
+  const compliant = items.filter(i => i.status === "Compliant").length;
+  const needsAttention = items.filter(i => i.status === "Needs Attention").length;
+  const immediateAction = items.filter(i => i.status === "Immediate Action").length;
+  const na = items.filter(i => i.status === "N/A").length;
+  const notAssessed = items.filter(i => i.status === "Not Assessed").length;
+  const assessed = total - notAssessed;
+  const pctComplete = total > 0 ? Math.round((assessed / total) * 100) : 0;
+  const applicableItems = total - na;
+  const complianceRate = applicableItems > 0 ? Math.round((compliant / applicableItems) * 100) : 0;
+
+  // Group by domain
+  const domainMap = new Map<string, VeritaScanPDFItem[]>();
+  for (const item of items) {
+    const arr = domainMap.get(item.domain) || [];
+    arr.push(item);
+    domainMap.set(item.domain, arr);
+  }
+
+  const domainSummaryRows = Array.from(domainMap.entries()).map(([domain, domItems]) => {
+    const dTotal = domItems.length;
+    const dCompliant = domItems.filter(i => i.status === "Compliant").length;
+    const dNeeds = domItems.filter(i => i.status === "Needs Attention").length;
+    const dImmediate = domItems.filter(i => i.status === "Immediate Action").length;
+    const dNA = domItems.filter(i => i.status === "N/A").length;
+    const dNotAssessed = domItems.filter(i => i.status === "Not Assessed").length;
+    const dApplicable = dTotal - dNA;
+    const dRate = dApplicable > 0 ? Math.round((dCompliant / dApplicable) * 100) : 100;
+    const rateColor = dRate >= 90 ? PASS : dRate >= 70 ? "#d97706" : FAIL;
+    return `<tr>
+      <td style="font-weight:600">${domain}</td>
+      <td class="text-center">${dTotal}</td>
+      <td class="text-center" style="color:${PASS};font-weight:600">${dCompliant}</td>
+      <td class="text-center" style="color:#d97706;font-weight:600">${dNeeds}</td>
+      <td class="text-center" style="color:${FAIL};font-weight:600">${dImmediate}</td>
+      <td class="text-center">${dNA}</td>
+      <td class="text-center">${dNotAssessed}</td>
+      <td class="text-center" style="color:${rateColor};font-weight:700">${dRate}%</td>
+    </tr>`;
+  }).join("");
+
+  // Action items — only Needs Attention and Immediate Action
+  const actionItems = items.filter(i => i.status === "Needs Attention" || i.status === "Immediate Action");
+  const actionRows = actionItems.length > 0
+    ? actionItems.map((item, idx) => {
+        const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
+        return `<tr class="${idx % 2 === 1 ? "stripe" : ""}">
+          <td>${item.id}</td>
+          <td style="max-width:220px;word-wrap:break-word">${item.question}</td>
+          <td><span style="background:${sc.bg};color:${sc.fg};padding:1px 6px;border-radius:3px;font-size:7pt;font-weight:600">${item.status}</span></td>
+          <td>${item.owner || "—"}</td>
+          <td>${item.due_date || "—"}</td>
+        </tr>`;
+      }).join("")
+    : `<tr><td colspan="5" class="text-center" style="color:${MUTED};padding:12px">No action items — all assessed items are compliant.</td></tr>`;
+
+  const overallColor = complianceRate >= 90 ? PASS : complianceRate >= 70 ? "#d97706" : FAIL;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+    .page-num::after { content: "Page " counter(page); }
+    body { counter-reset: page; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+    .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; text-align: center; }
+    .kpi-value { font-size: 20pt; font-weight: 700; line-height: 1.2; }
+    .kpi-label { font-size: 7pt; color: ${MUTED}; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+  </style></head><body>
+    <div class="report-header">
+      <div>
+        <div class="logo">VeritaScan™</div>
+        <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+      </div>
+      <div class="header-right">Generated ${today()}</div>
+    </div>
+    <div class="report-title">Executive Compliance Summary</div>
+    <div class="report-title-sub">${scanName} · Created ${new Date(createdAt).toLocaleDateString("en-US")} · Last Updated ${new Date(updatedAt).toLocaleDateString("en-US")}</div>
+    <hr class="divider">
+
+    <!-- KPI cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-value" style="color:${overallColor}">${complianceRate}%</div><div class="kpi-label">Compliance Rate</div></div>
+      <div class="kpi-card"><div class="kpi-value">${pctComplete}%</div><div class="kpi-label">Assessment Complete</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="color:#d97706">${needsAttention}</div><div class="kpi-label">Needs Attention</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="color:${FAIL}">${immediateAction}</div><div class="kpi-label">Immediate Action</div></div>
+    </div>
+
+    <!-- Domain summary -->
+    <div class="section-label">Compliance by Domain</div>
+    <table>
+      <thead><tr><th>Domain</th><th class="text-center">Items</th><th class="text-center">Compliant</th><th class="text-center">Needs Attn</th><th class="text-center">Immediate</th><th class="text-center">N/A</th><th class="text-center">Unassessed</th><th class="text-center">Rate</th></tr></thead>
+      <tbody>${domainSummaryRows}</tbody>
+    </table>
+
+    <hr class="divider">
+
+    <!-- Action items -->
+    <div class="section-label">Action Items Requiring Follow-Up</div>
+    <table>
+      <thead><tr><th>#</th><th>Compliance Question</th><th>Status</th><th>Owner</th><th>Due Date</th></tr></thead>
+      <tbody>${actionRows}</tbody>
+    </table>
+
+    <!-- Signature -->
+    <div class="signature-block" style="margin-top:24px">
+      <div class="accepted-label">Reviewed by:</div>
+      <div class="sig-lines">
+        <div class="sig-line" style="flex:2"><div class="line"></div><div class="label">Signature / Name &amp; Title</div></div>
+        <div class="sig-line sig-date"><div class="line"></div><div class="label">Date</div></div>
+      </div>
+    </div>
+  </body></html>`;
+}
+
+function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
+  const { scanName, createdAt, updatedAt, items } = data;
+
+  // Group by domain
+  const domainMap = new Map<string, VeritaScanPDFItem[]>();
+  for (const item of items) {
+    const arr = domainMap.get(item.domain) || [];
+    arr.push(item);
+    domainMap.set(item.domain, arr);
+  }
+
+  let domainSections = "";
+  let domainIndex = 0;
+  for (const [domain, domItems] of domainMap.entries()) {
+    const rows = domItems.map((item, idx) => {
+      const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
+      return `<tr class="${idx % 2 === 1 ? "stripe" : ""}">
+        <td>${item.id}</td>
+        <td style="max-width:200px;word-wrap:break-word;font-size:7pt">${item.question}</td>
+        <td style="font-size:6.5pt">${item.tjc || "—"}</td>
+        <td style="font-size:6.5pt">${item.cap || "—"}</td>
+        <td style="font-size:6.5pt">${item.cfr || "—"}</td>
+        <td><span style="background:${sc.bg};color:${sc.fg};padding:1px 5px;border-radius:3px;font-size:6.5pt;font-weight:600;white-space:nowrap">${item.status}</span></td>
+        <td style="font-size:7pt">${item.owner || ""}</td>
+        <td style="font-size:7pt">${item.due_date || ""}</td>
+        <td style="font-size:6.5pt;max-width:100px;word-wrap:break-word">${item.notes || ""}</td>
+      </tr>`;
+    }).join("");
+
+    domainSections += `
+      ${domainIndex > 0 ? '<div style="page-break-before:always"></div>' : ""}
+      <div class="section-label" style="font-size:10pt;margin:10px 0 6px;color:${TEAL}">${domain}</div>
+      <table>
+        <thead><tr><th>#</th><th>Compliance Question</th><th>TJC</th><th>CAP</th><th>CFR</th><th>Status</th><th>Owner</th><th>Due</th><th>Notes</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    domainIndex++;
+  }
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+    .page-num::after { content: "Page " counter(page); }
+    body { counter-reset: page; }
+  </style></head><body>
+    <div class="report-header">
+      <div>
+        <div class="logo">VeritaScan™</div>
+        <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+      </div>
+      <div class="header-right">Generated ${today()}</div>
+    </div>
+    <div class="report-title">Full Compliance Report</div>
+    <div class="report-title-sub">${scanName} · Created ${new Date(createdAt).toLocaleDateString("en-US")} · Last Updated ${new Date(updatedAt).toLocaleDateString("en-US")}</div>
+    <hr class="divider">
+    ${domainSections}
+
+    <div class="signature-block" style="margin-top:24px;page-break-before:always">
+      <div class="accepted-label">Reviewed by:</div>
+      <div class="sig-lines">
+        <div class="sig-line" style="flex:2"><div class="line"></div><div class="label">Signature / Name &amp; Title</div></div>
+        <div class="sig-line sig-date"><div class="line"></div><div class="label">Date</div></div>
+      </div>
+    </div>
+  </body></html>`;
+}
+
+const VERITASCAN_FOOTER_TEMPLATE = `
+<div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
+  <div style="border-top:1px solid #d2d7dc;padding-top:3px">
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaScan is a compliance assessment tool for qualified laboratory professionals. Results require review by laboratory leadership and do not constitute legal or regulatory advice.</div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
+      <span>VeritaScan by Veritas Lab Services &middot; veritaslabservices.com &middot; Generated <span class="date"></span></span>
+      <span>Page <span class="pageNumber"></span></span>
+    </div>
+  </div>
+</div>`;
+
+export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "executive" | "full"): Promise<Buffer> {
+  const html = type === "executive"
+    ? buildVeritaScanExecutiveHTML(data)
+    : buildVeritaScanFullHTML(data);
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: VERITASCAN_FOOTER_TEMPLATE,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}

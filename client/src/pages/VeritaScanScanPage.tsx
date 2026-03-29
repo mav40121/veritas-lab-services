@@ -548,11 +548,23 @@ export default function VeritaScanScanPage() {
   const downloadPdf = async (type: "executive" | "full") => {
     setPdfLoading(type);
     try {
+      const referenceItems = SCAN_ITEMS.map((item) => ({
+        id: item.id,
+        domain: item.domain,
+        question: item.question,
+        tjc: item.tjc,
+        cap: item.cap,
+        cfr: item.cfr,
+      }));
       const res = await fetch(
         `${API_BASE}/api/veritascan/pdf/${scanId}/${type}`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token ?? localStorage.getItem("veritas_token")}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token ?? localStorage.getItem("veritas_token")}`,
+          },
+          body: JSON.stringify({ referenceItems }),
         }
       );
       if (!res.ok) throw new Error("PDF generation failed");

@@ -7,7 +7,7 @@ import { db } from "./db";
 import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
@@ -747,6 +747,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) {
       console.error("Excel generation error:", e);
       res.status(500).json({ error: "Excel generation failed" });
+    }
+  });
+
+  // ── VERITASCAN PDF EXPORT ─────────────────────────────────────────────────
+  app.post("/api/veritascan/pdf/:scanId/:type", authMiddleware, async (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    const { scanId, type } = req.params;
+    if (type !== "executive" && type !== "full") return res.status(400).json({ error: "type must be 'executive' or 'full'" });
+
+    const scan = (db as any).$client.prepare(
+      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE id = ? AND user_id = ?"
+    ).get(scanId, req.user.userId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+
+    // Get saved items from DB
+    const dbItems = (db as any).$client.prepare(
+      "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+    ).all(scanId);
+    const itemMap: Record<number, any> = {};
+    for (const row of dbItems) {
+      itemMap[row.item_id] = row;
+    }
+
+    // Client sends the reference data (questions, citations) so server doesn't need to duplicate it
+    const { referenceItems } = req.body || {};
+    if (!Array.isArray(referenceItems) || referenceItems.length === 0) {
+      return res.status(400).json({ error: "referenceItems array required" });
+    }
+
+    // Merge reference data with DB statuses
+    const mergedItems = referenceItems.map((ref: any) => {
+      const saved = itemMap[ref.id] || {};
+      return {
+        id: ref.id,
+        domain: ref.domain,
+        question: ref.question,
+        tjc: ref.tjc || "",
+        cap: ref.cap || "",
+        cfr: ref.cfr || "",
+        status: saved.status || "Not Assessed",
+        notes: saved.notes || "",
+        owner: saved.owner || "",
+        due_date: saved.due_date || "",
+      };
+    });
+
+    try {
+      const pdfBuffer = await generateVeritaScanPDF(
+        {
+          scanName: scan.name,
+          createdAt: scan.created_at,
+          updatedAt: scan.updated_at,
+          items: mergedItems,
+        },
+        type as "executive" | "full"
+      );
+
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        console.error("VeritaScan PDF generation returned empty buffer");
+        return res.status(500).json({ error: "PDF generation failed — empty output" });
+      }
+
+      const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const label = type === "executive" ? "Executive" : "Full";
+      const filename = `VeritaScan_${label}_${safeName}_${date}.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("VeritaScan PDF generation error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
   });
 
