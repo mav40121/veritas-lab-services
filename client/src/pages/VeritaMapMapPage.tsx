@@ -428,7 +428,8 @@ function exportCSV(mapName: string, tests: TestRecord[]) {
     }[s];
   }
 
-  const rows = tests.map((t) => {
+  const sortedTests = [...tests].sort((a, b) => a.analyte.localeCompare(b.analyte));
+  const rows = sortedTests.map((t) => {
     const instrList = t.instruments.map((i) => `${i.instrument_name} [${i.role}]`).join("; ");
     const correlReq = t.complexity !== "WAIVED" && t.instruments.length >= 2 ? "Yes" : "No";
     const calVerStatus =
@@ -900,8 +901,8 @@ export default function VeritaMapMapPage() {
   }, [localTests]);
 
   const filteredTests = useMemo(() => {
-    if (filterSpecialty === "all") return localTests;
-    return localTests.filter((t) => t.specialty === filterSpecialty);
+    const base = filterSpecialty === "all" ? localTests : localTests.filter((t) => t.specialty === filterSpecialty);
+    return [...base].sort((a, b) => a.analyte.localeCompare(b.analyte));
   }, [localTests, filterSpecialty]);
 
   const compliance = useMemo(() => calcCompliance(localTests), [localTests]);

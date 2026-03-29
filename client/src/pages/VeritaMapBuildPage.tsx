@@ -82,6 +82,26 @@ const CATEGORY_ORDER = [
   "Microbiology",
 ];
 
+const CHEMISTRY_SPECIALTY_ORDER = [
+  "Electrolytes",
+  "General Chemistry",
+  "Endocrinology",
+  "General Immunology",
+  "Immunology",
+  "Toxicology",
+  "Coagulation",
+  "Hematology",
+  "Urinalysis",
+  "Microbiology",
+  "Blood Bank",
+];
+
+function getSpecialtyOrder(specialty: string, isChemistry: boolean): number {
+  if (!isChemistry) return 999;
+  const order = CHEMISTRY_SPECIALTY_ORDER.indexOf(specialty);
+  return order === -1 ? 998 : order;
+}
+
 const ROLES: Role[] = ["Primary", "Backup", "Satellite", "Reference", "POC"];
 
 const ROLE_STYLES: Record<Role, string> = {
@@ -214,24 +234,31 @@ function InstrumentTestSection({
   const [expanded, setExpanded] = useState(true);
   const [search, setSearch] = useState("");
 
+  const isChemistry = instrument.category === "Chemistry";
+
   const filtered = useMemo(() => {
     if (!search.trim()) return tests;
     const q = search.toLowerCase();
-    return tests.filter(
-      (t) =>
-        t.analyte.toLowerCase().includes(q) ||
-        t.specialty.toLowerCase().includes(q)
-    );
+    return tests
+      .filter(
+        (t) =>
+          t.analyte.toLowerCase().includes(q) ||
+          t.specialty.toLowerCase().includes(q)
+      )
+      .sort((a, b) => a.analyte.localeCompare(b.analyte));
   }, [tests, search]);
 
   const activeCount = tests.filter((t) => t.active).length;
 
-  // Group by specialty
+  // Group by specialty, sort tests alphabetically within each group
   const bySpecialty = useMemo(() => {
     const grouped: Record<string, TestToggle[]> = {};
     for (const t of filtered) {
       if (!grouped[t.specialty]) grouped[t.specialty] = [];
       grouped[t.specialty].push(t);
+    }
+    for (const key of Object.keys(grouped)) {
+      grouped[key].sort((a, b) => a.analyte.localeCompare(b.analyte));
     }
     return grouped;
   }, [filtered]);
@@ -303,7 +330,12 @@ function InstrumentTestSection({
           {/* Tests grouped by specialty */}
           <div className="divide-y divide-border">
             {Object.entries(bySpecialty)
-              .sort(([a], [b]) => a.localeCompare(b))
+              .sort(([a], [b]) => {
+                const orderA = getSpecialtyOrder(a, isChemistry);
+                const orderB = getSpecialtyOrder(b, isChemistry);
+                if (orderA !== orderB) return orderA - orderB;
+                return a.localeCompare(b);
+              })
               .map(([specialty, specialtyTests]) => (
                 <div key={specialty}>
                   <div className="px-4 pt-2.5 pb-1">
