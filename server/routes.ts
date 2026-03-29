@@ -726,35 +726,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sheetData = [headers, ...rows];
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-      // Column widths
+      // Column widths — must match header order exactly
       ws["!cols"] = [
-        { wch: 25 },  // Analyte
-        { wch: 18 },  // Department
-        { wch: 18 },  // Specialty
-        { wch: 12 },  // Complexity
-        { wch: 40 },  // Instruments
-        { wch: 10 },  // # of Instruments
-        { wch: 16 },  // CFR Section
-        { wch: 14 },  // Correlation Required
-        { wch: 16 },  // Unit of Measure
-        { wch: 36 },  // Reference Range
-        { wch: 32 },  // AMR
-        { wch: 20 },  // Mayo Critical Low
-        { wch: 20 },  // Mayo Critical High
-        { wch: 16 },  // Mayo Critical Units
-        { wch: 14 },  // Lab Critical Low
-        { wch: 14 },  // Lab Critical High
-        { wch: 14 },  // Lab AMR Low
-        { wch: 14 },  // Lab AMR High
-        { wch: 14 },  // Last Cal Ver Date
-        { wch: 14 },  // Cal Ver Status
-        { wch: 16 },  // Last Method Comp Date
-        { wch: 16 },  // Method Comp Status
-        { wch: 14 },  // Last Precision Date
-        { wch: 14 },  // Precision Status
-        { wch: 16 },  // Last SOP Review Date
-        { wch: 16 },  // SOP Review Status
-        { wch: 30 },  // Notes
+        { wch: 25 },  // 0: Analyte
+        { wch: 40 },  // 1: Instruments
+        { wch: 18 },  // 2: Department
+        { wch: 18 },  // 3: Specialty
+        { wch: 12 },  // 4: Complexity
+        { wch: 10 },  // 5: Number of Instruments
+        { wch: 16 },  // 6: CFR Section
+        { wch: 14 },  // 7: Correlation Required
+        { wch: 16 },  // 8: Typical Unit of Measure
+        { wch: 36 },  // 9: Typical Adult Reference Range
+        { wch: 32 },  // 10: Typical AMR
+        { wch: 20 },  // 11: Mayo Recommended Critical Low
+        { wch: 20 },  // 12: Mayo Recommended Critical High
+        { wch: 16 },  // 13: Mayo Critical Value Units
+        { wch: 14 },  // 14: Lab Critical Low
+        { wch: 14 },  // 15: Lab Critical High
+        { wch: 14 },  // 16: Lab AMR Low
+        { wch: 14 },  // 17: Lab AMR High
+        { wch: 14 },  // 18: Last Cal Ver Date
+        { wch: 14 },  // 19: Cal Ver Status
+        { wch: 16 },  // 20: Last Method Comp Date
+        { wch: 16 },  // 21: Method Comp Status
+        { wch: 14 },  // 22: Last Precision Date
+        { wch: 14 },  // 23: Precision Status
+        { wch: 16 },  // 24: Last SOP Review Date
+        { wch: 16 },  // 25: SOP Review Status
+        { wch: 30 },  // 26: Notes
       ];
 
       // Freeze at C2: columns A (Analyte) and B (Instruments) stay pinned, plus header row
@@ -798,12 +798,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
           // Alternating row shading
           if (isOddRow) {
-            style.fill = { fgColor: { rgb: "F9F9F9" } };
+            style.fill = { fgColor: { rgb: "F5F5F5" } };
           }
 
           // Lab fill-in columns (14-17, 0-indexed = columns O-R) — light blue
           if (c >= 14 && c <= 17) {
-            style.fill = { fgColor: { rgb: "E3F2FD" } };
+            style.fill = { fgColor: { rgb: "DDEEFF" } };
+          }
+
+          // Notes column — enable wrap text
+          if (c === 26) {
+            style.alignment = { vertical: "center", wrapText: true };
           }
 
           // Status columns: color-code based on value
@@ -812,11 +817,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             const val = String(ws[cellRef].v || "");
             if (val === "Overdue") {
               style.fill = { fgColor: { rgb: "FFCCCC" } };
+              style.font = { color: { rgb: "CC0000" } };
             } else if (val === "Due Soon") {
               style.fill = { fgColor: { rgb: "FFF3CD" } };
+              style.font = { color: { rgb: "856404" } };
+            } else if (val === "Compliant") {
+              style.fill = { fgColor: { rgb: "D4EDDA" } };
+              style.font = { color: { rgb: "155724" } };
+            } else if (val.includes("N/A")) {
+              style.fill = { fgColor: { rgb: "F0F0F0" } };
+              style.font = { color: { rgb: "888888" } };
             } else if (val === "Missing") {
               style.fill = { fgColor: { rgb: "F5F5F5" } };
             }
+          }
+
+          // Date columns — format as MM/DD/YYYY
+          const dateCols = [18, 20, 22, 24]; // Cal Ver Date, Method Comp Date, Precision Date, SOP Review Date
+          if (dateCols.includes(c)) {
+            style.alignment = { horizontal: "center", vertical: "center" };
           }
 
           ws[cellRef].s = style;
@@ -983,38 +1002,125 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     try {
       const XLSX = await import("xlsx");
-      const rows = referenceItems.map((ref: any) => {
+      const headers = [
+        "Item #", "Domain", "Compliance Question", "TJC Standard",
+        "CAP Requirement", "42 CFR Citation", "Status", "Owner", "Due Date", "Notes"
+      ];
+      const dataRows = referenceItems.map((ref: any) => {
         const saved = itemMap[ref.id] || {};
-        return {
-          "Item #": ref.id,
-          "Domain": ref.domain,
-          "Compliance Question": ref.question,
-          "TJC Standard": ref.tjc || "",
-          "CAP Requirement": ref.cap || "",
-          "42 CFR Citation": ref.cfr || "",
-          "Status": saved.status || "Not Assessed",
-          "Owner": saved.owner || "",
-          "Due Date": saved.due_date || "",
-          "Notes": saved.notes || "",
-        };
+        return [
+          ref.id,
+          ref.domain,
+          ref.question,
+          ref.tjc || "",
+          ref.cap || "",
+          ref.cfr || "",
+          saved.status || "Not Assessed",
+          saved.owner || "",
+          saved.due_date || "",
+          saved.notes || "",
+        ];
       });
 
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(rows);
+      const sheetData = [headers, ...dataRows];
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-      // Set column widths
+      // Column widths
       ws["!cols"] = [
-        { wch: 8 },   // Item #
-        { wch: 28 },  // Domain
-        { wch: 80 },  // Question
-        { wch: 22 },  // TJC
-        { wch: 16 },  // CAP
-        { wch: 24 },  // CFR
-        { wch: 18 },  // Status
-        { wch: 20 },  // Owner
-        { wch: 14 },  // Due Date
-        { wch: 40 },  // Notes
+        { wch: 8 },   // 0: Item #
+        { wch: 28 },  // 1: Domain
+        { wch: 80 },  // 2: Compliance Question
+        { wch: 22 },  // 3: TJC Standard
+        { wch: 16 },  // 4: CAP Requirement
+        { wch: 24 },  // 5: 42 CFR Citation
+        { wch: 18 },  // 6: Status
+        { wch: 20 },  // 7: Owner
+        { wch: 14 },  // 8: Due Date
+        { wch: 40 },  // 9: Notes
       ];
+
+      // Freeze header row + first 2 columns
+      ws["!freeze"] = { xSplit: 2, ySplit: 1 };
+
+      // Header row styling — teal background, white bold text
+      for (let c = 0; c < headers.length; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+        if (!ws[cellRef]) continue;
+        ws[cellRef].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "006064" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } },
+          },
+        };
+      }
+
+      // Data row styling
+      for (let r = 1; r <= dataRows.length; r++) {
+        const isOddRow = r % 2 === 1;
+        for (let c = 0; c < headers.length; c++) {
+          const cellRef = XLSX.utils.encode_cell({ r, c });
+          if (!ws[cellRef]) {
+            ws[cellRef] = { v: "", t: "s" };
+          }
+          const style: any = {
+            border: {
+              top: { style: "thin", color: { rgb: "D0D0D0" } },
+              bottom: { style: "thin", color: { rgb: "D0D0D0" } },
+              left: { style: "thin", color: { rgb: "D0D0D0" } },
+              right: { style: "thin", color: { rgb: "D0D0D0" } },
+            },
+            alignment: { vertical: "center" },
+          };
+
+          // Alternating row shading
+          if (isOddRow) {
+            style.fill = { fgColor: { rgb: "F5F5F5" } };
+          }
+
+          // Wrap text for question and notes columns
+          if (c === 2 || c === 9) {
+            style.alignment = { vertical: "center", wrapText: true };
+          }
+
+          // Date column — center align
+          if (c === 8) {
+            style.alignment = { horizontal: "center", vertical: "center" };
+          }
+
+          // Status column (6) — color-code based on value
+          if (c === 6) {
+            const val = String(ws[cellRef].v || "");
+            if (val === "FAIL" || val === "Overdue" || val === "Non-Compliant") {
+              style.fill = { fgColor: { rgb: "FFCCCC" } };
+              style.font = { color: { rgb: "CC0000" } };
+            } else if (val === "Due Soon" || val === "In Progress") {
+              style.fill = { fgColor: { rgb: "FFF3CD" } };
+              style.font = { color: { rgb: "856404" } };
+            } else if (val === "PASS" || val === "Compliant") {
+              style.fill = { fgColor: { rgb: "D4EDDA" } };
+              style.font = { color: { rgb: "155724" } };
+            } else if (val === "Not Assessed") {
+              style.fill = { fgColor: { rgb: "F0F0F0" } };
+              style.font = { color: { rgb: "888888" } };
+            }
+          }
+
+          // Owner and Notes columns — light blue for lab fill-in
+          if (c === 7 || c === 9) {
+            if (!style.fill || (style.fill.fgColor.rgb === "F5F5F5")) {
+              style.fill = { fgColor: { rgb: "DDEEFF" } };
+            }
+          }
+
+          ws[cellRef].s = style;
+        }
+      }
 
       XLSX.utils.book_append_sheet(wb, ws, "VeritaScan");
 
@@ -1659,37 +1765,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create program
   app.post("/api/competency/programs", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
-    const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
-    if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
-    if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
-    const now = new Date().toISOString();
-    const result = (db as any).$client.prepare(
-      "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(req.user.userId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
-    const programId = Number(result.lastInsertRowid);
+    try {
+      if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+      const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
+      if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
+      if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+      const now = new Date().toISOString();
+      const result = (db as any).$client.prepare(
+        "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(req.user.userId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
+      const programId = Number(result.lastInsertRowid);
 
-    // Insert method groups for technical type
-    if (type === "technical" && Array.isArray(methodGroups)) {
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
-      );
-      for (const g of methodGroups) {
-        stmt.run(programId, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+      // Insert method groups for technical type
+      if (type === "technical" && Array.isArray(methodGroups)) {
+        const stmt = (db as any).$client.prepare(
+          "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+        );
+        for (const g of methodGroups) {
+          stmt.run(programId, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+        }
       }
-    }
 
-    // Insert checklist items for nontechnical type
-    if (type === "nontechnical" && Array.isArray(checklistItems)) {
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
-      );
-      checklistItems.forEach((item: any, idx: number) => {
-        stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
-      });
-    }
+      // Insert checklist items for nontechnical type
+      if (type === "nontechnical" && Array.isArray(checklistItems)) {
+        const stmt = (db as any).$client.prepare(
+          "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+        );
+        checklistItems.forEach((item: any, idx: number) => {
+          stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
+        });
+      }
 
-    res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
+      res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
+    } catch (e: any) {
+      console.error("Error creating competency program:", e);
+      res.status(500).json({ error: "Failed to create program", details: e.message });
+    }
+  });
+
+  // Alias: /api/veritacomp/programs → /api/competency/programs
+  app.post("/api/veritacomp/programs", authMiddleware, requireWriteAccess, (req: any, res) => {
+    try {
+      if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+      const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
+      if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
+      if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+      const now = new Date().toISOString();
+      const result = (db as any).$client.prepare(
+        "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(req.user.userId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
+      const programId = Number(result.lastInsertRowid);
+
+      if (type === "technical" && Array.isArray(methodGroups)) {
+        const stmt = (db as any).$client.prepare(
+          "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+        );
+        for (const g of methodGroups) {
+          stmt.run(programId, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+        }
+      }
+
+      if (type === "nontechnical" && Array.isArray(checklistItems)) {
+        const stmt = (db as any).$client.prepare(
+          "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+        );
+        checklistItems.forEach((item: any, idx: number) => {
+          stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
+        });
+      }
+
+      res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
+    } catch (e: any) {
+      console.error("Error creating competency program:", e);
+      res.status(500).json({ error: "Failed to create program", details: e.message });
+    }
   });
 
   // Get single program with full data
@@ -2268,15 +2417,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ...updated, roles: updRoles, competencySchedule: schedule || null });
   });
 
-  // Delete employee (soft delete)
+  // Delete employee (hard delete — removes employee and associated roles/schedules)
   app.delete("/api/staff/employees/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
     const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(req.user.userId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
     const emp = (db as any).$client.prepare("SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    (db as any).$client.prepare("UPDATE staff_employees SET status = 'inactive', updated_at = ? WHERE id = ?").run(new Date().toISOString(), req.params.id);
-    res.json({ ok: true });
+    (db as any).$client.prepare("DELETE FROM staff_competency_schedules WHERE employee_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
+    res.json({ ok: true, deleted: req.params.id });
   });
 
   // Update competency schedule
