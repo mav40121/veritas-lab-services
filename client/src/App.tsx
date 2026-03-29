@@ -108,6 +108,23 @@ function ScrollToTop() {
   return null;
 }
 
+// Fires a GA4 page_view on every hash route change (including initial load,
+// since gtag config uses send_page_view:false to avoid double-counting)
+function GATracker() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_path: location,
+        page_title: document.title,
+      });
+    }
+  }, [location]);
+
+  return null;
+}
+
 function OnboardingGuard() {
   const { user, isLoggedIn } = useAuth();
   const [showWizard, setShowWizard] = useState(false);
@@ -129,6 +146,7 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
+      <GATracker />
       <NavBar />
       <OnboardingGuard />
       <main className="flex-1">
