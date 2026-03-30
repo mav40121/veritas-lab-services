@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle } from "lucide-react";
+import CLIALookupModal from "@/components/CLIALookupModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -170,13 +171,14 @@ export default function VeritaCheckPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const { toast } = useToast();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
   const [discountCode, setDiscountCode] = useState("");
   const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string } | null>(null);
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountError, setDiscountError] = useState("");
+  const [cliaModalOpen, setCliaModalOpen] = useState(false);
 
   // Check URL params for payment result after Stripe redirect
   useEffect(() => {
@@ -191,12 +193,32 @@ export default function VeritaCheckPage() {
     }
   }, [search]);
 
-  const handleBuy = async (priceType: "perStudy" | "starter" | "professional" | "lab" | "complete") => {
+  // Plans that require a CLIA number before checkout
+  const CLIA_REQUIRED_PLANS = new Set(["waived", "community", "hospital", "large_hospital"]);
+
+  const handleBuy = async (priceType: string) => {
     if (!isLoggedIn) {
       toast({ title: "Sign in required", description: "Please create a free account to purchase.", variant: "destructive" });
       navigate("/login");
       return;
     }
+
+    // For CLIA-required plans, check if user already has a CLIA number
+    if (CLIA_REQUIRED_PLANS.has(priceType) && !user?.cliaNumber) {
+      // Show CLIA lookup modal instead of going straight to Stripe
+      setCliaModalOpen(true);
+      return;
+    }
+
+    // For users who already have CLIA set, use their stored tier for CLIA plans
+    const checkoutPriceType = CLIA_REQUIRED_PLANS.has(priceType) && user?.cliaTier
+      ? user.cliaTier
+      : priceType;
+
+    await goToStripeCheckout(checkoutPriceType);
+  };
+
+  const goToStripeCheckout = async (priceType: string) => {
     setCheckoutLoading(priceType);
     try {
       const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
@@ -212,6 +234,11 @@ export default function VeritaCheckPage() {
       toast({ title: "Payment error", description: err.message, variant: "destructive" });
       setCheckoutLoading(null);
     }
+  };
+
+  const handleCliaCheckout = (tier: string) => {
+    setCliaModalOpen(false);
+    goToStripeCheckout(tier);
   };
 
   const applyDiscount = async (priceType: string) => {
@@ -1498,7 +1525,7 @@ export default function VeritaCheckPage() {
                       className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
                       variant={plan.highlight ? "default" : "outline"}
                       disabled={isLoading || checkoutLoading !== null}
-                      onClick={() => handleBuy(plan.priceType as "perStudy" | "starter" | "professional" | "lab" | "complete")}
+                      onClick={() => handleBuy(plan.priceType)}
                     >
                       {isLoading ? <><Loader2 size={14} className="mr-2 animate-spin" />Redirecting…</> : plan.cta}
                     </Button>
@@ -1585,6 +1612,12 @@ export default function VeritaCheckPage() {
           </p>
         </div>
       </section>
+      <CLIALookupModal
+        open={cliaModalOpen}
+        onClose={() => setCliaModalOpen(false)}
+        onCheckout={handleCliaCheckout}
+        discountCode={discountApplied?.code}
+      />
     </div>
   );
 }
