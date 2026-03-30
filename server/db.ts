@@ -411,6 +411,101 @@ const compItemCols = sqlite.prepare("PRAGMA table_info(competency_assessment_ite
 const compItemColNames = compItemCols.map((c) => c.name);
 if (!compItemColNames.includes("specimen_info")) sqlite.exec("ALTER TABLE competency_assessment_items ADD COLUMN specimen_info TEXT");
 
+// Add new element-specific columns to competency_assessment_items (VeritaComp redesign)
+const newCompItemCols: [string, string][] = [
+  ["element_number", "INTEGER"],
+  ["method_group_name", "TEXT"],
+  ["el1_specimen_id", "TEXT"],
+  ["el1_observer_initials", "TEXT"],
+  ["el2_evidence", "TEXT"],
+  ["el2_date", "TEXT"],
+  ["el3_qc_date", "TEXT"],
+  ["el4_date_observed", "TEXT"],
+  ["el4_observer_initials", "TEXT"],
+  ["el5_sample_type", "TEXT"],
+  ["el5_sample_id", "TEXT"],
+  ["el5_acceptable", "INTEGER"],
+  ["el6_quiz_id", "TEXT"],
+  ["el6_score", "INTEGER"],
+  ["el6_date_taken", "TEXT"],
+  ["waived_instrument", "TEXT"],
+  ["waived_test", "TEXT"],
+  ["waived_method_number", "INTEGER"],
+  ["waived_evidence", "TEXT"],
+  ["waived_date", "TEXT"],
+  ["waived_initials", "TEXT"],
+  ["nt_item_label", "TEXT"],
+  ["nt_item_description", "TEXT"],
+  ["nt_date_met", "TEXT"],
+  ["nt_employee_initials", "TEXT"],
+  ["nt_supervisor_initials", "TEXT"],
+];
+for (const [col, colType] of newCompItemCols) {
+  if (!compItemColNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE competency_assessment_items ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
+// Create competency_quizzes table
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_quizzes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 0,
+    program_id INTEGER,
+    method_group_id INTEGER,
+    method_group_name TEXT,
+    questions TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+  );
+`);
+
+// Create competency_quiz_results table
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_quiz_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER,
+    quiz_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    answers TEXT NOT NULL DEFAULT '[]',
+    score INTEGER NOT NULL DEFAULT 0,
+    passed INTEGER NOT NULL DEFAULT 0,
+    date_taken TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (quiz_id) REFERENCES competency_quizzes(id)
+  );
+`);
+
+// Seed default VITROS 5600 quiz if not present
+{
+  const existingQuiz = sqlite.prepare(
+    "SELECT id FROM competency_quizzes WHERE user_id = 0 AND method_group_name LIKE '%VITROS 5600%'"
+  ).get();
+  if (!existingQuiz) {
+    const quizQuestions = JSON.stringify([
+      {
+        id: "q1",
+        question: "Which of the following would cause a falsely elevated sodium result on the VITROS 5600?",
+        type: "multiple_choice",
+        options: ["A. Hemolyzed specimen", "B. Lipemic specimen", "C. Prolonged tourniquet time", "D. Icteric specimen"],
+        correct_answer: "B",
+        explanation: "Lipemia causes optical/ISE interference on the VITROS 5600, which can falsely elevate sodium values."
+      },
+      {
+        id: "q2",
+        question: "A potassium result of 6.8 mEq/L is reported. The patient has no clinical symptoms consistent with hyperkalemia. What is the MOST likely pre-analytical cause?",
+        type: "multiple_choice",
+        options: ["A. Dilutional error", "B. Reagent degradation", "C. Hemolysis from traumatic venipuncture", "D. Calibration drift"],
+        correct_answer: "C",
+        explanation: "Hemolysis releases intracellular potassium, causing falsely elevated results. This is the most common pre-analytical cause of spurious hyperkalemia."
+      }
+    ]);
+    sqlite.prepare(
+      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, questions, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(0, null, null, "Chemistry (VITROS 5600)", quizQuestions, new Date().toISOString());
+    console.log("[seed] VeritaComp default VITROS 5600 quiz seeded");
+  }
+}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");

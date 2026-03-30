@@ -1989,14 +1989,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(programId, employeeId, assessmentType || "initial", assessmentDate || now.split("T")[0], evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, now);
     const assessmentId = Number(result.lastInsertRowid);
 
-    // Insert assessment items
+    // Insert assessment items (with new element-specific columns)
     if (Array.isArray(items)) {
       const stmt = (db as any).$client.prepare(
-        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO competency_assessment_items (
+          assessment_id, method_number, method_group_id, item_label, item_description,
+          evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info,
+          element_number, method_group_name,
+          el1_specimen_id, el1_observer_initials,
+          el2_evidence, el2_date,
+          el3_qc_date,
+          el4_date_observed, el4_observer_initials,
+          el5_sample_type, el5_sample_id, el5_acceptable,
+          el6_quiz_id, el6_score, el6_date_taken,
+          waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
+          nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
-        stmt.run(assessmentId, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0, item.specimenInfo ?? null);
+        stmt.run(
+          assessmentId,
+          item.methodNumber ?? null, item.methodGroupId ?? null,
+          item.itemLabel ?? null, item.itemDescription ?? null,
+          item.evidence ?? null, item.dateMet ?? null,
+          item.employeeInitials ?? null, item.supervisorInitials ?? null,
+          item.passed ? 1 : 0, item.specimenInfo ?? null,
+          item.elementNumber ?? null, item.methodGroupName ?? null,
+          item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+          item.el2Evidence ?? null, item.el2Date ?? null,
+          item.el3QcDate ?? null,
+          item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+          item.el5SampleType ?? null, item.el5SampleId ?? null,
+          item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+          item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+          item.waivedInstrument ?? null, item.waivedTest ?? null,
+          item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
+          item.waivedDate ?? null, item.waivedInitials ?? null,
+          item.ntItemLabel ?? null, item.ntItemDescription ?? null,
+          item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
+        );
       }
     }
 
@@ -2038,11 +2069,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (Array.isArray(items)) {
       (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
       const stmt = (db as any).$client.prepare(
-        `INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO competency_assessment_items (
+          assessment_id, method_number, method_group_id, item_label, item_description,
+          evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info,
+          element_number, method_group_name,
+          el1_specimen_id, el1_observer_initials,
+          el2_evidence, el2_date,
+          el3_qc_date,
+          el4_date_observed, el4_observer_initials,
+          el5_sample_type, el5_sample_id, el5_acceptable,
+          el6_quiz_id, el6_score, el6_date_taken,
+          waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
+          nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
-        stmt.run(req.params.id, item.methodNumber ?? null, item.methodGroupId ?? null, item.itemLabel ?? null, item.itemDescription ?? null, item.evidence ?? null, item.dateMet ?? null, item.employeeInitials ?? null, item.supervisorInitials ?? null, item.passed ? 1 : 0, item.specimenInfo ?? null);
+        stmt.run(
+          req.params.id,
+          item.methodNumber ?? null, item.methodGroupId ?? null,
+          item.itemLabel ?? null, item.itemDescription ?? null,
+          item.evidence ?? null, item.dateMet ?? null,
+          item.employeeInitials ?? null, item.supervisorInitials ?? null,
+          item.passed ? 1 : 0, item.specimenInfo ?? null,
+          item.elementNumber ?? null, item.methodGroupName ?? null,
+          item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+          item.el2Evidence ?? null, item.el2Date ?? null,
+          item.el3QcDate ?? null,
+          item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+          item.el5SampleType ?? null, item.el5SampleId ?? null,
+          item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+          item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+          item.waivedInstrument ?? null, item.waivedTest ?? null,
+          item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
+          item.waivedDate ?? null, item.waivedInitials ?? null,
+          item.ntItemLabel ?? null, item.ntItemDescription ?? null,
+          item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
+        );
       }
     }
     res.json({ ok: true });
@@ -2060,6 +2122,175 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
+  });
+
+  // ── VERITACOMP ALIASED ROUTES ──────────────────────────────────────────
+
+  // GET /api/veritacomp/assessments/:id
+  app.get("/api/veritacomp/assessments/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE a.id = ? AND p.user_id = ?`
+    ).get(req.params.id, req.user.userId);
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    const items = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id);
+    const methodGroups = (db as any).$client.prepare("SELECT * FROM competency_method_groups WHERE program_id = ?").all(assessment.program_id);
+    res.json({ ...assessment, items, methodGroups });
+  });
+
+  // GET /api/veritacomp/programs/:id/assessments
+  app.get("/api/veritacomp/programs/:id/assessments", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const assessments = (db as any).$client.prepare(
+      `SELECT a.*, e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date
+       FROM competency_assessments a
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE a.program_id = ?
+       ORDER BY a.created_at DESC`
+    ).all(req.params.id);
+    res.json(assessments);
+  });
+
+  // ── QUIZ ENDPOINTS ──────────────────────────────────────────────────────
+
+  // GET /api/veritacomp/programs/:id/quizzes
+  app.get("/api/veritacomp/programs/:id/quizzes", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    // Get user quizzes for this program + system quizzes (user_id = 0)
+    const quizzes = (db as any).$client.prepare(
+      "SELECT id, user_id, program_id, method_group_id, method_group_name, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0 OR user_id = ?"
+    ).all(req.params.id, req.user.userId);
+    res.json(quizzes);
+  });
+
+  // POST /api/veritacomp/programs/:id/quizzes
+  app.post("/api/veritacomp/programs/:id/quizzes", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const { methodGroupId, methodGroupName, questions } = req.body;
+    if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, questions, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(req.user.userId, parseInt(req.params.id), methodGroupId || null, methodGroupName || null, JSON.stringify(questions), now);
+    res.json({ id: Number(result.lastInsertRowid), program_id: parseInt(req.params.id), method_group_id: methodGroupId, method_group_name: methodGroupName, created_at: now });
+  });
+
+  // GET /api/veritacomp/quizzes/:id (without revealing correct answers)
+  app.get("/api/veritacomp/quizzes/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    // Strip correct_answer and explanation from questions
+    const questions = JSON.parse(quiz.questions || "[]").map((q: any) => ({
+      id: q.id,
+      question: q.question,
+      type: q.type,
+      options: q.options,
+    }));
+    res.json({ ...quiz, questions });
+  });
+
+  // POST /api/veritacomp/quiz-results - submit quiz, auto-score
+  app.post("/api/veritacomp/quiz-results", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const { quizId, assessmentId, employeeId, answers } = req.body;
+    if (!quizId || !employeeId || !Array.isArray(answers)) return res.status(400).json({ error: "quizId, employeeId, and answers array required" });
+    const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(quizId) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    const questions = JSON.parse(quiz.questions || "[]");
+    // Score
+    let correct = 0;
+    const gradedAnswers = answers.map((a: any) => {
+      const q = questions.find((qq: any) => qq.id === a.question_id);
+      const isCorrect = q && a.selected_answer === q.correct_answer;
+      if (isCorrect) correct++;
+      return { question_id: a.question_id, selected_answer: a.selected_answer, correct: !!isCorrect };
+    });
+    const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
+    const passed = score === 100;
+    const now = new Date().toISOString();
+    const dateTaken = now.split("T")[0];
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_quiz_results (assessment_id, quiz_id, employee_id, answers, score, passed, date_taken, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(assessmentId || null, quizId, employeeId, JSON.stringify(gradedAnswers), score, passed ? 1 : 0, dateTaken, now);
+    // Return full result including correct answers + explanations for review
+    const fullQuestions = questions.map((q: any) => {
+      const ga = gradedAnswers.find((a: any) => a.question_id === q.id);
+      return { ...q, selected_answer: ga?.selected_answer, was_correct: ga?.correct };
+    });
+    res.json({
+      id: Number(result.lastInsertRowid),
+      quiz_id: quizId,
+      employee_id: employeeId,
+      score,
+      passed,
+      date_taken: dateTaken,
+      answers: gradedAnswers,
+      questions: fullQuestions,
+    });
+  });
+
+  // GET /api/veritacomp/assessments/:id/quiz-results
+  app.get("/api/veritacomp/assessments/:id/quiz-results", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const results = (db as any).$client.prepare(
+      `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
+       FROM competency_quiz_results qr
+       JOIN competency_quizzes q ON qr.quiz_id = q.id
+       WHERE qr.assessment_id = ?
+       ORDER BY qr.created_at DESC`
+    ).all(req.params.id);
+    res.json(results);
+  });
+
+  // GET /api/veritacomp/assessments/:id/pdf
+  app.get("/api/veritacomp/assessments/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE a.id = ? AND p.user_id = ?`
+    ).get(req.params.id, req.user.userId);
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    const items = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id);
+    const methodGroups = (db as any).$client.prepare("SELECT * FROM competency_method_groups WHERE program_id = ?").all(assessment.program_id);
+    const checklistItems = (db as any).$client.prepare("SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(assessment.program_id);
+    const quizResults = (db as any).$client.prepare(
+      `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
+       FROM competency_quiz_results qr
+       JOIN competency_quizzes q ON qr.quiz_id = q.id
+       WHERE qr.assessment_id = ?`
+    ).all(assessment.id);
+    const labUser = storage.getUserById(req.user.userId);
+    const labName = labUser?.name || "Clinical Laboratory";
+    try {
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults });
+      const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
+      const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("Competency PDF generation error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // VeritaMap integration — get instruments from a map for method group suggestions
@@ -2104,6 +2335,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(assessment.program_id);
 
+    const quizResults = (db as any).$client.prepare(
+      `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
+       FROM competency_quiz_results qr
+       JOIN competency_quizzes q ON qr.quiz_id = q.id
+       WHERE qr.assessment_id = ?`
+    ).all(assessment.id);
+
     // Get user info for lab name
     const labUser = storage.getUserById(req.user.userId);
     const labName = labUser?.name || "Clinical Laboratory";
@@ -2115,6 +2353,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         methodGroups,
         checklistItems,
         labName,
+        quizResults,
       });
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();

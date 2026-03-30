@@ -1703,10 +1703,16 @@ interface CompetencyPDFInput {
   methodGroups: any[];
   checklistItems: any[];
   labName: string;
+  quizResults?: any[];
+}
+
+function esc(s: string | null | undefined): string {
+  if (!s) return "";
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function buildCompetencyHTML(input: CompetencyPDFInput): string {
-  const { assessment, items, methodGroups, checklistItems, labName } = input;
+  const { assessment, items, methodGroups, checklistItems, labName, quizResults } = input;
   const dateStr = assessment.assessment_date || new Date().toISOString().split("T")[0];
   const isTechnical = assessment.competency_type === "technical";
   const isWaived = assessment.competency_type === "waived";
@@ -1715,210 +1721,301 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const typeLabel = isTechnical ? "Technical Competency Assessment" : isWaived ? "Waived Testing Competency Assessment" : "Non-Technical Competency Assessment";
   const standardRef = isTechnical ? "HR.01.06.01 EP 18 &middot; 42 CFR &sect;493.1451" : isWaived ? "WT.03.01.01 EP 5 &middot; 42 CFR &sect;493.15" : "HR.01.06.01 EP 5/6";
 
-  const passColor = assessment.status === "pass" ? "#16a34a" : assessment.status === "fail" ? "#dc2626" : "#d97706";
-  const passLabel = assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "REMEDIATION";
+  const passColor = assessment.status === "pass" ? "#437A22" : assessment.status === "fail" ? "#A12C7B" : "#d97706";
+  const passLabel = assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "REMEDIATION REQUIRED";
 
-  // Build header section
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Segoe UI', Roboto, sans-serif; font-size: 9pt; color: #1a1a1a; line-height: 1.5; }
-  .header { background: linear-gradient(135deg, #0e8a82 0%, #0a5e58 100%); color: white; padding: 20px 24px; }
-  .header h1 { font-size: 16pt; font-weight: 700; margin-bottom: 2px; }
-  .header .sub { font-size: 9pt; opacity: 0.85; }
-  .header .standard { font-size: 7.5pt; opacity: 0.65; margin-top: 4px; }
-  .signature-block { border: 1.5px solid #0e8a82; border-radius: 6px; padding: 12px 16px; margin: 16px 24px; background: #f0fdfa; }
-  .signature-block .verdict { font-size: 14pt; font-weight: 800; letter-spacing: 1px; }
-  .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
-  .sig-line { border-bottom: 1px solid #ccc; padding-bottom: 2px; min-height: 20px; font-size: 8pt; }
-  .sig-label { font-size: 7pt; color: #888; margin-top: 1px; }
+  body { font-family: 'Inter', 'Segoe UI', Roboto, sans-serif; font-size: 9pt; color: #1a1a1a; line-height: 1.5; }
+  .header { background: #01696F; color: white; padding: 18px 24px; }
+  .header h1 { font-size: 15pt; font-weight: 700; margin-bottom: 2px; }
+  .header .sub { font-size: 9.5pt; opacity: 0.9; font-weight: 500; }
+  .header .divider { height: 1px; background: rgba(255,255,255,0.3); margin: 8px 0 4px 0; }
+  .info-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin: 14px 24px; }
+  .info-2col .col { }
+  .info-2col .row { display: flex; gap: 6px; font-size: 8.5pt; margin-bottom: 3px; }
+  .info-2col .row .lbl { color: #888; min-width: 90px; font-size: 7.5pt; }
+  .info-2col .row .val { font-weight: 600; }
+  .evaluator-block { margin: 10px 24px; padding: 8px 12px; border: 1px solid #e0e4e8; border-radius: 4px; background: #f8fafb; }
+  .evaluator-block .note { font-size: 7pt; font-style: italic; color: #666; margin-top: 4px; }
+  .verdict-box { margin: 12px 24px; padding: 10px 16px; border-radius: 6px; text-align: center; }
+  .verdict-box .label { font-size: 8pt; color: #666; margin-bottom: 2px; }
+  .verdict-box .verdict { font-size: 16pt; font-weight: 800; letter-spacing: 1.5px; }
+  .ack-box { margin: 12px 24px; border: 1.5px solid #01696F; border-radius: 6px; padding: 12px 16px; background: #f0fdfa; }
+  .ack-box .title { font-size: 9pt; font-weight: 700; color: #01696F; margin-bottom: 6px; }
+  .ack-box .text { font-size: 7.5pt; line-height: 1.5; margin-bottom: 8px; }
+  .ack-box ul { font-size: 7.5pt; margin-left: 14px; margin-bottom: 8px; }
+  .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sig-line { border-bottom: 1px solid #999; padding-bottom: 2px; min-height: 18px; font-size: 8pt; }
+  .sig-label { font-size: 6.5pt; color: #888; margin-top: 1px; }
   .section { padding: 12px 24px; }
-  .section-title { font-size: 11pt; font-weight: 700; color: #0e8a82; border-bottom: 2px solid #0e8a82; padding-bottom: 3px; margin-bottom: 10px; }
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 16px; margin-bottom: 12px; }
-  .info-item label { font-size: 7pt; color: #888; display: block; }
-  .info-item span { font-size: 9pt; font-weight: 600; }
+  .section-header { background: #01696F; color: white; padding: 6px 12px; font-size: 9pt; font-weight: 700; margin-bottom: 8px; border-radius: 3px; }
+  .section-note { font-size: 7.5pt; font-style: italic; color: #555; margin-bottom: 8px; line-height: 1.4; }
   table { width: 100%; border-collapse: collapse; font-size: 8pt; }
-  th { background: #0e8a82; color: white; padding: 5px 6px; text-align: left; font-size: 7pt; font-weight: 600; }
+  th { background: #01696F; color: white; padding: 5px 6px; text-align: left; font-size: 7pt; font-weight: 600; }
   td { border: 0.5px solid #ddd; padding: 4px 6px; vertical-align: top; }
-  tr:nth-child(even) td { background: #f8fafb; }
-  .pass-cell { color: #16a34a; font-weight: 700; }
-  .fail-cell { color: #dc2626; font-weight: 700; }
-  .narrative { background: #f8fafb; border: 1px solid #e0e4e8; border-radius: 4px; padding: 10px 14px; margin: 12px 24px; font-size: 8.5pt; line-height: 1.6; }
+  tr:nth-child(even) td { background: #F5F5F5; }
+  .pass-badge { color: #437A22; font-weight: 700; }
+  .fail-badge { color: #A12C7B; font-weight: 700; }
   .remediation-box { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 4px; padding: 10px 14px; margin: 8px 24px; font-size: 8.5pt; }
-  .footer-note { font-size: 6.5pt; color: #999; padding: 8px 24px; border-top: 1px solid #e0e4e8; margin-top: 16px; }
   .page-break { page-break-before: always; }
+  .quiz-correct { background: #dcfce7; }
+  .quiz-incorrect { background: #fee2e2; }
+  .quiz-banner { text-align: center; padding: 6px; border-radius: 4px; font-weight: 700; font-size: 9pt; margin-top: 8px; }
 </style></head><body>`;
+
+  // ─── PAGE 1 ───
 
   // Header
   html += `<div class="header">
-    <h1>VeritaComp\u2122</h1>
+    <h1>VeritaAssure\u2122</h1>
     <div class="sub">${typeLabel}</div>
-    <div class="standard">${standardRef}</div>
+    <div class="divider"></div>
   </div>`;
 
-  // Signature block on page 1
-  html += `<div class="signature-block">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div>
-        <div style="font-size:8pt;color:#666">Overall Determination</div>
-        <div class="verdict" style="color:${passColor}">${passLabel}</div>
-      </div>
-      <div style="text-align:right;font-size:8pt;color:#666">
-        ${labName}<br>
-        ${assessment.program_name} &mdash; ${assessment.department}
-      </div>
+  // Two-column info block
+  html += `<div class="info-2col">
+    <div class="col">
+      <div class="row"><span class="lbl">Laboratory:</span><span class="val">${esc(labName)}</span></div>
+      <div class="row"><span class="lbl">Program:</span><span class="val">${esc(assessment.program_name)}</span></div>
+      <div class="row"><span class="lbl">Department:</span><span class="val">${esc(assessment.department)}</span></div>
     </div>
-    <div class="sig-grid">
-      <div>
-        <div class="sig-line">${assessment.employee_name || ""}</div>
-        <div class="sig-label">Employee Name / Signature &mdash; Date: ${dateStr}</div>
-      </div>
-      <div>
-        <div class="sig-line">${assessment.evaluator_name || ""} ${assessment.evaluator_initials ? "(" + assessment.evaluator_initials + ")" : ""}</div>
-        <div class="sig-label">Evaluator Name / Signature &mdash; ${assessment.evaluator_title || "Supervisor"}</div>
-      </div>
+    <div class="col">
+      <div class="row"><span class="lbl">Employee:</span><span class="val">${esc(assessment.employee_name)}</span></div>
+      <div class="row"><span class="lbl">Date of Hire:</span><span class="val">${esc(assessment.employee_hire_date) || "-"}</span></div>
+      <div class="row"><span class="lbl">Type:</span><span class="val">${(assessment.assessment_type || "initial").replace("_", " ").toUpperCase()}</span></div>
+      <div class="row"><span class="lbl">Date:</span><span class="val">${dateStr}</span></div>
     </div>
   </div>`;
 
-  // Employee info
-  html += `<div class="section">
-    <div class="section-title">Employee Information</div>
-    <div class="info-grid">
-      <div class="info-item"><label>Employee</label><span>${assessment.employee_name}</span></div>
-      <div class="info-item"><label>Title</label><span>${assessment.employee_title || "—"}</span></div>
-      <div class="info-item"><label>Date of Hire</label><span>${assessment.employee_hire_date || "—"}</span></div>
-      <div class="info-item"><label>LIS Initials</label><span>${assessment.employee_lis_initials || "—"}</span></div>
-      <div class="info-item"><label>Assessment Type</label><span>${(assessment.assessment_type || "initial").replace("_", " ").toUpperCase()}</span></div>
-      <div class="info-item"><label>Assessment Date</label><span>${dateStr}</span></div>
+  // Evaluator block
+  html += `<div class="evaluator-block">
+    <div style="display:flex;gap:24px;font-size:8.5pt;">
+      <div><span style="color:#888;font-size:7pt;">Evaluator:</span> <strong>${esc(assessment.evaluator_name) || "-"}</strong></div>
+      <div><span style="color:#888;font-size:7pt;">Title:</span> <strong>${esc(assessment.evaluator_title) || "-"}</strong></div>
+      <div><span style="color:#888;font-size:7pt;">Initials:</span> <strong>${esc(assessment.evaluator_initials) || "-"}</strong></div>
     </div>
+    <div class="note">Evaluator must be Lab Director, Technical Consultant, or Technical Supervisor as appropriate per 42 CFR &sect;493.1451.</div>
   </div>`;
 
-  // Narrative summary
-  html += `<div class="narrative">
-    <strong>Narrative Summary:</strong> ${assessment.employee_name} was assessed for ${isTechnical ? "technical competency across " + methodGroups.length + " method group(s) using all 6 CLIA-required assessment methods" : isWaived ? "waived testing competency using 2 of 4 prescribed assessment methods" : "non-technical competency across " + checklistItems.length + " departmental skill areas"} in the ${assessment.department} department on ${dateStr}.
-    The overall determination is <strong style="color:${passColor}">${passLabel}</strong>.
-    ${assessment.status === "remediation" && assessment.remediation_plan ? " Remediation plan: " + assessment.remediation_plan : ""}
-    Evaluator: ${assessment.evaluator_name || "N/A"}, ${assessment.evaluator_title || "Supervisor"}.
-    This assessment is documented in accordance with ${standardRef} and maintains compliance with CLIA \u201988 competency assessment requirements.
+  // PASS/FAIL/REMEDIATION box
+  const verdictBg = assessment.status === "pass" ? "#dcfce7" : assessment.status === "fail" ? "#fce7f3" : "#fef3c7";
+  html += `<div class="verdict-box" style="background:${verdictBg}">
+    <div class="label">Overall Determination</div>
+    <div class="verdict" style="color:${passColor}">${passLabel}</div>
   </div>`;
 
   // Remediation box
   if (assessment.status === "remediation" || assessment.status === "fail") {
     html += `<div class="remediation-box">
-      <strong>\u26A0 Remediation Required:</strong> This employee needs additional training and is restricted from performing patient testing unsupervised.
-      ${assessment.remediation_plan ? "<br><strong>Action Plan:</strong> " + assessment.remediation_plan : ""}
+      <strong>Remediation Required:</strong> This employee requires additional training and may not perform patient testing unsupervised until remediation is complete.
+      ${assessment.remediation_plan ? "<br><strong>Action Plan:</strong> " + esc(assessment.remediation_plan) : ""}
     </div>`;
   }
 
-  // Page break before data tables
-  html += `<div class="page-break"></div>`;
+  // Employee Acknowledgement box with TJC language (on page 1 - non-negotiable)
+  html += `<div class="ack-box">
+    <div class="title">Employee Acknowledgement</div>
+    <div class="text">Prior to performing laboratory duties, the following are completed:</div>
+    <ul>
+      <li>The laboratory director or supervisor documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
+      <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
+    </ul>
+    <div class="sig-grid">
+      <div>
+        <div class="sig-line">${esc(assessment.employee_name) || ""}</div>
+        <div class="sig-label">Employee Print Name / Initials / Date: ${dateStr}</div>
+      </div>
+      <div>
+        <div class="sig-line">${esc(assessment.evaluator_name) || ""} ${assessment.evaluator_initials ? "(" + esc(assessment.evaluator_initials) + ")" : ""}</div>
+        <div class="sig-label">Supervisor Print Name / Initials / Date: ${dateStr}</div>
+      </div>
+    </div>
+  </div>`;
 
-  // Assessment data tables
+  // ─── PAGES 2+ ───
+
   if (isTechnical) {
-    html += `<div class="section">
-      <div class="section-title">Technical Competency Matrix &mdash; 6 CLIA Methods \u00D7 ${methodGroups.length} Method Group(s)</div>
-      <table>
-        <tr><th style="width:35%">CLIA Assessment Method</th>`;
-    for (const g of methodGroups) {
-      html += `<th>${g.name}</th>`;
-    }
-    html += `</tr>`;
+    // Each element gets its own section
+    const elementDefs = [
+      {
+        num: 1,
+        title: "Element 1: Direct Observation of Routine Patient Test Performance",
+        note: "Observer must be Lab Director, TC, or TS as appropriate. Documents that the observer watched the employee process and test a specimen.",
+        cols: ["Method Group", "Specimen ID", "Observer Initials", "Pass"],
+        render: (item: any) => `<td>${esc(item.method_group_name || item.specimen_info || "")}</td>
+          <td>${esc(item.el1_specimen_id || item.specimen_info || "")}</td>
+          <td>${esc(item.el1_observer_initials || item.supervisor_initials || "")}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+      },
+      {
+        num: 2,
+        title: "Element 2: Monitoring, Recording and Reporting of Test Results",
+        note: "Documents the employee's ability to monitor, record, and report results including critical values.",
+        cols: ["Method Group", "Evidence", "Date", "Pass"],
+        render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+          <td>${esc(item.el2_evidence || item.evidence || "")}</td>
+          <td>${esc(item.el2_date || item.date_met || "")}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+      },
+      {
+        num: 3,
+        title: "Element 3: QC Performance",
+        note: "Enter the date the employee personally ran QC on this instrument. The surveyor will pull the QC records for that date to confirm.",
+        cols: ["Method Group", "Date Tech Ran QC", "Pass"],
+        render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+          <td>${esc(item.el3_qc_date || item.date_met || "")}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+      },
+      {
+        num: 4,
+        title: "Element 4: Direct Observation of Instrument Maintenance",
+        note: "Observer must be Lab Director, TC, or TS as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.",
+        cols: ["Method Group", "Date Observed", "Observer Initials", "Pass"],
+        render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+          <td>${esc(item.el4_date_observed || item.date_met || "")}</td>
+          <td>${esc(item.el4_observer_initials || item.supervisor_initials || "")}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+      },
+      {
+        num: 5,
+        title: "Element 5: Blind / PT Sample Performance",
+        note: "The PT report or blind sample log serves as the supporting record. Do not enter patient specimen data here.",
+        cols: ["Method Group", "Sample Type", "Sample ID", "Acceptable", "Pass"],
+        render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+          <td>${esc(item.el5_sample_type || "")}</td>
+          <td>${esc(item.el5_sample_id || item.specimen_info || "")}</td>
+          <td>${item.el5_acceptable ? "Yes" : item.el5_acceptable === 0 ? "No" : "-"}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+      },
+      {
+        num: 6,
+        title: "Element 6: Problem-Solving Assessment (Quiz)",
+        note: "A short quiz (1-2 questions per method group) is required. Score must be 100% to pass. The quiz and all answers are appended to this competency record.",
+        cols: ["Method Group", "Quiz ID", "Score", "Date Taken", "Pass"],
+        render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+          <td>${esc(item.el6_quiz_id || "")}</td>
+          <td>${item.el6_score != null ? item.el6_score + "%" : "-"}</td>
+          <td>${esc(item.el6_date_taken || "")}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+      },
+    ];
 
-    for (let m = 1; m <= 6; m++) {
-      html += `<tr><td style="font-size:7.5pt">${CLIA_METHODS[m - 1]}</td>`;
-      for (const g of methodGroups) {
-        const cell = items.find((i: any) => i.method_number === m && i.method_group_id === g.id);
-        const passed = cell?.passed;
-        html += `<td class="${passed ? 'pass-cell' : cell ? 'fail-cell' : ''}">
-          ${cell?.evidence || "—"}<br>
-          ${cell?.specimen_info ? `<span style="font-size:6.5pt;color:#0e8a82"><strong>Specimen:</strong> ${cell.specimen_info}</span><br>` : ""}
-          <span style="font-size:6.5pt;color:#888"><strong>Date:</strong> ${cell?.date_met || "—"} &middot; <strong>Init:</strong> ${cell?.supervisor_initials || "—"}</span>
-          ${passed ? ' \u2713' : cell ? ' \u2717' : ''}
-        </td>`;
+    for (const elDef of elementDefs) {
+      html += `<div class="page-break"></div>`;
+      html += `<div class="section">
+        <div class="section-header">${elDef.title}</div>
+        <div class="section-note">${elDef.note}</div>
+        <table>
+          <tr>${elDef.cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
+      const elItems = items.filter((i: any) => (i.element_number || i.method_number) === elDef.num);
+      if (elItems.length === 0) {
+        // Fallback: show items by method_number for backward compatibility
+        const fallbackItems = items.filter((i: any) => i.method_number === elDef.num);
+        for (const item of fallbackItems) {
+          const mg = methodGroups.find((g: any) => g.id === item.method_group_id);
+          const augmented = { ...item, method_group_name: item.method_group_name || mg?.name || "" };
+          html += `<tr>${elDef.render(augmented)}</tr>`;
+        }
+      } else {
+        for (const item of elItems) {
+          const mg = methodGroups.find((g: any) => g.id === item.method_group_id);
+          const augmented = { ...item, method_group_name: item.method_group_name || mg?.name || "" };
+          html += `<tr>${elDef.render(augmented)}</tr>`;
+        }
       }
-      html += `</tr>`;
+      if (elItems.length === 0 && items.filter((i: any) => i.method_number === elDef.num).length === 0) {
+        html += `<tr><td colspan="${elDef.cols.length}" style="text-align:center;color:#888;font-style:italic">No data recorded</td></tr>`;
+      }
+      html += `</table></div>`;
     }
-    html += `</table></div>`;
-
-    // Method group details
-    html += `<div class="section">
-      <div class="section-title">Method Groups &mdash; Instruments &amp; Analytes</div>
-      <table><tr><th>Method Group</th><th>Instruments</th><th>Analytes Covered</th></tr>`;
-    for (const g of methodGroups) {
-      const instruments = JSON.parse(g.instruments || "[]");
-      const analytes = JSON.parse(g.analytes || "[]");
-      html += `<tr><td><strong>${g.name}</strong></td>
-        <td>${instruments.join(", ") || "—"}</td>
-        <td style="font-size:7pt">${analytes.join(", ") || "—"}</td></tr>`;
-    }
-    html += `</table></div>`;
 
   } else if (isWaived) {
+    html += `<div class="page-break"></div>`;
     html += `<div class="section">
-      <div class="section-title">Waived Testing Competency &mdash; 2 of 4 Methods Required Per Test</div>
+      <div class="section-header">Waived Testing Competency - 2 of 4 Methods Required Per Test</div>
       <table>
-        <tr><th>Assessment Method</th><th>Evidence</th><th>Specimen/Sample</th><th>Date</th><th>Initials</th><th>Pass</th></tr>`;
+        <tr><th>Assessment Method</th><th>Instrument/Test</th><th>Evidence</th><th>Date</th><th>Initials</th><th>Pass</th></tr>`;
     for (const item of items) {
-      const methodLabel = WAIVED_METHODS[(item.method_number || 1) - 1] || `Method ${item.method_number}`;
+      const methodLabel = WAIVED_METHODS[(item.method_number || item.waived_method_number || 1) - 1] || `Method ${item.method_number}`;
       html += `<tr>
         <td>${methodLabel}</td>
-        <td>${item.evidence || "—"}</td>
-        <td>${item.specimen_info || "—"}</td>
-        <td>${item.date_met || "—"}</td>
-        <td>${item.supervisor_initials || "—"}</td>
-        <td class="${item.passed ? 'pass-cell' : 'fail-cell'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>
+        <td>${esc(item.waived_instrument || "")} ${esc(item.waived_test || "")}</td>
+        <td>${esc(item.waived_evidence || item.evidence || "")}</td>
+        <td>${esc(item.waived_date || item.date_met || "")}</td>
+        <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
+        <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>
       </tr>`;
     }
     html += `</table></div>`;
 
   } else {
     // Non-technical checklist
+    html += `<div class="page-break"></div>`;
     html += `<div class="section">
-      <div class="section-title">Non-Technical Competency Checklist &mdash; ${assessment.department}</div>
+      <div class="section-header">Non-Technical Competency Checklist - ${esc(assessment.department)}</div>
       <table>
-        <tr><th style="width:5%">#</th><th>Competency Item</th><th style="width:12%">Date Met</th><th style="width:14%">Specimen/Scenario</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
+        <tr><th style="width:5%">#</th><th>Competency Item</th><th style="width:12%">Date Met</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
     for (const item of items) {
       html += `<tr>
-        <td><strong>${item.item_label || ""}</strong></td>
-        <td>${item.item_description || "—"}</td>
-        <td>${item.date_met || "—"}</td>
-        <td>${item.specimen_info || "—"}</td>
-        <td>${item.employee_initials || "—"}</td>
-        <td>${item.supervisor_initials || "—"}</td>
+        <td><strong>${esc(item.nt_item_label || item.item_label || "")}</strong></td>
+        <td>${esc(item.nt_item_description || item.item_description || "")}</td>
+        <td>${esc(item.nt_date_met || item.date_met || "")}</td>
+        <td>${esc(item.nt_employee_initials || item.employee_initials || "")}</td>
+        <td>${esc(item.nt_supervisor_initials || item.supervisor_initials || "")}</td>
       </tr>`;
     }
     html += `</table></div>`;
   }
 
-  // Acknowledgement section
-  html += `<div class="section" style="margin-top:16px">
-    <div class="section-title">Acknowledgement</div>
-    <p style="font-size:8pt;margin-bottom:8px;line-height:1.5">
-      ${isTechnical ? "I have had an opportunity to review and ask questions about policies and procedures related to equipment and testing above." : "The signatures below indicate that the employee and supervisor both affirm that the employee can perform all duties covered above."}
-    </p>
-    <div class="sig-grid">
-      <div>
-        <div class="sig-line">${assessment.employee_name || ""}</div>
-        <div class="sig-label">Employee Print Name / Initials &mdash; Date: ${dateStr}</div>
-        <div style="margin-top:4px;font-size:7.5pt;color:${assessment.employee_acknowledged ? '#16a34a' : '#dc2626'}">
-          ${assessment.employee_acknowledged ? '\u2713 Acknowledged' : '\u2717 Not yet acknowledged'}
-        </div>
-      </div>
-      <div>
-        <div class="sig-line">${assessment.evaluator_name || ""} ${assessment.evaluator_initials ? "(" + assessment.evaluator_initials + ")" : ""}</div>
-        <div class="sig-label">Supervisor Print Name / Initials &mdash; Date: ${dateStr}</div>
-        <div style="margin-top:4px;font-size:7.5pt;color:${assessment.supervisor_acknowledged ? '#16a34a' : '#dc2626'}">
-          ${assessment.supervisor_acknowledged ? '\u2713 Acknowledged' : '\u2717 Not yet acknowledged'}
-        </div>
-      </div>
-    </div>
-  </div>`;
+  // ─── QUIZ ADDENDUM ───
+  if (quizResults && quizResults.length > 0) {
+    html += `<div class="page-break"></div>`;
+    html += `<div class="section">
+      <div class="section-header">Appendix A: Problem-Solving Quiz Results</div>`;
 
-  // Footer
-  html += `<div class="footer-note">
-    VeritaComp\u2122 by Veritas Lab Services, LLC &middot; veritaslabservices.com &middot; Generated ${new Date().toISOString().split("T")[0]}<br>
-    This document is produced for internal quality assurance and regulatory compliance purposes. It does not constitute legal advice. Governed by the laws of the Commonwealth of Massachusetts.
-  </div>`;
+    for (const qr of quizResults) {
+      const questions = JSON.parse(qr.quiz_questions || "[]");
+      const answers = JSON.parse(qr.answers || "[]");
+
+      html += `<div style="margin-bottom:16px;">
+        <div style="font-size:8.5pt;font-weight:600;margin-bottom:4px;">${esc(qr.method_group_name) || "Quiz"}</div>
+        <div style="font-size:7.5pt;color:#666;margin-bottom:6px;">
+          Quiz ID: ${qr.quiz_id} | Date Taken: ${esc(qr.date_taken)} | Score: ${qr.score}% |
+          <span class="${qr.passed ? 'pass-badge' : 'fail-badge'}">${qr.passed ? 'PASS' : 'FAIL'}</span>
+        </div>`;
+
+      for (let qi = 0; qi < questions.length; qi++) {
+        const q = questions[qi];
+        const a = answers.find((ans: any) => ans.question_id === q.id);
+        html += `<div style="margin-bottom:10px;border:1px solid #e0e4e8;border-radius:4px;padding:8px;">
+          <div style="font-size:8pt;font-weight:600;margin-bottom:4px;">Q${qi + 1}: ${esc(q.question)}</div>`;
+        for (const opt of (q.options || [])) {
+          const optLetter = opt.charAt(0);
+          const isSelected = a?.selected_answer === optLetter;
+          const isCorrect = q.correct_answer === optLetter;
+          const bgClass = isSelected && isCorrect ? "quiz-correct" : isSelected && !isCorrect ? "quiz-incorrect" : isCorrect ? "quiz-correct" : "";
+          html += `<div class="${bgClass}" style="font-size:7.5pt;padding:2px 6px;margin:1px 0;border-radius:2px;">
+            ${isSelected ? "\u25CF" : "\u25CB"} ${esc(opt)}
+            ${isCorrect ? ' <span style="color:#437A22;font-weight:600;">\u2713 Correct</span>' : ""}
+            ${isSelected && !isCorrect ? ' <span style="color:#A12C7B;font-weight:600;">\u2717 Selected</span>' : ""}
+          </div>`;
+        }
+        if (q.explanation) {
+          html += `<div style="font-size:7pt;color:#555;margin-top:4px;font-style:italic;"><strong>Explanation:</strong> ${esc(q.explanation)}</div>`;
+        }
+        html += `</div>`;
+      }
+
+      if (qr.score === 100) {
+        html += `<div class="quiz-banner" style="background:#dcfce7;color:#437A22;">ALL ANSWERS CORRECT</div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
 
   html += `</body></html>`;
   return html;
@@ -1926,10 +2023,9 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
 
 const COMPETENCY_FOOTER = `<div style="width:100%;padding:4px 15mm;font-family:sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
-    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaComp\u2122 is a competency management tool for qualified laboratory professionals. Results require review by laboratory leadership and do not constitute legal or regulatory advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaComp\u2122 by Veritas Lab Services &middot; veritaslabservices.com &middot; Generated <span class="date"></span></span>
-      <span>Page <span class="pageNumber"></span></span>
+      <span>VeritaAssure\u2122 | VeritaComp\u2122 | Confidential - For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
 </div>`;

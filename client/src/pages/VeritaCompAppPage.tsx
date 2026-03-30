@@ -522,7 +522,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
     if (mapInstruments && mapInstruments.length > 0 && type === "technical") {
       const grouped: Record<string, { instruments: string[]; analytes: string[] }> = {};
       for (const inst of mapInstruments) {
-        const key = `${inst.category} \u2014 ${inst.instrument_name}`;
+        const key = `${inst.category} - ${inst.instrument_name}`;
         if (!grouped[key]) grouped[key] = { instruments: [], analytes: [] };
         grouped[key].instruments.push(inst.instrument_name);
         for (const t of inst.tests) {
@@ -585,7 +585,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
               <label className="text-sm font-medium mb-1 block">Program Name</label>
               <Input
                 autoFocus
-                placeholder="e.g., 2026 Annual Competency \u2014 Chemistry"
+                placeholder="e.g., 2026 Annual Competency, Chemistry"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 maxLength={200}
@@ -1015,9 +1015,9 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   const assessments = program.assessments || [];
 
   const downloadPdf = async (assessmentId: number) => {
-    const res = await fetch(`${API_BASE}/api/competency/pdf/${assessmentId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+    const res = await fetch(`${API_BASE}/api/veritacomp/assessments/${assessmentId}/pdf`, {
+      method: "GET",
+      headers: authHeaders(),
     });
     if (!res.ok) return;
     const blob = await res.blob();
@@ -1193,9 +1193,9 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
               {employees.map(emp => (
                 <tr key={emp.id} className="border-b border-border last:border-0">
                   <td className="p-3 font-medium">{emp.name}</td>
-                  <td className="p-3 text-muted-foreground">{emp.title || "\u2014"}</td>
-                  <td className="p-3 text-muted-foreground">{emp.hire_date || "\u2014"}</td>
-                  <td className="p-3 text-muted-foreground">{emp.lis_initials || "\u2014"}</td>
+                  <td className="p-3 text-muted-foreground">{emp.title || "-"}</td>
+                  <td className="p-3 text-muted-foreground">{emp.hire_date || "-"}</td>
+                  <td className="p-3 text-muted-foreground">{emp.lis_initials || "-"}</td>
                   <td className="p-3">
                     <Badge variant="outline" className={`text-[10px] ${emp.status === "active" ? "text-emerald-600 bg-emerald-500/10" : "text-muted-foreground bg-muted"}`}>
                       {emp.status}
@@ -1264,7 +1264,64 @@ function SettingsTab({ program }: { program: Program }) {
   );
 }
 
-// ── New Assessment Dialog ──────────────────────────────────────────────
+// ── New Assessment Dialog (Full Redesign) ──────────────────────────────
+
+const SAMPLE_TYPES = [
+  "CAP PT Survey",
+  "College of American Pathologists",
+  "Internal Blind",
+  "External QC Sample",
+  "Other",
+];
+
+interface TechElementData {
+  passed: boolean;
+  // Element 1
+  el1_specimen_id: string;
+  el1_observer_initials: string;
+  // Element 2
+  el2_evidence: string;
+  el2_date: string;
+  // Element 3
+  el3_qc_date: string;
+  // Element 4
+  el4_date_observed: string;
+  el4_observer_initials: string;
+  // Element 5
+  el5_sample_type: string;
+  el5_sample_id: string;
+  el5_acceptable: boolean | null;
+  // Element 6
+  el6_quiz_id: string;
+  el6_score: number | null;
+  el6_date_taken: string;
+}
+
+function emptyTechElement(): TechElementData {
+  return {
+    passed: false,
+    el1_specimen_id: "", el1_observer_initials: "",
+    el2_evidence: "", el2_date: "",
+    el3_qc_date: "",
+    el4_date_observed: "", el4_observer_initials: "",
+    el5_sample_type: "", el5_sample_id: "", el5_acceptable: null,
+    el6_quiz_id: "", el6_score: null, el6_date_taken: "",
+  };
+}
+
+interface WaivedItemData {
+  methodNumber: number;
+  evidence: string;
+  date: string;
+  initials: string;
+  passed: boolean;
+}
+
+interface NonTechItemData {
+  dateMet: string;
+  empInitials: string;
+  supInitials: string;
+}
 
 function NewAssessmentDialog({
   program,
@@ -1278,34 +1335,143 @@ function NewAssessmentDialog({
   onCreated: () => void;
 }) {
   const activeEmployees = employees.filter(e => e.status === "active");
-  const [employeeId, setEmployeeId] = useState<number | null>(activeEmployees[0]?.id || null);
+  const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
+  const [employeeId, setEmployeeId] = useState<number | null>(selectedEmployee?.id || null);
   const [assessmentType, setAssessmentType] = useState("initial");
   const [assessmentDate, setAssessmentDate] = useState(new Date().toISOString().split("T")[0]);
   const [evaluatorName, setEvaluatorName] = useState("");
   const [evaluatorTitle, setEvaluatorTitle] = useState("");
   const [evaluatorInitials, setEvaluatorInitials] = useState("");
-  const [status, setStatus] = useState("pass");
+  const [status, setStatus] = useState<"pass" | "fail" | "remediation">("pass");
   const [remediationPlan, setRemediationPlan] = useState("");
-  const [employeeAck, setEmployeeAck] = useState(false);
-  const [supervisorAck, setSupervisorAck] = useState(false);
+  const [remediationDate, setRemediationDate] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Items state based on type
-  const [techItems, setTechItems] = useState<Record<string, { evidence: string; passed: boolean; initials: string; date: string; specimen: string }>>({});
+  // Employee acknowledgement fields
+  const [empPrintName, setEmpPrintName] = useState("");
+  const [empInitials, setEmpInitials] = useState("");
+  const [empAckDate, setEmpAckDate] = useState("");
+  const [supPrintName, setSupPrintName] = useState("");
+  const [supInitials, setSupInitials] = useState("");
+  const [supAckDate, setSupAckDate] = useState("");
+
+  // Technical: element data per method group (key = "element-mgId")
+  const [techData, setTechData] = useState<Record<string, TechElementData>>({});
+  const [activeMgTab, setActiveMgTab] = useState<number>(program.methodGroups?.[0]?.id || 0);
+
+  // Quiz state
+  const [quizActive, setQuizActive] = useState<{ mgId: number; quizId: number } | null>(null);
+  const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  const [quizCurrentQ, setQuizCurrentQ] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
+  const [quizResult, setQuizResult] = useState<any>(null);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+
+  // Waived: selected methods and data per instrument
   const [waivedMethods, setWaivedMethods] = useState<number[]>([1, 2]);
-  const [waivedItems, setWaivedItems] = useState<Record<number, { evidence: string; passed: boolean; initials: string; date: string; specimen: string }>>({});
-  const [nonTechItems, setNonTechItems] = useState<Record<string, { dateMet: string; empInitials: string; supInitials: string; specimen: string }>>({});
+  const [waivedItems, setWaivedItems] = useState<Record<number, WaivedItemData>>({});
+
+  // Non-technical
+  const [ntAssessmentType, setNtAssessmentType] = useState("orientation");
+  const [nonTechItems, setNonTechItems] = useState<Record<string, NonTechItemData>>({});
+  const [ntCompletionDate, setNtCompletionDate] = useState("");
+
+  // Fetch quizzes for this program
+  const { data: quizzes } = useQuery<any[]>({
+    queryKey: ["/api/veritacomp/programs", program.id, "quizzes"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/veritacomp/programs/${program.id}/quizzes`, { headers: authHeaders() });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: program.type === "technical",
+  });
+
+  // Get hire date when employee changes
+  const currentEmployee = activeEmployees.find(e => e.id === employeeId);
 
   // Initialize nontechnical items
   useEffect(() => {
     if (program.type === "nontechnical" && program.checklistItems) {
-      const init: Record<string, { dateMet: string; empInitials: string; supInitials: string; specimen: string }> = {};
+      const init: Record<string, NonTechItemData> = {};
       for (const item of program.checklistItems) {
-        init[item.label] = { dateMet: "", empInitials: "", supInitials: "", specimen: "" };
+        init[item.label] = { dateMet: "", empInitials: "", supInitials: "" };
       }
       setNonTechItems(init);
     }
   }, [program]);
+
+  // Find quiz for a method group
+  function findQuizForMg(mgId: number, mgName: string): any | null {
+    if (!quizzes) return null;
+    // First: exact match by method_group_id
+    const byId = quizzes.find(q => q.method_group_id === mgId);
+    if (byId) return byId;
+    // Second: fuzzy match on method_group_name
+    const byName = quizzes.find(q => {
+      if (!q.method_group_name) return false;
+      const qn = q.method_group_name.toLowerCase();
+      const mn = mgName.toLowerCase();
+      return qn.includes("vitros 5600") && mn.includes("vitros 5600") ||
+             qn.includes(mn) || mn.includes(qn);
+    });
+    return byName || null;
+  }
+
+  // Start quiz inline
+  async function startQuiz(mgId: number, quizId: number) {
+    try {
+      const res = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      setQuizQuestions(data.questions || []);
+      setQuizCurrentQ(0);
+      setQuizAnswers({});
+      setQuizResult(null);
+      setQuizActive({ mgId, quizId });
+    } catch {}
+  }
+
+  // Submit quiz
+  async function submitQuiz() {
+    if (!quizActive || !employeeId) return;
+    setQuizSubmitting(true);
+    try {
+      const answersArr = quizQuestions.map(q => ({
+        question_id: q.id,
+        selected_answer: quizAnswers[q.id] || "",
+      }));
+      const res = await fetch(`${API_BASE}/api/veritacomp/quiz-results`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          quizId: quizActive.quizId,
+          employeeId,
+          answers: answersArr,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const result = await res.json();
+      setQuizResult(result);
+      // Update tech data for Element 6
+      const key = `6-${quizActive.mgId}`;
+      setTechData(prev => ({
+        ...prev,
+        [key]: {
+          ...(prev[key] || emptyTechElement()),
+          passed: result.passed,
+          el6_quiz_id: String(quizActive.quizId),
+          el6_score: result.score,
+          el6_date_taken: result.date_taken,
+        },
+      }));
+    } catch {} finally {
+      setQuizSubmitting(false);
+    }
+  }
+
+  // Check if any element fails
+  const anyFails = Object.values(techData).some(d => !d.passed && (d.el1_specimen_id || d.el2_evidence || d.el3_qc_date || d.el4_date_observed || d.el5_sample_id || d.el6_quiz_id));
 
   async function handleCreate() {
     if (!employeeId) return;
@@ -1315,42 +1481,57 @@ function NewAssessmentDialog({
 
     if (program.type === "technical") {
       for (const mg of (program.methodGroups || [])) {
-        for (let m = 1; m <= 6; m++) {
-          const key = `${m}-${mg.id}`;
-          const cell = techItems[key] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
+        for (let el = 1; el <= 6; el++) {
+          const key = `${el}-${mg.id}`;
+          const d = techData[key] || emptyTechElement();
           items.push({
-            methodNumber: m,
+            methodNumber: el,
             methodGroupId: mg.id,
-            evidence: cell.evidence,
-            dateMet: cell.date || assessmentDate,
-            supervisorInitials: cell.initials || evaluatorInitials,
-            specimenInfo: cell.specimen,
-            passed: cell.passed,
+            elementNumber: el,
+            methodGroupName: mg.name,
+            el1SpecimenId: d.el1_specimen_id,
+            el1ObserverInitials: d.el1_observer_initials,
+            el2Evidence: d.el2_evidence,
+            el2Date: d.el2_date,
+            el3QcDate: d.el3_qc_date,
+            el4DateObserved: d.el4_date_observed,
+            el4ObserverInitials: d.el4_observer_initials,
+            el5SampleType: d.el5_sample_type,
+            el5SampleId: d.el5_sample_id,
+            el5Acceptable: d.el5_acceptable,
+            el6QuizId: d.el6_quiz_id,
+            el6Score: d.el6_score,
+            el6DateTaken: d.el6_date_taken,
+            passed: d.passed,
           });
         }
       }
     } else if (program.type === "waived") {
       for (const methodNum of waivedMethods) {
-        const cell = waivedItems[methodNum] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
+        const cell = waivedItems[methodNum] || { methodNumber: methodNum, evidence: "", date: "", initials: "", passed: false };
         items.push({
           methodNumber: methodNum,
-          evidence: cell.evidence,
-          dateMet: cell.date || assessmentDate,
-          supervisorInitials: cell.initials || evaluatorInitials,
-          specimenInfo: cell.specimen,
+          waivedMethodNumber: methodNum,
+          waivedEvidence: cell.evidence,
+          waivedDate: cell.date || assessmentDate,
+          waivedInitials: cell.initials || evaluatorInitials,
           passed: cell.passed,
         });
       }
     } else {
       for (const item of (program.checklistItems || [])) {
-        const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "", specimen: "" };
+        const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
         items.push({
           itemLabel: item.label,
           itemDescription: item.description,
+          ntItemLabel: item.label,
+          ntItemDescription: item.description,
+          ntDateMet: cell.dateMet || assessmentDate,
+          ntEmployeeInitials: cell.empInitials,
+          ntSupervisorInitials: cell.supInitials || evaluatorInitials,
           dateMet: cell.dateMet || assessmentDate,
           employeeInitials: cell.empInitials,
           supervisorInitials: cell.supInitials || evaluatorInitials,
-          specimenInfo: cell.specimen,
           passed: !!(cell.dateMet && cell.empInitials && cell.supInitials),
         });
       }
@@ -1363,7 +1544,7 @@ function NewAssessmentDialog({
         body: JSON.stringify({
           programId: program.id,
           employeeId,
-          assessmentType,
+          assessmentType: program.type === "nontechnical" ? ntAssessmentType : assessmentType,
           assessmentDate,
           evaluatorName,
           evaluatorTitle,
@@ -1371,8 +1552,8 @@ function NewAssessmentDialog({
           competencyType: program.type,
           status,
           remediationPlan: status === "remediation" ? remediationPlan : null,
-          employeeAcknowledged: employeeAck,
-          supervisorAcknowledged: supervisorAck,
+          employeeAcknowledged: !!(empPrintName && empInitials),
+          supervisorAcknowledged: !!(supPrintName && supInitials),
           items,
         }),
       });
@@ -1383,165 +1564,359 @@ function NewAssessmentDialog({
     }
   }
 
+  function getTechDataForElement(el: number, mgId: number): TechElementData {
+    return techData[`${el}-${mgId}`] || emptyTechElement();
+  }
+
+  function setTechField(el: number, mgId: number, field: keyof TechElementData, value: any) {
+    const key = `${el}-${mgId}`;
+    setTechData(prev => ({
+      ...prev,
+      [key]: { ...(prev[key] || emptyTechElement()), [field]: value },
+    }));
+  }
+
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New {typeLabel(program.type)} Assessment</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Header fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium block mb-1">Employee</label>
-              <Select value={employeeId ? String(employeeId) : ""} onValueChange={v => setEmployeeId(parseInt(v))}>
-                <SelectTrigger><SelectValue placeholder="Select employee..." /></SelectTrigger>
-                <SelectContent>
-                  {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+        <div className="space-y-5">
+          {/* ── Assessment Header ── */}
+          <div className="border border-border rounded-lg p-4 space-y-3">
+            <div className="text-sm font-semibold">Assessment Header</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Employee</label>
+                <Select value={employeeId ? String(employeeId) : ""} onValueChange={v => setEmployeeId(parseInt(v))}>
+                  <SelectTrigger><SelectValue placeholder="Select employee..." /></SelectTrigger>
+                  <SelectContent>
+                    {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Date of Hire</label>
+                <Input type="date" value={currentEmployee?.hire_date || ""} readOnly className="bg-muted/50 text-xs" />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium block mb-1">Assessment Type</label>
-              <Select value={assessmentType} onValueChange={setAssessmentType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {program.type === "nontechnical" ? (
-                    <>
-                      <SelectItem value="initial">Orientation</SelectItem>
-                      <SelectItem value="annual">2-Year Reassessment</SelectItem>
-                      <SelectItem value="reassessment">Duty Change</SelectItem>
-                    </>
-                  ) : (
-                    <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Assessment Type</label>
+                {program.type === "nontechnical" ? (
+                  <Select value={ntAssessmentType} onValueChange={setNtAssessmentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="orientation">Orientation</SelectItem>
+                      <SelectItem value="reassessment">2-Year Reassessment</SelectItem>
+                      <SelectItem value="duty_change">Duty Change</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={assessmentType} onValueChange={setAssessmentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
                       <SelectItem value="initial">Initial</SelectItem>
                       <SelectItem value="6month">6-Month</SelectItem>
                       <SelectItem value="annual">Annual</SelectItem>
                       <SelectItem value="reassessment">Reassessment</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium block mb-1">Assessment Date</label>
-              <Input type="date" value={assessmentDate} onChange={e => setAssessmentDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium block mb-1">Overall Status</label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pass">Pass</SelectItem>
-                  <SelectItem value="fail">Fail</SelectItem>
-                  <SelectItem value="remediation">Remediation</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-medium block mb-1">Evaluator Name</label>
-              <Input placeholder="Print name" value={evaluatorName} onChange={e => setEvaluatorName(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium block mb-1">Evaluator Title</label>
-              <Input placeholder="Technical Supervisor" value={evaluatorTitle} onChange={e => setEvaluatorTitle(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium block mb-1">Evaluator Initials</label>
-              <Input placeholder="MV" value={evaluatorInitials} onChange={e => setEvaluatorInitials(e.target.value)} maxLength={10} />
-            </div>
-          </div>
-
-          {/* Technical form: 6-method matrix */}
-          {program.type === "technical" && program.methodGroups && program.methodGroups.length > 0 && (
-            <div>
-              <div className="text-sm font-semibold mb-2">Assessment Matrix</div>
-              <p className="text-[10px] text-muted-foreground mb-2">For each method/group, record the observation date, specimen or sample used, evidence, and evaluator initials. These are required for CLIA/CAP compliance.</p>
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-primary/5">
-                      <th className="p-2 text-left font-medium text-xs w-[35%]">CLIA Method</th>
-                      {program.methodGroups.map(g => (
-                        <th key={g.id} className="p-2 text-left font-medium text-xs">{g.name}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {CLIA_METHODS.map((method, mIdx) => (
-                      <tr key={mIdx} className="border-t border-border">
-                        <td className="p-2 text-xs leading-tight">{method}</td>
-                        {program.methodGroups!.map(g => {
-                          const key = `${mIdx + 1}-${g.id}`;
-                          const cell = techItems[key] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
-                          return (
-                            <td key={g.id} className="p-1.5 border-l border-border">
-                              <Input
-                                className="text-xs h-6 mb-1"
-                                placeholder="Evidence..."
-                                value={cell.evidence}
-                                onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, evidence: e.target.value } }))}
-                              />
-                              <Input
-                                className="text-xs h-6 mb-1"
-                                placeholder="Specimen/sample ID..."
-                                value={cell.specimen}
-                                onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, specimen: e.target.value } }))}
-                              />
-                              <div className="flex gap-1 mb-1">
-                                <Input
-                                  type="date"
-                                  className="text-[10px] h-6 flex-1"
-                                  value={cell.date}
-                                  onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, date: e.target.value } }))}
-                                  title="Observation date"
-                                />
-                                <Input
-                                  className="text-[10px] h-6 w-14"
-                                  placeholder="Init"
-                                  value={cell.initials}
-                                  onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, initials: e.target.value } }))}
-                                  maxLength={10}
-                                  title="Evaluator initials"
-                                />
-                              </div>
-                              <label className="flex items-center gap-1 text-[10px] cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={cell.passed}
-                                  onChange={e => setTechItems(prev => ({ ...prev, [key]: { ...cell, passed: e.target.checked } }))}
-                                  className="w-3 h-3"
-                                />
-                                Pass
-                              </label>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Assessment Date</label>
+                <Input type="date" value={assessmentDate} onChange={e => setAssessmentDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Evaluator Name</label>
+                <Input placeholder="Print name" value={evaluatorName} onChange={e => setEvaluatorName(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Evaluator Title</label>
+                <Input placeholder="Technical Supervisor" value={evaluatorTitle} onChange={e => setEvaluatorTitle(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Evaluator Initials</label>
+                <Input placeholder="MV" value={evaluatorInitials} onChange={e => setEvaluatorInitials(e.target.value)} maxLength={10} />
+              </div>
+            </div>
+            <p className="text-[10px] italic text-muted-foreground">Evaluator must be Lab Director, TC, or TS as appropriate.</p>
+          </div>
+
+          {/* ── TECHNICAL COMPETENCY FORM ── */}
+          {program.type === "technical" && program.methodGroups && program.methodGroups.length > 0 && (
+            <div className="space-y-3">
+              {/* Method group tabs */}
+              {program.methodGroups.length > 1 && (
+                <div className="flex border-b border-border gap-0 overflow-x-auto">
+                  {program.methodGroups.map(mg => (
+                    <button
+                      key={mg.id}
+                      onClick={() => setActiveMgTab(mg.id)}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+                        activeMgTab === mg.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {mg.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {program.methodGroups.filter(mg => program.methodGroups!.length === 1 || mg.id === activeMgTab).map(mg => (
+                <div key={mg.id} className="space-y-4">
+                  {/* Element 1 */}
+                  <div className="border border-border rounded-lg p-3">
+                    <div className="text-xs font-semibold mb-1">Element 1: Direct Observation of Routine Patient Test Performance</div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Observer must be Lab Director, TC, or TS as appropriate. Documents that the observer watched the employee process and test a specimen. Results reporting is covered in Element 2.</p>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-muted-foreground">Specimen ID</label>
+                        <Input className="text-xs h-7" placeholder="Specimen ID observed" value={getTechDataForElement(1, mg.id).el1_specimen_id} onChange={e => setTechField(1, mg.id, "el1_specimen_id", e.target.value)} />
+                      </div>
+                      <div className="w-24">
+                        <label className="text-[10px] text-muted-foreground">Observer Initials</label>
+                        <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(1, mg.id).el1_observer_initials} onChange={e => setTechField(1, mg.id, "el1_observer_initials", e.target.value)} maxLength={10} />
+                      </div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                        <input type="checkbox" checked={getTechDataForElement(1, mg.id).passed} onChange={e => setTechField(1, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                        Pass
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Element 2 */}
+                  <div className="border border-border rounded-lg p-3">
+                    <div className="text-xs font-semibold mb-1">Element 2: Monitoring, Recording and Reporting of Test Results</div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Documents the employee's ability to monitor, record, and report results including critical values.</p>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-muted-foreground">Evidence</label>
+                        <Textarea className="text-xs min-h-[32px]" placeholder="Evidence notes..." value={getTechDataForElement(2, mg.id).el2_evidence} onChange={e => setTechField(2, mg.id, "el2_evidence", e.target.value)} rows={2} />
+                      </div>
+                      <div className="w-32">
+                        <label className="text-[10px] text-muted-foreground">Date</label>
+                        <Input type="date" className="text-xs h-7" value={getTechDataForElement(2, mg.id).el2_date} onChange={e => setTechField(2, mg.id, "el2_date", e.target.value)} />
+                      </div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                        <input type="checkbox" checked={getTechDataForElement(2, mg.id).passed} onChange={e => setTechField(2, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                        Pass
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Element 3 */}
+                  <div className="border border-border rounded-lg p-3">
+                    <div className="text-xs font-semibold mb-1">Element 3: QC Performance</div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Enter the date the employee personally ran QC on this instrument. The surveyor will pull the QC records for that date to confirm.</p>
+                    <div className="flex gap-2 items-end">
+                      <div className="w-40">
+                        <label className="text-[10px] text-muted-foreground">Date Tech Ran QC</label>
+                        <Input type="date" className="text-xs h-7" value={getTechDataForElement(3, mg.id).el3_qc_date} onChange={e => setTechField(3, mg.id, "el3_qc_date", e.target.value)} />
+                      </div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                        <input type="checkbox" checked={getTechDataForElement(3, mg.id).passed} onChange={e => setTechField(3, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                        Pass
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Element 4 */}
+                  <div className="border border-border rounded-lg p-3">
+                    <div className="text-xs font-semibold mb-1">Element 4: Direct Observation of Instrument Maintenance</div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Observer must be Lab Director, TC, or TS as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.</p>
+                    <div className="flex gap-2 items-end">
+                      <div className="w-40">
+                        <label className="text-[10px] text-muted-foreground">Date Observed</label>
+                        <Input type="date" className="text-xs h-7" value={getTechDataForElement(4, mg.id).el4_date_observed} onChange={e => setTechField(4, mg.id, "el4_date_observed", e.target.value)} />
+                      </div>
+                      <div className="w-24">
+                        <label className="text-[10px] text-muted-foreground">Observer Initials</label>
+                        <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(4, mg.id).el4_observer_initials} onChange={e => setTechField(4, mg.id, "el4_observer_initials", e.target.value)} maxLength={10} />
+                      </div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                        <input type="checkbox" checked={getTechDataForElement(4, mg.id).passed} onChange={e => setTechField(4, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                        Pass
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Element 5 */}
+                  <div className="border border-border rounded-lg p-3">
+                    <div className="text-xs font-semibold mb-1">Element 5: Blind / PT Sample Performance</div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">The PT report or blind sample log serves as the supporting record. Do not enter patient specimen data here.</p>
+                    <div className="flex gap-2 items-end flex-wrap">
+                      <div className="w-44">
+                        <label className="text-[10px] text-muted-foreground">Sample Type</label>
+                        <Select value={getTechDataForElement(5, mg.id).el5_sample_type || ""} onValueChange={v => setTechField(5, mg.id, "el5_sample_type", v)}>
+                          <SelectTrigger className="text-xs h-7"><SelectValue placeholder="Select..." /></SelectTrigger>
+                          <SelectContent>
+                            {SAMPLE_TYPES.map(st => <SelectItem key={st} value={st}>{st}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-muted-foreground">Sample ID</label>
+                        <Input className="text-xs h-7" placeholder="Sample ID" value={getTechDataForElement(5, mg.id).el5_sample_id} onChange={e => setTechField(5, mg.id, "el5_sample_id", e.target.value)} />
+                      </div>
+                      <div className="w-24">
+                        <label className="text-[10px] text-muted-foreground">Acceptable</label>
+                        <Select value={getTechDataForElement(5, mg.id).el5_acceptable === true ? "yes" : getTechDataForElement(5, mg.id).el5_acceptable === false ? "no" : ""} onValueChange={v => setTechField(5, mg.id, "el5_acceptable", v === "yes")}>
+                          <SelectTrigger className="text-xs h-7"><SelectValue placeholder="..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="yes">Yes</SelectItem>
+                            <SelectItem value="no">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                        <input type="checkbox" checked={getTechDataForElement(5, mg.id).passed} onChange={e => setTechField(5, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                        Pass
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Element 6 - Quiz */}
+                  <div className="border border-border rounded-lg p-3">
+                    <div className="text-xs font-semibold mb-1">Element 6: Problem-Solving Assessment - Quiz</div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">A short quiz (1-2 questions per method group) is required. Score must be 100% to pass. The quiz and all answers will be appended to the competency record.</p>
+                    {(() => {
+                      const quiz = findQuizForMg(mg.id, mg.name);
+                      const el6Data = getTechDataForElement(6, mg.id);
+
+                      if (!quiz) {
+                        return (
+                          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded px-3 py-2">
+                            <p className="text-xs text-amber-700 dark:text-amber-400">Quiz not yet assigned for this method group.</p>
+                          </div>
+                        );
+                      }
+
+                      // Quiz already completed
+                      if (el6Data.el6_quiz_id && el6Data.el6_score !== null) {
+                        return (
+                          <div className={`rounded px-3 py-2 ${el6Data.passed ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300" : "bg-red-50 dark:bg-red-950/20 border border-red-300"}`}>
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="font-semibold">Quiz ID: {el6Data.el6_quiz_id}</span>
+                              <span>Score: {el6Data.el6_score}%</span>
+                              <span className={el6Data.passed ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>{el6Data.passed ? "PASS" : "FAIL"}</span>
+                              <span>Date: {el6Data.el6_date_taken}</span>
+                            </div>
+                            {!el6Data.passed && (
+                              <Button size="sm" variant="outline" className="mt-2 text-xs h-7" onClick={() => startQuiz(mg.id, quiz.id)}>
+                                Retake Quiz
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // Quiz active (taking it now)
+                      if (quizActive && quizActive.mgId === mg.id) {
+                        if (quizResult) {
+                          // Show result
+                          return (
+                            <div className={`rounded px-3 py-2 ${quizResult.passed ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300" : "bg-red-50 dark:bg-red-950/20 border border-red-300"}`}>
+                              <div className="text-xs font-semibold mb-2">
+                                Score: {quizResult.score}% - <span className={quizResult.passed ? "text-emerald-600" : "text-red-600"}>{quizResult.passed ? "PASS" : "FAIL"}</span>
+                              </div>
+                              {quizResult.questions?.map((q: any, qi: number) => (
+                                <div key={qi} className="text-[10px] mb-2 border-t border-border pt-1">
+                                  <div className="font-medium mb-1">Q{qi + 1}: {q.question}</div>
+                                  {q.options?.map((opt: string) => {
+                                    const letter = opt.charAt(0);
+                                    const isSelected = q.selected_answer === letter;
+                                    const isCorrect = q.correct_answer === letter;
+                                    return (
+                                      <div key={opt} className={`px-1 py-0.5 rounded ${isSelected && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSelected ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
+                                        {isSelected ? "\u25CF" : "\u25CB"} {opt}
+                                        {isCorrect && <span className="text-emerald-600 font-semibold ml-1">{"\u2713"}</span>}
+                                        {isSelected && !isCorrect && <span className="text-red-600 font-semibold ml-1">{"\u2717"}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                  {q.explanation && <div className="text-muted-foreground italic mt-1">{q.explanation}</div>}
+                                </div>
+                              ))}
+                              {!quizResult.passed && (
+                                <Button size="sm" variant="outline" className="mt-2 text-xs h-7" onClick={() => startQuiz(mg.id, quiz.id)}>
+                                  Retake Quiz
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // Show quiz questions one at a time
+                        const q = quizQuestions[quizCurrentQ];
+                        if (!q) return null;
+                        return (
+                          <div className="bg-muted/30 border border-border rounded-lg p-3">
+                            <div className="text-xs text-muted-foreground mb-1">Question {quizCurrentQ + 1} of {quizQuestions.length}</div>
+                            <div className="text-xs font-medium mb-2">{q.question}</div>
+                            <div className="space-y-1.5">
+                              {q.options?.map((opt: string) => {
+                                const letter = opt.charAt(0);
+                                return (
+                                  <label key={opt} className={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded border ${quizAnswers[q.id] === letter ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50"}`}>
+                                    <input type="radio" name={`quiz-${q.id}`} checked={quizAnswers[q.id] === letter} onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: letter }))} />
+                                    {opt}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <div className="flex justify-between mt-3">
+                              {quizCurrentQ > 0 && (
+                                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setQuizCurrentQ(prev => prev - 1)}>
+                                  <ChevronLeft size={12} className="mr-1" /> Previous
+                                </Button>
+                              )}
+                              <div className="flex-1" />
+                              {quizCurrentQ < quizQuestions.length - 1 ? (
+                                <Button size="sm" className="text-xs h-7" disabled={!quizAnswers[q.id]} onClick={() => setQuizCurrentQ(prev => prev + 1)}>
+                                  Next <ChevronRight size={12} className="ml-1" />
+                                </Button>
+                              ) : (
+                                <Button size="sm" className="text-xs h-7" disabled={!quizAnswers[q.id] || quizSubmitting} onClick={submitQuiz}>
+                                  {quizSubmitting ? "Scoring..." : "Submit Quiz"}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Show Take Quiz button
+                      return (
+                        <div className="flex items-center gap-3">
+                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => startQuiz(mg.id, quiz.id)}>
+                            Take Quiz
+                          </Button>
+                          <span className="text-[10px] text-muted-foreground">Quiz available: {quiz.method_group_name || "General"}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Waived form: select 2 of 4 methods */}
+          {/* ── WAIVED COMPETENCY FORM ── */}
           {program.type === "waived" && (
-            <div>
-              <div className="text-sm font-semibold mb-2">Select 2 of 4 Methods</div>
-              <p className="text-[10px] text-muted-foreground mb-2">For each selected method, record the date performed, specimen/sample used, evidence, and evaluator initials.</p>
+            <div className="space-y-3">
+              <div className="text-sm font-semibold">Select 2 of 4 Methods</div>
+              <p className="text-[10px] text-muted-foreground mb-2">For each waived instrument/test, select 2 methods and record evidence, date, initials, and pass/fail.</p>
               <div className="space-y-2">
                 {WAIVED_METHODS.map((method, mIdx) => {
                   const num = mIdx + 1;
                   const selected = waivedMethods.includes(num);
-                  const cell = waivedItems[num] || { evidence: "", passed: false, initials: "", date: "", specimen: "" };
+                  const cell = waivedItems[num] || { methodNumber: num, evidence: "", date: "", initials: "", passed: false };
                   return (
                     <div key={num} className={`border rounded-lg p-3 ${selected ? "border-primary bg-primary/5" : "border-border"}`}>
                       <label className="flex items-start gap-2 cursor-pointer">
@@ -1549,57 +1924,25 @@ function NewAssessmentDialog({
                           type="checkbox"
                           checked={selected}
                           onChange={e => {
-                            if (e.target.checked) {
-                              setWaivedMethods(prev => [...prev, num].slice(-4));
-                            } else {
-                              setWaivedMethods(prev => prev.filter(m => m !== num));
-                            }
+                            if (e.target.checked) setWaivedMethods(prev => [...prev, num].slice(-4));
+                            else setWaivedMethods(prev => prev.filter(m => m !== num));
                           }}
                           className="mt-0.5"
                         />
                         <div className="flex-1">
-                          <div className="text-xs font-medium">{method}</div>
+                          <div className="text-xs font-medium">{num}. {method}</div>
                           {selected && (
                             <div className="mt-2 space-y-1.5">
                               <div className="flex gap-2">
-                                <Input
-                                  className="text-xs h-7 flex-1"
-                                  placeholder="Evidence..."
-                                  value={cell.evidence}
-                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, evidence: e.target.value } }))}
-                                />
+                                <Input className="text-xs h-7 flex-1" placeholder="Evidence..." value={cell.evidence} onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, evidence: e.target.value } }))} />
                                 <label className="flex items-center gap-1 text-[10px] shrink-0">
-                                  <input
-                                    type="checkbox"
-                                    checked={cell.passed}
-                                    onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, passed: e.target.checked } }))}
-                                    className="w-3 h-3"
-                                  />
+                                  <input type="checkbox" checked={cell.passed} onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, passed: e.target.checked } }))} className="w-3 h-3" />
                                   Pass
                                 </label>
                               </div>
                               <div className="flex gap-2">
-                                <Input
-                                  className="text-xs h-7 flex-1"
-                                  placeholder="Specimen/sample ID..."
-                                  value={cell.specimen}
-                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, specimen: e.target.value } }))}
-                                />
-                                <Input
-                                  type="date"
-                                  className="text-xs h-7 w-36"
-                                  value={cell.date}
-                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, date: e.target.value } }))}
-                                  title="Date performed"
-                                />
-                                <Input
-                                  className="text-xs h-7 w-16"
-                                  placeholder="Init"
-                                  value={cell.initials}
-                                  onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, initials: e.target.value } }))}
-                                  maxLength={10}
-                                  title="Evaluator initials"
-                                />
+                                <Input type="date" className="text-xs h-7 w-36" value={cell.date} onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, date: e.target.value } }))} />
+                                <Input className="text-xs h-7 w-20" placeholder="Initials" value={cell.initials} onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, initials: e.target.value } }))} maxLength={10} />
                               </div>
                             </div>
                           )}
@@ -1615,10 +1958,10 @@ function NewAssessmentDialog({
             </div>
           )}
 
-          {/* Non-technical checklist */}
+          {/* ── NON-TECHNICAL COMPETENCY FORM ── */}
           {program.type === "nontechnical" && program.checklistItems && (
-            <div>
-              <div className="text-sm font-semibold mb-2">Checklist Items</div>
+            <div className="space-y-3">
+              <div className="text-sm font-semibold">Non-Technical Checklist Items</div>
               <div className="border border-border rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
@@ -1626,51 +1969,25 @@ function NewAssessmentDialog({
                       <th className="p-2 text-left w-8">#</th>
                       <th className="p-2 text-left">Item</th>
                       <th className="p-2 text-left w-28">Date Met</th>
-                      <th className="p-2 text-left w-28">Specimen/Scenario</th>
                       <th className="p-2 text-left w-20">Emp Init</th>
                       <th className="p-2 text-left w-20">Sup Init</th>
                     </tr>
                   </thead>
                   <tbody>
                     {program.checklistItems.map(item => {
-                      const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "", specimen: "" };
+                      const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
                       return (
                         <tr key={item.label} className="border-t border-border">
                           <td className="p-2 font-bold">{item.label}.</td>
                           <td className="p-2">{item.description}</td>
                           <td className="p-1.5">
-                            <Input
-                              type="date"
-                              className="text-xs h-7"
-                              value={cell.dateMet}
-                              onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, dateMet: e.target.value } }))}
-                            />
+                            <Input type="date" className="text-xs h-7" value={cell.dateMet} onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, dateMet: e.target.value } }))} />
                           </td>
                           <td className="p-1.5">
-                            <Input
-                              className="text-xs h-7"
-                              placeholder="Specimen/scenario..."
-                              value={cell.specimen}
-                              onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, specimen: e.target.value } }))}
-                            />
+                            <Input className="text-xs h-7" placeholder="Init" value={cell.empInitials} onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, empInitials: e.target.value } }))} maxLength={10} />
                           </td>
                           <td className="p-1.5">
-                            <Input
-                              className="text-xs h-7"
-                              placeholder="Init"
-                              value={cell.empInitials}
-                              onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, empInitials: e.target.value } }))}
-                              maxLength={10}
-                            />
-                          </td>
-                          <td className="p-1.5">
-                            <Input
-                              className="text-xs h-7"
-                              placeholder="Init"
-                              value={cell.supInitials}
-                              onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, supInitials: e.target.value } }))}
-                              maxLength={10}
-                            />
+                            <Input className="text-xs h-7" placeholder="Init" value={cell.supInitials} onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, supInitials: e.target.value } }))} maxLength={10} />
                           </td>
                         </tr>
                       );
@@ -1678,46 +1995,73 @@ function NewAssessmentDialog({
                   </tbody>
                 </table>
               </div>
+              <div className="flex gap-3">
+                <div>
+                  <label className="text-xs font-medium block mb-1">Departmental Completion Date</label>
+                  <Input type="date" className="text-xs h-7 w-40" value={ntCompletionDate} onChange={e => setNtCompletionDate(e.target.value)} />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Remediation */}
-          {(status === "fail" || status === "remediation") && (
+          {/* ── Remediation (show only if any element fails) ── */}
+          {(status === "fail" || status === "remediation" || anyFails) && (
             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
               <p className="text-xs text-amber-700 dark:text-amber-400 font-medium mb-2">
-                This employee needs additional training and is restricted from performing patient testing unsupervised.
+                This employee requires additional training and may not perform patient testing unsupervised until remediation is complete.
               </p>
-              <Textarea
-                placeholder="Action plan and timeline..."
-                value={remediationPlan}
-                onChange={e => setRemediationPlan(e.target.value)}
-                className="text-xs"
-                rows={3}
-              />
+              <div className="space-y-2">
+                <Textarea placeholder="Action plan..." value={remediationPlan} onChange={e => setRemediationPlan(e.target.value)} className="text-xs" rows={3} />
+                <div>
+                  <label className="text-[10px] text-muted-foreground">Target Completion Date</label>
+                  <Input type="date" className="text-xs h-7 w-40" value={remediationDate} onChange={e => setRemediationDate(e.target.value)} />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Acknowledgements */}
-          <div className="border border-border rounded-lg p-3 space-y-2">
-            <div className="text-xs font-semibold">Acknowledgement</div>
-            <p className="text-xs text-muted-foreground">
-              {program.type === "technical"
-                ? "I have had an opportunity to review and ask questions about policies and procedures related to equipment and testing above."
-                : "The signatures below indicate that the employee and supervisor both affirm that the employee can perform all duties covered above."}
-            </p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={employeeAck} onChange={e => setEmployeeAck(e.target.checked)} />
-                Employee Acknowledged
-              </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={supervisorAck} onChange={e => setSupervisorAck(e.target.checked)} />
-                Supervisor Acknowledged
-              </label>
+          {/* ── Overall Determination ── */}
+          <div className="border border-border rounded-lg p-3">
+            <div className="text-xs font-semibold mb-2">Overall Determination</div>
+            <div className="flex gap-3">
+              {(["pass", "fail", "remediation"] as const).map(s => (
+                <label key={s} className={`flex items-center gap-2 text-xs cursor-pointer px-3 py-1.5 rounded-full border ${status === s ? (s === "pass" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : s === "fail" ? "border-red-500 bg-red-50 text-red-700" : "border-amber-500 bg-amber-50 text-amber-700") : "border-border"}`}>
+                  <input type="radio" name="status" checked={status === s} onChange={() => setStatus(s)} className="sr-only" />
+                  {s === "pass" ? "Pass" : s === "fail" ? "Fail" : "Remediation Required"}
+                </label>
+              ))}
             </div>
           </div>
 
-          {/* Actions */}
+          {/* ── Employee Acknowledgement (TJC language) ── */}
+          <div className="border-2 border-primary/30 rounded-lg p-4 bg-primary/[0.02]">
+            <div className="text-xs font-bold text-primary mb-2">Employee Acknowledgement</div>
+            <p className="text-[10px] text-muted-foreground leading-relaxed mb-1">Prior to performing laboratory duties, the following are completed:</p>
+            <ul className="text-[10px] text-muted-foreground list-disc ml-4 mb-3 space-y-0.5">
+              <li>The laboratory director or supervisor documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
+              <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
+            </ul>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-semibold text-muted-foreground">Employee</div>
+                <Input className="text-xs h-7" placeholder="Print name" value={empPrintName} onChange={e => setEmpPrintName(e.target.value)} />
+                <div className="flex gap-2">
+                  <Input className="text-xs h-7 w-20" placeholder="Initials" value={empInitials} onChange={e => setEmpInitials(e.target.value)} maxLength={10} />
+                  <Input type="date" className="text-xs h-7 flex-1" value={empAckDate} onChange={e => setEmpAckDate(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-semibold text-muted-foreground">Supervisor</div>
+                <Input className="text-xs h-7" placeholder="Print name" value={supPrintName} onChange={e => setSupPrintName(e.target.value)} />
+                <div className="flex gap-2">
+                  <Input className="text-xs h-7 w-20" placeholder="Initials" value={supInitials} onChange={e => setSupInitials(e.target.value)} maxLength={10} />
+                  <Input type="date" className="text-xs h-7 flex-1" value={supAckDate} onChange={e => setSupAckDate(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Actions ── */}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <Button
