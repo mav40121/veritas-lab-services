@@ -666,7 +666,7 @@ export default function VeritaCheckPage() {
                     </p>
                   </div>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    VeritaCheck automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC CAMLAB 2024, and CAP checklists.
+                    VeritaCheck automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC standard, and CAP checklists.
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-6">
                     Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
@@ -734,7 +734,7 @@ export default function VeritaCheckPage() {
               </div>
               <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run, finally done right.</h1>
               <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-                Calibration verification, method comparison, and precision studies, automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation mapped to 42 CFR Part 493, TJC CAMLAB 2024, and CAP checklists.
+                Calibration verification, method comparison, and precision studies, automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation mapped to 42 CFR Part 493, TJC standard, and CAP checklists.
               </p>
             </div>
           </section>

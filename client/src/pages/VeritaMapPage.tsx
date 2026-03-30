@@ -29,7 +29,7 @@ const FEATURES = [
   "Sort by complexity: see all high-complexity tests instantly",
   "Know your PT obligations before the enrollment deadline",
   "Last Verified and Verified By columns for review cycle tracking",
-  "Built on CLIA '88 (42 CFR Part 493), CAP LAP standards, and TJC CAMLAB",
+  "Built on CLIA '88 (42 CFR Part 493), CAP LAP standards, and TJC standard",
 ];
 
 export default function VeritaMapPage() {
