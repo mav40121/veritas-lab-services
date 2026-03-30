@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useLocation } from "wouter";
 import {
   calculateStudy,
+  calculateMethodComparison,
   calculatePrecision,
   calculateLotToLot,
   calculatePTCoag,
@@ -48,7 +49,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen } from "lucide-react";
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 
 async function downloadPDF(study: Study, results: StudyResults) {
@@ -185,15 +186,15 @@ function generateNarrative(results: StudyResults, study: Study): string {
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias between methods"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the test method reads slightly higher than the reference at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the test method reads slightly lower than the reference at upper concentrations`;
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
     const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
-      ? `within the CLIA total allowable error of ±${cliaPct}%`
-      : `exceeds the CLIA total allowable error of ±${cliaPct}% and requires investigation`;
+      ? `within the CLIA total allowable error of \u00B1${cliaPct}%`
+      : `exceeds the CLIA total allowable error of \u00B1${cliaPct}% and requires investigation`;
     if (mc.overallPass) {
       narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
     } else {
-      narrative = `The method comparison for ${study.testName} did not meet acceptance criteria. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: ±${cliaPct}%) indicate unacceptable agreement between methods. Do not report patient results from the test method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
+      narrative = `The method comparison for ${study.testName} did not meet acceptance criteria. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. Do not report patient results from the comparison method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
     }
   } else if (isPrecision(results)) {
     const pr = results as PrecisionResults;
@@ -616,17 +617,29 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
 // ─── METHOD COMPARISON results ────────────────────────────────────────────────
 function MethodCompReport({ study, results }: { study: Study; results: MethodCompResults }) {
   const { levelResults, regression, blandAltman } = results;
-  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const allInstrumentNames: string[] = JSON.parse(study.instruments);
+  // Primary instrument is the first in the list; comparison instruments are the rest
+  const primaryName = allInstrumentNames[0];
+  // Comparison instrument names: either from levelResults keys, or allInstrumentNames[1:]
+  const comparisonNames = Object.keys(levelResults[0]?.instruments || {}).length > 0
+    ? Object.keys(levelResults[0].instruments)
+    : allInstrumentNames.slice(1);
   const cliaPercent = (study.cliaAllowableError * 100).toFixed(1);
 
-  // Scatter: each test instrument vs reference
-  const scatterData = instrumentNames.map((name) => ({
+  // Check for legacy data format (old studies that used expectedValue as reference)
+  const isLegacyFormat = levelResults.length > 0 && comparisonNames.length === 0 && allInstrumentNames.length >= 2;
+
+  // For legacy studies, the instrumentNames in results are keyed by the test instrument names
+  const effectiveCompNames = isLegacyFormat ? allInstrumentNames : comparisonNames;
+
+  // Scatter: each comparison instrument vs primary
+  const scatterData = effectiveCompNames.map((name) => ({
     name,
     data: levelResults.filter((r) => r.instruments[name]).map((r) => ({ x: r.referenceValue, y: r.instruments[name].value })),
   }));
 
   // Bland-Altman plot data: difference vs. average
-  const baPlotData = instrumentNames.flatMap((name, idx) =>
+  const baPlotData = effectiveCompNames.flatMap((name, idx) =>
     levelResults
       .filter((r) => r.instruments[name])
       .map((r) => ({
@@ -643,13 +656,25 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
 
   return (
     <>
+      {/* Legacy data notice */}
+      {isLegacyFormat && (
+        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
+          This study was created with an earlier version of VeritaCheck. Data has been migrated for display.
+        </div>
+      )}
+
+      {/* Sub-header: Primary and Comparison methods */}
+      <div className="mb-4 p-3 bg-muted/50 rounded-lg text-sm">
+        <span className="font-medium">Primary Method:</span> {primaryName} | <span className="font-medium">Comparison Method{effectiveCompNames.length > 1 ? "s" : ""}:</span> {effectiveCompNames.join(", ")}
+      </div>
+
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Sample Levels", value: levelResults.length },
+          { label: "Patient Samples", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "CLIA TEa", value: `±${cliaPercent}%` },
-          { label: "Instruments", value: instrumentNames.length + 1 },
+          { label: "CLIA TEa", value: `\u00B1${cliaPercent}%` },
+          { label: "Instruments", value: allInstrumentNames.length },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
             <div className="text-lg font-bold">{value}</div>
@@ -664,13 +689,13 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
           <CardContent className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
               <div>
-                <span className="text-muted-foreground">Reference Range: </span>
-                <span className="font-mono">{xRange.min.toFixed(3)} – {xRange.max.toFixed(3)}</span>
+                <span className="text-muted-foreground">{primaryName} (Primary) Range: </span>
+                <span className="font-mono">{xRange.min.toFixed(3)} - {xRange.max.toFixed(3)}</span>
               </div>
-              {instrumentNames.map((n) => yRange?.[n] && (
+              {effectiveCompNames.map((n) => yRange?.[n] && (
                 <div key={n}>
                   <span className="text-muted-foreground">{n} Range: </span>
-                  <span className="font-mono">{yRange[n].min.toFixed(3)} – {yRange[n].max.toFixed(3)}</span>
+                  <span className="font-mono">{yRange[n].min.toFixed(3)} - {yRange[n].max.toFixed(3)}</span>
                 </div>
               ))}
               <div>
@@ -682,118 +707,120 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
         </Card>
       )}
 
-      {/* Charts */}
-      <div className="grid sm:grid-cols-2 gap-5 mb-6">
-        {/* Correlation scatter */}
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Correlation - Test vs. Reference Method</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="x" name="Reference" type="number" label={{ value: "Reference Method", position: "insideBottom", offset: -10, fontSize: 10 }} />
-                <YAxis dataKey="y" name="Test" type="number" label={{ value: "Test Method", angle: -90, position: "insideLeft", fontSize: 10 }} />
-                <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-                <Legend />
-                {levelResults.length > 0 && (
-                  <ReferenceLine
-                    segment={[
-                      { x: levelResults[0].referenceValue, y: levelResults[0].referenceValue },
-                      { x: levelResults[levelResults.length - 1].referenceValue, y: levelResults[levelResults.length - 1].referenceValue },
-                    ]}
-                    stroke="#666" strokeDasharray="4 2"
-                    label={{ value: "1:1", fontSize: 9, fill: "#888" }}
-                  />
-                )}
-                {scatterData.map(({ name, data }, idx) => (
-                  <Scatter key={name} name={name} data={data} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                ))}
-              </ScatterChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {/* Per-comparison sections */}
+      {effectiveCompNames.map((compName, compIdx) => (
+        <div key={compName} className="mb-8">
+          <h3 className="text-base font-bold mb-4 border-b pb-2">{compName} vs. {primaryName}</h3>
 
-        {/* Bland-Altman: % difference vs. average */}
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Bland-Altman - % Difference vs. Mean</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="avg" name="Mean" type="number" label={{ value: "Mean of Methods", position: "insideBottom", offset: -10, fontSize: 10 }} />
-                <YAxis dataKey="pctDiff" name="% Diff" type="number" label={{ value: "% Difference", angle: -90, position: "insideLeft", fontSize: 10 }} />
-                <Tooltip formatter={(v: number, name: string) => name === "% Diff" ? `${v.toFixed(2)}%` : v} cursor={{ strokeDasharray: "3 3" }} />
-                <ReferenceLine y={0} stroke="#888" strokeDasharray="4 2" />
-                <ReferenceLine y={parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
-                <ReferenceLine y={-parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
-                {instrumentNames.map((name, idx) => (
-                  <Scatter
-                    key={name}
-                    name={name}
-                    data={baPlotData.filter((d) => d.instrument === name)}
-                    fill={CHART_COLORS[idx % CHART_COLORS.length]}
-                  />
-                ))}
-                <Legend />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Charts */}
+          <div className="grid sm:grid-cols-2 gap-5 mb-6">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Correlation - {compName} vs. {primaryName}</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={240}>
+                  <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="x" name={primaryName} type="number" label={{ value: `${primaryName} (Primary)`, position: "insideBottom", offset: -10, fontSize: 10 }} />
+                    <YAxis dataKey="y" name={compName} type="number" label={{ value: compName, angle: -90, position: "insideLeft", fontSize: 10 }} />
+                    <Tooltip cursor={{ strokeDasharray: "3 3" }} />
+                    {levelResults.length > 0 && (
+                      <ReferenceLine
+                        segment={[
+                          { x: levelResults[0].referenceValue, y: levelResults[0].referenceValue },
+                          { x: levelResults[levelResults.length - 1].referenceValue, y: levelResults[levelResults.length - 1].referenceValue },
+                        ]}
+                        stroke="#666" strokeDasharray="4 2"
+                        label={{ value: "1:1", fontSize: 9, fill: "#888" }}
+                      />
+                    )}
+                    <Scatter
+                      name={compName}
+                      data={scatterData.find(s => s.name === compName)?.data || []}
+                      fill={CHART_COLORS[compIdx % CHART_COLORS.length]}
+                    />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-      {/* Data table — with Bias column */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Bland-Altman - {compName} vs. {primaryName}</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={240}>
+                  <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="avg" name="Mean" type="number" label={{ value: "Mean of Methods", position: "insideBottom", offset: -10, fontSize: 10 }} />
+                    <YAxis dataKey="pctDiff" name="% Diff" type="number" label={{ value: "% Difference", angle: -90, position: "insideLeft", fontSize: 10 }} />
+                    <Tooltip formatter={(v: number, name: string) => name === "% Diff" ? `${v.toFixed(2)}%` : v} cursor={{ strokeDasharray: "3 3" }} />
+                    <ReferenceLine y={0} stroke="#888" strokeDasharray="4 2" />
+                    <ReferenceLine y={parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
+                    <ReferenceLine y={-parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
+                    <Scatter
+                      name={compName}
+                      data={baPlotData.filter((d) => d.instrument === compName)}
+                      fill={CHART_COLORS[compIdx % CHART_COLORS.length]}
+                    />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ))}
+
+      {/* Data table - sample-by-sample comparison results */}
       <Card className="mb-6">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Level-by-Level Comparison Results</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Sample-by-Sample Comparison Results</CardTitle></CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Level</th>
-                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Reference</th>
-                  {instrumentNames.map((n) => (
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Sample</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">{primaryName} (Primary)</th>
+                  {effectiveCompNames.map((n) => (
                     <th key={n} colSpan={4} className="text-center py-2 pr-3 text-muted-foreground font-medium border-l border-border/40">{n}</th>
                   ))}
                 </tr>
                 <tr className="border-b border-border/60 bg-muted/20">
                   <th className="py-1 pr-3" />
                   <th className="py-1 pr-3" />
-                  {instrumentNames.map((n) => (
-                    <>
-                      <th key={`${n}-val`} className="text-right py-1 pr-3 text-muted-foreground font-normal border-l border-border/40">Value</th>
-                      <th key={`${n}-bias`} className="text-right py-1 pr-3 text-muted-foreground font-normal">Bias</th>
-                      <th key={`${n}-diff`} className="text-right py-1 pr-3 text-muted-foreground font-normal">% Diff</th>
-                      <th key={`${n}-pf`} className="text-right py-1 pr-3 text-muted-foreground font-normal">Pass?</th>
-                    </>
+                  {effectiveCompNames.map((n) => (
+                    <React.Fragment key={`sub-${n}`}>
+                      <th className="text-right py-1 pr-3 text-muted-foreground font-normal border-l border-border/40">Value</th>
+                      <th className="text-right py-1 pr-3 text-muted-foreground font-normal">Bias</th>
+                      <th className="text-right py-1 pr-3 text-muted-foreground font-normal">% Diff</th>
+                      <th className="text-right py-1 pr-3 text-muted-foreground font-normal">Pass?</th>
+                    </React.Fragment>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {levelResults.map((r) => (
                   <tr key={r.level} className="border-b border-border/40">
-                    <td className="py-2 pr-3 font-mono">L{r.level}</td>
+                    <td className="py-2 pr-3 font-mono">S{r.level}</td>
                     <td className="text-right py-2 pr-3 font-mono">{r.referenceValue.toFixed(3)}</td>
-                    {instrumentNames.map((n) => (
-                      <>
-                        <td key={`${n}-val`} className="text-right py-2 pr-3 font-mono border-l border-border/20">
-                          {r.instruments[n] ? r.instruments[n].value.toFixed(3) : "—"}
+                    {effectiveCompNames.map((n) => (
+                      <React.Fragment key={`${r.level}-${n}`}>
+                        <td className="text-right py-2 pr-3 font-mono border-l border-border/20">
+                          {r.instruments[n] ? r.instruments[n].value.toFixed(3) : "---"}
                         </td>
-                        <td key={`${n}-bias`} className="text-right py-2 pr-3 font-mono">
-                          {r.instruments[n] ? r.instruments[n].difference.toFixed(3) : "—"}
+                        <td className="text-right py-2 pr-3 font-mono">
+                          {r.instruments[n] ? r.instruments[n].difference.toFixed(3) : "---"}
                         </td>
-                        <td key={`${n}-diff`} className="text-right py-2 pr-3 font-mono">
+                        <td className="text-right py-2 pr-3 font-mono">
                           {r.instruments[n]
                             ? <span className={Math.abs(r.instruments[n].pctDifference) < study.cliaAllowableError * 100 ? "text-green-400" : "text-red-400"}>
                                 {r.instruments[n].pctDifference.toFixed(2)}%
                               </span>
-                            : "—"}
+                            : "---"}
                         </td>
-                        <td key={`${n}-pf`} className="text-right py-2 pr-3">
+                        <td className="text-right py-2 pr-3">
                           {r.instruments[n]
                             ? <span className={r.instruments[n].passFail === "Pass" ? "pass-badge" : "fail-badge"}>{r.instruments[n].passFail}</span>
-                            : "—"}
+                            : "---"}
                         </td>
-                      </>
+                      </React.Fragment>
                     ))}
                   </tr>
                 ))}
@@ -1333,6 +1360,26 @@ export default function StudyResults() {
   } else if (study.studyType === "multi_analyte_coag") {
     const { specimens, isi, normalMeanPT, teas } = rawDataPoints;
     results = calculateMultiAnalyteCoag(specimens, isi, normalMeanPT, teas);
+  } else if (study.studyType === "method_comparison") {
+    // Handle both old and new data formats for method comparison
+    const dp = rawDataPoints as DataPoint[];
+    const primaryName = instrumentNames[0];
+    // Check if this is new format: primary instrument values are in instrumentValues
+    const hasAllInstrumentsInValues = dp.length > 0 && instrumentNames.every(n => n in (dp[0].instrumentValues || {}));
+    if (hasAllInstrumentsInValues && instrumentNames.length >= 2) {
+      // New format: map primary instrument values to expectedValue, comparison instruments stay in instrumentValues
+      const comparisonNames = instrumentNames.slice(1);
+      const mappedPoints: DataPoint[] = dp.map(d => ({
+        level: d.level,
+        expectedValue: d.instrumentValues[primaryName] ?? null,
+        instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
+      }));
+      results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError);
+    } else {
+      // Old format: expectedValue is already the reference, instrumentValues has test instruments
+      const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
+      results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError);
+    }
   } else {
     results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
   }

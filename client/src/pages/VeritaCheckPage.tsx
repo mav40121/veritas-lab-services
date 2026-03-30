@@ -297,6 +297,37 @@ export default function VeritaCheckPage() {
 
   const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
+  const [veritaMapInstruments, setVeritaMapInstruments] = useState<{ name: string; category: string }[]>([]);
+  const [veritaMapLoaded, setVeritaMapLoaded] = useState(false);
+
+  // Fetch VeritaMap instruments for method_comparison smart dropdown
+  useEffect(() => {
+    if (!isLoggedIn || veritaMapLoaded) return;
+    (async () => {
+      try {
+        const mapsRes = await fetch(`${API_BASE}/api/veritamap/maps`, { headers: authHeaders() });
+        if (!mapsRes.ok) { setVeritaMapLoaded(true); return; }
+        const maps = await mapsRes.json();
+        const allInstruments: { name: string; category: string }[] = [];
+        for (const map of maps) {
+          try {
+            const instRes = await fetch(`${API_BASE}/api/veritamap/maps/${map.id}/instruments`, { headers: authHeaders() });
+            if (instRes.ok) {
+              const instruments = await instRes.json();
+              for (const inst of instruments) {
+                if (inst.instrument_name && !allInstruments.some(i => i.name === inst.instrument_name)) {
+                  allInstruments.push({ name: inst.instrument_name, category: inst.category || "" });
+                }
+              }
+            }
+          } catch { /* skip this map */ }
+        }
+        setVeritaMapInstruments(allInstruments);
+      } catch { /* no VeritaMap data */ }
+      setVeritaMapLoaded(true);
+    })();
+  }, [isLoggedIn, veritaMapLoaded]);
+
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
@@ -385,6 +416,14 @@ export default function VeritaCheckPage() {
     Array.from({ length: 24 }, (_, i) => ({ id: `S${String(i + 1).padStart(3, "0")}`, ptNew: "", ptOld: "", apttNew: "", apttOld: "", fibNew: "", fibOld: "" }))
   );
 
+  // When switching to method_comparison, default to 20 samples (EP9 minimum)
+  useEffect(() => {
+    if (studyType === "method_comparison" && numLevels === DEFAULT_LEVELS) {
+      setNumLevels(20);
+      setDataPoints(prev => resizeDataPoints(prev, instrumentNames, 20));
+    }
+  }, [studyType]);
+
   const handleNumLevelsChange = (val: string) => {
     const n = parseInt(val);
     setNumLevels(n);
@@ -406,19 +445,17 @@ export default function VeritaCheckPage() {
     e.preventDefault();
     e.stopPropagation();
     const numRows = dataPoints.length;
-    const numCols = instrumentNames.length + 1; // +1 for Expected
+    const numCols = studyType === "method_comparison" ? instrumentNames.length : instrumentNames.length + 1; // method_comparison has no Expected column
     let nextRow = row;
     let nextCol = col;
     if (e.shiftKey) {
-      // Shift+Tab: go up
       nextRow = row - 1;
       if (nextRow < 0) { nextRow = numRows - 1; nextCol = col - 1; }
-      if (nextCol < 0) return; // exit grid
+      if (nextCol < 0) return;
     } else {
-      // Tab: go down
       nextRow = row + 1;
       if (nextRow >= numRows) { nextRow = 0; nextCol = col + 1; }
-      if (nextCol >= numCols) return; // exit grid
+      if (nextCol >= numCols) return;
     }
     const next = gridRefs.current.get(`${nextRow}-${nextCol}`);
     next?.focus();
@@ -431,8 +468,11 @@ export default function VeritaCheckPage() {
   };
 
   const addInstrument = () => {
-    if (instrumentNames.length >= 3) { toast({ title: "Maximum 3 instruments supported" }); return; }
-    const newName = `Instrument ${instrumentNames.length + 1}`;
+    const maxInst = studyType === "method_comparison" ? 5 : 3;
+    if (instrumentNames.length >= maxInst) { toast({ title: `Maximum ${maxInst} instruments supported` }); return; }
+    const newName = studyType === "method_comparison"
+      ? `Comparison ${instrumentNames.length}`
+      : `Instrument ${instrumentNames.length + 1}`;
     setInstrumentNames([...instrumentNames, newName]);
     setDataPoints(prev => prev.map(dp => ({ ...dp, instrumentValues: { ...dp.instrumentValues, [newName]: null } })));
   };
@@ -479,6 +519,8 @@ export default function VeritaCheckPage() {
     ? Object.values(qcRunData).filter(arr => arr.filter(v => !isNaN(v)).length >= 3).length
     : studyType === "multi_analyte_coag"
     ? maSpecimens.filter(s => (s.ptNew && s.ptOld) || (s.apttNew && s.apttOld) || (s.fibNew && s.fibOld)).length
+    : studyType === "method_comparison"
+    ? dataPoints.filter(dp => instrumentNames.filter(n => dp.instrumentValues[n] !== null).length >= 2).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
 
   const saveMutation = useMutation({
@@ -632,9 +674,32 @@ export default function VeritaCheckPage() {
       return;
     }
     if (filledLevels < MIN_LEVELS) { toast({ title: "Please enter at least 3 data points", variant: "destructive" }); return; }
+
+    if (studyType === "method_comparison") {
+      // For method_comparison, the primary instrument's values become expectedValue
+      // and comparison instruments remain in instrumentValues (minus the primary key)
+      const primaryName = instrumentNames[0];
+      const comparisonNames = instrumentNames.slice(1);
+      const mappedPoints: DataPoint[] = dataPoints.map(dp => ({
+        level: dp.level,
+        expectedValue: dp.instrumentValues[primaryName] ?? null,
+        instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentValues[n] ?? null])),
+      }));
+      const results = calculateStudy(mappedPoints, comparisonNames, cliaValue, "method_comparison");
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
+        date, studyType: "method_comparison", cliaAllowableError: cliaValue,
+        dataPoints: JSON.stringify(dataPoints),
+        instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
     const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison");
     const study: InsertStudy = {
-      testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "—",
+      testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
       date, studyType, cliaAllowableError: cliaValue, dataPoints: JSON.stringify(dataPoints),
       instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
       createdAt: new Date().toISOString(),
@@ -802,17 +867,54 @@ export default function VeritaCheckPage() {
 
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
-                  Instruments / Methods
-                  <Button variant="outline" size="sm" onClick={addInstrument} disabled={instrumentNames.length >= 3}><PlusCircle size={13} className="mr-1" />Add</Button>
+                  {studyType === "method_comparison" ? "Instruments / Methods" : "Instruments / Methods"}
+                  <Button variant="outline" size="sm" onClick={addInstrument} disabled={instrumentNames.length >= (studyType === "method_comparison" ? 5 : 3)}><PlusCircle size={13} className="mr-1" />{studyType === "method_comparison" ? "Add Instrument" : "Add"}</Button>
                 </CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {instrumentNames.map((name, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Badge variant="outline" className="w-7 justify-center shrink-0 text-xs">{idx + 1}</Badge>
-                      <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder={`Instrument ${idx + 1}`} />
-                      {instrumentNames.length > 1 && <Button variant="ghost" size="icon" onClick={() => removeInstrument(idx)} className="text-muted-foreground hover:text-destructive shrink-0 w-8 h-8"><Trash2 size={13} /></Button>}
-                    </div>
-                  ))}
+                <CardContent className="space-y-3">
+                  {studyType === "method_comparison" ? (
+                    <>
+                      {instrumentNames.map((name, idx) => (
+                        <div key={idx} className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={idx === 0 ? "default" : "outline"} className="shrink-0 text-xs px-2">{idx === 0 ? "Primary" : `Comp ${idx}`}</Badge>
+                            <Label className="text-xs text-muted-foreground">
+                              {idx === 0 ? "Primary Instrument / Method" : `Comparison Instrument / Method ${idx + 1}`}
+                            </Label>
+                          </div>
+                          {idx === 0 && <p className="text-xs text-muted-foreground ml-1">This instrument serves as the reference for all comparisons.</p>}
+                          <div className="flex items-center gap-2">
+                            {veritaMapInstruments.length > 0 ? (
+                              <div className="flex-1 space-y-1.5">
+                                <Select value={veritaMapInstruments.some(i => i.name === name) ? name : "__manual__"} onValueChange={v => { if (v !== "__manual__") updateInstrumentName(idx, v); }}>
+                                  <SelectTrigger className="h-9"><SelectValue placeholder="Select from VeritaMap..." /></SelectTrigger>
+                                  <SelectContent>
+                                    {veritaMapInstruments.map(inst => (
+                                      <SelectItem key={inst.name} value={inst.name}>
+                                        {inst.name}{inst.category ? ` - ${inst.category}` : ""}
+                                      </SelectItem>
+                                    ))}
+                                    <SelectItem value="__manual__">Or enter manually...</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder="e.g., Beckman Coulter AU5800" className="text-sm" />
+                              </div>
+                            ) : (
+                              <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder="e.g., Beckman Coulter AU5800" className="flex-1" />
+                            )}
+                            {idx > 0 && instrumentNames.length > 2 && <Button variant="ghost" size="icon" onClick={() => removeInstrument(idx)} className="text-muted-foreground hover:text-destructive shrink-0 w-8 h-8"><Trash2 size={13} /></Button>}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    instrumentNames.map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Badge variant="outline" className="w-7 justify-center shrink-0 text-xs">{idx + 1}</Badge>
+                        <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder={`Instrument ${idx + 1}`} />
+                        {instrumentNames.length > 1 && <Button variant="ghost" size="icon" onClick={() => removeInstrument(idx)} className="text-muted-foreground hover:text-destructive shrink-0 w-8 h-8"><Trash2 size={13} /></Button>}
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
 
@@ -1367,9 +1469,9 @@ export default function VeritaCheckPage() {
               ) : (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
-                  <span>Data Points</span>
+                  <span>{studyType === "method_comparison" ? "Sample Data" : "Data Points"}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground font-normal">Levels:</span>
+                    <span className="text-xs text-muted-foreground font-normal">{studyType === "method_comparison" ? "Samples:" : "Levels:"}</span>
                     <Select value={String(numLevels)} onValueChange={handleNumLevelsChange}>
                       <SelectTrigger className="h-7 w-20 text-xs">
                         <SelectValue />
@@ -1391,22 +1493,42 @@ export default function VeritaCheckPage() {
                 </CardTitle></CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead><tr className="border-b border-border">
-                        <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">Lvl</th>
-                        <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{studyType === "method_comparison" ? "Reference" : "Expected"}</th>
-                        {instrumentNames.map(n => <th key={n} className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{n}</th>)}
-                      </tr></thead>
-                      <tbody>
-                        {dataPoints.map((dp, idx) => (
-                          <tr key={idx} className="border-b border-border/50">
-                            <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
-                            <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
-                            {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {studyType === "method_comparison" ? (
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-border">
+                          <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">Sample</th>
+                          {instrumentNames.map((n, idx) => <th key={n} className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">
+                            <div>{n}</div>
+                            {idx === 0 && <div className="text-[10px] text-primary font-normal">(Primary)</div>}
+                          </th>)}
+                        </tr></thead>
+                        <tbody>
+                          {dataPoints.map((dp, idx) => (
+                            <tr key={idx} className="border-b border-border/50">
+                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">S{dp.level}</span></td>
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-border">
+                          <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">Lvl</th>
+                          <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Expected</th>
+                          {instrumentNames.map(n => <th key={n} className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{n}</th>)}
+                        </tr></thead>
+                        <tbody>
+                          {dataPoints.map((dp, idx) => (
+                            <tr key={idx} className="border-b border-border/50">
+                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
+                              <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1435,7 +1557,7 @@ export default function VeritaCheckPage() {
 
           <div className="mt-8 flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {filledLevels >= (studyType === "precision" ? 1 : 3) ? <span className="text-green-600 dark:text-green-400">✓ {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" ? "specimen" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : 3} minimum filled</span>}
+              {filledLevels >= (studyType === "precision" ? 1 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" ? "specimen" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : 3} minimum filled</span>}
             </div>
             <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < 3 || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
               {saveMutation.isPending ? "Calculating…" : "Run Study & Generate Report"}

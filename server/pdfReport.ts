@@ -426,25 +426,25 @@ function narrativeHTML(
     const ba: any = results.blandAltman ? Object.values(results.blandAltman)[0] : null;
     const meanBiasPct: number = ba?.pctMeanDiff ?? ba?.meanPctBias ?? 0;
 
-    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline — review carefully";
+    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline, review carefully";
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias between methods"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference — the test method reads slightly higher than the reference at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference — the test method reads slightly lower than the reference at upper concentrations`;
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
     const biasInterp = Math.abs(meanBiasPct) <= cliaError * 100
-      ? `within the CLIA total allowable error of ±${cliaPct}%`
-      : `exceeds the CLIA total allowable error of ±${cliaPct}% and requires investigation`;
+      ? `within the CLIA total allowable error of \u00B1${cliaPct}%`
+      : `exceeds the CLIA total allowable error of \u00B1${cliaPct}% and requires investigation`;
 
     if (results.overallPass) {
-      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${analyteName}. `;
+      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
       narrative += `The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. `;
       narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. `;
-      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
+      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
-      narrative += `The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: ±${cliaPct}%) indicate unacceptable agreement between methods. `;
-      narrative += `Do not report patient results from the test method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
+      narrative += `The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. `;
+      narrative += `Do not report patient results from the comparison method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
     }
   }
 
@@ -598,80 +598,122 @@ interface MethodCompData {
 }
 
 function buildMethodCompHTML(study: Study, results: MethodCompData): string {
-  const instrumentNames: string[] = JSON.parse(study.instruments);
-  const firstInst = instrumentNames[0];
+  const allInstrumentNames: string[] = JSON.parse(study.instruments);
+  const primaryName = allInstrumentNames[0];
+  // Comparison instruments are those that appear in the results' instruments
+  const comparisonNames = results.levelResults.length > 0
+    ? Object.keys(results.levelResults[0].instruments)
+    : allInstrumentNames.slice(1);
 
-  // Chart data
-  const xVals = results.levelResults.map(r => r.referenceValue);
-  const yVals = results.levelResults.filter(r => r.instruments[firstInst]).map(r => r.instruments[firstInst].value);
-  const corrSvg = scatterSVG(xVals, yVals.length ? yVals : xVals, "Reference Method", "Test Method", "Correlation", true);
+  // Build per-comparison sections
+  let comparisonSections = "";
+  for (const compName of comparisonNames) {
+    // Chart data for this comparison
+    const xVals = results.levelResults.map(r => r.referenceValue);
+    const yVals = results.levelResults.filter(r => r.instruments[compName]).map(r => r.instruments[compName].value);
+    const corrSvg = scatterSVG(xVals, yVals.length ? yVals : xVals, `${primaryName} (Primary)`, compName, `${compName} vs. ${primaryName}`, true);
 
-  const baEntry = results.blandAltman[firstInst];
-  const avgs = results.levelResults.filter(r => r.instruments[firstInst]).map(r => (r.referenceValue + r.instruments[firstInst].value) / 2);
-  const pctDiffs = results.levelResults.filter(r => r.instruments[firstInst]).map(r => r.instruments[firstInst].pctDifference);
-  const baSvg = blandAltmanSVG(avgs, pctDiffs, study.cliaAllowableError, baEntry?.pctMeanDiff ?? 0, firstInst);
+    const baEntry = results.blandAltman[compName];
+    const avgs = results.levelResults.filter(r => r.instruments[compName]).map(r => (r.referenceValue + r.instruments[compName].value) / 2);
+    const pctDiffs = results.levelResults.filter(r => r.instruments[compName]).map(r => r.instruments[compName].pctDifference);
+    const baSvg = blandAltmanSVG(avgs, pctDiffs, study.cliaAllowableError, baEntry?.pctMeanDiff ?? 0, compName);
 
-  // Supporting statistics (left col / right col layout)
-  const demEntry = Object.entries(results.regression).find(([k]) => k.includes("Deming"))?.[1];
-  const corrCoef = demEntry ? Math.sqrt(demEntry.r2).toFixed(4) : "—";
-  const xMeanVal = ((results.xRange.min + results.xRange.max) / 2).toFixed(3);
+    // Supporting statistics
+    const demKey = Object.keys(results.regression).find(k => k.includes(compName) && k.includes("Deming"));
+    const demEntry = demKey ? results.regression[demKey] : undefined;
+    const corrCoef = demEntry ? Math.sqrt(demEntry.r2).toFixed(4) : "---";
+    const xMeanVal = ((results.xRange.min + results.xRange.max) / 2).toFixed(3);
 
-  const suppStatsLeft = [
-    ["Corr Coef (R):", corrCoef],
-    ["Bias:", baEntry ? baEntry.meanDiff.toFixed(3) : "—"],
-    ["X Mean ± SD:", xMeanVal],
-    ["Std Dev Diffs:", baEntry ? baEntry.sdDiff.toFixed(3) : "—"],
-  ];
-  const suppStatsRight = [
-    ["Points (Plotted/Total):", `${results.levelResults.length}/${results.levelResults.length}`],
-    ["X Result Range:", `${results.xRange.min.toFixed(3)} to ${results.xRange.max.toFixed(3)}`],
-    ...instrumentNames.filter(n => results.yRange[n]).map(n => [`${n} Range:`, `${results.yRange[n].min.toFixed(3)} to ${results.yRange[n].max.toFixed(3)}`]),
-  ];
+    const suppStatsLeft = [
+      ["Corr Coef (R):", corrCoef],
+      ["Mean Bias:", baEntry ? baEntry.meanDiff.toFixed(3) : "---"],
+      ["Primary Mean:", xMeanVal],
+      ["Std Dev Diffs:", baEntry ? baEntry.sdDiff.toFixed(3) : "---"],
+    ];
+    const suppStatsRight = [
+      ["Points (Plotted/Total):", `${results.levelResults.length}/${results.levelResults.length}`],
+      ["Primary Range:", `${results.xRange.min.toFixed(3)} to ${results.xRange.max.toFixed(3)}`],
+      ...(results.yRange[compName] ? [[`${compName} Range:`, `${results.yRange[compName].min.toFixed(3)} to ${results.yRange[compName].max.toFixed(3)}`]] : []),
+    ];
 
-  const maxRows = Math.max(suppStatsLeft.length, suppStatsRight.length);
-  let suppRows = "";
-  for (let i = 0; i < maxRows; i++) {
-    const l = suppStatsLeft[i] || ["", ""];
-    const r = suppStatsRight[i] || ["", ""];
-    suppRows += `<tr>
-      <td style="color:${MUTED};font-weight:700;width:22%">${l[0]}</td><td style="width:26%">${l[1]}</td>
-      <td style="color:${MUTED};font-weight:700;width:22%">${r[0]}</td><td>${r[1]}</td>
-    </tr>`;
+    const maxRows = Math.max(suppStatsLeft.length, suppStatsRight.length);
+    let suppRows = "";
+    for (let i = 0; i < maxRows; i++) {
+      const l = suppStatsLeft[i] || ["", ""];
+      const r = suppStatsRight[i] || ["", ""];
+      suppRows += `<tr>
+        <td style="color:${MUTED};font-weight:700;width:22%">${l[0]}</td><td style="width:26%">${l[1]}</td>
+        <td style="color:${MUTED};font-weight:700;width:22%">${r[0]}</td><td>${r[1]}</td>
+      </tr>`;
+    }
+
+    // Regression rows for this comparison only
+    const regRowsForComp = Object.entries(results.regression)
+      .filter(([name]) => name.includes(compName))
+      .map(([name, reg]) => {
+        const shortName = name.includes("Deming") ? "Deming" : "OLS";
+        const slopeStr = reg.slopeLo !== undefined ? `${reg.slope.toFixed(4)} (${reg.slopeLo.toFixed(3)}-${reg.slopeHi!.toFixed(3)})` : reg.slope.toFixed(4);
+        const intStr = reg.interceptLo !== undefined ? `${reg.intercept.toFixed(4)} (${reg.interceptLo.toFixed(3)}-${reg.interceptHi!.toFixed(3)})` : reg.intercept.toFixed(4);
+        const biasClass = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? "pass" : "fail";
+        return `<tr>
+          <td>${shortName}</td>
+          <td class="text-right">${reg.n}</td>
+          <td class="text-right">${slopeStr}</td>
+          <td class="text-right">${intStr}</td>
+          <td class="text-right">${reg.see.toFixed(4)}</td>
+          <td class="text-right ${biasClass}">${(reg.proportionalBias * 100).toFixed(2)}%</td>
+          <td class="text-right">${Math.sqrt(reg.r2).toFixed(4)}</td>
+          <td class="text-right">${reg.r2.toFixed(4)}</td>
+        </tr>`;
+      }).join("");
+
+    // Bland-Altman row for this comparison
+    const baRow = baEntry ? (() => {
+      const biasClass = Math.abs(baEntry.pctMeanDiff) < study.cliaAllowableError * 100 ? "pass" : "fail";
+      return `<tr>
+        <td>${compName}</td>
+        <td class="text-right">${baEntry.meanDiff.toFixed(4)}</td>
+        <td class="text-right ${biasClass}">${baEntry.pctMeanDiff.toFixed(2)}%</td>
+        <td class="text-right">${baEntry.sdDiff.toFixed(4)}</td>
+        <td class="text-right">${baEntry.loa_lower.toFixed(4)}</td>
+        <td class="text-right">${baEntry.loa_upper.toFixed(4)}</td>
+      </tr>`;
+    })() : "";
+
+    comparisonSections += `
+    <div class="section-heading" style="margin-top:14px">${compName} vs. ${primaryName} - Method Comparison</div>
+    <div class="charts">${corrSvg}${baSvg}</div>
+
+    <hr class="divider">
+    <div class="section-label">Supporting Statistics</div>
+    <table style="font-size:8pt"><tbody>${suppRows}</tbody></table>
+
+    <hr class="divider" style="margin-top:8px">
+    <div class="section-label">Deming Regression: ${compName} vs. ${primaryName}</div>
+    <table>
+      <thead><tr>
+        <th>Method</th><th class="text-right">N</th><th class="text-right">Slope (95% CI)</th>
+        <th class="text-right">Intercept (95% CI)</th><th class="text-right">SEE</th>
+        <th class="text-right">Prop. Bias</th><th class="text-right">R</th><th class="text-right">R\u00B2</th>
+      </tr></thead>
+      <tbody>${regRowsForComp}</tbody>
+    </table>
+    <div style="font-size:6.5pt;color:${MUTED};margin-top:3px">95% Confidence Intervals shown in parentheses (OLS only)</div>
+
+    <hr class="divider" style="margin-top:8px">
+    <div class="section-label">Bland-Altman Bias Summary</div>
+    <table>
+      <thead><tr>
+        <th>Comparison Method</th><th class="text-right">Mean Bias</th><th class="text-right">Mean % Bias</th>
+        <th class="text-right">SD of Diff</th><th class="text-right">95% LoA Lower</th><th class="text-right">95% LoA Upper</th>
+      </tr></thead>
+      <tbody>${baRow}</tbody>
+    </table>
+    `;
   }
 
-  // Regression table
-  const regRows = Object.entries(results.regression).map(([name, reg]) => {
-    const shortName = name.includes("Deming") ? "Deming" : "OLS";
-    const slopeStr = reg.slopeLo !== undefined ? `${reg.slope.toFixed(4)} (${reg.slopeLo.toFixed(3)}-${reg.slopeHi!.toFixed(3)})` : reg.slope.toFixed(4);
-    const intStr = reg.interceptLo !== undefined ? `${reg.intercept.toFixed(4)} (${reg.interceptLo.toFixed(3)}-${reg.interceptHi!.toFixed(3)})` : reg.intercept.toFixed(4);
-    const biasClass = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? "pass" : "fail";
-    return `<tr>
-      <td>${shortName}</td>
-      <td class="text-right">${reg.n}</td>
-      <td class="text-right">${slopeStr}</td>
-      <td class="text-right">${intStr}</td>
-      <td class="text-right">${reg.see.toFixed(4)}</td>
-      <td class="text-right ${biasClass}">${(reg.proportionalBias * 100).toFixed(2)}%</td>
-      <td class="text-right">${Math.sqrt(reg.r2).toFixed(4)}</td>
-      <td class="text-right">${reg.r2.toFixed(4)}</td>
-    </tr>`;
-  }).join("");
-
-  // Bland-Altman summary table
-  const baRows = Object.entries(results.blandAltman).map(([name, ba], bi) => {
-    const biasClass = Math.abs(ba.pctMeanDiff) < study.cliaAllowableError * 100 ? "pass" : "fail";
-    return `<tr class="${bi % 2 === 1 ? "stripe" : ""}">
-      <td>${name}</td>
-      <td class="text-right">${ba.meanDiff.toFixed(4)}</td>
-      <td class="text-right ${biasClass}">${ba.pctMeanDiff.toFixed(2)}%</td>
-      <td class="text-right">${ba.sdDiff.toFixed(4)}</td>
-      <td class="text-right">${ba.loa_lower.toFixed(4)}</td>
-      <td class="text-right">${ba.loa_upper.toFixed(4)}</td>
-    </tr>`;
-  }).join("");
-
   // Level-by-level table
-  const instrHeaders = instrumentNames.flatMap(n => [
+  const instrHeaders = comparisonNames.flatMap(n => [
     `<th class="text-right">${n}</th>`,
     `<th class="text-right">Bias</th>`,
     `<th class="text-right">% Diff</th>`,
@@ -679,9 +721,9 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   ]).join("");
 
   const levelRows = results.levelResults.map((r, ri) => {
-    const instrCells = instrumentNames.flatMap(n => {
+    const instrCells = comparisonNames.flatMap(n => {
       const v = r.instruments[n];
-      if (!v) return [`<td>—</td>`, `<td>—</td>`, `<td>—</td>`, `<td>—</td>`];
+      if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td>---</td>`];
       const pfClass = v.passFail === "Pass" ? "pass" : "fail";
       return [
         `<td class="text-right">${v.value.toFixed(3)}</td>`,
@@ -691,7 +733,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       ];
     }).join("");
     return `<tr class="${ri % 2 === 1 ? "stripe" : ""}">
-      <td>L${r.level}</td>
+      <td>S${r.level}</td>
       <td class="text-right">${r.referenceValue.toFixed(3)}</td>
       ${instrCells}
     </tr>`;
@@ -703,52 +745,27 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="section-heading">Correlation / Method Comparison</div>
-  <div class="charts">${corrSvg}${baSvg}</div>
+  <div class="section-heading">Correlation / Method Comparison Study</div>
+  <div class="report-title-sub">Primary Method: ${primaryName} | Comparison Method${comparisonNames.length > 1 ? "s" : ""}: ${comparisonNames.join(", ")}</div>
 
-  <hr class="divider">
-  <div class="section-label">Supporting Statistics</div>
-  <table style="font-size:8pt"><tbody>${suppRows}</tbody></table>
-
-  <hr class="divider" style="margin-top:8px">
-  <div class="section-label">Regression Analysis</div>
-  <table>
-    <thead><tr>
-      <th>Method</th><th class="text-right">N</th><th class="text-right">Slope (95% CI)</th>
-      <th class="text-right">Intercept (95% CI)</th><th class="text-right">SEE</th>
-      <th class="text-right">Prop. Bias</th><th class="text-right">R</th><th class="text-right">R²</th>
-    </tr></thead>
-    <tbody>${regRows}</tbody>
-  </table>
-  <div style="font-size:6.5pt;color:${MUTED};margin-top:3px">95% Confidence Intervals shown in parentheses (OLS only)</div>
-
-  <hr class="divider" style="margin-top:8px">
-  <div class="section-label">Bland-Altman Bias Summary</div>
-  <table>
-    <thead><tr>
-      <th>Instrument</th><th class="text-right">Mean Bias</th><th class="text-right">Mean % Bias</th>
-      <th class="text-right">SD of Diff</th><th class="text-right">95% LoA Lower</th><th class="text-right">95% LoA Upper</th>
-    </tr></thead>
-    <tbody>${baRows}</tbody>
-  </table>
+  ${comparisonSections}
 
   ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
 
   ${signatureHTML()}
 
   <div class="stats-section">
-    <div class="section-label">Level-by-Level Comparison Results</div>
-    <div style="font-size:7pt;font-weight:700;color:${MUTED};margin-bottom:3px">${firstInst}</div>
+    <div class="section-label">Sample-by-Sample Comparison Results</div>
     <table>
       <thead><tr>
-        <th>Level</th><th class="text-right">Reference</th>${instrHeaders}
+        <th>Sample</th><th class="text-right">${primaryName} (Primary)</th>${instrHeaders}
       </tr></thead>
       <tbody>${levelRows}</tbody>
     </table>
     ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
   </div>
 
-  ${supportingPageHTML(study, instrumentNames)}
+  ${supportingPageHTML(study, allInstrumentNames)}
   </body></html>`;
 }
 

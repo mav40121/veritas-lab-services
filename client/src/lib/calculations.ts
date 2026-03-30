@@ -226,17 +226,17 @@ export function calculateCalVer(
 }
 
 // ─── METHOD COMPARISON ─────────────────────────────────────────────────────────
-// Input: reference method (x = expectedValue) vs. test method(s) (y = instrumentValues)
+// Input: primary method (x = expectedValue) vs. comparison method(s) (y = instrumentValues)
 // Key metrics: slope, intercept, R², bias per level, Bland-Altman difference
 
 export interface MethodCompLevelResult {
   level: number;
-  referenceValue: number;
+  referenceValue: number; // primary instrument value
   instruments: {
     [name: string]: {
       value: number;
-      difference: number;       // test - reference (absolute bias)
-      pctDifference: number;    // (test - reference) / reference * 100
+      difference: number;       // comparison - primary (absolute bias)
+      pctDifference: number;    // (comparison - primary) / primary * 100
       passFail: "Pass" | "Fail";
     };
   };
@@ -295,7 +295,7 @@ export function calculateMethodComparison(
     if (ys.length) yRange[n] = { min: Math.min(...ys), max: Math.max(...ys) };
   });
 
-  // Regression: Deming + OLS for each test method vs. reference
+  // Regression: Deming + OLS for each comparison method vs. primary
   const regression: { [k: string]: RegressionResult } = {};
   instrumentNames.forEach((n) => {
     const xs: number[] = [], ys: number[] = [];
@@ -303,15 +303,15 @@ export function calculateMethodComparison(
     if (xs.length >= 2) {
       // Deming regression
       const dem = demingRegression(xs, ys);
-      const demSee = seeFn(xs, ys); // SEE from residuals (approximation)
-      regression[`${n} vs. Reference (Deming)`] = {
+      const demSee = seeFn(xs, ys);
+      regression[`${n} vs. Primary (Deming)`] = {
         slope: dem.slope, intercept: dem.intercept, proportionalBias: dem.slope - 1,
         r2: rsq(xs, ys), n: xs.length, see: demSee, regressionType: "Deming"
       };
       // OLS regression with 95% CI
       const s = slopeFn(xs, ys), b = interceptFn(xs, ys);
       const ci = olsCI(xs, ys);
-      regression[`${n} vs. Reference (OLS)`] = {
+      regression[`${n} vs. Primary (OLS)`] = {
         slope: s, intercept: b, proportionalBias: s - 1,
         r2: rsq(xs, ys), n: xs.length, see: seeFn(xs, ys), ...ci, regressionType: "OLS"
       };
@@ -349,7 +349,7 @@ export function calculateMethodComparison(
     .join("; ");
   const n = levelResults.length;
   const summary =
-    `Method Comparison was performed using ${n} sample levels with CLIA TEa of ±${cliaPercent}%. ` +
+    `Correlation / Method Comparison was performed using ${n} patient samples with CLIA TEa of ±${cliaPercent}%. ` +
     `Regression analysis: ${regLines}. ` +
     `Bland-Altman analysis: ${baLines}. ` +
     `${passCount} of ${totalCount} paired results were within TEa. ` +

@@ -335,9 +335,10 @@ function generateMethodComparisonData(n: number, baseLow: number, baseHigh: numb
     const refValue = baseLow + (baseHigh - baseLow) * (i / (n - 1));
     const noise = (Math.sin(i * 3.14159) * 0.5 + (i % 3) * 0.1) * 0.3;
     const testValue = refValue * targetSlope + noise;
+    // New format: all instrument values in instrumentValues (primary + comparison)
     points.push({
       level: i + 1,
-      expectedValue: Math.round(refValue * 10) / 10,
+      expectedValue: null,
       instrumentValues: {
         "Ortho 5600 Primary": Math.round(refValue * 10) / 10,
         "Ortho 5600 Backup": Math.round(testValue * 10) / 10,
