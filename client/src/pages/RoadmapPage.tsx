@@ -83,6 +83,11 @@ const comingSoonItems: RoadmapItem[] = [
     description:
       "REST API for health systems and reference labs that need to integrate VeritaAssure data into existing LIS, LIMS, or compliance platforms.",
   },
+  {
+    title: "VeritaCheck\u2122 - Reference Range Verification Workflow",
+    description:
+      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
+  },
 ];
 
 interface SectionProps {
