@@ -20,13 +20,6 @@ interface LabData {
   base_price: number;
 }
 
-const TIER_LABELS: Record<string, string> = {
-  waived: "Waived",
-  community: "Community",
-  hospital: "Hospital",
-  large_hospital: "Large Hospital",
-};
-
 interface CLIALookupModalProps {
   open: boolean;
   onClose: () => void;
@@ -106,16 +99,12 @@ export default function CLIALookupModal({ open, onClose, onCheckout, discountCod
         setConfirming(false);
         return;
       }
-      // Proceed to Stripe checkout with the correct tier
-      onCheckout(labData.tier);
+      // Proceed to Stripe checkout with VeritaCheck-only tier
+      onCheckout("veritacheck_only");
     } catch {
       setError("Could not confirm lab. Please try again.");
       setConfirming(false);
     }
-  };
-
-  const handleVeritaCheckOnly = () => {
-    onCheckout("veritacheck_only");
   };
 
   return (
@@ -159,16 +148,6 @@ export default function CLIALookupModal({ open, onClose, onCheckout, discountCod
               </div>
               {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
             </div>
-
-            <div className="pt-2 border-t">
-              <button
-                type="button"
-                className="text-xs text-muted-foreground hover:text-primary underline cursor-pointer"
-                onClick={handleVeritaCheckOnly}
-              >
-                Subscribing to VeritaCheck&#8482; only? Click here -- no CLIA number required.
-              </button>
-            </div>
           </div>
         ) : (
           /* ── Lab Confirmation Step ── */
@@ -190,8 +169,10 @@ export default function CLIALookupModal({ open, onClose, onCheckout, discountCod
                   <p className="text-muted-foreground">Certified Specialties: {labData.specialty_count}</p>
                 </div>
                 <div className="pt-3 mt-3 border-t border-primary/20">
-                  <p className="text-sm font-semibold">
-                    Your plan: {TIER_LABELS[labData.tier] || labData.tier} -- ${labData.base_price}/yr (includes first user)
+                  <p className="text-sm font-semibold">Plan: VeritaCheck&#8482; Only</p>
+                  <p className="text-sm font-semibold">Price: $299/yr</p>
+                  <p className="text-xs text-muted-foreground italic mt-1">
+                    VeritaCheck&#8482;-only pricing is flat regardless of lab size.
                   </p>
                 </div>
               </CardContent>
