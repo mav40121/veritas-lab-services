@@ -441,7 +441,7 @@ export default function DemoLabPage() {
                   Riverside Regional's laboratory has been fully mapped - 11 analyzers and 2 manual methods across the Chemistry, Hematology, and Blood Bank departments.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  When building your lab in VeritaMap&#8482;, you select your instruments from a database of 190+ FDA-cleared analyzers. VeritaMap&#8482; queries the FDA test complexity database and presents every approved test for that instrument. You toggle the tests your lab performs, and VeritaMap&#8482; builds your complete test menu, with CLIA complexity, reference ranges, critical values, and AMR populated automatically from Mayo Clinic published data. The result is a living map of your laboratory that is always survey-ready.
+                  When building your lab in VeritaMap&#8482;, you select your instruments from a database of 190+ FDA-cleared analyzers. VeritaMap&#8482; queries the FDA test complexity database and presents every approved test for that instrument. You toggle the tests your lab performs, and VeritaMap&#8482; builds your complete test menu, with CLIA complexity, reference ranges, critical values, and AMR populated automatically from Mayo Clinic Laboratories published data. The result is a living map of your laboratory that is always survey-ready.
                 </p>
               </div>
               {map ? (

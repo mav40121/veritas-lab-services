@@ -787,7 +787,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Analyte", "Instruments", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Typical Unit of Measure", "Typical Adult Reference Range", "Typical AMR",
-        "Critical Low (Mayo Clinic)", "Critical High (Mayo Clinic)", "Critical Value Units (Mayo Clinic)",
+        "Critical Low (Mayo Clinic Laboratories)", "Critical High (Mayo Clinic Laboratories)", "Critical Value Units (Mayo Clinic Laboratories)",
         "Lab Critical Low", "Lab Critical High", "Lab AMR Low", "Lab AMR High",
         "Last Cal Ver Date", "Cal Ver Status", "Last Method Comp Date", "Method Comp Status",
         "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
@@ -924,6 +924,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             cell.alignment = { horizontal: "right", vertical: "middle" };
           }
         });
+      }
+
+      // ── Add notes to critical-value header cells (columns L, M, N = 12, 13, 14) ──
+      const critNote = "Source: Mayo Clinic Laboratories Critical Values / Critical Results List. These are Mayo Clinic's published critical thresholds, provided as a reference. Each laboratory must establish and approve its own critical value policy.";
+      for (const col of [12, 13, 14]) {
+        headerRow.getCell(col).note = critNote;
       }
 
       // Freeze pane at C2: cols A-B frozen + header row frozen
