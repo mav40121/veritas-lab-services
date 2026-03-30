@@ -36,7 +36,7 @@ export const PLAN_LIMITS = {
   community:        { label: "Community",            studyCredits: 99999, maxAnalysts: 10,  price: "$799/yr" },
   hospital:         { label: "Hospital",             studyCredits: 99999, maxAnalysts: 25,  price: "$1,299/yr" },
   large_hospital:   { label: "Large Hospital",       studyCredits: 99999, maxAnalysts: 50,  price: "$1,999/yr" },
-  veritacheck_only: { label: "VeritaCheck\u2122 Only", studyCredits: 99999, maxAnalysts: 1,   price: "$299/yr" },
+  veritacheck_only: { label: "VeritaCheck\u2122 Unlimited", studyCredits: 99999, maxAnalysts: 1,   price: "$299/yr" },
 } as const;
 
 // Seat pricing tiers
