@@ -786,7 +786,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const headers = [
         "Analyte", "Instruments", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
-        "Typical Unit of Measure", "Typical Adult Reference Range", "Typical AMR",
+        "Unit of Measure", "Reference Range", "AMR",
         "Critical Low (Mayo Clinic Laboratories)", "Critical High (Mayo Clinic Laboratories)", "Critical Value Units (Mayo Clinic Laboratories)",
         "Lab Critical Low", "Lab Critical High", "Lab AMR Low", "Lab AMR High",
         "Last Cal Ver Date", "Cal Ver Status", "Last Method Comp Date", "Method Comp Status",
@@ -829,8 +829,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           cfr,
           correlReq,
           unit ? `${unit}` : "",
-          refRange ? `${refRange} — Typical (verify w/ package insert)` : "",
-          amr ? `${amr} — Typical (verify w/ package insert)` : "",
+          refRange || "",
+          amr || "",
           mayo?.low || "",
           mayo?.high || "",
           mayo?.units || "",
@@ -931,6 +931,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const col of [12, 13, 14]) {
         headerRow.getCell(col).note = critNote;
       }
+
+      // ── Add notes to Reference Range and AMR header cells (columns J=10, K=11) ──
+      const refRangeNote = "Reference ranges must be established and verified by each laboratory per CLIA 493.1253. Values shown are lab-entered only.";
+      headerRow.getCell(10).note = refRangeNote;
+      const amrNote = "Analytical Measurement Range must be verified by each laboratory per CLIA 493.1253(b)(1). Values shown are lab-entered only.";
+      headerRow.getCell(11).note = amrNote;
+
+      // ── Add notes to Lab AMR header cells (columns Q=17, R=18) ──
+      const labAmrNote = "Enter your instrument's verified AMR per CLIA 493.1253(b)(1).";
+      headerRow.getCell(17).note = labAmrNote;
+      headerRow.getCell(18).note = labAmrNote;
 
       // Freeze pane at C2: cols A-B frozen + header row frozen
       ws.views = [{ state: "frozen" as const, xSplit: 2, ySplit: 1, topLeftCell: "C2" }];

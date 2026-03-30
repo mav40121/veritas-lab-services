@@ -1,5 +1,5 @@
 // ── VeritaMap Excel Export Lookup Tables ─────────────────────────────────────
-// Mayo critical values, units, reference ranges, AMR — keyed by analyte (lowercase)
+// Mayo critical values, units - keyed by analyte (lowercase)
 
 export const MAYO_CRITICAL_VALUES: Record<string, { low?: string; high?: string; units?: string }> = {
   // Hematology
@@ -137,64 +137,13 @@ export const UNITS_LOOKUP: Record<string, string> = {
   "carboxyhemoglobin": "%",
 };
 
-export const REFERENCE_RANGES: Record<string, string> = {
-  "sodium": "136-145 mmol/L",
-  "potassium": "3.5-5.1 mmol/L",
-  "chloride": "98-107 mmol/L",
-  "co2": "22-29 mmol/L",
-  "carbon dioxide, total (co2)": "22-29 mmol/L",
-  "glucose": "70-100 mg/dL (fasting)",
-  "bun": "7-25 mg/dL",
-  "creatinine": "0.59-1.35 mg/dL",
-  "calcium, total": "8.6-10.2 mg/dL",
-  "magnesium": "1.7-2.2 mg/dL",
-  "phosphorus": "2.5-4.5 mg/dL",
-  "albumin": "3.5-5.0 g/dL",
-  "total protein": "6.3-8.2 g/dL",
-  "bilirubin, total": "0.2-1.2 mg/dL",
-  "bilirubin": "0.2-1.2 mg/dL",
-  "alt": "7-56 U/L",
-  "ast": "10-40 U/L",
-  "alp": "44-147 U/L",
-  "cholesterol": "<200 mg/dL",
-  "triglyceride": "<150 mg/dL",
-  "hdl cholesterol": ">40 mg/dL (M), >50 mg/dL (F)",
-  "ldl cholesterol": "<100 mg/dL",
-  "hemoglobin": "12.0-17.5 g/dL",
-  "hematocrit": "36-53%",
-  "wbc": "4.5-11.0 x10(9)/L",
-  "platelets": "150-400 x10(9)/L",
-  "pt": "11-13.5 sec",
-  "inr": "0.8-1.1",
-  "ptt": "25-35 sec",
-  "aptt": "25-35 sec",
-  "activated partial thromboplastin time": "25-35 sec",
-  "fibrinogen": "200-400 mg/dL",
-  "tsh": "0.4-4.0 mIU/L",
-  "hemoglobin a1c": "<5.7% (normal)",
-  "hba1c": "<5.7% (normal)",
-  "ph": "7.35-7.45",
-  "pco2": "35-45 mmHg",
-  "po2": "80-100 mmHg",
-  "esr": "0-20 mm/hr",
-};
+// Reference ranges removed - each laboratory must establish and verify its own
+// reference intervals per CLIA 493.1253. Do not pre-populate published ranges.
+export const REFERENCE_RANGES: Record<string, string> = {};
 
-export const AMR_LOOKUP: Record<string, string> = {
-  "sodium": "100-180 mmol/L",
-  "potassium": "1.0-9.0 mmol/L",
-  "glucose": "20-700 mg/dL",
-  "creatinine": "0.2-40.0 mg/dL",
-  "calcium, total": "4.0-16.0 mg/dL",
-  "hemoglobin": "1.0-25.0 g/dL",
-  "pt": "8-250 sec",
-  "ptt": "14-250 sec",
-  "aptt": "14-250 sec",
-  "activated partial thromboplastin time": "14-250 sec",
-  "fibrinogen": "60-1200 mg/dL",
-  "d-dimer": "0.1-40 mg/L FEU",
-  "troponin-i (cardiac)": "0.006-50 ng/mL",
-  "troponin i": "0.006-50 ng/mL",
-};
+// AMR removed - each laboratory must verify its own analytical measurement range
+// per CLIA 493.1253(b)(1). Do not pre-populate typical ranges.
+export const AMR_LOOKUP: Record<string, string> = {};
 
 // CFR section lookup (matches the client-side CFR_MAP)
 export const CFR_MAP: Record<string, string> = {
@@ -232,7 +181,7 @@ export function lookupAnalyte<T>(table: Record<string, T>, analyte: string): T |
 
 // Instructions sheet content
 export const INSTRUCTIONS_CONTENT = [
-  ["VeritaMap™ Compliance Export — How to Use This File"],
+  ["VeritaMap™ Compliance Export - How to Use This File"],
   [""],
   ["1. About This Export"],
   ["This file was generated from VeritaAssure VeritaMap, a clinical laboratory compliance mapping tool."],
@@ -240,14 +189,14 @@ export const INSTRUCTIONS_CONTENT = [
   ["instrument assignments, compliance dates, and reference data."],
   [""],
   ["2. Column Guide"],
-  ["• Columns A-F: Analyte identification — test name, department, specialty, complexity, instruments, and count."],
-  ["• Column G: CFR Section — the applicable 42 CFR Part 493 section for the test specialty."],
-  ["• Column H: Correlation Required — Yes if non-waived test is run on 2+ instruments (42 CFR §493.1213)."],
-  ["• Columns I-K: Reference data — typical units, adult reference ranges, and analytical measurement range (AMR)."],
+  ["• Columns A-F: Analyte identification - test name, department, specialty, complexity, instruments, and count."],
+  ["• Column G: CFR Section - the applicable 42 CFR Part 493 section for the test specialty."],
+  ["• Column H: Correlation Required - Yes if non-waived test is run on 2+ instruments (42 CFR §493.1213)."],
+  ["• Columns I-K: Unit of measure, reference range, and AMR (lab-entered values only)."],
   ["• Columns L-N: Critical values from Mayo Clinic Laboratories (low, high, units) for guidance."],
   ["• Columns O-R (blue): Lab fill-in columns for YOUR laboratory's critical values and AMR."],
   ["• Columns S-Z: Compliance dates and calculated status for Cal Ver, Method Comp, Precision, and SOP Review."],
-  ["• Column AA: Notes — free text from your VeritaMap."],
+  ["• Column AA: Notes - free text from your VeritaMap."],
   [""],
   ["3. Lab Fill-In Columns (Blue Background)"],
   ["Lab Critical Low/High: Enter your laboratory's established critical value thresholds."],
@@ -255,14 +204,15 @@ export const INSTRUCTIONS_CONTENT = [
   ["Cal Ver, Method Comp, Precision, and SOP dates should be updated regularly in VeritaMap."],
   [""],
   ["4. Reference Ranges and Critical Values"],
-  ["Reference ranges shown are typical adult values for guidance only."],
+  ["Reference ranges and AMR must be established and verified by each laboratory per CLIA 493.1253."],
+  ["Values shown in the Reference Range and AMR columns are lab-entered only - no pre-populated defaults are provided."],
   ["Critical values are from Mayo Clinic Laboratories DLMP Critical Values list and should be compared"],
   ["to your laboratory's established critical value policy."],
   ["Your laboratory director is responsible for establishing and approving all reference ranges and critical values."],
   [""],
-  ["5. AMR — Analytical Measurement Range"],
-  ["AMR shown is typical for common platforms. Verify against your specific instrument's package insert"],
-  ["and most recent calibration/linearity data."],
+  ["5. AMR - Analytical Measurement Range"],
+  ["AMR must be verified by each laboratory per CLIA 493.1253(b)(1)."],
+  ["Enter your instrument's verified AMR from your most recent calibration/linearity verification data."],
   [""],
   ["6. Data Source"],
   ["veritaassure.com | Veritas Lab Services, LLC"],
