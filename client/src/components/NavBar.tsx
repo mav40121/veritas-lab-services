@@ -31,6 +31,7 @@ const allMobileLinks = [
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/book", label: "Book" },
   { href: "/resources", label: "Resources" },
+  { href: "/roadmap", label: "Roadmap" },
   { href: "/demo", label: "Live Demo" },
   { href: "/contact", label: "Contact" },
 ];
@@ -160,11 +161,54 @@ export function NavBar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Resources */}
-          <Link href="/resources" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-            isActive("/resources") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
-            Resources
-          </Link>
+          {/* Resources dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                ["/resources","/book","/study-guide","/roadmap"].some(p => location.startsWith(p))
+                  ? "text-foreground bg-secondary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}>
+                Resources
+                <ChevronDown size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem asChild>
+                <Link href="/resources" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Articles</div>
+                    <div className="text-xs text-muted-foreground">Clinical lab knowledge base</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/book" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Lab Management 101</div>
+                    <div className="text-xs text-muted-foreground">Book for new lab leaders</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/study-guide" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Study Guide</div>
+                    <div className="text-xs text-muted-foreground">Which study do I need?</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/roadmap" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Roadmap</div>
+                    <div className="text-xs text-muted-foreground">Product development status</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Live Demo */}
           <Link href="/demo" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">
