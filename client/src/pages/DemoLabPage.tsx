@@ -221,10 +221,12 @@ export default function DemoLabPage() {
           {/* ═══════════════ TAB 1: VERITACHECK ═══════════════ */}
           {activeTab === "veritacheck" && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold">Method Validation Studies</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  VeritaCheck&#8482; runs the EP studies required for CLIA and CAP compliance. Below are two completed method comparison studies for Riverside Regional's chemistry department.
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Riverside Regional has completed 2 method comparison studies for their chemistry department.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  Below, you can explore the full results, Deming regression, bias analysis, and CLIA pass/fail evaluation, exactly as they appear in the compliance record. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
                 </p>
               </div>
 
@@ -434,10 +436,12 @@ export default function DemoLabPage() {
           {/* ═══════════════ TAB 2: VERITAMAP ═══════════════ */}
           {activeTab === "veritamap" && (
             <div className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold">Laboratory Test Menu Map</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  VeritaMap&#8482; builds a complete inventory of your instruments and tests, with regulatory reference ranges, critical values, and AMR pulled automatically.
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Riverside Regional's laboratory has been fully mapped - 11 analyzers and 2 manual methods across the Chemistry, Hematology, and Blood Bank departments.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  When building your lab in VeritaMap&#8482;, you select your instruments from a database of 190+ FDA-cleared analyzers. VeritaMap&#8482; queries the FDA test complexity database and presents every approved test for that instrument. You toggle the tests your lab performs, and VeritaMap&#8482; builds your complete test menu, with CLIA complexity, reference ranges, critical values, and AMR populated automatically from Mayo Clinic published data. The result is a living map of your laboratory that is always survey-ready.
                 </p>
               </div>
               {map ? (
@@ -512,10 +516,12 @@ export default function DemoLabPage() {
           {/* ═══════════════ TAB 3: VERITASCAN ═══════════════ */}
           {activeTab === "veritascan" && (
             <div className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold">Inspection Readiness Checklist</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  VeritaScan&#8482; walks through 168 TJC and CAP standards and tracks your readiness before a survey.
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Riverside Regional's inspection readiness checklist has been completed across all major TJC and CAP domains.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaScan&#8482; walks through 168 standards drawn from TJC and CAP requirements, tracks completion status by domain, and flags items that need attention before a surveyor arrives. The checklist exports to Excel for documentation and evidence gathering. Below is Riverside Regional's current readiness snapshot.
                 </p>
               </div>
               {scan ? (
@@ -651,10 +657,12 @@ export default function DemoLabPage() {
           {/* ═══════════════ TAB 4: VERITACOMP ═══════════════ */}
           {activeTab === "veritacomp" && (
             <div className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold">Competency Assessment Management</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  VeritaComp&#8482; manages all three CLIA competency types and generates compliant documentation for TJC and CAP surveys.
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Riverside Regional has documented annual competency for Jennifer Martinez, MLS(ASCP), in the Chemistry department.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  Every element required by CLIA, from direct observation of patient test performance to problem-solving assessment, is captured here with supporting documentation fields that satisfy TJC and CAP surveyor expectations. Element 6 includes a scored quiz appended directly to the competency record. VeritaComp&#8482; manages all three CLIA competency types: technical, waived, and non-technical.
                 </p>
               </div>
 
@@ -745,10 +753,12 @@ export default function DemoLabPage() {
           {/* ═══════════════ TAB 5: VERITASTAFF ═══════════════ */}
           {activeTab === "veritastaff" && (
             <div className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold">Personnel and Credentialing Management</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  VeritaStaff&#8482; tracks CLIA role assignments, qualification requirements, and competency timelines for every employee.
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Riverside Regional's personnel records are fully loaded across all CLIA-defined roles.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaStaff&#8482; tracks CLIA role assignments (Laboratory Director, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel), qualification requirements by complexity level, and competency timelines for every employee. You always know who is current, who is due, and who is overdue, before the surveyor asks.
                 </p>
               </div>
 

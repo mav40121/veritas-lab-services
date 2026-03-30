@@ -244,7 +244,7 @@ export const INSTRUCTIONS_CONTENT = [
   ["• Column G: CFR Section — the applicable 42 CFR Part 493 section for the test specialty."],
   ["• Column H: Correlation Required — Yes if non-waived test is run on 2+ instruments (42 CFR §493.1213)."],
   ["• Columns I-K: Reference data — typical units, adult reference ranges, and analytical measurement range (AMR)."],
-  ["• Columns L-N: Mayo Clinic recommended critical values (low, high, units) for guidance."],
+  ["• Columns L-N: Critical values from Mayo Clinic (low, high, units) for guidance."],
   ["• Columns O-R (blue): Lab fill-in columns for YOUR laboratory's critical values and AMR."],
   ["• Columns S-Z: Compliance dates and calculated status for Cal Ver, Method Comp, Precision, and SOP Review."],
   ["• Column AA: Notes — free text from your VeritaMap."],

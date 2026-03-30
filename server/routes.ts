@@ -787,7 +787,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Analyte", "Instruments", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Typical Unit of Measure", "Typical Adult Reference Range", "Typical AMR",
-        "Mayo Recommended Critical Low", "Mayo Recommended Critical High", "Mayo Critical Value Units",
+        "Critical Low (Mayo Clinic)", "Critical High (Mayo Clinic)", "Critical Value Units (Mayo Clinic)",
         "Lab Critical Low", "Lab Critical High", "Lab AMR Low", "Lab AMR High",
         "Last Cal Ver Date", "Cal Ver Status", "Last Method Comp Date", "Method Comp Status",
         "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
