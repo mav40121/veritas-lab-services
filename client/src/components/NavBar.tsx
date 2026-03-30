@@ -12,8 +12,8 @@ const productLinks = [
   { href: "/veritacheck", label: "VeritaCheck™", desc: "EP Study Analysis", highlight: true },
   { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness" },
   { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping" },
-  { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management" },
-  { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management" },
+  { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management", badge: "In Progress" },
+  { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management", badge: "In Progress" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];
 

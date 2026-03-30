@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
-import { CheckCircle2, Shield, ChevronRight, Users, FileText, UserCheck, Building2 } from "lucide-react";
+import { CheckCircle2, Shield, ChevronRight, Users, FileText, UserCheck, Building2, AlertTriangle } from "lucide-react";
 
 const FEATURES = [
   "Complete staff roster with credentials, hire dates, and qualification tracking",
@@ -100,6 +100,16 @@ export default function VeritaStaffPage() {
           </div>
         </div>
       </section>
+
+      {/* In Progress Banner */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-6">
+        <div className="bg-amber-50 border border-amber-400 text-amber-800 rounded-lg px-5 py-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-sm leading-relaxed">
+            VeritaStaff{"\u2122"} is actively being developed and refined. You may access and use all features, but some functionality is still being improved. We appreciate your patience.
+          </p>
+        </div>
+      </div>
 
       {/* Three Feature Cards */}
       <section className="section-padding border-b border-border">

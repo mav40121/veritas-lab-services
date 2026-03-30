@@ -127,12 +127,12 @@ export default function VeritaCompPage() {
         </div>
       </section>
 
-      {/* WIP Banner */}
-      <div className="bg-amber-50 dark:bg-amber-950/30 border-y border-amber-400/50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-start gap-3">
+      {/* In Progress Banner */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-6">
+        <div className="bg-amber-50 border border-amber-400 text-amber-800 rounded-lg px-5 py-4 flex items-start gap-3">
           <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
-            VeritaComp{"\u2122"} is currently in active development. You may access the module and explore its features, but some functionality is still being refined. Thank you for your patience as we build this out.
+          <p className="text-sm leading-relaxed">
+            VeritaComp{"\u2122"} is actively being developed and refined. You may access and use all features, but some functionality is still being improved. We appreciate your patience.
           </p>
         </div>
       </div>
