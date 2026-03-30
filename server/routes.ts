@@ -750,7 +750,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const headerRow = ws.getRow(1);
       headerRow.height = 20;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         cell.border = thinBorder;
@@ -767,7 +767,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           // Base styling
-          cell.font = { color: { argb: "FF28251D" }, size: 10 };
+          cell.font = { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
           cell.alignment = { vertical: "middle", wrapText: true };
           cell.border = thinBorder;
 
@@ -782,20 +782,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           // Status columns: color-code based on value
           if (statusCols.includes(colNumber)) {
             const val = String(cell.value || "");
-            if (val === "Overdue") {
-              fillColor = "FFFFCCCC";
-              cell.font = { color: { argb: "FFCC0000" }, size: 10 };
-            } else if (val === "Due Soon") {
-              fillColor = "FFFFF3CD";
-              cell.font = { color: { argb: "FF856404" }, size: 10 };
-            } else if (val === "Compliant") {
-              fillColor = "FFD4EDDA";
-              cell.font = { color: { argb: "FF155724" }, size: 10 };
-            } else if (val.includes("N/A")) {
-              fillColor = "FFF0F0F0";
-              cell.font = { color: { argb: "FF888888" }, size: 10 };
+            if (/Overdue|Expired/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FFA12C7B" }, size: 10 };
+            } else if (/Due Soon|Pending|In Progress/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+            } else if (/Compliant|Current|Pass/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (/N\/A|Not Required/i.test(val)) {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
             } else if (val === "Missing") {
-              fillColor = "FFF5F5F5";
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
             }
           }
 
@@ -980,11 +976,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     try {
-      const XLSX = await import("xlsx");
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("VeritaScan");
+
       const headers = [
         "Item #", "Domain", "Compliance Question", "TJC Standard",
         "CAP Requirement", "42 CFR Citation", "Status", "Owner", "Due Date", "Notes"
       ];
+
+      // Column widths
+      const colWidths = [10, 28, 80, 22, 18, 24, 18, 20, 16, 40];
+      ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] }));
+
+      // Build data rows
       const dataRows = referenceItems.map((ref: any) => {
         const saved = itemMap[ref.id] || {};
         return [
@@ -1000,110 +1005,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           saved.notes || "",
         ];
       });
-
-      const wb = XLSX.utils.book_new();
-      const sheetData = [headers, ...dataRows];
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-      // Column widths
-      ws["!cols"] = [
-        { wch: 8 },   // 0: Item #
-        { wch: 28 },  // 1: Domain
-        { wch: 80 },  // 2: Compliance Question
-        { wch: 22 },  // 3: TJC Standard
-        { wch: 16 },  // 4: CAP Requirement
-        { wch: 24 },  // 5: 42 CFR Citation
-        { wch: 18 },  // 6: Status
-        { wch: 20 },  // 7: Owner
-        { wch: 14 },  // 8: Due Date
-        { wch: 40 },  // 9: Notes
-      ];
-
-      // Freeze header row + first 2 columns
-      ws["!freeze"] = { xSplit: 2, ySplit: 1 };
-
-      // Header row styling — teal background, white bold text
-      for (let c = 0; c < headers.length; c++) {
-        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
-        if (!ws[cellRef]) continue;
-        ws[cellRef].s = {
-          font: { bold: true, color: { rgb: "FFFFFF" } },
-          fill: { fgColor: { rgb: "006064" } },
-          alignment: { horizontal: "center", vertical: "center", wrapText: true },
-          border: {
-            top: { style: "thin", color: { rgb: "000000" } },
-            bottom: { style: "thin", color: { rgb: "000000" } },
-            left: { style: "thin", color: { rgb: "000000" } },
-            right: { style: "thin", color: { rgb: "000000" } },
-          },
-        };
+      for (const row of dataRows) {
+        ws.addRow(row);
       }
 
-      // Data row styling
-      for (let r = 1; r <= dataRows.length; r++) {
-        const isOddRow = r % 2 === 1;
-        for (let c = 0; c < headers.length; c++) {
-          const cellRef = XLSX.utils.encode_cell({ r, c });
-          if (!ws[cellRef]) {
-            ws[cellRef] = { v: "", t: "s" };
-          }
-          const style: any = {
-            border: {
-              top: { style: "thin", color: { rgb: "D0D0D0" } },
-              bottom: { style: "thin", color: { rgb: "D0D0D0" } },
-              left: { style: "thin", color: { rgb: "D0D0D0" } },
-              right: { style: "thin", color: { rgb: "D0D0D0" } },
-            },
-            alignment: { vertical: "center" },
-          };
+      // Shared border style
+      const thinBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
 
-          // Alternating row shading
-          if (isOddRow) {
-            style.fill = { fgColor: { rgb: "F5F5F5" } };
-          }
+      // ── Header row (row 1) ──
+      const headerRow = ws.getRow(1);
+      headerRow.height = 20;
+      headerRow.eachCell((cell) => {
+        cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
+      });
 
-          // Wrap text for question and notes columns
-          if (c === 2 || c === 9) {
-            style.alignment = { vertical: "center", wrapText: true };
+      // ── Data rows (row 2 onward) ──
+      const statusCol = 7; // 1-indexed: Status
+      const dateCol = 9;   // 1-indexed: Due Date
+      for (let r = 2; r <= dataRows.length + 1; r++) {
+        const row = ws.getRow(r);
+        const isEvenRow = r % 2 === 0;
+        const bgColor = isEvenRow ? "FFEBF3F8" : "FFFFFFFF";
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          // Base styling
+          cell.font = { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+
+          let fillColor = bgColor;
+
+          // Status column — color-code based on value
+          if (colNumber === statusCol) {
+            const val = String(cell.value || "");
+            if (/Fail|Overdue|Expired|Non-[Cc]ompliant/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FFA12C7B" }, size: 10 };
+            } else if (/Due Soon|Pending|In Progress/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+            } else if (/Pass|Compliant|Current|Active|^Yes$/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (/N\/A|Not Required|Not Assessed/i.test(val)) {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
           }
 
           // Date column — center align
-          if (c === 8) {
-            style.alignment = { horizontal: "center", vertical: "center" };
+          if (colNumber === dateCol) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
           }
 
-          // Status column (6) — color-code based on value
-          if (c === 6) {
-            const val = String(ws[cellRef].v || "");
-            if (val === "FAIL" || val === "Overdue" || val === "Non-Compliant") {
-              style.fill = { fgColor: { rgb: "FFCCCC" } };
-              style.font = { color: { rgb: "CC0000" } };
-            } else if (val === "Due Soon" || val === "In Progress") {
-              style.fill = { fgColor: { rgb: "FFF3CD" } };
-              style.font = { color: { rgb: "856404" } };
-            } else if (val === "PASS" || val === "Compliant") {
-              style.fill = { fgColor: { rgb: "D4EDDA" } };
-              style.font = { color: { rgb: "155724" } };
-            } else if (val === "Not Assessed") {
-              style.fill = { fgColor: { rgb: "F0F0F0" } };
-              style.font = { color: { rgb: "888888" } };
-            }
-          }
-
-          // Owner and Notes columns — light blue for lab fill-in
-          if (c === 7 || c === 9) {
-            if (!style.fill || (style.fill.fgColor.rgb === "F5F5F5")) {
-              style.fill = { fgColor: { rgb: "DDEEFF" } };
-            }
-          }
-
-          ws[cellRef].s = style;
-        }
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
+        });
       }
 
-      XLSX.utils.book_append_sheet(wb, ws, "VeritaScan");
+      // Freeze pane at C2: cols A-B frozen + header row frozen (Item # + Domain stay visible)
+      ws.views = [{ state: "frozen" as const, xSplit: 2, ySplit: 1, topLeftCell: "C2" }];
 
-      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      // Auto-filter on all columns
+      const lastColNum = headers.length;
+      const lastColLetter = lastColNum <= 26
+        ? String.fromCharCode(64 + lastColNum)
+        : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
+      ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      const buffer = await wb.xlsx.writeBuffer();
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const filename = `VeritaScan_${safeName}_${date}.xlsx`;
@@ -1599,24 +1572,99 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     try {
-      const XLSX = await import("xlsx");
-      const rows = entries.map((e: any) => ({
-        "Year": e.year,
-        "Lot Label": e.lot_label,
-        "Old Lot #": e.old_lot_number || "",
-        "New Lot #": e.new_lot_number || "",
-        "Old GeoMean (sec)": e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : "",
-        "New GeoMean (sec)": e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : "",
-        "Difference (sec)": e.difference != null ? Number(e.difference).toFixed(1) : "",
-        "CumSum (sec)": e.cumsum != null ? Number(e.cumsum).toFixed(1) : "",
-        "Verdict": e.verdict || "",
-        "Notes": e.notes || "",
-      }));
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws["!cols"] = [{ wch: 8 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 30 }];
-      XLSX.utils.book_append_sheet(wb, ws, "CUMSUM");
-      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("CUMSUM");
+
+      const headers = [
+        "Year", "Lot Label", "Old Lot #", "New Lot #",
+        "Old GeoMean (sec)", "New GeoMean (sec)", "Difference (sec)",
+        "CumSum (sec)", "Verdict", "Notes"
+      ];
+
+      // Column widths
+      const colWidths = [10, 20, 16, 16, 18, 18, 18, 16, 18, 35];
+      ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] }));
+
+      // Build data rows
+      const dataRows = entries.map((e: any) => [
+        e.year,
+        e.lot_label,
+        e.old_lot_number || "",
+        e.new_lot_number || "",
+        e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : "",
+        e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : "",
+        e.difference != null ? Number(e.difference).toFixed(1) : "",
+        e.cumsum != null ? Number(e.cumsum).toFixed(1) : "",
+        e.verdict || "",
+        e.notes || "",
+      ]);
+      for (const row of dataRows) {
+        ws.addRow(row);
+      }
+
+      // Shared border style
+      const thinBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+
+      // ── Header row (row 1) ──
+      const headerRow = ws.getRow(1);
+      headerRow.height = 20;
+      headerRow.eachCell((cell) => {
+        cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
+      });
+
+      // ── Data rows (row 2 onward) ──
+      const verdictCol = 9; // 1-indexed: Verdict
+      for (let r = 2; r <= dataRows.length + 1; r++) {
+        const row = ws.getRow(r);
+        const isEvenRow = r % 2 === 0;
+        const bgColor = isEvenRow ? "FFEBF3F8" : "FFFFFFFF";
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          // Base styling
+          cell.font = { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+
+          let fillColor = bgColor;
+
+          // Verdict column — color-code based on value
+          if (colNumber === verdictCol) {
+            const val = String(cell.value || "");
+            if (/Pass|Compliant|Current|Active|^Yes$|Accept/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (/Fail|Overdue|Expired|Non-[Cc]ompliant|Reject/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FFA12C7B" }, size: 10 };
+            } else if (/Due Soon|Pending|In Progress/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+            } else if (/N\/A|Not Required/i.test(val)) {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
+          }
+
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
+        });
+      }
+
+      // Freeze pane at B2: col A frozen + header row frozen (Year stays visible)
+      ws.views = [{ state: "frozen" as const, xSplit: 1, ySplit: 1, topLeftCell: "B2" }];
+
+      // Auto-filter on all columns
+      const lastColNum = headers.length;
+      const lastColLetter = lastColNum <= 26
+        ? String.fromCharCode(64 + lastColNum)
+        : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
+      ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      const buffer = await wb.xlsx.writeBuffer();
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
