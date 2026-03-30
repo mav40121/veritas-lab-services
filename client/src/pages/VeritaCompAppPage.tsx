@@ -1341,6 +1341,7 @@ function NewAssessmentDialog({
   const [assessmentDate, setAssessmentDate] = useState(new Date().toISOString().split("T")[0]);
   const [evaluatorName, setEvaluatorName] = useState("");
   const [evaluatorTitle, setEvaluatorTitle] = useState("");
+  const [evaluatorTitleOther, setEvaluatorTitleOther] = useState("");
   const [evaluatorInitials, setEvaluatorInitials] = useState("");
   const [status, setStatus] = useState<"pass" | "fail" | "remediation">("pass");
   const [remediationPlan, setRemediationPlan] = useState("");
@@ -1547,7 +1548,7 @@ function NewAssessmentDialog({
           assessmentType: program.type === "nontechnical" ? ntAssessmentType : assessmentType,
           assessmentDate,
           evaluatorName,
-          evaluatorTitle,
+          evaluatorTitle: evaluatorTitle === "Other" ? evaluatorTitleOther : evaluatorTitle,
           evaluatorInitials,
           competencyType: program.type,
           status,
@@ -1638,14 +1639,26 @@ function NewAssessmentDialog({
               </div>
               <div>
                 <label className="text-xs font-medium block mb-1">Evaluator Title</label>
-                <Input placeholder="Technical Supervisor" value={evaluatorTitle} onChange={e => setEvaluatorTitle(e.target.value)} />
+                <Select value={evaluatorTitle} onValueChange={v => setEvaluatorTitle(v)}>
+                  <SelectTrigger><SelectValue placeholder="Select title" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Laboratory Director">Laboratory Director</SelectItem>
+                    <SelectItem value="Technical Consultant (Moderate Complexity)">Technical Consultant (Moderate Complexity)</SelectItem>
+                    <SelectItem value="Technical Supervisor (High Complexity)">Technical Supervisor (High Complexity)</SelectItem>
+                    <SelectItem value="General Supervisor (Waived/PPM)">General Supervisor (Waived/PPM)</SelectItem>
+                    <SelectItem value="Other">Other (specify)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {evaluatorTitle === "Other" && (
+                  <Input className="mt-1" placeholder="Enter title" value={evaluatorTitleOther} onChange={e => setEvaluatorTitleOther(e.target.value)} />
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium block mb-1">Evaluator Initials</label>
                 <Input placeholder="MV" value={evaluatorInitials} onChange={e => setEvaluatorInitials(e.target.value)} maxLength={10} />
               </div>
             </div>
-            <p className="text-[10px] italic text-muted-foreground">Evaluator must be Lab Director, TC, or TS as appropriate.</p>
+            <p className="text-[10px] italic text-muted-foreground">Moderate complexity testing: Technical Consultant required. High complexity testing: Technical Supervisor required. Waived testing: General Supervisor required.</p>
           </div>
 
           {/* ── TECHNICAL COMPETENCY FORM ── */}

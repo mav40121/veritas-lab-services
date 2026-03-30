@@ -1797,7 +1797,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div><span style="color:#888;font-size:7pt;">Title:</span> <strong>${esc(assessment.evaluator_title) || "-"}</strong></div>
       <div><span style="color:#888;font-size:7pt;">Initials:</span> <strong>${esc(assessment.evaluator_initials) || "-"}</strong></div>
     </div>
-    <div class="note">Evaluator must be Lab Director, Technical Consultant, or Technical Supervisor as appropriate per 42 CFR &sect;493.1451.</div>
+    <div class="note">Evaluator must be Lab Director, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>
   </div>`;
 
   // PASS/FAIL/REMEDIATION box
@@ -1843,7 +1843,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       {
         num: 1,
         title: "Element 1: Direct Observation of Routine Patient Test Performance",
-        note: "Observer must be Lab Director, TC, or TS as appropriate. Documents that the observer watched the employee process and test a specimen.",
+        note: "Observer must be Lab Director or Technical Consultant (moderate complexity) or Technical Supervisor (high complexity) as appropriate. Documents that the observer watched the employee process and test a specimen.",
         cols: ["Method Group", "Specimen ID", "Observer Initials", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || item.specimen_info || "")}</td>
           <td>${esc(item.el1_specimen_id || item.specimen_info || "")}</td>
@@ -1872,7 +1872,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       {
         num: 4,
         title: "Element 4: Direct Observation of Instrument Maintenance",
-        note: "Observer must be Lab Director, TC, or TS as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.",
+        note: "Observer must be Lab Director or Technical Consultant (moderate complexity) or Technical Supervisor (high complexity) as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.",
         cols: ["Method Group", "Date Observed", "Observer Initials", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el4_date_observed || item.date_met || "")}</td>

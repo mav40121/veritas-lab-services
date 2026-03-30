@@ -305,7 +305,7 @@ export default function VeritaCompPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { title: "Laboratory Directors", desc: "You own the CLIA certificate and the competency requirement. Know exactly who is current and who is overdue." },
-              { title: "Technical Supervisors", desc: "Delegated to assess technical competency? VeritaComp gives you the structured form and documentation trail." },
+              { title: "Technical Consultants / Supervisors", desc: "Delegated to assess technical competency? VeritaComp gives you the structured form and documentation trail." },
               { title: "Quality Managers", desc: "Track competency across the lab. Generate reports for accreditation surveys. No filing cabinet required." },
               { title: "Education Coordinators", desc: "Manage orientation competency checklists for new hires across every department." },
               { title: "POCT Coordinators", desc: "Waived testing competency for every nurse, RT, and CNA performing point-of-care tests." },
