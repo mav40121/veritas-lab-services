@@ -660,10 +660,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     try {
-      const XLSX = await import("xlsx");
-      const wb = XLSX.utils.book_new();
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
 
       // ── Sheet 1: Compliance Map ──
+      const ws = wb.addWorksheet("Compliance Map");
+
       const headers = [
         "Analyte", "Instruments", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
@@ -675,6 +677,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Notes",
       ];
 
+      // Column widths
+      const colWidths = [
+        20, 55, 18, 20, 14, 22, 14, 20, 22, 22, 25, 14, 14, 18, 14, 14, 12, 12,
+        18, 18, 18, 18, 18, 18, 18, 18, 18,
+      ];
+      ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
+
+      // Build data rows
       const rows = tests.map((t: any) => {
         const instruments = t.instruments || [];
         const instrList = instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join("; ");
@@ -723,140 +733,109 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ];
       });
 
-      const sheetData = [headers, ...rows];
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-      // Column widths — must match header order exactly
-      ws["!cols"] = [
-        { wch: 25 },  // 0: Analyte
-        { wch: 40 },  // 1: Instruments
-        { wch: 18 },  // 2: Department
-        { wch: 18 },  // 3: Specialty
-        { wch: 12 },  // 4: Complexity
-        { wch: 10 },  // 5: Number of Instruments
-        { wch: 16 },  // 6: CFR Section
-        { wch: 14 },  // 7: Correlation Required
-        { wch: 16 },  // 8: Typical Unit of Measure
-        { wch: 36 },  // 9: Typical Adult Reference Range
-        { wch: 32 },  // 10: Typical AMR
-        { wch: 20 },  // 11: Mayo Recommended Critical Low
-        { wch: 20 },  // 12: Mayo Recommended Critical High
-        { wch: 16 },  // 13: Mayo Critical Value Units
-        { wch: 14 },  // 14: Lab Critical Low
-        { wch: 14 },  // 15: Lab Critical High
-        { wch: 14 },  // 16: Lab AMR Low
-        { wch: 14 },  // 17: Lab AMR High
-        { wch: 14 },  // 18: Last Cal Ver Date
-        { wch: 14 },  // 19: Cal Ver Status
-        { wch: 16 },  // 20: Last Method Comp Date
-        { wch: 16 },  // 21: Method Comp Status
-        { wch: 14 },  // 22: Last Precision Date
-        { wch: 14 },  // 23: Precision Status
-        { wch: 16 },  // 24: Last SOP Review Date
-        { wch: 16 },  // 25: SOP Review Status
-        { wch: 30 },  // 26: Notes
-      ];
-
-      // Freeze at C2: columns A (Analyte) and B (Instruments) stay pinned, plus header row
-      ws["!freeze"] = { xSplit: 2, ySplit: 1 };
-
-      // Apply cell styles (xlsx community edition has limited style support, but we set what we can)
-      // Header row styling
-      for (let c = 0; c < headers.length; c++) {
-        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
-        if (!ws[cellRef]) continue;
-        ws[cellRef].s = {
-          font: { bold: true, color: { rgb: "FFFFFF" } },
-          fill: { fgColor: { rgb: "006064" } },
-          alignment: { horizontal: "center", vertical: "center", wrapText: true },
-          border: {
-            top: { style: "thin", color: { rgb: "000000" } },
-            bottom: { style: "thin", color: { rgb: "000000" } },
-            left: { style: "thin", color: { rgb: "000000" } },
-            right: { style: "thin", color: { rgb: "000000" } },
-          },
-        };
+      // Add data rows
+      for (const row of rows) {
+        ws.addRow(row);
       }
 
-      // Data row styling
-      for (let r = 1; r <= rows.length; r++) {
-        const isOddRow = r % 2 === 1;
-        for (let c = 0; c < headers.length; c++) {
-          const cellRef = XLSX.utils.encode_cell({ r, c });
-          if (!ws[cellRef]) {
-            ws[cellRef] = { v: "", t: "s" };
-          }
-          const style: any = {
-            border: {
-              top: { style: "thin", color: { rgb: "D0D0D0" } },
-              bottom: { style: "thin", color: { rgb: "D0D0D0" } },
-              left: { style: "thin", color: { rgb: "D0D0D0" } },
-              right: { style: "thin", color: { rgb: "D0D0D0" } },
-            },
-            alignment: { vertical: "center", wrapText: true },
-          };
+      // Shared border style
+      const thinBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
 
-          // Alternating row shading
-          if (isOddRow) {
-            style.fill = { fgColor: { rgb: "F5F5F5" } };
-          }
+      // ── Header row (row 1) ──
+      const headerRow = ws.getRow(1);
+      headerRow.height = 20;
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
+      });
 
-          // Lab fill-in columns (14-17, 0-indexed = columns O-R) — light blue
-          if (c >= 14 && c <= 17) {
-            style.fill = { fgColor: { rgb: "DDEEFF" } };
-          }
+      // ── Data rows (row 2 onward) ──
+      const statusCols = [20, 22, 24, 26]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
+      const dateCols = [19, 21, 23, 25];   // 1-indexed: date columns
+      const numCol = 6; // 1-indexed: Number of Instruments
+      for (let r = 2; r <= rows.length + 1; r++) {
+        const row = ws.getRow(r);
+        const isEvenRow = r % 2 === 0; // row 2=even, row 3=odd, ...
+        const bgColor = isEvenRow ? "FFEBF3F8" : "FFFFFFFF";
 
-          // Notes column — enable wrap text
-          if (c === 26) {
-            style.alignment = { vertical: "center", wrapText: true };
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          // Base styling
+          cell.font = { color: { argb: "FF28251D" }, size: 10 };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+
+          // Alternating row background
+          let fillColor = bgColor;
+
+          // Lab fill-in columns (15-18, 1-indexed = Lab Critical Low/High, Lab AMR Low/High)
+          if (colNumber >= 15 && colNumber <= 18) {
+            fillColor = "FFDDEEFF";
           }
 
           // Status columns: color-code based on value
-          const statusCols = [19, 21, 23, 25]; // Cal Ver Status, Method Comp Status, Precision Status, SOP Status
-          if (statusCols.includes(c)) {
-            const val = String(ws[cellRef].v || "");
+          if (statusCols.includes(colNumber)) {
+            const val = String(cell.value || "");
             if (val === "Overdue") {
-              style.fill = { fgColor: { rgb: "FFCCCC" } };
-              style.font = { color: { rgb: "CC0000" } };
+              fillColor = "FFFFCCCC";
+              cell.font = { color: { argb: "FFCC0000" }, size: 10 };
             } else if (val === "Due Soon") {
-              style.fill = { fgColor: { rgb: "FFF3CD" } };
-              style.font = { color: { rgb: "856404" } };
+              fillColor = "FFFFF3CD";
+              cell.font = { color: { argb: "FF856404" }, size: 10 };
             } else if (val === "Compliant") {
-              style.fill = { fgColor: { rgb: "D4EDDA" } };
-              style.font = { color: { rgb: "155724" } };
+              fillColor = "FFD4EDDA";
+              cell.font = { color: { argb: "FF155724" }, size: 10 };
             } else if (val.includes("N/A")) {
-              style.fill = { fgColor: { rgb: "F0F0F0" } };
-              style.font = { color: { rgb: "888888" } };
+              fillColor = "FFF0F0F0";
+              cell.font = { color: { argb: "FF888888" }, size: 10 };
             } else if (val === "Missing") {
-              style.fill = { fgColor: { rgb: "F5F5F5" } };
+              fillColor = "FFF5F5F5";
             }
           }
 
-          // Date columns — format as MM/DD/YYYY
-          const dateCols = [18, 20, 22, 24]; // Cal Ver Date, Method Comp Date, Precision Date, SOP Review Date
-          if (dateCols.includes(c)) {
-            style.alignment = { horizontal: "center", vertical: "center" };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
+
+          // Date columns — center align
+          if (dateCols.includes(colNumber)) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
           }
 
-          ws[cellRef].s = style;
-        }
+          // Number of Instruments — right align
+          if (colNumber === numCol) {
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          }
+        });
       }
 
-      XLSX.utils.book_append_sheet(wb, ws, "Compliance Map");
+      // Freeze pane at C2: cols A-B frozen + header row frozen
+      ws.views = [{ state: "frozen" as const, xSplit: 2, ySplit: 1, topLeftCell: "C2" }];
+
+      // Auto-filter on all columns
+      // Convert column number to Excel letter(s) (1=A, 27=AA, etc.)
+      const lastColNum = headers.length;
+      const lastColLetter = lastColNum <= 26
+        ? String.fromCharCode(64 + lastColNum)
+        : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
+      ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
 
       // ── Sheet 2: Instructions ──
-      const ws2 = XLSX.utils.aoa_to_sheet(INSTRUCTIONS_CONTENT);
-      ws2["!cols"] = [{ wch: 100 }];
-      // Style the title row
-      const titleRef = XLSX.utils.encode_cell({ r: 0, c: 0 });
-      if (ws2[titleRef]) {
-        ws2[titleRef].s = {
-          font: { bold: true, sz: 14, color: { rgb: "006064" } },
-        };
+      const ws2 = wb.addWorksheet("Instructions");
+      ws2.getColumn(1).width = 100;
+      for (const instrRow of INSTRUCTIONS_CONTENT) {
+        ws2.addRow(instrRow);
       }
-      XLSX.utils.book_append_sheet(wb, ws2, "Instructions");
+      // Style the title row
+      const titleCell = ws2.getCell("A1");
+      titleCell.font = { bold: true, size: 14, color: { argb: "FF01696F" } };
 
-      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      // Write to buffer
+      const buffer = await wb.xlsx.writeBuffer();
       const safeName = (map.name || "Map").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const filename = `VeritaMap_${safeName}_${date}.xlsx`;
