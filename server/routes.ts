@@ -10,6 +10,17 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF } from "./pdfReport";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Safe JSON parse helper — handles already-parsed values and plain strings
+function safeJsonParse(value: any, fallback: any = []): any {
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) return value;
+  if (typeof value !== 'string') return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return [value];
+  }
+}
 import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
 import { autoCompleteVeritaScanItems } from "./integrations";
 import {
@@ -1913,8 +1924,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = getDemoUserId();
     if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
-    const study = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+    const study = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
     if (!study) return res.status(404).json({ error: "Study not found" });
+    // Parse JSON fields so frontend and PDF generator receive consistent data
+    if (study.instruments) study.instruments = safeJsonParse(study.instruments);
+    if (study.data_points) study.data_points = safeJsonParse(study.data_points);
     res.json(study);
   });
 
@@ -1934,8 +1948,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         date: studyRow.date,
         studyType: studyRow.study_type,
         cliaAllowableError: studyRow.clia_allowable_error,
-        dataPoints: JSON.parse(studyRow.data_points),
-        instruments: JSON.parse(studyRow.instruments),
+        dataPoints: safeJsonParse(studyRow.data_points),
+        instruments: safeJsonParse(studyRow.instruments),
         status: studyRow.status,
       };
 

@@ -9,6 +9,17 @@
 import puppeteer from "puppeteer";
 import type { Study } from "@shared/schema";
 
+// ─── Safe JSON parse helper ──────────────────────────────────────────────────
+function safeJsonParse(value: any, fallback: any = []): any {
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) return value;
+  if (typeof value !== 'string') return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return [value];
+  }
+}
+
 // ─── Math helpers (mirrors client/src/lib/calculations.ts) ────────────────────
 function mean(v: number[]) { return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; }
 function slopeFn(x: number[], y: number[]) {
@@ -493,7 +504,7 @@ interface CalVerData {
 }
 
 function buildCalVerHTML(study: Study, results: CalVerData): string {
-  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const instrumentNames: string[] = safeJsonParse(study.instruments);
   const assignedVals = results.levelResults.map(r => r.assignedValue);
   const recoveries   = results.levelResults.map(r => r.pctRecovery);
 
@@ -598,7 +609,7 @@ interface MethodCompData {
 }
 
 function buildMethodCompHTML(study: Study, results: MethodCompData): string {
-  const allInstrumentNames: string[] = JSON.parse(study.instruments);
+  const allInstrumentNames: string[] = safeJsonParse(study.instruments);
   const primaryName = allInstrumentNames[0];
   // Comparison instruments are those that appear in the results' instruments
   const comparisonNames = results.levelResults.length > 0
@@ -771,7 +782,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
 // ─── PRECISION HTML report ───────────────────────────────────────────────────
 function buildPrecisionHTML(study: Study, results: any): string {
-  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const instrumentNames: string[] = safeJsonParse(study.instruments);
   const cliaCV = (study.cliaAllowableError * 100).toFixed(1);
   const isAdvanced = results.mode === "advanced";
 
@@ -811,7 +822,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
       </tbody>
     </table>` : "";
 
-  const dataPoints = JSON.parse((study as any).dataPoints || "[]");
+  const dataPoints = safeJsonParse((study as any).dataPoints, []);
   const valuesSection = results.levelResults.map((r: any, li: number) => {
     const vals: number[] = dataPoints[li]?.values || [];
     const filtered = vals.filter((v: number) => !isNaN(v));
@@ -936,8 +947,8 @@ function differencePlotSVG(
 
 // ─── LOT-TO-LOT HTML report ──────────────────────────────────────────────────
 function buildLotToLotHTML(study: Study, results: any): string {
-  const instrumentNames: string[] = JSON.parse(study.instruments);
-  const rawData = JSON.parse(study.dataPoints);
+  const instrumentNames: string[] = safeJsonParse(study.instruments);
+  const rawData = safeJsonParse(study.dataPoints);
   const teaPct = (study.cliaAllowableError * 100).toFixed(1);
 
   let cohortSections = "";
@@ -1019,8 +1030,8 @@ function geometricMean(values: number[]): number {
 }
 
 function buildPTCoagHTML(study: Study, results: any): string {
-  const instrumentNames: string[] = JSON.parse(study.instruments);
-  const rawData = JSON.parse(study.dataPoints);
+  const instrumentNames: string[] = safeJsonParse(study.instruments);
+  const rawData = safeJsonParse(study.dataPoints);
   const { module1, module2, module3 } = results;
 
   // Module 1 section
@@ -1266,14 +1277,14 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <th style="text-align:right">New Mean</th><th style="text-align:right">New SD</th><th style="text-align:right">CV%</th>
       <th style="text-align:right">Old Mean</th><th style="text-align:right">% Diff</th>
     </tr></thead><tbody>${tableRows}</tbody></table>
-    ${supportingPageHTML(study, JSON.parse(study.instruments))}
+    ${supportingPageHTML(study, safeJsonParse(study.instruments))}
   </body></html>`;
 }
 
 // ─── MULTI-ANALYTE LOT COMPARISON HTML ────────────────────────────────────────
 function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   const r = results;
-  const rawDP = JSON.parse(study.dataPoints);
+  const rawDP = safeJsonParse(study.dataPoints);
   const summaryRows = (r.analyteResults || []).filter((ar: any) => ar.n > 0).map((ar: any) => `
     <tr style="${!ar.pass ? 'background:#fef2f2;' : ''}">
       <td>${ar.analyte}</td><td style="text-align:right">${ar.n}</td>
@@ -1337,7 +1348,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
       <th style="text-align:right">APTT %Diff</th><th style="text-align:right">New Fib</th>
       <th style="text-align:right">Old Fib</th><th style="text-align:right">Fib %Diff</th>
     </tr></thead><tbody>${specimenRows}</tbody></table>
-    ${supportingPageHTML(study, JSON.parse(study.instruments))}
+    ${supportingPageHTML(study, safeJsonParse(study.instruments))}
   </body></html>`;
 }
 
@@ -2004,8 +2015,8 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div class="section-header">Appendix A: Problem-Solving Quiz Results</div>`;
 
     for (const qr of quizResults) {
-      const questions = JSON.parse(qr.quiz_questions || "[]");
-      const answers = JSON.parse(qr.answers || "[]");
+      const questions = safeJsonParse(qr.quiz_questions, []);
+      const answers = safeJsonParse(qr.answers, []);
 
       html += `<div style="margin-bottom:16px;">
         <div style="font-size:8.5pt;font-weight:600;margin-bottom:4px;">${esc(qr.method_group_name) || "Quiz"}</div>
