@@ -14,6 +14,7 @@ const productLinks = [
   { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping" },
   { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management", badge: "In Progress" },
   { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management", badge: "In Progress" },
+  { href: "/veritalab", label: "VeritaLab™", desc: "Certificate Tracking", badge: "New", badgeColor: "emerald" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];
 
@@ -27,6 +28,7 @@ const allMobileLinks = [
   { href: "/veritamap", label: "VeritaMap™" },
   { href: "/veritacomp", label: "VeritaComp™" },
   { href: "/veritastaff", label: "VeritaStaff™" },
+  { href: "/veritalab", label: "VeritaLab™" },
   { href: "/book", label: "Book" },
   { href: "/resources", label: "Resources" },
   { href: "/demo", label: "Live Demo" },
@@ -123,7 +125,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/book","/cumsum"].includes(location)
+                ["/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritalab","/book","/cumsum"].includes(location)
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
@@ -133,14 +135,19 @@ export function NavBar() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              {productLinks.map(({ href, label, desc, badge, highlight }) => (
+              {productLinks.map(({ href, label, desc, badge, badgeColor, highlight }: any) => (
                 <DropdownMenuItem key={href} asChild>
                   <Link href={href} className="flex items-start gap-2 py-2">
                     <div>
                       <div className={cn("text-sm font-medium flex items-center gap-1.5", highlight && "text-primary")}>
                         {label}
                         {badge && (
-                          <span className="text-[9px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-500/25 rounded px-1 py-0.5 leading-none">
+                          <span className={cn(
+                            "text-[9px] font-semibold border rounded px-1 py-0.5 leading-none",
+                            badgeColor === "emerald"
+                              ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/25"
+                              : "bg-amber-500/15 text-amber-600 border-amber-500/25"
+                          )}>
                             {badge}
                           </span>
                         )}

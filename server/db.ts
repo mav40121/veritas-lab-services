@@ -294,6 +294,50 @@ sqlite.exec(`
     FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
   );
 
+  CREATE TABLE IF NOT EXISTS lab_certificates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    cert_type TEXT NOT NULL DEFAULT 'other',
+    cert_name TEXT NOT NULL,
+    cert_number TEXT,
+    issuing_body TEXT,
+    issued_date TEXT,
+    expiration_date TEXT,
+    lab_director TEXT,
+    notes TEXT,
+    is_auto_populated INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS lab_certificate_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    certificate_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    original_filename TEXT NOT NULL,
+    file_size INTEGER NOT NULL DEFAULT 0,
+    mime_type TEXT,
+    file_data BLOB,
+    uploaded_at TEXT NOT NULL,
+    FOREIGN KEY (certificate_id) REFERENCES lab_certificates(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS lab_certificate_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    certificate_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    reminder_type TEXT NOT NULL,
+    scheduled_date TEXT NOT NULL,
+    sent_at TEXT,
+    is_sent INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (certificate_id) REFERENCES lab_certificates(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS staff_competency_schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,

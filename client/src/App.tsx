@@ -42,6 +42,8 @@ import VeritaCompPage from "@/pages/VeritaCompPage";
 import VeritaCompAppPage from "@/pages/VeritaCompAppPage";
 import VeritaStaffPage from "@/pages/VeritaStaffPage";
 import VeritaStaffAppPage from "@/pages/VeritaStaffAppPage";
+import VeritaLabPage from "@/pages/VeritaLabPage";
+import VeritaLabAppPage from "@/pages/VeritaLabAppPage";
 import CumsumPage from "@/pages/CumsumPage";
 import SeatManagementPage from "@/pages/SeatManagementPage";
 
@@ -72,6 +74,7 @@ function SiteFooter() {
                 <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan: Compliance Audit Tool</a></li>
                 <li><a href="/#/veritacomp" className="hover:text-primary transition-colors">VeritaComp: Competency Management</a></li>
                 <li><a href="/#/veritastaff" className="hover:text-primary transition-colors">VeritaStaff: Personnel Management</a></li>
+                <li><a href="/#/veritalab" className="hover:text-primary transition-colors">VeritaLab: Certificate Tracking</a></li>
                 <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
                 <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
@@ -193,6 +196,8 @@ function AppContent() {
           <Route path="/veritastaff" component={VeritaStaffPage} />
           <Route path="/veritastaff-app" component={VeritaStaffAppPage} />
           <Route path="/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
+          <Route path="/veritalab" component={VeritaLabPage} />
+          <Route path="/veritalab-app" component={VeritaLabAppPage} />
           <Route path="/cumsum" component={CumsumPage} />
           <Route path="/account/seats" component={SeatManagementPage} />
           <Route component={NotFound} />

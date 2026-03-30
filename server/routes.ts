@@ -3195,5 +3195,412 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── VERITALAB ──────────────────────────────────────────────────────────
+
+  function hasLabCertAccess(user: any) {
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital"].includes(user?.plan);
+  }
+
+  function scheduleReminders(certId: number, userId: number, expirationDate: string) {
+    // Delete existing reminders for this certificate
+    (db as any).$client.prepare("DELETE FROM lab_certificate_reminders WHERE certificate_id = ?").run(certId);
+
+    if (!expirationDate) return;
+
+    const exp = new Date(expirationDate);
+    if (isNaN(exp.getTime())) return;
+
+    const reminders: { type: string; months?: number; days?: number }[] = [
+      { type: "9month", months: 9 },
+      { type: "6month", months: 6 },
+      { type: "3month", months: 3 },
+      { type: "30day", days: 30 },
+      { type: "expired" },
+    ];
+
+    const stmt = (db as any).$client.prepare(
+      "INSERT INTO lab_certificate_reminders (certificate_id, user_id, reminder_type, scheduled_date, is_sent) VALUES (?, ?, ?, ?, 0)"
+    );
+
+    for (const r of reminders) {
+      let scheduledDate: Date;
+      if (r.type === "expired") {
+        scheduledDate = new Date(exp);
+      } else if (r.months) {
+        scheduledDate = new Date(exp);
+        scheduledDate.setMonth(scheduledDate.getMonth() - r.months);
+      } else if (r.days) {
+        scheduledDate = new Date(exp);
+        scheduledDate.setDate(scheduledDate.getDate() - r.days);
+      } else {
+        continue;
+      }
+      stmt.run(certId, userId, r.type, scheduledDate.toISOString().split("T")[0]);
+    }
+  }
+
+  // GET /api/veritalab/certificates - list all certificates for user
+  app.get("/api/veritalab/certificates", authMiddleware, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+
+    // Auto-populate CLIA certificate if user has clia_number but no CLIA cert yet
+    const userRow = (db as any).$client.prepare("SELECT * FROM users WHERE id = ?").get(req.userId) as any;
+    if (userRow?.clia_number) {
+      const existingClia = (db as any).$client.prepare(
+        "SELECT id FROM lab_certificates WHERE user_id = ? AND cert_type = 'clia' AND is_active = 1"
+      ).get(req.userId);
+      if (!existingClia) {
+        const now = new Date().toISOString();
+        (db as any).$client.prepare(
+          "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA lookup. Please enter your expiration date.', ?, ?)"
+        ).run(req.userId, userRow.clia_number, userRow.clia_director || null, now, now);
+      }
+    }
+
+    const certs = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC"
+    ).all(req.userId) as any[];
+
+    // Attach document count for each certificate
+    const result = certs.map((cert: any) => {
+      const docCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM lab_certificate_documents WHERE certificate_id = ? AND user_id = ?"
+      ).get(cert.id, req.userId) as any;
+      return { ...cert, document_count: docCount?.cnt || 0 };
+    });
+
+    res.json(result);
+  });
+
+  // POST /api/veritalab/certificates - create a new certificate
+  app.post("/api/veritalab/certificates", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
+    if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
+
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes, is_auto_populated, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)"
+    ).run(req.userId, cert_type || "other", cert_name.trim(), cert_number || null, issuing_body || null, issued_date || null, expiration_date || null, lab_director || null, notes || null, now, now);
+
+    const certId = Number(result.lastInsertRowid);
+    if (expiration_date) {
+      scheduleReminders(certId, req.userId, expiration_date);
+    }
+
+    const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(certId);
+    res.status(201).json(cert);
+  });
+
+  // PUT /api/veritalab/certificates/:id - update a certificate
+  app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
+    ).get(req.params.id, req.userId) as any;
+    if (!existing) return res.status(404).json({ error: "Certificate not found" });
+
+    const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
+    const now = new Date().toISOString();
+
+    (db as any).$client.prepare(
+      "UPDATE lab_certificates SET cert_type=?, cert_name=?, cert_number=?, issuing_body=?, issued_date=?, expiration_date=?, lab_director=?, notes=?, updated_at=? WHERE id=?"
+    ).run(
+      cert_type ?? existing.cert_type,
+      cert_name?.trim() ?? existing.cert_name,
+      cert_number ?? existing.cert_number,
+      issuing_body ?? existing.issuing_body,
+      issued_date ?? existing.issued_date,
+      expiration_date ?? existing.expiration_date,
+      lab_director ?? existing.lab_director,
+      notes ?? existing.notes,
+      now,
+      req.params.id
+    );
+
+    // Reschedule reminders if expiration_date changed
+    const newExp = expiration_date ?? existing.expiration_date;
+    if (newExp) {
+      scheduleReminders(Number(req.params.id), req.userId, newExp);
+    }
+
+    const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id);
+    res.json(cert);
+  });
+
+  // DELETE /api/veritalab/certificates/:id - soft delete
+  app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
+    ).get(req.params.id, req.userId);
+    if (!existing) return res.status(404).json({ error: "Certificate not found" });
+
+    const now = new Date().toISOString();
+    (db as any).$client.prepare("UPDATE lab_certificates SET is_active = 0, updated_at = ? WHERE id = ?").run(now, req.params.id);
+    // Remove pending reminders
+    (db as any).$client.prepare("DELETE FROM lab_certificate_reminders WHERE certificate_id = ? AND is_sent = 0").run(req.params.id);
+    res.json({ success: true });
+  });
+
+  // POST /api/veritalab/certificates/:id/documents - upload document
+  const multer = require("multer");
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
+
+  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, upload.single("file"), (req: any, res: any) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    const cert = (db as any).$client.prepare(
+      "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
+    ).get(req.params.id, req.userId);
+    if (!cert) return res.status(404).json({ error: "Certificate not found" });
+
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    const now = new Date().toISOString();
+    const filename = `${Date.now()}_${req.file.originalname}`;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO lab_certificate_documents (certificate_id, user_id, filename, original_filename, file_size, mime_type, file_data, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(req.params.id, req.userId, filename, req.file.originalname, req.file.size, req.file.mimetype, req.file.buffer, now);
+
+    res.status(201).json({
+      id: Number(result.lastInsertRowid),
+      certificate_id: Number(req.params.id),
+      filename,
+      original_filename: req.file.originalname,
+      file_size: req.file.size,
+      mime_type: req.file.mimetype,
+      uploaded_at: now,
+    });
+  });
+
+  // GET /api/veritalab/certificates/:id/documents - list documents
+  app.get("/api/veritalab/certificates/:id/documents", authMiddleware, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    const cert = (db as any).$client.prepare(
+      "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
+    ).get(req.params.id, req.userId);
+    if (!cert) return res.status(404).json({ error: "Certificate not found" });
+
+    const docs = (db as any).$client.prepare(
+      "SELECT id, certificate_id, filename, original_filename, file_size, mime_type, uploaded_at FROM lab_certificate_documents WHERE certificate_id = ? AND user_id = ? ORDER BY uploaded_at DESC"
+    ).all(req.params.id, req.userId);
+    res.json(docs);
+  });
+
+  // GET /api/veritalab/certificates/:id/documents/:docId - download document
+  app.get("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    const doc = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
+    ).get(req.params.docId, req.params.id, req.userId) as any;
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    res.setHeader("Content-Type", doc.mime_type || "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${doc.original_filename}"`);
+    res.setHeader("Content-Length", doc.file_size);
+    res.send(doc.file_data);
+  });
+
+  // DELETE /api/veritalab/certificates/:id/documents/:docId - delete document
+  app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    const doc = (db as any).$client.prepare(
+      "SELECT id FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
+    ).get(req.params.docId, req.params.id, req.userId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    (db as any).$client.prepare("DELETE FROM lab_certificate_documents WHERE id = ?").run(req.params.docId);
+    res.json({ success: true });
+  });
+
+  // POST /api/veritalab/check-reminders - check and send due reminders
+  app.post("/api/veritalab/check-reminders", (req: any, res) => {
+    const adminSecret = req.headers["x-admin-secret"];
+    if (adminSecret !== (process.env.ADMIN_SECRET || "veritas-admin-2026")) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const dueReminders = (db as any).$client.prepare(
+      "SELECT r.*, c.cert_name, c.cert_number, c.expiration_date FROM lab_certificate_reminders r JOIN lab_certificates c ON c.id = r.certificate_id WHERE r.scheduled_date <= ? AND r.is_sent = 0 AND c.is_active = 1"
+    ).all(today) as any[];
+
+    let sent = 0;
+    let errors = 0;
+
+    const reminderLabels: Record<string, string> = {
+      "9month": "9-Month Reminder",
+      "6month": "6-Month Reminder",
+      "3month": "3-Month Reminder",
+      "30day": "30-Day Reminder",
+      "expired": "Expiration Notice",
+    };
+
+    for (const reminder of dueReminders) {
+      const user = (db as any).$client.prepare("SELECT email, clia_lab_name FROM users WHERE id = ?").get(reminder.user_id) as any;
+      if (!user?.email) continue;
+
+      const label = reminderLabels[reminder.reminder_type] || reminder.reminder_type;
+      const expDate = reminder.expiration_date ? new Date(reminder.expiration_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "Unknown";
+      const subject = `${label} - ${reminder.cert_name} expires ${expDate}`;
+
+      const htmlBody = `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+          <h2 style="color:#01696F;margin-bottom:16px">Your ${reminder.cert_name} is expiring soon.</h2>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+            <tr><td style="padding:6px 0;color:#666">Certificate:</td><td style="padding:6px 0;font-weight:600">${reminder.cert_name}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Number:</td><td style="padding:6px 0">${reminder.cert_number || "N/A"}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Expiration:</td><td style="padding:6px 0;font-weight:600;color:#c53030">${expDate}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Lab:</td><td style="padding:6px 0">${user.clia_lab_name || "Your laboratory"}</td></tr>
+          </table>
+          <p style="margin-bottom:20px">Log in to VeritaAssure to view your certificate details and upload renewal documentation.</p>
+          <a href="https://www.veritaslabservices.com/#/veritalab-app" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open VeritaLab\u2122</a>
+          <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+          <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC</p>
+        </div>
+      `;
+
+      try {
+        if (resend) {
+          resend.emails.send({
+            from: "VeritaAssure <info@veritaslabservices.com>",
+            to: user.email,
+            subject,
+            html: htmlBody,
+          });
+        }
+        (db as any).$client.prepare(
+          "UPDATE lab_certificate_reminders SET is_sent = 1, sent_at = ? WHERE id = ?"
+        ).run(new Date().toISOString(), reminder.id);
+        sent++;
+      } catch (err) {
+        console.error("[VeritaLab] Reminder email failed:", err);
+        errors++;
+      }
+    }
+
+    res.json({ processed: dueReminders.length, sent, errors });
+  });
+
+  // POST /api/veritalab/certificates/excel - export certificates to Excel
+  app.post("/api/veritalab/certificates/excel", authMiddleware, async (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+
+    const certs = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY expiration_date ASC"
+    ).all(req.userId) as any[];
+
+    try {
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Certificates");
+
+      const headers = [
+        "Certificate Name", "Type", "Number", "Issuing Body", "Issued Date",
+        "Expiration Date", "Days Until Expiration", "Status", "Lab Director",
+        "Documents Count", "Notes",
+      ];
+
+      const colWidths = [28, 18, 20, 35, 16, 16, 22, 16, 22, 18, 30];
+      ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
+
+      const today = new Date();
+      const rows = certs.map((c: any) => {
+        const docCount = (db as any).$client.prepare(
+          "SELECT COUNT(*) as cnt FROM lab_certificate_documents WHERE certificate_id = ?"
+        ).get(c.id) as any;
+
+        let daysUntil = "";
+        let status = "No expiration date";
+        if (c.expiration_date) {
+          const exp = new Date(c.expiration_date);
+          const diffMs = exp.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          daysUntil = String(diffDays);
+          if (diffDays < 0) status = "Expired";
+          else if (diffDays <= 30) status = "Expires Soon";
+          else if (diffDays <= 90) status = "Expiring";
+          else status = "Current";
+        }
+
+        const typeLabels: Record<string, string> = {
+          clia: "CLIA", cap: "CAP", tjc: "TJC", state_license: "State License",
+          lab_director_license: "Lab Director License", other: "Other",
+        };
+
+        return [
+          c.cert_name, typeLabels[c.cert_type] || c.cert_type, c.cert_number || "",
+          c.issuing_body || "", c.issued_date || "", c.expiration_date || "",
+          daysUntil, status, c.lab_director || "", docCount?.cnt || 0, c.notes || "",
+        ];
+      });
+
+      for (const row of rows) {
+        ws.addRow(row);
+      }
+
+      // Shared border style
+      const thinBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+
+      // Header row styling
+      const headerRow = ws.getRow(1);
+      headerRow.height = 20;
+      headerRow.eachCell((cell) => {
+        cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
+      });
+
+      // Data rows
+      const statusCol = 8; // 1-indexed
+      for (let r = 2; r <= rows.length + 1; r++) {
+        const row = ws.getRow(r);
+        const isEvenRow = r % 2 === 0;
+        const bgColor = isEvenRow ? "FFEBF3F8" : "FFFFFFFF";
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
+
+          if (colNumber === statusCol) {
+            const val = String(cell.value || "");
+            if (/Expired/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FFA12C7B" }, size: 10 };
+            } else if (/Expires Soon|Expiring/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+            } else if (/Current/i.test(val)) {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            }
+          }
+        });
+      }
+
+      // Freeze pane at B2
+      ws.views = [{ state: "frozen" as const, xSplit: 1, ySplit: 1, topLeftCell: "B2" }];
+
+      // Auto-filter
+      const lastColLetter = String.fromCharCode(64 + headers.length);
+      ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const date = new Date().toISOString().split("T")[0];
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaLab_Certificates_${date}.xlsx"`);
+      res.send(Buffer.from(buffer));
+    } catch (err: any) {
+      console.error("[VeritaLab] Excel export error:", err);
+      res.status(500).json({ error: "Excel export failed" });
+    }
+  });
+
   return httpServer;
 }
