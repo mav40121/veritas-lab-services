@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { db } from "./db";
-import { stripe, PRICES, WEBHOOK_SECRET, FRONTEND_URL } from "./stripe";
+import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF } from "./pdfReport";
@@ -94,7 +94,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/set-plan", (req, res) => {
     const { secret, userId, plan, credits } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const planCredits = ["annual", "starter", "professional", "lab", "complete"].includes(plan) ? 99999 : (credits ?? 0);
+    const planCredits = ["annual", "starter", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
     storage.updateUserPlan(Number(userId), plan, planCredits);
     const user = storage.getUserById(Number(userId));
     res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
@@ -171,8 +171,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (storage.getUserByEmail(email)) return res.status(409).json({ error: "Email already registered" });
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
+
+    // Check if this user was invited as a seat
+    const seatInvite = (db as any).$client.prepare(
+      "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
+    ).get(email.toLowerCase()) as any;
+    if (seatInvite) {
+      (db as any).$client.prepare(
+        "UPDATE user_seats SET seat_user_id = ?, status = 'active', accepted_at = ? WHERE id = ?"
+      ).run(user.id, new Date().toISOString(), seatInvite.id);
+    }
+
     const token = signToken(user.id);
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: 'free', accessLevel: 'free' } });
+
+    // Create session
+    const sessionToken = crypto.randomUUID();
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
+    ).run(user.id, sessionToken, req.headers["user-agent"] || "Unknown", now, now);
+
+    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: 'free', accessLevel: 'free', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: 1 } });
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -183,18 +202,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user) return res.status(401).json({ error: "Invalid email or password" });
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
-    const token = signToken(user.id);
-    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status FROM users WHERE id = ?").get(user.id);
+
+    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count FROM users WHERE id = ?").get(user.id) as any;
     const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding, subscriptionExpiresAt: userRow?.subscription_expires_at || null, subscriptionStatus: userRow?.subscription_status || 'free', accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }) } });
+
+    // Check for seat access: user must be an account owner or have an active seat
+    const isOwner = true; // The user logging in owns their own account
+    const hasSeat = (db as any).$client.prepare(
+      "SELECT id FROM user_seats WHERE seat_email = ? AND status = 'active'"
+    ).get(email.toLowerCase());
+
+    // Session conflict check
+    const activeSession = (db as any).$client.prepare(
+      "SELECT id, device_info, last_active FROM user_sessions WHERE user_id = ? AND is_active = 1 ORDER BY last_active DESC LIMIT 1"
+    ).get(user.id) as any;
+
+    const deviceInfo = req.headers["user-agent"] || "Unknown";
+
+    if (activeSession) {
+      // Return session conflict - let frontend handle the force-logout choice
+      const token = signToken(user.id);
+      return res.json({
+        session_conflict: true,
+        active_device: activeSession.device_info || "Unknown device",
+        last_active: activeSession.last_active,
+        message: "Another session is active on another device. Log out that device to continue.",
+        token,
+        user: {
+          id: user.id, email: user.email, name: user.name, plan: user.plan,
+          studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding,
+          subscriptionExpiresAt: userRow?.subscription_expires_at || null,
+          subscriptionStatus: userRow?.subscription_status || 'free',
+          accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }),
+          cliaNumber: userRow?.clia_number || null,
+          cliaLabName: userRow?.clia_lab_name || null,
+          cliaTier: userRow?.clia_tier || null,
+          seatCount: userRow?.seat_count || 1,
+        },
+      });
+    }
+
+    // No conflict - create new session
+    const sessionToken = crypto.randomUUID();
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
+    ).run(user.id, sessionToken, deviceInfo, now, now);
+
+    const token = signToken(user.id);
+    res.json({
+      token, session_token: sessionToken,
+      user: {
+        id: user.id, email: user.email, name: user.name, plan: user.plan,
+        studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding,
+        subscriptionExpiresAt: userRow?.subscription_expires_at || null,
+        subscriptionStatus: userRow?.subscription_status || 'free',
+        accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }),
+        cliaNumber: userRow?.clia_number || null,
+        cliaLabName: userRow?.clia_lab_name || null,
+        cliaTier: userRow?.clia_tier || null,
+        seatCount: userRow?.seat_count || 1,
+      },
+    });
   });
 
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {
     const user = storage.getUserById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status FROM users WHERE id = ?").get(user.id);
+    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count FROM users WHERE id = ?").get(user.id) as any;
     const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
-    res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding, subscriptionExpiresAt: userRow?.subscription_expires_at || null, subscriptionStatus: userRow?.subscription_status || 'free', accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }) });
+
+    // Update session last_active
+    const sessionToken = req.headers["x-session-token"];
+    if (sessionToken) {
+      (db as any).$client.prepare("UPDATE user_sessions SET last_active = ? WHERE session_token = ? AND is_active = 1").run(new Date().toISOString(), sessionToken);
+    }
+
+    res.json({
+      id: user.id, email: user.email, name: user.name, plan: user.plan,
+      studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding,
+      subscriptionExpiresAt: userRow?.subscription_expires_at || null,
+      subscriptionStatus: userRow?.subscription_status || 'free',
+      accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }),
+      cliaNumber: userRow?.clia_number || null,
+      cliaLabName: userRow?.clia_lab_name || null,
+      cliaTier: userRow?.clia_tier || null,
+      seatCount: userRow?.seat_count || 1,
+    });
   });
 
   // ── STUDIES ───────────────────────────────────────────────────────────────
@@ -303,7 +397,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!study || !results) return res.status(400).json({ error: "study and results required" });
       // Gate: PT/Coag New Lot Validation is Coming Soon — pending regulatory review
       if (study.studyType === "pt_coag") return res.status(403).json({ error: "PT/Coag New Lot Validation is not yet available" });
-      const pdfBuffer = await generatePDFBuffer(study, results);
+
+      // Fetch CLIA number from user record if authenticated
+      let cliaNumber: string | undefined;
+      const auth = req.headers.authorization;
+      if (auth?.startsWith("Bearer ")) {
+        try {
+          const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+          const userRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(payload.userId) as any;
+          cliaNumber = userRow?.clia_number || undefined;
+        } catch {}
+      }
+
+      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber);
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
@@ -327,7 +433,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITAMAP ───────────────────────────────────────────────────────────
 
   function hasMapAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "waived", "community", "hospital", "large_hospital"].includes(user?.plan);
   }
 
   // List maps
@@ -849,7 +955,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Check access: annual, lab, or veritascan plan
   function hasScanAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritascan"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital"].includes(user?.plan);
   }
 
   // List scans for current user
@@ -1133,6 +1239,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     });
 
+    // Fetch CLIA number
+    const scanUserRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(req.userId) as any;
+
     try {
       const pdfBuffer = await generateVeritaScanPDF(
         {
@@ -1140,6 +1249,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           createdAt: scan.created_at,
           updatedAt: scan.updated_at,
           items: mergedItems,
+          cliaNumber: scanUserRow?.clia_number || undefined,
         },
         type as "executive" | "full"
       );
@@ -1328,7 +1438,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
     if (!stripe) return res.status(503).json({ error: "Payments not configured" });
-    const { priceType, discountCode } = req.body; // "perStudy" | "starter" | "professional" | "lab" | "complete"
+    const { priceType, discountCode, additionalSeats } = req.body;
+    // priceType: "perStudy" | "waived" | "community" | "hospital" | "large_hospital" | "veritacheck_only"
     if (!priceType || !PRICES[priceType as keyof typeof PRICES]) {
       return res.status(400).json({ error: "Invalid price type" });
     }
@@ -1345,7 +1456,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let discountRow: any = null;
     if (discountCode) {
       discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
-      if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType)) {
+      if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual" || discountRow.applies_to === "all")) {
         try {
           const coupon = await stripe.coupons.create({
             percent_off: discountRow.discount_pct,
@@ -1355,7 +1466,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           couponId = coupon.id;
         } catch (err: any) {
           console.error("Stripe coupon creation error:", err.message);
-          // Continue without discount if coupon creation fails
         }
       }
     }
@@ -1373,13 +1483,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         storage.updateUserStripe(user.id, { stripeCustomerId: customerId });
       }
 
+      // Build line items: base plan + optional additional seats
+      const lineItems: any[] = [{ price: priceId, quantity: 1 }];
+      const totalSeats = 1 + (additionalSeats || 0);
+      if (additionalSeats && additionalSeats > 0 && priceType !== "veritacheck_only") {
+        const seatTier = getSeatPrice(totalSeats);
+        if (seatTier) {
+          lineItems.push({ price: seatTier.priceId, quantity: additionalSeats });
+        }
+      }
+
       const sessionParams: any = {
         customer: customerId,
         mode: isSubscription ? "subscription" : "payment",
-        line_items: [{ price: priceId, quantity: 1 }],
+        line_items: lineItems,
         success_url: successUrl,
         cancel_url: cancelUrl,
-        metadata: { userId: String(user.id), priceType },
+        metadata: { userId: String(user.id), priceType, totalSeats: String(totalSeats) },
       };
       if (couponId) {
         sessionParams.discounts = [{ coupon: couponId }];
@@ -1387,7 +1507,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const session = await stripe.checkout.sessions.create(sessionParams);
 
-      // Increment discount code usage after successful session creation
       if (couponId && discountRow) {
         db.$client.prepare("UPDATE discount_codes SET uses = uses + 1 WHERE id = ?").run(discountRow.id);
       }
@@ -1416,6 +1535,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const session = event.data.object as any;
         const userId = parseInt(session.metadata?.userId || "0");
         const priceType = session.metadata?.priceType;
+        const totalSeats = parseInt(session.metadata?.totalSeats || "1");
         if (userId) {
           // Calculate subscription expiry (1 year from now for annual plans)
           const expiresAt = new Date();
@@ -1423,31 +1543,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const expiresAtISO = expiresAt.toISOString();
 
           if (priceType === "perStudy") {
-            // Add 1 study credit
             storage.addStudyCredits(userId, 1);
-          } else if (priceType === "starter" && session.subscription) {
+          } else if (["waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(priceType) && session.subscription) {
+            // New tiered plans
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
-              plan: "starter",
+              plan: priceType,
             });
-            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
-          } else if (priceType === "professional" && session.subscription) {
+            (db as any).$client.prepare(
+              "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active', plan_expires_at = ?, seat_count = ? WHERE id = ?"
+            ).run(expiresAtISO, expiresAtISO, totalSeats, userId);
+          } else if (["starter", "professional", "lab", "complete", "annual"].includes(priceType) && session.subscription) {
+            // Backward compatibility for legacy plans
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
-              plan: "professional",
-            });
-            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
-          } else if ((priceType === "lab" || priceType === "complete") && session.subscription) {
-            storage.updateUserStripe(userId, {
-              stripeSubscriptionId: session.subscription,
-              plan: priceType === "complete" ? "lab" : "lab",
-            });
-            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
-          } else if (priceType === "annual" && session.subscription) {
-            // Backward compatibility for existing annual subscribers
-            storage.updateUserStripe(userId, {
-              stripeSubscriptionId: session.subscription,
-              plan: "annual",
+              plan: priceType === "complete" ? "lab" : priceType,
             });
             (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
           }
@@ -1491,7 +1601,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
   function hasCheckAccess(user: any) {
-    return ["annual", "starter", "professional", "lab", "complete", "per_study"].includes(user?.plan) || (user?.userId && user.userId <= 11);
+    return ["annual", "starter", "professional", "lab", "complete", "per_study", "waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(user?.plan) || (user?.userId && user.userId <= 11);
   }
 
   // List trackers for user
@@ -1763,7 +1873,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital"].includes(user?.plan);
   }
 
   // List programs
@@ -2304,8 +2414,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).all(assessment.id);
     const labUser = storage.getUserById(req.user.userId);
     const labName = labUser?.name || "Clinical Laboratory";
+    const compUserRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(req.userId) as any;
     try {
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults });
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: compUserRow?.clia_number || undefined });
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
@@ -2372,6 +2483,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Get user info for lab name
     const labUser = storage.getUserById(req.user.userId);
     const labName = labUser?.name || "Clinical Laboratory";
+    const compUserRow2 = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(req.userId) as any;
 
     try {
       const pdfBuffer = await generateCompetencyPDF({
@@ -2381,6 +2493,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         checklistItems,
         labName,
         quizResults,
+        cliaNumber: compUserRow2?.clia_number || undefined,
       });
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
@@ -2452,8 +2565,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     const { currentSpecimens } = req.body || {};
+    const cumsumUserRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(req.userId) as any;
     try {
-      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens);
+      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumUserRow?.clia_number || undefined);
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
@@ -2469,7 +2583,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITASTAFF ──────────────────────────────────────────────────────────
 
   function hasStaffAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp"].includes(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital"].includes(user?.plan);
   }
 
   // CMS specialty list (for validation and labels)
@@ -2825,6 +2939,260 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Get CMS specialties reference
   app.get("/api/staff/specialties", (_req: any, res) => {
     res.json(CMS_SPECIALTIES);
+  });
+
+  // ── CLIA LOOKUP ───────────────────────────────────────────────────────────
+
+  app.post("/api/clia/lookup", async (req, res) => {
+    const { clia_number } = req.body;
+    if (!clia_number || typeof clia_number !== "string" || clia_number.trim().length < 5) {
+      return res.status(400).json({ error: "Valid CLIA number required" });
+    }
+    const cliaNum = clia_number.trim().toUpperCase();
+
+    let labData: any = null;
+
+    // Try CMS Data API first
+    try {
+      const query = encodeURIComponent(`SELECT * FROM 4pq5-ikyk WHERE provider_number = '${cliaNum}' LIMIT 1`);
+      const cmsUrl = `https://data.cms.gov/provider-data/api/1/datastore/sql?query=[${query}]`;
+      const cmsRes = await fetch(cmsUrl, { signal: AbortSignal.timeout(10000) });
+      if (cmsRes.ok) {
+        const cmsData = await cmsRes.json();
+        const rows = Array.isArray(cmsData) ? cmsData : (cmsData?.results || []);
+        if (rows.length > 0) {
+          const row = rows[0];
+          labData = {
+            facility_name: row.facility_name || row.prvdr_ctgry_desc || row.name || "",
+            address: [row.street_address || row.st_adr, row.city, row.state, row.zip_code || row.zip].filter(Boolean).join(", "),
+            city: row.city || "",
+            state: row.state || "",
+            zip: row.zip_code || row.zip || "",
+            lab_director: [row.first_name || row.drctrs_first_nm, row.last_name || row.drctrs_last_nm].filter(Boolean).join(" "),
+            certificate_type: row.certificate_type || row.crtfct_type_cd || "",
+            specialty_count: 0,
+            specialties: [],
+            valid_through: row.expiration_date || row.exprtn_dt || null,
+          };
+          // Count specialties from CMS data columns
+          const specCols = Object.keys(row).filter(k => /specialty|spclty/i.test(k) && row[k]);
+          labData.specialty_count = specCols.length || 1;
+          labData.specialties = specCols.map((k: string) => row[k]);
+        }
+      }
+    } catch (err: any) {
+      console.log("[CLIA] CMS Data API failed, trying QCOR:", err.message);
+    }
+
+    // Fallback: try QCOR API
+    if (!labData) {
+      try {
+        const qcorUrl = `https://qcor.cms.gov/api/public/clia/lab?clia_id=${cliaNum}`;
+        const qcorRes = await fetch(qcorUrl, { signal: AbortSignal.timeout(10000) });
+        if (qcorRes.ok) {
+          const qcorData = await qcorRes.json();
+          if (qcorData && (qcorData.facility_name || qcorData.name)) {
+            labData = {
+              facility_name: qcorData.facility_name || qcorData.name || "",
+              address: [qcorData.address, qcorData.city, qcorData.state, qcorData.zip].filter(Boolean).join(", "),
+              city: qcorData.city || "",
+              state: qcorData.state || "",
+              zip: qcorData.zip || "",
+              lab_director: qcorData.lab_director || qcorData.director || "",
+              certificate_type: qcorData.certificate_type || "",
+              specialty_count: qcorData.specialties?.length || qcorData.specialty_count || 1,
+              specialties: qcorData.specialties || [],
+              valid_through: qcorData.expiration_date || null,
+            };
+          }
+        }
+      } catch (err: any) {
+        console.log("[CLIA] QCOR API also failed:", err.message);
+      }
+    }
+
+    if (!labData) {
+      return res.status(404).json({ error: "CLIA number not found. Please verify and try again." });
+    }
+
+    // Determine tier from certificate type and specialty count
+    const certType = (labData.certificate_type || "").toLowerCase();
+    let tier: string;
+    let base_price: number;
+
+    if (certType.includes("waiv")) {
+      tier = "waived";
+      base_price = 499;
+    } else if (labData.specialty_count >= 16) {
+      tier = "large_hospital";
+      base_price = 1999;
+    } else if (labData.specialty_count >= 9) {
+      tier = "hospital";
+      base_price = 1299;
+    } else {
+      tier = "community";
+      base_price = 799;
+    }
+
+    res.json({
+      clia_number: cliaNum,
+      facility_name: labData.facility_name,
+      address: labData.address,
+      city: labData.city,
+      state: labData.state,
+      zip: labData.zip,
+      lab_director: labData.lab_director,
+      certificate_type: labData.certificate_type,
+      specialty_count: labData.specialty_count,
+      specialties: labData.specialties,
+      valid_through: labData.valid_through,
+      tier,
+      base_price,
+    });
+  });
+
+  app.post("/api/clia/confirm", authMiddleware, (req: any, res) => {
+    const { clia_number, facility_name, address, lab_director, specialty_count, certificate_type, tier } = req.body;
+    if (!clia_number) return res.status(400).json({ error: "CLIA number required" });
+
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      UPDATE users SET
+        clia_number = ?, clia_lab_name = ?, clia_address = ?, clia_director = ?,
+        clia_specialty_count = ?, clia_certificate_type = ?, clia_tier = ?, clia_verified_at = ?
+      WHERE id = ?
+    `).run(clia_number, facility_name || null, address || null, lab_director || null,
+      specialty_count || null, certificate_type || null, tier || null, now, req.userId);
+
+    res.json({ ok: true, tier });
+  });
+
+  // ── NAMED SEAT MANAGEMENT ────────────────────────────────────────────────
+
+  // List seats for current account owner
+  app.get("/api/account/seats", authMiddleware, (req: any, res) => {
+    const seats = (db as any).$client.prepare(
+      "SELECT * FROM user_seats WHERE owner_user_id = ? ORDER BY id"
+    ).all(req.userId);
+    const userRow = (db as any).$client.prepare("SELECT seat_count FROM users WHERE id = ?").get(req.userId);
+    res.json({ seats, seat_count: userRow?.seat_count || 1 });
+  });
+
+  // Add a seat (invite)
+  app.post("/api/account/seats", authMiddleware, async (req: any, res) => {
+    const { email } = req.body;
+    if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+
+    const userRow = (db as any).$client.prepare("SELECT seat_count FROM users WHERE id = ?").get(req.userId) as any;
+    const maxSeats = userRow?.seat_count || 1;
+    const currentSeats = (db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
+    ).get(req.userId) as any;
+
+    // +1 for the owner seat
+    if ((currentSeats?.cnt || 0) + 1 >= maxSeats) {
+      return res.status(403).json({ error: "Seat limit reached. Purchase additional seats to add more users." });
+    }
+
+    const now = new Date().toISOString();
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ?"
+    ).get(req.userId, email.toLowerCase());
+    if (existing) return res.status(409).json({ error: "This email already has a seat assigned" });
+
+    // Check if invited user already has an account
+    const existingUser = storage.getUserByEmail(email.toLowerCase());
+    const seatUserId = existingUser ? existingUser.id : null;
+
+    (db as any).$client.prepare(
+      "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status) VALUES (?, ?, ?, ?, ?)"
+    ).run(req.userId, email.toLowerCase(), seatUserId, now, seatUserId ? "active" : "pending");
+
+    // Send invite email via Resend
+    const owner = storage.getUserById(req.userId);
+    try {
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.RESEND_API_KEY || "re_iuVZocND_7KCES3ak8QYN4funPUF3oF1z"}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "VeritaAssure <noreply@veritaslabservices.com>",
+          to: email.toLowerCase(),
+          subject: `You've been invited to ${owner?.name || "a lab"}'s VeritaAssure account`,
+          html: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+              <h2 style="color:#01696F">VeritaAssure\u2122 Seat Invitation</h2>
+              <p>${owner?.name || "Your lab administrator"} has assigned you a seat on their VeritaAssure account.</p>
+              <p>Create your account using this email address (${email}) to get started:</p>
+              <a href="${FRONTEND_URL}/#/login" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Create Account</a>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+              <p style="color:#999;font-size:12px">Veritas Lab Services, LLC</p>
+            </div>
+          `,
+        }),
+      });
+    } catch (emailErr) {
+      console.error("[seats] Invite email failed:", emailErr);
+    }
+
+    res.json({ ok: true, status: seatUserId ? "active" : "pending" });
+  });
+
+  // Deactivate a seat
+  app.delete("/api/account/seats/:seatId", authMiddleware, (req: any, res) => {
+    const seat = (db as any).$client.prepare(
+      "SELECT id FROM user_seats WHERE id = ? AND owner_user_id = ?"
+    ).get(req.params.seatId, req.userId);
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+
+    (db as any).$client.prepare("UPDATE user_seats SET status = 'deactivated' WHERE id = ?").run(req.params.seatId);
+    res.json({ ok: true });
+  });
+
+  // ── SESSION MANAGEMENT ───────────────────────────────────────────────────
+
+  app.post("/api/auth/force-logout", authMiddleware, (req: any, res) => {
+    // Deactivate all sessions for this user
+    (db as any).$client.prepare(
+      "UPDATE user_sessions SET is_active = 0 WHERE user_id = ?"
+    ).run(req.userId);
+
+    // Create new session
+    const sessionToken = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const deviceInfo = req.headers["user-agent"] || "Unknown";
+    (db as any).$client.prepare(
+      "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
+    ).run(req.userId, sessionToken, deviceInfo, now, now);
+
+    res.json({ ok: true, session_token: sessionToken });
+  });
+
+  // Force logout a specific seat's sessions (for account owner)
+  app.post("/api/account/seats/:seatId/force-logout", authMiddleware, (req: any, res) => {
+    const seat = (db as any).$client.prepare(
+      "SELECT seat_user_id FROM user_seats WHERE id = ? AND owner_user_id = ?"
+    ).get(req.params.seatId, req.userId) as any;
+    if (!seat || !seat.seat_user_id) return res.status(404).json({ error: "Seat not found or user not registered" });
+
+    (db as any).$client.prepare(
+      "UPDATE user_sessions SET is_active = 0 WHERE user_id = ?"
+    ).run(seat.seat_user_id);
+
+    res.json({ ok: true });
+  });
+
+  // Logout (mark session inactive)
+  app.post("/api/auth/logout", authMiddleware, (req: any, res) => {
+    const { session_token } = req.body;
+    if (session_token) {
+      (db as any).$client.prepare(
+        "UPDATE user_sessions SET is_active = 0 WHERE session_token = ?"
+      ).run(session_token);
+    }
+    res.json({ ok: true });
   });
 
   return httpServer;

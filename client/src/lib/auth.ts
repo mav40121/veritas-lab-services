@@ -24,6 +24,10 @@ export interface AuthUser {
   subscriptionExpiresAt?: string | null;
   subscriptionStatus?: string;
   accessLevel?: 'full' | 'read_only' | 'locked' | 'free';
+  cliaNumber?: string | null;
+  cliaLabName?: string | null;
+  cliaTier?: string | null;
+  seatCount?: number;
 }
 
 export function setAuth(token: string, user: AuthUser) {

@@ -259,7 +259,7 @@ const CSS = `
 `;
 
 // ─── Shared header HTML ───────────────────────────────────────────────────────
-function headerHTML(study: Study): string {
+function headerHTML(study: Study, cliaNumber?: string): string {
   const typeLabelMap: Record<string, string> = {
     cal_ver: "Calibration Verification / Linearity",
     precision: "Precision Verification (EP15)",
@@ -270,15 +270,17 @@ function headerHTML(study: Study): string {
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
   };
   const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
+  const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not provided</div>`;
   return `
   <div class="report-header">
     <div>
-      <div class="logo">VeritaCheck™</div>
-      <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+      <div class="logo">VeritaCheck\u2122</div>
+      <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+      ${cliaLine}
     </div>
     <div class="header-right">Instrument: ${study.instrument}</div>
   </div>
-  <div class="report-title">${typeLabel} — ${study.testName}</div>
+  <div class="report-title">${typeLabel} - ${study.testName}</div>
   <hr class="divider">`;
 }
 
@@ -544,7 +546,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   body { counter-reset: page; }
   </style></head><body>
   ${footerHTML()}
-  ${headerHTML(study)}
+  ${headerHTML(study, (study as any)._cliaNumber)}
 
   <div class="section-heading">Calibration Verification / Linearity</div>
   <div class="charts">${scatterSvg}${recoverySvg}</div>
@@ -699,7 +701,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
-  ${headerHTML(study)}
+  ${headerHTML(study, (study as any)._cliaNumber)}
 
   <div class="section-heading">Correlation / Method Comparison</div>
   <div class="charts">${corrSvg}${baSvg}</div>
@@ -813,7 +815,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
-  ${headerHTML(study)}
+  ${headerHTML(study, (study as any)._cliaNumber)}
 
   <div class="section-heading">Precision Verification (EP15)</div>
 
@@ -981,7 +983,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
-  ${headerHTML(study)}
+  ${headerHTML(study, (study as any)._cliaNumber)}
   <div class="section-heading">Lot-to-Lot Verification</div>
   ${lotInfo}
   ${cohortSections}
@@ -1150,7 +1152,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
-  ${headerHTML(study)}
+  ${headerHTML(study, (study as any)._cliaNumber)}
   <div class="section-heading">PT/Coag New Lot Validation</div>
   ${reagentInfo}
 
@@ -1231,7 +1233,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
   </style></head><body>
-    ${headerHTML(study)}
+    ${headerHTML(study, (study as any)._cliaNumber)}
     ${signatureHTML()}
     ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     <div class="narrative-section">
@@ -1240,7 +1242,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
     </div>
     <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot — the historical/peer-derived SD should be used for control limits.</div>
     <div style="page-break-before:always"></div>
-    ${headerHTML(study)}
+    ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Results</div>
     <table class="data-table"><thead><tr>
       <th>Analyzer</th><th>Analyte</th><th>Level</th><th style="text-align:right">N</th>
@@ -1293,7 +1295,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
   </style></head><body>
-    ${headerHTML(study)}
+    ${headerHTML(study, (study as any)._cliaNumber)}
     ${signatureHTML()}
     ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     <div class="narrative-section">
@@ -1302,7 +1304,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
     </div>
     ${isiNote}
     <div style="page-break-before:always"></div>
-    ${headerHTML(study)}
+    ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Per-Analyte Summary</div>
     <table class="data-table"><thead><tr>
       <th>Analyte</th><th style="text-align:right">N</th><th style="text-align:right">Mean New</th>
@@ -1323,7 +1325,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
 }
 
 // ─── CUMSUM PDF GENERATOR ─────────────────────────────────────────────────────
-export async function generateCumsumPDF(tracker: any, entries: any[], currentSpecimens?: any[]): Promise<Buffer> {
+export async function generateCumsumPDF(tracker: any, entries: any[], currentSpecimens?: any[], cliaNumber?: string): Promise<Buffer> {
   const historyRows = entries.map((e: any) => `
     <tr style="${e.verdict === 'ACTION REQUIRED' ? 'background:#fef2f2;' : e.verdict === 'ACCEPT' ? 'background:#f0fdf4;' : ''}">
       <td>${e.year}</td>
@@ -1355,12 +1357,13 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   </style></head><body>
     <div class="report-header">
       <div>
-        <div class="logo">VeritaCheck™</div>
-        <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+        <div class="logo">VeritaCheck\u2122</div>
+        <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+        <div style="font-size:8pt;color:${cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${cliaNumber || 'Not provided'}</div>
       </div>
       <div class="header-right">Instrument: ${tracker.instrument_name}</div>
     </div>
-    <div class="report-title">CUMSUM Tracker — ${tracker.instrument_name} (${tracker.analyte})</div>
+    <div class="report-title">CUMSUM Tracker - ${tracker.instrument_name} (${tracker.analyte})</div>
     <hr class="divider">
     <div class="signature-block">
       <div class="accepted-label">Accepted by:</div>
@@ -1403,7 +1406,9 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   }
 }
 
-export async function generatePDFBuffer(study: Study, results: any): Promise<Buffer> {
+export async function generatePDFBuffer(study: Study, results: any, cliaNumber?: string): Promise<Buffer> {
+  // Attach cliaNumber to study object for internal builder use
+  (study as any)._cliaNumber = cliaNumber || null;
   const html = study.studyType === "cal_ver"
     ? buildCalVerHTML(study, results)
     : study.studyType === "precision"
@@ -1456,6 +1461,7 @@ interface VeritaScanPDFData {
   createdAt: string;
   updatedAt: string;
   items: VeritaScanPDFItem[];
+  cliaNumber?: string;
 }
 
 const SCAN_STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -1536,8 +1542,9 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
   </style></head><body>
     <div class="report-header">
       <div>
-        <div class="logo">VeritaScan™</div>
-        <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+        <div class="logo">VeritaScan\u2122</div>
+        <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not provided'}</div>
       </div>
       <div class="header-right">Generated ${today()}</div>
     </div>
@@ -1625,8 +1632,9 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
   </style></head><body>
     <div class="report-header">
       <div>
-        <div class="logo">VeritaScan™</div>
-        <div class="logo-sub">by Veritas Lab Services · veritaslabservices.com</div>
+        <div class="logo">VeritaScan\u2122</div>
+        <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not provided'}</div>
       </div>
       <div class="header-right">Generated ${today()}</div>
     </div>
@@ -1704,6 +1712,7 @@ interface CompetencyPDFInput {
   checklistItems: any[];
   labName: string;
   quizResults?: any[];
+  cliaNumber?: string;
 }
 
 function esc(s: string | null | undefined): string {
@@ -1772,6 +1781,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   html += `<div class="header">
     <h1>VeritaAssure\u2122</h1>
     <div class="sub">${typeLabel}</div>
+    <div style="font-size:9pt;color:rgba(255,255,255,0.8);margin-top:2px;">CLIA: ${input.cliaNumber || 'Not provided'}</div>
     <div class="divider"></div>
   </div>`;
 

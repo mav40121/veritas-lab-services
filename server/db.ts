@@ -393,6 +393,53 @@ if (!colNames.includes("subscription_status")) {
   sqlite.exec("UPDATE users SET subscription_status = 'active' WHERE plan IN ('starter', 'professional', 'lab', 'complete', 'annual')");
 }
 
+// Add CLIA and seat/session columns to users table
+const cliaUserCols: [string, string][] = [
+  ["clia_number", "TEXT"],
+  ["clia_lab_name", "TEXT"],
+  ["clia_address", "TEXT"],
+  ["clia_director", "TEXT"],
+  ["clia_specialty_count", "INTEGER"],
+  ["clia_certificate_type", "TEXT"],
+  ["clia_tier", "TEXT"],
+  ["clia_verified_at", "TEXT"],
+  ["seat_count", "INTEGER DEFAULT 1"],
+  ["plan_expires_at", "TEXT"],
+];
+for (const [col, colType] of cliaUserCols) {
+  if (!colNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE users ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
+// Create user_seats table for named seat management
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS user_seats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    seat_email TEXT NOT NULL,
+    seat_user_id INTEGER,
+    invited_at TEXT,
+    accepted_at TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+  );
+`);
+
+// Create user_sessions table for session limiting
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS user_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    session_token TEXT UNIQUE NOT NULL,
+    device_info TEXT,
+    created_at TEXT NOT NULL,
+    last_active TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
 // Set test accounts (userId 1-11) to active with subscription_expires_at = 2 years from now
 const twoYearsFromNow = new Date();
 twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);

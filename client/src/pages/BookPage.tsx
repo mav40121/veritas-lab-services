@@ -126,9 +126,9 @@ export default function BookPage() {
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
                     <Badge className="bg-amber-500 text-white border-0 text-xs">Best Value</Badge>
                   </div>
-                  <div className="text-2xl font-bold">$599<span className="text-sm font-normal opacity-80">/yr</span></div>
-                  <div className="text-xs opacity-80">Professional Plan + Book Included</div>
-                  <div className="text-xs opacity-60">Book free with Professional subscription</div>
+                  <div className="text-2xl font-bold">from $499<span className="text-sm font-normal opacity-80">/yr</span></div>
+                  <div className="text-xs opacity-80">VeritaAssure&#8482; Suite + Book Included</div>
+                  <div className="text-xs opacity-60">Book included free with any annual plan</div>
                 </div>
               </div>
               <NotifyForm />
@@ -385,14 +385,15 @@ export default function BookPage() {
                 <Badge className="bg-primary text-primary-foreground">Best Value</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Best Value: Professional Plan + Book Included</div>
+                <div className="font-bold text-lg mb-1">Best Value: VeritaAssure&#8482; Suite + Book Included</div>
                 <div className="flex items-baseline gap-2 mb-1">
-                  <span className="text-4xl font-bold">$599</span>
+                  <span className="text-sm text-muted-foreground">from</span>
+                  <span className="text-4xl font-bold">$499</span>
                   <span className="text-sm text-muted-foreground">/yr</span>
                 </div>
-                <div className="text-xs text-muted-foreground mb-3">Book included free with Professional subscription</div>
+                <div className="text-xs text-muted-foreground mb-3">Book included free with any annual plan</div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Full VeritaAssure suite (VeritaCheck, VeritaMap, VeritaScan, VeritaComp) plus Lab Management 101 at no extra cost.
+                  Full VeritaAssure&#8482; suite (VeritaCheck&#8482;, VeritaMap&#8482;, VeritaScan&#8482;, VeritaComp&#8482;) plus Lab Management 101 at no extra cost. Tier-based pricing from your CLIA certificate.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[

@@ -68,7 +68,7 @@ export default function VeritaMapPage() {
                 </div>
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in Professional ($599/yr) and above</div>
+                  <div className="text-xs text-muted-foreground">in Waived ($499/yr) and above</div>
                 </div>
               </div>
 
@@ -229,13 +229,14 @@ export default function VeritaMapPage() {
                 <Badge className="bg-primary text-primary-foreground">Full Access</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Professional</div>
+                <div className="font-bold text-lg mb-1">VeritaAssure&#8482; Suite</div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-4xl font-bold">$599</span>
+                  <span className="text-sm text-muted-foreground">from</span>
+                  <span className="text-4xl font-bold">$499</span>
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Unlimited instruments and analytes. Full regulatory gap report. Full suite: VeritaCheck, VeritaMap, and VeritaScan.
+                  Unlimited instruments and analytes. Full regulatory gap report. CLIA tier-based pricing determined by your certificate.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck + VeritaScan included","Annual review cycle tracking","Priority support"].map(f => (
@@ -255,7 +256,7 @@ export default function VeritaMapPage() {
           <div className="mt-6 max-w-2xl">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5">
               <div className="font-bold text-base mb-1">
-                Professional Plan: <span className="text-primary">$599/year</span>
+                VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $499/year</span>
                 <Badge className="ml-2 bg-primary text-primary-foreground text-xs">Full Suite</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">

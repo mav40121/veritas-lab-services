@@ -43,6 +43,7 @@ import VeritaCompAppPage from "@/pages/VeritaCompAppPage";
 import VeritaStaffPage from "@/pages/VeritaStaffPage";
 import VeritaStaffAppPage from "@/pages/VeritaStaffAppPage";
 import CumsumPage from "@/pages/CumsumPage";
+import SeatManagementPage from "@/pages/SeatManagementPage";
 
 function SiteFooter() {
   return (
@@ -193,6 +194,7 @@ function AppContent() {
           <Route path="/veritastaff-app" component={VeritaStaffAppPage} />
           <Route path="/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
           <Route path="/cumsum" component={CumsumPage} />
+          <Route path="/account/seats" component={SeatManagementPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
