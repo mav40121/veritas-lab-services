@@ -1792,15 +1792,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
-  // ── DEMO DATA API (public, read-only) ──────────────────────────────────
-  app.get("/api/demo/data", (_req, res) => {
-    // Find the demo user
+  // ── DEMO DATA APIs (all public, NO auth middleware) ─────────────────────
+
+  function getDemoUserId(): number | null {
     const demoUser = (db as any).$client.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get();
-    if (!demoUser) return res.json({ maps: [], scans: [], studies: [], cumsumTrackers: [] });
+    return demoUser ? demoUser.id : null;
+  }
 
-    const userId = demoUser.id;
+  // Legacy endpoint - kept for backwards compatibility
+  app.get("/api/demo/data", (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.json({ maps: [], scans: [], studies: [], cumsumTrackers: [] });
 
-    // VeritaMap maps
     const maps = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").all(userId);
     const mapsWithData = maps.map((m: any) => {
       const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(m.id);
@@ -1810,7 +1813,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(m.id);
 
-      // Compute intelligence
       const rows = (db as any).$client.prepare(`
         SELECT it.analyte, it.specialty, it.complexity,
                i.instrument_name, i.role, i.id as instrument_id
@@ -1840,7 +1842,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ...m, instruments: instrumentsWithTests, tests: mapTests, intelligence };
     });
 
-    // VeritaScan scans
     const scans = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").all(userId);
     const scansWithItems = scans.map((s: any) => {
       const items = (db as any).$client.prepare(
@@ -1852,10 +1853,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ...s, items, total, assessed, compliant };
     });
 
-    // Studies
     const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
 
-    // CUMSUM trackers
     const trackers = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE user_id = ?").all(userId);
     const trackersWithEntries = trackers.map((t: any) => {
       const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(t.id);
@@ -1868,6 +1867,326 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       studies,
       cumsumTrackers: trackersWithEntries,
     });
+  });
+
+  // GET /api/demo/overview - lab summary stats
+  app.get("/api/demo/overview", (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+
+    const studyCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?").get(userId)?.cnt || 0;
+    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").get(userId);
+    let scanPct = 0;
+    if (scan) {
+      const items = (db as any).$client.prepare("SELECT status FROM veritascan_items WHERE scan_id = ?").all(scan.id);
+      const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
+      scanPct = Math.round((assessed / 168) * 100);
+    }
+    const employeeCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM competency_employees WHERE user_id = ?").get(userId)?.cnt || 0;
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(userId);
+    const instrumentCount = map ? ((db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(map.id)?.cnt || 0) : 0;
+
+    res.json({
+      labName: "Riverside Regional Medical Center",
+      cliaNumber: "22D0099999",
+      address: "1200 Medical Center Drive, Richmond, VA 23298",
+      stats: {
+        studyCount,
+        scanCompletionPct: scanPct,
+        employeeCount,
+        instrumentCount,
+      },
+    });
+  });
+
+  // GET /api/demo/studies - list all demo studies with full data
+  app.get("/api/demo/studies", (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.json([]);
+
+    const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
+    res.json(studies);
+  });
+
+  // GET /api/demo/studies/:id - single study with full data
+  app.get("/api/demo/studies/:id", (req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+
+    const study = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+    if (!study) return res.status(404).json({ error: "Study not found" });
+    res.json(study);
+  });
+
+  // GET /api/demo/studies/:id/pdf - generate PDF for a demo study
+  app.get("/api/demo/studies/:id/pdf", async (req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+
+    const studyRow = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+
+    try {
+      const study = {
+        testName: studyRow.test_name,
+        instrument: studyRow.instrument,
+        analyst: studyRow.analyst,
+        date: studyRow.date,
+        studyType: studyRow.study_type,
+        cliaAllowableError: studyRow.clia_allowable_error,
+        dataPoints: JSON.parse(studyRow.data_points),
+        instruments: JSON.parse(studyRow.instruments),
+        status: studyRow.status,
+      };
+
+      // Compute results based on study type (method_comparison)
+      const dp = study.dataPoints;
+      const instNames = study.instruments;
+      const primary = instNames[0];
+      const comparison = instNames[1];
+
+      const xs = dp.map((p: any) => p.instrumentValues?.[primary] ?? 0);
+      const ys = dp.map((p: any) => p.instrumentValues?.[comparison] ?? 0);
+
+      const n = xs.length;
+      const xMean = xs.reduce((a: number, b: number) => a + b, 0) / n;
+      const yMean = ys.reduce((a: number, b: number) => a + b, 0) / n;
+      const sxx = xs.reduce((s: number, x: number) => s + (x - xMean) ** 2, 0);
+      const syy = ys.reduce((s: number, y: number) => s + (y - yMean) ** 2, 0);
+      const sxy = xs.reduce((s: number, x: number, i: number) => s + (x - xMean) * (ys[i] - yMean), 0);
+      const slope = sxx === 0 ? 1 : sxy / sxx;
+      const intercept = yMean - slope * xMean;
+      const rSquared = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+
+      const biases = xs.map((x: number, i: number) => ys[i] - x);
+      const meanBias = biases.reduce((a: number, b: number) => a + b, 0) / n;
+
+      const results = {
+        type: "method_comparison",
+        n,
+        slope,
+        intercept,
+        rSquared,
+        meanBias,
+        pass: true,
+        instrumentResults: {
+          [comparison]: {
+            slope, intercept, rSquared, meanBias, pass: true,
+          },
+        },
+        blandAltman: {},
+      };
+
+      const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0099999");
+      const filename = `VeritaCheck_MethodComp_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("Demo PDF generation error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // GET /api/demo/map - demo VeritaMap data
+  app.get("/api/demo/map", (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.json({ instruments: [], tests: [] });
+
+    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").get(userId);
+    if (!map) return res.json({ instruments: [], tests: [] });
+
+    const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(map.id);
+    const instrumentsWithTests = instruments.map((inst: any) => {
+      const tests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(inst.id);
+      return { ...inst, tests };
+    });
+    const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(map.id);
+
+    res.json({ ...map, instruments: instrumentsWithTests, tests: mapTests });
+  });
+
+  // GET /api/demo/map/excel - demo map Excel export
+  app.get("/api/demo/map/excel", async (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+
+    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").get(userId);
+    if (!map) return res.status(404).json({ error: "No demo map" });
+
+    const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(map.id);
+    const instrByAnalyte = (db as any).$client.prepare(`
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category
+      FROM veritamap_instrument_tests it
+      JOIN veritamap_instruments i ON i.id = it.instrument_id
+      WHERE it.map_id = ? AND it.active = 1
+    `).all(map.id);
+    const instrMap: Record<string, any[]> = {};
+    for (const row of instrByAnalyte) {
+      if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
+      instrMap[row.analyte].push(row);
+    }
+    const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
+
+    tests.sort((a: any, b: any) => {
+      const catA = (a.instruments[0]?.category || "").toLowerCase();
+      const catB = (b.instruments[0]?.category || "").toLowerCase();
+      if (catA !== catB) return catA.localeCompare(catB);
+      const specA = (a.specialty || "").toLowerCase();
+      const specB = (b.specialty || "").toLowerCase();
+      if (specA !== specB) return specA.localeCompare(specB);
+      return (a.analyte || "").toLowerCase().localeCompare((b.analyte || "").toLowerCase());
+    });
+
+    try {
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Compliance Map");
+
+      const headers = [
+        "Analyte", "Instruments", "Department", "Specialty", "Complexity",
+        "Number of Instruments", "Correlation Required",
+        "Last Cal Ver Date", "Last Method Comp Date", "Last Precision Date", "Notes",
+      ];
+      ws.columns = headers.map((h) => ({ header: h, key: h, width: 22 }));
+
+      for (const t of tests) {
+        const instruments = t.instruments || [];
+        const instrList = instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join("; ");
+        const isWaived = t.complexity === "WAIVED";
+        ws.addRow([
+          t.analyte, instrList, instruments[0]?.category || "", t.specialty, t.complexity,
+          instruments.length, !isWaived && instruments.length >= 2 ? "Yes" : "No",
+          t.last_cal_ver || "", t.last_method_comp || "", t.last_precision || "", t.notes || "",
+        ]);
+      }
+
+      const headerRow = ws.getRow(1);
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } } as any;
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaMap_Demo_Riverside_Regional.xlsx"`);
+      res.send(Buffer.from(buffer));
+    } catch (err: any) {
+      console.error("Demo Excel error:", err);
+      res.status(500).json({ error: "Excel export failed" });
+    }
+  });
+
+  // GET /api/demo/scan - demo VeritaScan checklist
+  app.get("/api/demo/scan", (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.json({ items: [], total: 168 });
+
+    const scan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").get(userId);
+    if (!scan) return res.json({ items: [], total: 168 });
+
+    const items = (db as any).$client.prepare(
+      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+    ).all(scan.id);
+    const total = 168;
+    const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
+    const compliant = items.filter((i: any) => i.status === "Compliant").length;
+    res.json({ ...scan, items, total, assessed, compliant });
+  });
+
+  // GET /api/demo/competency - demo competency assessment data
+  app.get("/api/demo/competency", (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.json({ programs: [], employees: [], assessments: [] });
+
+    const programs = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE user_id = ?").all(userId);
+    const employees = (db as any).$client.prepare("SELECT * FROM competency_employees WHERE user_id = ?").all(userId);
+
+    const assessments: any[] = [];
+    for (const prog of programs) {
+      const progAssessments = (db as any).$client.prepare(
+        `SELECT a.*, e.name as employee_name, e.title as employee_title
+         FROM competency_assessments a
+         JOIN competency_employees e ON a.employee_id = e.id
+         WHERE a.program_id = ?`
+      ).all(prog.id);
+
+      for (const assessment of progAssessments) {
+        const items = (db as any).$client.prepare(
+          "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
+        ).all(assessment.id);
+        const methodGroups = (db as any).$client.prepare(
+          "SELECT * FROM competency_method_groups WHERE program_id = ?"
+        ).all(prog.id);
+        assessments.push({ ...assessment, program_name: prog.name, items, methodGroups });
+      }
+    }
+
+    res.json({ programs, employees, assessments });
+  });
+
+  // GET /api/demo/competency/pdf - generate competency PDF for demo
+  app.get("/api/demo/competency/pdf", async (_req, res) => {
+    const userId = getDemoUserId();
+    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE p.user_id = ?
+       LIMIT 1`
+    ).get(userId);
+    if (!assessment) return res.status(404).json({ error: "No demo assessment" });
+
+    const items = (db as any).$client.prepare(
+      "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
+    ).all(assessment.id);
+
+    const methodGroups = (db as any).$client.prepare(
+      "SELECT * FROM competency_method_groups WHERE program_id = ?"
+    ).all(assessment.program_id);
+
+    const checklistItems = (db as any).$client.prepare(
+      "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
+    ).all(assessment.program_id);
+
+    let quizResults: any[] = [];
+    try {
+      quizResults = (db as any).$client.prepare(
+        `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
+         FROM competency_quiz_results qr
+         JOIN competency_quizzes q ON qr.quiz_id = q.id
+         WHERE qr.assessment_id = ?`
+      ).all(assessment.id);
+    } catch { /* quiz tables may not have data */ }
+
+    try {
+      const pdfBuffer = await generateCompetencyPDF({
+        assessment,
+        items,
+        methodGroups,
+        checklistItems,
+        labName: "Riverside Regional Medical Center",
+        quizResults,
+        cliaNumber: "22D0099999",
+      });
+
+      const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const filename = `VeritaComp_Technical_${safeName}_Demo.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("Demo competency PDF error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // ── VERITACOMP ─────────────────────────────────────────────────────────

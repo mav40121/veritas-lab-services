@@ -1,6 +1,6 @@
 /**
  * Seed demo account data for Riverside Regional Medical Center.
- * Runs on startup — safe to re-run (uses INSERT OR IGNORE / checks).
+ * Runs on startup -- safe to re-run (uses INSERT OR IGNORE / upsert logic).
  */
 import { db } from "./db";
 import bcrypt from "bcryptjs";
@@ -14,7 +14,6 @@ export async function seedDemoData() {
 
   if (existing) {
     demoUserId = existing.id;
-    // Ensure plan is lab and onboarding complete
     sqlite.prepare("UPDATE users SET plan = 'lab', has_completed_onboarding = 1 WHERE id = ?").run(demoUserId);
   } else {
     const hash = await bcrypt.hash("VeritaDemo2026!", 10);
@@ -27,31 +26,89 @@ export async function seedDemoData() {
 
   console.log(`[seed] Demo user id=${demoUserId}`);
 
-  // ─── 2. VeritaMap — Riverside Regional Map ──────────────────────────────
-  const existingMap = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ? AND name = ?").get(demoUserId, "Riverside Regional \u2014 2026 Compliance Map");
-  if (existingMap) {
-    console.log("[seed] Demo map already exists, skipping seed.");
-    return; // Already seeded
-  }
-
+  // ─── 2. VeritaMap -- Riverside Regional Map ──────────────────────────────
+  const existingMap = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(demoUserId);
+  let mapId: number;
   const now = new Date().toISOString();
 
-  const mapResult = sqlite.prepare(
-    "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
-  ).run(demoUserId, "Riverside Regional \u2014 2026 Compliance Map", now, now);
-  const mapId = Number(mapResult.lastInsertRowid);
+  if (existingMap) {
+    mapId = existingMap.id;
+    // Verify we have at least 3 chemistry instruments
+    const chemCount = sqlite.prepare(
+      "SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ? AND category = 'Chemistry'"
+    ).get(mapId)?.cnt || 0;
+    if (chemCount < 3) {
+      // Add missing instruments
+      const existingInsts = sqlite.prepare("SELECT instrument_name FROM veritamap_instruments WHERE map_id = ?").all(mapId).map((r: any) => r.instrument_name);
+      const requiredChem = [
+        { name: "Beckman Coulter AU5800 [Primary]", role: "Primary" },
+        { name: "Beckman Coulter AU5800 [Backup]", role: "Backup" },
+        { name: "Siemens ADVIA 1800", role: "Satellite" },
+      ];
+      for (const inst of requiredChem) {
+        if (!existingInsts.includes(inst.name)) {
+          sqlite.prepare(
+            "INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, created_at) VALUES (?, ?, ?, 'Chemistry', ?)"
+          ).run(mapId, inst.name, inst.role, now);
+        }
+      }
+    }
+    console.log("[seed] Demo map already exists, checking remaining data.");
+  } else {
+    const mapResult = sqlite.prepare(
+      "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
+    ).run(demoUserId, "Riverside Regional - 2026 Compliance Map", now, now);
+    mapId = Number(mapResult.lastInsertRowid);
+    seedMapData(sqlite, mapId, now);
+  }
 
-  // Instruments
+  // ─── 3. VeritaScan ──────────────────────────────────────────────────────
+  const existingScan = sqlite.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").get(demoUserId);
+  if (!existingScan) {
+    seedScanData(sqlite, demoUserId, now);
+  }
+
+  // ─── 4. VeritaCheck Studies (Sodium + Potassium method comparisons) ─────
+  const existingStudies = sqlite.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?").get(demoUserId);
+  if (!existingStudies || existingStudies.cnt < 2) {
+    // Remove old studies to reseed cleanly
+    sqlite.prepare("DELETE FROM studies WHERE user_id = ?").run(demoUserId);
+    seedStudies(sqlite, demoUserId, now);
+  }
+
+  // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
+  const existingComp = sqlite.prepare(
+    "SELECT id FROM competency_programs WHERE user_id = ?"
+  ).get(demoUserId);
+  if (!existingComp) {
+    seedCompetencyData(sqlite, demoUserId, now);
+  }
+
+  // ─── 6. CUMSUM Tracker ─────────────────────────────────────────────────
+  const existingTracker = sqlite.prepare("SELECT id FROM cumsum_trackers WHERE user_id = ?").get(demoUserId);
+  if (!existingTracker) {
+    seedCumsumData(sqlite, demoUserId, now);
+  }
+
+  console.log(`[seed] Demo data seeded for user=${demoUserId}`);
+}
+
+// ─── Map seeding ──────────────────────────────────────────────────────────────
+function seedMapData(sqlite: any, mapId: number, now: string) {
   const instruments = [
-    { name: "Ortho 5600 Primary", role: "Primary", category: "Chemistry", tests: [
-      { analyte: "Potassium", specialty: "Chemistry", complexity: "MODERATE" },
+    { name: "Beckman Coulter AU5800 [Primary]", role: "Primary", category: "Chemistry", tests: [
+      { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
+      { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
       { analyte: "Troponin", specialty: "Chemistry", complexity: "MODERATE" },
-      { analyte: "Sodium", specialty: "Chemistry", complexity: "MODERATE" },
     ]},
-    { name: "Ortho 5600 Backup", role: "Backup", category: "Chemistry", tests: [
-      { analyte: "Potassium", specialty: "Chemistry", complexity: "MODERATE" },
+    { name: "Beckman Coulter AU5800 [Backup]", role: "Backup", category: "Chemistry", tests: [
+      { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
+      { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
       { analyte: "Troponin", specialty: "Chemistry", complexity: "MODERATE" },
-      { analyte: "Sodium", specialty: "Chemistry", complexity: "MODERATE" },
+    ]},
+    { name: "Siemens ADVIA 1800", role: "Satellite", category: "Chemistry", tests: [
+      { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
+      { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
     ]},
     { name: "Tosoh", role: "Satellite", category: "Chemistry", tests: [
       { analyte: "Hemoglobin A1c", specialty: "Chemistry", complexity: "MODERATE" },
@@ -129,7 +186,6 @@ export async function seedDemoData() {
       }
     }
 
-    // Build merged map tests with realistic dates
     const analyteMap: Record<string, { specialty: string; complexity: string; instruments: string[] }> = {};
     for (const inst of instruments) {
       for (const t of inst.tests) {
@@ -140,91 +196,78 @@ export async function seedDemoData() {
 
     for (const [analyte, info] of Object.entries(analyteMap)) {
       const isWaived = info.complexity === "WAIVED";
-      // Give realistic dates — most have recent cal ver and method comp
       let calVer: string | null = isWaived ? null : "2026-01-15";
       let methodComp: string | null = info.instruments.length >= 2 ? "2025-11-20" : null;
       let precision: string | null = isWaived ? null : "2025-10-05";
 
-      // Deliberately leave some incomplete for demo story
-      if (analyte === "PT") { methodComp = null; } // PT correlation pending
-      if (analyte === "Potassium") { calVer = null; } // Potassium cal ver pending
-      if (analyte === "Hemoglobin") { precision = null; } // Hemoglobin accuracy pending
-
-      // Sodium method comparison — done (will show as auto-completed by VeritaCheck)
-      if (analyte === "Sodium") { methodComp = "2026-03-15"; }
-      // HbA1c accuracy — done
+      if (analyte === "PT") { methodComp = null; }
+      if (analyte === "Potassium") { calVer = null; }
+      if (analyte === "Hemoglobin") { precision = null; }
+      if (analyte === "Sodium") { methodComp = "2026-01-15"; }
       if (analyte === "Hemoglobin A1c") { precision = "2026-03-10"; }
 
       mapTestStmt.run(mapId, analyte, info.specialty, info.complexity, info.instruments.join(", "), calVer, methodComp, precision, now);
     }
   });
   seedInstruments();
+}
 
-  // ─── 3. VeritaScan — Riverside Regional Scan ────────────────────────────
+// ─── Scan seeding ─────────────────────────────────────────────────────────────
+function seedScanData(sqlite: any, demoUserId: number, now: string) {
   const scanResult = sqlite.prepare(
     "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
-  ).run(demoUserId, "Riverside Regional \u2014 2026 Annual Inspection Readiness", now, now);
+  ).run(demoUserId, "Riverside Regional - 2026 Annual Inspection Readiness", now, now);
   const scanId = Number(scanResult.lastInsertRowid);
 
-  // Items to leave INCOMPLETE (for demo story)
-  const incompleteKeywords = [
-    // PT correlation/method comparison items
-    "correlation", "method comparison",
-    // Potassium calibration verification
-    "calibration verification",
-    // Hemoglobin accuracy
-    "accuracy",
-  ];
-
-  // Items to mark as auto-completed by VeritaCheck
-  const autoCompletedItems = new Map<number, { studyName: string; link: string }>();
-  // We'll set these after creating the studies
-
-  // Mark ~60% of 168 items as Compliant
   const scanItemStmt = sqlite.prepare(`
     INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, completion_source, completion_link, completion_note, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Deterministic "random" - use item_id to decide status
-  // Items 1-168, mark about 60% as Compliant
   const seedScanItems = sqlite.transaction(() => {
     for (let itemId = 1; itemId <= 168; itemId++) {
-      // Default: mark as Compliant if hash is favorable (~60%)
-      const hash = (itemId * 7 + 13) % 10; // 0-9
-      const isCompliant = hash < 6; // 60% chance
-
-      let status = isCompliant ? "Compliant" : "Not Assessed";
+      const hash = (itemId * 7 + 13) % 10;
+      let status = hash < 6 ? "Compliant" : "Not Assessed";
       let notes: string | null = null;
-      let owner: string | null = isCompliant ? "Lab Staff" : null;
+      let owner: string | null = status === "Compliant" ? "Lab Staff" : null;
       let completionSource = "manual";
       let completionLink: string | null = null;
       let completionNote: string | null = null;
 
-      // Specific overrides: Blood Bank items (122-141) — some compliant, some N/A for smaller items
+      // Some items get "Needs Attention"
+      if ([15, 45, 67, 89, 112, 145].includes(itemId)) {
+        status = "Needs Attention";
+        notes = "Requires documentation update";
+        owner = "Lab Staff";
+      }
+
+      // Some N/A
+      if ([50, 100, 150].includes(itemId)) {
+        status = "N/A";
+        notes = "Not applicable to this facility";
+        owner = null;
+      }
+
       if (itemId >= 122 && itemId <= 141) {
         status = hash < 7 ? "Compliant" : "Not Assessed";
         owner = status === "Compliant" ? "Blood Bank Lead" : null;
       }
 
-      // Leave PT-related items incomplete (items about correlation: 26, 27, 28, 29)
       if ([26, 27, 28, 29].includes(itemId)) {
         status = "Not Assessed";
-        notes = "Pending \u2014 PT correlation study not yet completed";
+        notes = "Pending - PT correlation study not yet completed";
         owner = null;
       }
 
-      // Leave calibration verification items that match potassium incomplete (21, 22, 23, 24)
       if ([21, 22, 23, 24].includes(itemId)) {
         status = "Not Assessed";
-        notes = "Pending \u2014 Potassium cal ver not yet completed";
+        notes = "Pending - Potassium cal ver not yet completed";
         owner = null;
       }
 
-      // Leave accuracy/precision items incomplete for Hemoglobin (30, 32)
       if ([30, 32].includes(itemId)) {
         status = "Not Assessed";
-        notes = "Pending \u2014 Hemoglobin accuracy study not yet completed";
+        notes = "Pending - Hemoglobin accuracy study not yet completed";
         owner = null;
       }
 
@@ -232,80 +275,114 @@ export async function seedDemoData() {
     }
   });
   seedScanItems();
+}
 
-  // ─── 4. VeritaCheck Studies ─────────────────────────────────────────────
-
+// ─── Studies seeding (Sodium + Potassium method comparison) ───────────────────
+function seedStudies(sqlite: any, demoUserId: number, now: string) {
   // Study 1: Sodium Method Comparison
-  const sodiumDataPoints = generateMethodComparisonData(20, 140, 145, 0.998, 1.002);
-  const study1Result = sqlite.prepare(`
+  const sodiumDataPoints = generateSodiumData();
+  sqlite.prepare(`
     INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
     "Sodium",
-    "Ortho 5600 Primary",
-    "Demo Analyst",
-    "2026-03-15",
+    "Beckman Coulter AU5800 [Primary]",
+    "M. Veri, MLS(ASCP)",
+    "2026-01-15",
     "method_comparison",
-    0.04, // 4 mmol/L or ~3%
+    4.0, // 4 mmol/L absolute TEa for sodium
     JSON.stringify(sodiumDataPoints),
-    JSON.stringify(["Ortho 5600 Primary", "Ortho 5600 Backup"]),
+    JSON.stringify(["Beckman Coulter AU5800 [Primary]", "Beckman Coulter AU5800 [Backup]"]),
     now
   );
-  const study1Id = Number(study1Result.lastInsertRowid);
 
-  // Study 2: HbA1c Accuracy & Precision
-  const hba1cDataPoints = generateAccuracyData(3, [4.5, 7.0, 10.5], 0.06);
-  const study2Result = sqlite.prepare(`
+  // Study 2: Potassium Method Comparison
+  const potassiumDataPoints = generatePotassiumData();
+  sqlite.prepare(`
     INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
-    "Hemoglobin A1c",
-    "Tosoh",
-    "Demo Analyst",
-    "2026-03-10",
-    "precision",
-    0.06, // 6% TEa
-    JSON.stringify(hba1cDataPoints),
-    JSON.stringify(["Tosoh"]),
+    "Potassium",
+    "Beckman Coulter AU5800 [Primary]",
+    "M. Veri, MLS(ASCP)",
+    "2026-01-15",
+    "method_comparison",
+    0.5, // 0.5 mmol/L absolute TEa for potassium
+    JSON.stringify(potassiumDataPoints),
+    JSON.stringify(["Beckman Coulter AU5800 [Primary]", "Beckman Coulter AU5800 [Backup]"]),
     now
   );
-  const study2Id = Number(study2Result.lastInsertRowid);
+}
 
-  // Now mark the corresponding VeritaScan items as auto-completed by VeritaCheck
-  // Sodium method comparison → items 26,27,28,29 (method comparison items) — but only for Sodium
-  // Since these are general items, we auto-complete them to show the bridge
-  const autoCompleteStmt = sqlite.prepare(`
-    UPDATE veritascan_items SET
-      status = 'Compliant',
-      completion_source = 'veritacheck_auto',
-      completion_link = ?,
-      completion_note = ?,
-      notes = ?,
-      owner = 'VeritaCheck\u2122',
-      updated_at = ?
-    WHERE scan_id = ? AND item_id = ?
+// ─── Competency data seeding ──────────────────────────────────────────────────
+function seedCompetencyData(sqlite: any, demoUserId: number, now: string) {
+  // Create employee: Jennifer Martinez
+  const empResult = sqlite.prepare(
+    "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
+  ).run(demoUserId, "Jennifer Martinez", "MLS(ASCP)", "2020-03-15", "JM", now);
+  const employeeId = Number(empResult.lastInsertRowid);
+
+  // Create additional demo employees for VeritaStaff tab
+  sqlite.prepare(
+    "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
+  ).run(demoUserId, "Robert Chen", "MT(ASCP)", "2018-06-01", "RC", now);
+  sqlite.prepare(
+    "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
+  ).run(demoUserId, "Sarah Williams", "MLT(ASCP)", "2022-01-10", "SW", now);
+  sqlite.prepare(
+    "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
+  ).run(demoUserId, "David Nguyen", "MLS(ASCP)", "2019-09-20", "DN", now);
+
+  // Create program
+  const progResult = sqlite.prepare(
+    "INSERT INTO competency_programs (user_id, name, department, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(demoUserId, "2026 Annual Competency - Chemistry", "Chemistry", "technical", now, now);
+  const programId = Number(progResult.lastInsertRowid);
+
+  // Create method group
+  const mgResult = sqlite.prepare(
+    "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+  ).run(programId, "Chemistry Routine - AU5800", JSON.stringify(["Beckman Coulter AU5800 [Primary]", "Beckman Coulter AU5800 [Backup]"]), JSON.stringify(["Sodium", "Potassium", "Troponin"]), null);
+  const methodGroupId = Number(mgResult.lastInsertRowid);
+
+  // Create assessment
+  const assessResult = sqlite.prepare(`
+    INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, employee_acknowledged, supervisor_acknowledged, created_at)
+    VALUES (?, ?, 'annual', '2026-01-20', 'M. Veri', 'Technical Consultant', 'MV', 'technical', 'pass', 1, 1, ?)
+  `).run(programId, employeeId, now);
+  const assessmentId = Number(assessResult.lastInsertRowid);
+
+  // Create 6 assessment items (one per element), all passed
+  const itemStmt = sqlite.prepare(`
+    INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
 
-  // Auto-complete: pick two specific items to show as VC-auto-completed
-  // Item 29: "Correlation studies performed when multiple instruments perform the same test" — for Sodium
-  autoCompleteStmt.run(
-    `/study/${study1Id}/results`,
-    `Auto-completed by VeritaCheck: Sodium Method Comparison on 2026-03-15`,
-    `Auto-completed by VeritaCheck: Sodium Method Comparison \u2014 Ortho 5600 Primary vs Backup`,
-    now, scanId, 29
-  );
+  const elements = [
+    { num: 1, label: "Direct Observation of Routine Patient Test Performance", evidence: "Observed processing chemistry panel on AU5800", date: "2026-01-15" },
+    { num: 2, label: "Monitoring, Recording and Reporting of Test Results", evidence: "Reviewed result reporting including critical values", date: "2026-01-16" },
+    { num: 3, label: "QC Performance", evidence: "QC run documented in LIS on date observed", date: "2026-01-17" },
+    { num: 4, label: "Direct Observation of Instrument Maintenance", evidence: "Observed daily maintenance on AU5800", date: "2026-01-17" },
+    { num: 5, label: "Blind/PT Sample Performance", evidence: "CAP PT survey, all analytes acceptable", date: "2026-01-18" },
+    { num: 6, label: "Problem-Solving Assessment (Quiz)", evidence: "Quiz Q-AU5800-001, 2/2 correct, 100%", date: "2026-01-18" },
+  ];
 
-  // Item 32: "Accuracy verification (bias study) performed" — for HbA1c
-  autoCompleteStmt.run(
-    `/study/${study2Id}/results`,
-    `Auto-completed by VeritaCheck: HbA1c Accuracy & Precision on 2026-03-10`,
-    `Auto-completed by VeritaCheck: HbA1c Accuracy & Precision \u2014 Tosoh`,
-    now, scanId, 32
-  );
+  for (const el of elements) {
+    itemStmt.run(assessmentId, el.num, methodGroupId, el.label, el.label, el.evidence, el.date, "JM", "MV");
+  }
 
-  // ─── 5. CUMSUM Tracker — CA-660 Primary ─────────────────────────────────
+  // Create checklist items for the program
+  const checkStmt = sqlite.prepare(
+    "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+  );
+  checkStmt.run(programId, "Annual competency assessment completed", "All 6 elements documented", 1);
+  checkStmt.run(programId, "Employee acknowledged results", "Signed competency record", 2);
+}
+
+// ─── CUMSUM data seeding ──────────────────────────────────────────────────────
+function seedCumsumData(sqlite: any, demoUserId: number, now: string) {
   const trackerResult = sqlite.prepare(
     "INSERT INTO cumsum_trackers (user_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?)"
   ).run(demoUserId, "CA-660 Primary", "PTT", now);
@@ -317,59 +394,65 @@ export async function seedDemoData() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // 3 historical entries, all ACCEPT, final CumSum = -2.5
   entryStmt.run(trackerId, 2025, "Lot Change #1", "LOT-2024-A", "LOT-2025-A", 28.5, 29.1, 0.6, 0.6, "ACCEPT",
     JSON.stringify(generateSpecimenData(20, 28.5, 29.1)), "Routine lot change", now);
   entryStmt.run(trackerId, 2025, "Lot Change #2", "LOT-2025-A", "LOT-2025-B", 29.1, 27.5, -1.6, -1.0, "ACCEPT",
     JSON.stringify(generateSpecimenData(20, 29.1, 27.5)), "Mid-year lot change", now);
   entryStmt.run(trackerId, 2026, "Lot Change #3", "LOT-2025-B", "LOT-2026-A", 27.5, 26.0, -1.5, -2.5, "ACCEPT",
     JSON.stringify(generateSpecimenData(20, 27.5, 26.0)), "Annual lot change", now);
-
-  console.log(`[seed] Demo data seeded: map=${mapId}, scan=${scanId}, studies=${study1Id},${study2Id}, tracker=${trackerId}`);
 }
 
-// ─── Helper: Generate method comparison data ──────────────────────────────
-function generateMethodComparisonData(n: number, baseLow: number, baseHigh: number, targetR: number, targetSlope: number) {
+// ─── Data generators ──────────────────────────────────────────────────────────
+
+function generateSodiumData() {
+  // 20 patient samples, sodium range 135-145 mmol/L
+  // Primary vs Backup with <2% variation, slope ~1.001, intercept ~0.3, r2 = 0.998
   const points: any[] = [];
-  for (let i = 0; i < n; i++) {
-    const refValue = baseLow + (baseHigh - baseLow) * (i / (n - 1));
-    const noise = (Math.sin(i * 3.14159) * 0.5 + (i % 3) * 0.1) * 0.3;
-    const testValue = refValue * targetSlope + noise;
-    // New format: all instrument values in instrumentValues (primary + comparison)
+  const baseValues = [
+    135.2, 136.8, 137.5, 138.1, 138.9, 139.4, 139.8, 140.2, 140.6, 141.0,
+    141.3, 141.7, 142.0, 142.4, 142.8, 143.1, 143.5, 143.9, 144.3, 144.8,
+  ];
+  for (let i = 0; i < 20; i++) {
+    const primary = baseValues[i];
+    // Slight variation: slope 1.001, intercept 0.3, small noise
+    const noise = (Math.sin(i * 2.71828) * 0.3);
+    const backup = Math.round((primary * 1.001 + 0.3 + noise) * 10) / 10;
     points.push({
       level: i + 1,
       expectedValue: null,
       instrumentValues: {
-        "Ortho 5600 Primary": Math.round(refValue * 10) / 10,
-        "Ortho 5600 Backup": Math.round(testValue * 10) / 10,
+        "Beckman Coulter AU5800 [Primary]": primary,
+        "Beckman Coulter AU5800 [Backup]": backup,
       },
     });
   }
   return points;
 }
 
-// ─── Helper: Generate accuracy/precision data ─────────────────────────────
-function generateAccuracyData(nLevels: number, targetValues: number[], tea: number) {
+function generatePotassiumData() {
+  // 20 patient samples, potassium range 3.5-5.1 mmol/L
+  // slope ~0.999, intercept ~0.02, r2 = 0.997
   const points: any[] = [];
-  for (let i = 0; i < nLevels; i++) {
-    const target = targetValues[i];
-    // Generate 20 replicate measurements close to target
-    const values: number[] = [];
-    for (let j = 0; j < 20; j++) {
-      const noise = (Math.sin(j * 2.718 + i) * 0.3) * target * tea * 0.3;
-      values.push(Math.round((target + noise) * 100) / 100);
-    }
+  const baseValues = [
+    3.5, 3.6, 3.7, 3.8, 3.9, 4.0, 4.1, 4.2, 4.3, 4.4,
+    4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 5.1, 4.3, 3.8, 4.6,
+  ];
+  for (let i = 0; i < 20; i++) {
+    const primary = baseValues[i];
+    const noise = (Math.sin(i * 1.618) * 0.03);
+    const backup = Math.round((primary * 0.999 + 0.02 + noise) * 100) / 100;
     points.push({
       level: i + 1,
-      expectedValue: target,
-      instrumentValues: { "Tosoh": values[0] },
-      replicates: values,
+      expectedValue: null,
+      instrumentValues: {
+        "Beckman Coulter AU5800 [Primary]": primary,
+        "Beckman Coulter AU5800 [Backup]": backup,
+      },
     });
   }
   return points;
 }
 
-// ─── Helper: Generate CUMSUM specimen data ────────────────────────────────
 function generateSpecimenData(n: number, oldMean: number, newMean: number) {
   const specimens: any[] = [];
   for (let i = 1; i <= n; i++) {

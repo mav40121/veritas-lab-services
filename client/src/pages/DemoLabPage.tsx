@@ -3,15 +3,18 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   CheckCircle2, AlertTriangle, MapPin, ClipboardList, FlaskConical,
-  ArrowRight, Shield, ExternalLink,
-  ChevronDown, ChevronUp, Activity, Info, FileText, Eye
+  ArrowRight, Shield, Users, Award,
+  ChevronDown, ChevronUp, Activity, Info, FileText, Download
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
+import {
+  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
+  ResponsiveContainer, ReferenceLine, Legend, Tooltip as RechartsTooltip
+} from "recharts";
 
 interface DemoData {
   maps: any[];
@@ -20,22 +23,31 @@ interface DemoData {
   cumsumTrackers: any[];
 }
 
+interface CompetencyData {
+  programs: any[];
+  employees: any[];
+  assessments: any[];
+}
+
 export default function DemoLabPage() {
   const [data, setData] = useState<DemoData | null>(null);
+  const [competencyData, setCompetencyData] = useState<CompetencyData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("veritamap");
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("veritacheck");
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedStudy, setExpandedStudy] = useState<number | null>(null);
+  const [showFullScan, setShowFullScan] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/demo/data`)
-      .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    Promise.all([
+      fetch(`${API_BASE}/api/demo/data`).then((r) => r.json()),
+      fetch(`${API_BASE}/api/demo/competency`).then((r) => r.json()).catch(() => null),
+    ]).then(([demoData, compData]) => {
+      setData(demoData);
+      setCompetencyData(compData);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
-
-  const blockAction = () => setShowUpgradeModal(true);
 
   const toggleDomain = (domain: string) => {
     setExpandedDomains((prev) => {
@@ -70,24 +82,17 @@ export default function DemoLabPage() {
   const totalItems = 168;
   const assessedItems = Object.values(scanItemMap).filter((i: any) => i.status !== "Not Assessed").length;
   const compliantItems = Object.values(scanItemMap).filter((i: any) => i.status === "Compliant").length;
-  const completionPct = Math.round((assessedItems / totalItems) * 100);
-  const compliancePct = assessedItems > 0 ? Math.round((compliantItems / assessedItems) * 100) : 0;
-  const remainingItems = totalItems - compliantItems;
-
-  // Readiness score — compliant items as % of total
   const readinessPct = Math.round((compliantItems / totalItems) * 100);
   const readinessColor = readinessPct >= 80 ? "text-emerald-500" : readinessPct >= 50 ? "text-amber-500" : "text-red-500";
   const readinessBg = readinessPct >= 80 ? "bg-emerald-500" : readinessPct >= 50 ? "bg-amber-500" : "bg-red-500";
-
-  // Count analytes requiring correlation
-  const correlationAnalytes = map?.intelligence
-    ? Object.entries(map.intelligence as Record<string, any>).filter(([, v]: [string, any]) => v.correlationRequired).length
-    : 0;
+  const remainingItems = totalItems - compliantItems;
 
   const tabConfig = [
-    { id: "veritamap", label: "VeritaMap\u2122", desc: "Regulatory Mapping", icon: MapPin },
-    { id: "veritascan", label: "VeritaScan\u2122", desc: "Inspection Readiness", icon: ClipboardList },
-    { id: "veritacheck", label: "VeritaCheck\u2122", desc: "EP Studies", icon: FlaskConical },
+    { id: "veritacheck", label: "VeritaCheck\u2122", icon: FlaskConical },
+    { id: "veritamap", label: "VeritaMap\u2122", icon: MapPin },
+    { id: "veritascan", label: "VeritaScan\u2122", icon: ClipboardList },
+    { id: "veritacomp", label: "VeritaComp\u2122", icon: Award },
+    { id: "veritastaff", label: "VeritaStaff\u2122", icon: Users },
   ];
 
   const typeLabel: Record<string, string> = {
@@ -99,17 +104,78 @@ export default function DemoLabPage() {
     qc_range: "QC Range",
   };
 
+  // Compute study statistics for inline results
+  function computeStudyStats(study: any) {
+    const dp = study.data_points ? JSON.parse(study.data_points) : [];
+    const instruments = study.instruments ? JSON.parse(study.instruments) : [];
+    const primary = instruments[0];
+    const comparison = instruments[1];
+    if (!primary || !comparison || dp.length === 0) return null;
+
+    const xs = dp.map((p: any) => p.instrumentValues?.[primary] ?? 0);
+    const ys = dp.map((p: any) => p.instrumentValues?.[comparison] ?? 0);
+    const n = xs.length;
+    if (n < 2) return null;
+
+    const xMean = xs.reduce((a: number, b: number) => a + b, 0) / n;
+    const yMean = ys.reduce((a: number, b: number) => a + b, 0) / n;
+    const sxx = xs.reduce((s: number, x: number) => s + (x - xMean) ** 2, 0);
+    const syy = ys.reduce((s: number, y: number) => s + (y - yMean) ** 2, 0);
+    const sxy = xs.reduce((s: number, x: number, i: number) => s + (x - xMean) * (ys[i] - yMean), 0);
+
+    const slope = sxx === 0 ? 1 : sxy / sxx;
+    const intercept = yMean - slope * xMean;
+    const rSquared = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+
+    const biases = xs.map((x: number, i: number) => ys[i] - x);
+    const meanBias = biases.reduce((a: number, b: number) => a + b, 0) / n;
+    const pctDiffs = xs.map((x: number, i: number) => x === 0 ? 0 : ((ys[i] - x) / x) * 100);
+    const meanPctDiff = pctDiffs.reduce((a: number, b: number) => a + b, 0) / n;
+
+    const tea = study.clia_allowable_error;
+
+    const rows = dp.map((p: any, i: number) => {
+      const pVal = p.instrumentValues?.[primary] ?? 0;
+      const cVal = p.instrumentValues?.[comparison] ?? 0;
+      const bias = cVal - pVal;
+      const pctDiff = pVal === 0 ? 0 : ((cVal - pVal) / pVal) * 100;
+      const pass = Math.abs(bias) <= tea;
+      return { level: i + 1, primary: pVal, comparison: cVal, bias: Math.round(bias * 1000) / 1000, pctDiff: Math.round(pctDiff * 100) / 100, pass };
+    });
+
+    const scatterData = dp.map((p: any) => ({
+      x: p.instrumentValues?.[primary] ?? 0,
+      y: p.instrumentValues?.[comparison] ?? 0,
+    }));
+
+    return {
+      n, slope, intercept, rSquared, meanBias, meanPctDiff, tea,
+      rows, scatterData, primary, comparison,
+      allPass: rows.every((r: any) => r.pass),
+    };
+  }
+
+  function downloadStudyPdf(studyId: number) {
+    window.open(`${API_BASE}/api/demo/studies/${studyId}/pdf`, "_blank");
+  }
+
+  function downloadMapExcel() {
+    window.open(`${API_BASE}/api/demo/map/excel`, "_blank");
+  }
+
+  function downloadCompetencyPdf() {
+    window.open(`${API_BASE}/api/demo/competency/pdf`, "_blank");
+  }
+
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-background">
-        {/* ═══════════════════════════════════════════════════════════
-            BANNER — Solid dark teal, no gradient
-            ═══════════════════════════════════════════════════════════ */}
-        <div style={{ background: "#006064" }} className="text-white">
+        {/* STICKY DEMO BANNER */}
+        <div style={{ background: "#006064" }} className="text-white sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Shield size={16} />
-              You're viewing the VeritaAssure&#8482; demo lab &mdash; Riverside Regional Medical Center
+              VeritaAssure&#8482; Live Demo - Riverside Regional Medical Center | This is a fully interactive demo with real data.
             </div>
             <Button asChild size="sm" className="bg-white text-[#006064] hover:bg-white/90 font-semibold border-0">
               <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
@@ -117,37 +183,19 @@ export default function DemoLabPage() {
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════
-            CONTEXT HEADER — Orientation section
-            ═══════════════════════════════════════════════════════════ */}
+        {/* PAGE HEADER */}
         <div className="border-b bg-card">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 text-center">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">The VeritaAssure&#8482; Suite &mdash; Live Demo</h1>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 text-center">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">See VeritaAssure&#8482; in Action</h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-2xl mx-auto">
-              Explore how Riverside Regional Medical Center uses all three tools together. Click each tab to see the full workflow.
+              Explore a live lab environment. Every chart, report, and result below is generated by the actual VeritaAssure system.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                <MapPin size={12} />
-                {map?.instruments?.length || 13} Instruments Mapped
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                <ClipboardList size={12} />
-                {totalItems} Compliance Items Tracked
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                <FlaskConical size={12} />
-                {studies.length} Studies Completed
-              </span>
-            </div>
           </div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          {/* ═══════════════════════════════════════════════════════════
-              TABS — Redesigned with clear active/inactive states
-              ═══════════════════════════════════════════════════════════ */}
-          <div className="flex gap-2 mb-6 border-b border-border">
+          {/* TAB NAVIGATION */}
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-border">
             {tabConfig.map((tab) => {
               const isActive = activeTab === tab.id;
               const Icon = tab.icon;
@@ -156,259 +204,39 @@ export default function DemoLabPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    relative flex flex-col items-center px-5 py-3 rounded-t-lg text-sm font-medium transition-all
+                    relative flex items-center gap-1.5 px-4 py-3 rounded-t-lg text-sm font-medium transition-all
                     ${isActive
                       ? "bg-[#006064] text-white shadow-md -mb-px z-10"
                       : "bg-card text-muted-foreground border border-b-0 border-border hover:bg-secondary/60 hover:text-foreground"
                     }
                   `}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <Icon size={14} />
-                    <span>{tab.label}</span>
-                  </div>
-                  <span className={`text-[10px] mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground/70"}`}>
-                    {tab.desc}
-                  </span>
+                  <Icon size={14} />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════
-              VERITAMAP TAB
-              ═══════════════════════════════════════════════════════════ */}
-          {activeTab === "veritamap" && (
-            <div className="space-y-5">
-              {map ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-xl font-bold">{map.name}</h2>
-                      <p className="text-sm text-muted-foreground">{map.instruments?.length || 0} instruments &middot; {map.tests?.length || 0} analytes mapped</p>
-                    </div>
-                    {/* Read-only badge instead of Add Instrument button */}
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                      <Eye size={12} />
-                      Read-only demo &mdash; <button onClick={blockAction} className="text-primary hover:underline font-semibold">Sign up to build your own map</button>
-                    </div>
-                  </div>
-
-                  {/* Instruments */}
-                  <div className="grid gap-3">
-                    {(map.instruments || []).map((inst: any) => (
-                      <Card key={inst.id} className="overflow-hidden">
-                        <CardHeader className="py-3 px-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-sm font-semibold">{inst.instrument_name}</CardTitle>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-xs">{inst.role}</Badge>
-                                <span className="text-xs text-muted-foreground">{inst.category}</span>
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{inst.tests?.length || 0} tests</span>
-                          </div>
-                        </CardHeader>
-                        {inst.tests?.length > 0 && (
-                          <CardContent className="py-2 px-4 border-t">
-                            <div className="flex flex-wrap gap-1.5">
-                              {inst.tests.map((t: any) => (
-                                <Badge key={t.analyte} variant="secondary" className="text-xs">
-                                  {t.analyte}
-                                  <span className="ml-1 text-[9px] opacity-60">{t.complexity}</span>
-                                </Badge>
-                              ))}
-                            </div>
-                          </CardContent>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-
-                  {/* Narrative intro callout */}
-                  <div className="border-l-4 border-[#006064] bg-card rounded-r-lg p-4">
-                    <div className="flex items-start gap-2">
-                      <Info size={16} className="text-primary mt-0.5 shrink-0" />
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        VeritaMap identified <strong className="text-foreground">{correlationAnalytes} analytes</strong> requiring correlation studies across Riverside Regional's instruments. {studies.length} correlation studies have already been completed and auto-verified in VeritaScan. {Math.max(0, correlationAnalytes - studies.length)} are pending &mdash; click "Run Study" on any analyte to see how VeritaCheck pre-populates the study.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Intelligence Banner */}
-                  {map.intelligence && (
-                    <div className="rounded-xl border-2 border-red-200 dark:border-red-900/60 bg-gradient-to-br from-red-50 to-red-50/30 dark:from-red-950/30 dark:to-red-950/10 p-4 shadow-sm">
-                      <div className="flex items-center gap-2 mb-3">
-                        <AlertTriangle size={16} className="text-red-600" />
-                        <span className="font-semibold text-sm text-red-700 dark:text-red-400">Compliance Intelligence</span>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        {Object.entries(map.intelligence as Record<string, any>).filter(([, v]: [string, any]) => v.correlationRequired).map(([analyte, info]: [string, any]) => (
-                          <div key={analyte} className="bg-white/70 dark:bg-white/5 rounded-lg p-3 border border-red-100 dark:border-red-900/30">
-                            <div className="font-medium text-sm">{analyte}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {info.instruments.length} instruments &mdash; correlation study required (42 CFR &sect;493.1213)
-                            </div>
-                            <div className="mt-2">
-                              <Button size="sm" variant="link" className="h-auto p-0 text-xs text-primary" onClick={blockAction}>
-                                <FlaskConical size={10} className="mr-1" /> Run Study &rarr;
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                        {Object.entries(map.intelligence as Record<string, any>).filter(([, v]: [string, any]) => v.calVerRequired && !v.isWaived).slice(0, 4).map(([analyte]: [string, any]) => (
-                          <div key={`cv-${analyte}`} className="bg-white/70 dark:bg-white/5 rounded-lg p-3 border border-primary/20 dark:border-primary/30">
-                            <div className="font-medium text-sm">{analyte}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              Calibration verification required every 6 months (42 CFR &sect;493.1255)
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center text-muted-foreground py-12">No map data available</div>
-              )}
-            </div>
-          )}
-
-          {/* ═══════════════════════════════════════════════════════════
-              VERITASCAN TAB
-              ═══════════════════════════════════════════════════════════ */}
-          {activeTab === "veritascan" && (
-            <>
-              {scan ? (
-                <div className="space-y-5">
-                  {/* Readiness hero */}
-                  <div className="text-center py-6">
-                    <div className={`text-6xl font-bold ${readinessColor}`}>{readinessPct}%</div>
-                    <div className="text-sm text-muted-foreground mt-1 font-medium">Inspection-Ready</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {compliantItems} of {totalItems} items compliant &middot; {remainingItems} items remaining
-                    </div>
-                    {/* Readiness bar */}
-                    <div className="max-w-md mx-auto mt-3">
-                      <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full ${readinessBg} rounded-full transition-all`} style={{ width: `${readinessPct}%` }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Domain breakdown */}
-                  <div className="space-y-2">
-                    {DOMAINS.map((domain) => {
-                      const domainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
-                      const domainCompliant = domainItems.filter((i) => scanItemMap[i.id]?.status === "Compliant").length;
-                      const domainAssessed = domainItems.filter((i) => scanItemMap[i.id]?.status && scanItemMap[i.id]?.status !== "Not Assessed").length;
-                      const domainPct = Math.round((domainCompliant / domainItems.length) * 100);
-                      const isExpanded = expandedDomains.has(domain);
-                      const hasVcItems = domainItems.some((i) => scanItemMap[i.id]?.completion_source === "veritacheck_auto");
-
-                      return (
-                        <Card key={domain} className="overflow-hidden">
-                          <button
-                            className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-secondary/30 transition-colors"
-                            onClick={() => toggleDomain(domain)}
-                          >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <Badge className={`text-xs shrink-0 ${DOMAIN_COLORS[domain]}`}>{domain}</Badge>
-                              {hasVcItems && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">VC</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Auto-completed items from VeritaCheck&#8482;</TooltipContent>
-                                </Tooltip>
-                              )}
-                              <span className="text-xs text-muted-foreground shrink-0">
-                                {domainCompliant}/{domainItems.length} compliant
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <span className={`text-xs font-semibold ${domainPct >= 80 ? "text-emerald-600" : domainPct >= 50 ? "text-amber-600" : "text-red-600"}`}>
-                                {domainPct}%
-                              </span>
-                              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${domainPct >= 80 ? "bg-emerald-500" : domainPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
-                                  style={{ width: `${domainPct}%` }}
-                                />
-                              </div>
-                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </div>
-                          </button>
-                          {isExpanded && (
-                            <div className="border-t divide-y">
-                              {domainItems.map((item) => {
-                                const saved = scanItemMap[item.id];
-                                const status: ScanStatus = saved?.status || "Not Assessed";
-                                const isAutoCompleted = saved?.completion_source === "veritacheck_auto";
-
-                                return (
-                                  <div key={item.id} className="px-4 py-2.5 flex items-start gap-3">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="text-xs leading-relaxed">{item.question}</div>
-                                      <div className="text-[10px] text-muted-foreground mt-0.5">
-                                        TJC: {item.tjc} &middot; CAP: {item.cap} &middot; {item.cfr}
-                                      </div>
-                                      {saved?.notes && (
-                                        <div className="text-[10px] text-muted-foreground mt-0.5 italic">{saved.notes}</div>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                      {isAutoCompleted && (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
-                                              VC
-                                            </span>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="left" className="max-w-xs">
-                                            <p className="text-xs font-medium">Auto-completed by VeritaCheck&#8482;</p>
-                                            <p className="text-xs text-muted-foreground mt-0.5">{saved?.completion_note}</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      )}
-                                      <Badge className={`text-[10px] ${STATUS_COLORS[status]}`}>
-                                        {status}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-muted-foreground py-12">No scan data available</div>
-              )}
-            </>
-          )}
-
-          {/* ═══════════════════════════════════════════════════════════
-              VERITACHECK TAB — Results dashboard
-              ═══════════════════════════════════════════════════════════ */}
+          {/* ═══════════════ TAB 1: VERITACHECK ═══════════════ */}
           {activeTab === "veritacheck" && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-bold">VeritaCheck&#8482; Studies</h2>
-                <p className="text-sm text-muted-foreground">{studies.length} completed studies &mdash; EP verification & validation</p>
+                <h2 className="text-xl font-bold">Method Validation Studies</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  VeritaCheck&#8482; runs the EP studies required for CLIA and CAP compliance. Below are two completed method comparison studies for Riverside Regional's chemistry department.
+                </p>
               </div>
 
               {/* Study cards */}
               <div className="grid sm:grid-cols-2 gap-4">
                 {studies.map((study: any) => {
                   const isExpanded = expandedStudy === study.id;
+                  const stats = computeStudyStats(study);
+                  const instruments = study.instruments ? JSON.parse(study.instruments) : [];
 
                   return (
-                    <Card key={study.id} className="overflow-hidden">
+                    <Card key={study.id} className={`overflow-hidden ${isExpanded ? "sm:col-span-2" : ""}`}>
                       <CardHeader className="py-3 px-4">
                         <div className="flex items-start justify-between">
                           <div>
@@ -422,40 +250,123 @@ export default function DemoLabPage() {
                           </Badge>
                         </div>
                       </CardHeader>
-                      <CardContent className="py-3 px-4 border-t space-y-2">
+                      <CardContent className="py-3 px-4 border-t space-y-3">
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div><span className="text-muted-foreground">Instrument:</span> {study.instrument}</div>
+                          <div><span className="text-muted-foreground">Primary:</span> {instruments[0]}</div>
+                          <div><span className="text-muted-foreground">Comparison:</span> {instruments[1]}</div>
                           <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
                           <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
-                          <div><span className="text-muted-foreground">TEa:</span> {study.clia_allowable_error ? `${(study.clia_allowable_error * 100).toFixed(1)}%` : "N/A"}</div>
+                          <div><span className="text-muted-foreground">CLIA TEa:</span> {study.clia_allowable_error} {study.test_name === "Sodium" ? "mmol/L" : "mmol/L"}</div>
                         </div>
                         <div className="flex gap-2 pt-1">
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={blockAction}>
-                            <FileText size={11} className="mr-1" /> View Report
+                          <Button
+                            size="sm"
+                            variant={isExpanded ? "default" : "outline"}
+                            className="text-xs h-7"
+                            onClick={() => setExpandedStudy(isExpanded ? null : study.id)}
+                          >
+                            {isExpanded ? <ChevronUp size={11} className="mr-1" /> : <ChevronDown size={11} className="mr-1" />}
+                            {isExpanded ? "Collapse Results" : "View Full Results"}
                           </Button>
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={blockAction}>
-                            <ExternalLink size={11} className="mr-1" /> Full Results
+                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => downloadStudyPdf(study.id)}>
+                            <Download size={11} className="mr-1" /> Download PDF Report
                           </Button>
                         </div>
+
+                        {/* INLINE EXPANDED RESULTS */}
+                        {isExpanded && stats && (
+                          <div className="space-y-4 pt-3 border-t">
+                            {/* Summary stats */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                              {[
+                                { label: "n", value: stats.n },
+                                { label: "Mean Bias", value: stats.meanBias.toFixed(3) },
+                                { label: "Mean % Diff", value: stats.meanPctDiff.toFixed(2) + "%" },
+                                { label: "Deming Slope", value: stats.slope.toFixed(4) },
+                                { label: "Intercept", value: stats.intercept.toFixed(3) },
+                                { label: "r\u00B2", value: stats.rSquared.toFixed(4) },
+                              ].map((s) => (
+                                <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
+                                  <div className="text-[10px] text-muted-foreground uppercase">{s.label}</div>
+                                  <div className="text-sm font-mono font-bold">{s.value}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Scatter plot */}
+                            <Card>
+                              <CardContent className="pt-4">
+                                <div className="text-xs font-semibold mb-2">Regression Scatter Plot</div>
+                                <ResponsiveContainer width="100%" height={300}>
+                                  <ScatterChart margin={{ top: 10, right: 30, bottom: 20, left: 10 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" dataKey="x" name={stats.primary} label={{ value: stats.primary, position: "bottom", offset: 0, style: { fontSize: 10 } }} tick={{ fontSize: 10 }} />
+                                    <YAxis type="number" dataKey="y" name={stats.comparison} label={{ value: stats.comparison, angle: -90, position: "insideLeft", style: { fontSize: 10 } }} tick={{ fontSize: 10 }} />
+                                    <RechartsTooltip formatter={(value: number) => value.toFixed(1)} />
+                                    <Legend />
+                                    <ReferenceLine
+                                      segment={[
+                                        { x: Math.min(...stats.scatterData.map((d: any) => d.x)), y: Math.min(...stats.scatterData.map((d: any) => d.x)) },
+                                        { x: Math.max(...stats.scatterData.map((d: any) => d.x)), y: Math.max(...stats.scatterData.map((d: any) => d.x)) },
+                                      ]}
+                                      stroke="#999"
+                                      strokeDasharray="5 5"
+                                      label={{ value: "Identity", position: "end", fontSize: 9 }}
+                                    />
+                                    <Scatter name="Samples" data={stats.scatterData} fill="#0e8a82" r={4} />
+                                  </ScatterChart>
+                                </ResponsiveContainer>
+                              </CardContent>
+                            </Card>
+
+                            {/* Data table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-muted-foreground border-b">
+                                    <th className="text-left py-1.5 pr-3">#</th>
+                                    <th className="text-right py-1.5 pr-3">Primary</th>
+                                    <th className="text-right py-1.5 pr-3">Comparison</th>
+                                    <th className="text-right py-1.5 pr-3">Bias</th>
+                                    <th className="text-right py-1.5 pr-3">% Diff</th>
+                                    <th className="text-center py-1.5">Pass/Fail</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {stats.rows.map((row: any) => (
+                                    <tr key={row.level} className="border-b border-border/50">
+                                      <td className="py-1.5 pr-3">{row.level}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.primary}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.comparison}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.bias}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.pctDiff}%</td>
+                                      <td className="py-1.5 text-center">
+                                        <Badge className={row.pass ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}>
+                                          {row.pass ? "PASS" : "FAIL"}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   );
                 })}
               </div>
 
-              {/* Run Study CTA */}
-              <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
-                <CardContent className="py-6 text-center">
-                  <FlaskConical size={24} className="mx-auto text-primary mb-2" />
-                  <h3 className="text-sm font-semibold mb-1">Run a New EP Study</h3>
-                  <p className="text-xs text-muted-foreground mb-3 max-w-sm mx-auto">
-                    Method comparison, calibration verification, precision, lot-to-lot &mdash; all CLIA-compliant with automated reporting.
-                  </p>
-                  <Button size="sm" onClick={blockAction} className="bg-[#006064] hover:bg-[#00494d] text-white font-semibold">
-                    Run Study <ArrowRight size={14} className="ml-1" />
-                  </Button>
-                </CardContent>
-              </Card>
+              {/* CTA */}
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">
+                  Ready to run your own studies? VeritaCheck&#8482; works with your instruments and your data.
+                </p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
 
               {/* CUMSUM section */}
               {cumsumTrackers.length > 0 && (
@@ -468,7 +379,7 @@ export default function DemoLabPage() {
                       <CardContent className="py-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-medium text-sm">{tracker.instrument_name} &mdash; {tracker.analyte}</div>
+                            <div className="font-medium text-sm">{tracker.instrument_name} - {tracker.analyte}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">{tracker.entries?.length || 0} lot changes tracked</div>
                           </div>
                           <div className="text-right">
@@ -519,29 +430,375 @@ export default function DemoLabPage() {
               )}
             </div>
           )}
-        </div>
 
-        {/* ═══════════════════════════════════════════════════════════
-            UPGRADE MODAL — Clean conversion prompt
-            ═══════════════════════════════════════════════════════════ */}
-        <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Ready to build your own lab?</DialogTitle>
-              <DialogDescription>
-                This is a read-only demo of Riverside Regional Medical Center's compliance setup. Sign up free to map your own instruments, run real EP studies, and track your inspection readiness.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-3 mt-4">
-              <Button asChild className="w-full font-semibold" style={{ background: "#006064" }}>
-                <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
-              </Button>
-              <Button variant="outline" onClick={() => setShowUpgradeModal(false)}>
-                Keep Exploring
-              </Button>
+          {/* ═══════════════ TAB 2: VERITAMAP ═══════════════ */}
+          {activeTab === "veritamap" && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold">Laboratory Test Menu Map</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  VeritaMap&#8482; builds a complete inventory of your instruments and tests, with regulatory reference ranges, critical values, and AMR pulled automatically.
+                </p>
+              </div>
+              {map ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">{map.name}</h3>
+                      <p className="text-sm text-muted-foreground">{map.instruments?.length || 0} instruments &middot; {map.tests?.length || 0} analytes mapped</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={downloadMapExcel}>
+                      <Download size={14} className="mr-1" /> Download Excel Export
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {(map.instruments || []).map((inst: any) => (
+                      <Card key={inst.id} className="overflow-hidden">
+                        <CardHeader className="py-3 px-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="text-sm font-semibold">{inst.instrument_name}</CardTitle>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-xs">{inst.role}</Badge>
+                                <span className="text-xs text-muted-foreground">{inst.category}</span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{inst.tests?.length || 0} tests</span>
+                          </div>
+                        </CardHeader>
+                        {inst.tests?.length > 0 && (
+                          <CardContent className="py-2 px-4 border-t">
+                            <div className="flex flex-wrap gap-1.5">
+                              {inst.tests.map((t: any) => (
+                                <Badge key={t.analyte} variant="secondary" className="text-xs">
+                                  {t.analyte}
+                                  <span className="ml-1 text-[9px] opacity-60">{t.complexity}</span>
+                                </Badge>
+                              ))}
+                            </div>
+                          </CardContent>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+
+                  {map.intelligence && (
+                    <div className="border-l-4 border-[#006064] bg-card rounded-r-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <Info size={16} className="text-primary mt-0.5 shrink-0" />
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          VeritaMap&#8482; identified <strong className="text-foreground">
+                          {Object.entries(map.intelligence as Record<string, any>).filter(([, v]: [string, any]) => v.correlationRequired).length} analytes
+                          </strong> requiring correlation studies across Riverside Regional's instruments.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center text-muted-foreground py-12">No map data available</div>
+              )}
+
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Map your lab's instruments and tests in minutes.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          )}
+
+          {/* ═══════════════ TAB 3: VERITASCAN ═══════════════ */}
+          {activeTab === "veritascan" && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold">Inspection Readiness Checklist</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  VeritaScan&#8482; walks through 168 TJC and CAP standards and tracks your readiness before a survey.
+                </p>
+              </div>
+              {scan ? (
+                <>
+                  {/* Readiness hero */}
+                  <div className="text-center py-6">
+                    <div className={`text-6xl font-bold ${readinessColor}`}>{readinessPct}%</div>
+                    <div className="text-sm text-muted-foreground mt-1 font-medium">Inspection-Ready</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {compliantItems} of {totalItems} items compliant, {remainingItems} items remaining
+                    </div>
+                    <div className="max-w-md mx-auto mt-3">
+                      <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full ${readinessBg} rounded-full transition-all`} style={{ width: `${readinessPct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Domain breakdown */}
+                  <div className="space-y-2">
+                    {DOMAINS.map((domain) => {
+                      const domainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
+                      const domainCompliant = domainItems.filter((i) => scanItemMap[i.id]?.status === "Compliant").length;
+                      const domainPct = Math.round((domainCompliant / domainItems.length) * 100);
+                      const isExpanded = expandedDomains.has(domain);
+                      const hasVcItems = domainItems.some((i) => scanItemMap[i.id]?.completion_source === "veritacheck_auto");
+
+                      // Show items based on showFullScan toggle
+                      const visibleItems = showFullScan ? domainItems : domainItems.slice(0, 3);
+
+                      return (
+                        <Card key={domain} className="overflow-hidden">
+                          <button
+                            className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-secondary/30 transition-colors"
+                            onClick={() => toggleDomain(domain)}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <Badge className={`text-xs shrink-0 ${DOMAIN_COLORS[domain]}`}>{domain}</Badge>
+                              {hasVcItems && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">VC</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Auto-completed items from VeritaCheck&#8482;</TooltipContent>
+                                </Tooltip>
+                              )}
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                {domainCompliant}/{domainItems.length} compliant
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className={`text-xs font-semibold ${domainPct >= 80 ? "text-emerald-600" : domainPct >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                                {domainPct}%
+                              </span>
+                              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${domainPct >= 80 ? "bg-emerald-500" : domainPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                                  style={{ width: `${domainPct}%` }}
+                                />
+                              </div>
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </div>
+                          </button>
+                          {isExpanded && (
+                            <div className="border-t divide-y">
+                              {visibleItems.map((item) => {
+                                const saved = scanItemMap[item.id];
+                                const status: ScanStatus = saved?.status || "Not Assessed";
+                                const isAutoCompleted = saved?.completion_source === "veritacheck_auto";
+
+                                return (
+                                  <div key={item.id} className="px-4 py-2.5 flex items-start gap-3">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs leading-relaxed">{item.question}</div>
+                                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                                        TJC: {item.tjc} &middot; CAP: {item.cap} &middot; {item.cfr}
+                                      </div>
+                                      {saved?.notes && (
+                                        <div className="text-[10px] text-muted-foreground mt-0.5 italic">{saved.notes}</div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {isAutoCompleted && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
+                                              VC
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="left" className="max-w-xs">
+                                            <p className="text-xs font-medium">Auto-completed by VeritaCheck&#8482;</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{saved?.completion_note}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                      <Badge className={`text-[10px] ${STATUS_COLORS[status]}`}>
+                                        {status}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {!showFullScan && domainItems.length > 3 && (
+                                <div className="px-4 py-2 text-center">
+                                  <button
+                                    className="text-xs text-primary hover:underline"
+                                    onClick={(e) => { e.stopPropagation(); setShowFullScan(true); }}
+                                  >
+                                    Show all {domainItems.length} items
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center text-muted-foreground py-12">No scan data available</div>
+              )}
+
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Know where you stand before the surveyor arrives.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 4: VERITACOMP ═══════════════ */}
+          {activeTab === "veritacomp" && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold">Competency Assessment Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  VeritaComp&#8482; manages all three CLIA competency types and generates compliant documentation for TJC and CAP surveys.
+                </p>
+              </div>
+
+              {competencyData?.assessments?.length ? (
+                <>
+                  {competencyData.assessments.map((assessment: any) => (
+                    <Card key={assessment.id}>
+                      <CardHeader className="py-4 px-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-base font-semibold">{assessment.employee_name}</CardTitle>
+                            <div className="text-sm text-muted-foreground">{assessment.employee_title}</div>
+                          </div>
+                          <Badge className="pass-badge">
+                            <CheckCircle2 size={10} className="mr-1" /> PASS
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="py-3 px-4 border-t space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                          <div><span className="text-muted-foreground">Assessment Type:</span> Annual</div>
+                          <div><span className="text-muted-foreground">Date:</span> {assessment.assessment_date}</div>
+                          <div><span className="text-muted-foreground">Evaluator:</span> {assessment.evaluator_name}, {assessment.evaluator_title}</div>
+                          <div><span className="text-muted-foreground">Program:</span> {assessment.program_name}</div>
+                        </div>
+
+                        {/* 6-element summary */}
+                        <div>
+                          <div className="text-xs font-semibold mb-2">6 CLIA Competency Elements</div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-muted-foreground border-b">
+                                  <th className="text-left py-1.5 pr-3">#</th>
+                                  <th className="text-left py-1.5 pr-3">Element</th>
+                                  <th className="text-left py-1.5 pr-3">Evidence</th>
+                                  <th className="text-left py-1.5 pr-3">Date</th>
+                                  <th className="text-center py-1.5">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(assessment.items || []).map((item: any, idx: number) => (
+                                  <tr key={item.id || idx} className="border-b border-border/50">
+                                    <td className="py-1.5 pr-3">{item.method_number || idx + 1}</td>
+                                    <td className="py-1.5 pr-3">{item.item_label}</td>
+                                    <td className="py-1.5 pr-3 text-muted-foreground">{item.evidence}</td>
+                                    <td className="py-1.5 pr-3">{item.date_met}</td>
+                                    <td className="py-1.5 text-center">
+                                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+                                        {item.passed ? "PASS" : "FAIL"}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Quiz results */}
+                        <div className="bg-muted/50 rounded-lg p-3">
+                          <div className="text-xs font-semibold mb-1">Element 6: Problem-Solving Quiz</div>
+                          <div className="text-xs text-muted-foreground">
+                            Quiz ID: Q-AU5800-001, 2 questions, Score: 100%, Date: 2026-01-18
+                          </div>
+                        </div>
+
+                        <Button size="sm" variant="outline" onClick={downloadCompetencyPdf}>
+                          <Download size={14} className="mr-1" /> Download Competency PDF
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </>
+              ) : (
+                <div className="text-center text-muted-foreground py-12">No competency data available</div>
+              )}
+
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Document competency the way surveyors expect to see it.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 5: VERITASTAFF ═══════════════ */}
+          {activeTab === "veritastaff" && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold">Personnel and Credentialing Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  VeritaStaff&#8482; tracks CLIA role assignments, qualification requirements, and competency timelines for every employee.
+                </p>
+              </div>
+
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-muted-foreground border-b text-xs">
+                          <th className="text-left py-2 pr-4">Name</th>
+                          <th className="text-left py-2 pr-4">Title</th>
+                          <th className="text-left py-2 pr-4">CLIA Role</th>
+                          <th className="text-left py-2 pr-4">Hire Date</th>
+                          <th className="text-center py-2">Competency Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { name: "Jennifer Martinez", title: "MLS(ASCP)", role: "Testing Personnel", hire: "2020-03-15", status: "Current" },
+                          { name: "Robert Chen", title: "MT(ASCP)", role: "Testing Personnel", hire: "2018-06-01", status: "Current" },
+                          { name: "Sarah Williams", title: "MLT(ASCP)", role: "Testing Personnel", hire: "2022-01-10", status: "Current" },
+                          { name: "David Nguyen", title: "MLS(ASCP)", role: "Technical Supervisor", hire: "2019-09-20", status: "Current" },
+                        ].map((emp) => (
+                          <tr key={emp.name} className="border-b border-border/50">
+                            <td className="py-2.5 pr-4 font-medium">{emp.name}</td>
+                            <td className="py-2.5 pr-4 text-muted-foreground">{emp.title}</td>
+                            <td className="py-2.5 pr-4">{emp.role}</td>
+                            <td className="py-2.5 pr-4 text-muted-foreground">{emp.hire}</td>
+                            <td className="py-2.5 text-center">
+                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
+                                {emp.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Keep your personnel records survey-ready.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </TooltipProvider>
   );
