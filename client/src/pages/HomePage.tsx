@@ -70,10 +70,10 @@ export default function HomePage() {
       <section className="border-b border-border">
         <div className="max-w-[700px] mx-auto px-4 sm:px-6 py-10">
           <blockquote className="border-l-4 border-[#01696F] bg-[#F0FAFA] rounded-lg px-6 py-5">
-            <p className="italic text-foreground leading-relaxed mb-2">
+            <p className="italic leading-relaxed mb-2" style={{ color: '#1B4B4E' }}>
               "I became a laboratory director without ever being taught how. That experience is why I built VeritaAssure."
             </p>
-            <footer className="text-sm text-muted-foreground">
+            <footer className="text-sm" style={{ color: '#1B4B4E' }}>
               Michael Veri, MS, MBA, MLS(ASCP), CPHQ | Founder, VeritaAssure
             </footer>
           </blockquote>
