@@ -1965,23 +1965,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         date: studyRow.date,
         studyType: studyRow.study_type,
         cliaAllowableError: studyRow.clia_allowable_error,
-        dataPoints: safeJsonParse(studyRow.data_points),
-        instruments: safeJsonParse(studyRow.instruments),
+        dataPoints: safeJsonParse(studyRow.data_points) || [],
+        instruments: safeJsonParse(studyRow.instruments) || [],
         status: studyRow.status,
       };
 
       // Compute results based on study type (method_comparison)
-      const dp = study.dataPoints;
-      const instNames = study.instruments;
-      const primary = instNames[0];
-      const comparison = instNames[1];
+      const dp = study.dataPoints || [];
+      const instNames = study.instruments || [];
+      const primary = instNames[0] || "Primary";
+      const comparison = instNames[1] || "Comparison";
 
       const xs = dp.map((p: any) => p.instrumentValues?.[primary] ?? 0);
       const ys = dp.map((p: any) => p.instrumentValues?.[comparison] ?? 0);
 
       const n = xs.length;
-      const xMean = xs.reduce((a: number, b: number) => a + b, 0) / n;
-      const yMean = ys.reduce((a: number, b: number) => a + b, 0) / n;
+      const xMean = n > 0 ? xs.reduce((a: number, b: number) => a + b, 0) / n : 0;
+      const yMean = n > 0 ? ys.reduce((a: number, b: number) => a + b, 0) / n : 0;
       const sxx = xs.reduce((s: number, x: number) => s + (x - xMean) ** 2, 0);
       const syy = ys.reduce((s: number, y: number) => s + (y - yMean) ** 2, 0);
       const sxy = xs.reduce((s: number, x: number, i: number) => s + (x - xMean) * (ys[i] - yMean), 0);
@@ -1990,7 +1990,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const rSquared = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
 
       const biases = xs.map((x: number, i: number) => ys[i] - x);
-      const meanBias = biases.reduce((a: number, b: number) => a + b, 0) / n;
+      const meanBias = n > 0 ? biases.reduce((a: number, b: number) => a + b, 0) / n : 0;
 
       const results = {
         type: "method_comparison",

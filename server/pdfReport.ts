@@ -395,9 +395,10 @@ function narrativeHTML(
   let narrative = "";
 
   if (studyType === "cal_ver") {
-    const maxErr = Math.max(...results.levelResults.map((r: any) => Math.abs(r.obsError * 100)));
+    const calLevelResults = results.levelResults || [];
+    const maxErr = calLevelResults.length > 0 ? Math.max(...calLevelResults.map((r: any) => Math.abs(r.obsError * 100))) : 0;
     const meetsAdlm = maxErr <= cliaError * 50;
-    const slope = Object.values(results.regression as any)[0] as any;
+    const slope = Object.values((results.regression || {}) as any)[0] as any;
     const slopeVal: number = slope?.slope ?? 1;
     const interceptVal: number = slope?.intercept ?? 0;
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
@@ -428,8 +429,8 @@ function narrativeHTML(
   }
 
   if (studyType === "method_comp") {
-    const firstReg: any = Object.values(results.regression as any).find((r: any) => (r as any).regressionType === "Deming") ||
-      Object.values(results.regression as any)[0];
+    const regEntries = results.regression ? Object.values(results.regression as any) : [];
+    const firstReg: any = regEntries.find((r: any) => (r as any).regressionType === "Deming") || regEntries[0];
     const slopeVal: number = firstReg?.slope ?? 1;
     const interceptVal: number = firstReg?.intercept ?? 0;
     const r2Val: number = firstReg?.r2 ?? 1;
@@ -460,8 +461,8 @@ function narrativeHTML(
   }
 
   if (studyType === "precision") {
-    const levels = results.levelResults;
-    const maxCV: number = Math.max(...levels.map((r: any) => r.totalCV ?? r.cv ?? 0));
+    const levels = results.levelResults || [];
+    const maxCV: number = levels.length > 0 ? Math.max(...levels.map((r: any) => r.totalCV ?? r.cv ?? 0)) : 0;
     const meetsAdlm = maxCV <= cliaError * 50;
     const isAdvanced = results.mode === "advanced";
 
@@ -504,12 +505,13 @@ interface CalVerData {
 }
 
 function buildCalVerHTML(study: Study, results: CalVerData): string {
-  const instrumentNames: string[] = safeJsonParse(study.instruments);
-  const assignedVals = results.levelResults.map(r => r.assignedValue);
-  const recoveries   = results.levelResults.map(r => r.pctRecovery);
+  const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
+  const levelResults = results.levelResults || [];
+  const assignedVals = levelResults.map(r => r.assignedValue);
+  const recoveries   = levelResults.map(r => r.pctRecovery);
 
   // Charts
-  const scatterPoints = results.levelResults.map(r => ({
+  const scatterPoints = levelResults.map(r => ({
     x: r.assignedValue,
     y: instrumentNames[0] && r.instruments[instrumentNames[0]] ? r.instruments[instrumentNames[0]].value : r.mean
   }));
@@ -517,7 +519,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   const recoverySvg = recoveryPlotSVG(assignedVals, recoveries, study.cliaAllowableError);
 
   // Linearity summary table
-  const linRows = Object.entries(results.regression).map(([name, reg]) => {
+  const linRows = Object.entries(results.regression || {}).map(([name, reg]) => {
     const r = Math.sqrt(reg.r2);
     const biasColor = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? PASS : FAIL;
     const biasClass = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? "pass" : "fail";
@@ -534,7 +536,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
 
   // Statistical table
   const instrHeaders = instrumentNames.map(n => `<th class="text-right">${n}</th>`).join("");
-  const dataRows = results.levelResults.map((r, ri) => {
+  const dataRows = levelResults.map((r, ri) => {
     const instrCells = instrumentNames.map(n => {
       const v = r.instruments[n];
       return v ? `<td class="text-right">${v.value.toFixed(3)}</td>` : `<td class="text-right">—</td>`;
@@ -609,31 +611,33 @@ interface MethodCompData {
 }
 
 function buildMethodCompHTML(study: Study, results: MethodCompData): string {
-  const allInstrumentNames: string[] = safeJsonParse(study.instruments);
-  const primaryName = allInstrumentNames[0];
+  const allInstrumentNames: string[] = safeJsonParse(study.instruments) || [];
+  const primaryName = allInstrumentNames[0] || "Primary";
+  const levelResults = results.levelResults || [];
   // Comparison instruments are those that appear in the results' instruments
-  const comparisonNames = results.levelResults.length > 0
-    ? Object.keys(results.levelResults[0].instruments)
+  const comparisonNames = levelResults.length > 0
+    ? Object.keys(levelResults[0].instruments || {})
     : allInstrumentNames.slice(1);
 
   // Build per-comparison sections
   let comparisonSections = "";
   for (const compName of comparisonNames) {
     // Chart data for this comparison
-    const xVals = results.levelResults.map(r => r.referenceValue);
-    const yVals = results.levelResults.filter(r => r.instruments[compName]).map(r => r.instruments[compName].value);
+    const xVals = levelResults.map(r => r.referenceValue);
+    const yVals = levelResults.filter(r => r.instruments?.[compName]).map(r => r.instruments[compName].value);
     const corrSvg = scatterSVG(xVals, yVals.length ? yVals : xVals, `${primaryName} (Primary)`, compName, `${compName} vs. ${primaryName}`, true);
 
-    const baEntry = results.blandAltman[compName];
-    const avgs = results.levelResults.filter(r => r.instruments[compName]).map(r => (r.referenceValue + r.instruments[compName].value) / 2);
-    const pctDiffs = results.levelResults.filter(r => r.instruments[compName]).map(r => r.instruments[compName].pctDifference);
+    const baEntry = (results.blandAltman || {})[compName];
+    const avgs = levelResults.filter(r => r.instruments?.[compName]).map(r => (r.referenceValue + r.instruments[compName].value) / 2);
+    const pctDiffs = levelResults.filter(r => r.instruments?.[compName]).map(r => r.instruments[compName].pctDifference);
     const baSvg = blandAltmanSVG(avgs, pctDiffs, study.cliaAllowableError, baEntry?.pctMeanDiff ?? 0, compName);
 
     // Supporting statistics
-    const demKey = Object.keys(results.regression).find(k => k.includes(compName) && k.includes("Deming"));
-    const demEntry = demKey ? results.regression[demKey] : undefined;
+    const demKey = Object.keys(results.regression || {}).find(k => k.includes(compName) && k.includes("Deming"));
+    const demEntry = demKey ? (results.regression || {})[demKey] : undefined;
     const corrCoef = demEntry ? Math.sqrt(demEntry.r2).toFixed(4) : "---";
-    const xMeanVal = ((results.xRange.min + results.xRange.max) / 2).toFixed(3);
+    const xRange = results.xRange || { min: 0, max: 0 };
+    const xMeanVal = ((xRange.min + xRange.max) / 2).toFixed(3);
 
     const suppStatsLeft = [
       ["Corr Coef (R):", corrCoef],
@@ -641,10 +645,11 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       ["Primary Mean:", xMeanVal],
       ["Std Dev Diffs:", baEntry ? baEntry.sdDiff.toFixed(3) : "---"],
     ];
+    const yRange = results.yRange || {};
     const suppStatsRight = [
-      ["Points (Plotted/Total):", `${results.levelResults.length}/${results.levelResults.length}`],
-      ["Primary Range:", `${results.xRange.min.toFixed(3)} to ${results.xRange.max.toFixed(3)}`],
-      ...(results.yRange[compName] ? [[`${compName} Range:`, `${results.yRange[compName].min.toFixed(3)} to ${results.yRange[compName].max.toFixed(3)}`]] : []),
+      ["Points (Plotted/Total):", `${levelResults.length}/${levelResults.length}`],
+      ["Primary Range:", `${xRange.min.toFixed(3)} to ${xRange.max.toFixed(3)}`],
+      ...(yRange[compName] ? [[`${compName} Range:`, `${yRange[compName].min.toFixed(3)} to ${yRange[compName].max.toFixed(3)}`]] : []),
     ];
 
     const maxRows = Math.max(suppStatsLeft.length, suppStatsRight.length);
@@ -659,7 +664,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     }
 
     // Regression rows for this comparison only
-    const regRowsForComp = Object.entries(results.regression)
+    const regRowsForComp = Object.entries(results.regression || {})
       .filter(([name]) => name.includes(compName))
       .map(([name, reg]) => {
         const shortName = name.includes("Deming") ? "Deming" : "OLS";
@@ -731,7 +736,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     `<th class="text-right">Pass?</th>`,
   ]).join("");
 
-  const levelRows = results.levelResults.map((r, ri) => {
+  const levelRows = levelResults.map((r, ri) => {
     const instrCells = comparisonNames.flatMap(n => {
       const v = r.instruments[n];
       if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td>---</td>`];
@@ -782,11 +787,12 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
 // ─── PRECISION HTML report ───────────────────────────────────────────────────
 function buildPrecisionHTML(study: Study, results: any): string {
-  const instrumentNames: string[] = safeJsonParse(study.instruments);
+  const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const cliaCV = (study.cliaAllowableError * 100).toFixed(1);
   const isAdvanced = results.mode === "advanced";
+  const levelResults = results.levelResults || [];
 
-  const summaryRows = results.levelResults.map((r: any, i: number) => {
+  const summaryRows = levelResults.map((r: any, i: number) => {
     const pfClass = r.passFail === "Pass" ? "pass" : "fail";
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
       <td>${r.levelName}</td>
@@ -810,7 +816,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
         <th class="text-right">Between-Day CV%</th>
         <th class="text-right">Total CV%</th>
       </tr></thead>
-      <tbody>${results.levelResults.map((r: any, i: number) => `
+      <tbody>${levelResults.map((r: any, i: number) => `
         <tr class="${i % 2 === 1 ? "stripe" : ""}">
           <td>${r.levelName}</td>
           <td class="text-right">${r.withinRunSD?.toFixed(4) ?? "—"}</td>
@@ -822,8 +828,8 @@ function buildPrecisionHTML(study: Study, results: any): string {
       </tbody>
     </table>` : "";
 
-  const dataPoints = safeJsonParse((study as any).dataPoints, []);
-  const valuesSection = results.levelResults.map((r: any, li: number) => {
+  const dataPoints = safeJsonParse((study as any).dataPoints, []) || [];
+  const valuesSection = levelResults.map((r: any, li: number) => {
     const vals: number[] = dataPoints[li]?.values || [];
     const filtered = vals.filter((v: number) => !isNaN(v));
     if (!filtered.length) return "";
@@ -947,16 +953,17 @@ function differencePlotSVG(
 
 // ─── LOT-TO-LOT HTML report ──────────────────────────────────────────────────
 function buildLotToLotHTML(study: Study, results: any): string {
-  const instrumentNames: string[] = safeJsonParse(study.instruments);
-  const rawData = safeJsonParse(study.dataPoints);
+  const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
+  const rawData = safeJsonParse(study.dataPoints) || {};
   const teaPct = (study.cliaAllowableError * 100).toFixed(1);
 
   let cohortSections = "";
-  for (const cohort of results.cohorts) {
-    const currentVals = cohort.specimens.map((s: any) => s.currentLot);
-    const newVals = cohort.specimens.map((s: any) => s.newLot);
-    const pctDiffs = cohort.specimens.map((s: any) => s.pctDifference);
-    const specimenNums = cohort.specimens.map((_: any, i: number) => i + 1);
+  for (const cohort of (results.cohorts || [])) {
+    const specimens = cohort.specimens || [];
+    const currentVals = specimens.map((s: any) => s.currentLot);
+    const newVals = specimens.map((s: any) => s.newLot);
+    const pctDiffs = specimens.map((s: any) => s.pctDifference);
+    const specimenNums = specimens.map((_: any, i: number) => i + 1);
 
     const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} — Scatter`, true);
     const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError);
@@ -970,7 +977,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
           <td style="color:${MUTED};font-weight:700">Coverage</td><td class="${cohort.coverage >= 90 ? "pass" : "fail"}">${cohort.coverage.toFixed(0)}%</td></tr>
     `;
 
-    const dataRows = cohort.specimens.map((s: any, i: number) => {
+    const dataRows = specimens.map((s: any, i: number) => {
       const pfClass = s.passFail === "Pass" ? "pass" : "fail";
       return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
         <td>${s.specimenId}</td>
@@ -1030,12 +1037,12 @@ function geometricMean(values: number[]): number {
 }
 
 function buildPTCoagHTML(study: Study, results: any): string {
-  const instrumentNames: string[] = safeJsonParse(study.instruments);
-  const rawData = safeJsonParse(study.dataPoints);
-  const { module1, module2, module3 } = results;
+  const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
+  const rawData = safeJsonParse(study.dataPoints) || {};
+  const { module1 = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true }, module2, module3 } = results;
 
   // Module 1 section
-  const m1DataRows = module1.specimens.map((s: any, i: number) => {
+  const m1DataRows = (module1.specimens || []).map((s: any, i: number) => {
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
       <td>${s.id}</td>
       <td class="text-right">${s.pt.toFixed(1)}</td>
@@ -1060,21 +1067,22 @@ function buildPTCoagHTML(study: Study, results: any): string {
   `;
 
   // Module 2 section — Deming with Error Index
-  const m2 = module2;
+  const m2 = module2 || { errorIndexResults: [], regression: { r: 0, slope: 1, intercept: 0, see: 0, n: 0 }, averageErrorIndex: 0, errorIndexRange: { min: 0, max: 0 }, pass: true, coverage: 100, tea: 0 };
+  const m2EIResults = m2.errorIndexResults || [];
   const m2Scatter = scatterSVG(
-    m2.errorIndexResults.map((r: any) => r.x),
-    m2.errorIndexResults.map((r: any) => r.y),
+    m2EIResults.map((r: any) => r.x),
+    m2EIResults.map((r: any) => r.y),
     rawData.module2?.inst1 || instrumentNames[0] || "Inst 1",
     rawData.module2?.inst2 || instrumentNames[1] || "Inst 2",
     "Two-Instrument Correlation", true
   );
   const m2EI = errorIndexSVG(
-    m2.errorIndexResults.map((r: any) => r.x),
-    m2.errorIndexResults.map((r: any) => r.errorIndex),
+    m2EIResults.map((r: any) => r.x),
+    m2EIResults.map((r: any) => r.errorIndex),
     "Error Index Plot", "Concentration (X)"
   );
 
-  const m2DataRows = m2.errorIndexResults.map((r: any, i: number) => {
+  const m2DataRows = m2EIResults.map((r: any, i: number) => {
     const pfClass = r.pass ? "pass" : "fail";
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
       <td>${r.specimenId}</td>
@@ -1110,18 +1118,19 @@ function buildPTCoagHTML(study: Study, results: any): string {
   let m3Section = "";
   if (module3) {
     const m3 = module3;
+    const m3EIResults = m3.errorIndexResults || [];
     const m3Scatter = scatterSVG(
-      m3.errorIndexResults.map((r: any) => r.x),
-      m3.errorIndexResults.map((r: any) => r.y),
+      m3EIResults.map((r: any) => r.x),
+      m3EIResults.map((r: any) => r.y),
       "Old Lot", "New Lot", "Old vs New Lot Correlation", true
     );
     const m3EI = errorIndexSVG(
-      m3.errorIndexResults.map((r: any) => r.x),
-      m3.errorIndexResults.map((r: any) => r.errorIndex),
+      m3EIResults.map((r: any) => r.x),
+      m3EIResults.map((r: any) => r.errorIndex),
       "Error Index Plot", "Concentration (X)"
     );
 
-    const m3DataRows = m3.errorIndexResults.map((r: any, i: number) => {
+    const m3DataRows = m3EIResults.map((r: any, i: number) => {
       const pfClass = r.pass ? "pass" : "fail";
       return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
         <td>${r.specimenId}</td>
@@ -1354,7 +1363,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
 
 // ─── CUMSUM PDF GENERATOR ─────────────────────────────────────────────────────
 export async function generateCumsumPDF(tracker: any, entries: any[], currentSpecimens?: any[], cliaNumber?: string): Promise<Buffer> {
-  const historyRows = entries.map((e: any) => `
+  const historyRows = (entries || []).map((e: any) => `
     <tr style="${e.verdict === 'ACTION REQUIRED' ? 'background:#fef2f2;' : e.verdict === 'ACCEPT' ? 'background:#f0fdf4;' : ''}">
       <td>${e.year}</td>
       <td>${e.old_lot_number || '—'}</td>
@@ -2133,12 +2142,13 @@ function buildCMS209HTML(input: CMS209Input): string {
   }
 
   const rows: Row[] = [];
-  for (const emp of employees) {
-    if (!emp.performs_testing && !emp.roles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) continue;
+  for (const emp of (employees || [])) {
+    const empRoles = emp.roles || [];
+    if (!emp.performs_testing && !empRoles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) continue;
 
-    const roleSet = new Set(emp.roles.map(r => r.role));
-    const tcSpecs = emp.roles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
-    const tsSpecs = emp.roles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
+    const roleSet = new Set(empRoles.map(r => r.role));
+    const tcSpecs = empRoles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
+    const tsSpecs = empRoles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
 
     // If the employee has TC or TS with specialties, create one row per specialty
     const specRows: { tc: string; ts: string }[] = [];
