@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 // Products dropdown items
 const productLinks = [
   { href: "/veritacheck", label: "VeritaCheck™", desc: "EP Study Analysis", highlight: true, badge: "Live", badgeColor: "emerald" },
-  { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness" },
-  { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping" },
+  { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
+  { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
   { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management", badge: "In Progress" },
   { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management", badge: "In Progress" },
   { href: "/veritalab", label: "VeritaLab™", desc: "Certificate Tracking", badge: "New", badgeColor: "emerald" },

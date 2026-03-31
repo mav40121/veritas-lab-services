@@ -89,6 +89,8 @@ export default function HomePage() {
               { name: "VeritaMap™", href: "/veritamap" },
               { name: "VeritaScan™", href: "/veritascan" },
               { name: "VeritaComp™", href: "/veritacomp" },
+              { name: "VeritaStaff™", href: "/veritastaff" },
+              { name: "VeritaLab™", href: "/veritalab" },
             ].map(({ name, href }) => (
               <Link key={name} href={href}>
                 <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-primary/30 text-primary text-xs font-medium bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
@@ -127,7 +129,7 @@ export default function HomePage() {
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure</h2>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              VeritaAssure is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools (VeritaCheck™, VeritaMap™, and VeritaScan™) to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure brings the expertise and the tools together so your team isn't scrambling before the next inspection.
+              VeritaAssure is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools (VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™) to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure brings the expertise and the tools together so your team isn't scrambling before the next inspection.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -138,7 +140,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold text-sm mb-2">VeritaAssure Tools</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  VeritaCheck™, VeritaMap™, VeritaScan™, and VeritaComp™ are the software instruments of the VeritaAssure suite, built for lab directors who want data-driven compliance without waiting on a consultant.
+                  VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™ are the 6 software products of the VeritaAssure suite, built for lab directors who want data-driven compliance without waiting on a consultant.
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/veritacheck">Explore the Tools →</Link>
