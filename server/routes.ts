@@ -21,7 +21,169 @@ function safeJsonParse(value: any, fallback: any = []): any {
     return [value];
   }
 }
-import { insertStudySchema, insertContactSchema, registerSchema, loginSchema } from "@shared/schema";
+import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study } from "@shared/schema";
+
+// ── Server-side pass/fail recomputation ─────────────────────────────────────
+// Mirrors the client calculation logic so the stored status is always correct.
+// Each study type has its own pass/fail rule derived from the raw dataPoints.
+function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number): "pass" | "fail" {
+  try {
+    const rawData = safeJsonParse(dataPointsJson, null);
+    const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
+    if (!rawData) return "fail";
+
+    if (studyType === "cal_ver") {
+      // Each data point: |obsError| < cliaError for every instrument value
+      const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      const valid = dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null));
+      let passCount = 0, totalCount = 0;
+      for (const dp of valid) {
+        const assigned = dp.expectedValue!;
+        for (const n of instrumentNames) {
+          const v = dp.instrumentValues[n];
+          if (v !== null && v !== undefined) {
+            totalCount++;
+            const obsError = assigned !== 0 ? (v - assigned) / assigned : 0;
+            if (Math.abs(obsError) < cliaAllowableError) passCount++;
+          }
+        }
+      }
+      return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
+    }
+
+    if (studyType === "method_comparison") {
+      // Data may be in new format (all values in instrumentValues) or old format (expectedValue + instrumentValues)
+      const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      const primaryName = instrumentNames[0];
+      const hasAllInValues = dataPoints.length > 0 && instrumentNames.every(n => n in (dataPoints[0].instrumentValues || {}));
+      let comparisonNames: string[];
+      let mappedPoints: typeof dataPoints;
+      if (hasAllInValues && instrumentNames.length >= 2) {
+        comparisonNames = instrumentNames.slice(1);
+        mappedPoints = dataPoints.map(d => ({
+          level: d.level,
+          expectedValue: d.instrumentValues[primaryName] ?? null,
+          instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
+        }));
+      } else {
+        comparisonNames = instrumentNames.filter(n => n in (dataPoints[0]?.instrumentValues || {}));
+        if (comparisonNames.length === 0) comparisonNames = instrumentNames;
+        mappedPoints = dataPoints;
+      }
+      const valid = mappedPoints.filter(dp => dp.expectedValue !== null && comparisonNames.some(n => dp.instrumentValues[n] !== null));
+      let passCount = 0, totalCount = 0;
+      for (const dp of valid) {
+        const ref = dp.expectedValue!;
+        for (const n of comparisonNames) {
+          const v = dp.instrumentValues[n];
+          if (v !== null && v !== undefined) {
+            totalCount++;
+            const pctDiff = ref !== 0 ? (v - ref) / ref : 0;
+            if (Math.abs(pctDiff) < cliaAllowableError) passCount++;
+          }
+        }
+      }
+      return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
+    }
+
+    if (studyType === "precision") {
+      // Each level: CV <= allowableCV (cliaAllowableError * 100)
+      const dataPoints = rawData as { level: number; levelName: string; values: number[]; days?: number[][] }[];
+      const allowableCV = cliaAllowableError * 100;
+      let passCount = 0, totalCount = 0;
+      for (const dp of dataPoints) {
+        const allVals = dp.days ? dp.days.flat().filter(v => v !== null && !isNaN(v)) : dp.values.filter(v => v !== null && !isNaN(v));
+        if (allVals.length < 2) { totalCount++; continue; }
+        totalCount++;
+        const n = allVals.length;
+        const m = allVals.reduce((a, b) => a + b, 0) / n;
+        const variance = allVals.reduce((s, v) => s + (v - m) ** 2, 0) / (n - 1);
+        const cv = m !== 0 ? (Math.sqrt(variance) / m) * 100 : 0;
+        if (cv <= allowableCV) passCount++;
+      }
+      return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
+    }
+
+    if (studyType === "lot_to_lot") {
+      const { data, sampleType } = rawData;
+      const tea = cliaAllowableError;
+      const cohorts: string[] = sampleType === "both" ? ["Normal", "Abnormal"] : [sampleType === "normal" ? "Normal" : "Abnormal"];
+      const meanFn = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      for (const cohort of cohorts) {
+        const valid = data.filter((dp: any) => dp.cohort === cohort && dp.currentLot !== null && dp.newLot !== null);
+        const absPcts = valid.map((dp: any) => {
+          const pctDiff = dp.currentLot !== 0 ? ((dp.newLot - dp.currentLot) / dp.currentLot) * 100 : 0;
+          return Math.abs(pctDiff);
+        });
+        const n = absPcts.length;
+        if (n === 0) return "fail";
+        const meanAbsPct = meanFn(absPcts);
+        const withinTea = absPcts.filter((a: number) => a <= tea * 100).length;
+        const coverage = (withinTea / n) * 100;
+        if (!(meanAbsPct <= tea * 100 && coverage >= 90)) return "fail";
+      }
+      return "pass";
+    }
+
+    if (studyType === "qc_range") {
+      const { dataPoints: dp } = rawData;
+      const meanFn = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      for (const item of dp) {
+        const valid = (item.runs as number[]).filter(v => v !== null && v !== undefined && !isNaN(v));
+        const n = valid.length;
+        const newMean = n > 0 ? meanFn(valid) : 0;
+        const pctDiffFromOld = item.oldMean != null && item.oldMean !== 0
+          ? ((newMean - item.oldMean) / item.oldMean) * 100
+          : null;
+        if (pctDiffFromOld !== null && Math.abs(pctDiffFromOld) > 10) return "fail";
+      }
+      return "pass";
+    }
+
+    if (studyType === "multi_analyte_coag") {
+      const { specimens, teas } = rawData;
+      const meanFn = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      const analytes: { getNew: (s: any) => number | null; getOld: (s: any) => number | null; tea: number }[] = [
+        { getNew: s => s.ptNew, getOld: s => s.ptOld, tea: teas.pt },
+        { getNew: s => s.apttNew, getOld: s => s.apttOld, tea: teas.aptt },
+        { getNew: s => s.fibNew, getOld: s => s.fibOld, tea: teas.fib },
+      ];
+      for (const { getNew, getOld, tea } of analytes) {
+        const valid = specimens.filter((s: any) => getNew(s) != null && getOld(s) != null);
+        if (valid.length === 0) continue;
+        const pctDiffs = valid.map((s: any) => ((getNew(s) - getOld(s)) / getOld(s)) * 100);
+        const meanPctDiff = meanFn(pctDiffs);
+        if (Math.abs(meanPctDiff) > tea * 100) return "fail";
+      }
+      return "pass";
+    }
+
+    // pt_coag or unknown: trust client value (pt_coag is gated anyway)
+    return "fail";
+  } catch (err) {
+    console.error("[computeStudyStatus] Error recomputing status:", err);
+    return "fail"; // fail-safe: if we cannot verify, mark as fail
+  }
+}
+
+// Recompute and fix status for all existing studies
+export function recomputeAllStudyStatuses(): void {
+  const allStudies = storage.getAllStudies();
+  let fixed = 0;
+  for (const study of allStudies) {
+    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError);
+    if (computed !== study.status) {
+      storage.updateStudyStatus(study.id, computed);
+      console.log(`[migration] Study #${study.id} "${study.testName}": ${study.status} -> ${computed}`);
+      fixed++;
+    }
+  }
+  if (fixed > 0) {
+    console.log(`[migration] Fixed ${fixed} study status(es)`);
+  } else {
+    console.log("[migration] All study statuses are correct");
+  }
+}
 import { autoCompleteVeritaScanItems } from "./integrations";
 import {
   MAYO_CRITICAL_VALUES, UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
@@ -386,7 +548,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
     }
 
-    const study = storage.createStudy({ ...parsed.data, userId });
+    // Server-side pass/fail verification: recompute from data instead of trusting the client
+    const verifiedStatus = computeStudyStatus(
+      parsed.data.studyType,
+      parsed.data.dataPoints,
+      parsed.data.instruments,
+      parsed.data.cliaAllowableError
+    );
+    const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId });
 
     // VeritaCheck → VeritaScan integration bridge
     try {

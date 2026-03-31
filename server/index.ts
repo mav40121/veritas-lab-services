@@ -103,6 +103,14 @@ app.use((req, res, next) => {
     console.error("[seed] Demo data seed error:", err.message);
   }
 
+  // Recompute pass/fail status for all existing studies to fix any stale values
+  try {
+    const { recomputeAllStudyStatuses } = await import("./routes");
+    recomputeAllStudyStatuses();
+  } catch (err: any) {
+    console.error("[migration] Study status recompute error:", err.message);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

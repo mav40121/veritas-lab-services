@@ -17,6 +17,7 @@ export interface IStorage {
   getStudy(id: number): Study | undefined;
   getStudiesByUser(userId: number): Study[];
   getAllStudies(): Study[];
+  updateStudyStatus(id: number, status: string): void;
   deleteStudy(id: number): void;
   // Contact
   createContactMessage(msg: InsertContact): void;
@@ -69,6 +70,9 @@ class DatabaseStorage implements IStorage {
   }
   getAllStudies(): Study[] {
     return db.select().from(studies).orderBy(desc(studies.id)).all();
+  }
+  updateStudyStatus(id: number, status: string): void {
+    db.update(studies).set({ status }).where(eq(studies.id, id)).run();
   }
   deleteStudy(id: number): void {
     db.delete(studies).where(eq(studies.id, id)).run();
