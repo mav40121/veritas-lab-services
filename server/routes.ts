@@ -1916,7 +1916,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     res.json({
       labName: "Riverside Regional Medical Center",
-      cliaNumber: "22D0099999",
+      cliaNumber: "22D0999999",
       address: "1200 Medical Center Drive, Richmond, VA 23298",
       stats: {
         studyCount,
@@ -1958,57 +1958,153 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!studyRow) return res.status(404).json({ error: "Study not found" });
 
     try {
+      const dp = safeJsonParse(studyRow.data_points) || [];
+      const instNames = safeJsonParse(studyRow.instruments) || [];
+      const primaryName = instNames[0] || "Primary";
+      const comparisonName = instNames[1] || "Comparison";
+      const teaAbsolute: number = studyRow.clia_allowable_error; // absolute mmol/L
+
+      // Compute mean of primary values for converting absolute TEa to fraction
+      const dpXs: number[] = dp.map((p: any) => p.instrumentValues?.[primaryName] ?? 0);
+      const dpMean = dpXs.length > 0 ? dpXs.reduce((a: number, b: number) => a + b, 0) / dpXs.length : 1;
+      const teaFraction = dpMean > 0 ? teaAbsolute / dpMean : 0.04; // fraction for PDF display
+
       const study = {
         testName: studyRow.test_name,
         instrument: studyRow.instrument,
         analyst: studyRow.analyst,
         date: studyRow.date,
         studyType: studyRow.study_type,
-        cliaAllowableError: studyRow.clia_allowable_error,
-        dataPoints: safeJsonParse(studyRow.data_points) || [],
-        instruments: safeJsonParse(studyRow.instruments) || [],
+        cliaAllowableError: teaFraction, // fraction for PDF narrative/eval display
+        dataPoints: dp,
+        instruments: instNames,
         status: studyRow.status,
+        _labName: "Riverside Regional Medical Center",
       };
 
-      // Compute results based on study type (method_comparison)
-      const dp = study.dataPoints || [];
-      const instNames = study.instruments || [];
-      const primary = instNames[0] || "Primary";
-      const comparison = instNames[1] || "Comparison";
+      // Build full MethodCompData results for PDF generator
 
-      const xs = dp.map((p: any) => p.instrumentValues?.[primary] ?? 0);
-      const ys = dp.map((p: any) => p.instrumentValues?.[comparison] ?? 0);
-
+      const xs: number[] = dpXs;
+      const ys: number[] = dp.map((p: any) => p.instrumentValues?.[comparisonName] ?? 0);
       const n = xs.length;
-      const xMean = n > 0 ? xs.reduce((a: number, b: number) => a + b, 0) / n : 0;
-      const yMean = n > 0 ? ys.reduce((a: number, b: number) => a + b, 0) / n : 0;
-      const sxx = xs.reduce((s: number, x: number) => s + (x - xMean) ** 2, 0);
-      const syy = ys.reduce((s: number, y: number) => s + (y - yMean) ** 2, 0);
-      const sxy = xs.reduce((s: number, x: number, i: number) => s + (x - xMean) * (ys[i] - yMean), 0);
-      const slope = sxx === 0 ? 1 : sxy / sxx;
-      const intercept = yMean - slope * xMean;
-      const rSquared = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
 
-      const biases = xs.map((x: number, i: number) => ys[i] - x);
-      const meanBias = n > 0 ? biases.reduce((a: number, b: number) => a + b, 0) / n : 0;
+      // Helper functions
+      const _mean = (v: number[]) => v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+      const _stddev = (v: number[]) => {
+        if (v.length < 2) return 0;
+        const m = _mean(v);
+        return Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / (v.length - 1));
+      };
+
+      const xMean = _mean(xs);
+      const yMean = _mean(ys);
+
+      // OLS regression
+      const sxx = xs.reduce((s, x) => s + (x - xMean) ** 2, 0);
+      const syy = ys.reduce((s, y) => s + (y - yMean) ** 2, 0);
+      const sxy = xs.reduce((s, x, i) => s + (x - xMean) * (ys[i] - yMean), 0);
+      const olsSlope = sxx === 0 ? 1 : sxy / sxx;
+      const olsIntercept = yMean - olsSlope * xMean;
+      const r2 = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+
+      // Deming regression
+      const Sxx = n > 1 ? sxx / (n - 1) : 0;
+      const Syy = n > 1 ? syy / (n - 1) : 0;
+      const Sxy = n > 1 ? sxy / (n - 1) : 0;
+      const demSlope = Sxy === 0 ? 1 : (Syy - Sxx + Math.sqrt((Syy - Sxx) ** 2 + 4 * Sxy ** 2)) / (2 * Sxy);
+      const demIntercept = yMean - demSlope * xMean;
+
+      // SEE (Standard Error of Estimate)
+      const sse = ys.reduce((sum, yi, i) => sum + (yi - (olsSlope * xs[i] + olsIntercept)) ** 2, 0);
+      const see = n > 2 ? Math.sqrt(sse / (n - 2)) : 0;
+
+      // OLS confidence intervals
+      const tCrit = n <= 20 ? 2.101 : n <= 25 ? 2.060 : 1.960; // t-critical for n-2 df
+      const seSlopeVal = sxx > 0 ? see / Math.sqrt(sxx) : 0;
+      const seIntVal = see * Math.sqrt(xs.reduce((sum, xi) => sum + xi ** 2, 0) / (n * sxx));
+
+      // Bias calculations
+      const biases = xs.map((x, i) => ys[i] - x);
+      const meanDiff = _mean(biases);
+      const sdDiff = _stddev(biases);
+      const pctDiffs = xs.map((x, i) => x === 0 ? 0 : ((ys[i] - x) / x) * 100);
+      const pctMeanDiff = _mean(pctDiffs);
+
+      // Proportional bias (slope - 1)
+      const propBias = demSlope - 1;
+
+      // Build levelResults for sample-by-sample table
+      let passCount = 0;
+      const levelResults = dp.map((p: any, i: number) => {
+        const xVal = p.instrumentValues?.[primaryName] ?? 0;
+        const yVal = p.instrumentValues?.[comparisonName] ?? 0;
+        const diff = yVal - xVal;
+        const pctDiff = xVal === 0 ? 0 : ((yVal - xVal) / xVal) * 100;
+        const pass = Math.abs(diff) <= teaAbsolute;
+        if (pass) passCount++;
+        return {
+          level: i + 1,
+          referenceValue: xVal,
+          instruments: {
+            [comparisonName]: {
+              value: yVal,
+              difference: diff,
+              pctDifference: pctDiff,
+              passFail: pass ? "Pass" : "Fail",
+            },
+          },
+        };
+      });
+
+      const overallPass = passCount === n;
 
       const results = {
         type: "method_comparison",
-        n,
-        slope,
-        intercept,
-        rSquared,
-        meanBias,
-        pass: true,
-        instrumentResults: {
-          [comparison]: {
-            slope, intercept, rSquared, meanBias, pass: true,
+        levelResults,
+        regression: {
+          [`Deming: ${comparisonName} vs ${primaryName}`]: {
+            slope: demSlope,
+            intercept: demIntercept,
+            proportionalBias: propBias,
+            r2,
+            n,
+            see,
+            regressionType: "Deming",
+          },
+          [`OLS: ${comparisonName} vs ${primaryName}`]: {
+            slope: olsSlope,
+            intercept: olsIntercept,
+            proportionalBias: olsSlope - 1,
+            r2,
+            n,
+            see,
+            slopeLo: olsSlope - tCrit * seSlopeVal,
+            slopeHi: olsSlope + tCrit * seSlopeVal,
+            interceptLo: olsIntercept - tCrit * seIntVal,
+            interceptHi: olsIntercept + tCrit * seIntVal,
+            regressionType: "OLS",
           },
         },
-        blandAltman: {},
+        blandAltman: {
+          [comparisonName]: {
+            meanDiff,
+            sdDiff,
+            loa_upper: meanDiff + 1.96 * sdDiff,
+            loa_lower: meanDiff - 1.96 * sdDiff,
+            pctMeanDiff,
+          },
+        },
+        overallPass,
+        passCount,
+        totalCount: n,
+        xRange: { min: Math.min(...xs), max: Math.max(...xs) },
+        yRange: { [comparisonName]: { min: Math.min(...ys), max: Math.max(...ys) } },
+        summary: overallPass
+          ? `All ${n} samples passed within CLIA TEa of ±${teaAbsolute} mmol/L (±${(teaFraction * 100).toFixed(1)}%). Method is acceptable for patient testing.`
+          : `${n - passCount} of ${n} samples exceeded CLIA TEa of ±${teaAbsolute} mmol/L. Corrective action required.`,
       };
 
-      const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0099999");
+      const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
       const filename = `VeritaCheck_MethodComp_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -2204,7 +2300,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         checklistItems,
         labName: "Riverside Regional Medical Center",
         quizResults,
-        cliaNumber: "22D0099999",
+        cliaNumber: "22D0999999",
       });
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();

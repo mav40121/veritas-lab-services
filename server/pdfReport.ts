@@ -282,11 +282,14 @@ function headerHTML(study: Study, cliaNumber?: string): string {
   };
   const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
   const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not provided</div>`;
+  const labName = (study as any)._labName;
+  const labLine = labName ? `<div style="font-size:8.5pt;font-weight:600;color:#28251D;margin-top:1px;">${labName}</div>` : "";
   return `
   <div class="report-header">
     <div>
-      <div class="logo">VeritaCheck\u2122</div>
+      <div class="logo">VeritaAssure\u2122</div>
       <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+      ${labLine}
       ${cliaLine}
     </div>
     <div class="header-right">Instrument: ${study.instrument}</div>
@@ -1241,8 +1244,8 @@ const FOOTER_TEMPLATE = `
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaCheck by Veritas Lab Services &middot; veritaslabservices.com &middot; Generated <span class="date"></span></span>
-      <span>Page <span class="pageNumber"></span></span>
+      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential &mdash; For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
 </div>`;

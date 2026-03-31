@@ -41,8 +41,8 @@ export async function seedDemoData() {
       // Add missing instruments
       const existingInsts = sqlite.prepare("SELECT instrument_name FROM veritamap_instruments WHERE map_id = ?").all(mapId).map((r: any) => r.instrument_name);
       const requiredChem = [
-        { name: "Beckman Coulter AU5800 [Primary]", role: "Primary" },
-        { name: "Beckman Coulter AU5800 [Backup]", role: "Backup" },
+        { name: "Ortho VITROS 5600 [Primary]", role: "Primary" },
+        { name: "Ortho VITROS 5600 [Backup]", role: "Backup" },
         { name: "Siemens ADVIA 1800", role: "Satellite" },
       ];
       for (const inst of requiredChem) {
@@ -69,12 +69,9 @@ export async function seedDemoData() {
   }
 
   // ─── 4. VeritaCheck Studies (Sodium + Potassium method comparisons) ─────
-  const existingStudies = sqlite.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?").get(demoUserId);
-  if (!existingStudies || existingStudies.cnt < 2) {
-    // Remove old studies to reseed cleanly
-    sqlite.prepare("DELETE FROM studies WHERE user_id = ?").run(demoUserId);
-    seedStudies(sqlite, demoUserId, now);
-  }
+  // Always reseed studies to ensure correct instrument names and data
+  sqlite.prepare("DELETE FROM studies WHERE user_id = ?").run(demoUserId);
+  seedStudies(sqlite, demoUserId, now);
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
@@ -96,12 +93,12 @@ export async function seedDemoData() {
 // ─── Map seeding ──────────────────────────────────────────────────────────────
 function seedMapData(sqlite: any, mapId: number, now: string) {
   const instruments = [
-    { name: "Beckman Coulter AU5800 [Primary]", role: "Primary", category: "Chemistry", tests: [
+    { name: "Ortho VITROS 5600 [Primary]", role: "Primary", category: "Chemistry", tests: [
       { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
       { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
       { analyte: "Troponin", specialty: "Chemistry", complexity: "MODERATE" },
     ]},
-    { name: "Beckman Coulter AU5800 [Backup]", role: "Backup", category: "Chemistry", tests: [
+    { name: "Ortho VITROS 5600 [Backup]", role: "Backup", category: "Chemistry", tests: [
       { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
       { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
       { analyte: "Troponin", specialty: "Chemistry", complexity: "MODERATE" },
@@ -287,13 +284,13 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
   `).run(
     demoUserId,
     "Sodium",
-    "Beckman Coulter AU5800 [Primary]",
-    "M. Veri, MLS(ASCP)",
+    "Ortho VITROS 5600 [Primary]",
+    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-15",
     "method_comparison",
     4.0, // 4 mmol/L absolute TEa for sodium
     JSON.stringify(sodiumDataPoints),
-    JSON.stringify(["Beckman Coulter AU5800 [Primary]", "Beckman Coulter AU5800 [Backup]"]),
+    JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
   );
 
@@ -305,13 +302,13 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
   `).run(
     demoUserId,
     "Potassium",
-    "Beckman Coulter AU5800 [Primary]",
-    "M. Veri, MLS(ASCP)",
+    "Ortho VITROS 5600 [Primary]",
+    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-15",
     "method_comparison",
     0.5, // 0.5 mmol/L absolute TEa for potassium
     JSON.stringify(potassiumDataPoints),
-    JSON.stringify(["Beckman Coulter AU5800 [Primary]", "Beckman Coulter AU5800 [Backup]"]),
+    JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
   );
 }
@@ -344,13 +341,13 @@ function seedCompetencyData(sqlite: any, demoUserId: number, now: string) {
   // Create method group
   const mgResult = sqlite.prepare(
     "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
-  ).run(programId, "Chemistry Routine - AU5800", JSON.stringify(["Beckman Coulter AU5800 [Primary]", "Beckman Coulter AU5800 [Backup]"]), JSON.stringify(["Sodium", "Potassium", "Troponin"]), null);
+  ).run(programId, "Chemistry Routine - VITROS 5600", JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]), JSON.stringify(["Sodium", "Potassium", "Troponin"]), null);
   const methodGroupId = Number(mgResult.lastInsertRowid);
 
   // Create assessment
   const assessResult = sqlite.prepare(`
     INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, employee_acknowledged, supervisor_acknowledged, created_at)
-    VALUES (?, ?, 'annual', '2026-01-20', 'M. Veri', 'Technical Consultant', 'MV', 'technical', 'pass', 1, 1, ?)
+    VALUES (?, ?, 'annual', '2026-01-20', 'Michael Veri, MS, MBA, MLS(ASCP), CPHQ', 'Technical Consultant', 'MV', 'technical', 'pass', 1, 1, ?)
   `).run(programId, employeeId, now);
   const assessmentId = Number(assessResult.lastInsertRowid);
 
@@ -361,12 +358,12 @@ function seedCompetencyData(sqlite: any, demoUserId: number, now: string) {
   `);
 
   const elements = [
-    { num: 1, label: "Direct Observation of Routine Patient Test Performance", evidence: "Observed processing chemistry panel on AU5800", date: "2026-01-15" },
+    { num: 1, label: "Direct Observation of Routine Patient Test Performance", evidence: "Observed processing chemistry panel on VITROS 5600", date: "2026-01-15" },
     { num: 2, label: "Monitoring, Recording and Reporting of Test Results", evidence: "Reviewed result reporting including critical values", date: "2026-01-16" },
     { num: 3, label: "QC Performance", evidence: "QC run documented in LIS on date observed", date: "2026-01-17" },
-    { num: 4, label: "Direct Observation of Instrument Maintenance", evidence: "Observed daily maintenance on AU5800", date: "2026-01-17" },
+    { num: 4, label: "Direct Observation of Instrument Maintenance", evidence: "Observed daily maintenance on VITROS 5600", date: "2026-01-17" },
     { num: 5, label: "Blind/PT Sample Performance", evidence: "CAP PT survey, all analytes acceptable", date: "2026-01-18" },
-    { num: 6, label: "Problem-Solving Assessment (Quiz)", evidence: "Quiz Q-AU5800-001, 2/2 correct, 100%", date: "2026-01-18" },
+    { num: 6, label: "Problem-Solving Assessment (Quiz)", evidence: "Quiz Q-VITROS-001, 2/2 correct, 100%", date: "2026-01-18" },
   ];
 
   for (const el of elements) {
@@ -405,24 +402,25 @@ function seedCumsumData(sqlite: any, demoUserId: number, now: string) {
 // ─── Data generators ──────────────────────────────────────────────────────────
 
 function generateSodiumData() {
-  // 20 patient samples, sodium range 135-145 mmol/L
-  // Primary vs Backup with <2% variation, slope ~1.001, intercept ~0.3, r2 = 0.998
+  // 20 patient samples, sodium range 131-147 mmol/L
+  // Primary vs Backup with 1-2 mmol/L variation, all within CLIA TEa (4 mmol/L)
+  // Target: slope ~1.001, intercept ~0.3, r² ≈ 0.998
   const points: any[] = [];
   const baseValues = [
-    135.2, 136.8, 137.5, 138.1, 138.9, 139.4, 139.8, 140.2, 140.6, 141.0,
-    141.3, 141.7, 142.0, 142.4, 142.8, 143.1, 143.5, 143.9, 144.3, 144.8,
+    131.2, 132.5, 133.8, 135.1, 136.4, 137.7, 138.5, 139.2, 139.9, 140.5,
+    141.0, 141.6, 142.3, 143.0, 143.7, 144.2, 144.8, 145.5, 146.2, 147.0,
   ];
   for (let i = 0; i < 20; i++) {
     const primary = baseValues[i];
-    // Slight variation: slope 1.001, intercept 0.3, small noise
-    const noise = (Math.sin(i * 2.71828) * 0.3);
+    // Slight variation: slope 1.001, intercept 0.3, small deterministic noise
+    const noise = (Math.sin(i * 2.71828) * 0.4);
     const backup = Math.round((primary * 1.001 + 0.3 + noise) * 10) / 10;
     points.push({
       level: i + 1,
       expectedValue: null,
       instrumentValues: {
-        "Beckman Coulter AU5800 [Primary]": primary,
-        "Beckman Coulter AU5800 [Backup]": backup,
+        "Ortho VITROS 5600 [Primary]": primary,
+        "Ortho VITROS 5600 [Backup]": backup,
       },
     });
   }
@@ -430,23 +428,24 @@ function generateSodiumData() {
 }
 
 function generatePotassiumData() {
-  // 20 patient samples, potassium range 3.5-5.1 mmol/L
-  // slope ~0.999, intercept ~0.02, r2 = 0.997
+  // 20 patient samples, potassium range 3.2-5.8 mmol/L
+  // Primary vs Backup with 0.1-0.2 mmol/L variation, all within CLIA TEa (0.5 mmol/L)
+  // Target: slope ~0.999, intercept ~0.02, r² ≈ 0.997
   const points: any[] = [];
   const baseValues = [
-    3.5, 3.6, 3.7, 3.8, 3.9, 4.0, 4.1, 4.2, 4.3, 4.4,
-    4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 5.1, 4.3, 3.8, 4.6,
+    3.2, 3.4, 3.6, 3.8, 3.9, 4.0, 4.2, 4.3, 4.5, 4.6,
+    4.7, 4.8, 5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.8,
   ];
   for (let i = 0; i < 20; i++) {
     const primary = baseValues[i];
-    const noise = (Math.sin(i * 1.618) * 0.03);
+    const noise = (Math.sin(i * 1.618) * 0.04);
     const backup = Math.round((primary * 0.999 + 0.02 + noise) * 100) / 100;
     points.push({
       level: i + 1,
       expectedValue: null,
       instrumentValues: {
-        "Beckman Coulter AU5800 [Primary]": primary,
-        "Beckman Coulter AU5800 [Backup]": backup,
+        "Ortho VITROS 5600 [Primary]": primary,
+        "Ortho VITROS 5600 [Backup]": backup,
       },
     });
   }
