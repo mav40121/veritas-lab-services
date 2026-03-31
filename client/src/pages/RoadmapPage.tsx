@@ -37,6 +37,11 @@ const completedItems: RoadmapItem[] = [
     description:
       "Mock inspections, regulatory gap analysis, laboratory director services, and policy and procedure development. Available as a standalone engagement or alongside the software suite.",
   },
+  {
+    title: "VeritaCheck\u2122 - PT/Coag New Lot Validation",
+    description:
+      "Validates new reagent lots for PT and coagulation testing using Deming regression, geometric mean analysis, and INR comparison. Generates a compliant PDF with full statistical tables. Laboratory director review and approval required.",
+  },
 ];
 
 const inProgressItems: RoadmapItem[] = [

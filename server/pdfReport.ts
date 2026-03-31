@@ -286,7 +286,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
   };
   const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
-  const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file — enter your CLIA number in account settings</div>`;
+  const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter your CLIA number in account settings</div>`;
   const labName = (study as any)._labName;
   const labLine = labName ? `<div style="font-size:8.5pt;font-weight:600;color:#28251D;margin-top:1px;">${labName}</div>` : "";
   return `
@@ -354,6 +354,30 @@ function footerHTML(): string {
     <div class="footer-bar">
       <span>VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${today}</span>
       <span class="page-num"></span>
+    </div>
+  </div>`;
+}
+
+// ─── Laboratory Director Review block HTML ───────────────────────────────────
+function directorReviewHTML(): string {
+  return `
+  <div style="margin-top:18px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:12px 14px;background:#FAFAF8;">
+    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director Review</div>
+    <p style="font-size:7.5pt;color:#28251D;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
+    <div style="font-size:8pt;color:#28251D;margin-bottom:4px;">
+      <span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
+      <span>\u25CB Not accepted</span>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:12px;">
+      <div style="flex:2;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Print Name</div>
+      </div>
+      <div style="flex:0.7;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Initials</div>
+      </div>
+      <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Date</div>
+      </div>
     </div>
   </div>`;
 }
@@ -427,12 +451,13 @@ function narrativeHTML(
       } else {
         narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
-      narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range.`;
+      narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range. `;
+      narrative += `The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       const failCount = results.totalCount - results.passCount;
       narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
-      narrative += `Do not report patient results until the cause has been identified, corrective action has been taken, and the study is repeated with passing results. `;
-      narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
+      narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. `;
+      narrative += `The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -460,11 +485,12 @@ function narrativeHTML(
       narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
       narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
       narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% is ${biasInterp}. `;
-      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting.`;
+      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting. `;
+      narrative += `The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
       narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. `;
-      narrative += `Do not report patient results from the comparison method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
+      narrative += `The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -486,11 +512,11 @@ function narrativeHTML(
         const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "-";
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
-      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
+      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
+      narrative += `The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The precision study for ${analyteName} did not meet acceptance criteria. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. `;
-      narrative += `Do not rely on this instrument for patient reporting until the cause of imprecision has been identified, corrective action has been taken, and the study is repeated with passing results. `;
-      narrative += `Review reagent lot, instrument maintenance, and QC trends for contributing factors.`;
+      narrative += `The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -585,6 +611,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
 
   ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName)}
 
+  ${directorReviewHTML()}
   ${signatureHTML()}
 
   <div class="stats-section">
@@ -776,6 +803,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
   ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
 
+  ${directorReviewHTML()}
   ${signatureHTML()}
 
   <div class="stats-section">
@@ -876,6 +904,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
 
   ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName)}
 
+  ${directorReviewHTML()}
   ${signatureHTML()}
 
   <div class="stats-section">
@@ -1017,9 +1046,13 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
   const lotInfo = rawData.currentLot ? `<div style="font-size:8pt;margin-bottom:6px">Current Lot: ${rawData.currentLot} · New Lot: ${rawData.newLot} · Analyte: ${rawData.analyte || study.testName} ${rawData.units ? `(${rawData.units})` : ""}</div>` : "";
 
+  const cliaStatement = results.overallPass
+    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
-    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary}</p>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary} ${cliaStatement}</p>
   </div>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
@@ -1031,6 +1064,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
   ${lotInfo}
   ${cohortSections}
   ${narrative}
+  ${directorReviewHTML()}
   ${signatureHTML()}
   ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
   ${supportingPageHTML(study, instrumentNames)}
@@ -1181,9 +1215,12 @@ function buildPTCoagHTML(study: Study, results: any): string {
   // Narrative
   const overallVerdict = results.overallPass ? "PASS" : "FAIL";
   const narrativeText = results.summary;
+  const ptCoagCliaStatement = results.overallPass
+    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
-    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText}</p>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText} ${ptCoagCliaStatement}</p>
   </div>`;
 
   // Overall verdict
@@ -1204,6 +1241,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   ${m1Section}
 
   ${narrative}
+  ${directorReviewHTML()}
   ${signatureHTML()}
 
   ${m2Section}
@@ -1249,7 +1287,7 @@ const FOOTER_TEMPLATE = `
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential &mdash; For Internal Lab Use Only</span>
+      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential - For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
@@ -1270,21 +1308,26 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <td style="text-align:right;${lr.flagShift ? 'color:#dc2626;font-weight:600;' : ''}">${lr.pctDiffFromOld != null ? lr.pctDiffFromOld.toFixed(1) + '%' : '-'}${lr.flagShift ? ' ⚠' : ''}</td>
     </tr>`).join("");
 
+  const qcCliaStatement = r.overallPass
+    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `New QC ranges have been established for ${analytes.join(", ")}. ` +
     `Runs were performed across ${r.dateRange?.start || ''} to ${r.dateRange?.end || ''} on ${study.instrument}. ` +
-    (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`);
+    (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`) +
+    ` ${qcCliaStatement}`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
   </style></head><body>
     ${headerHTML(study, (study as any)._cliaNumber)}
-    ${signatureHTML()}
-    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     <div class="narrative-section">
       <div class="eval-title">Narrative Summary</div>
       <div class="eval-text">${narrative}</div>
     </div>
+    ${directorReviewHTML()}
+    ${signatureHTML()}
+    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot - the historical/peer-derived SD should be used for control limits.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
@@ -1331,8 +1374,12 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
 
   const sampleLabel = rawDP.sampleType === "normal" ? "normal" : "random";
   const validAnalytes = (r.analyteResults || []).filter((ar: any) => ar.n > 0);
+  const maCoagCliaStatement = r.overallPass
+    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `${(r.specimens || []).length} ${sampleLabel} specimens were compared between old lot and new lot on ${study.instrument}. ` +
-    validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${(ar.tea * 100).toFixed(0)}% TEa).`).join(" ");
+    validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${(ar.tea * 100).toFixed(0)}% TEa).`).join(" ") +
+    ` ${maCoagCliaStatement}`;
 
   const isiNote = r.ptINRValidation ? `<div class="eval-text" style="margin:8px 0;font-size:7.5px">${r.ptINRValidation.isiCheck}</div>` : '';
 
@@ -1341,13 +1388,14 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   body { counter-reset: page; }
   </style></head><body>
     ${headerHTML(study, (study as any)._cliaNumber)}
-    ${signatureHTML()}
-    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     <div class="narrative-section">
       <div class="eval-title">Narrative Summary</div>
       <div class="eval-text">${narrative}</div>
     </div>
     ${isiNote}
+    ${directorReviewHTML()}
+    ${signatureHTML()}
+    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Per-Analyte Summary</div>

@@ -533,9 +533,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/studies", (req, res) => {
     const parsed = insertStudySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    // Gate: PT/Coag New Lot Validation is Coming Soon — pending regulatory review
-    if (parsed.data.studyType === "pt_coag") return res.status(403).json({ error: "PT/Coag New Lot Validation is not yet available" });
-
     // Attach userId if authenticated
     let userId: number | null = null;
     const auth = req.headers.authorization;
@@ -597,9 +594,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { study, results } = req.body;
       if (!study || !results) return res.status(400).json({ error: "study and results required" });
-      // Gate: PT/Coag New Lot Validation is Coming Soon — pending regulatory review
-      if (study.studyType === "pt_coag") return res.status(403).json({ error: "PT/Coag New Lot Validation is not yet available" });
-
       // Fetch CLIA number from user record if authenticated
       let cliaNumber: string | undefined;
       const auth = req.headers.authorization;
