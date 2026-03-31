@@ -1,5 +1,5 @@
 // CLIA Allowable Error (TEa) Database
-// Source: 42 CFR Part 493, Subpart H — effective July 11, 2024 (2025 CLIA Final Rule)
+// Source: 42 CFR Part 493, Subpart H - effective July 11, 2024 (2025 CLIA Final Rule)
 // Sections: §493.927 (Immunology), §493.931 (Chemistry), §493.933 (Endocrinology),
 //           §493.937 (Toxicology), §493.941 (Hematology), §493.959 (Coagulation/Immunohematology)
 
@@ -120,18 +120,18 @@ export const teaData: TeaAnalyte[] = [
   { analyte: "Theophylline", criteria: "±20%", specialty: "Toxicology", cfr: "§493.937" },
 
   // ─── HEMATOLOGY §493.941 ──────────────────────────────────────────────────
-  { analyte: "CBC — WBC (White Blood Cell Count)", criteria: "±15%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC — RBC (Red Blood Cell Count)", criteria: "±6%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC — Hemoglobin", criteria: "±7% or ±1.0 g/dL (greater)", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC — Hematocrit", criteria: "±6%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC — MCV (Mean Corpuscular Volume)", criteria: "±7%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC — MCHC (Mean Corpuscular Hemoglobin Conc.)", criteria: "±8%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC — Platelet Count", criteria: "±25%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Differential — Neutrophils (Granulocytes)", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941", notes: "Absolute count ±30%" },
-  { analyte: "Differential — Lymphocytes", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941", notes: "Absolute count ±30%" },
-  { analyte: "Differential — Monocytes", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Differential — Eosinophils", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Differential — Basophils", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - WBC (White Blood Cell Count)", criteria: "±15%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - RBC (Red Blood Cell Count)", criteria: "±6%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - Hemoglobin", criteria: "±7% or ±1.0 g/dL (greater)", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - Hematocrit", criteria: "±6%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - MCV (Mean Corpuscular Volume)", criteria: "±7%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - MCHC (Mean Corpuscular Hemoglobin Conc.)", criteria: "±8%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - Platelet Count", criteria: "±25%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "Differential - Neutrophils (Granulocytes)", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941", notes: "Absolute count ±30%" },
+  { analyte: "Differential - Lymphocytes", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941", notes: "Absolute count ±30%" },
+  { analyte: "Differential - Monocytes", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "Differential - Eosinophils", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "Differential - Basophils", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "Fibrinogen", criteria: "±20%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "Reticulocyte Count", criteria: "±3 percentage points or ±30% (greater)", specialty: "Hematology", cfr: "§493.941" },
 
@@ -149,7 +149,7 @@ export const teaData: TeaAnalyte[] = [
   { analyte: "Compatibility Testing (Crossmatch)", criteria: "100% accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
 
   // ─── URINALYSIS ───────────────────────────────────────────────────────────
-  { analyte: "Urinalysis — Qualitative (dipstick)", criteria: "Positive or negative; ±1 graduation (semi-quantitative)", specialty: "Urinalysis", cfr: "§493.931", notes: "For glucose, protein, etc. Semi-quantitative results must be within 1 reagent strip grade of target" },
+  { analyte: "Urinalysis - Qualitative (dipstick)", criteria: "Positive or negative; ±1 graduation (semi-quantitative)", specialty: "Urinalysis", cfr: "§493.931", notes: "For glucose, protein, etc. Semi-quantitative results must be within 1 reagent strip grade of target" },
 ];
 
 export const specialties: TeaSpecialty[] = [

@@ -212,7 +212,7 @@ export function calculateCalVer(
 
   const range = levelResults.length
     ? `${levelResults[0].assignedValue.toFixed(3)} to ${levelResults[levelResults.length - 1].assignedValue.toFixed(3)}`
-    : "—";
+    : "-";
   const cliaPercent = (cliaError * 100).toFixed(1);
   const maxDev = levelResults.length ? Math.max(...levelResults.map((r) => Math.abs(r.pctRecovery - 100))) : 0;
   const summary =

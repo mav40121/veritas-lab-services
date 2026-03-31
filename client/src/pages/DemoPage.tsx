@@ -456,7 +456,7 @@ export default function DemoPage() {
                     <div className="grid sm:grid-cols-3 gap-3 mb-2">
                       {[
                         { label: "Pearson r", value: "0.997", note: "Acceptable ≥ 0.975", pass: true },
-                        { label: "Slope", value: "0.991", note: "Acceptable 0.90–1.10", pass: true },
+                        { label: "Slope", value: "0.991", note: "Acceptable 0.90-1.10", pass: true },
                         { label: "Avg Bias", value: "+0.4 sec", note: "Within 10% TEa", pass: true },
                       ].map(({ label, value, note, pass }) => (
                         <div key={label} className="rounded-lg border border-border bg-card p-3 text-center">

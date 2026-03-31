@@ -293,12 +293,12 @@ export default function CumsumPage() {
                       {selectedTracker.entries.map((e, idx) => (
                         <tr key={e.id} className={`border-b border-border/50 ${e.verdict === "ACTION REQUIRED" ? "bg-red-50 dark:bg-red-950/20" : e.verdict === "ACCEPT" ? "bg-green-50/50 dark:bg-green-950/10" : ""}`}>
                           <td className="py-2 pr-3">{e.year}</td>
-                          <td className="py-2 pr-3 font-mono text-xs">{e.old_lot_number || "—"}</td>
-                          <td className="py-2 pr-3 font-mono text-xs">{e.new_lot_number || "—"}</td>
-                          <td className="py-2 pr-3 text-right font-mono">{e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : "—"}</td>
-                          <td className="py-2 pr-3 text-right font-mono">{e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : "—"}</td>
-                          <td className="py-2 pr-3 text-right font-mono">{e.difference != null ? (e.difference >= 0 ? "+" : "") + Number(e.difference).toFixed(1) : "—"}</td>
-                          <td className="py-2 pr-3 text-right font-mono font-semibold">{e.cumsum != null ? Number(e.cumsum).toFixed(1) : "—"}</td>
+                          <td className="py-2 pr-3 font-mono text-xs">{e.old_lot_number || "-"}</td>
+                          <td className="py-2 pr-3 font-mono text-xs">{e.new_lot_number || "-"}</td>
+                          <td className="py-2 pr-3 text-right font-mono">{e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : "-"}</td>
+                          <td className="py-2 pr-3 text-right font-mono">{e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : "-"}</td>
+                          <td className="py-2 pr-3 text-right font-mono">{e.difference != null ? (e.difference >= 0 ? "+" : "") + Number(e.difference).toFixed(1) : "-"}</td>
+                          <td className="py-2 pr-3 text-right font-mono font-semibold">{e.cumsum != null ? Number(e.cumsum).toFixed(1) : "-"}</td>
                           <td className="py-2">
                             {e.verdict === "ACCEPT" && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">ACCEPT</Badge>}
                             {e.verdict === "ACTION REQUIRED" && <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0">ACTION REQUIRED</Badge>}
@@ -367,11 +367,11 @@ export default function CumsumPage() {
                             </td>
                             {!isInstallLot && (
                               <td className="py-1 pr-3">
-                                <Input placeholder="—" value={s.oldLot} onChange={e => { const d = [...specimens]; d[idx] = { ...d[idx], oldLot: e.target.value }; setSpecimens(d); }} className="h-7 text-xs w-24" />
+                                <Input placeholder="-" value={s.oldLot} onChange={e => { const d = [...specimens]; d[idx] = { ...d[idx], oldLot: e.target.value }; setSpecimens(d); }} className="h-7 text-xs w-24" />
                               </td>
                             )}
                             <td className="py-1 pr-3">
-                              <Input placeholder="—" value={s.newLot} onChange={e => { const d = [...specimens]; d[idx] = { ...d[idx], newLot: e.target.value }; setSpecimens(d); }} className="h-7 text-xs w-24" />
+                              <Input placeholder="-" value={s.newLot} onChange={e => { const d = [...specimens]; d[idx] = { ...d[idx], newLot: e.target.value }; setSpecimens(d); }} className="h-7 text-xs w-24" />
                             </td>
                           </tr>
                         ))}

@@ -463,7 +463,7 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
       r.pctRecovery.toFixed(1)+"%",
       (r.obsError*100).toFixed(2)+"%",
       r.passFailMean,
-      ...instrumentNames.map(n => r.instruments[n] ? r.instruments[n].value.toFixed(3) : "—"),
+      ...instrumentNames.map(n => r.instruments[n] ? r.instruments[n].value.toFixed(3) : "-"),
     ];
     row.forEach((val, i) => {
       if (val === "Pass") setRgb(doc, PASS_GREEN);
@@ -514,10 +514,10 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   const firstInstBA = results.blandAltman[firstInst];
   const firstInstReg = Object.entries(results.regression).find(([k]) => k.includes("Deming"))?.[1];
   const supportStats = [
-    ["Corr Coef (R):", firstInstReg ? Math.sqrt(firstInstReg.r2).toFixed(4) : "—"],
-    ["Bias:", firstInstBA ? firstInstBA.meanDiff.toFixed(3) : "—"],
-    ["X Mean ± SD:", xRange ? `${((xRange.min+xRange.max)/2).toFixed(3)}` : "—"],
-    ["Std Dev Diffs:", firstInstBA ? firstInstBA.sdDiff.toFixed(3) : "—"],
+    ["Corr Coef (R):", firstInstReg ? Math.sqrt(firstInstReg.r2).toFixed(4) : "-"],
+    ["Bias:", firstInstBA ? firstInstBA.meanDiff.toFixed(3) : "-"],
+    ["X Mean ± SD:", xRange ? `${((xRange.min+xRange.max)/2).toFixed(3)}` : "-"],
+    ["Std Dev Diffs:", firstInstBA ? firstInstBA.sdDiff.toFixed(3) : "-"],
     ["Points (Plotted/Total):", `${results.levelResults.length}/${results.levelResults.length}`],
   ];
   // Build all stats into two columns of 3 rows each
@@ -643,7 +643,7 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
       r.referenceValue.toFixed(3),
       ...instrumentNames.flatMap(n => r.instruments[n]
         ? [r.instruments[n].value.toFixed(3), r.instruments[n].difference.toFixed(3), r.instruments[n].pctDifference.toFixed(2)+"%", r.instruments[n].passFail]
-        : ["—","—","—","—"]
+        : ["-","-","-","-"]
       ),
     ];
     row.forEach((val, i) => {

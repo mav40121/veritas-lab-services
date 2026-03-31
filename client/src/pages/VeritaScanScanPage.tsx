@@ -690,7 +690,7 @@ export default function VeritaScanScanPage() {
             <div
               className={`text-3xl font-bold tabular-nums ${scoreColor(score)}`}
             >
-              {score !== null ? `${Math.round(score)}%` : "—"}
+              {score !== null ? `${Math.round(score)}%` : "-"}
             </div>
             <div className="text-[10px] text-muted-foreground mt-0.5">
               Overall Readiness
@@ -815,7 +815,7 @@ export default function VeritaScanScanPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-lg font-bold ${scoreColor(score)}`}>
-              {score !== null ? `${Math.round(score)}%` : "—"}
+              {score !== null ? `${Math.round(score)}%` : "-"}
             </span>
             <Button
               size="sm"

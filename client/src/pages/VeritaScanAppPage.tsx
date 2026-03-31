@@ -41,7 +41,7 @@ interface ScanSummary {
 }
 
 function ComplianceMeter({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs text-muted-foreground">—</span>;
+  if (pct === null) return <span className="text-xs text-muted-foreground">-</span>;
   const color =
     pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500";
   const textColor =

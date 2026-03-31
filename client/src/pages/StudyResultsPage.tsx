@@ -252,9 +252,9 @@ function QCRangeReport({ study, results }: { study: Study; results: QCRangeResul
                         <td className="py-1.5 pr-3 text-right font-mono">{r.newMean.toFixed(2)}</td>
                         <td className="py-1.5 pr-3 text-right font-mono">{r.newSD.toFixed(3)}</td>
                         <td className="py-1.5 pr-3 text-right font-mono">{r.cv.toFixed(1)}%</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">{r.oldMean != null ? r.oldMean.toFixed(2) : "—"}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono">{r.oldMean != null ? r.oldMean.toFixed(2) : "-"}</td>
                         <td className={`py-1.5 text-right font-mono ${r.flagShift ? "text-red-500 font-semibold" : ""}`}>
-                          {r.pctDiffFromOld != null ? r.pctDiffFromOld.toFixed(1) + "%" : "—"}
+                          {r.pctDiffFromOld != null ? r.pctDiffFromOld.toFixed(1) + "%" : "-"}
                           {r.flagShift && " ⚠"}
                         </td>
                       </tr>
@@ -359,16 +359,16 @@ function MultiAnalyteCoagReport({ study, results }: { study: Study; results: Mul
                 {results.specimens.map((s, i) => (
                   <tr key={i} className="border-b border-border/30">
                     <td className="py-1 pr-2 font-mono">{s.specimenId}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.ptNew != null ? s.ptNew.toFixed(1) : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.ptNewINR != null ? s.ptNewINR.toFixed(2) : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.ptOld != null ? s.ptOld.toFixed(1) : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.ptPctDiff != null ? s.ptPctDiff.toFixed(1) + "%" : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.apttNew != null ? s.apttNew.toFixed(1) : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.apttOld != null ? s.apttOld.toFixed(1) : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.apttPctDiff != null ? s.apttPctDiff.toFixed(1) + "%" : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.fibNew != null ? s.fibNew.toFixed(1) : "—"}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{s.fibOld != null ? s.fibOld.toFixed(1) : "—"}</td>
-                    <td className="py-1 text-right font-mono">{s.fibPctDiff != null ? s.fibPctDiff.toFixed(1) + "%" : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptNew != null ? s.ptNew.toFixed(1) : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptNewINR != null ? s.ptNewINR.toFixed(2) : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptOld != null ? s.ptOld.toFixed(1) : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.ptPctDiff != null ? s.ptPctDiff.toFixed(1) + "%" : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.apttNew != null ? s.apttNew.toFixed(1) : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.apttOld != null ? s.apttOld.toFixed(1) : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.apttPctDiff != null ? s.apttPctDiff.toFixed(1) + "%" : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.fibNew != null ? s.fibNew.toFixed(1) : "-"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{s.fibOld != null ? s.fibOld.toFixed(1) : "-"}</td>
+                    <td className="py-1 text-right font-mono">{s.fibPctDiff != null ? s.fibPctDiff.toFixed(1) + "%" : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -561,7 +561,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
                     </td>
                     {instrumentNames.map((n) => (
                       <td key={n} className="text-right py-2 pr-3 font-mono">
-                        {r.instruments[n] ? r.instruments[n].value.toFixed(3) : "—"}
+                        {r.instruments[n] ? r.instruments[n].value.toFixed(3) : "-"}
                       </td>
                     ))}
                   </tr>
@@ -995,10 +995,10 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
                   {results.levelResults.map((r, i) => (
                     <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/20" : ""}`}>
                       <td className="py-2 pr-3">{r.levelName}</td>
-                      <td className="text-right py-2 pr-3 font-mono">{r.withinRunCV?.toFixed(2) ?? "—"}%</td>
-                      <td className="text-right py-2 pr-3 font-mono">{r.betweenRunCV?.toFixed(2) ?? "—"}%</td>
-                      <td className="text-right py-2 pr-3 font-mono">{r.betweenDayCV?.toFixed(2) ?? "—"}%</td>
-                      <td className="text-right py-2 pr-3 font-mono font-semibold">{r.totalCV?.toFixed(2) ?? "—"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.withinRunCV?.toFixed(2) ?? "-"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.betweenRunCV?.toFixed(2) ?? "-"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono">{r.betweenDayCV?.toFixed(2) ?? "-"}%</td>
+                      <td className="text-right py-2 pr-3 font-mono font-semibold">{r.totalCV?.toFixed(2) ?? "-"}%</td>
                     </tr>
                   ))}
                 </tbody>

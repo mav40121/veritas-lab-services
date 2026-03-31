@@ -169,10 +169,10 @@ export default function CLIALookupModal({ open, onClose, onCheckout, discountCod
                   <p className="text-muted-foreground">Certified Specialties: {labData.specialty_count}</p>
                 </div>
                 <div className="pt-3 mt-3 border-t border-primary/20">
-                  <p className="text-sm font-semibold">Plan: VeritaCheck&#8482; Only</p>
+                  <p className="text-sm font-semibold">Plan: VeritaCheck&#8482; Unlimited</p>
                   <p className="text-sm font-semibold">Price: $299/yr</p>
                   <p className="text-xs text-muted-foreground italic mt-1">
-                    VeritaCheck&#8482;-only pricing is flat regardless of lab size.
+                    VeritaCheck&#8482; Unlimited pricing is flat regardless of lab size.
                   </p>
                 </div>
               </CardContent>

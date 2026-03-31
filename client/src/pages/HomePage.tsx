@@ -63,7 +63,7 @@ export default function HomePage() {
               </Button>
             </div>
             <Link href="/demo" className="sm:hidden inline-flex items-center gap-1 text-sm text-primary font-medium mt-3 hover:underline">
-              See it in action — no login required <ArrowRight size={14} />
+              See it in action - no login required <ArrowRight size={14} />
             </Link>
           </div>
         </div>

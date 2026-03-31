@@ -138,7 +138,7 @@ const featureTooltips: Record<string, string> = {
   "Cal Ver, Method Comp, Precision & Lot-to-Lot": "Covers calibration verification/linearity, correlation/method comparison, accuracy & precision, and lot-to-lot verification study types.",
   "CLIA pass/fail evaluation": "Each study is automatically evaluated against CLIA allowable total error (TEa) and returns a clear Pass or Fail result.",
   // Starter
-  "Unlimited studies": "Run as many EP studies as your lab needs — no per-study charges.",
+  "Unlimited studies": "Run as many EP studies as your lab needs - no per-study charges.",
   "All VeritaCheck study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
   "Full PDF reports": "Every study generates a signed, audit-ready PDF report suitable for surveyor review.",
   "Study history dashboard": "View, search, and re-download all past studies from your personal dashboard.",
@@ -154,7 +154,7 @@ const featureTooltips: Record<string, string> = {
   "Lab branding on PDF reports": "Add your laboratory name and logo to all generated PDF reports.",
   // VeritaAssure Complete
   "Everything in Lab": "Includes all features from the Lab plan.",
-  "Consulting access": "Direct access to Michael Veri for compliance questions — the same expertise behind 200+ facility inspections as a Joint Commission Surveyor.",
+  "Consulting access": "Direct access to Michael Veri for compliance questions - the same expertise behind 200+ facility inspections as a Joint Commission Surveyor.",
   "Lab Management 101 book included": "Digital copy of Lab Management 101 by Michael Veri included with your subscription.",
 };
 
@@ -545,7 +545,7 @@ export default function VeritaCheckPage() {
       if (validData.length < 3) { toast({ title: "Please enter at least 3 specimen pairs", variant: "destructive" }); return; }
       const results = calculateLotToLot(allData, cliaValue, lotSampleType);
       const study: InsertStudy = {
-        testName: testName.trim(), instrument: instrumentNames[0] || "—", analyst: analyst.trim() || "—",
+        testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "lot_to_lot", cliaAllowableError: cliaValue,
         dataPoints: JSON.stringify({ data: allData, sampleType: lotSampleType, currentLot: lotCurrentLotNum, newLot: lotNewLotNum, analyte: lotAnalyte, units: lotUnits }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
@@ -575,7 +575,7 @@ export default function VeritaCheckPage() {
         module3Data
       );
       const study: InsertStudy = {
-        testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "—",
+        testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "-",
         date, studyType: "pt_coag", cliaAllowableError: ptModule2TEa,
         dataPoints: JSON.stringify({
           module1: { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
@@ -607,7 +607,7 @@ export default function VeritaCheckPage() {
       if (dataPoints.length === 0) { toast({ title: "Enter run data for at least one analyte/level", variant: "destructive" }); return; }
       const results = calculateQCRange(dataPoints, { start: qcDateStart, end: qcDateEnd });
       const study: InsertStudy = {
-        testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "—",
+        testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "-",
         date, studyType: "qc_range", cliaAllowableError: 0.10,
         dataPoints: JSON.stringify({ dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels, dateRange: { start: qcDateStart, end: qcDateEnd }, oldLotData: qcOldLotData }),
         instruments: JSON.stringify(qcAnalyzers),
@@ -631,7 +631,7 @@ export default function VeritaCheckPage() {
       if (rawSpecimens.length < 3) { toast({ title: "Enter at least 3 specimen pairs", variant: "destructive" }); return; }
       const results = calculateMultiAnalyteCoag(rawSpecimens, maISI, maNormalMeanPT, { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib });
       const study: InsertStudy = {
-        testName: testName.trim(), instrument: maInstrument, analyst: analyst.trim() || "—",
+        testName: testName.trim(), instrument: maInstrument, analyst: analyst.trim() || "-",
         date, studyType: "multi_analyte_coag", cliaAllowableError: maTeaPT,
         dataPoints: JSON.stringify({
           specimens: rawSpecimens, isi: maISI, normalMeanPT: maNormalMeanPT,
@@ -663,7 +663,7 @@ export default function VeritaCheckPage() {
       });
       const results = calculatePrecision(precDataPoints, cliaValue, precisionMode);
       const study: InsertStudy = {
-        testName: testName.trim(), instrument: instrumentNames[0] || "—", analyst: analyst.trim() || "—",
+        testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "precision", cliaAllowableError: cliaValue,
         dataPoints: JSON.stringify(precDataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
@@ -745,7 +745,7 @@ export default function VeritaCheckPage() {
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                       <div className="text-2xl font-bold text-primary">$299/yr</div>
-                      <div className="text-xs text-muted-foreground">VeritaCheck&#8482; Only (single user)</div>
+                      <div className="text-xs text-muted-foreground">VeritaCheck&#8482; Unlimited (single user)</div>
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                       <div className="text-2xl font-bold text-primary">From $499/yr</div>
@@ -1009,8 +1009,8 @@ export default function VeritaCheckPage() {
                             {lotData.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotData(d); }} className="h-8 text-sm w-24" /></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.newLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
@@ -1031,8 +1031,8 @@ export default function VeritaCheckPage() {
                               {lotDataAbnormal.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotDataAbnormal(d); }} className="h-8 text-sm w-24" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.newLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1066,7 +1066,7 @@ export default function VeritaCheckPage() {
                         <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
                         <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                           {ptModule1Data.map((v, i) => (
-                            <Input key={i} type="number" step="any" placeholder="—" value={v ?? ""}
+                            <Input key={i} type="number" step="any" placeholder="-" value={v ?? ""}
                               onChange={e => { const d = [...ptModule1Data]; d[i] = e.target.value === "" ? null as any : parseFloat(e.target.value); setPtModule1Data(d); }}
                               className="h-8 text-xs text-center" />
                           ))}
@@ -1096,8 +1096,8 @@ export default function VeritaCheckPage() {
                             {ptModule2Data.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.x ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.y ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
@@ -1134,8 +1134,8 @@ export default function VeritaCheckPage() {
                               {ptModule3Data.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.x ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="—" value={dp.y ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1216,7 +1216,7 @@ export default function VeritaCheckPage() {
                                   <div className="text-xs text-muted-foreground">{analyzer}</div>
                                   <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
                                     {Array.from({ length: qcNumRuns }).map((_, ri) => (
-                                      <Input key={ri} type="number" step="any" placeholder="—"
+                                      <Input key={ri} type="number" step="any" placeholder="-"
                                         value={!isNaN(runs[ri]) ? runs[ri] : ""}
                                         onChange={e => {
                                           const updated = [...(qcRunData[key] || Array(qcNumRuns).fill(NaN))];
@@ -1228,12 +1228,12 @@ export default function VeritaCheckPage() {
                                   </div>
                                   <div className="flex items-center gap-4 mt-1">
                                     <div className="text-xs text-muted-foreground">Old lot mean:</div>
-                                    <Input type="number" step="any" placeholder="—"
+                                    <Input type="number" step="any" placeholder="-"
                                       value={qcOldLotData[key]?.mean ?? ""}
                                       onChange={e => setQcOldLotData({ ...qcOldLotData, [key]: { ...qcOldLotData[key], mean: e.target.value === "" ? null : parseFloat(e.target.value), sd: qcOldLotData[key]?.sd ?? null } })}
                                       className="h-7 text-xs w-24" />
                                     <div className="text-xs text-muted-foreground">Old lot SD:</div>
-                                    <Input type="number" step="any" placeholder="—"
+                                    <Input type="number" step="any" placeholder="-"
                                       value={qcOldLotData[key]?.sd ?? ""}
                                       onChange={e => setQcOldLotData({ ...qcOldLotData, [key]: { ...qcOldLotData[key], sd: e.target.value === "" ? null : parseFloat(e.target.value), mean: qcOldLotData[key]?.mean ?? null } })}
                                       className="h-7 text-xs w-24" />
@@ -1322,15 +1322,15 @@ export default function VeritaCheckPage() {
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1 pr-2"><span className="text-xs font-mono text-muted-foreground">{s.id}</span></td>
                                   <td className="py-1 pr-2"><Input value={s.ptNew} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], ptNew: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
-                                  <td className="py-1 pr-2"><span className="text-xs font-mono">{ptINR != null ? ptINR.toFixed(2) : "—"}</span></td>
+                                  <td className="py-1 pr-2"><span className="text-xs font-mono">{ptINR != null ? ptINR.toFixed(2) : "-"}</span></td>
                                   <td className="py-1 pr-2"><Input value={s.ptOld} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], ptOld: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
-                                  <td className="py-1 pr-2"><span className={`text-xs font-mono ${ptPct != null && Math.abs(ptPct) > maTeaPT * 100 ? "text-red-500 font-semibold" : ""}`}>{ptPct != null ? ptPct.toFixed(1) + "%" : "—"}</span></td>
+                                  <td className="py-1 pr-2"><span className={`text-xs font-mono ${ptPct != null && Math.abs(ptPct) > maTeaPT * 100 ? "text-red-500 font-semibold" : ""}`}>{ptPct != null ? ptPct.toFixed(1) + "%" : "-"}</span></td>
                                   <td className="py-1 pr-2"><Input value={s.apttNew} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], apttNew: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
                                   <td className="py-1 pr-2"><Input value={s.apttOld} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], apttOld: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
-                                  <td className="py-1 pr-2"><span className={`text-xs font-mono ${apttPct != null && Math.abs(apttPct) > maTeaAPTT * 100 ? "text-red-500 font-semibold" : ""}`}>{apttPct != null ? apttPct.toFixed(1) + "%" : "—"}</span></td>
+                                  <td className="py-1 pr-2"><span className={`text-xs font-mono ${apttPct != null && Math.abs(apttPct) > maTeaAPTT * 100 ? "text-red-500 font-semibold" : ""}`}>{apttPct != null ? apttPct.toFixed(1) + "%" : "-"}</span></td>
                                   <td className="py-1 pr-2"><Input value={s.fibNew} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], fibNew: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
                                   <td className="py-1 pr-2"><Input value={s.fibOld} onChange={e => { const d = [...maSpecimens]; d[idx] = { ...d[idx], fibOld: e.target.value }; setMaSpecimens(d); }} className="h-7 text-xs w-16" /></td>
-                                  <td className="py-1"><span className={`text-xs font-mono ${fibPct != null && Math.abs(fibPct) > maTeaFib * 100 ? "text-red-500 font-semibold" : ""}`}>{fibPct != null ? fibPct.toFixed(1) + "%" : "—"}</span></td>
+                                  <td className="py-1"><span className={`text-xs font-mono ${fibPct != null && Math.abs(fibPct) > maTeaFib * 100 ? "text-red-500 font-semibold" : ""}`}>{fibPct != null ? fibPct.toFixed(1) + "%" : "-"}</span></td>
                                 </tr>
                               );
                             })}
@@ -1409,7 +1409,7 @@ export default function VeritaCheckPage() {
                         {precisionMode === "simple" ? (
                           <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                             {Array.from({ length: precisionReps }).map((_, vi) => (
-                              <Input key={vi} type="number" step="any" placeholder="—"
+                              <Input key={vi} type="number" step="any" placeholder="-"
                                 value={precisionValues[li]?.[vi] ?? ""}
                                 onChange={e => {
                                   const vals = [...precisionValues];
@@ -1441,7 +1441,7 @@ export default function VeritaCheckPage() {
                                     <td className="py-1 pr-2 text-xs text-muted-foreground font-mono">Day {di + 1}</td>
                                     {Array.from({ length: precisionRunsPerDay * precisionReplicatesPerRun }).map((_, ci) => (
                                       <td key={ci} className="py-1 px-1">
-                                        <Input type="number" step="any" placeholder="—"
+                                        <Input type="number" step="any" placeholder="-"
                                           value={precisionAdvancedData[li]?.[di]?.[ci] ?? ""}
                                           onChange={e => {
                                             const data = [...precisionAdvancedData];

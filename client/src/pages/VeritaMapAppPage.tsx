@@ -38,7 +38,7 @@ interface MapSummary {
 }
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return new Date(iso).toLocaleDateString("en-US", {
       month: "short",
@@ -46,7 +46,7 @@ function formatDate(iso: string | null | undefined): string {
       year: "numeric",
     });
   } catch {
-    return "—";
+    return "-";
   }
 }
 

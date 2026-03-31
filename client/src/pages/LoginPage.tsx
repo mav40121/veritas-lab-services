@@ -304,7 +304,7 @@ export default function LoginPage() {
                     )}
                     {skipClia && (
                       <div className="bg-muted rounded-lg p-3 text-xs">
-                        <p className="font-medium">VeritaCheck&#8482; Only - $299/yr</p>
+                        <p className="font-medium">VeritaCheck&#8482; Unlimited - $299/yr</p>
                         <p className="text-muted-foreground">Single user, method validation suite</p>
                       </div>
                     )}

@@ -671,10 +671,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         complexity,
         isWaived,
         calVerRequired,
-        calVerFrequency: calVerRequired ? 'Every 6 months (42 CFR §493.1255)' : 'Exempt — waived test',
+        calVerFrequency: calVerRequired ? 'Every 6 months (42 CFR §493.1255)' : 'Exempt - waived test',
         correlationRequired,
         correlationReason: correlationRequired
-          ? `${instruments.length} instruments performing this test (${instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join(', ')}) — 42 CFR §493.1213, TJC QSA.04.05.01`
+          ? `${instruments.length} instruments performing this test (${instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join(', ')}) - 42 CFR §493.1213, TJC QSA.04.05.01`
           : null,
         instruments: instruments.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
       };
@@ -1284,7 +1284,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       if (!pdfBuffer || pdfBuffer.length === 0) {
         console.error("VeritaScan PDF generation returned empty buffer");
-        return res.status(500).json({ error: "PDF generation failed — empty output" });
+        return res.status(500).json({ error: "PDF generation failed - empty output" });
       }
 
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
@@ -1356,12 +1356,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   <h2>From Veritas Lab Services</h2>
   <hr class="divider">
   <p>${name ? `${name},` : "Hello,"}</p>
-  <p>You're in. Welcome to <strong>The Lab Director's Briefing</strong> — practical, regulation-backed guidance for clinical laboratory leaders, written by a former Joint Commission surveyor with 200+ facility inspections.</p>
+  <p>You're in. Welcome to <strong>The Lab Director's Briefing</strong> - practical, regulation-backed guidance for clinical laboratory leaders, written by a former Joint Commission surveyor with 200+ facility inspections.</p>
   <p>Here's what you can expect:</p>
   <ul>
-    <li><strong>Regulatory clarity</strong> — What CLIA, TJC, and CAP actually require, in plain language</li>
-    <li><strong>Surveyor callouts</strong> — What I actually looked for across 200+ inspections</li>
-    <li><strong>Tools and resources</strong> — Free guides, lookup tools, and study aids for your lab</li>
+    <li><strong>Regulatory clarity</strong> - What CLIA, TJC, and CAP actually require, in plain language</li>
+    <li><strong>Surveyor callouts</strong> - What I actually looked for across 200+ inspections</li>
+    <li><strong>Tools and resources</strong> - Free guides, lookup tools, and study aids for your lab</li>
   </ul>
   <p>While you're here, two free resources worth bookmarking:</p>
   <a href="https://www.veritaslabservices.com/#/resources/clia-tea-lookup" class="cta">CLIA TEa Lookup Tool</a>
@@ -1829,124 +1829,144 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Legacy endpoint - kept for backwards compatibility
   app.get("/api/demo/data", (_req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.json({ maps: [], scans: [], studies: [], cumsumTrackers: [] });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.json({ maps: [], scans: [], studies: [], cumsumTrackers: [] });
 
-    const maps = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").all(userId);
-    const mapsWithData = maps.map((m: any) => {
-      const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(m.id);
-      const instrumentsWithTests = instruments.map((inst: any) => {
-        const tests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(inst.id);
-        return { ...inst, tests };
+      const maps = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").all(userId);
+      const mapsWithData = maps.map((m: any) => {
+        const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(m.id);
+        const instrumentsWithTests = instruments.map((inst: any) => {
+          const tests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(inst.id);
+          return { ...inst, tests };
+        });
+        const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(m.id);
+
+        const rows = (db as any).$client.prepare(`
+          SELECT it.analyte, it.specialty, it.complexity,
+                 i.instrument_name, i.role, i.id as instrument_id
+          FROM veritamap_instrument_tests it
+          JOIN veritamap_instruments i ON i.id = it.instrument_id
+          WHERE it.map_id = ? AND it.active = 1
+        `).all(m.id);
+
+        const byAnalyte: Record<string, any[]> = {};
+        for (const row of rows) {
+          if (!byAnalyte[row.analyte]) byAnalyte[row.analyte] = [];
+          byAnalyte[row.analyte].push(row);
+        }
+        const intelligence: Record<string, any> = {};
+        for (const [analyte, insts] of Object.entries(byAnalyte)) {
+          const complexity = insts[0].complexity;
+          const isWaived = complexity === 'WAIVED';
+          intelligence[analyte] = {
+            complexity,
+            isWaived,
+            calVerRequired: !isWaived,
+            correlationRequired: insts.length >= 2,
+            instruments: insts.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
+          };
+        }
+
+        return { ...m, instruments: instrumentsWithTests, tests: mapTests, intelligence };
       });
-      const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(m.id);
 
-      const rows = (db as any).$client.prepare(`
-        SELECT it.analyte, it.specialty, it.complexity,
-               i.instrument_name, i.role, i.id as instrument_id
-        FROM veritamap_instrument_tests it
-        JOIN veritamap_instruments i ON i.id = it.instrument_id
-        WHERE it.map_id = ? AND it.active = 1
-      `).all(m.id);
+      const scans = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").all(userId);
+      const scansWithItems = scans.map((s: any) => {
+        const items = (db as any).$client.prepare(
+          "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+        ).all(s.id);
+        const total = 168;
+        const assessed = items.filter((i: any) => i.status !== 'Not Assessed').length;
+        const compliant = items.filter((i: any) => i.status === 'Compliant').length;
+        return { ...s, items, total, assessed, compliant };
+      });
 
-      const byAnalyte: Record<string, any[]> = {};
-      for (const row of rows) {
-        if (!byAnalyte[row.analyte]) byAnalyte[row.analyte] = [];
-        byAnalyte[row.analyte].push(row);
-      }
-      const intelligence: Record<string, any> = {};
-      for (const [analyte, insts] of Object.entries(byAnalyte)) {
-        const complexity = insts[0].complexity;
-        const isWaived = complexity === 'WAIVED';
-        intelligence[analyte] = {
-          complexity,
-          isWaived,
-          calVerRequired: !isWaived,
-          correlationRequired: insts.length >= 2,
-          instruments: insts.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
-        };
-      }
+      const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
 
-      return { ...m, instruments: instrumentsWithTests, tests: mapTests, intelligence };
-    });
+      const trackers = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE user_id = ?").all(userId);
+      const trackersWithEntries = trackers.map((t: any) => {
+        const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(t.id);
+        return { ...t, entries };
+      });
 
-    const scans = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").all(userId);
-    const scansWithItems = scans.map((s: any) => {
-      const items = (db as any).$client.prepare(
-        "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
-      ).all(s.id);
-      const total = 168;
-      const assessed = items.filter((i: any) => i.status !== 'Not Assessed').length;
-      const compliant = items.filter((i: any) => i.status === 'Compliant').length;
-      return { ...s, items, total, assessed, compliant };
-    });
-
-    const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
-
-    const trackers = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE user_id = ?").all(userId);
-    const trackersWithEntries = trackers.map((t: any) => {
-      const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(t.id);
-      return { ...t, entries };
-    });
-
-    res.json({
-      maps: mapsWithData,
-      scans: scansWithItems,
-      studies,
-      cumsumTrackers: trackersWithEntries,
-    });
+      res.json({
+        maps: mapsWithData,
+        scans: scansWithItems,
+        studies,
+        cumsumTrackers: trackersWithEntries,
+      });
+    } catch (err: any) {
+      console.error("Demo data error:", err.message);
+      res.status(500).json({ error: "Failed to load demo data" });
+    }
   });
 
   // GET /api/demo/overview - lab summary stats
   app.get("/api/demo/overview", (_req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
-    const studyCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?").get(userId)?.cnt || 0;
-    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").get(userId);
-    let scanPct = 0;
-    if (scan) {
-      const items = (db as any).$client.prepare("SELECT status FROM veritascan_items WHERE scan_id = ?").all(scan.id);
-      const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
-      scanPct = Math.round((assessed / 168) * 100);
+      const studyCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?").get(userId)?.cnt || 0;
+      const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").get(userId);
+      let scanPct = 0;
+      if (scan) {
+        const items = (db as any).$client.prepare("SELECT status FROM veritascan_items WHERE scan_id = ?").all(scan.id);
+        const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
+        scanPct = Math.round((assessed / 168) * 100);
+      }
+      const employeeCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM competency_employees WHERE user_id = ?").get(userId)?.cnt || 0;
+      const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(userId);
+      const instrumentCount = map ? ((db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(map.id)?.cnt || 0) : 0;
+
+      res.json({
+        labName: "Riverside Regional Medical Center",
+        cliaNumber: "22D0999999",
+        address: "1200 Medical Center Drive, Richmond, VA 23298",
+        stats: {
+          studyCount,
+          scanCompletionPct: scanPct,
+          employeeCount,
+          instrumentCount,
+        },
+      });
+    } catch (err: any) {
+      console.error("Demo overview error:", err.message);
+      res.status(500).json({ error: "Failed to load demo overview" });
     }
-    const employeeCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM competency_employees WHERE user_id = ?").get(userId)?.cnt || 0;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(userId);
-    const instrumentCount = map ? ((db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(map.id)?.cnt || 0) : 0;
-
-    res.json({
-      labName: "Riverside Regional Medical Center",
-      cliaNumber: "22D0999999",
-      address: "1200 Medical Center Drive, Richmond, VA 23298",
-      stats: {
-        studyCount,
-        scanCompletionPct: scanPct,
-        employeeCount,
-        instrumentCount,
-      },
-    });
   });
 
   // GET /api/demo/studies - list all demo studies with full data
   app.get("/api/demo/studies", (_req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.json([]);
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.json([]);
 
-    const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
-    res.json(studies);
+      const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
+      res.json(studies);
+    } catch (err: any) {
+      console.error("Demo studies error:", err.message);
+      res.status(500).json({ error: "Failed to load demo studies" });
+    }
   });
 
   // GET /api/demo/studies/:id - single study with full data
   app.get("/api/demo/studies/:id", (req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.status(404).json({ error: "Demo data not found" });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
-    const study = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
-    if (!study) return res.status(404).json({ error: "Study not found" });
-    // Parse JSON fields so frontend and PDF generator receive consistent data
-    if (study.instruments) study.instruments = safeJsonParse(study.instruments);
-    if (study.data_points) study.data_points = safeJsonParse(study.data_points);
-    res.json(study);
+      const study = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
+      if (!study) return res.status(404).json({ error: "Study not found" });
+      // Parse JSON fields so frontend and PDF generator receive consistent data
+      if (study.instruments) study.instruments = safeJsonParse(study.instruments);
+      if (study.data_points) study.data_points = safeJsonParse(study.data_points);
+      res.json(study);
+    } catch (err: any) {
+      console.error("Demo study detail error:", err.message);
+      res.status(500).json({ error: "Failed to load demo study" });
+    }
   });
 
   // GET /api/demo/studies/:id/pdf - generate PDF for a demo study
@@ -2118,20 +2138,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/demo/map - demo VeritaMap data
   app.get("/api/demo/map", (_req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.json({ instruments: [], tests: [] });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.json({ instruments: [], tests: [] });
 
-    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").get(userId);
-    if (!map) return res.json({ instruments: [], tests: [] });
+      const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE user_id = ?").get(userId);
+      if (!map) return res.json({ instruments: [], tests: [] });
 
-    const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(map.id);
-    const instrumentsWithTests = instruments.map((inst: any) => {
-      const tests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(inst.id);
-      return { ...inst, tests };
-    });
-    const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(map.id);
+      const instruments = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(map.id);
+      const instrumentsWithTests = instruments.map((inst: any) => {
+        const tests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(inst.id);
+        return { ...inst, tests };
+      });
+      const mapTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ?").all(map.id);
 
-    res.json({ ...map, instruments: instrumentsWithTests, tests: mapTests });
+      res.json({ ...map, instruments: instrumentsWithTests, tests: mapTests });
+    } catch (err: any) {
+      console.error("Demo map error:", err.message);
+      res.status(500).json({ error: "Failed to load demo map" });
+    }
   });
 
   // GET /api/demo/map/excel - demo map Excel export
@@ -2208,50 +2233,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/demo/scan - demo VeritaScan checklist
   app.get("/api/demo/scan", (_req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.json({ items: [], total: 168 });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.json({ items: [], total: 168 });
 
-    const scan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").get(userId);
-    if (!scan) return res.json({ items: [], total: 168 });
+      const scan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").get(userId);
+      if (!scan) return res.json({ items: [], total: 168 });
 
-    const items = (db as any).$client.prepare(
-      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
-    ).all(scan.id);
-    const total = 168;
-    const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
-    const compliant = items.filter((i: any) => i.status === "Compliant").length;
-    res.json({ ...scan, items, total, assessed, compliant });
+      const items = (db as any).$client.prepare(
+        "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+      ).all(scan.id);
+      const total = 168;
+      const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
+      const compliant = items.filter((i: any) => i.status === "Compliant").length;
+      res.json({ ...scan, items, total, assessed, compliant });
+    } catch (err: any) {
+      console.error("Demo scan error:", err.message);
+      res.status(500).json({ error: "Failed to load demo scan" });
+    }
   });
 
   // GET /api/demo/competency - demo competency assessment data
   app.get("/api/demo/competency", (_req, res) => {
-    const userId = getDemoUserId();
-    if (!userId) return res.json({ programs: [], employees: [], assessments: [] });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.json({ programs: [], employees: [], assessments: [] });
 
-    const programs = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE user_id = ?").all(userId);
-    const employees = (db as any).$client.prepare("SELECT * FROM competency_employees WHERE user_id = ?").all(userId);
+      const programs = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE user_id = ?").all(userId);
+      const employees = (db as any).$client.prepare("SELECT * FROM competency_employees WHERE user_id = ?").all(userId);
 
-    const assessments: any[] = [];
-    for (const prog of programs) {
-      const progAssessments = (db as any).$client.prepare(
-        `SELECT a.*, e.name as employee_name, e.title as employee_title
-         FROM competency_assessments a
-         JOIN competency_employees e ON a.employee_id = e.id
-         WHERE a.program_id = ?`
-      ).all(prog.id);
-
-      for (const assessment of progAssessments) {
-        const items = (db as any).$client.prepare(
-          "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
-        ).all(assessment.id);
-        const methodGroups = (db as any).$client.prepare(
-          "SELECT * FROM competency_method_groups WHERE program_id = ?"
+      const assessments: any[] = [];
+      for (const prog of programs) {
+        const progAssessments = (db as any).$client.prepare(
+          `SELECT a.*, e.name as employee_name, e.title as employee_title
+           FROM competency_assessments a
+           JOIN competency_employees e ON a.employee_id = e.id
+           WHERE a.program_id = ?`
         ).all(prog.id);
-        assessments.push({ ...assessment, program_name: prog.name, items, methodGroups });
-      }
-    }
 
-    res.json({ programs, employees, assessments });
+        for (const assessment of progAssessments) {
+          const items = (db as any).$client.prepare(
+            "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
+          ).all(assessment.id);
+          const methodGroups = (db as any).$client.prepare(
+            "SELECT * FROM competency_method_groups WHERE program_id = ?"
+          ).all(prog.id);
+          assessments.push({ ...assessment, program_name: prog.name, items, methodGroups });
+        }
+      }
+
+      res.json({ programs, employees, assessments });
+    } catch (err: any) {
+      console.error("Demo competency error:", err.message);
+      res.status(500).json({ error: "Failed to load demo competency data" });
+    }
   });
 
   // GET /api/demo/competency/pdf - generate competency PDF for demo

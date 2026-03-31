@@ -91,7 +91,7 @@ export default function VeritaMapPage() {
                     <span className="font-serif font-bold text-lg">VeritaMap™</span>
                   </div>
                   <div className="space-y-2 flex-1">
-                    {["Glucose · Chem · Mod · PT ✓","HgbA1C · Chem · Mod · Lin ✓","CBC · Heme · Mod · Corr ✓","PT/INR · Coag · Mod · PT ✓","Blood Cx · Micro · High · —","Urine Cx · Micro · High · —","ABO/Rh · BB · High · Corr ✓","UA Dipstick · UA · Waived · —"].map((t, i) => (
+                    {["Glucose · Chem · Mod · PT ✓","HgbA1C · Chem · Mod · Lin ✓","CBC · Heme · Mod · Corr ✓","PT/INR · Coag · Mod · PT ✓","Blood Cx · Micro · High · -","Urine Cx · Micro · High · -","ABO/Rh · BB · High · Corr ✓","UA Dipstick · UA · Waived · -"].map((t, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs">
                         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.includes("✓") ? "bg-green-400" : "bg-amber-400"}`} />
                         <span className="text-white/80 font-mono">{t}</span>

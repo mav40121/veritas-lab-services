@@ -3,7 +3,7 @@
  * Replaces client-side jsPDF. Called from POST /api/generate-pdf.
  *
  * The math functions are duplicated here (not imported from client) because
- * this runs in Node — the client calculations.ts uses the same algorithms.
+ * this runs in Node - the client calculations.ts uses the same algorithms.
  */
 
 import puppeteer from "puppeteer";
@@ -238,7 +238,7 @@ const CSS = `
   .verdict.pass-bg { background: ${PASS}; }
   .verdict.fail-bg { background: ${FAIL}; }
 
-  /* Signature block — always on page 1 */
+  /* Signature block - always on page 1 */
   .signature-block { margin-top: 20px; }
   .accepted-label { font-size: 9pt; font-weight: 700; margin-bottom: 8px; }
   .sig-lines { display: flex; gap: 40px; }
@@ -259,7 +259,7 @@ const CSS = `
   /* Statistical table page break */
   .stats-section { page-break-before: always; }
 
-  /* Footer rendered via Puppeteer displayHeaderFooter — hidden from body */
+  /* Footer rendered via Puppeteer displayHeaderFooter - hidden from body */
   .footer { display: none; }
   .page-num { display: none; }
 
@@ -375,8 +375,8 @@ function signatureHTML(): string {
 function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number): string {
   const cliaP = (cliaError * 100).toFixed(1);
   const verdictText = overallPass
-    ? `PASS — ${passCount}/${totalCount} results within TEa of ±${cliaP}%`
-    : `FAIL — ${passCount}/${totalCount} results within TEa of ±${cliaP}%`;
+    ? `PASS - ${passCount}/${totalCount} results within TEa of +/-${cliaP}%`
+    : `FAIL - ${passCount}/${totalCount} results within TEa of +/-${cliaP}%`;
   return `
   <div class="eval-section">
     <hr class="divider">
@@ -407,8 +407,8 @@ function narrativeHTML(
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias — results trend slightly high at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias — results trend slightly low at upper concentrations`;
+        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias - results trend slightly high at upper concentrations`
+        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias - results trend slightly low at upper concentrations`;
     const interceptInterp = Math.abs(interceptVal) < cliaError * 100 * 0.1
       ? "a negligible constant offset"
       : interceptVal > 0
@@ -477,8 +477,8 @@ function narrativeHTML(
         narrative += `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
       if (isAdvanced && levels[0]?.withinRunCV !== undefined) {
-        const wrCV = levels[0].withinRunCV?.toFixed(2) ?? "—";
-        const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "—";
+        const wrCV = levels[0].withinRunCV?.toFixed(2) ?? "-";
+        const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "-";
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
@@ -542,7 +542,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   const dataRows = levelResults.map((r, ri) => {
     const instrCells = instrumentNames.map(n => {
       const v = r.instruments[n];
-      return v ? `<td class="text-right">${v.value.toFixed(3)}</td>` : `<td class="text-right">—</td>`;
+      return v ? `<td class="text-right">${v.value.toFixed(3)}</td>` : `<td class="text-right">-</td>`;
     }).join("");
     const pfClass = r.passFailMean === "Pass" ? "pass" : "fail";
     return `<tr class="${ri % 2 === 1 ? "stripe" : ""}">
@@ -822,11 +822,11 @@ function buildPrecisionHTML(study: Study, results: any): string {
       <tbody>${levelResults.map((r: any, i: number) => `
         <tr class="${i % 2 === 1 ? "stripe" : ""}">
           <td>${r.levelName}</td>
-          <td class="text-right">${r.withinRunSD?.toFixed(4) ?? "—"}</td>
-          <td class="text-right">${r.withinRunCV?.toFixed(2) ?? "—"}%</td>
-          <td class="text-right">${r.betweenRunCV?.toFixed(2) ?? "—"}%</td>
-          <td class="text-right">${r.betweenDayCV?.toFixed(2) ?? "—"}%</td>
-          <td class="text-right" style="font-weight:700">${r.totalCV?.toFixed(2) ?? "—"}%</td>
+          <td class="text-right">${r.withinRunSD?.toFixed(4) ?? "-"}</td>
+          <td class="text-right">${r.withinRunCV?.toFixed(2) ?? "-"}%</td>
+          <td class="text-right">${r.betweenRunCV?.toFixed(2) ?? "-"}%</td>
+          <td class="text-right">${r.betweenDayCV?.toFixed(2) ?? "-"}%</td>
+          <td class="text-right" style="font-weight:700">${r.totalCV?.toFixed(2) ?? "-"}%</td>
         </tr>`).join("")}
       </tbody>
     </table>` : "";
@@ -968,7 +968,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
     const pctDiffs = specimens.map((s: any) => s.pctDifference);
     const specimenNums = specimens.map((_: any, i: number) => i + 1);
 
-    const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} — Scatter`, true);
+    const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} - Scatter`, true);
     const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError);
 
     const summaryRows = `
@@ -996,12 +996,12 @@ function buildLotToLotHTML(study: Study, results: any): string {
       <div class="charts">${scatter}${diffPlot}</div>
       <hr class="divider">
       <table style="font-size:8pt;margin-bottom:8px"><tbody>${summaryRows}</tbody></table>
-      <div class="section-label">${cohort.cohort} — ${cohort.pass ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}</div>
+      <div class="section-label">${cohort.cohort} - ${cohort.pass ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}</div>
     `;
 
     cohortSections += `
       <div class="stats-section">
-        <div class="section-label">${cohort.cohort} Cohort — Individual Results</div>
+        <div class="section-label">${cohort.cohort} Cohort - Individual Results</div>
         <table>
           <thead><tr><th>Specimen</th><th class="text-right">Current Lot</th><th class="text-right">New Lot</th><th class="text-right">% Diff</th><th class="text-right">Pass?</th></tr></thead>
           <tbody>${dataRows}</tbody>
@@ -1042,7 +1042,7 @@ function geometricMean(values: number[]): number {
 function buildPTCoagHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
-  const { module1 = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true }, module2, module3 } = results;
+  const { module1 = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true }, module2 = { errorIndexResults: [], regression: { slope: 0, intercept: 0, r2: 0 }, pass: true, meanEI: 0, sdEI: 0, n: 0 }, module3 } = results;
 
   // Module 1 section
   const m1DataRows = (module1.specimens || []).map((s: any, i: number) => {
@@ -1061,7 +1061,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
       <span class="key">N:</span><span>${module1.n}</span>
       <span class="key">Geometric Mean PT:</span><span>${module1.geoMeanPT.toFixed(2)} sec</span>
       <span class="key">Geometric Mean INR:</span><span>${module1.geoMeanINR.toFixed(3)}</span>
-      <span class="key">ISI:</span><span>${rawData.module1?.isi ?? "—"}</span>
+      <span class="key">ISI:</span><span>${rawData.module1?.isi ?? "-"}</span>
       <span class="key">PT RI:</span><span>${module1.ptRI.low}–${module1.ptRI.high} sec</span>
       <span class="key">INR RI:</span><span>${module1.inrRI.low}–${module1.inrRI.high}</span>
       <span class="key">PT Outside RI:</span><span class="${module1.ptRIPass ? "pass" : "fail"}">${module1.ptOutsideRI}/${module1.n} (${module1.ptRIPass ? "PASS" : "FAIL"})</span>
@@ -1069,7 +1069,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
     </div>
   `;
 
-  // Module 2 section — Deming with Error Index
+  // Module 2 section - Deming with Error Index
   const m2 = module2 || { errorIndexResults: [], regression: { r: 0, slope: 1, intercept: 0, see: 0, n: 0 }, averageErrorIndex: 0, errorIndexRange: { min: 0, max: 0 }, pass: true, coverage: 100, tea: 0 };
   const m2EIResults = m2.errorIndexResults || [];
   const m2Scatter = scatterSVG(
@@ -1161,7 +1161,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
         </tbody>
       </table>
       <div class="stats-section">
-        <div class="section-label">Module 3 — Experimental Results</div>
+        <div class="section-label">Module 3 - Experimental Results</div>
         <table>
           <thead><tr><th>Specimen</th><th class="text-right">Old Lot</th><th class="text-right">New Lot</th><th class="text-right">Error Index</th><th class="text-right">Pass?</th></tr></thead>
           <tbody>${m3DataRows}</tbody>
@@ -1170,7 +1170,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
     `;
   } else {
     m3Section = `<div class="section-heading" style="page-break-before:always">Module 3: Old Lot vs New Lot Comparison</div>
-      <p style="font-size:9pt;color:${MUTED};margin:8px 0">Module 3 skipped — single analyzer lab.</p>`;
+      <p style="font-size:9pt;color:${MUTED};margin:8px 0">Module 3 skipped - single analyzer lab.</p>`;
   }
 
   // Narrative
@@ -1183,10 +1183,10 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   // Overall verdict
   const verdictHtml = `<div class="verdict ${results.overallPass ? "pass-bg" : "fail-bg"}" style="margin-top:12px">
-    Overall: ${overallVerdict} — Module 1: ${module1.pass ? "PASS" : "FAIL"}, Module 2: ${module2.pass ? "PASS" : "FAIL"}${module3 ? `, Module 3: ${module3.pass ? "PASS" : "FAIL"}` : ""}
+    Overall: ${overallVerdict} - Module 1: ${module1.pass ? "PASS" : "FAIL"}, Module 2: ${module2.pass ? "PASS" : "FAIL"}${module3 ? `, Module 3: ${module3.pass ? "PASS" : "FAIL"}` : ""}
   </div>`;
 
-  const reagentInfo = rawData.reagentLot ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "—"} · ISI: ${rawData.module1?.isi ?? "—"}</div>` : "";
+  const reagentInfo = rawData.reagentLot ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "-"} · ISI: ${rawData.module1?.isi ?? "-"}</div>` : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1203,7 +1203,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   ${m2Section}
   <div class="stats-section">
-    <div class="section-label">Module 2 — Experimental Results</div>
+    <div class="section-label">Module 2 - Experimental Results</div>
     <table>
       <thead><tr><th>Specimen</th><th class="text-right">Inst 1</th><th class="text-right">Inst 2</th><th class="text-right">Error Index</th><th class="text-right">Pass?</th></tr></thead>
       <tbody>${m2DataRows}</tbody>
@@ -1213,7 +1213,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   ${m3Section}
 
   <div class="stats-section">
-    <div class="section-label">Module 1 — Individual Results</div>
+    <div class="section-label">Module 1 - Individual Results</div>
     <table>
       <thead><tr><th>Specimen</th><th class="text-right">PT (sec)</th><th class="text-right">INR</th><th class="text-right">PT in RI?</th><th class="text-right">INR in RI?</th></tr></thead>
       <tbody>${m1DataRows}</tbody>
@@ -1261,8 +1261,8 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <td style="text-align:right">${lr.newMean.toFixed(2)}</td>
       <td style="text-align:right">${lr.newSD.toFixed(3)}</td>
       <td style="text-align:right">${lr.cv.toFixed(1)}%</td>
-      <td style="text-align:right">${lr.oldMean != null ? lr.oldMean.toFixed(2) : '—'}</td>
-      <td style="text-align:right;${lr.flagShift ? 'color:#dc2626;font-weight:600;' : ''}">${lr.pctDiffFromOld != null ? lr.pctDiffFromOld.toFixed(1) + '%' : '—'}${lr.flagShift ? ' ⚠' : ''}</td>
+      <td style="text-align:right">${lr.oldMean != null ? lr.oldMean.toFixed(2) : '-'}</td>
+      <td style="text-align:right;${lr.flagShift ? 'color:#dc2626;font-weight:600;' : ''}">${lr.pctDiffFromOld != null ? lr.pctDiffFromOld.toFixed(1) + '%' : '-'}${lr.flagShift ? ' ⚠' : ''}</td>
     </tr>`).join("");
 
   const narrative = `New QC ranges have been established for ${analytes.join(", ")}. ` +
@@ -1280,7 +1280,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <div class="eval-title">Narrative Summary</div>
       <div class="eval-text">${narrative}</div>
     </div>
-    <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot — the historical/peer-derived SD should be used for control limits.</div>
+    <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot - the historical/peer-derived SD should be used for control limits.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Results</div>
@@ -1312,16 +1312,16 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   const specimenRows = (r.specimens || []).map((s: any) => `
     <tr>
       <td>${s.specimenId}</td>
-      <td style="text-align:right">${s.ptNew != null ? s.ptNew.toFixed(1) : '—'}</td>
-      <td style="text-align:right">${s.ptNewINR != null ? s.ptNewINR.toFixed(2) : '—'}</td>
-      <td style="text-align:right">${s.ptOld != null ? s.ptOld.toFixed(1) : '—'}</td>
-      <td style="text-align:right">${s.ptPctDiff != null ? s.ptPctDiff.toFixed(1) + '%' : '—'}</td>
-      <td style="text-align:right">${s.apttNew != null ? s.apttNew.toFixed(1) : '—'}</td>
-      <td style="text-align:right">${s.apttOld != null ? s.apttOld.toFixed(1) : '—'}</td>
-      <td style="text-align:right">${s.apttPctDiff != null ? s.apttPctDiff.toFixed(1) + '%' : '—'}</td>
-      <td style="text-align:right">${s.fibNew != null ? s.fibNew.toFixed(1) : '—'}</td>
-      <td style="text-align:right">${s.fibOld != null ? s.fibOld.toFixed(1) : '—'}</td>
-      <td style="text-align:right">${s.fibPctDiff != null ? s.fibPctDiff.toFixed(1) + '%' : '—'}</td>
+      <td style="text-align:right">${s.ptNew != null ? s.ptNew.toFixed(1) : '-'}</td>
+      <td style="text-align:right">${s.ptNewINR != null ? s.ptNewINR.toFixed(2) : '-'}</td>
+      <td style="text-align:right">${s.ptOld != null ? s.ptOld.toFixed(1) : '-'}</td>
+      <td style="text-align:right">${s.ptPctDiff != null ? s.ptPctDiff.toFixed(1) + '%' : '-'}</td>
+      <td style="text-align:right">${s.apttNew != null ? s.apttNew.toFixed(1) : '-'}</td>
+      <td style="text-align:right">${s.apttOld != null ? s.apttOld.toFixed(1) : '-'}</td>
+      <td style="text-align:right">${s.apttPctDiff != null ? s.apttPctDiff.toFixed(1) + '%' : '-'}</td>
+      <td style="text-align:right">${s.fibNew != null ? s.fibNew.toFixed(1) : '-'}</td>
+      <td style="text-align:right">${s.fibOld != null ? s.fibOld.toFixed(1) : '-'}</td>
+      <td style="text-align:right">${s.fibPctDiff != null ? s.fibPctDiff.toFixed(1) + '%' : '-'}</td>
     </tr>`).join("");
 
   const sampleLabel = rawDP.sampleType === "normal" ? "normal" : "random";
@@ -1369,21 +1369,21 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   const historyRows = (entries || []).map((e: any) => `
     <tr style="${e.verdict === 'ACTION REQUIRED' ? 'background:#fef2f2;' : e.verdict === 'ACCEPT' ? 'background:#f0fdf4;' : ''}">
       <td>${e.year}</td>
-      <td>${e.old_lot_number || '—'}</td>
-      <td>${e.new_lot_number || '—'}</td>
-      <td style="text-align:right">${e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : '—'}</td>
-      <td style="text-align:right">${e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : '—'}</td>
-      <td style="text-align:right">${e.difference != null ? (e.difference >= 0 ? '+' : '') + Number(e.difference).toFixed(1) : '—'}</td>
-      <td style="text-align:right;font-weight:600">${e.cumsum != null ? Number(e.cumsum).toFixed(1) : '—'}</td>
-      <td style="${e.verdict === 'ACTION REQUIRED' ? 'color:#dc2626;font-weight:600' : e.verdict === 'ACCEPT' ? 'color:#059669;font-weight:600' : ''}">${e.verdict || '—'}</td>
+      <td>${e.old_lot_number || '-'}</td>
+      <td>${e.new_lot_number || '-'}</td>
+      <td style="text-align:right">${e.old_lot_geomean != null ? Number(e.old_lot_geomean).toFixed(1) : '-'}</td>
+      <td style="text-align:right">${e.new_lot_geomean != null ? Number(e.new_lot_geomean).toFixed(1) : '-'}</td>
+      <td style="text-align:right">${e.difference != null ? (e.difference >= 0 ? '+' : '') + Number(e.difference).toFixed(1) : '-'}</td>
+      <td style="text-align:right;font-weight:600">${e.cumsum != null ? Number(e.cumsum).toFixed(1) : '-'}</td>
+      <td style="${e.verdict === 'ACTION REQUIRED' ? 'color:#dc2626;font-weight:600' : e.verdict === 'ACCEPT' ? 'color:#059669;font-weight:600' : ''}">${e.verdict || '-'}</td>
     </tr>`).join("");
 
   let specimenSection = '';
   if (currentSpecimens && currentSpecimens.length > 0) {
-    const specRows = currentSpecimens.map((s: any) => `<tr><td>${s.specimenId}</td><td style="text-align:right">${s.oldLot || '—'}</td><td style="text-align:right">${s.newLot || '—'}</td></tr>`).join("");
+    const specRows = currentSpecimens.map((s: any) => `<tr><td>${s.specimenId}</td><td style="text-align:right">${s.oldLot || '-'}</td><td style="text-align:right">${s.newLot || '-'}</td></tr>`).join("");
     specimenSection = `
       <div style="page-break-before:always"></div>
-      <div style="font-size:9px;font-weight:600;margin:10px 0 6px">Current Lot Change — Specimen Data</div>
+      <div style="font-size:9px;font-weight:600;margin:10px 0 6px">Current Lot Change - Specimen Data</div>
       <table class="data-table"><thead><tr><th>Specimen ID</th><th style="text-align:right">Old Lot (sec)</th><th style="text-align:right">New Lot (sec)</th></tr></thead><tbody>${specRows}</tbody></table>`;
   }
 
@@ -1415,7 +1415,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
     <div class="eval-section">
       <hr class="divider">
       <div class="eval-title">Current Status</div>
-      <div class="eval-text">Current CumSum: <strong>${currentCumsum} sec</strong> — Verdict: <strong style="${currentVerdict === 'ACTION REQUIRED' ? 'color:#dc2626' : currentVerdict === 'ACCEPT' ? 'color:#059669' : ''}">${currentVerdict}</strong></div>
+      <div class="eval-text">Current CumSum: <strong>${currentCumsum} sec</strong> - Verdict: <strong style="${currentVerdict === 'ACTION REQUIRED' ? 'color:#dc2626' : currentVerdict === 'ACCEPT' ? 'color:#059669' : ''}">${currentVerdict}</strong></div>
       <div class="eval-text" style="margin-top:4px">Threshold: |CumSum| ≤ 7.0 seconds → ACCEPT. Exceeds threshold → ACTION REQUIRED (new Heparin Response Curve needed).</div>
       <div class="verdict" style="background:${currentVerdict === 'ACTION REQUIRED' ? '#fef2f2;border-color:#fca5a5;color:#dc2626' : '#f0fdf4;border-color:#86efac;color:#059669'}">${currentVerdict === 'ACTION REQUIRED' ? '✗ ACTION REQUIRED' : currentVerdict === 'ACCEPT' ? '✓ ACCEPT' : currentVerdict}</div>
     </div>
@@ -1555,7 +1555,7 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
     </tr>`;
   }).join("");
 
-  // Action items — only Needs Attention and Immediate Action
+  // Action items - only Needs Attention and Immediate Action
   const actionItems = items.filter(i => i.status === "Needs Attention" || i.status === "Immediate Action");
   const actionRows = actionItems.length > 0
     ? actionItems.map((item, idx) => {
@@ -1564,11 +1564,11 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
           <td>${item.id}</td>
           <td style="max-width:220px;word-wrap:break-word">${item.question}</td>
           <td><span style="background:${sc.bg};color:${sc.fg};padding:1px 6px;border-radius:3px;font-size:7pt;font-weight:600">${item.status}</span></td>
-          <td>${item.owner || "—"}</td>
-          <td>${item.due_date || "—"}</td>
+          <td>${item.owner || "-"}</td>
+          <td>${item.due_date || "-"}</td>
         </tr>`;
       }).join("")
-    : `<tr><td colspan="5" class="text-center" style="color:${MUTED};padding:12px">No action items — all assessed items are compliant.</td></tr>`;
+    : `<tr><td colspan="5" class="text-center" style="color:${MUTED};padding:12px">No action items - all assessed items are compliant.</td></tr>`;
 
   const overallColor = complianceRate >= 90 ? PASS : complianceRate >= 70 ? "#d97706" : FAIL;
 
@@ -1646,9 +1646,9 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
       return `<tr class="${idx % 2 === 1 ? "stripe" : ""}">
         <td>${item.id}</td>
         <td style="max-width:200px;word-wrap:break-word;font-size:7pt">${item.question}</td>
-        <td style="font-size:6.5pt">${item.tjc || "—"}</td>
-        <td style="font-size:6.5pt">${item.cap || "—"}</td>
-        <td style="font-size:6.5pt">${item.cfr || "—"}</td>
+        <td style="font-size:6.5pt">${item.tjc || "-"}</td>
+        <td style="font-size:6.5pt">${item.cap || "-"}</td>
+        <td style="font-size:6.5pt">${item.cfr || "-"}</td>
         <td><span style="background:${sc.bg};color:${sc.fg};padding:1px 5px;border-radius:3px;font-size:6.5pt;font-weight:600;white-space:nowrap">${item.status}</span></td>
         <td style="font-size:7pt">${item.owner || ""}</td>
         <td style="font-size:7pt">${item.due_date || ""}</td>
