@@ -777,7 +777,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     try {
-      const ExcelJS = await import("exceljs");
+      const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
 
       // ── Sheet 1: Compliance Map ──
@@ -1110,7 +1110,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     try {
-      const ExcelJS = await import("exceljs");
+      const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("VeritaScan");
 
@@ -1710,7 +1710,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     try {
-      const ExcelJS = await import("exceljs");
+      const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("CUMSUM");
 
@@ -2167,7 +2167,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     try {
-      const ExcelJS = await import("exceljs");
+      const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Compliance Map");
 
@@ -3938,7 +3938,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).all(req.userId) as any[];
 
     try {
-      const ExcelJS = await import("exceljs");
+      const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Certificates");
 
