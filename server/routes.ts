@@ -350,10 +350,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/auth/register", async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const { email, password, name } = parsed.data;
+    const { email, password, name, hipaa_acknowledged } = parsed.data;
+    if (!hipaa_acknowledged) return res.status(400).json({ error: "You must acknowledge the data use policy to create an account." });
     if (storage.getUserByEmail(email)) return res.status(409).json({ error: "Email already registered" });
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
+
+    // Save HIPAA acknowledgment
+    try {
+      (db as any).$client.prepare(
+        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ? WHERE id = ?"
+      ).run(new Date().toISOString(), user.id);
+    } catch {}
+
 
     // Check if this user was invited as a seat
     const seatInvite = (db as any).$client.prepare(

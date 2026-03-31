@@ -40,6 +40,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "" });
+  const [hipaaAcknowledged, setHipaaAcknowledged] = useState(false);
+  const [hipaaError, setHipaaError] = useState("");
 
   // CLIA lookup state
   const [regStep, setRegStep] = useState<"clia" | "form">("clia");
@@ -133,9 +135,14 @@ export default function LoginPage() {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    if (!hipaaAcknowledged) {
+      setHipaaError("You must agree to the data use policy to create an account.");
+      return;
+    }
+    setHipaaError("");
     setLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/auth/register", registerForm);
+      const res = await apiRequest("POST", "/api/auth/register", { ...registerForm, hipaa_acknowledged: true });
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Registration failed", variant: "destructive" }); return; }
 
@@ -311,7 +318,21 @@ export default function LoginPage() {
                     <div className="space-y-1.5"><Label>Full Name</Label><Input value={registerForm.name} onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required /></div>
                     <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
                     <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 6 characters" required /></div>
-                    <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">{loading ? "Creating account..." : "Create Account"}</Button>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hipaaAcknowledged}
+                          onChange={e => { setHipaaAcknowledged(e.target.checked); if (e.target.checked) setHipaaError(""); }}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+                        />
+                        <span className="text-sm text-foreground leading-relaxed">
+                          I understand that VeritaAssure&#8482; is not a HIPAA-covered platform and is not designed to store, process, or transmit protected health information (PHI). I agree to use only de-identified data, sample IDs, QC lot numbers, and non-patient-identifiable information when entering data into any VeritaAssure&#8482; module.
+                        </span>
+                      </label>
+                      {hipaaError && <p className="text-sm text-red-600">{hipaaError}</p>}
+                    </div>
+                    <Button type="submit" disabled={loading || !hipaaAcknowledged} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">{loading ? "Creating account..." : "Create Account"}</Button>
                     <button type="button" onClick={() => { setRegStep("clia"); setCliaConfirmed(false); setSkipClia(false); }} className="text-xs text-muted-foreground hover:underline w-full text-center">
                       Back to CLIA lookup
                     </button>

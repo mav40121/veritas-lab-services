@@ -179,6 +179,7 @@ export default function VeritaCheckPage() {
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountError, setDiscountError] = useState("");
   const [cliaModalOpen, setCliaModalOpen] = useState(false);
+  const [phiBannerDismissed, setPhiBannerDismissed] = useState(false);
 
   // Check URL params for payment result after Stripe redirect
   useEffect(() => {
@@ -299,6 +300,9 @@ export default function VeritaCheckPage() {
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<{ name: string; category: string }[]>([]);
   const [veritaMapLoaded, setVeritaMapLoaded] = useState(false);
+
+  // Reset PHI banner when study type changes (new study started)
+  useEffect(() => { setPhiBannerDismissed(false); }, [studyType]);
 
   // Fetch VeritaMap instruments for method_comparison smart dropdown
   useEffect(() => {
@@ -956,6 +960,14 @@ export default function VeritaCheckPage() {
             </TabsContent>
 
             <TabsContent value="data">
+              {!phiBannerDismissed && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded p-3 text-sm mb-4 flex items-start justify-between gap-3">
+                  <span>Reminder: Do not enter patient names, MRNs, dates of birth, or any other protected health information. Use sample IDs only (e.g. S1, S2, or your internal specimen numbering).</span>
+                  <button onClick={() => setPhiBannerDismissed(true)} className="shrink-0 text-amber-600 hover:text-amber-900" aria-label="Dismiss">
+                    <XCircle size={16} />
+                  </button>
+                </div>
+              )}
               {studyType === "lot_to_lot" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base">Lot-to-Lot Verification Data Entry</CardTitle></CardHeader>

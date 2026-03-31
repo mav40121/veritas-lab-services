@@ -495,6 +495,14 @@ if (!colNames.includes("onboarding_seen")) {
   sqlite.exec("ALTER TABLE users ADD COLUMN onboarding_seen INTEGER DEFAULT 0");
 }
 
+// Add HIPAA acknowledgment columns
+if (!colNames.includes("hipaa_acknowledged")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN hipaa_acknowledged INTEGER DEFAULT 0"); } catch {}
+}
+if (!colNames.includes("hipaa_acknowledged_at")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN hipaa_acknowledged_at TEXT"); } catch {}
+}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);

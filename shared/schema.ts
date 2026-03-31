@@ -20,7 +20,7 @@ export const users = sqliteTable("users", {
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, passwordHash: true, createdAt: true, plan: true, studyCredits: true, hasCompletedOnboarding: true });
 export const loginSchema = z.object({ email: z.string().email(), password: z.string().min(6) });
-export const registerSchema = z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1) });
+export const registerSchema = z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1), hipaa_acknowledged: z.boolean().optional() });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
