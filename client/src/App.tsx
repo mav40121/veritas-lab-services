@@ -89,7 +89,7 @@ function SiteFooter() {
         <div className="border-t border-border pt-4 mb-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
             <strong>Disclaimer:</strong> VeritaCheck is a statistical analysis tool intended for use by qualified laboratory professionals.
-            Results require interpretation by a licensed laboratory director or clinical consultant and do not constitute medical advice, diagnosis, or treatment.
+            Results require interpretation by a licensed medical director or designee and do not constitute medical advice, diagnosis, or treatment.
             Veritas Lab Services, LLC assumes no liability for clinical decisions made based on VeritaCheck output.
             By using this tool you agree to our{" "}
             <a href="/#/terms" className="text-primary hover:underline">Terms of Service</a>{" "}and{" "}

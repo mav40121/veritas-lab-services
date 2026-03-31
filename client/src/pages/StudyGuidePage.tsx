@@ -21,17 +21,17 @@ const REFS = {
   },
   cfr493931: {
     label: "42 CFR §493.931 - Calibration Verification",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
     source: "eCFR",
   },
   cfr493933: {
     label: "42 CFR §493.933 - Method Comparison & Bias",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.933",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.933",
     source: "eCFR",
   },
   cfr493941: {
     label: "42 CFR §493.941 - Precision & Accuracy",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.941",
     source: "eCFR",
   },
   clsiEP6: {

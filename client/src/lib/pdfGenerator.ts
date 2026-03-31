@@ -254,7 +254,7 @@ function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
     doc.setPage(p);
     hLine(doc, pageH-12);
     doc.setFontSize(5.5); setRgb(doc, [160,160,160] as [number,number,number]);
-    doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.", margin, pageH-16, { maxWidth: cw });
+    doc.text("VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.", margin, pageH-16, { maxWidth: cw });
     doc.setFontSize(6.5); setRgb(doc, MUTED);
     doc.text(`VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
     doc.text(`Page ${p}`, pw-margin, pageH-8, { align: "right" });
@@ -295,17 +295,17 @@ function pdfSupportingPage(doc: jsPDF, study: Study, instrumentNames: string[], 
   hLine(doc, y); y += 6;
 
   const cliaP = (study.cliaAllowableError*100).toFixed(1);
-  // Map CFR section from study's stored cfr field, fall back to §493 Subpart I
+  // Map CFR section from study's stored cfr field, fall back to §493.931
   // The cfr field is stored on the study from the preset selection
   const storedCfr: string = (study as any).cfr || "";
-  let cfrCitation = storedCfr || "42 CFR §493 Subpart I";
+  let cfrCitation = storedCfr || "42 CFR §493.931";
   const cfrSectionMap: { [key: string]: string } = {
-    "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931",
-    "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.933",
-    "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.935",
-    "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941",
+    "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
+    "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.933",
+    "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.935",
+    "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.941",
   };
-  const cfrUrl = cfrSectionMap[cfrCitation] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I";
+  const cfrUrl = cfrSectionMap[cfrCitation] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931";
 
   // Two-column layout: specs left, supporting right
   doc.setFontSize(8); doc.setFont("helvetica","bold"); setRgb(doc, DARK);

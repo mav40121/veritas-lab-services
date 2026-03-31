@@ -21,7 +21,7 @@ import type { InsertStudy } from "@shared/schema";
 
 const API_BASE = "https://www.veritaslabservices.com";
 
-// CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart I)
+// CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart K)
 const CLIA_PRESETS = [
   // ── Routine Chemistry §493.931 ──────────────────────────────────────────
   { label: "ALT/SGPT (±15% or ±6 U/L)",              value: 0.15,  cfr: "42 CFR §493.931" },
