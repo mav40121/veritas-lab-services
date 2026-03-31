@@ -117,19 +117,12 @@ export default function BookPage() {
                 <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure and the VeritaCheck, VeritaMap, VeritaScan, and VeritaComp compliance software suite. The same knowledge that built the software is in this book.
               </p>
 
-              <div className="flex flex-wrap gap-3 mb-8">
+              <div className="flex items-center gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">$69</div>
                   <div className="text-xs text-muted-foreground">Book only</div>
                 </div>
-                <div className="bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-center relative">
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-amber-500 text-white border-0 text-xs">Best Value</Badge>
-                  </div>
-                  <div className="text-2xl font-bold">from $499<span className="text-sm font-normal opacity-80">/yr</span></div>
-                  <div className="text-xs opacity-80">VeritaAssure&#8482; Suite + Book Included</div>
-                  <div className="text-xs opacity-60">Book included free with any annual plan</div>
-                </div>
+                <span className="text-sm text-muted-foreground">or included free with any VeritaAssure&#8482; annual plan</span>
               </div>
               <NotifyForm />
             </div>
@@ -347,83 +340,55 @@ export default function BookPage() {
       </section>
 
       {/* Pricing / bundles */}
-      <section className="section-padding border-b border-border">
+      <section id="pricing" className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
-          <p className="text-muted-foreground mb-8">Choose the option that fits your needs.</p>
-          <div className="grid sm:grid-cols-2 gap-6 max-w-2xl">
+          <h2 className="font-serif text-3xl font-bold mb-2">Pricing Options</h2>
+          <p className="text-muted-foreground mb-8">Two ways to get the book:</p>
+          <div className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
 
-            {/* Book only */}
-            <Card className="border-2 border-border">
-              <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Book Only</div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-4xl font-bold">$69</span>
+            {/* Card 1: Book Only */}
+            <Card className="border-2 border-border flex flex-col">
+              <CardContent className="p-6 flex flex-col flex-1">
+                <div className="font-bold text-lg mb-4">Book Only</div>
+                <div className="flex items-baseline gap-1 mb-4">
+                  <span className="text-5xl font-bold text-foreground">$69</span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-5">
-                  The complete Lab Management 101 guide: all 16 chapters, surveyor callouts, and worked examples.
+                <p className="text-sm text-muted-foreground mb-6 flex-1">
+                  Digital copy of Lab Management 101. Available when the book launches.
                 </p>
-                <ul className="space-y-2 mb-6">
-                  {["Complete 16-chapter guide", "Surveyor Callout boxes throughout", "Worked examples with real numbers", "Regulatory citations for every claim"].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  disabled
-                  className="w-full border border-border rounded-lg py-2.5 text-sm font-semibold text-muted-foreground bg-muted/50 cursor-not-allowed"
+                <a
+                  href="#notify"
+                  className="w-full border-2 border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center block hover:bg-primary/5 transition-colors"
                 >
-                  Available Soon
-                </button>
+                  Notify Me
+                </a>
               </CardContent>
             </Card>
 
-            {/* Book + Professional Plan */}
-            <Card className="border-2 border-primary bg-primary/5 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="bg-primary text-primary-foreground">Best Value</Badge>
+            {/* Card 2: Book + VeritaAssure Suite */}
+            <Card className="border-2 border-primary flex flex-col shadow-md relative">
+              <div className="absolute -top-3 left-4">
+                <Badge className="bg-amber-500 text-white border-0 text-xs">Best Value</Badge>
               </div>
-              <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">Best Value: VeritaAssure&#8482; Suite + Book Included</div>
-                <div className="flex items-baseline gap-2 mb-1">
+              <CardContent className="p-6 flex flex-col flex-1">
+                <div className="font-bold text-lg mb-4">Book + Full Suite</div>
+                <div className="flex items-baseline gap-1 mb-4">
                   <span className="text-sm text-muted-foreground">from</span>
-                  <span className="text-4xl font-bold">$499</span>
+                  <span className="text-5xl font-bold text-foreground">$499</span>
                   <span className="text-sm text-muted-foreground">/yr</span>
                 </div>
-                <div className="text-xs text-muted-foreground mb-3">Book included free with any annual plan</div>
-                <p className="text-sm text-muted-foreground mb-5">
-                  Full VeritaAssure&#8482; suite (VeritaCheck&#8482;, VeritaMap&#8482;, VeritaScan&#8482;, VeritaComp&#8482;) plus Lab Management 101 at no extra cost. Tier-based pricing from your CLIA certificate.
+                <p className="text-sm text-muted-foreground mb-6 flex-1">
+                  Lab Management 101 included free with any VeritaAssure&#8482; annual plan.
                 </p>
-                <ul className="space-y-2 mb-6">
-                  {[
-                    "Lab Management 101 included at no extra cost",
-                    "Full VeritaAssure suite access for 1 year",
-                    "VeritaCheck, VeritaMap, VeritaScan, VeritaComp",
-                    "Unlimited studies and PDF reports",
-                    "Priority support",
-                  ].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
                 <Link
                   href="/veritacheck#pricing"
                   className="w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center block transition-colors"
                 >
-                  Get Professional Plan
+                  View Plans
                 </Link>
               </CardContent>
             </Card>
           </div>
-          <p className="text-xs text-muted-foreground mt-5">
-            Notify us at{" "}
-            <a href="mailto:info@veritaslabservices.com?subject=Lab Management 101 - Purchase Inquiry" className="text-primary hover:underline">
-              info@veritaslabservices.com
-            </a>{" "}
-            if you'd like to be contacted when the book is available.
-          </p>
         </div>
       </section>
 
@@ -476,7 +441,7 @@ export default function BookPage() {
       </section>
 
       {/* Bottom CTA */}
-      <section className="section-padding">
+      <section id="notify" className="section-padding">
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Be the first to know</h2>
           <p className="text-muted-foreground mb-6">
