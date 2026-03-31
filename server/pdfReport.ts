@@ -1850,6 +1850,40 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     <div class="note">Evaluator must be Lab Director, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>
   </div>`;
 
+  // ─── Assessment Summary Table (compact, page 1) ───
+  if (isTechnical) {
+    const summaryElements = [
+      { num: 1, name: "Direct Observation of Routine Patient Test Performance" },
+      { num: 2, name: "Monitoring, Recording and Reporting of Test Results" },
+      { num: 3, name: "QC Performance" },
+      { num: 4, name: "Direct Observation of Instrument Maintenance" },
+      { num: 5, name: "Blind / PT Sample Performance" },
+      { num: 6, name: "Problem-Solving Assessment (Quiz)" },
+    ];
+    const summaryRows = summaryElements.map(el => {
+      const elItems = items.filter((i: any) => (i.element_number || i.method_number) === el.num);
+      const allPass = elItems.length > 0 && elItems.every((i: any) => i.passed);
+      const statusLabel = elItems.length === 0 ? "N/A" : allPass ? "PASS" : "FAIL";
+      const statusColor = statusLabel === "PASS" ? "#437A22" : statusLabel === "FAIL" ? "#A12C7B" : "#888";
+      return `<tr>
+        <td style="text-align:center;width:5%;font-weight:600;">${el.num}</td>
+        <td style="width:80%;">${el.name}</td>
+        <td style="text-align:center;width:15%;font-weight:700;color:${statusColor}">${statusLabel}</td>
+      </tr>`;
+    }).join("");
+
+    html += `<div style="margin:10px 24px;">
+      <table style="width:100%;border-collapse:collapse;font-size:9pt;">
+        <tr style="background:#01696F;color:white;">
+          <th style="padding:4px 6px;text-align:center;font-size:7.5pt;font-weight:600;width:5%;">#</th>
+          <th style="padding:4px 6px;text-align:left;font-size:7.5pt;font-weight:600;width:80%;">Element</th>
+          <th style="padding:4px 6px;text-align:center;font-size:7.5pt;font-weight:600;width:15%;">Status</th>
+        </tr>
+        ${summaryRows}
+      </table>
+    </div>`;
+  }
+
   // PASS/FAIL/REMEDIATION box
   const verdictBg = assessment.status === "pass" ? "#dcfce7" : assessment.status === "fail" ? "#fce7f3" : "#fef3c7";
   html += `<div class="verdict-box" style="background:${verdictBg}">

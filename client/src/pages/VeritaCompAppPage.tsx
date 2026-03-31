@@ -1084,6 +1084,48 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                   </Button>
                 </div>
               </div>
+              {/* 6-element summary table */}
+              {a.items && a.items.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="text-xs font-semibold mb-2">6 CLIA Competency Elements</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-muted-foreground border-b">
+                          <th className="text-left py-1 pr-2">#</th>
+                          <th className="text-left py-1 pr-2">Element</th>
+                          <th className="text-center py-1">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { num: 1, name: "Direct Observation of Routine Patient Test Performance" },
+                          { num: 2, name: "Monitoring, Recording and Reporting of Test Results" },
+                          { num: 3, name: "QC Performance" },
+                          { num: 4, name: "Direct Observation of Instrument Maintenance" },
+                          { num: 5, name: "Blind / PT Sample Performance" },
+                          { num: 6, name: "Problem-Solving Assessment (Quiz)" },
+                        ].map(el => {
+                          const elItems = (a.items || []).filter((i: AssessmentItem) => (i.method_number) === el.num);
+                          const allPass = elItems.length > 0 && elItems.every((i: AssessmentItem) => i.passed);
+                          const statusLabel = elItems.length === 0 ? "N/A" : allPass ? "PASS" : "FAIL";
+                          return (
+                            <tr key={el.num} className="border-b border-border/50">
+                              <td className="py-1 pr-2">{el.num}</td>
+                              <td className="py-1 pr-2">{el.name}</td>
+                              <td className="py-1 text-center">
+                                <Badge className={statusLabel === "PASS" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]" : statusLabel === "FAIL" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]" : "bg-muted text-muted-foreground text-[10px]"}>
+                                  {statusLabel}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
