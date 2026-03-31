@@ -1412,7 +1412,7 @@ const FOOTER_TEMPLATE = `
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential - For Internal Lab Use Only</span>
+      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential &mdash; For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
@@ -2085,7 +2085,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     <div class="title">Employee Acknowledgement</div>
     <div class="text">Prior to performing laboratory duties, the following are completed:</div>
     <ul>
-      <li>The laboratory director or supervisor documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
+      <li>The laboratory director or designee documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
       <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
     </ul>
     <div class="sig-grid">
@@ -2335,7 +2335,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
 const COMPETENCY_FOOTER = `<div style="width:100%;padding:4px 15mm;font-family:sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure\u2122 | VeritaComp\u2122 | Confidential - For Internal Lab Use Only</span>
+      <span>VeritaAssure\u2122 | VeritaComp\u2122 | Confidential \u2014 For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>

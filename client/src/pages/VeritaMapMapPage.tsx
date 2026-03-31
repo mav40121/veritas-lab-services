@@ -694,7 +694,7 @@ function TestRow({ test, onChange, onRowMount }: TestRowProps) {
             >
               <Link href="/veritacheck">
                 <FlaskConical size={10} className="mr-1" />
-                Run Cal Ver →
+                Run Cal Verification →
               </Link>
             </Button>
           )}
@@ -1154,7 +1154,7 @@ export default function VeritaMapMapPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-0.5 h-3 rounded-full bg-amber-400" />
-              Cal Ver overdue
+              Cal Verification overdue
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-0.5 h-3 rounded-full bg-emerald-400/60" />
@@ -1189,10 +1189,10 @@ export default function VeritaMapMapPage() {
                     </span>
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Cal Ver
+                    Cal Verification
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Method Comp
+                    Method Comparison
                   </th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                     Precision
@@ -1232,7 +1232,7 @@ export default function VeritaMapMapPage() {
 
           {/* Footer */}
           <p className="text-[10px] text-muted-foreground mt-3">
-            Changes auto-save after 1.5 seconds. Cal Ver and Method Comp required
+            Changes auto-save after 1.5 seconds. Calibration Verification and Correlation / Method Comparison required
             for non-waived tests (42 CFR §493.1255). SOP review cadence: 2 years.
             Correlations required when 2+ instruments run the same analyte (42 CFR
             §493.1213).

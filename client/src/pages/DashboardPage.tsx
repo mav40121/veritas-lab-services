@@ -107,7 +107,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm truncate">{study.testName}</span>
                     <Badge variant="outline" className="text-xs shrink-0">
-                      {study.studyType === "cal_ver" ? "Cal Ver / Linearity" : study.studyType === "precision" ? "Precision (EP15)" : "Correlation / Method Comp"}
+                      {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision (EP15)" : "Correlation / Method Comparison"}
                     </Badge>
                     <span className={`text-xs font-semibold ${study.status === "pass" ? "pass-badge" : "fail-badge"}`}>
                       {study.status.toUpperCase()}

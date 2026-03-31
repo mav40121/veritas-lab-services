@@ -2093,7 +2093,7 @@ function NewAssessmentDialog({
             <div className="text-xs font-bold text-primary mb-2">Employee Acknowledgement</div>
             <p className="text-[10px] text-muted-foreground leading-relaxed mb-1">Prior to performing laboratory duties, the following are completed:</p>
             <ul className="text-[10px] text-muted-foreground list-disc ml-4 mb-3 space-y-0.5">
-              <li>The laboratory director or supervisor documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
+              <li>The laboratory director or designee documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
               <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
             </ul>
             <div className="grid grid-cols-2 gap-4">

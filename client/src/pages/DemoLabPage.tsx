@@ -116,8 +116,8 @@ export default function DemoLabPage() {
   ];
 
   const typeLabel: Record<string, string> = {
-    method_comparison: "Method Comparison",
-    cal_ver: "Cal Ver / Linearity",
+    method_comparison: "Correlation / Method Comparison",
+    cal_ver: "Calibration Verification / Linearity",
     precision: "Accuracy & Precision",
     lot_to_lot: "Lot-to-Lot",
     pt_coag: "PT/Coag",

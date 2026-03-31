@@ -1320,8 +1320,8 @@ export default function StudyResults() {
     );
   }
 
-  // Gate: PT/Coag New Lot Validation is Coming Soon — pending regulatory review
-  if (study.studyType === "pt_coag") {
+  // PT/Coag is now unlocked
+  if (false && study.studyType === "pt_coag") {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center">
         <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 px-3 py-1 text-sm font-semibold mb-4">Coming Soon</Badge>

@@ -974,7 +974,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Unit of Measure", "Reference Range", "AMR",
         "Critical Low (Mayo Clinic Laboratories)", "Critical High (Mayo Clinic Laboratories)", "Critical Value Units (Mayo Clinic Laboratories)",
         "Lab Critical Low", "Lab Critical High", "Lab AMR Low", "Lab AMR High",
-        "Last Cal Ver Date", "Cal Ver Status", "Last Method Comp Date", "Method Comp Status",
+        "Last Calibration Verification Date", "Calibration Verification Status", "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
         "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
         "Notes",
       ];
@@ -982,7 +982,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Column widths
       const colWidths = [
         22, 55, 18, 20, 14, 22, 14, 20, 24, 25, 20, 22, 22, 18, 14, 14, 12, 12,
-        18, 18, 18, 18, 18, 18, 18, 18, 18,
+        30, 28, 36, 36, 18, 18, 18, 18, 18,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
 
@@ -1574,7 +1574,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   </ul>
   <p>While you're here, two free resources worth bookmarking:</p>
   <a href="https://www.veritaslabservices.com/#/resources/clia-tea-lookup" class="cta">CLIA TEa Lookup Tool</a>
-  <a href="https://www.veritaslabservices.com/#/resources/clia-calibration-verification-method-comparison" class="cta-outline">Cal Ver Guide</a>
+  <a href="https://www.veritaslabservices.com/#/resources/clia-calibration-verification-method-comparison" class="cta-outline">Calibration Verification Guide</a>
   <hr class="divider">
   <p class="sig">
     Michael Veri, MS, MBA, MLS(ASCP), CPHQ<br>
@@ -2506,9 +2506,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const headers = [
         "Analyte", "Instruments", "Department", "Specialty", "Complexity",
         "Number of Instruments", "Correlation Required",
-        "Last Cal Ver Date", "Last Method Comp Date", "Last Precision Date", "Notes",
+        "Last Calibration Verification Date", "Last Correlation / Method Comparison Date", "Last Precision Date", "Notes",
       ];
-      const colWidths = [22, 55, 18, 20, 14, 22, 20, 18, 18, 18, 30];
+      const colWidths = [22, 55, 18, 20, 14, 22, 20, 30, 36, 18, 30];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
 
       const dataRows = tests.map((t: any) => {
