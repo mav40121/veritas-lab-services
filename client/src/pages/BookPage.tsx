@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookOpen, CheckCircle2, FlaskConical, Users, Award, Mic, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 const CHAPTERS = [
   "Understanding US Lab Law",
@@ -31,6 +32,7 @@ const CREDENTIALS = [
 ];
 
 function NotifyForm() {
+  const { toast } = useToast();
   return (
     <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 text-center">
       <div className="text-2xl mb-2">📬</div>
@@ -41,8 +43,18 @@ function NotifyForm() {
       <form
         onSubmit={e => {
           e.preventDefault();
-          const email = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
-          window.location.href = `mailto:info@veritaslabservices.com?subject=Lab Management 101 - Notify Me&body=Please notify me when the book is available. My email is: ${email}`;
+          const input = e.currentTarget.elements.namedItem("email") as HTMLInputElement;
+          const email = input.value;
+          fetch("/api/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, source: "book" }),
+          }).catch(() => {});
+          toast({
+            title: "You're on the list!",
+            description: "We'll notify you when Lab Management 101 launches.",
+          });
+          input.value = "";
         }}
         className="flex gap-2 max-w-sm mx-auto"
       >
@@ -114,7 +126,7 @@ export default function BookPage() {
                 Every laboratory director knows the feeling: degrees earned, certifications passed, years logged, and still unprepared for the actual job. The regulations read like a foreign language. The C-suite speaks finance, not science. Accreditors are coming. There is no manual.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure and the VeritaCheck, VeritaMap, VeritaScan, and VeritaComp compliance software suite. The same knowledge that built the software is in this book.
+                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure and VeritaCheck, VeritaMap, VeritaScan, and VeritaComp compliance software suite. The same knowledge that built the software is in this book.
               </p>
 
               <div className="flex items-center gap-3 mb-8">
@@ -207,6 +219,7 @@ export default function BookPage() {
                   <div className="text-xs text-white/70 mb-3">A Guide to Laboratory Leadership</div>
                   <div className="w-8 h-0.5 bg-white/40 mb-2" />
                   <div className="text-xs font-semibold">Michael Veri</div>
+                  <div className="text-[9px] text-white/60 mt-0.5">MS, MBA, MLS(ASCP), CPHQ</div>
                 </div>
                 <div className="font-semibold text-sm mb-1">Lab Management 101</div>
                 <p className="text-xs text-muted-foreground">The regulatory landscape, C-suite relationships, and career development framework that no MLS or MBA program offers.</p>

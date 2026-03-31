@@ -8,29 +8,29 @@ interface RoadmapItem {
 
 const completedItems: RoadmapItem[] = [
   {
-    title: "VeritaCheck\u2122 \u2014 Method Validation Suite",
+    title: "VeritaCheck\u2122 - Method Validation Suite",
     description:
       "Runs EP studies required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, QC range establishment, and multi-analyte comparison. Generates compliant PDF reports with statistical tables.",
   },
   {
-    title: "VeritaMap\u2122 \u2014 Laboratory Test Menu Mapping",
+    title: "VeritaMap\u2122 - Laboratory Test Menu Mapping",
     description:
       "Builds a complete instrument and test menu inventory for your lab. Maps 190+ instruments across all specialties, pulls Mayo Clinic Laboratories reference ranges, critical values, and AMR. Exports a formatted Excel workbook with compliance tracking. Free tier available.",
   },
   {
-    title: "VeritaScan\u2122 \u2014 Inspection Readiness Checklist",
+    title: "VeritaScan\u2122 - Inspection Readiness Checklist",
     description:
       "168-item checklist covering the most commonly cited TJC and CAP standards. Walks through every major inspection domain, tracks completion status, and exports results to Excel. Built for pre-survey walkthroughs and ongoing readiness monitoring.",
   },
   {
-    title: "VeritaLab\u2122 \u2014 Certificate and Accreditation Tracking",
+    title: "VeritaLab\u2122 - Certificate and Accreditation Tracking",
     description:
       "Tracks CLIA certificates, CAP accreditation, TJC accreditation, state licenses, and lab director credentials. Sends advance renewal reminders at 9 months, 6 months, 3 months, 30 days, and expiration. Stores certificate documents for instant retrieval during surveys.",
   },
   {
     title: "CLIA-Based Account Verification",
     description:
-      "Every account is tied to a specific CLIA certificate. Lab tier and pricing are determined automatically by certificate type and specialty count. No self-reporting required.",
+      "Every account is tied to a specific CLIA certificate. Lab tier and pricing are determined automatically by certificate type and specialty count. Your pricing tier is automatically determined by your CLIA certificate, no self-reporting, no manual verification required.",
   },
   {
     title: "VeritaAssure\u2122 Consulting Services",
@@ -41,17 +41,12 @@ const completedItems: RoadmapItem[] = [
 
 const inProgressItems: RoadmapItem[] = [
   {
-    title: "VeritaComp\u2122 \u2014 Competency Assessment Management",
+    title: "VeritaComp\u2122 - Competency Assessment Management (Phase 1)",
     description:
-      "Manages all three CLIA competency types: technical (6-element assessment per method group), waived (2-of-4 method selection), and non-technical (supervisor checklist). Generates compliant PDF records with per-element documentation fields. Active refinement ongoing based on TJC, CAP, and CLIA surveyor expectations.",
+      "Manages all three CLIA competency types: technical (6-element assessment per method group), waived (2-of-4 method selection), and non-technical (supervisor checklist). Generates compliant PDF records with per-element documentation fields. Problem-solving quiz engine in active development, requires 100% score and appends full quiz record to the competency PDF.",
   },
   {
-    title: "VeritaComp\u2122 \u2014 Problem-Solving Quiz Engine",
-    description:
-      "Element 6 of the technical competency assessment requires documented problem-solving evaluation. The quiz engine delivers instrument-specific questions per method group, requires 100% to pass, and appends the full question-and-answer record to the competency PDF. Question banks are being expanded by instrument and specialty.",
-  },
-  {
-    title: "VeritaStaff\u2122 \u2014 Personnel and Credentialing Management",
+    title: "VeritaStaff\u2122 - Personnel and Credentialing Management",
     description:
       "Manages laboratory employee records with CLIA role assignments (LD, TC, TS, GS, TP). Tracks qualification requirements by role and complexity. Generates CMS 209 documentation. Competency timeline engine tracks initial, 6-month, and annual assessment due dates.",
   },
@@ -59,17 +54,17 @@ const inProgressItems: RoadmapItem[] = [
 
 const comingSoonItems: RoadmapItem[] = [
   {
-    title: "VeritaComp\u2122 \u2014 Expanded Instrument Question Banks",
+    title: "VeritaComp\u2122 - Expanded Question Banks (Phase 2)",
     description:
       "Pre-built problem-solving questions for every major instrument and specialty. Chemistry, hematology, coagulation, blood bank, microbiology, urinalysis, and point-of-care. Required to fully activate Element 6 across all method groups.",
   },
   {
-    title: "VeritaPT\u2122 \u2014 Proficiency Testing Tracker",
+    title: "VeritaPT\u2122 - Proficiency Testing Tracker",
     description:
       "Tracks PT enrollment, survey results, and corrective actions by analyte and specialty. Monitors unacceptable results, identifies trends, and generates documentation for surveyor review.",
   },
   {
-    title: "VeritaLab\u2122 \u2014 Director and Staff Credential Tracking",
+    title: "VeritaLab\u2122 - Director and Staff Credential Tracking",
     description:
       "Extends certificate tracking to individual staff credentials: MT/MLS licensure, specialty certifications, and continuing education requirements. Flags expiring credentials before they create compliance gaps.",
   },
