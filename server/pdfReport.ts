@@ -362,7 +362,7 @@ function footerHTML(): string {
 function directorReviewHTML(): string {
   return `
   <div style="margin-top:18px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:12px 14px;background:#FAFAF8;">
-    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director Review</div>
+    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
     <p style="font-size:7.5pt;color:#28251D;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
     <div style="font-size:8pt;color:#28251D;margin-bottom:4px;">
       <span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
@@ -382,23 +382,6 @@ function directorReviewHTML(): string {
   </div>`;
 }
 
-// ─── Signature block HTML ─────────────────────────────────────────────────────
-function signatureHTML(): string {
-  return `
-  <div class="signature-block">
-    <div class="accepted-label">Accepted by:</div>
-    <div class="sig-lines">
-      <div class="sig-line" style="flex:2">
-        <div class="line"></div>
-        <div class="label">Signature / Name &amp; Title</div>
-      </div>
-      <div class="sig-line sig-date">
-        <div class="line"></div>
-        <div class="label">Date</div>
-      </div>
-    </div>
-  </div>`;
-}
 
 // ─── Evaluation section HTML ──────────────────────────────────────────────────
 function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number): string {
@@ -622,7 +605,6 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName)}
 
   ${directorReviewHTML()}
-  ${signatureHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
 
@@ -861,7 +843,6 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
 
   ${directorReviewHTML()}
-  ${signatureHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
 
@@ -975,7 +956,6 @@ function buildPrecisionHTML(study: Study, results: any): string {
   ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName)}
 
   ${directorReviewHTML()}
-  ${signatureHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
 
@@ -1160,7 +1140,6 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
   ${narrative}
   ${directorReviewHTML()}
-  ${signatureHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
 
@@ -1363,7 +1342,6 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   ${narrative}
   ${directorReviewHTML()}
-  ${signatureHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
 
@@ -1451,7 +1429,6 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <div class="eval-text">${narrative}</div>
     </div>
     ${directorReviewHTML()}
-    ${signatureHTML()}
     <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
@@ -1520,7 +1497,6 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
     </div>
     ${isiNote}
     ${directorReviewHTML()}
-    ${signatureHTML()}
     <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
@@ -1586,13 +1562,6 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
     </div>
     <div class="report-title">CUMSUM Tracker - ${tracker.instrument_name} (${tracker.analyte})</div>
     <hr class="divider">
-    <div class="signature-block">
-      <div class="accepted-label">Accepted by:</div>
-      <div class="sig-lines">
-        <div class="sig-line" style="flex:2"><div class="line"></div><div class="label">Signature / Name &amp; Title</div></div>
-        <div class="sig-line sig-date"><div class="line"></div><div class="label">Date</div></div>
-      </div>
-    </div>
     <div class="eval-section">
       <hr class="divider">
       <div class="eval-title">Current Status</div>
@@ -2028,7 +1997,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div><span style="color:#888;font-size:7pt;">Title:</span> <strong>${esc(assessment.evaluator_title) || "-"}</strong></div>
       <div><span style="color:#888;font-size:7pt;">Initials:</span> <strong>${esc(assessment.evaluator_initials) || "-"}</strong></div>
     </div>
-    <div class="note">Evaluator must be Lab Director, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>
+    <div class="note">Evaluator must be Lab Director or designee, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>
   </div>`;
 
   // ─── Assessment Summary Table (compact, page 1) ───
@@ -2108,7 +2077,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       {
         num: 1,
         title: "Element 1: Direct Observation of Routine Patient Test Performance",
-        note: "Observer must be Lab Director or Technical Consultant (moderate complexity) or Technical Supervisor (high complexity) as appropriate. Documents that the observer watched the employee process and test a specimen.",
+        note: "Observer must be Lab Director or designee, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate. Documents that the observer watched the employee process and test a specimen.",
         cols: ["Method Group", "Specimen ID", "Observer Initials", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || item.specimen_info || "")}</td>
           <td>${esc(item.el1_specimen_id || item.specimen_info || "")}</td>
@@ -2137,7 +2106,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       {
         num: 4,
         title: "Element 4: Direct Observation of Instrument Maintenance",
-        note: "Observer must be Lab Director or Technical Consultant (moderate complexity) or Technical Supervisor (high complexity) as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.",
+        note: "Observer must be Lab Director or designee, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.",
         cols: ["Method Group", "Date Observed", "Observer Initials", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el4_date_observed || item.date_met || "")}</td>
@@ -2576,7 +2545,7 @@ function buildCMS209HTML(input: CMS209Input): string {
     <div class="sig-section">
       <div class="sig-block">
         <div class="sig-line"></div>
-        <div class="sig-label">Laboratory Director Signature</div>
+        <div class="sig-label">Laboratory Director or Designee Signature</div>
       </div>
       <div class="sig-block">
         <div class="sig-line"></div>
