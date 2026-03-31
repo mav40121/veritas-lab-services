@@ -208,7 +208,7 @@ export const INSTRUCTIONS_CONTENT = [
   ["Values shown in the Reference Range and AMR columns are lab-entered only - no pre-populated defaults are provided."],
   ["Critical values are from Mayo Clinic Laboratories DLMP Critical Values list and should be compared"],
   ["to your laboratory's established critical value policy."],
-  ["Your laboratory director is responsible for establishing and approving all reference ranges and critical values."],
+  ["Your laboratory director or designee is responsible for establishing and approving all reference ranges and critical values."],
   [""],
   ["5. AMR - Analytical Measurement Range"],
   ["AMR must be verified by each laboratory per CLIA 493.1253(b)(1)."],

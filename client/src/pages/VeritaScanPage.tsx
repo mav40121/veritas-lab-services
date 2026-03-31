@@ -31,7 +31,7 @@ const FEATURES = [
   "Finding documentation fields with owner assignment and due dates",
   "Blood bank / transfusion service coverage (Domain X)",
   "Written by a 4-year TJC surveyor with 200+ facility inspections",
-  "Exportable: share with medical director, CNO, or consulting team",
+  "Exportable: share with medical director or designee, CNO, or consulting team",
 ];
 
 
@@ -113,7 +113,7 @@ export default function VeritaScanPage() {
                 VeritaScan gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance from the TJC standard, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director, your CNO, or your accreditation body as evidence of proactive self-assessment.
+                The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director or designee, your CNO, or your accreditation body as evidence of proactive self-assessment.
               </p>
               <p className="text-base font-semibold text-foreground">
                 Written by a former TJC laboratory surveyor. Used from the same vantage point as an inspection, because it was built from one.

@@ -205,7 +205,7 @@ export default function StudyGuidePage() {
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">42 CFR Part 493</a>{" "}
-            and official CMS CLIA guidance. This page is an educational summary. Always consult your laboratory director and the full regulation for compliance decisions.
+            and official CMS CLIA guidance. This page is an educational summary. Always consult your laboratory director or designee and the full regulation for compliance decisions.
           </p>
         </div>
       </section>
@@ -297,7 +297,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; annually recommended"
             regulation="42 CFR §493.933"
-            passFail="Each paired result is evaluated against the CLIA TEa for that analyte. VeritaCheck also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within TEa and mean bias within acceptable limits. Your laboratory director makes the final acceptability determination."
+            passFail="Each paired result is evaluated against the CLIA TEa for that analyte. VeritaCheck also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within TEa and mean bias within acceptable limits. Your laboratory director or designee makes the final acceptability determination."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493933,
@@ -324,7 +324,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; after major maintenance"
             regulation="42 CFR §493.941"
-            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa. VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
+            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa. VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493941,

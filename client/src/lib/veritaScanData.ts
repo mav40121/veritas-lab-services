@@ -40,7 +40,7 @@ export const DOMAINS: ScanDomain[] = [
 
 export const SCAN_ITEMS: ScanItem[] = [
   // ─── QUALITY SYSTEMS & QC (20 items) ─────────────────────────────────────
-  { id: 1, domain: "Quality Systems & QC", question: "Written QC policy documented, approved by laboratory director, and current within 2 years?", tjc: "QSA.04.01.01 EP1", cap: "GEN.20316", cfr: "42 CFR §493.1256" },
+  { id: 1, domain: "Quality Systems & QC", question: "Written QC policy documented, approved by laboratory director or designee, and current within 2 years?", tjc: "QSA.04.01.01 EP1", cap: "GEN.20316", cfr: "42 CFR §493.1256" },
   { id: 2, domain: "Quality Systems & QC", question: "QC performed at required frequency for all analytes and documented in the LIS or QC records?", tjc: "QSA.04.01.01 EP2", cap: "GEN.30200", cfr: "42 CFR §493.1256(d)" },
   { id: 3, domain: "Quality Systems & QC", question: "Levey-Jennings charts (or equivalent) maintained and reviewed by qualified personnel?", tjc: "QSA.04.01.01 EP3", cap: "GEN.30250", cfr: "42 CFR §493.1256(e)" },
   { id: 4, domain: "Quality Systems & QC", question: "Corrective action documented whenever QC results fall outside acceptable ranges?", tjc: "QSA.04.01.01 EP4", cap: "GEN.30300", cfr: "42 CFR §493.1256(g)" },
@@ -54,7 +54,7 @@ export const SCAN_ITEMS: ScanItem[] = [
   { id: 12, domain: "Quality Systems & QC", question: "Critical values policy documented with defined analyte list, limits, and communication requirements?", tjc: "NPSG.02.03.01 EP1", cap: "COM.40000", cfr: "42 CFR §493.1291(h)" },
   { id: 13, domain: "Quality Systems & QC", question: "Critical value communication documented with read-back, time, and recipient identity for each occurrence?", tjc: "NPSG.02.03.01 EP2", cap: "COM.40100", cfr: "42 CFR §493.1291(h)" },
   { id: 14, domain: "Quality Systems & QC", question: "Delta check policy in place and applied to applicable analytes?", tjc: "QSA.04.03.01 EP3", cap: "COM.30500", cfr: "42 CFR §493.1291(d)" },
-  { id: 15, domain: "Quality Systems & QC", question: "Reference ranges established, verified, or approved by medical director for all reported analytes?", tjc: "QSA.04.03.01 EP4", cap: "COM.30000", cfr: "42 CFR §493.1291(c)" },
+  { id: 15, domain: "Quality Systems & QC", question: "Reference ranges established, verified, or approved by medical director or designee for all reported analytes?", tjc: "QSA.04.03.01 EP4", cap: "COM.30000", cfr: "42 CFR §493.1291(c)" },
   { id: 16, domain: "Quality Systems & QC", question: "Specimen rejection criteria documented and staff trained on application?", tjc: "QSA.02.01.01 EP3", cap: "PRE.04800", cfr: "42 CFR §493.1241(b)" },
   { id: 17, domain: "Quality Systems & QC", question: "Amended report policy in place with documentation of amendments and notification to ordering provider?", tjc: "QSA.04.03.01 EP5", cap: "COM.40620", cfr: "42 CFR §493.1291(k)" },
   { id: 18, domain: "Quality Systems & QC", question: "Laboratory quality assessment plan reviewed and updated at least annually?", tjc: "QSA.06.01.01 EP2", cap: "GEN.20400", cfr: "42 CFR §493.1282" },
@@ -122,7 +122,7 @@ export const SCAN_ITEMS: ScanItem[] = [
 
   // ─── TEST MANAGEMENT & PROCEDURES (18 items) ──────────────────────────────
   { id: 74, domain: "Test Management & Procedures", question: "Written SOPs exist for every test performed, including pre-analytic, analytic, and post-analytic steps?", tjc: "QSA.01.01.01 EP1", cap: "GEN.56700", cfr: "42 CFR §493.1251" },
-  { id: 75, domain: "Test Management & Procedures", question: "SOPs reviewed, approved, and signed by laboratory director at least every 2 years?", tjc: "QSA.01.01.01 EP2", cap: "GEN.56800", cfr: "42 CFR §493.1251(b)(9)" },
+  { id: 75, domain: "Test Management & Procedures", question: "SOPs reviewed, approved, and signed by laboratory director or designee at least every 2 years?", tjc: "QSA.01.01.01 EP2", cap: "GEN.56800", cfr: "42 CFR §493.1251(b)(9)" },
   { id: 76, domain: "Test Management & Procedures", question: "SOPs accessible to all testing personnel at point of use?", tjc: "QSA.01.01.01 EP3", cap: "GEN.56900", cfr: "42 CFR §493.1251(c)" },
   { id: 77, domain: "Test Management & Procedures", question: "Discontinued SOPs retained for minimum 2 years after the date of discontinuance?", tjc: "IM.02.01.01 EP2", cap: "GEN.57000", cfr: "42 CFR §493.1105(a)(9)" },
   { id: 78, domain: "Test Management & Procedures", question: "CLIA test complexity certificates match the complexity level of all tests being performed?", tjc: "LD.04.01.01 EP1", cap: "GEN.09800", cfr: "42 CFR §493.35" },
@@ -216,7 +216,7 @@ export const SCAN_ITEMS: ScanItem[] = [
   { id: 158, domain: "Point of Care Testing", question: "POCT connectivity or middleware validated for accurate result transmission?", tjc: "QSA.04.03.01 EP12", cap: "POC.13000", cfr: "42 CFR §493.1291" },
 
   // ─── LEADERSHIP & GOVERNANCE (10 items) ───────────────────────────────────
-  { id: 159, domain: "Leadership & Governance", question: "Laboratory director reviews and signs off on all required policies at defined intervals?", tjc: "LD.04.05.03 EP1", cap: "DIR.60000", cfr: "42 CFR §493.1441" },
+  { id: 159, domain: "Leadership & Governance", question: "Laboratory director or designee reviews and signs off on all required policies at defined intervals?", tjc: "LD.04.05.03 EP1", cap: "DIR.60000", cfr: "42 CFR §493.1441" },
   { id: 160, domain: "Leadership & Governance", question: "Laboratory reports to C-suite or hospital leadership with defined accountability structure?", tjc: "LD.04.01.01 EP3", cap: "DIR.70000", cfr: "42 CFR §493.1441" },
   { id: 161, domain: "Leadership & Governance", question: "External agency recommendations (TJC, CAP, CMS) acted upon and responses documented?", tjc: "LD.04.01.01 EP4", cap: "GEN.09500", cfr: "42 CFR §493.1775" },
   { id: 162, domain: "Leadership & Governance", question: "CLIA certificate current and posted in the laboratory?", tjc: "LD.04.01.01 EP5", cap: "GEN.09800", cfr: "42 CFR §493.35" },

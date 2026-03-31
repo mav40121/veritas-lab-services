@@ -215,7 +215,7 @@ export default function ArticleCalVerPage() {
             <div><span className="text-muted-foreground">Jan 15:</span> Last study signed off (completion date)</div>
             <div><span className="text-muted-foreground">Apr 10:</span> Collect data during slow period</div>
             <div><span className="text-muted-foreground">May 5:</span> Generate report and analysis</div>
-            <div><span className="text-muted-foreground">Jul 15:</span> Medical director reviews and signs off</div>
+            <div><span className="text-muted-foreground">Jul 15:</span> Medical director or designee reviews and signs off</div>
             <div className="pt-1 text-primary font-semibold">Next deadline: Aug 4 (6 months + 20 days from Jul 15)</div>
           </div>
 
@@ -229,7 +229,7 @@ export default function ArticleCalVerPage() {
             <li><strong>Audit which tests actually require calibration verification.</strong> Remove waived tests and factory-calibrated instruments from the schedule.</li>
             <li><strong>Inventory existing materials with known true values.</strong> Calibrators, QC material, stable PT samples. You likely already have everything you need.</li>
             <li><strong>Combine calibration verification and correlation.</strong> Run the same specimens across all instruments in a single session to satisfy both requirements simultaneously.</li>
-            <li><strong>Collect data strategically.</strong> Schedule data collection during slower periods; batch medical director review sessions for efficiency.</li>
+            <li><strong>Collect data strategically.</strong> Schedule data collection during slower periods; batch medical director or designee review sessions for efficiency.</li>
             <li><strong>Track completion dates, not collection dates.</strong> Your next deadline is calculated from the sign-off date. Document it clearly.</li>
             <li><strong>Reference current CLIA TEa criteria.</strong> These values update periodically. Always use the current <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Code of Federal Regulations</a>, not outdated reference cards.</li>
           </ol>
@@ -255,7 +255,7 @@ export default function ArticleCalVerPage() {
             },
             {
               q: "What is the exact deadline for our next calibration verification study?",
-              a: "Six months plus twenty days from the date your medical director signed off on the last study. Not from when data was collected. Not from the date the report was generated. The sign-off date is what counts. Document it explicitly in your tracking system."
+              a: "Six months plus twenty days from the date your medical director or designee signed off on the last study. Not from when data was collected. Not from the date the report was generated. The sign-off date is what counts. Document it explicitly in your tracking system."
             },
             {
               q: "Where do I find the CLIA allowable error (TEa) for a specific analyte?",

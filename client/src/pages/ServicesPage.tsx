@@ -115,7 +115,7 @@ const serviceGroups = [
         pricing: "Starting at $3,500/month",
         description: "Stay CLIA compliant with one of our available CLIA laboratory directors. Remote and on-site oversight so your laboratory remains compliant and delivers consistently reliable results.",
         details: [
-          "Full CLIA medical director responsibilities",
+          "Full CLIA medical director or designee responsibilities",
           "Staff oversight and quality assurance programs",
           "Regulatory reviews and compliance maintenance",
           "Remote and on-site oversight options",

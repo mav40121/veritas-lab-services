@@ -24,12 +24,12 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">4. Disclaimer of Medical Advice</h2>
-          <p>The Service is a professional reference and statistical computation tool only. Nothing produced by VeritaCheck™ or VeritaScan™ constitutes medical advice, diagnosis, treatment, a clinical recommendation, or a substitute for official accreditation review or regulatory inspection of any kind. All output must be reviewed and interpreted by a qualified laboratory director or clinical consultant before being used to make any clinical, regulatory, or operational decision. The Company expressly disclaims any liability for clinical or regulatory decisions made in reliance on Service output.</p>
+          <p>The Service is a professional reference and statistical computation tool only. Nothing produced by VeritaCheck™ or VeritaScan™ constitutes medical advice, diagnosis, treatment, a clinical recommendation, or a substitute for official accreditation review or regulatory inspection of any kind. All output must be reviewed and interpreted by a qualified laboratory director or designee or clinical consultant before being used to make any clinical, regulatory, or operational decision. The Company expressly disclaims any liability for clinical or regulatory decisions made in reliance on Service output.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-base mb-2">5. User Responsibilities</h2>
-          <p>You are solely responsible for: (a) the accuracy and completeness of data entered into the Service; (b) the interpretation of results; (c) compliance with all applicable laws, regulations, and accreditation standards; and (d) maintaining appropriate oversight by a qualified laboratory director. You represent that you are a credentialed laboratory professional authorized to perform the studies you conduct using this Service.</p>
+          <p>You are solely responsible for: (a) the accuracy and completeness of data entered into the Service; (b) the interpretation of results; (c) compliance with all applicable laws, regulations, and accreditation standards; and (d) maintaining appropriate oversight by a qualified laboratory director or designee. You represent that you are a credentialed laboratory professional authorized to perform the studies you conduct using this Service.</p>
         </section>
 
         <section>

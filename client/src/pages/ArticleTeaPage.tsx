@@ -181,7 +181,7 @@ export default function ArticleTeaPage() {
             For glucose, that means an internal goal of ±4% or ±3 mg/dL (half of the CLIA TEa of ±8% or ±6 mg/dL). Using half TEa as an internal standard doesn't change what you report to regulators. It simply gives your quality program a tighter target that reduces the risk of marginal results.
           </p>
           <p>
-            Whether to adopt ADLM recommendations is a laboratory director decision. The regulatory floor is CLIA TEa. The quality ceiling is whatever your director determines is appropriate for your patient population and clinical context.
+            Whether to adopt ADLM recommendations is a laboratory director or designee decision. The regulatory floor is CLIA TEa. The quality ceiling is whatever your director or designee determines is appropriate for your patient population and clinical context.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">How to Apply TEa to Calibration Verification</h2>
@@ -228,7 +228,7 @@ export default function ArticleTeaPage() {
             },
             {
               q: "Our analyte isn't in the CLIA TEa table. What do we use?",
-              a: "If an analyte isn't regulated under CLIA proficiency testing requirements, there is no federally mandated TEa. In that case, labs should use manufacturer-stated allowable error, biological variation-based goals (from EFLM or RCPA tables), or medical decision-based criteria established by the laboratory director. Document the rationale for whatever criteria you choose."
+              a: "If an analyte isn't regulated under CLIA proficiency testing requirements, there is no federally mandated TEa. In that case, labs should use manufacturer-stated allowable error, biological variation-based goals (from EFLM or RCPA tables), or medical decision-based criteria established by the laboratory director or designee. Document the rationale for whatever criteria you choose."
             },
             {
               q: "How often does CLIA TEa change?",

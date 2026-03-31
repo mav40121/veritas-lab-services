@@ -40,7 +40,7 @@ const completedItems: RoadmapItem[] = [
   {
     title: "VeritaCheck\u2122 - PT/Coag New Lot Validation",
     description:
-      "Validates new reagent lots for PT and coagulation testing using Deming regression, geometric mean analysis, and INR comparison. Generates a compliant PDF with full statistical tables. Laboratory director review and approval required.",
+      "Validates new reagent lots for PT and coagulation testing using Deming regression, geometric mean analysis, and INR comparison. Generates a compliant PDF with full statistical tables. Laboratory director or designee review and approval required.",
   },
 ];
 
