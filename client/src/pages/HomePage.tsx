@@ -16,7 +16,7 @@ const services = [
 
 const stats = [
   { value: "200+", label: "Facilities surveyed" },
-  { value: "6", label: "Software products" },
+  { value: "6", label: "Software Products" },
   { value: "168", label: "Compliance items tracked" },
   { value: "22 yrs", label: "Industry experience" },
 ];
@@ -38,13 +38,10 @@ export default function HomePage() {
               </Badge>
             </div>
             <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight text-foreground">
-              VeritaAssure: Lab Compliance, Built for the Real World
+              You spent years mastering the science. Nobody taught you the compliance.
             </h1>
-            <p className="text-lg text-muted-foreground mb-3 leading-relaxed max-w-2xl">
-              Expert consulting and purpose-built software to keep your lab inspection-ready and confidently compliant with CLIA, CAP, COLA, TJC, and FDA requirements.
-            </p>
-            <p className="text-sm text-muted-foreground mb-8 leading-relaxed max-w-2xl">
-              Built by working lab leaders who know what surveyors actually look for.
+            <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
+              VeritaAssure gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               {/* Mobile: VeritaCheck primary, Explore secondary */}
@@ -66,6 +63,20 @@ export default function HomePage() {
               See it in action - no login required <ArrowRight size={14} />
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Pull Quote */}
+      <section className="border-b border-border">
+        <div className="max-w-[700px] mx-auto px-4 sm:px-6 py-10">
+          <blockquote className="border-l-4 border-[#01696F] bg-[#F0FAFA] rounded-lg px-6 py-5">
+            <p className="italic text-foreground leading-relaxed mb-2">
+              "I became a laboratory director without ever being taught how. That experience is why I built VeritaAssure."
+            </p>
+            <footer className="text-sm text-muted-foreground">
+              Michael Veri, MS, MBA, MLS(ASCP), CPHQ | Founder, VeritaAssure
+            </footer>
+          </blockquote>
         </div>
       </section>
 
@@ -98,6 +109,15 @@ export default function HomePage() {
               <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Bridge Paragraph */}
+      <section className="border-b border-border">
+        <div className="max-w-[650px] mx-auto px-4 sm:px-6 py-10 text-center">
+          <p className="text-sm text-[#7A7974] leading-relaxed">
+            Most labs manage compliance with a folder of spreadsheets, a binder of outdated SOPs, and the hope that nothing has slipped through the cracks. VeritaAssure replaces all of that with purpose-built tools designed around what surveyors actually look for.
+          </p>
         </div>
       </section>
 

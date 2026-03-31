@@ -136,7 +136,7 @@ export default function ServicesPage() {
           <Badge variant="outline" className="mb-4 text-primary border-primary/30">VeritaAssure Suite</Badge>
           <h1 className="font-serif text-4xl font-bold mb-3">Laboratory Consulting Services</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Veritas Lab Services delivers VeritaAssure, integrated support for regulatory readiness, mock inspections, productivity analysis, leadership coaching, and CLIA laboratory director services. Our approach combines on-site expertise with practical compliance tools so your lab stays ahead of CLIA, CAP, COLA, TJC, and FDA expectations year-round, not just right before surveyors arrive.
+            Compliance is not a once-a-year event. It is the daily discipline of running a laboratory that can withstand scrutiny at any moment. VeritaAssure consulting services exist because the gap between clinical training and compliance responsibility is real, and most lab professionals navigate it alone.
           </p>
         </div>
       </section>

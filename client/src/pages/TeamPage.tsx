@@ -52,10 +52,7 @@ export default function TeamPage() {
 
             <div className="sm:col-span-2 space-y-5">
               <p className="text-foreground leading-relaxed">
-                Michael founded VLS out of the recognition that <strong>administrative lab leaders lacked accessible avenues for growth and mentorship</strong>, especially for directors and managers who are often the most senior in their organizations and have limited options to advance their expertise or gain outside perspective.
-              </p>
-              <p className="text-muted-foreground leading-relaxed">
-                By establishing VLS, he aimed to create a supportive, external resource <strong>dedicated to education, confidence-building, and sustainable leadership development</strong> for those steering the future of laboratory medicine.
+                I became a laboratory director without ever being taught how. That experience, the gap between clinical training and compliance responsibility, is why I built VeritaAssure.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 Michael is a distinguished US Army veteran with 22 years of service and over a decade of director-level leadership in the civilian healthcare sector. Leveraging four years as a Joint Commission (TJC) Surveyor, he has conducted regulatory and compliance inspections at more than 200 healthcare facilities across the country.
