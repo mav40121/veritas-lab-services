@@ -9,6 +9,11 @@
 import puppeteer from "puppeteer";
 import type { Study } from "@shared/schema";
 
+// ─── Safe number formatting helper ──────────────────────────────────────────
+function sf(value: any, digits: number): string {
+  return Number(value ?? 0).toFixed(digits);
+}
+
 // ─── Safe JSON parse helper ──────────────────────────────────────────────────
 function safeJsonParse(value: any, fallback: any = []): any {
   if (Array.isArray(value) || (typeof value === 'object' && value !== null)) return value;
@@ -399,7 +404,7 @@ function narrativeHTML(
 
   if (studyType === "cal_ver") {
     const calLevelResults = results.levelResults || [];
-    const maxErr = calLevelResults.length > 0 ? Math.max(...calLevelResults.map((r: any) => Math.abs(r.obsError * 100))) : 0;
+    const maxErr = calLevelResults.length > 0 ? Math.max(...calLevelResults.map((r: any) => Math.abs((r.obsError ?? 0) * 100))) : 0;
     const meetsAdlm = maxErr <= cliaError * 50;
     const slope = Object.values((results.regression || {}) as any)[0] as any;
     const slopeVal: number = slope?.slope ?? 1;
@@ -407,27 +412,27 @@ function narrativeHTML(
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias - results trend slightly high at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias - results trend slightly low at upper concentrations`;
+        ? `a ${sf((slopeVal - 1) * 100, 1)}% upward proportional bias - results trend slightly high at upper concentrations`
+        : `a ${sf((1 - slopeVal) * 100, 1)}% downward proportional bias - results trend slightly low at upper concentrations`;
     const interceptInterp = Math.abs(interceptVal) < cliaError * 100 * 0.1
       ? "a negligible constant offset"
       : interceptVal > 0
-        ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
-        : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
+        ? `a small positive constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`
+        : `a small negative constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`;
 
     if (results.overallPass) {
       narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
       if (meetsAdlm) {
-        narrative += `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `;
+        narrative += `The maximum observed error of ${sf(maxErr, 1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `;
       } else {
-        narrative += `The maximum observed error of ${maxErr.toFixed(1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+        narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
-      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range.`;
+      narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range.`;
     } else {
       const failCount = results.totalCount - results.passCount;
       narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
       narrative += `Do not report patient results until the cause has been identified, corrective action has been taken, and the study is repeated with passing results. `;
-      narrative += `The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
+      narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
     }
   }
 
@@ -445,20 +450,20 @@ function narrativeHTML(
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
       ? "minimal proportional bias between methods"
       : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
+        ? `a ${sf((slopeVal - 1) * 100, 1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
+        : `a ${sf((1 - slopeVal) * 100, 1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
     const biasInterp = Math.abs(meanBiasPct) <= cliaError * 100
       ? `within the CLIA total allowable error of \u00B1${cliaPct}%`
       : `exceeds the CLIA total allowable error of \u00B1${cliaPct}% and requires investigation`;
 
     if (results.overallPass) {
-      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
-      narrative += `The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. `;
-      narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. `;
+      narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
+      narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
+      narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% is ${biasInterp}. `;
       narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
-      narrative += `The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. `;
+      narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. `;
       narrative += `Do not report patient results from the comparison method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
     }
   }
@@ -470,7 +475,7 @@ function narrativeHTML(
     const isAdvanced = results.mode === "advanced";
 
     if (results.overallPass) {
-      narrative = `The precision study for ${analyteName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative = `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
       if (meetsAdlm) {
         narrative += `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `;
       } else {
@@ -483,7 +488,7 @@ function narrativeHTML(
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
     } else {
-      narrative = `The precision study for ${analyteName} did not meet acceptance criteria. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. `;
+      narrative = `The precision study for ${analyteName} did not meet acceptance criteria. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. `;
       narrative += `Do not rely on this instrument for patient reporting until the cause of imprecision has been identified, corrective action has been taken, and the study is repeated with passing results. `;
       narrative += `Review reagent lot, instrument maintenance, and QC trends for contributing factors.`;
     }
@@ -523,17 +528,17 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
 
   // Linearity summary table
   const linRows = Object.entries(results.regression || {}).map(([name, reg]) => {
-    const r = Math.sqrt(reg.r2);
-    const biasColor = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? PASS : FAIL;
-    const biasClass = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? "pass" : "fail";
+    const r = Math.sqrt(reg.r2 ?? 0);
+    const biasColor = Math.abs(reg.proportionalBias ?? 0) < study.cliaAllowableError ? PASS : FAIL;
+    const biasClass = Math.abs(reg.proportionalBias ?? 0) < study.cliaAllowableError ? "pass" : "fail";
     return `<tr>
       <td>${name}</td>
-      <td class="text-right">${reg.n}</td>
-      <td class="text-right">${reg.slope.toFixed(4)}</td>
-      <td class="text-right">${reg.intercept.toFixed(4)}</td>
-      <td class="text-right ${biasClass}">${(reg.proportionalBias * 100).toFixed(2)}%</td>
-      <td class="text-right">${r.toFixed(4)}</td>
-      <td class="text-right">${reg.r2.toFixed(4)}</td>
+      <td class="text-right">${reg.n ?? 0}</td>
+      <td class="text-right">${sf(reg.slope, 4)}</td>
+      <td class="text-right">${sf(reg.intercept, 4)}</td>
+      <td class="text-right ${biasClass}">${sf((reg.proportionalBias ?? 0) * 100, 2)}%</td>
+      <td class="text-right">${sf(r, 4)}</td>
+      <td class="text-right">${sf(reg.r2, 4)}</td>
     </tr>`;
   }).join("");
 
@@ -542,16 +547,16 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   const dataRows = levelResults.map((r, ri) => {
     const instrCells = instrumentNames.map(n => {
       const v = r.instruments[n];
-      return v ? `<td class="text-right">${v.value.toFixed(3)}</td>` : `<td class="text-right">-</td>`;
+      return v ? `<td class="text-right">${sf(v.value, 3)}</td>` : `<td class="text-right">-</td>`;
     }).join("");
     const pfClass = r.passFailMean === "Pass" ? "pass" : "fail";
     return `<tr class="${ri % 2 === 1 ? "stripe" : ""}">
       <td>L${r.level}</td>
-      <td class="text-right">${r.assignedValue.toFixed(3)}</td>
-      <td class="text-right">${r.mean.toFixed(3)}</td>
-      <td class="text-right">${r.pctRecovery.toFixed(1)}%</td>
-      <td class="text-right">${(r.obsError * 100).toFixed(2)}%</td>
-      <td class="text-right ${pfClass}">${r.passFailMean}</td>
+      <td class="text-right">${sf(r.assignedValue, 3)}</td>
+      <td class="text-right">${sf(r.mean, 3)}</td>
+      <td class="text-right">${sf(r.pctRecovery, 1)}%</td>
+      <td class="text-right">${sf((r.obsError ?? 0) * 100, 2)}%</td>
+      <td class="text-right ${pfClass}">${r.passFailMean ?? "---"}</td>
       ${instrCells}
     </tr>`;
   }).join("");
@@ -638,21 +643,21 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     // Supporting statistics
     const demKey = Object.keys(results.regression || {}).find(k => k.includes(compName) && k.includes("Deming"));
     const demEntry = demKey ? (results.regression || {})[demKey] : undefined;
-    const corrCoef = demEntry ? Math.sqrt(demEntry.r2).toFixed(4) : "---";
+    const corrCoef = demEntry ? sf(Math.sqrt(demEntry.r2 ?? 0), 4) : "---";
     const xRange = results.xRange || { min: 0, max: 0 };
-    const xMeanVal = ((xRange.min + xRange.max) / 2).toFixed(3);
+    const xMeanVal = sf(((xRange.min ?? 0) + (xRange.max ?? 0)) / 2, 3);
 
     const suppStatsLeft = [
       ["Corr Coef (R):", corrCoef],
-      ["Mean Bias:", baEntry ? baEntry.meanDiff.toFixed(3) : "---"],
+      ["Mean Bias:", baEntry ? sf(baEntry.meanDiff, 3) : "---"],
       ["Primary Mean:", xMeanVal],
-      ["Std Dev Diffs:", baEntry ? baEntry.sdDiff.toFixed(3) : "---"],
+      ["Std Dev Diffs:", baEntry ? sf(baEntry.sdDiff, 3) : "---"],
     ];
     const yRange = results.yRange || {};
     const suppStatsRight = [
       ["Points (Plotted/Total):", `${levelResults.length}/${levelResults.length}`],
-      ["Primary Range:", `${xRange.min.toFixed(3)} to ${xRange.max.toFixed(3)}`],
-      ...(yRange[compName] ? [[`${compName} Range:`, `${yRange[compName].min.toFixed(3)} to ${yRange[compName].max.toFixed(3)}`]] : []),
+      ["Primary Range:", `${sf(xRange.min, 3)} to ${sf(xRange.max, 3)}`],
+      ...(yRange[compName] ? [[`${compName} Range:`, `${sf(yRange[compName].min, 3)} to ${sf(yRange[compName].max, 3)}`]] : []),
     ];
 
     const maxRows = Math.max(suppStatsLeft.length, suppStatsRight.length);
@@ -671,31 +676,31 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       .filter(([name]) => name.includes(compName))
       .map(([name, reg]) => {
         const shortName = name.includes("Deming") ? "Deming" : "OLS";
-        const slopeStr = reg.slopeLo !== undefined ? `${reg.slope.toFixed(4)} (${reg.slopeLo.toFixed(3)}-${reg.slopeHi!.toFixed(3)})` : reg.slope.toFixed(4);
-        const intStr = reg.interceptLo !== undefined ? `${reg.intercept.toFixed(4)} (${reg.interceptLo.toFixed(3)}-${reg.interceptHi!.toFixed(3)})` : reg.intercept.toFixed(4);
-        const biasClass = Math.abs(reg.proportionalBias) < study.cliaAllowableError ? "pass" : "fail";
+        const slopeStr = reg.slopeLo !== undefined ? `${sf(reg.slope, 4)} (${sf(reg.slopeLo, 3)}-${sf(reg.slopeHi, 3)})` : sf(reg.slope, 4);
+        const intStr = reg.interceptLo !== undefined ? `${sf(reg.intercept, 4)} (${sf(reg.interceptLo, 3)}-${sf(reg.interceptHi, 3)})` : sf(reg.intercept, 4);
+        const biasClass = Math.abs(reg.proportionalBias ?? 0) < study.cliaAllowableError ? "pass" : "fail";
         return `<tr>
           <td>${shortName}</td>
-          <td class="text-right">${reg.n}</td>
+          <td class="text-right">${reg.n ?? 0}</td>
           <td class="text-right">${slopeStr}</td>
           <td class="text-right">${intStr}</td>
-          <td class="text-right">${reg.see.toFixed(4)}</td>
-          <td class="text-right ${biasClass}">${(reg.proportionalBias * 100).toFixed(2)}%</td>
-          <td class="text-right">${Math.sqrt(reg.r2).toFixed(4)}</td>
-          <td class="text-right">${reg.r2.toFixed(4)}</td>
+          <td class="text-right">${sf(reg.see, 4)}</td>
+          <td class="text-right ${biasClass}">${sf((reg.proportionalBias ?? 0) * 100, 2)}%</td>
+          <td class="text-right">${sf(Math.sqrt(reg.r2 ?? 0), 4)}</td>
+          <td class="text-right">${sf(reg.r2, 4)}</td>
         </tr>`;
       }).join("");
 
     // Bland-Altman row for this comparison
     const baRow = baEntry ? (() => {
-      const biasClass = Math.abs(baEntry.pctMeanDiff) < study.cliaAllowableError * 100 ? "pass" : "fail";
+      const biasClass = Math.abs(baEntry.pctMeanDiff ?? 0) < study.cliaAllowableError * 100 ? "pass" : "fail";
       return `<tr>
         <td>${compName}</td>
-        <td class="text-right">${baEntry.meanDiff.toFixed(4)}</td>
-        <td class="text-right ${biasClass}">${baEntry.pctMeanDiff.toFixed(2)}%</td>
-        <td class="text-right">${baEntry.sdDiff.toFixed(4)}</td>
-        <td class="text-right">${baEntry.loa_lower.toFixed(4)}</td>
-        <td class="text-right">${baEntry.loa_upper.toFixed(4)}</td>
+        <td class="text-right">${sf(baEntry.meanDiff, 4)}</td>
+        <td class="text-right ${biasClass}">${sf(baEntry.pctMeanDiff, 2)}%</td>
+        <td class="text-right">${sf(baEntry.sdDiff, 4)}</td>
+        <td class="text-right">${sf(baEntry.loa_lower, 4)}</td>
+        <td class="text-right">${sf(baEntry.loa_upper, 4)}</td>
       </tr>`;
     })() : "";
 
@@ -745,15 +750,15 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td>---</td>`];
       const pfClass = v.passFail === "Pass" ? "pass" : "fail";
       return [
-        `<td class="text-right">${v.value.toFixed(3)}</td>`,
-        `<td class="text-right">${v.difference.toFixed(3)}</td>`,
-        `<td class="text-right">${v.pctDifference.toFixed(2)}%</td>`,
+        `<td class="text-right">${sf(v.value, 3)}</td>`,
+        `<td class="text-right">${sf(v.difference, 3)}</td>`,
+        `<td class="text-right">${sf(v.pctDifference, 2)}%</td>`,
         `<td class="text-right ${pfClass}">${v.passFail}</td>`,
       ];
     }).join("");
     return `<tr class="${ri % 2 === 1 ? "stripe" : ""}">
       <td>S${r.level}</td>
-      <td class="text-right">${r.referenceValue.toFixed(3)}</td>
+      <td class="text-right">${sf(r.referenceValue, 3)}</td>
       ${instrCells}
     </tr>`;
   }).join("");
@@ -800,9 +805,9 @@ function buildPrecisionHTML(study: Study, results: any): string {
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
       <td>${r.levelName}</td>
       <td class="text-right">${r.n}</td>
-      <td class="text-right">${r.mean.toFixed(3)}</td>
-      <td class="text-right">${r.sd.toFixed(3)}</td>
-      <td class="text-right">${r.cv.toFixed(2)}%</td>
+      <td class="text-right">${sf(r.mean, 3)}</td>
+      <td class="text-right">${sf(r.sd, 3)}</td>
+      <td class="text-right">${sf(r.cv, 2)}%</td>
       <td class="text-right">±${cliaCV}%</td>
       <td class="text-right ${pfClass}">${r.passFail}</td>
     </tr>`;
@@ -973,20 +978,20 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
     const summaryRows = `
       <tr><td style="color:${MUTED};font-weight:700">N</td><td>${cohort.n}</td>
-          <td style="color:${MUTED};font-weight:700">Mean Bias</td><td>${cohort.meanPctDiff.toFixed(2)}%</td></tr>
-      <tr><td style="color:${MUTED};font-weight:700">SD</td><td>${cohort.sdPctDiff.toFixed(2)}%</td>
-          <td style="color:${MUTED};font-weight:700">Mean |%Diff|</td><td>${cohort.meanAbsPctDiff.toFixed(2)}%</td></tr>
-      <tr><td style="color:${MUTED};font-weight:700">Max |%Diff|</td><td>${cohort.maxAbsPctDiff.toFixed(2)}%</td>
-          <td style="color:${MUTED};font-weight:700">Coverage</td><td class="${cohort.coverage >= 90 ? "pass" : "fail"}">${cohort.coverage.toFixed(0)}%</td></tr>
+          <td style="color:${MUTED};font-weight:700">Mean Bias</td><td>${sf(cohort.meanPctDiff, 2)}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">SD</td><td>${sf(cohort.sdPctDiff, 2)}%</td>
+          <td style="color:${MUTED};font-weight:700">Mean |%Diff|</td><td>${sf(cohort.meanAbsPctDiff, 2)}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Max |%Diff|</td><td>${sf(cohort.maxAbsPctDiff, 2)}%</td>
+          <td style="color:${MUTED};font-weight:700">Coverage</td><td class="${(cohort.coverage ?? 0) >= 90 ? "pass" : "fail"}">${sf(cohort.coverage, 0)}%</td></tr>
     `;
 
     const dataRows = specimens.map((s: any, i: number) => {
       const pfClass = s.passFail === "Pass" ? "pass" : "fail";
       return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
         <td>${s.specimenId}</td>
-        <td class="text-right">${s.currentLot.toFixed(3)}</td>
-        <td class="text-right">${s.newLot.toFixed(3)}</td>
-        <td class="text-right">${s.pctDifference.toFixed(2)}%</td>
+        <td class="text-right">${sf(s.currentLot, 3)}</td>
+        <td class="text-right">${sf(s.newLot, 3)}</td>
+        <td class="text-right">${sf(s.pctDifference, 2)}%</td>
         <td class="text-right ${pfClass}">${s.passFail}</td>
       </tr>`;
     }).join("");

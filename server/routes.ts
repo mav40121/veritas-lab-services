@@ -2211,29 +2211,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // Build cal_ver level results
         let passCount = 0;
         const totalCount = dp.length * instNames.length;
-        const levelResults = dp.map((p: any) => {
+
+        // Pre-compute means per level for the level results
+        const levelMeans = dp.map((p: any) => {
+          const vals = instNames.map((n: string) => p.instrumentValues?.[n] ?? 0);
+          return vals.reduce((a: number, b: number) => a + b, 0) / (vals.length || 1);
+        });
+
+        const levelResults = dp.map((p: any, idx: number) => {
           const assigned = p.assignedValue ?? p.expectedValue ?? 0;
+          const mean = levelMeans[idx];
+          const pctRecovery = assigned !== 0 ? (mean / assigned) * 100 : 100;
+          const obsError = assigned !== 0 ? (mean - assigned) / assigned : 0;
+          const passFailMean = Math.abs(pctRecovery - 100) <= teaPct ? "Pass" : "Fail";
           const instResults: Record<string, any> = {};
           for (const instName of instNames) {
             const measured = p.instrumentValues?.[instName] ?? 0;
             const pctRec = assigned !== 0 ? (measured / assigned) * 100 : 100;
+            const instObsError = assigned !== 0 ? (measured - assigned) / assigned : 0;
             const pass = Math.abs(pctRec - 100) <= teaPct;
             if (pass) passCount++;
             instResults[instName] = {
               value: measured,
               pctRecovery: pctRec,
+              obsError: instObsError,
               passFail: pass ? "Pass" : "Fail",
             };
           }
-          return { level: p.level, assignedValue: assigned, instruments: instResults };
+          return { level: p.level, assignedValue: assigned, mean, pctRecovery, obsError, passFailMean, instruments: instResults };
         });
 
         // Regression on means vs assigned
         const assignedVals = dp.map((p: any) => p.assignedValue ?? p.expectedValue ?? 0);
-        const meanVals = dp.map((p: any) => {
-          const vals = instNames.map((n: string) => p.instrumentValues?.[n] ?? 0);
-          return vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
-        });
+        const meanVals = levelMeans;
         const _mean = (v: number[]) => v.length ? v.reduce((a: number, b: number) => a + b, 0) / v.length : 0;
         const xm = _mean(assignedVals);
         const ym = _mean(meanVals);
@@ -2243,6 +2253,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const slope = sxx === 0 ? 1 : sxy / sxx;
         const intercept = ym - slope * xm;
         const r2 = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+        const proportionalBias = slope - 1;
 
         const pctRecoveries = dp.flatMap((p: any) => {
           const assigned = p.assignedValue ?? p.expectedValue ?? 0;
@@ -2255,7 +2266,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const results = {
           type: "cal_ver",
           levelResults,
-          regression: { slope, intercept, r2 },
+          regression: {
+            [`${primaryName} vs Assigned`]: { slope, intercept, proportionalBias, r2, n: dp.length },
+          },
           maxPercentRecovery: maxPctRec,
           minPercentRecovery: minPctRec,
           overallPass,

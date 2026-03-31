@@ -358,10 +358,10 @@ export default function DemoLabPage() {
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                               {[
                                 { label: "N", value: (stats as any).totalCount },
-                                { label: "Max % Recovery", value: (stats as any).maxPctRec.toFixed(1) + "%" },
-                                { label: "Min % Recovery", value: (stats as any).minPctRec.toFixed(1) + "%" },
-                                { label: "Slope", value: (stats as any).slope.toFixed(4) },
-                                { label: "r\u00B2", value: (stats as any).rSquared.toFixed(4) },
+                                { label: "Max % Recovery", value: Number((stats as any).maxPctRec ?? 0).toFixed(1) + "%" },
+                                { label: "Min % Recovery", value: Number((stats as any).minPctRec ?? 0).toFixed(1) + "%" },
+                                { label: "Slope", value: Number((stats as any).slope ?? 0).toFixed(4) },
+                                { label: "r\u00B2", value: Number((stats as any).rSquared ?? 0).toFixed(4) },
                               ].map((s) => (
                                 <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
                                   <div className="text-[10px] text-muted-foreground uppercase">{s.label}</div>
@@ -412,11 +412,11 @@ export default function DemoLabPage() {
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                               {[
                                 { label: "n", value: (stats as any).n },
-                                { label: "Mean Bias", value: (stats as any).meanBias.toFixed(3) },
-                                { label: "Mean % Diff", value: (stats as any).meanPctDiff.toFixed(2) + "%" },
-                                { label: "Deming Slope", value: (stats as any).slope.toFixed(4) },
-                                { label: "Intercept", value: (stats as any).intercept.toFixed(3) },
-                                { label: "r\u00B2", value: (stats as any).rSquared.toFixed(4) },
+                                { label: "Mean Bias", value: Number((stats as any).meanBias ?? 0).toFixed(3) },
+                                { label: "Mean % Diff", value: Number((stats as any).meanPctDiff ?? 0).toFixed(2) + "%" },
+                                { label: "Deming Slope", value: Number((stats as any).slope ?? 0).toFixed(4) },
+                                { label: "Intercept", value: Number((stats as any).intercept ?? 0).toFixed(3) },
+                                { label: "r\u00B2", value: Number((stats as any).rSquared ?? 0).toFixed(4) },
                               ].map((s) => (
                                 <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
                                   <div className="text-[10px] text-muted-foreground uppercase">{s.label}</div>
