@@ -4034,6 +4034,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     `).run(clia_number, facility_name || null, address || null, lab_director || null,
       specialty_count || null, certificate_type || null, tier || null, now, req.userId);
 
+    // Auto-create VeritaLab CLIA certificate if one does not already exist
+    const existingCert = (db as any).$client.prepare(
+      `SELECT id FROM lab_certificates WHERE user_id = ? AND cert_type = 'clia'`
+    ).get(req.userId);
+
+    if (!existingCert) {
+      (db as any).$client.prepare(`
+        INSERT INTO lab_certificates
+        (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at)
+        VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, ?, ?, ?)
+      `).run(
+        req.userId,
+        clia_number,
+        lab_director || '',
+        'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.',
+        now,
+        now
+      );
+    }
+
     res.json({ ok: true, tier });
   });
 
@@ -4222,7 +4242,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!existingClia) {
         const now = new Date().toISOString();
         (db as any).$client.prepare(
-          "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA lookup. Please enter your expiration date.', ?, ?)"
+          "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.', ?, ?)"
         ).run(req.userId, userRow.clia_number, userRow.clia_director || null, now, now);
       }
     }

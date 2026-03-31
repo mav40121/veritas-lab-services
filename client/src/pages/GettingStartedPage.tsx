@@ -91,8 +91,8 @@ const STEPS = [
   {
     key: "cert_entered" as const,
     number: 7,
-    title: "Enter your certificate expiration in VeritaLab\u2122",
-    description: "Add your CLIA certificate expiration date to activate renewal reminders at 9 months, 6 months, 3 months, and 30 days.",
+    title: "Confirm your CLIA certificate expiration date",
+    description: "Your CLIA certificate was auto-populated from your account setup. Open VeritaLab\u2122 to enter the expiration date and activate renewal reminders at 9 months, 6 months, 3 months, and 30 days.",
     time: "2 minutes",
     buttonLabel: "Open VeritaLab\u2122",
     route: "/veritalab-app",
