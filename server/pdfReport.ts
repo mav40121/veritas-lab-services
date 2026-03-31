@@ -281,7 +281,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
   };
   const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
-  const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not provided</div>`;
+  const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file — enter your CLIA number in account settings</div>`;
   const labName = (study as any)._labName;
   const labLine = labName ? `<div style="font-size:8.5pt;font-weight:600;color:#28251D;margin-top:1px;">${labName}</div>` : "";
   return `
@@ -1399,7 +1399,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
       <div>
         <div class="logo">VeritaCheck\u2122</div>
         <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
-        <div style="font-size:8pt;color:${cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${cliaNumber || 'Not provided'}</div>
+        <div style="font-size:8pt;color:${cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
       </div>
       <div class="header-right">Instrument: ${tracker.instrument_name}</div>
     </div>
@@ -1584,7 +1584,7 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
       <div>
         <div class="logo">VeritaScan\u2122</div>
         <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
-        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not provided'}</div>
+        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
       </div>
       <div class="header-right">Generated ${today()}</div>
     </div>
@@ -1674,7 +1674,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
       <div>
         <div class="logo">VeritaScan\u2122</div>
         <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
-        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not provided'}</div>
+        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
       </div>
       <div class="header-right">Generated ${today()}</div>
     </div>
@@ -1821,7 +1821,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   html += `<div class="header">
     <h1>VeritaAssure\u2122</h1>
     <div class="sub">${typeLabel}</div>
-    <div style="font-size:9pt;color:rgba(255,255,255,0.8);margin-top:2px;">CLIA: ${input.cliaNumber || 'Not provided'}</div>
+    <div style="font-size:9pt;color:rgba(255,255,255,0.8);margin-top:2px;">CLIA: ${input.cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
     <div class="divider"></div>
   </div>`;
 

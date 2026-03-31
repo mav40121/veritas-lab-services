@@ -14,12 +14,12 @@ export async function seedDemoData() {
 
   if (existing) {
     demoUserId = existing.id;
-    sqlite.prepare("UPDATE users SET plan = 'lab', has_completed_onboarding = 1 WHERE id = ?").run(demoUserId);
+    sqlite.prepare("UPDATE users SET plan = 'lab', has_completed_onboarding = 1, clia_number = '22D0999999', clia_lab_name = 'Riverside Regional Medical Center' WHERE id = ?").run(demoUserId);
   } else {
     const hash = await bcrypt.hash("VeritaDemo2026!", 10);
     const now = new Date().toISOString();
     const result = sqlite.prepare(
-      "INSERT INTO users (email, password_hash, name, plan, study_credits, has_completed_onboarding, created_at) VALUES (?, ?, ?, 'lab', 99999, 1, ?)"
+      "INSERT INTO users (email, password_hash, name, plan, study_credits, has_completed_onboarding, clia_number, clia_lab_name, created_at) VALUES (?, ?, ?, 'lab', 99999, 1, '22D0999999', 'Riverside Regional Medical Center', ?)"
     ).run("demo@veritaslabservices.com", hash, "Demo User", now);
     demoUserId = Number(result.lastInsertRowid);
   }
