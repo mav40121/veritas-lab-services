@@ -679,7 +679,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
     // For each test, attach the list of instruments running it
     const instrByAnalyte = (db as any).$client.prepare(`
-      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number
       FROM veritamap_instrument_tests it
       JOIN veritamap_instruments i ON i.id = it.instrument_id
       WHERE it.map_id = ? AND it.active = 1
@@ -687,7 +687,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const instrMap: Record<string, any[]> = {};
     for (const row of instrByAnalyte) {
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
-      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category });
+      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null });
     }
     const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
     res.json({ ...map, tests });
@@ -753,23 +753,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const count = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(req.params.id).cnt;
       if (count >= 4) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 4 instruments", limitReached: true, limit: 4, type: "instruments" });
     }
-    const { instrument_name, role, category } = req.body;
+    const { instrument_name, role, category, serial_number } = req.body;
     if (!instrument_name?.trim()) return res.status(400).json({ error: "Instrument name required" });
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, created_at) VALUES (?, ?, ?, ?, ?)"
-    ).run(req.params.id, instrument_name.trim(), role || 'Primary', category || 'Chemistry', now);
-    res.json({ id: Number(result.lastInsertRowid), instrument_name: instrument_name.trim(), role: role || 'Primary', category: category || 'Chemistry', tests: [] });
+      "INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, serial_number, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(req.params.id, instrument_name.trim(), role || 'Primary', category || 'Chemistry', serial_number?.trim() || null, now);
+    res.json({ id: Number(result.lastInsertRowid), instrument_name: instrument_name.trim(), role: role || 'Primary', category: category || 'Chemistry', serial_number: serial_number?.trim() || null, tests: [] });
   });
 
   // Update instrument role/name
   app.put("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, requireWriteAccess, (req: any, res) => {
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const { instrument_name, role, category } = req.body;
+    const { instrument_name, role, category, serial_number } = req.body;
     (db as any).$client.prepare(
-      "UPDATE veritamap_instruments SET instrument_name=?, role=?, category=? WHERE id=? AND map_id=?"
-    ).run(instrument_name, role, category, req.params.instId, req.params.id);
+      "UPDATE veritamap_instruments SET instrument_name=?, role=?, category=?, serial_number=? WHERE id=? AND map_id=?"
+    ).run(instrument_name, role, category, serial_number?.trim() || null, req.params.instId, req.params.id);
     res.json({ ok: true });
   });
 
@@ -938,7 +938,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Fetch tests (same as map detail endpoint)
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id);
     const instrByAnalyte = (db as any).$client.prepare(`
-      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number
       FROM veritamap_instrument_tests it
       JOIN veritamap_instruments i ON i.id = it.instrument_id
       WHERE it.map_id = ? AND it.active = 1
@@ -969,7 +969,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const ws = wb.addWorksheet("Compliance Map");
 
       const headers = [
-        "Analyte", "Instruments", "Department", "Specialty", "Complexity",
+        "Analyte", "Instruments", "Serial Number", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Unit of Measure", "Reference Range", "AMR",
         "Critical Low (Mayo Clinic Laboratories)", "Critical High (Mayo Clinic Laboratories)", "Critical Value Units (Mayo Clinic Laboratories)",
@@ -981,7 +981,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Column widths
       const colWidths = [
-        22, 55, 18, 20, 14, 22, 14, 20, 24, 25, 20, 22, 22, 18, 14, 14, 12, 12,
+        22, 55, 20, 18, 20, 14, 22, 14, 20, 24, 25, 20, 22, 22, 18, 14, 14, 12, 12,
         30, 28, 36, 36, 18, 18, 18, 18, 18,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
@@ -990,6 +990,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const rows = tests.map((t: any) => {
         const instruments = t.instruments || [];
         const instrList = instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join("; ");
+        const serialList = instruments.map((i: any) => i.serial_number || "").filter((s: string) => s).join("; ");
         const instrCount = instruments.length;
         const department = instruments[0]?.category || t.specialty || "";
         const isWaived = t.complexity === "WAIVED";
@@ -1007,6 +1008,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return [
           t.analyte,
           instrList,
+          serialList,
           department,
           t.specialty,
           t.complexity,
@@ -1059,11 +1061,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       // ── Data rows (row 2 onward) ──
-      const statusCols = [20, 22, 24, 26]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
-      const dateCols = [19, 21, 23, 25];   // 1-indexed: date columns
-      const numCol = 6; // 1-indexed: Number of Instruments
-      const complexityCol = 5; // 1-indexed: Complexity
-      const correlCol = 8;     // 1-indexed: Correlation Required
+      const statusCols = [21, 23, 25, 27]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
+      const dateCols = [20, 22, 24, 26];   // 1-indexed: date columns
+      const numCol = 7; // 1-indexed: Number of Instruments
+      const complexityCol = 6; // 1-indexed: Complexity
+      const correlCol = 9;     // 1-indexed: Correlation Required
       for (let r = 2; r <= rows.length + 1; r++) {
         const row = ws.getRow(r);
         const isEvenRow = r % 2 === 0; // row 2=even, row 3=odd, ...
@@ -1078,8 +1080,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           // Alternating row background
           let fillColor = bgColor;
 
-          // Lab fill-in columns (15-18, 1-indexed = Lab Critical Low/High, Lab AMR Low/High)
-          if (colNumber >= 15 && colNumber <= 18) {
+          // Lab fill-in columns (16-19, 1-indexed = Lab Critical Low/High, Lab AMR Low/High)
+          if (colNumber >= 16 && colNumber <= 19) {
             fillColor = "FFDDEEFF";
           }
 
@@ -1135,22 +1137,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
       }
 
-      // ── Add notes to critical-value header cells (columns L, M, N = 12, 13, 14) ──
+      // ── Add notes to critical-value header cells (columns M, N, O = 13, 14, 15) ──
       const critNote = "Source: Mayo Clinic Laboratories Critical Values / Critical Results List. These are Mayo Clinic's published critical thresholds, provided as a reference. Each laboratory must establish and approve its own critical value policy.";
-      for (const col of [12, 13, 14]) {
+      for (const col of [13, 14, 15]) {
         headerRow.getCell(col).note = critNote;
       }
 
-      // ── Add notes to Reference Range and AMR header cells (columns J=10, K=11) ──
+      // ── Add notes to Reference Range and AMR header cells (columns K=11, L=12) ──
       const refRangeNote = "Reference ranges must be established and verified by each laboratory per CLIA 493.1253. Values shown are lab-entered only.";
-      headerRow.getCell(10).note = refRangeNote;
+      headerRow.getCell(11).note = refRangeNote;
       const amrNote = "Analytical Measurement Range must be verified by each laboratory per CLIA 493.1253(b)(1). Values shown are lab-entered only.";
-      headerRow.getCell(11).note = amrNote;
+      headerRow.getCell(12).note = amrNote;
 
-      // ── Add notes to Lab AMR header cells (columns Q=17, R=18) ──
+      // ── Add notes to Lab AMR header cells (columns R=18, S=19) ──
       const labAmrNote = "Enter your instrument's verified AMR per CLIA 493.1253(b)(1).";
-      headerRow.getCell(17).note = labAmrNote;
       headerRow.getCell(18).note = labAmrNote;
+      headerRow.getCell(19).note = labAmrNote;
 
       // Freeze pane at C2: cols A-B frozen + header row frozen
       ws.views = [{ state: "frozen" as const, xSplit: 2, ySplit: 1, topLeftCell: "C2" }];

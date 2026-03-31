@@ -360,6 +360,15 @@ sqlite.exec(`
   );
 `);
 
+// Add serial_number column to veritamap_instruments if upgrading
+{
+  const instrCols = sqlite.prepare("PRAGMA table_info(veritamap_instruments)").all() as { name: string }[];
+  const instrColNames = instrCols.map((c) => c.name);
+  if (!instrColNames.includes("serial_number")) {
+    try { sqlite.exec("ALTER TABLE veritamap_instruments ADD COLUMN serial_number TEXT"); } catch {}
+  }
+}
+
 // Seed VeritaStaff demo data for Riverside Regional (user_id = 1)
 {
   const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE clia_number = '05D2187634'").get() as any;

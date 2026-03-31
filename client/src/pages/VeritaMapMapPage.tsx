@@ -36,6 +36,7 @@ type Role = "Primary" | "Backup" | "Satellite" | "Reference" | "POC";
 interface InstrumentOnTest {
   instrument_name: string;
   role: Role;
+  serial_number?: string | null;
 }
 
 interface TestRecord {
@@ -175,11 +176,16 @@ const ROLE_STYLES: Record<Role, string> = {
 function InstrumentBadge({ instr }: { instr: InstrumentOnTest }) {
   const roleStyle = ROLE_STYLES[instr.role] ?? "bg-muted text-muted-foreground";
   return (
-    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border border-border bg-muted/50 whitespace-nowrap mr-1 mb-0.5">
-      <span className="truncate max-w-[90px]">{instr.instrument_name}</span>
-      <span className={`ml-1 px-1 py-0 rounded text-[9px] font-semibold ${roleStyle}`}>
-        {instr.role}
+    <span className="inline-flex flex-col mr-1 mb-0.5">
+      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border border-border bg-muted/50 whitespace-nowrap">
+        <span className="truncate max-w-[90px]">{instr.instrument_name}</span>
+        <span className={`ml-1 px-1 py-0 rounded text-[9px] font-semibold ${roleStyle}`}>
+          {instr.role}
+        </span>
       </span>
+      {instr.serial_number && (
+        <span className="text-[9px] text-muted-foreground px-1.5">S/N: {instr.serial_number}</span>
+      )}
     </span>
   );
 }

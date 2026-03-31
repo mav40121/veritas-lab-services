@@ -61,6 +61,7 @@ interface InstrumentEntry {
   instrument_name: string;
   role: Role;
   category: string;
+  serial_number?: string | null;
 }
 
 interface TestToggle {
@@ -605,6 +606,7 @@ export default function VeritaMapBuildPage() {
   const [manualEntry, setManualEntry] = useState(false);
   const [manualInstrumentName, setManualInstrumentName] = useState("");
   const [role, setRole] = useState<Role>("Primary");
+  const [serialNumber, setSerialNumber] = useState("");
 
   // "Other" write-in state for cascade
   const [customDepartment, setCustomDepartment] = useState("");
@@ -708,6 +710,7 @@ export default function VeritaMapBuildPage() {
             instrument_name: name,
             role,
             category,
+            serial_number: serialNumber.trim() || null,
           }),
         }
       );
@@ -732,6 +735,7 @@ export default function VeritaMapBuildPage() {
       setCustomDepartment("");
       setCustomVendor("");
       setCustomInstrument("");
+      setSerialNumber("");
       // Initialize tests for new instrument
       const fdaInstr = INSTRUMENT_DATA[newInstr.instrument_name];
       if (fdaInstr) {
@@ -1149,6 +1153,18 @@ export default function VeritaMapBuildPage() {
               </div>
             )}
 
+            {/* Serial Number (optional, always visible) */}
+            <div className="max-w-xs mt-3">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Serial Number</label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="e.g. SN-2024-00142"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Optional. Used for maintenance records and instrument inventory.</p>
+            </div>
+
             {/* Helper note for Other instrument */}
             {(isOtherInstrument || isOtherVendor) && !isOtherDepartment && (
               <p className="text-[11px] text-muted-foreground flex items-start gap-1.5 mt-2">
@@ -1253,6 +1269,9 @@ export default function VeritaMapBuildPage() {
                         ? "Custom instrument - add tests in Step 2"
                         : `${fdaInstr?.testCount ?? 0} ${instr.category === "Manual Procedures" ? "tests" : "FDA-cleared tests"}`}
                     </span>
+                    {instr.serial_number && (
+                      <span className="text-[10px] text-muted-foreground">S/N: {instr.serial_number}</span>
+                    )}
                   </div>
                   <Button
                     variant="ghost"
