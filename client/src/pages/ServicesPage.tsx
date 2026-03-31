@@ -43,7 +43,7 @@ const serviceGroups = [
           "Identification of inefficiencies from staffing gaps, outdated processes, or resource misallocation",
           "Customized analysis reports with clear, actionable recommendations",
           "C-suite communication support: data-driven staffing rationales",
-          "Authored by Michael Veri, author of \"Capturing Productivity in the Laboratory\"",
+          "Authored by Michael Veri, MS, MBA, MLS(ASCP), CPHQ - author of Lab Management 101: A Guide to Laboratory Leadership",
         ],
         cta: "Start a productivity analysis",
       },
@@ -58,7 +58,7 @@ const serviceGroups = [
         category: "Coaching",
         title: "Leadership Coaching",
         duration: "1 hr sessions",
-        pricing: "Email us!",
+        pricing: "Contact for pricing",
         description: "VLS offers coaching services to laboratory leaders. You pick the topics, whether improving your lab, C-suite relationships, or learning how to advance into laboratory leadership.",
         details: [
           "Single 1-hour sessions or blocks of 10",
@@ -237,6 +237,14 @@ export default function ServicesPage() {
           <p className="text-muted-foreground leading-relaxed">
             Laboratory compliance isn't a one-time event. VeritaAssure is built on the belief that inspection readiness should be a permanent state, not a sprint. Whether you engage us for a single mock survey or an ongoing partnership, every service we deliver is designed to leave your lab more prepared, more documented, and more confident than when we arrived.
           </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-8">
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+              <Link href="/contact">Schedule a Consultation</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/veritacheck">Explore the Software Suite</Link>
+            </Button>
+          </div>
         </div>
       </section>
     </div>
