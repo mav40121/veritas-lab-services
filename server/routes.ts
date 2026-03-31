@@ -796,7 +796,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Column widths
       const colWidths = [
-        20, 55, 18, 20, 14, 22, 14, 20, 22, 22, 25, 14, 14, 18, 14, 14, 12, 12,
+        22, 55, 18, 20, 14, 22, 14, 20, 24, 25, 20, 22, 22, 18, 14, 14, 12, 12,
         18, 18, 18, 18, 18, 18, 18, 18, 18,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
@@ -877,6 +877,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const statusCols = [20, 22, 24, 26]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
       const dateCols = [19, 21, 23, 25];   // 1-indexed: date columns
       const numCol = 6; // 1-indexed: Number of Instruments
+      const complexityCol = 5; // 1-indexed: Complexity
+      const correlCol = 8;     // 1-indexed: Correlation Required
       for (let r = 2; r <= rows.length + 1; r++) {
         const row = ws.getRow(r);
         const isEvenRow = r % 2 === 0; // row 2=even, row 3=odd, ...
@@ -894,6 +896,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           // Lab fill-in columns (15-18, 1-indexed = Lab Critical Low/High, Lab AMR Low/High)
           if (colNumber >= 15 && colNumber <= 18) {
             fillColor = "FFDDEEFF";
+          }
+
+          // Complexity column color coding
+          if (colNumber === complexityCol) {
+            const val = String(cell.value || "");
+            if (val === "HIGH") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (val === "MODERATE") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+            } else if (val === "WAIVED") {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
+          }
+
+          // Correlation Required color coding
+          if (colNumber === correlCol) {
+            const val = String(cell.value || "");
+            if (val === "Yes") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (val === "No") {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
           }
 
           // Status columns: color-code based on value
@@ -2201,25 +2225,90 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Number of Instruments", "Correlation Required",
         "Last Cal Ver Date", "Last Method Comp Date", "Last Precision Date", "Notes",
       ];
-      ws.columns = headers.map((h) => ({ header: h, key: h, width: 22 }));
+      const colWidths = [22, 55, 18, 20, 14, 22, 20, 18, 18, 18, 30];
+      ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
 
-      for (const t of tests) {
+      const dataRows = tests.map((t: any) => {
         const instruments = t.instruments || [];
         const instrList = instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join("; ");
         const isWaived = t.complexity === "WAIVED";
-        ws.addRow([
+        return [
           t.analyte, instrList, instruments[0]?.category || "", t.specialty, t.complexity,
           instruments.length, !isWaived && instruments.length >= 2 ? "Yes" : "No",
           t.last_cal_ver || "", t.last_method_comp || "", t.last_precision || "", t.notes || "",
-        ]);
+        ];
+      });
+      for (const row of dataRows) {
+        ws.addRow(row);
       }
 
+      // Shared border style
+      const thinBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+
+      // Header row styling
       const headerRow = ws.getRow(1);
+      headerRow.height = 20;
       headerRow.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } } as any;
+        cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
       });
+
+      // Data rows styling
+      const complexityCol = 5; // 1-indexed
+      const correlCol = 7;     // 1-indexed
+      for (let r = 2; r <= dataRows.length + 1; r++) {
+        const row = ws.getRow(r);
+        const isEvenRow = r % 2 === 0;
+        const bgColor = isEvenRow ? "FFEBF3F8" : "FFFFFFFF";
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
+
+          // Complexity column color coding
+          if (colNumber === complexityCol) {
+            const val = String(cell.value || "");
+            if (val === "HIGH") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (val === "MODERATE") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+            } else if (val === "WAIVED") {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
+          }
+
+          // Correlation Required color coding
+          if (colNumber === correlCol) {
+            const val = String(cell.value || "");
+            if (val === "Yes") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (val === "No") {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
+          }
+
+          // Number of Instruments — right align
+          if (colNumber === 6) {
+            cell.alignment = { horizontal: "right", vertical: "middle" };
+          }
+        });
+      }
+
+      // Freeze pane at C2: cols A-B frozen + header row frozen
+      ws.views = [{ state: "frozen" as const, xSplit: 2, ySplit: 1, topLeftCell: "C2" }];
+
+      // Auto-filter on all columns
+      const lastColLetter = String.fromCharCode(64 + headers.length);
+      ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
 
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
