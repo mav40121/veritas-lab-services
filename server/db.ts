@@ -490,6 +490,11 @@ twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
 const twoYearsISO = twoYearsFromNow.toISOString();
 sqlite.exec(`UPDATE users SET subscription_status = 'active', subscription_expires_at = '${twoYearsISO}' WHERE id <= 11 AND plan = 'lab'`);
 
+// Add onboarding_seen column for Getting Started page tracking
+if (!colNames.includes("onboarding_seen")) {
+  sqlite.exec("ALTER TABLE users ADD COLUMN onboarding_seen INTEGER DEFAULT 0");
+}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);

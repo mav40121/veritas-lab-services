@@ -386,7 +386,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
 
-    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count FROM users WHERE id = ?").get(user.id) as any;
+    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count, onboarding_seen FROM users WHERE id = ?").get(user.id) as any;
     const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
 
     // Check for seat access: user must be an account owner or have an active seat
@@ -421,6 +421,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           cliaLabName: userRow?.clia_lab_name || null,
           cliaTier: userRow?.clia_tier || null,
           seatCount: userRow?.seat_count || 1,
+          onboardingSeen: !!(userRow?.onboarding_seen),
         },
       });
     }
@@ -445,6 +446,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cliaLabName: userRow?.clia_lab_name || null,
         cliaTier: userRow?.clia_tier || null,
         seatCount: userRow?.seat_count || 1,
+        onboardingSeen: !!(userRow?.onboarding_seen),
       },
     });
   });
@@ -452,7 +454,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {
     const user = storage.getUserById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count FROM users WHERE id = ?").get(user.id) as any;
+    const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count, onboarding_seen FROM users WHERE id = ?").get(user.id) as any;
     const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
 
     // Update session last_active
@@ -471,6 +473,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cliaLabName: userRow?.clia_lab_name || null,
       cliaTier: userRow?.clia_tier || null,
       seatCount: userRow?.seat_count || 1,
+      onboardingSeen: !!(userRow?.onboarding_seen),
     });
   });
 
@@ -4566,6 +4569,104 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.error("[VeritaLab] Excel export error:", err);
       res.status(500).json({ error: "Excel export failed" });
+    }
+  });
+
+  // ── ONBOARDING STATUS ──────────────────────────────────────────────────
+  app.get("/api/onboarding/status", authMiddleware, (req: any, res) => {
+    try {
+      const userId = req.userId;
+      const userRow = (db as any).$client.prepare(
+        "SELECT clia_number, onboarding_seen FROM users WHERE id = ?"
+      ).get(userId) as any;
+
+      const cliaEntered = !!(userRow?.clia_number && userRow.clia_number.trim() !== '');
+      const onboardingSeen = !!(userRow?.onboarding_seen);
+
+      const mapCount = ((db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM veritamap_maps WHERE user_id = ?"
+      ).get(userId) as any)?.cnt || 0;
+
+      const studyCount = ((db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?"
+      ).get(userId) as any)?.cnt || 0;
+
+      const scanCount = ((db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM veritascan_scans WHERE user_id = ?"
+      ).get(userId) as any)?.cnt || 0;
+
+      const compCount = ((db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM competency_programs WHERE user_id = ?"
+      ).get(userId) as any)?.cnt || 0;
+
+      const staffCount = ((db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM staff_employees WHERE user_id = ?"
+      ).get(userId) as any)?.cnt || 0;
+
+      const certCount = ((db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM lab_certificates WHERE user_id = ?"
+      ).get(userId) as any)?.cnt || 0;
+
+      const steps: Record<string, boolean> = {
+        clia_entered: cliaEntered,
+        map_created: mapCount > 0,
+        study_created: studyCount > 0,
+        scan_started: scanCount > 0,
+        comp_created: compCount > 0,
+        staff_added: staffCount > 0,
+        cert_entered: certCount > 0,
+      };
+
+      const completedCount = Object.values(steps).filter(Boolean).length;
+
+      res.json({
+        onboarding_seen: onboardingSeen,
+        steps,
+        completed_count: completedCount,
+        total_count: 7,
+      });
+    } catch (err: any) {
+      console.error("[onboarding] status error:", err);
+      res.status(500).json({ error: "Failed to fetch onboarding status" });
+    }
+  });
+
+  app.post("/api/onboarding/seen", authMiddleware, (req: any, res) => {
+    try {
+      (db as any).$client.prepare(
+        "UPDATE users SET onboarding_seen = 1 WHERE id = ?"
+      ).run(req.userId);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[onboarding] seen error:", err);
+      res.status(500).json({ error: "Failed to update onboarding status" });
+    }
+  });
+
+  // ── ACCOUNT SETTINGS ────────────────────────────────────────────────────
+  app.get("/api/account/settings", authMiddleware, (req: any, res) => {
+    try {
+      const userRow = (db as any).$client.prepare(
+        "SELECT clia_number, clia_lab_name FROM users WHERE id = ?"
+      ).get(req.userId) as any;
+      res.json({
+        clia_number: userRow?.clia_number || '',
+        clia_lab_name: userRow?.clia_lab_name || '',
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch account settings" });
+    }
+  });
+
+  app.put("/api/account/settings", authMiddleware, (req: any, res) => {
+    try {
+      const { clia_number, clia_lab_name } = req.body;
+      (db as any).$client.prepare(
+        "UPDATE users SET clia_number = ?, clia_lab_name = ? WHERE id = ?"
+      ).run(clia_number || null, clia_lab_name || null, req.userId);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to update account settings" });
     }
   });
 

@@ -28,6 +28,7 @@ export interface AuthUser {
   cliaLabName?: string | null;
   cliaTier?: string | null;
   seatCount?: number;
+  onboardingSeen?: boolean;
 }
 
 export function setAuth(token: string, user: AuthUser) {

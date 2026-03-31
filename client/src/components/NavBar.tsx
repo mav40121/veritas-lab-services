@@ -3,7 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard, Play } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard, Play, ListChecks } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +30,7 @@ const allMobileLinks = [
   { href: "/veritastaff", label: "VeritaStaff™" },
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/book", label: "Book" },
+  { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Resources" },
   { href: "/roadmap", label: "Roadmap" },
   { href: "/demo", label: "Live Demo" },
@@ -121,7 +122,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/resources","/book","/study-guide","/roadmap"].some(p => location.startsWith(p))
+                ["/resources","/book","/study-guide","/roadmap","/getting-started"].some(p => location.startsWith(p))
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
@@ -130,6 +131,15 @@ export function NavBar() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem asChild>
+                <Link href="/getting-started" className="flex items-start gap-2 py-2">
+                  <ListChecks size={15} className="mt-0.5 text-primary shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium">Getting Started</div>
+                    <div className="text-xs text-muted-foreground">Set up your lab step by step</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/resources" className="flex items-start gap-2 py-2">
                   <div>

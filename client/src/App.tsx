@@ -47,6 +47,9 @@ import VeritaLabAppPage from "@/pages/VeritaLabAppPage";
 import CumsumPage from "@/pages/CumsumPage";
 import SeatManagementPage from "@/pages/SeatManagementPage";
 import RoadmapPage from "@/pages/RoadmapPage";
+import GettingStartedPage from "@/pages/GettingStartedPage";
+import AccountSettingsPage from "@/pages/AccountSettingsPage";
+import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function SiteFooter() {
   return (
@@ -160,6 +163,7 @@ function AppContent() {
       <GATracker />
       <NavBar />
       <SubscriptionBanner />
+      <OnboardingBanner />
       <OnboardingGuard />
       <main className="flex-1">
         <Switch>
@@ -201,6 +205,8 @@ function AppContent() {
           <Route path="/veritalab-app" component={VeritaLabAppPage} />
           <Route path="/cumsum" component={CumsumPage} />
           <Route path="/roadmap" component={RoadmapPage} />
+          <Route path="/getting-started" component={GettingStartedPage} />
+          <Route path="/account/settings" component={AccountSettingsPage} />
           <Route path="/account/seats" component={SeatManagementPage} />
           <Route component={NotFound} />
         </Switch>
