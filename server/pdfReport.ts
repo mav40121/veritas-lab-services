@@ -452,12 +452,12 @@ function narrativeHTML(
         narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
       narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range. `;
-      narrative += `The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       const failCount = results.totalCount - results.passCount;
       narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
       narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. `;
-      narrative += `The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -486,11 +486,11 @@ function narrativeHTML(
       narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
       narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% is ${biasInterp}. `;
       narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting. `;
-      narrative += `The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
       narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. `;
-      narrative += `The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -513,10 +513,10 @@ function narrativeHTML(
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
-      narrative += `The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The precision study for ${analyteName} did not meet acceptance criteria. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. `;
-      narrative += `The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -587,6 +587,14 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
     </tr>`;
   }).join("");
 
+  // Compact summary stats for page 1
+  const firstReg = Object.values(results.regression || {})[0] as any;
+  const compactSlope = firstReg ? sf(firstReg.slope, 4) : "---";
+  const compactR2 = firstReg ? sf(firstReg.r2, 4) : "---";
+  const maxRecovery = recoveries.length > 0 ? sf(Math.max(...recoveries), 1) + "%" : "---";
+  const minRecovery = recoveries.length > 0 ? sf(Math.min(...recoveries), 1) + "%" : "---";
+  const compactPassCount = `${results.passCount}/${results.totalCount}`;
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
   /* Page numbering */
   .page-num::after { content: "Page " counter(page); }
@@ -599,14 +607,16 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   <div class="charts">${scatterSvg}${recoverySvg}</div>
 
   <hr class="divider">
-  <div class="section-label">Linearity Summary</div>
-  <table>
-    <thead><tr>
-      <th></th><th class="text-right">N</th><th class="text-right">Slope</th>
-      <th class="text-right">Intercept</th><th class="text-right">Prop. Bias</th>
-      <th class="text-right">R</th><th class="text-right">R²</th>
-    </tr></thead>
-    <tbody>${linRows}</tbody>
+  <div class="section-label">Key Statistics Summary</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Slope</td><td style="width:25%">${compactSlope}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">R²</td><td style="width:25%">${compactR2}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Max % Recovery</td><td>${maxRecovery}</td>
+          <td style="color:${MUTED};font-weight:700">Min % Recovery</td><td>${minRecovery}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${compactPassCount}</td>
+          <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
+    </tbody>
   </table>
 
   ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName)}
@@ -614,8 +624,23 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   ${directorReviewHTML()}
   ${signatureHTML()}
 
+  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
+
   <div class="stats-section">
-    <div class="section-label">Statistical Analysis and Experimental Results</div>
+    <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+
+    <div class="section-label" style="margin-top:8px">Linearity Summary</div>
+    <table>
+      <thead><tr>
+        <th></th><th class="text-right">N</th><th class="text-right">Slope</th>
+        <th class="text-right">Intercept</th><th class="text-right">Prop. Bias</th>
+        <th class="text-right">R</th><th class="text-right">R²</th>
+      </tr></thead>
+      <tbody>${linRows}</tbody>
+    </table>
+
+    <hr class="divider" style="margin-top:8px">
+    <div class="section-label">Sample-by-Sample Results</div>
     <table>
       <thead><tr>
         <th></th><th class="text-right">Assigned</th><th class="text-right">Mean</th>
@@ -790,6 +815,25 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     </tr>`;
   }).join("");
 
+  // Compact key stats for page 1 — use the first comparison instrument
+  const firstCompName = comparisonNames[0] || "";
+  const firstDemKey = Object.keys(results.regression || {}).find(k => k.includes(firstCompName) && k.includes("Deming"));
+  const firstDemEntry = firstDemKey ? (results.regression || {})[firstDemKey] : undefined;
+  const firstBAEntry = (results.blandAltman || {})[firstCompName];
+  const compactCorrCoef = firstDemEntry ? sf(Math.sqrt(firstDemEntry.r2 ?? 0), 4) : "---";
+  const compactDemSlope = firstDemEntry ? sf(firstDemEntry.slope, 4) : "---";
+  const compactMeanBias = firstBAEntry ? sf(firstBAEntry.meanDiff, 3) : "---";
+  const compactMeanPctBias = firstBAEntry ? sf(firstBAEntry.pctMeanDiff, 2) + "%" : "---";
+  const compactMCPassCount = `${results.passCount}/${results.totalCount}`;
+
+  // Build charts for just the first comparison for page 1
+  const p1xVals = levelResults.map(r => r.referenceValue);
+  const p1yVals = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].value);
+  const p1CorrSvg = scatterSVG(p1xVals, p1yVals.length ? p1yVals : p1xVals, `${primaryName} (Primary)`, firstCompName, `${firstCompName} vs. ${primaryName}`, true);
+  const p1avgs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => (r.referenceValue + r.instruments[firstCompName].value) / 2);
+  const p1pctDiffs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].pctDifference);
+  const p1BaSvg = blandAltmanSVG(p1avgs, p1pctDiffs, study.cliaAllowableError, firstBAEntry?.pctMeanDiff ?? 0, firstCompName);
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
@@ -799,14 +843,34 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   <div class="section-heading">Correlation / Method Comparison Study</div>
   <div class="report-title-sub">Primary Method: ${primaryName} | Comparison Method${comparisonNames.length > 1 ? "s" : ""}: ${comparisonNames.join(", ")}</div>
 
-  ${comparisonSections}
+  <div class="charts">${p1CorrSvg}${p1BaSvg}</div>
+
+  <hr class="divider">
+  <div class="section-label">Key Statistics Summary</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Corr Coef (R)</td><td style="width:25%">${compactCorrCoef}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">Deming Slope</td><td style="width:25%">${compactDemSlope}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Mean Bias</td><td>${compactMeanBias}</td>
+          <td style="color:${MUTED};font-weight:700">Mean % Bias</td><td>${compactMeanPctBias}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${compactMCPassCount}</td>
+          <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
+    </tbody>
+  </table>
 
   ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
 
   ${directorReviewHTML()}
   ${signatureHTML()}
 
+  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
+
   <div class="stats-section">
+    <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+
+    ${comparisonSections}
+
+    <hr class="divider" style="margin-top:8px">
     <div class="section-label">Sample-by-Sample Comparison Results</div>
     <table>
       <thead><tr>
@@ -881,6 +945,12 @@ function buildPrecisionHTML(study: Study, results: any): string {
       </div>`;
   }).join("");
 
+  // Compact key stats for page 1
+  const precMean = levelResults.length > 0 ? sf(levelResults[0].mean, 3) : "---";
+  const precSD = levelResults.length > 0 ? sf(levelResults[0].sd, 3) : "---";
+  const precMaxCV = levelResults.length > 0 ? sf(Math.max(...levelResults.map((r: any) => r.cv ?? 0)), 2) + "%" : "---";
+  const precPassCount = `${results.passCount}/${results.totalCount}`;
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
@@ -890,24 +960,41 @@ function buildPrecisionHTML(study: Study, results: any): string {
   <div class="section-heading">Precision Verification (EP15)</div>
 
   <hr class="divider">
-  <div class="section-label">Precision Summary</div>
-  <table>
-    <thead><tr>
-      <th>Level</th><th class="text-right">N</th><th class="text-right">Mean</th>
-      <th class="text-right">SD</th><th class="text-right">CV%</th>
-      <th class="text-right">Allow CV%</th><th class="text-right">Pass?</th>
-    </tr></thead>
-    <tbody>${summaryRows}</tbody>
+  <div class="section-label">Key Statistics Summary</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Mean</td><td style="width:25%">${precMean}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">SD</td><td style="width:25%">${precSD}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">CV%</td><td>${precMaxCV}</td>
+          <td style="color:${MUTED};font-weight:700">Allowable CV%</td><td>±${cliaCV}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${precPassCount}</td>
+          <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
+    </tbody>
   </table>
-
-  ${anovaSection}
 
   ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName)}
 
   ${directorReviewHTML()}
   ${signatureHTML()}
 
+  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
+
   <div class="stats-section">
+    <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+
+    <div class="section-label" style="margin-top:8px">Precision Summary</div>
+    <table>
+      <thead><tr>
+        <th>Level</th><th class="text-right">N</th><th class="text-right">Mean</th>
+        <th class="text-right">SD</th><th class="text-right">CV%</th>
+        <th class="text-right">Allow CV%</th><th class="text-right">Pass?</th>
+      </tr></thead>
+      <tbody>${summaryRows}</tbody>
+    </table>
+
+    ${anovaSection}
+
+    <hr class="divider" style="margin-top:8px">
     <div class="section-label">Individual Measurements</div>
     ${valuesSection}
     ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
@@ -994,7 +1081,9 @@ function buildLotToLotHTML(study: Study, results: any): string {
   const rawData = safeJsonParse(study.dataPoints) || {};
   const teaPct = (study.cliaAllowableError * 100).toFixed(1);
 
-  let cohortSections = "";
+  // Split cohort sections: page 1 gets charts + compact summary, page 2 gets full data tables
+  let cohortChartSections = "";
+  let cohortDataSections = "";
   for (const cohort of (results.cohorts || [])) {
     const specimens = cohort.specimens || [];
     const currentVals = specimens.map((s: any) => s.currentLot);
@@ -1004,15 +1093,6 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
     const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} - Scatter`, true);
     const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError);
-
-    const summaryRows = `
-      <tr><td style="color:${MUTED};font-weight:700">N</td><td>${cohort.n}</td>
-          <td style="color:${MUTED};font-weight:700">Mean Bias</td><td>${sf(cohort.meanPctDiff, 2)}%</td></tr>
-      <tr><td style="color:${MUTED};font-weight:700">SD</td><td>${sf(cohort.sdPctDiff, 2)}%</td>
-          <td style="color:${MUTED};font-weight:700">Mean |%Diff|</td><td>${sf(cohort.meanAbsPctDiff, 2)}%</td></tr>
-      <tr><td style="color:${MUTED};font-weight:700">Max |%Diff|</td><td>${sf(cohort.maxAbsPctDiff, 2)}%</td>
-          <td style="color:${MUTED};font-weight:700">Coverage</td><td class="${(cohort.coverage ?? 0) >= 90 ? "pass" : "fail"}">${sf(cohort.coverage, 0)}%</td></tr>
-    `;
 
     const dataRows = specimens.map((s: any, i: number) => {
       const pfClass = s.passFail === "Pass" ? "pass" : "fail";
@@ -1025,30 +1105,33 @@ function buildLotToLotHTML(study: Study, results: any): string {
       </tr>`;
     }).join("");
 
-    cohortSections += `
+    // Page 1: charts only
+    cohortChartSections += `
       <div class="section-label">${cohort.cohort} Cohort</div>
       <div class="charts">${scatter}${diffPlot}</div>
-      <hr class="divider">
-      <table style="font-size:8pt;margin-bottom:8px"><tbody>${summaryRows}</tbody></table>
-      <div class="section-label">${cohort.cohort} - ${cohort.pass ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>'}</div>
     `;
 
-    cohortSections += `
-      <div class="stats-section">
-        <div class="section-label">${cohort.cohort} Cohort - Individual Results</div>
-        <table>
-          <thead><tr><th>Specimen</th><th class="text-right">Current Lot</th><th class="text-right">New Lot</th><th class="text-right">% Diff</th><th class="text-right">Pass?</th></tr></thead>
-          <tbody>${dataRows}</tbody>
-        </table>
-      </div>
+    // Page 2: full data tables
+    cohortDataSections += `
+      <div class="section-label">${cohort.cohort} Cohort - Individual Results</div>
+      <table>
+        <thead><tr><th>Specimen</th><th class="text-right">Current Lot</th><th class="text-right">New Lot</th><th class="text-right">% Diff</th><th class="text-right">Pass?</th></tr></thead>
+        <tbody>${dataRows}</tbody>
+      </table>
     `;
   }
 
   const lotInfo = rawData.currentLot ? `<div style="font-size:8pt;margin-bottom:6px">Current Lot: ${rawData.currentLot} · New Lot: ${rawData.newLot} · Analyte: ${rawData.analyte || study.testName} ${rawData.units ? `(${rawData.units})` : ""}</div>` : "";
 
+  // Compact key stats for page 1
+  const firstCohort = (results.cohorts || [])[0];
+  const l2lMeanPctDiff = firstCohort ? sf(firstCohort.meanPctDiff, 2) + "%" : "---";
+  const l2lMaxAbsPctDiff = firstCohort ? sf(firstCohort.maxAbsPctDiff, 2) + "%" : "---";
+  const l2lPassCount = `${results.passCount}/${results.totalCount}`;
+
   const cliaStatement = results.overallPass
-    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
@@ -1062,11 +1145,31 @@ function buildLotToLotHTML(study: Study, results: any): string {
   ${headerHTML(study, (study as any)._cliaNumber)}
   <div class="section-heading">Lot-to-Lot Verification</div>
   ${lotInfo}
-  ${cohortSections}
+  ${cohortChartSections}
+
+  <hr class="divider">
+  <div class="section-label">Key Statistics Summary</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Mean % Diff</td><td style="width:25%">${l2lMeanPctDiff}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">Max |% Diff|</td><td style="width:25%">${l2lMaxAbsPctDiff}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${l2lPassCount}</td>
+          <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
+    </tbody>
+  </table>
+
   ${narrative}
   ${directorReviewHTML()}
   ${signatureHTML()}
-  ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+
+  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
+
+  <div class="stats-section">
+    <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+    ${cohortDataSections}
+    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+  </div>
+
   ${supportingPageHTML(study, instrumentNames)}
   </body></html>`;
 }
@@ -1216,8 +1319,8 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const overallVerdict = results.overallPass ? "PASS" : "FAIL";
   const narrativeText = results.summary;
   const ptCoagCliaStatement = results.overallPass
-    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText} ${ptCoagCliaStatement}</p>
@@ -1230,6 +1333,11 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   const reagentInfo = rawData.reagentLot ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "-"} · ISI: ${rawData.module1?.isi ?? "-"}</div>` : "";
 
+  // Page 1 compact key stats
+  const ptCompactM1Pass = module1.pass ? "PASS" : "FAIL";
+  const ptCompactM2Pass = module2.pass ? "PASS" : "FAIL";
+  const ptCompactM3Pass = module3 ? (module3.pass ? "PASS" : "FAIL") : "N/A";
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
@@ -1238,25 +1346,42 @@ function buildPTCoagHTML(study: Study, results: any): string {
   <div class="section-heading">PT/Coag New Lot Validation</div>
   ${reagentInfo}
 
-  ${m1Section}
+  <div class="charts">${m2Scatter}${m2EI}</div>
+
+  <hr class="divider">
+  <div class="section-label">Key Statistics Summary</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Module 1 (Normal Mean/RI)</td><td style="width:25%" class="${module1.pass ? "pass" : "fail"}">${ptCompactM1Pass}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">Module 2 (Two-Instrument)</td><td style="width:25%" class="${module2.pass ? "pass" : "fail"}">${ptCompactM2Pass}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Module 3 (Lot Comparison)</td><td class="${module3 ? (module3.pass ? "pass" : "fail") : ""}">${ptCompactM3Pass}</td>
+          <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${overallVerdict}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Geo Mean PT</td><td>${module1.geoMeanPT.toFixed(2)} sec</td>
+          <td style="color:${MUTED};font-weight:700">Geo Mean INR</td><td>${module1.geoMeanINR.toFixed(3)}</td></tr>
+    </tbody>
+  </table>
 
   ${narrative}
   ${directorReviewHTML()}
   ${signatureHTML()}
 
-  ${m2Section}
+  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
+
   <div class="stats-section">
+    <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+
+    ${m1Section}
+
+    ${m2Section}
     <div class="section-label">Module 2 - Experimental Results</div>
     <table>
       <thead><tr><th>Specimen</th><th class="text-right">Inst 1</th><th class="text-right">Inst 2</th><th class="text-right">Error Index</th><th class="text-right">Pass?</th></tr></thead>
       <tbody>${m2DataRows}</tbody>
     </table>
-  </div>
 
-  ${m3Section}
+    ${m3Section}
 
-  <div class="stats-section">
-    <div class="section-label">Module 1 - Individual Results</div>
+    <div class="section-label" style="margin-top:12px">Module 1 - Individual Results</div>
     <table>
       <thead><tr><th>Specimen</th><th class="text-right">PT (sec)</th><th class="text-right">INR</th><th class="text-right">PT in RI?</th><th class="text-right">INR in RI?</th></tr></thead>
       <tbody>${m1DataRows}</tbody>
@@ -1309,8 +1434,8 @@ function buildQCRangeHTML(study: Study, results: any): string {
     </tr>`).join("");
 
   const qcCliaStatement = r.overallPass
-    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `New QC ranges have been established for ${analytes.join(", ")}. ` +
     `Runs were performed across ${r.dateRange?.start || ''} to ${r.dateRange?.end || ''} on ${study.instrument}. ` +
     (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`) +
@@ -1327,16 +1452,17 @@ function buildQCRangeHTML(study: Study, results: any): string {
     </div>
     ${directorReviewHTML()}
     ${signatureHTML()}
-    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
-    <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot - the historical/peer-derived SD should be used for control limits.</div>
+    <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
-    <div class="eval-title" style="margin-top:8px">Statistical Results</div>
+    <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
     <table class="data-table"><thead><tr>
       <th>Analyzer</th><th>Analyte</th><th>Level</th><th style="text-align:right">N</th>
       <th style="text-align:right">New Mean</th><th style="text-align:right">New SD</th><th style="text-align:right">CV%</th>
       <th style="text-align:right">Old Mean</th><th style="text-align:right">% Diff</th>
     </tr></thead><tbody>${tableRows}</tbody></table>
+    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
+    <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot - the historical/peer-derived SD should be used for control limits.</div>
     ${supportingPageHTML(study, safeJsonParse(study.instruments))}
   </body></html>`;
 }
@@ -1375,8 +1501,8 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   const sampleLabel = rawDP.sampleType === "normal" ? "normal" : "random";
   const validAnalytes = (r.analyteResults || []).filter((ar: any) => ar.n > 0);
   const maCoagCliaStatement = r.overallPass
-    ? `The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931. Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `${(r.specimens || []).length} ${sampleLabel} specimens were compared between old lot and new lot on ${study.instrument}. ` +
     validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${(ar.tea * 100).toFixed(0)}% TEa).`).join(" ") +
     ` ${maCoagCliaStatement}`;
@@ -1395,9 +1521,10 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
     ${isiNote}
     ${directorReviewHTML()}
     ${signatureHTML()}
-    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
+    <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
+    <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
     <div class="eval-title" style="margin-top:8px">Per-Analyte Summary</div>
     <table class="data-table"><thead><tr>
       <th>Analyte</th><th style="text-align:right">N</th><th style="text-align:right">Mean New</th>
@@ -1413,6 +1540,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
       <th style="text-align:right">APTT %Diff</th><th style="text-align:right">New Fib</th>
       <th style="text-align:right">Old Fib</th><th style="text-align:right">Fib %Diff</th>
     </tr></thead><tbody>${specimenRows}</tbody></table>
+    ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
     ${supportingPageHTML(study, safeJsonParse(study.instruments))}
   </body></html>`;
 }
