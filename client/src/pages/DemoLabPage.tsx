@@ -37,6 +37,7 @@ export default function DemoLabPage() {
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedStudy, setExpandedStudy] = useState<number | null>(null);
   const [showFullScan, setShowFullScan] = useState(false);
+  const [generating209, setGenerating209] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -56,6 +57,25 @@ export default function DemoLabPage() {
       return next;
     });
   };
+
+  async function handleGenerateCMS209() {
+    setGenerating209(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/demo/staff/cms209`);
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CMS_209_22D0999999_${new Date().toISOString().split("T")[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("CMS 209 generation failed:", err.message);
+    } finally {
+      setGenerating209(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -799,6 +819,21 @@ export default function DemoLabPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              <div className="flex flex-col items-start gap-1">
+                <Button
+                  size="sm"
+                  className="bg-[#006064] hover:bg-[#00838f] text-white font-semibold"
+                  onClick={handleGenerateCMS209}
+                  disabled={generating209}
+                >
+                  <FileText size={14} className="mr-1.5" />
+                  {generating209 ? "Generating..." : "Generate CMS 209"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  CMS 209 -- Laboratory Personnel Report required at every CLIA survey
+                </p>
+              </div>
 
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Keep your personnel records survey-ready.</p>

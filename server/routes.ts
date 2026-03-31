@@ -2503,6 +2503,86 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/demo/staff/cms209 - generate CMS 209 PDF for demo lab
+  app.get("/api/demo/staff/cms209", async (_req, res) => {
+    try {
+      const demoLab = {
+        lab_name: "Riverside Regional Medical Center",
+        clia_number: "22D0999999",
+        lab_address_street: "100 Medical Center Drive",
+        lab_address_city: "Riverside",
+        lab_address_state: "CA",
+        lab_address_zip: "92501",
+      };
+
+      const demoEmployees = [
+        {
+          last_name: "Martinez",
+          first_name: "Jennifer",
+          middle_initial: null,
+          highest_complexity: "H",
+          performs_testing: 1,
+          qualifications_text: "MLS(ASCP)",
+          roles: [{ role: "TP", specialty_number: null }],
+        },
+        {
+          last_name: "Chen",
+          first_name: "Robert",
+          middle_initial: null,
+          highest_complexity: "H",
+          performs_testing: 1,
+          qualifications_text: "MT(ASCP)",
+          roles: [{ role: "TP", specialty_number: null }],
+        },
+        {
+          last_name: "Williams",
+          first_name: "Sarah",
+          middle_initial: null,
+          highest_complexity: "H",
+          performs_testing: 1,
+          qualifications_text: "MLT(ASCP)",
+          roles: [{ role: "TP", specialty_number: null }],
+        },
+        {
+          last_name: "Nguyen",
+          first_name: "David",
+          middle_initial: null,
+          highest_complexity: "H",
+          performs_testing: 1,
+          qualifications_text: "MLS(ASCP)",
+          roles: [
+            { role: "TS", specialty_number: 7 },
+            { role: "TS", specialty_number: 8 },
+          ],
+        },
+      ];
+
+      const specialties: Record<number, string> = {
+        1: "Bacteriology", 2: "Mycobacteriology", 3: "Mycology", 4: "Parasitology",
+        5: "Virology", 6: "Diagnostic Immunology", 7: "Chemistry", 8: "Hematology",
+        9: "Immunohematology", 10: "Radiobioassay", 11: "Cytology", 12: "Histopathology",
+        13: "Dermatopathology", 14: "Ophthalmic Pathology", 15: "Oral Pathology",
+        16: "Histocompatibility", 17: "Clinical Cytogenetics",
+      };
+
+      const pdfBuffer = await generateCMS209PDF({
+        lab: demoLab,
+        employees: demoEmployees,
+        specialties,
+      });
+
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `CMS_209_22D0999999_${date}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("Demo CMS 209 PDF error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
