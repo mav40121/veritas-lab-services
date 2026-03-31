@@ -356,30 +356,30 @@ function seedCompetencyData(sqlite: any, demoUserId: number, now: string) {
 
   // Create 6 assessment items (one per element), all passed
   const itemStmt = sqlite.prepare(`
-    INSERT INTO competency_assessment_items (assessment_id, method_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed,
-      el1_specimen_id, el3_qc_date, el4_date_observed, el5_sample_id, el5_sample_type, el5_acceptable, el6_quiz_id, el6_score, el6_date_taken)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO competency_assessment_items (assessment_id, method_number, element_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed,
+      el1_specimen_id, el2_evidence, el2_date, el3_qc_date, el4_date_observed, el5_sample_id, el5_sample_type, el5_acceptable, el6_quiz_id, el6_score, el6_date_taken)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const elements = [
     { num: 1, label: "Direct Observation of Routine Patient Test Performance", evidence: "Observed processing chemistry panel on VITROS 5600", date: "2026-01-15",
-      el1_specimen_id: "0326:C147", el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
-    { num: 2, label: "Monitoring, Recording and Reporting of Test Results", evidence: "Reviewed result reporting including critical values", date: "2026-01-16",
-      el1_specimen_id: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      el1_specimen_id: "0326:C147", el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+    { num: 2, label: "Monitoring, Recording and Reporting of Test Results", evidence: "0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented", date: "2026-01-16",
+      el1_specimen_id: null, el2_evidence: "0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented", el2_date: "2026-01-16", el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
     { num: 3, label: "QC Performance", evidence: "QC run documented in LIS on date observed", date: "2026-01-17",
-      el1_specimen_id: null, el3_qc_date: "2026-01-10", el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: "2026-01-10", el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
     { num: 4, label: "Direct Observation of Instrument Maintenance", evidence: "Observed daily maintenance on VITROS 5600", date: "2026-01-17",
-      el1_specimen_id: null, el3_qc_date: null, el4_date_observed: "2026-01-15", el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: "2026-01-15", el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
     { num: 5, label: "Blind/PT Sample Performance", evidence: "CAP PT survey, all analytes acceptable", date: "2026-01-18",
-      el1_specimen_id: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: "CAP-2026-C-01", el5_sample_type: "CAP PT Survey", el5_acceptable: 1, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: "CAP-2026-C-01", el5_sample_type: "CAP PT Survey", el5_acceptable: 1, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
     { num: 6, label: "Problem-Solving Assessment (Quiz)", evidence: "Quiz Q-AU5800-001, 2/2 correct, 100%", date: "2026-01-18",
-      el1_specimen_id: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: "Q-AU5800-001", el6_score: 100, el6_date_taken: "2026-01-18" },
+      el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: "Q-AU5800-001", el6_score: 100, el6_date_taken: "2026-01-18" },
   ];
 
   for (const el of elements) {
-    itemStmt.run(assessmentId, el.num, methodGroupId, el.label, el.label, el.evidence, el.date, "JM", "MV",
-      el.el1_specimen_id, el.el3_qc_date, el.el4_date_observed, el.el5_sample_id, el.el5_sample_type, el.el5_acceptable, el.el6_quiz_id, el.el6_score, el.el6_date_taken);
+    itemStmt.run(assessmentId, el.num, el.num, methodGroupId, el.label, el.label, el.evidence, el.date, "JM", "MV",
+      el.el1_specimen_id, el.el2_evidence, el.el2_date, el.el3_qc_date, el.el4_date_observed, el.el5_sample_id, el.el5_sample_type, el.el5_acceptable, el.el6_quiz_id, el.el6_score, el.el6_date_taken);
   }
 
   // Create checklist items for the program
@@ -420,29 +420,39 @@ function backfillCompetencyElements(sqlite: any, programId: number) {
 
   const aid = assessment.id;
 
+  // Backfill element_number from method_number for all rows that lack it
+  sqlite.prepare(
+    "UPDATE competency_assessment_items SET element_number = method_number WHERE assessment_id = ? AND (element_number IS NULL OR element_number = 0)"
+  ).run(aid);
+
   // Element 1: specimen ID
   sqlite.prepare(
-    "UPDATE competency_assessment_items SET el1_specimen_id = ? WHERE assessment_id = ? AND method_number = 1"
+    "UPDATE competency_assessment_items SET el1_specimen_id = ? WHERE assessment_id = ? AND method_number = 1 AND (el1_specimen_id IS NULL OR el1_specimen_id = '')"
   ).run("0326:C147", aid);
+
+  // Element 2: evidence with specimen ID and date
+  sqlite.prepare(
+    `UPDATE competency_assessment_items SET el2_evidence = ?, el2_date = ?, evidence = ? WHERE assessment_id = ? AND method_number = 2 AND (el2_evidence IS NULL OR el2_evidence = '')`
+  ).run("0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented", "2026-01-16", "0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented", aid);
 
   // Element 3: QC date
   sqlite.prepare(
-    "UPDATE competency_assessment_items SET el3_qc_date = ? WHERE assessment_id = ? AND method_number = 3"
+    "UPDATE competency_assessment_items SET el3_qc_date = ? WHERE assessment_id = ? AND method_number = 3 AND (el3_qc_date IS NULL OR el3_qc_date = '')"
   ).run("2026-01-10", aid);
 
   // Element 4: date observed
   sqlite.prepare(
-    "UPDATE competency_assessment_items SET el4_date_observed = ? WHERE assessment_id = ? AND method_number = 4"
+    "UPDATE competency_assessment_items SET el4_date_observed = ? WHERE assessment_id = ? AND method_number = 4 AND (el4_date_observed IS NULL OR el4_date_observed = '')"
   ).run("2026-01-15", aid);
 
   // Element 5: sample ID, type, acceptable
   sqlite.prepare(
-    "UPDATE competency_assessment_items SET el5_sample_id = ?, el5_sample_type = ?, el5_acceptable = ? WHERE assessment_id = ? AND method_number = 5"
-  ).run("CAP-2026-C-01", "CAP PT Survey", 1, aid);
+    "UPDATE competency_assessment_items SET el5_sample_type = ?, el5_sample_id = ?, el5_acceptable = 1 WHERE assessment_id = ? AND method_number = 5 AND (el5_sample_id IS NULL OR el5_sample_id = '')"
+  ).run("CAP PT Survey", "CAP-2026-C-01", aid);
 
   // Element 6: quiz ID, score, date
   sqlite.prepare(
-    "UPDATE competency_assessment_items SET el6_quiz_id = ?, el6_score = ?, el6_date_taken = ?, evidence = ? WHERE assessment_id = ? AND method_number = 6"
+    "UPDATE competency_assessment_items SET el6_quiz_id = ?, el6_score = ?, el6_date_taken = ?, evidence = ? WHERE assessment_id = ? AND method_number = 6 AND (el6_quiz_id IS NULL OR el6_quiz_id = '')"
   ).run("Q-AU5800-001", 100, "2026-01-18", "Quiz Q-AU5800-001, 2/2 correct, 100%", aid);
 
   console.log("[seed] Backfilled competency element fields for existing assessment");
