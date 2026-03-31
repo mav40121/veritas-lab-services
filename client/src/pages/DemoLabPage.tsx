@@ -290,7 +290,7 @@ export default function DemoLabPage() {
                   Riverside Regional has completed 3 EP studies for their chemistry department -- 2 method comparisons and 1 calibration verification.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  Below, you can explore the full results, Deming regression, bias analysis, and CLIA pass/fail evaluation, exactly as they appear in the compliance record. The calibration verification satisfies the 42 CFR 493.1255 semi-annual requirement. The method comparisons satisfy 42 CFR 493.1213 for instruments sharing a reference range. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
+                  Both study types are recurring requirements. Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
                 </p>
               </div>
 
