@@ -191,10 +191,10 @@ const DARK   = "#14141e";
 
 // ─── CFR URL map ──────────────────────────────────────────────────────────────
 const CFR_URLS: Record<string, string> = {
-  "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.931",
-  "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.933",
-  "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.935",
-  "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/subject-group-ECFRefb3c9d811d8641/section-493.941",
+  "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
+  "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.933",
+  "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.935",
+  "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.941",
 };
 
 // ─── Shared CSS ───────────────────────────────────────────────────────────────
@@ -301,8 +301,8 @@ function headerHTML(study: Study, cliaNumber?: string): string {
 // ─── Supporting data page HTML ────────────────────────────────────────────────
 function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cliaP = (study.cliaAllowableError * 100).toFixed(1);
-  const cfr = (study as any).cfr || "42 CFR §493 Subpart I";
-  const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I";
+  const cfr = (study as any).cfr || "42 CFR §493.931";
+  const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931";
 
   const specs = [
     ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"],
@@ -345,7 +345,7 @@ function footerHTML(): string {
   const today = new Date().toLocaleDateString();
   return `
   <div class="footer">
-    <div class="footer-disclaimer">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.</div>
+    <div class="footer-disclaimer">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.</div>
     <div class="footer-bar">
       <span>VeritaCheck by Veritas Lab Services · veritaslabservices.com · Generated ${today}</span>
       <span class="page-num"></span>
@@ -1242,7 +1242,7 @@ const today = () => new Date().toLocaleDateString("en-US", { year: "numeric", mo
 const FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
-    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed laboratory director and do not constitute medical advice.</div>
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
       <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential &mdash; For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
