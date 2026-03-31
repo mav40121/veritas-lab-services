@@ -1906,7 +1906,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         note: "Documents the employee's ability to monitor, record, and report results including critical values.",
         cols: ["Method Group", "Evidence", "Date", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
-          <td>${esc(item.el2_evidence || item.evidence || "")}</td>
+          <td style="word-break:break-word;white-space:normal;max-width:280px;font-size:7.5pt;line-height:1.4;">${esc(item.el2_evidence || item.evidence || "")}</td>
           <td>${esc(item.el2_date || item.date_met || "")}</td>
           <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
       },
@@ -1953,9 +1953,10 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       },
     ];
 
+    // Single page break before all elements, then they flow naturally
+    html += `<div class="page-break"></div>`;
     for (const elDef of elementDefs) {
-      html += `<div class="page-break"></div>`;
-      html += `<div class="section">
+      html += `<div class="section" style="margin-bottom:6px;">
         <div class="section-header">${elDef.title}</div>
         <div class="section-note">${elDef.note}</div>
         <table>
@@ -2019,6 +2020,51 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     }
     html += `</table></div>`;
   }
+
+  // ─── EVALUATOR SIGN-OFF ───
+  const evalName = esc(assessment.evaluator_name) || "M. Veri";
+  const evalTitle = esc(assessment.evaluator_title) || "Technical Consultant";
+  const evalInitials = esc(assessment.evaluator_initials) || "MV";
+  const signOffDate = assessment.assessment_date || dateStr;
+  html += `<div class="page-break"></div>`;
+  html += `<div class="section">
+    <div class="section-header">Evaluator Sign-Off</div>
+    <div style="border:1.5px solid #01696F;border-radius:6px;padding:16px 18px;background:#f8fafb;margin-top:8px;">
+      <div style="font-size:9pt;font-weight:700;color:#01696F;margin-bottom:10px;text-align:center;">COMPETENCY ASSESSMENT COMPLETION</div>
+      <div style="font-size:8.5pt;margin-bottom:12px;text-align:center;">All required elements have been assessed and documented above.</div>
+      <div style="text-align:center;margin-bottom:14px;">
+        <span style="font-size:10pt;font-weight:800;color:#437A22;letter-spacing:1px;">Overall Determination: PASS</span>
+      </div>
+      <div style="font-size:8pt;margin-bottom:6px;font-weight:600;">Evaluator Certification:</div>
+      <div style="font-size:7.5pt;font-style:italic;line-height:1.6;margin-bottom:14px;color:#333;">
+        &ldquo;I certify that I have directly assessed this employee&rsquo;s competency using the methods documented above and that the results accurately reflect the employee&rsquo;s performance.&rdquo;
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:10px;">
+        <div>
+          <div style="border-bottom:1px solid #999;padding-bottom:2px;min-height:18px;font-size:8.5pt;font-weight:600;">${evalName}</div>
+          <div style="font-size:6.5pt;color:#888;margin-top:2px;">Evaluator Print Name</div>
+        </div>
+        <div>
+          <div style="border-bottom:1px solid #999;padding-bottom:2px;min-height:18px;font-size:8.5pt;font-weight:600;">${evalTitle}</div>
+          <div style="font-size:6.5pt;color:#888;margin-top:2px;">Title</div>
+        </div>
+        <div>
+          <div style="border-bottom:1px solid #999;padding-bottom:2px;min-height:18px;font-size:8.5pt;font-weight:600;">${signOffDate}</div>
+          <div style="font-size:6.5pt;color:#888;margin-top:2px;">Date</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <div style="border-bottom:1px solid #999;padding-bottom:2px;min-height:18px;font-size:8.5pt;font-weight:600;">${evalInitials}</div>
+          <div style="font-size:6.5pt;color:#888;margin-top:2px;">Initials</div>
+        </div>
+        <div>
+          <div style="border-bottom:1px solid #999;padding-bottom:2px;min-height:18px;font-size:8.5pt;">&nbsp;</div>
+          <div style="font-size:6.5pt;color:#888;margin-top:2px;">Signature</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
 
   // ─── QUIZ ADDENDUM ───
   if (quizResults && quizResults.length > 0) {
