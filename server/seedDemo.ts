@@ -277,7 +277,7 @@ function seedScanData(sqlite: any, demoUserId: number, now: string) {
   seedScanItems();
 }
 
-// ─── Studies seeding (Sodium + Potassium method comparison) ───────────────────
+// ─── Studies seeding (Sodium + Potassium method comparison, Creatinine cal ver) ─
 function seedStudies(sqlite: any, demoUserId: number, now: string) {
   // Study 1: Sodium Method Comparison
   const sodiumDataPoints = generateSodiumData();
@@ -311,6 +311,24 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "method_comparison",
     0.5, // 0.5 mmol/L absolute TEa for potassium
     JSON.stringify(potassiumDataPoints),
+    JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
+    now
+  );
+
+  // Study 3: Creatinine Calibration Verification / Linearity
+  const creatinineDataPoints = generateCreatinineCalVerData();
+  sqlite.prepare(`
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+  `).run(
+    demoUserId,
+    "Creatinine",
+    "Ortho VITROS 5600 [Primary]",
+    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+    "2026-01-22",
+    "cal_ver",
+    15, // 15% or 0.3 mg/dL CLIA TEa (percentage stored)
+    JSON.stringify(creatinineDataPoints),
     JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
   );
@@ -509,6 +527,28 @@ function generatePotassiumData() {
     });
   }
   return points;
+}
+
+function generateCreatinineCalVerData() {
+  // 5 levels, two runs each (stored as two instrument columns: Primary = Run 1, Backup = Run 2)
+  // Pre-computed: slope=0.9963, intercept=0.0125, r2=0.9999
+  // maxPercentRecovery=101.4%, minPercentRecovery=99.4%, allPass=true, 10/10
+  const levels = [
+    { level: 1, assignedValue: 0.5,  run1: 0.50,  run2: 0.51 },
+    { level: 2, assignedValue: 2.0,  run1: 2.02,  run2: 2.01 },
+    { level: 3, assignedValue: 5.0,  run1: 5.08,  run2: 5.06 },
+    { level: 4, assignedValue: 10.0, run1: 10.15, run2: 10.12 },
+    { level: 5, assignedValue: 20.0, run1: 19.85, run2: 19.90 },
+  ];
+  return levels.map(l => ({
+    level: l.level,
+    assignedValue: l.assignedValue,
+    expectedValue: l.assignedValue, // alias used by computeStudyStatus
+    instrumentValues: {
+      "Ortho VITROS 5600 [Primary]": l.run1,
+      "Ortho VITROS 5600 [Backup]": l.run2,
+    },
+  }));
 }
 
 function generateSpecimenData(n: number, oldMean: number, newMean: number) {

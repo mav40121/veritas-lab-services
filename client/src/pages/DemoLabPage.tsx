@@ -117,7 +117,7 @@ export default function DemoLabPage() {
 
   const typeLabel: Record<string, string> = {
     method_comparison: "Method Comparison",
-    cal_ver: "Calibration Verification",
+    cal_ver: "Cal Ver / Linearity",
     precision: "Accuracy & Precision",
     lot_to_lot: "Lot-to-Lot",
     pt_coag: "PT/Coag",
@@ -171,6 +171,50 @@ export default function DemoLabPage() {
     return {
       n, slope, intercept, rSquared, meanBias, meanPctDiff, tea,
       rows, scatterData, primary, comparison,
+      allPass: rows.every((r: any) => r.pass),
+    };
+  }
+
+  // Compute cal ver statistics for inline results
+  function computeCalVerStats(study: any) {
+    const dp = study.data_points ? JSON.parse(study.data_points) : [];
+    const instruments = study.instruments ? JSON.parse(study.instruments) : [];
+    if (dp.length === 0) return null;
+
+    const teaPct = study.clia_allowable_error; // stored as percentage
+    const rows = dp.map((p: any) => {
+      const assigned = p.assignedValue ?? p.expectedValue ?? 0;
+      const run1 = p.instrumentValues?.[instruments[0]] ?? 0;
+      const run2 = p.instrumentValues?.[instruments[1]] ?? 0;
+      const mean = (run1 + run2) / 2;
+      const pctRecovery = assigned !== 0 ? (mean / assigned) * 100 : 100;
+      const pass = Math.abs(pctRecovery - 100) <= teaPct;
+      return { level: p.level, assigned, run1, run2, mean: Math.round(mean * 1000) / 1000, pctRecovery: Math.round(pctRecovery * 10) / 10, pass };
+    });
+
+    const allPctRec = dp.flatMap((p: any) => {
+      const assigned = p.assignedValue ?? p.expectedValue ?? 0;
+      return instruments.map((n: string) => assigned !== 0 ? ((p.instrumentValues?.[n] ?? 0) / assigned) * 100 : 100);
+    });
+
+    // Regression: means vs assigned
+    const assignedVals = rows.map((r: any) => r.assigned);
+    const meanVals = rows.map((r: any) => r.mean);
+    const xm = assignedVals.reduce((a: number, b: number) => a + b, 0) / assignedVals.length;
+    const ym = meanVals.reduce((a: number, b: number) => a + b, 0) / meanVals.length;
+    const sxx = assignedVals.reduce((s: number, x: number) => s + (x - xm) ** 2, 0);
+    const syy = meanVals.reduce((s: number, y: number) => s + (y - ym) ** 2, 0);
+    const sxy = assignedVals.reduce((s: number, x: number, i: number) => s + (x - xm) * (meanVals[i] - ym), 0);
+    const slope = sxx === 0 ? 1 : sxy / sxx;
+    const rSquared = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+
+    return {
+      totalCount: dp.length * instruments.length,
+      maxPctRec: Math.max(...allPctRec),
+      minPctRec: Math.min(...allPctRec),
+      slope,
+      rSquared,
+      rows,
       allPass: rows.every((r: any) => r.pass),
     };
   }
@@ -243,10 +287,10 @@ export default function DemoLabPage() {
             <div className="space-y-6">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional has completed 2 method comparison studies for their chemistry department.
+                  Riverside Regional has completed 3 EP studies for their chemistry department -- 2 method comparisons and 1 calibration verification.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  Below, you can explore the full results, Deming regression, bias analysis, and CLIA pass/fail evaluation, exactly as they appear in the compliance record. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
+                  Below, you can explore the full results, Deming regression, bias analysis, and CLIA pass/fail evaluation, exactly as they appear in the compliance record. The calibration verification satisfies the 42 CFR 493.1255 semi-annual requirement. The method comparisons satisfy 42 CFR 493.1213 for instruments sharing a reference range. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
                 </p>
               </div>
 
@@ -254,7 +298,8 @@ export default function DemoLabPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 {studies.map((study: any) => {
                   const isExpanded = expandedStudy === study.id;
-                  const stats = computeStudyStats(study);
+                  const isCalVer = study.study_type === "cal_ver";
+                  const stats = isCalVer ? computeCalVerStats(study) : computeStudyStats(study);
                   const instruments = study.instruments ? JSON.parse(study.instruments) : [];
 
                   return (
@@ -274,11 +319,22 @@ export default function DemoLabPage() {
                       </CardHeader>
                       <CardContent className="py-3 px-4 border-t space-y-3">
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div><span className="text-muted-foreground">Primary:</span> {instruments[0]}</div>
-                          <div><span className="text-muted-foreground">Comparison:</span> {instruments[1]}</div>
-                          <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
-                          <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
-                          <div><span className="text-muted-foreground">CLIA TEa:</span> {study.clia_allowable_error} {study.test_name === "Sodium" ? "mmol/L" : "mmol/L"}</div>
+                          {isCalVer ? (
+                            <>
+                              <div><span className="text-muted-foreground">Instrument:</span> {instruments[0]}</div>
+                              <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
+                              <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
+                              <div><span className="text-muted-foreground">CLIA TEa:</span> &plusmn;{study.clia_allowable_error}%</div>
+                            </>
+                          ) : (
+                            <>
+                              <div><span className="text-muted-foreground">Primary:</span> {instruments[0]}</div>
+                              <div><span className="text-muted-foreground">Comparison:</span> {instruments[1]}</div>
+                              <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
+                              <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
+                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.clia_allowable_error} {study.test_name === "Sodium" ? "mmol/L" : "mmol/L"}</div>
+                            </>
+                          )}
                         </div>
                         <div className="flex gap-2 pt-1">
                           <Button
@@ -296,17 +352,71 @@ export default function DemoLabPage() {
                         </div>
 
                         {/* INLINE EXPANDED RESULTS */}
-                        {isExpanded && stats && (
+                        {isExpanded && stats && isCalVer && (
+                          <div className="space-y-4 pt-3 border-t">
+                            {/* Cal Ver Summary stats */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                              {[
+                                { label: "N", value: (stats as any).totalCount },
+                                { label: "Max % Recovery", value: (stats as any).maxPctRec.toFixed(1) + "%" },
+                                { label: "Min % Recovery", value: (stats as any).minPctRec.toFixed(1) + "%" },
+                                { label: "Slope", value: (stats as any).slope.toFixed(4) },
+                                { label: "r\u00B2", value: (stats as any).rSquared.toFixed(4) },
+                              ].map((s) => (
+                                <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
+                                  <div className="text-[10px] text-muted-foreground uppercase">{s.label}</div>
+                                  <div className="text-sm font-mono font-bold">{s.value}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Cal Ver Data table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-muted-foreground border-b">
+                                    <th className="text-left py-1.5 pr-3">Level</th>
+                                    <th className="text-right py-1.5 pr-3">Assigned</th>
+                                    <th className="text-right py-1.5 pr-3">Run 1</th>
+                                    <th className="text-right py-1.5 pr-3">Run 2</th>
+                                    <th className="text-right py-1.5 pr-3">Mean</th>
+                                    <th className="text-right py-1.5 pr-3">% Recovery</th>
+                                    <th className="text-center py-1.5">Pass/Fail</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(stats as any).rows.map((row: any) => (
+                                    <tr key={row.level} className="border-b border-border/50">
+                                      <td className="py-1.5 pr-3">{row.level}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.assigned}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.run1}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.run2}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.mean}</td>
+                                      <td className="py-1.5 pr-3 text-right font-mono">{row.pctRecovery}%</td>
+                                      <td className="py-1.5 text-center">
+                                        <Badge className={row.pass ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}>
+                                          {row.pass ? "PASS" : "FAIL"}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {isExpanded && stats && !isCalVer && (
                           <div className="space-y-4 pt-3 border-t">
                             {/* Summary stats */}
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                               {[
-                                { label: "n", value: stats.n },
-                                { label: "Mean Bias", value: stats.meanBias.toFixed(3) },
-                                { label: "Mean % Diff", value: stats.meanPctDiff.toFixed(2) + "%" },
-                                { label: "Deming Slope", value: stats.slope.toFixed(4) },
-                                { label: "Intercept", value: stats.intercept.toFixed(3) },
-                                { label: "r\u00B2", value: stats.rSquared.toFixed(4) },
+                                { label: "n", value: (stats as any).n },
+                                { label: "Mean Bias", value: (stats as any).meanBias.toFixed(3) },
+                                { label: "Mean % Diff", value: (stats as any).meanPctDiff.toFixed(2) + "%" },
+                                { label: "Deming Slope", value: (stats as any).slope.toFixed(4) },
+                                { label: "Intercept", value: (stats as any).intercept.toFixed(3) },
+                                { label: "r\u00B2", value: (stats as any).rSquared.toFixed(4) },
                               ].map((s) => (
                                 <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
                                   <div className="text-[10px] text-muted-foreground uppercase">{s.label}</div>
@@ -322,20 +432,20 @@ export default function DemoLabPage() {
                                 <ResponsiveContainer width="100%" height={300}>
                                   <ScatterChart margin={{ top: 10, right: 30, bottom: 20, left: 10 }}>
                                     <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis type="number" dataKey="x" name={stats.primary} label={{ value: stats.primary, position: "bottom", offset: 0, style: { fontSize: 10 } }} tick={{ fontSize: 10 }} />
-                                    <YAxis type="number" dataKey="y" name={stats.comparison} label={{ value: stats.comparison, angle: -90, position: "insideLeft", style: { fontSize: 10 } }} tick={{ fontSize: 10 }} />
+                                    <XAxis type="number" dataKey="x" name={(stats as any).primary} label={{ value: (stats as any).primary, position: "bottom", offset: 0, style: { fontSize: 10 } }} tick={{ fontSize: 10 }} />
+                                    <YAxis type="number" dataKey="y" name={(stats as any).comparison} label={{ value: (stats as any).comparison, angle: -90, position: "insideLeft", style: { fontSize: 10 } }} tick={{ fontSize: 10 }} />
                                     <RechartsTooltip formatter={(value: number) => value.toFixed(1)} />
                                     <Legend />
                                     <ReferenceLine
                                       segment={[
-                                        { x: Math.min(...stats.scatterData.map((d: any) => d.x)), y: Math.min(...stats.scatterData.map((d: any) => d.x)) },
-                                        { x: Math.max(...stats.scatterData.map((d: any) => d.x)), y: Math.max(...stats.scatterData.map((d: any) => d.x)) },
+                                        { x: Math.min(...(stats as any).scatterData.map((d: any) => d.x)), y: Math.min(...(stats as any).scatterData.map((d: any) => d.x)) },
+                                        { x: Math.max(...(stats as any).scatterData.map((d: any) => d.x)), y: Math.max(...(stats as any).scatterData.map((d: any) => d.x)) },
                                       ]}
                                       stroke="#999"
                                       strokeDasharray="5 5"
                                       label={{ value: "Identity", position: "end", fontSize: 9 }}
                                     />
-                                    <Scatter name="Samples" data={stats.scatterData} fill="#0e8a82" r={4} />
+                                    <Scatter name="Samples" data={(stats as any).scatterData} fill="#0e8a82" r={4} />
                                   </ScatterChart>
                                 </ResponsiveContainer>
                               </CardContent>
@@ -355,7 +465,7 @@ export default function DemoLabPage() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {stats.rows.map((row: any) => (
+                                  {(stats as any).rows.map((row: any) => (
                                     <tr key={row.level} className="border-b border-border/50">
                                       <td className="py-1.5 pr-3">{row.level}</td>
                                       <td className="py-1.5 pr-3 text-right font-mono">{row.primary}</td>

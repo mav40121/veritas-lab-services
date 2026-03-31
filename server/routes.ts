@@ -2185,8 +2185,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const instNames = safeJsonParse(studyRow.instruments) || [];
       const primaryName = instNames[0] || "Primary";
       const comparisonName = instNames[1] || "Comparison";
-      const teaAbsolute: number = studyRow.clia_allowable_error; // absolute mmol/L
+      const teaAbsolute: number = studyRow.clia_allowable_error;
 
+      if (studyRow.study_type === "cal_ver") {
+        // ── Calibration Verification / Linearity PDF ──
+        const teaPct = teaAbsolute; // stored as percentage (e.g. 15)
+        const teaFraction = teaPct / 100;
+
+        const study = {
+          testName: studyRow.test_name,
+          instrument: studyRow.instrument,
+          analyst: studyRow.analyst,
+          date: studyRow.date,
+          studyType: "cal_ver",
+          cliaAllowableError: teaFraction,
+          dataPoints: dp,
+          instruments: instNames,
+          status: studyRow.status,
+          _labName: "Riverside Regional Medical Center",
+        };
+
+        // Build cal_ver level results
+        let passCount = 0;
+        const totalCount = dp.length * instNames.length;
+        const levelResults = dp.map((p: any) => {
+          const assigned = p.assignedValue ?? p.expectedValue ?? 0;
+          const instResults: Record<string, any> = {};
+          for (const instName of instNames) {
+            const measured = p.instrumentValues?.[instName] ?? 0;
+            const pctRec = assigned !== 0 ? (measured / assigned) * 100 : 100;
+            const pass = Math.abs(pctRec - 100) <= teaPct;
+            if (pass) passCount++;
+            instResults[instName] = {
+              value: measured,
+              pctRecovery: pctRec,
+              passFail: pass ? "Pass" : "Fail",
+            };
+          }
+          return { level: p.level, assignedValue: assigned, instruments: instResults };
+        });
+
+        // Regression on means vs assigned
+        const assignedVals = dp.map((p: any) => p.assignedValue ?? p.expectedValue ?? 0);
+        const meanVals = dp.map((p: any) => {
+          const vals = instNames.map((n: string) => p.instrumentValues?.[n] ?? 0);
+          return vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
+        });
+        const _mean = (v: number[]) => v.length ? v.reduce((a: number, b: number) => a + b, 0) / v.length : 0;
+        const xm = _mean(assignedVals);
+        const ym = _mean(meanVals);
+        const sxx = assignedVals.reduce((s: number, x: number) => s + (x - xm) ** 2, 0);
+        const syy = meanVals.reduce((s: number, y: number) => s + (y - ym) ** 2, 0);
+        const sxy = assignedVals.reduce((s: number, x: number, i: number) => s + (x - xm) * (meanVals[i] - ym), 0);
+        const slope = sxx === 0 ? 1 : sxy / sxx;
+        const intercept = ym - slope * xm;
+        const r2 = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+
+        const pctRecoveries = dp.flatMap((p: any) => {
+          const assigned = p.assignedValue ?? p.expectedValue ?? 0;
+          return instNames.map((n: string) => assigned !== 0 ? ((p.instrumentValues?.[n] ?? 0) / assigned) * 100 : 100);
+        });
+        const maxPctRec = Math.max(...pctRecoveries);
+        const minPctRec = Math.min(...pctRecoveries);
+
+        const overallPass = passCount === totalCount && totalCount > 0;
+        const results = {
+          type: "cal_ver",
+          levelResults,
+          regression: { slope, intercept, r2 },
+          maxPercentRecovery: maxPctRec,
+          minPercentRecovery: minPctRec,
+          overallPass,
+          passCount,
+          totalCount,
+          summary: overallPass
+            ? `All ${totalCount} measurements passed within CLIA TEa of +/-${teaPct}%. Calibration verification acceptable.`
+            : `${totalCount - passCount} of ${totalCount} measurements exceeded CLIA TEa of +/-${teaPct}%. Corrective action required.`,
+        };
+
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const filename = `VeritaCheck_CalVer_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", pdfBuffer.length);
+        return res.send(pdfBuffer);
+      }
+
+      // ── Method Comparison PDF (default) ──
       // Compute mean of primary values for converting absolute TEa to fraction
       const dpXs: number[] = dp.map((p: any) => p.instrumentValues?.[primaryName] ?? 0);
       const dpMean = dpXs.length > 0 ? dpXs.reduce((a: number, b: number) => a + b, 0) / dpXs.length : 1;
