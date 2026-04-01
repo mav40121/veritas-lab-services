@@ -2,12 +2,15 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Save } from "lucide-react";
+import { Save, Tag, Loader2, CheckCircle2 } from "lucide-react";
+
+const API_BASE = "https://www.veritaslabservices.com";
 
 type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 const ACCREDITATION_OPTIONS: { value: AccreditationBody; label: string; description: string }[] = [
@@ -29,6 +32,59 @@ export default function AccountSettingsPage() {
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
   const [preferredStandards, setPreferredStandards] = useState<AccreditationBody[]>([]);
+
+  // Discount code state
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string } | null>(null);
+  const [discountError, setDiscountError] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  async function applyDiscount() {
+    if (!discountCode.trim()) return;
+    setDiscountLoading(true);
+    setDiscountError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/discount/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ code: discountCode.trim(), priceType: "community" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setDiscountError(data.message || data.error || "Invalid discount code.");
+      } else {
+        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName });
+        setDiscountError("");
+      }
+    } catch {
+      setDiscountError("Could not validate code. Please try again.");
+    } finally {
+      setDiscountLoading(false);
+    }
+  }
+
+  async function goToCheckout() {
+    if (!discountApplied) return;
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ priceType: "community", discountCode: discountApplied.code }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast({ title: "Checkout error", description: data.error || "Could not start checkout.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Checkout error", description: "Could not start checkout.", variant: "destructive" });
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
 
   const { data: settings, isLoading } = useQuery<AccountSettings>({
     queryKey: ["/api/account/settings"],
@@ -168,6 +224,67 @@ export default function AccountSettingsPage() {
             <Save size={14} className="mr-1.5" />
             {saveMutation.isPending ? "Saving..." : "Save"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Discount Code</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Have a discount code? Enter it below to apply it to your subscription.
+          </p>
+          {!discountApplied ? (
+            <div className="flex gap-2">
+              <Input
+                value={discountCode}
+                onChange={(e) => { setDiscountCode(e.target.value); setDiscountError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && applyDiscount()}
+                placeholder="Enter code"
+                className="max-w-xs"
+              />
+              <Button
+                onClick={applyDiscount}
+                disabled={discountLoading || !discountCode.trim()}
+                variant="outline"
+              >
+                {discountLoading ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} className="mr-1.5" />}
+                {discountLoading ? "Checking..." : "Apply"}
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex items-start gap-3">
+              <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-800">
+                  <strong>{discountApplied.code}</strong>: {discountApplied.pct}% off via {discountApplied.partnerName}
+                </p>
+                {discountApplied.pct === 100 && (
+                  <p className="text-xs text-green-700 mt-0.5">No payment method required.</p>
+                )}
+              </div>
+              <button
+                className="text-xs text-muted-foreground underline"
+                onClick={() => { setDiscountApplied(null); setDiscountCode(""); }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+          {discountError && (
+            <p className="text-sm text-red-500">{discountError}</p>
+          )}
+          {discountApplied && (
+            <Button
+              onClick={goToCheckout}
+              disabled={checkoutLoading}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {checkoutLoading ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+              {checkoutLoading ? "Redirecting..." : "Activate Subscription"}
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

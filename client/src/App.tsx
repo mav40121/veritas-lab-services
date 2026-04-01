@@ -210,6 +210,7 @@ function AppContent() {
           <Route path="/getting-started" component={GettingStartedPage} />
           <Route path="/account/settings" component={AccountSettingsPage} />
           <Route path="/account/seats" component={SeatManagementPage} />
+          <Route path="/account">{() => { window.location.replace("/#/account/settings"); return null; }}</Route>
           <Route component={NotFound} />
         </Switch>
       </main>
