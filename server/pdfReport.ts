@@ -833,7 +833,6 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
     comparisonSections += `
     <div class="section-heading" style="margin-top:14px">${compName} vs. ${primaryName} - Method Comparison</div>
-    <div class="charts">${corrSvg}${baSvg}</div>
 
     <hr class="divider">
     <div class="section-label">Supporting Statistics</div>
