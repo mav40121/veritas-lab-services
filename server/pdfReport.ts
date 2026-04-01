@@ -368,15 +368,20 @@ function directorReviewHTML(): string {
       <span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
       <span>\u25CB Not accepted</span>
     </div>
-    <div style="display:flex;gap:16px;margin-top:12px;">
-      <div style="flex:2;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Print Name</div>
-      </div>
-      <div style="flex:0.7;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Initials</div>
+    <div style="display:flex;gap:16px;margin-top:14px;">
+      <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:22px;">Signature</div>
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Date</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:22px;">Date</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:10px;">
+      <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Print Name</div>
+      </div>
+      <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Title</div>
       </div>
     </div>
   </div>`;
