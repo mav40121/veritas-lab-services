@@ -8,6 +8,7 @@ import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS,
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF } from "./pdfReport";
+import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -341,6 +342,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ valid: true, discountPct: row.discount_pct, partnerName: row.partner_name, message: `${row.discount_pct}% discount applied` });
   });
 
+  // ── DOWNLOADS ─────────────────────────────────────────────────────────────
+  app.get("/api/downloads/clsi-compliance-matrix", (_req, res) => {
+    const buf = Buffer.from(CLSI_COMPLIANCE_MATRIX_B64, "base64");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="VeritaCheck_CLSI_Compliance_Matrix.pdf"');
+    res.setHeader("Content-Length", buf.length);
+    res.send(buf);
+  });
+
+  app.get("/api/downloads/software-validation-template", (_req, res) => {
+    const buf = Buffer.from(SOFTWARE_VALIDATION_TEMPLATE_B64, "base64");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="VeritaCheck_Software_Validation_Template.pdf"');
+    res.setHeader("Content-Length", buf.length);
+    res.send(buf);
+  });
+
   // ── HEALTH CHECK ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "veritas-lab-services", timestamp: new Date().toISOString() });
@@ -384,6 +402,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(user.id, sessionToken, req.headers["user-agent"] || "Unknown", now, now);
 
     res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: 'free', accessLevel: 'free', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: 1 } });
+
+    // Send welcome email via Resend
+    if (resend) {
+      resend.emails.send({
+        from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+        to: [email],
+        subject: "Welcome to VeritaAssure\u2122 - Your lab compliance platform is ready",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff;">
+            <div style="background: #01696F; padding: 24px 28px; border-radius: 8px 8px 0 0;">
+              <h1 style="color: #ffffff; font-size: 22px; margin: 0;">Welcome to VeritaAssure&#8482;</h1>
+              <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin: 6px 0 0;">Veritas Lab Services, LLC</p>
+            </div>
+            <div style="background: #f9fafb; padding: 28px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+              <p style="font-size: 15px; color: #1B2B2B; margin: 0 0 16px;">Hi ${name},</p>
+              <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
+                Your VeritaAssure&#8482; account is active. The platform includes VeritaCheck&#8482; for EP method validation studies, VeritaMap&#8482; for test menu regulatory mapping, VeritaScan&#8482; for inspection readiness, VeritaComp&#8482; for competency management, VeritaStaff&#8482; for personnel tracking, and VeritaLab&#8482; for certificate monitoring.
+              </p>
+              <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 20px;">
+                Start with the Getting Started guide to configure your lab in under an hour.
+              </p>
+              <a href="https://www.veritaslabservices.com/#/getting-started" style="display: inline-block; background: #01696F; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 24px; border-radius: 6px; margin-bottom: 24px;">Get Started</a>
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+              <p style="font-size: 13px; color: #6B7280; font-weight: 600; margin: 0 0 8px;">Free Downloads</p>
+              <p style="font-size: 13px; color: #374151; line-height: 1.6; margin: 0 0 10px;">
+                Before running your first compliance study, download the <strong>VeritaCheck&#8482; Software Validation Template</strong> to validate the tool for use in your lab. This is required by CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251 before using any software for compliance documentation.
+              </p>
+              <a href="https://www.veritaslabservices.com/api/downloads/software-validation-template" style="display: inline-block; background: #ffffff; color: #01696F; text-decoration: none; font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; border: 1px solid #01696F; margin-right: 8px; margin-bottom: 8px;">Download Validation Template</a>
+              <a href="https://www.veritaslabservices.com/api/downloads/clsi-compliance-matrix" style="display: inline-block; background: #ffffff; color: #01696F; text-decoration: none; font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; border: 1px solid #01696F; margin-bottom: 8px;">Download CLSI Compliance Matrix</a>
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+              <p style="font-size: 11px; color: #9CA3AF; line-height: 1.5; margin: 0;">
+                VeritaAssure&#8482; is a statistical calculation tool. Results require interpretation by a licensed medical director or designee. Not medical advice. No PHI should be entered in any field.
+                Final approval and clinical determination must be made by the laboratory director or designee.
+                Veritas Lab Services, LLC, Massachusetts. info@veritaslabservices.com
+              </p>
+            </div>
+          </div>
+        `,
+      }).catch((err: any) => console.error("[register] Welcome email failed:", err));
+    }
   });
 
   app.post("/api/auth/login", async (req, res) => {

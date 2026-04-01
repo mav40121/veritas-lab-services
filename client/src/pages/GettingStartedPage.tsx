@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2, Clock, Circle, ArrowRight, Settings, Map,
-  FlaskConical, ClipboardCheck, Users, Award, FileText, Mail,
+  FlaskConical, ClipboardCheck, Users, Award, FileText, Mail, Download, Shield,
 } from "lucide-react";
 
 interface OnboardingStatus {
@@ -219,6 +219,48 @@ export default function GettingStartedPage() {
             </Card>
           );
         })}
+      </div>
+
+      {/* Free Downloads */}
+      <div className="mt-8 rounded-xl border border-primary/20 bg-card p-6">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Free Downloads</div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Download these two documents to validate and deploy VeritaCheck&#8482; for compliance documentation. No login required.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield size={15} className="text-primary shrink-0" />
+              <span className="font-semibold text-sm">CLSI Compliance Matrix</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+              One-page reference mapping all 6 VeritaCheck&#8482; study types to CLSI, CLIA, CAP, and TJC standards.
+            </p>
+            <a
+              href="/api/downloads/clsi-compliance-matrix"
+              download="VeritaCheck_CLSI_Compliance_Matrix.pdf"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              <Download size={13} /> Download PDF
+            </a>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 size={15} className="text-primary shrink-0" />
+              <span className="font-semibold text-sm">Software Validation Template</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+              Validate VeritaCheck&#8482; for compliance documentation before placing it into service. Satisfies CAP GEN.20316 and CLIA 493.1251.
+            </p>
+            <a
+              href="/api/downloads/software-validation-template"
+              download="VeritaCheck_Software_Validation_Template.pdf"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              <Download size={13} /> Download PDF
+            </a>
+          </div>
+        </div>
       </div>
 
       {/* Bottom CTA */}

@@ -3,13 +3,14 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard, Play, ListChecks } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 // Products dropdown items
 const productLinks = [
-  { href: "/veritacheck", label: "VeritaCheck™", desc: "EP Study Analysis", highlight: true, badge: "Live", badgeColor: "emerald" },
+  { href: "/veritaassure", label: "VeritaAssure\u2122 Suite", desc: "All modules overview", highlight: false, badge: null, badgeColor: null },
+  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "EP Study Analysis", highlight: true, badge: "Live", badgeColor: "emerald" },
   { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
   { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
   { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management", badge: "In Progress" },
@@ -21,6 +22,7 @@ const productLinks = [
 const allMobileLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/veritaassure", label: "VeritaAssure\u2122" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck™" },
   { href: "/cumsum", label: "CUMSUM Tracker" },
@@ -77,17 +79,19 @@ export function NavBar() {
             Services
           </Link>
 
-          {/* Products dropdown */}
+          {/* VeritaAssure dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className={cn(
-                "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritalab","/book","/cumsum"].includes(location)
-                  ? "text-foreground bg-secondary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              )}>
-                <FlaskConical size={13} className="text-primary" />
-                Products
+              <button
+                className={cn(
+                  "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  ["/veritaassure","/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritalab","/book","/cumsum"].includes(location)
+                    ? "text-foreground bg-secondary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                )}
+              >
+                <ShieldCheck size={13} className="text-primary" />
+                VeritaAssure&#8482;
                 <ChevronDown size={12} />
               </button>
             </DropdownMenuTrigger>

@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookOpen, ChevronRight, Clock, FlaskConical, User, Search, Wrench } from "lucide-react";
+import { BookOpen, ChevronRight, Clock, FlaskConical, User, Search, Wrench, Download, Shield, CheckCircle2 } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const articles = [
@@ -111,6 +111,51 @@ export default function ResourcesPage() {
               </Card>
             </Link>
           ))}
+        </section>
+
+        {/* Free Downloads */}
+        <section>
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Free Downloads</div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              {
+                title: "VeritaCheck\u2122 CLSI Compliance Matrix",
+                desc: "One-page landscape reference mapping all 6 VeritaCheck\u2122 study types to CLSI, CLIA (42 CFR), CAP, and TJC standards. Use this with inspectors to demonstrate regulatory alignment.",
+                url: "/api/downloads/clsi-compliance-matrix",
+                filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
+                icon: Shield,
+              },
+              {
+                title: "VeritaCheck\u2122 Software Validation Template",
+                desc: "4-page fillable template to validate VeritaCheck\u2122 for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+                url: "/api/downloads/software-validation-template",
+                filename: "VeritaCheck_Software_Validation_Template.pdf",
+                icon: CheckCircle2,
+              },
+            ].map(({ title, desc, url, filename, icon: Icon }) => (
+              <Card key={title} className="border-primary/20 hover:border-primary/40 hover:shadow-md transition-all group">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Icon size={16} className="text-primary" />
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 mt-0.5">
+                      Free Download
+                    </span>
+                  </div>
+                  <div className="font-semibold text-sm mb-1.5 group-hover:text-primary transition-colors">{title}</div>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{desc}</p>
+                  <a
+                    href={url}
+                    download={filename}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Download size={13} /> Download PDF
+                  </a>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </section>
 
         {/* Tools */}
