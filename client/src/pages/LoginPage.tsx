@@ -50,6 +50,9 @@ export default function LoginPage() {
   const [cliaResult, setCliaResult] = useState<CLIAResult | null>(null);
   const [cliaConfirmed, setCliaConfirmed] = useState(false);
   const [skipClia, setSkipClia] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [manualLabName, setManualLabName] = useState("");
+  const [lookupFailed, setLookupFailed] = useState(false);
 
   // Session conflict state
   const [sessionConflict, setSessionConflict] = useState(false);
@@ -59,19 +62,25 @@ export default function LoginPage() {
     if (!cliaInput.trim()) return;
     setCliaLooking(true);
     setCliaResult(null);
+    setLookupFailed(false);
     try {
       const res = await apiRequest("POST", "/api/clia/lookup", { clia_number: cliaInput.trim() });
       const data = await res.json();
       if (!res.ok) {
-        toast({ title: data.error || "CLIA lookup failed", variant: "destructive" });
+        setLookupFailed(true);
         return;
       }
       setCliaResult(data);
     } catch {
-      toast({ title: "CLIA lookup failed. Please try again.", variant: "destructive" });
+      setLookupFailed(true);
     } finally {
       setCliaLooking(false);
     }
+  }
+
+  function handleManualEntry() {
+    setManualEntry(true);
+    setRegStep("form");
   }
 
   function handleConfirmLab() {
@@ -165,6 +174,19 @@ export default function LoginPage() {
               specialty_count: cliaResult.specialty_count,
               certificate_type: cliaResult.certificate_type,
               tier: cliaResult.tier,
+            }),
+          });
+        } catch {}
+      } else if (manualEntry) {
+        // Manual CLIA entry - lookup was unavailable
+        try {
+          await fetch("/api/clia/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${data.token}` },
+            body: JSON.stringify({
+              clia_number: cliaInput.trim().toUpperCase(),
+              facility_name: manualLabName.trim(),
+              tier: "community",
             }),
           });
         } catch {}
@@ -291,6 +313,34 @@ export default function LoginPage() {
                       </div>
                     )}
 
+                    {lookupFailed && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Lab not found in CMS registry</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          The CMS lookup service may be temporarily unavailable, or your lab may not be in the database yet.
+                          You can enter your lab name manually and proceed.
+                        </p>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Laboratory Name</Label>
+                          <Input
+                            value={manualLabName}
+                            onChange={e => setManualLabName(e.target.value)}
+                            placeholder="e.g. Riverside Regional Medical Center"
+                            className="text-sm"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={handleManualEntry}
+                          disabled={!manualLabName.trim()}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          Continue with manual entry
+                        </Button>
+                      </div>
+                    )}
+
                     <div className="text-center pt-2 border-t">
                       <button
                         type="button"
@@ -307,6 +357,12 @@ export default function LoginPage() {
                       <div className="bg-muted rounded-lg p-3 text-xs space-y-0.5">
                         <p className="font-medium">{cliaResult.facility_name}</p>
                         <p className="text-muted-foreground">CLIA: {cliaResult.clia_number} | Tier: {TIER_LABELS[cliaResult.tier]}</p>
+                      </div>
+                    )}
+                    {manualEntry && (
+                      <div className="bg-muted rounded-lg p-3 text-xs space-y-0.5">
+                        <p className="font-medium">{manualLabName || "Laboratory"}</p>
+                        <p className="text-muted-foreground">CLIA: {cliaInput.trim().toUpperCase()} | Manually entered</p>
                       </div>
                     )}
                     {skipClia && (
