@@ -383,6 +383,92 @@ function directorReviewHTML(): string {
 }
 
 
+// ─── Regulatory Compliance References box ───────────────────────────────────
+type StudyTypeKey = "cal_ver" | "method_comp" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag";
+
+interface RegulatoryRefs {
+  cap: string[];
+  tjc: string[];
+  clsi: string[];
+  cfr: string[];
+}
+
+const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
+  cal_ver: {
+    cap:  ["CHM.13700", "CHM.13750", "GEN.40830"],
+    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+    clsi: ["EP06-Ed3", "EP15-A3"],
+    cfr:  ["42 CFR §493.1255(b)(3)", "42 CFR §493.1271(b)"],
+  },
+  method_comp: {
+    cap:  ["CHM.13650", "CHM.13700", "GEN.40810"],
+    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+    clsi: ["EP09-A3", "EP15-A3"],
+    cfr:  ["42 CFR §493.1255(b)(2)", "42 CFR §493.1271(b)"],
+  },
+  precision: {
+    cap:  ["CHM.13600", "GEN.40800"],
+    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+    clsi: ["EP05-A3", "EP15-A3"],
+    cfr:  ["42 CFR §493.1255(b)(1)", "42 CFR §493.1271(a)"],
+  },
+  lot_to_lot: {
+    cap:  ["CHM.13800", "GEN.40860"],
+    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+    clsi: ["EP07-A2", "EP26-A"],
+    cfr:  ["42 CFR §493.1255(b)(3)", "42 CFR §493.1271(b)(3)"],
+  },
+  qc_range: {
+    cap:  ["COM.30450", "GEN.40500"],
+    tjc:  ["QSA.02.04.01", "QSA.02.10.01"],
+    clsi: ["EP23-A", "C24-A3"],
+    cfr:  ["42 CFR §493.1256(d)(3)", "42 CFR §493.1256(e)"],
+  },
+  multi_analyte_coag: {
+    cap:  ["HEM.36160", "HEM.36180", "GEN.40860"],
+    tjc:  ["QSA.02.02.01", "QSA.13.02.01"],
+    clsi: ["EP26-A", "H47-A2", "H21-A5"],
+    cfr:  ["42 CFR §493.1255(b)(3)"],
+  },
+  pt_coag: {
+    cap:  ["HEM.36160", "HEM.36200", "GEN.40860"],
+    tjc:  ["QSA.02.02.01", "QSA.13.05.01"],
+    clsi: ["H47-A2", "H21-A5", "EP26-A"],
+    cfr:  ["42 CFR §493.1255(b)(3)"],
+  },
+};
+
+function regulatoryComplianceBoxHTML(studyType: string): string {
+  const refs = REGULATORY_REFS[studyType as StudyTypeKey];
+  if (!refs) return "";
+
+  const cell = (items: string[]) =>
+    items.map(i => `<span style="display:inline-block;margin:1px 4px 1px 0;font-size:7pt;font-weight:600;color:#01696F;background:#E8F4F4;border:1px solid #B0D8D8;border-radius:3px;padding:1px 5px;">${i}</span>`).join("");
+
+  return `
+  <div style="margin-top:14px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:10px 14px;background:#FAFAF8;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Regulatory Compliance References</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px 12px;">
+      <div>
+        <div style="font-size:6.5pt;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px;">CAP Checklist</div>
+        <div>${cell(refs.cap)}</div>
+      </div>
+      <div>
+        <div style="font-size:6.5pt;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px;">TJC Standard</div>
+        <div>${cell(refs.tjc)}</div>
+      </div>
+      <div>
+        <div style="font-size:6.5pt;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px;">CLSI Guideline</div>
+        <div>${cell(refs.clsi)}</div>
+      </div>
+      <div>
+        <div style="font-size:6.5pt;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px;">CLIA / CFR</div>
+        <div style="font-size:6.8pt;color:#444;line-height:1.6;">${refs.cfr.join("<br>")}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ─── Evaluation section HTML ──────────────────────────────────────────────────
 function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number): string {
   const cliaP = (cliaError * 100).toFixed(1);
@@ -603,6 +689,8 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   </table>
 
   ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName)}
+
+  ${regulatoryComplianceBoxHTML(study.studyType)}
 
   ${directorReviewHTML()}
 
@@ -842,6 +930,8 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
   ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
 
+  ${regulatoryComplianceBoxHTML(study.studyType)}
+
   ${directorReviewHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
@@ -954,6 +1044,8 @@ function buildPrecisionHTML(study: Study, results: any): string {
   </table>
 
   ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName)}
+
+  ${regulatoryComplianceBoxHTML(study.studyType)}
 
   ${directorReviewHTML()}
 
@@ -1139,6 +1231,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
   </table>
 
   ${narrative}
+  ${regulatoryComplianceBoxHTML(study.studyType)}
   ${directorReviewHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
@@ -1341,6 +1434,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   </table>
 
   ${narrative}
+  ${regulatoryComplianceBoxHTML(study.studyType)}
   ${directorReviewHTML()}
 
   <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
@@ -1428,6 +1522,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <div class="eval-title">Narrative Summary</div>
       <div class="eval-text">${narrative}</div>
     </div>
+    ${regulatoryComplianceBoxHTML(study.studyType)}
     ${directorReviewHTML()}
     <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
@@ -1496,6 +1591,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
       <div class="eval-text">${narrative}</div>
     </div>
     ${isiNote}
+    ${regulatoryComplianceBoxHTML(study.studyType)}
     ${directorReviewHTML()}
     <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
