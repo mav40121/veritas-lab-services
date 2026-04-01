@@ -1352,7 +1352,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     `);
     const bulkUpdate = (db as any).$client.transaction((items: any[]) => {
       for (const item of items) {
-        stmt.run(req.params.id, item.item_id, item.status || 'Not Assessed', item.notes || null, item.owner || null, item.due_date || null, now);
+        // Accept both camelCase (client) and snake_case field names
+        const itemId = item.item_id ?? item.itemId;
+        const dueDate = item.due_date ?? item.dueDate ?? null;
+        stmt.run(req.params.id, itemId, item.status || 'Not Assessed', item.notes || null, item.owner || null, dueDate, now);
       }
     });
     bulkUpdate(items);
