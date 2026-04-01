@@ -654,16 +654,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!study || !results) return res.status(400).json({ error: "study and results required" });
       // Fetch CLIA number from user record if authenticated
       let cliaNumber: string | undefined;
+      let preferredStandards: string[] | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
         try {
           const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-          const userRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(payload.userId) as any;
+          const userRow = (db as any).$client.prepare("SELECT clia_number, preferred_standards FROM users WHERE id = ?").get(payload.userId) as any;
           cliaNumber = userRow?.clia_number || undefined;
+          if (userRow?.preferred_standards) {
+            try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
+          }
         } catch {}
       }
 
-      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber);
+      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any);
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
@@ -1536,8 +1540,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     });
 
-    // Fetch CLIA number
-    const scanUserRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(req.userId) as any;
+    // Fetch CLIA number and preferred standards
+    const scanUserRow = (db as any).$client.prepare("SELECT clia_number, preferred_standards FROM users WHERE id = ?").get(req.userId) as any;
+    let scanPreferredStandards: string[] | undefined;
+    if (scanUserRow?.preferred_standards) {
+      try { scanPreferredStandards = JSON.parse(scanUserRow.preferred_standards); } catch {}
+    }
 
     try {
       const pdfBuffer = await generateVeritaScanPDF(
@@ -1547,6 +1555,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           updatedAt: scan.updated_at,
           items: mergedItems,
           cliaNumber: scanUserRow?.clia_number || undefined,
+          preferredStandards: scanPreferredStandards as any,
         },
         type as "executive" | "full"
       );
@@ -4743,11 +4752,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
       const userRow = (db as any).$client.prepare(
-        "SELECT clia_number, clia_lab_name FROM users WHERE id = ?"
+        "SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?"
       ).get(req.userId) as any;
+      let preferredStandards: string[] = [];
+      if (userRow?.preferred_standards) {
+        try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
+      }
       res.json({
         clia_number: userRow?.clia_number || '',
         clia_lab_name: userRow?.clia_lab_name || '',
+        preferred_standards: preferredStandards,
       });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to fetch account settings" });
@@ -4756,10 +4770,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
-      const { clia_number, clia_lab_name } = req.body;
+      const { clia_number, clia_lab_name, preferred_standards } = req.body;
+      // Validate preferred_standards: must be array of valid accreditation bodies, max 2
+      const VALID_BODIES = ["CAP", "TJC", "COLA", "AABB"];
+      let standardsJson: string | null = null;
+      if (Array.isArray(preferred_standards)) {
+        const filtered = preferred_standards.filter((s: string) => VALID_BODIES.includes(s)).slice(0, 2);
+        standardsJson = JSON.stringify(filtered);
+      }
       (db as any).$client.prepare(
-        "UPDATE users SET clia_number = ?, clia_lab_name = ? WHERE id = ?"
-      ).run(clia_number || null, clia_lab_name || null, req.userId);
+        "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ? WHERE id = ?"
+      ).run(clia_number || null, clia_lab_name || null, standardsJson, req.userId);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to update account settings" });

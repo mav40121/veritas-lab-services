@@ -512,6 +512,11 @@ if (!colNames.includes("hipaa_acknowledged_at")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN hipaa_acknowledged_at TEXT"); } catch {}
 }
 
+// Add preferred_standards column for lab-level accreditation selector
+if (!colNames.includes("preferred_standards")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_standards TEXT DEFAULT NULL"); } catch {}
+}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);
