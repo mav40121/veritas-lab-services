@@ -64,19 +64,16 @@ async function downloadPDF(study: Study, results: StudyResults) {
   const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
-  // Use octet-stream blob to prevent Adobe Acrobat browser extension from
-  // intercepting the download and opening it as about:blank without a filename
-  const arrayBuffer = await res.arrayBuffer();
-  const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
+  // Use server-side token: browser navigates directly to GET endpoint,
+  // bypassing Adobe Acrobat's blob:// interception entirely.
+  const { token } = await res.json();
   const a = document.createElement("a");
-  a.href = url;
+  a.href = `/api/pdf/${token}`;
   a.download = filename;
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];

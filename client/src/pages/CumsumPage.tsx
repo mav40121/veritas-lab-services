@@ -213,14 +213,11 @@ export default function CumsumPage() {
         body: JSON.stringify({ currentSpecimens: specimenData }),
       });
       if (!res.ok) throw new Error();
-      const arrayBuffer = await res.arrayBuffer();
-      const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
+      const { token } = await res.json();
       const a = document.createElement("a");
-      a.href = url;
+      a.href = `/api/pdf/${token}`;
       a.download = `CUMSUM_${selectedTracker.instrument_name}.pdf`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch { toast({ title: "PDF export failed", variant: "destructive" }); }
     setPdfLoading(false);
   };

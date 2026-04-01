@@ -250,6 +250,22 @@ function authMiddleware(req: any, res: any, next: any) {
   }
 }
 
+
+// ── PDF TOKEN STORE ──────────────────────────────────────────────────────────
+// Short-lived in-memory store for PDF downloads.  Client calls POST to generate
+// the PDF, receives a one-time token, then redirects the browser to the GET
+// endpoint.  The browser handles the download natively so Adobe Acrobat's
+// extension never gets a chance to intercept a blob:// URL.
+interface PdfTokenEntry { buffer: Buffer; filename: string; expires: number; }
+const pdfTokenStore = new Map<string, PdfTokenEntry>();
+function storePdfToken(buffer: Buffer, filename: string): string {
+  const token = crypto.randomUUID();
+  pdfTokenStore.set(token, { buffer, filename, expires: Date.now() + 60_000 });
+  // Prune expired entries
+  for (const [k, v] of pdfTokenStore) { if (v.expires < Date.now()) pdfTokenStore.delete(k); }
+  return token;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // ── DEMO COMPETENCY DATA BACKFILL (runs once on startup) ────────────────
   try {
@@ -670,14 +686,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any);
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
+      const pdfToken = storePdfToken(pdfBuffer, filename);
+      res.json({ token: pdfToken });
     } catch (err: any) {
       console.error("PDF generation error:", err.message);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
+  });
+
+
+  // ── PDF TOKEN DOWNLOAD ───────────────────────────────────────────────────
+  // Client POSTs to generate-pdf, gets a token, then navigates browser directly
+  // to this GET endpoint.  Browser handles download natively - no blob:// URL,
+  // no Adobe Acrobat interception.
+  app.get("/api/pdf/:token", (req, res) => {
+    const entry = pdfTokenStore.get(req.params.token);
+    if (!entry || entry.expires < Date.now()) {
+      pdfTokenStore.delete(req.params.token);
+      return res.status(404).json({ error: "PDF token expired or not found" });
+    }
+    pdfTokenStore.delete(req.params.token); // one-time use
+    const encoded = encodeURIComponent(entry.filename);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
+    res.setHeader("Content-Length", entry.buffer.length);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(entry.buffer);
   });
 
   // ── CONTACT ───────────────────────────────────────────────────────────────
@@ -1573,10 +1608,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const label = type === "executive" ? "Executive" : "Full";
       const filename = `VeritaScan_${label}_${safeName}_${date}.pdf`;
 
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const veritascanToken = storePdfToken(pdfBuffer, filename);
+      res.json({ token: veritascanToken });
     } catch (err: any) {
       console.error("VeritaScan PDF generation error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
@@ -2918,10 +2951,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const date = new Date().toISOString().split("T")[0];
       const filename = `CMS_209_22D0999999_${date}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const demoCms209Token = storePdfToken(pdfBuffer, filename);
+      res.json({ token: demoCms209Token });
     } catch (err: any) {
       console.error("Demo CMS 209 PDF error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
@@ -3479,10 +3510,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const veritacompToken = storePdfToken(pdfBuffer, filename);
+      res.json({ token: veritacompToken });
     } catch (err: any) {
       console.error("Competency PDF generation error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
@@ -3559,10 +3588,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
 
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const veritastaffToken = storePdfToken(pdfBuffer, filename);
+      res.json({ token: veritastaffToken });
     } catch (err: any) {
       console.error("Competency PDF generation error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
@@ -3628,10 +3655,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumUserRow?.clia_number || undefined);
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const cumsumToken = storePdfToken(pdfBuffer, filename);
+      res.json({ token: cumsumToken });
     } catch (e: any) {
       console.error("CUMSUM PDF error:", e);
       res.status(500).json({ error: "PDF generation failed" });
@@ -3984,10 +4009,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       const date = new Date().toISOString().split("T")[0];
       const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const cms209Token = storePdfToken(pdfBuffer, filename);
+      res.json({ token: cms209Token });
     } catch (err: any) {
       console.error("CMS 209 PDF generation error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });

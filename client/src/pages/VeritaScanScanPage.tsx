@@ -568,19 +568,16 @@ export default function VeritaScanScanPage() {
         }
       );
       if (!res.ok) throw new Error("PDF generation failed");
-      const arrayBuffer = await res.arrayBuffer();
-      const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
+      const { token } = await res.json();
       const a = document.createElement("a");
-      a.href = url;
       const date = new Date().toISOString().split("T")[0];
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      a.href = `/api/pdf/${token}`;
       a.download =
         type === "executive"
           ? `VeritaScan_Executive_${safeName}_${date}.pdf`
           : `VeritaScan_Full_${safeName}_${date}.pdf`;
       a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
       // fail silently — server may not be ready
       console.error("PDF error:", e);
