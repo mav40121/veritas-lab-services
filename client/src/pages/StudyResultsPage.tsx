@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
+import { authHeaders } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLocation } from "wouter";
 import {
@@ -55,7 +56,7 @@ import { API_BASE } from "@/lib/queryClient";
 async function downloadPDF(study: Study, results: StudyResults) {
   const res = await fetch(`${API_BASE}/api/generate-pdf`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ study, results }),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -63,25 +64,18 @@ async function downloadPDF(study: Study, results: StudyResults) {
   const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
-  // Use ArrayBuffer → base64 data URI to bypass Adobe Acrobat's
-  // blob-URL interception which strips the filename and shows about:blank
-  const arrayBuffer = await res.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-  let binary = "";
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  const base64 = btoa(binary);
-  const dataUri = `data:application/octet-stream;base64,${base64}`;
-
+  // Use blob URL with explicit download attribute to force save-as dialog
+  // rather than opening a new tab (about:blank)
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = dataUri;
+  a.href = url;
   a.download = filename;
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];
