@@ -343,19 +343,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── DISCOUNT CODE VALIDATION (public) ──────────────────────────────────
-  app.post("/api/discount/validate", (req, res) => {
+  app.post("/api/discount/validate", async (req, res) => {
     const { code, priceType } = req.body;
     if (!code) return res.json({ valid: false, message: "No code provided" });
 
+    // Check internal discount_codes table first
     const row = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(code.trim()) as any;
-    if (!row) return res.json({ valid: false, message: "Invalid discount code" });
-    if (!row.active) return res.json({ valid: false, message: "This code is no longer active" });
-    if (row.max_uses !== null && row.uses >= row.max_uses) return res.json({ valid: false, message: "This code has reached its usage limit" });
-    if (row.applies_to !== "all" && row.applies_to !== priceType) {
-      return res.json({ valid: false, message: `This code applies to ${row.applies_to} plans only` });
+    if (row) {
+      if (!row.active) return res.json({ valid: false, message: "This code is no longer active" });
+      if (row.max_uses !== null && row.uses >= row.max_uses) return res.json({ valid: false, message: "This code has reached its usage limit" });
+      if (row.applies_to !== "all" && row.applies_to !== priceType) {
+        return res.json({ valid: false, message: `This code applies to ${row.applies_to} plans only` });
+      }
+      return res.json({ valid: true, discountPct: row.discount_pct, partnerName: row.partner_name, message: `${row.discount_pct}% discount applied` });
     }
 
-    res.json({ valid: true, discountPct: row.discount_pct, partnerName: row.partner_name, message: `${row.discount_pct}% discount applied` });
+    // Fall back to direct Stripe coupon lookup
+    if (stripe) {
+      try {
+        const coupon = await stripe.coupons.retrieve(code.trim());
+        if (coupon && coupon.valid) {
+          const pct = coupon.percent_off ?? 0;
+          return res.json({ valid: true, discountPct: pct, partnerName: coupon.name || "Partner", message: `${pct}% discount applied`, stripeId: coupon.id });
+        }
+      } catch {}
+    }
+
+    return res.json({ valid: false, message: "Invalid discount code" });
   });
 
   // ── DOWNLOADS ─────────────────────────────────────────────────────────────
@@ -1796,7 +1810,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Validate discount code if provided
     let couponId: string | undefined;
     let discountRow: any = null;
+    let discountPct = 0;
     if (discountCode) {
+      // Check internal discount_codes table first
       discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
       if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual" || discountRow.applies_to === "all")) {
         try {
@@ -1806,9 +1822,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             name: `${discountRow.partner_name} - ${discountRow.discount_pct}% off`,
           });
           couponId = coupon.id;
+          discountPct = discountRow.discount_pct;
         } catch (err: any) {
           console.error("Stripe coupon creation error:", err.message);
         }
+      } else if (!discountRow) {
+        // Try as a direct Stripe coupon ID
+        try {
+          const stripeCoupon = await stripe.coupons.retrieve(discountCode.trim());
+          if (stripeCoupon && stripeCoupon.valid) {
+            couponId = stripeCoupon.id;
+            discountPct = stripeCoupon.percent_off ?? 0;
+          }
+        } catch {}
       }
     }
 
@@ -1835,6 +1861,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       }
 
+      // Check if this discount is 100% off - if so, skip card collection requirement
+      const isFullDiscount = couponId !== undefined && discountPct === 100;
+      //
       const sessionParams: any = {
         customer: customerId,
         mode: isSubscription ? "subscription" : "payment",
@@ -1845,6 +1874,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
       if (couponId) {
         sessionParams.discounts = [{ coupon: couponId }];
+      }
+      // When subscription is fully covered, do not require a payment method upfront
+      if (isSubscription && isFullDiscount) {
+        sessionParams.payment_method_collection = "if_required";
       }
 
       const session = await stripe.checkout.sessions.create(sessionParams);
