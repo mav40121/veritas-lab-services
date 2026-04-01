@@ -568,7 +568,8 @@ export default function VeritaScanScanPage() {
         }
       );
       if (!res.ok) throw new Error("PDF generation failed");
-      const blob = await res.blob();
+      const arrayBuffer = await res.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -579,7 +580,7 @@ export default function VeritaScanScanPage() {
           ? `VeritaScan_Executive_${safeName}_${date}.pdf`
           : `VeritaScan_Full_${safeName}_${date}.pdf`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
       // fail silently — server may not be ready
       console.error("PDF error:", e);

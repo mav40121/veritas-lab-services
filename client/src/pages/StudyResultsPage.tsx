@@ -64,9 +64,10 @@ async function downloadPDF(study: Study, results: StudyResults) {
   const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
-  // Use blob URL with explicit download attribute to force save-as dialog
-  // rather than opening a new tab (about:blank)
-  const blob = await res.blob();
+  // Use octet-stream blob to prevent Adobe Acrobat browser extension from
+  // intercepting the download and opening it as about:blank without a filename
+  const arrayBuffer = await res.arrayBuffer();
+  const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

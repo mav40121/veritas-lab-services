@@ -1020,13 +1020,14 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
       headers: authHeaders(),
     });
     if (!res.ok) return;
-    const blob = await res.blob();
+    const arrayBuffer = await res.arrayBuffer();
+    const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `VeritaComp_Assessment_${assessmentId}.pdf`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const deleteAssessment = async (id: number) => {

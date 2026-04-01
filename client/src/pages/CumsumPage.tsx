@@ -213,7 +213,8 @@ export default function CumsumPage() {
         body: JSON.stringify({ currentSpecimens: specimenData }),
       });
       if (!res.ok) throw new Error();
-      const blob = await res.blob();
+      const arrayBuffer = await res.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
