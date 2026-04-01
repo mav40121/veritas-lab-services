@@ -473,8 +473,8 @@ function regulatoryComplianceBoxHTML(studyType: string): string {
 function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number): string {
   const cliaP = (cliaError * 100).toFixed(1);
   const verdictText = overallPass
-    ? `PASS - ${passCount}/${totalCount} results within TEa of +/-${cliaP}%`
-    : `FAIL - ${passCount}/${totalCount} results within TEa of +/-${cliaP}%`;
+    ? `Meets CLIA criteria - ${passCount}/${totalCount} results within TEa of \u00B1${cliaP}%`
+    : `Does not meet CLIA criteria - ${passCount}/${totalCount} results within TEa of \u00B1${cliaP}%`;
   return `
   <div class="eval-section">
     <hr class="divider">
@@ -1388,7 +1388,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   }
 
   // Narrative
-  const overallVerdict = results.overallPass ? "PASS" : "FAIL";
+  const overallVerdict = results.overallPass ? "Meets CLIA criteria" : "Does not meet CLIA criteria";
   const narrativeText = results.summary;
   const ptCoagCliaStatement = results.overallPass
     ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
@@ -1400,7 +1400,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   // Overall verdict
   const verdictHtml = `<div class="verdict ${results.overallPass ? "pass-bg" : "fail-bg"}" style="margin-top:12px">
-    Overall: ${overallVerdict} - Module 1: ${module1.pass ? "PASS" : "FAIL"}, Module 2: ${module2.pass ? "PASS" : "FAIL"}${module3 ? `, Module 3: ${module3.pass ? "PASS" : "FAIL"}` : ""}
+    ${overallVerdict} - Module 1: ${module1.pass ? "Meets criteria" : "Does not meet criteria"}, Module 2: ${module2.pass ? "Meets criteria" : "Does not meet criteria"}${module3 ? `, Module 3: ${module3.pass ? "Meets criteria" : "Does not meet criteria"}` : ""}
   </div>`;
 
   const reagentInfo = rawData.reagentLot ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "-"} · ISI: ${rawData.module1?.isi ?? "-"}</div>` : "";
