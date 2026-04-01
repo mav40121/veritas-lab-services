@@ -427,6 +427,8 @@ sqlite.exec(`
   VALUES ('DARK10', 'Dark Report', 10, 'annual', NULL, 0, 1, '${new Date().toISOString()}');
   INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at)
   VALUES ('BETA2026', 'VeritaAssure Beta', 100, 'all', 10, 0, 1, '${new Date().toISOString()}');
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at)
+  VALUES ('TdFkdMWg', 'Community Hospital 1yr Free (10 users)', 100, 'all', NULL, 0, 1, '${new Date().toISOString()}');
 `);
 
 // Step 2: Add columns if upgrading from older schema (safe migration)

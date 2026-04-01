@@ -366,7 +366,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const pct = coupon.percent_off ?? 0;
           return res.json({ valid: true, discountPct: pct, partnerName: coupon.name || "Partner", message: `${pct}% discount applied`, stripeId: coupon.id });
         }
-      } catch {}
+      } catch (stripeErr: any) {
+        console.error("[validate-discount] Stripe coupon lookup error:", stripeErr?.message);
+      }
     }
 
     return res.json({ valid: false, message: "Invalid discount code" });
