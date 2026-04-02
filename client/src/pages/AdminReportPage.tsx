@@ -407,7 +407,7 @@ export default function AdminReportPage() {
                   <th
                     key={col.key}
                     onClick={() => toggleSort(col.key)}
-                    className="px-3 py-2 text-left font-medium text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-nowrap select-none"
+                    className="px-3 py-2 text-left font-semibold text-gray-900 cursor-pointer hover:bg-gray-100 whitespace-nowrap select-none"
                   >
                     {col.label}
                     {sortIndicator(col.key)}
@@ -419,13 +419,13 @@ export default function AdminReportPage() {
               {filtered.map((u, i) => (
                 <tr
                   key={u.id}
-                  className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                  className={`text-gray-900 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {u.clia_lab_name || "Not set"}
+                    {u.clia_lab_name || <span className="text-gray-500">Not set</span>}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {u.clia_number || "Not on file"}
+                    {u.clia_number || <span className="text-gray-500">Not on file</span>}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u.clia_director || u.name || ""}
@@ -452,7 +452,7 @@ export default function AdminReportPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-3 py-8 text-center text-gray-400">
+                  <td colSpan={13} className="px-3 py-8 text-center text-gray-500">
                     No users found
                   </td>
                 </tr>
@@ -461,7 +461,7 @@ export default function AdminReportPage() {
           </table>
         </div>
 
-        <div className="text-xs text-gray-400 text-right">
+        <div className="text-xs text-gray-500 text-right">
           Generated: {data.generatedAt ? new Date(data.generatedAt).toLocaleString() : ""}
         </div>
       </div>
