@@ -20,10 +20,13 @@ const ACCREDITATION_OPTIONS: { value: AccreditationBody; label: string; descript
   { value: "AABB", label: "AABB", description: "AABB (blood banking / transfusion)" },
 ];
 
+type PtVendorPref = "none" | "cap" | "api";
+
 interface AccountSettings {
   clia_number: string;
   clia_lab_name: string;
   preferred_standards: AccreditationBody[];
+  preferred_pt_vendor: PtVendorPref;
 }
 
 export default function AccountSettingsPage() {
@@ -32,6 +35,7 @@ export default function AccountSettingsPage() {
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
   const [preferredStandards, setPreferredStandards] = useState<AccreditationBody[]>([]);
+  const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
   // Discount code state
   const [discountCode, setDiscountCode] = useState("");
@@ -96,6 +100,7 @@ export default function AccountSettingsPage() {
       setCliaNumber(settings.clia_number || "");
       setLabName(settings.clia_lab_name || "");
       setPreferredStandards(settings.preferred_standards || []);
+      setPreferredPtVendor(settings.preferred_pt_vendor || "none");
     }
   }, [settings]);
 
@@ -104,6 +109,7 @@ export default function AccountSettingsPage() {
       clia_number: cliaNumber,
       clia_lab_name: labName,
       preferred_standards: preferredStandards,
+      preferredPtVendor,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/account/settings"] });
@@ -216,6 +222,43 @@ export default function AccountSettingsPage() {
           {preferredStandards.length === 2 && (
             <p className="text-xs text-muted-foreground">Maximum of 2 selected. Deselect one to choose another.</p>
           )}
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || isLoading}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            <Save size={14} className="mr-1.5" />
+            {saveMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Proficiency Testing Preferences</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Preferred PT Vendor</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Your preferred vendor's programs will appear first in PT recommendations.
+            </p>
+            <div className="flex gap-3">
+              {(["none", "cap", "api"] as const).map((val) => (
+                <button
+                  key={val}
+                  onClick={() => setPreferredPtVendor(val)}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    preferredPtVendor === val
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+                  }`}
+                >
+                  {val === "none" ? "No Preference" : val.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
           <Button
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending || isLoading}

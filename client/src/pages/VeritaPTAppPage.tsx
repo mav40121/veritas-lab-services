@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -125,17 +125,19 @@ function EnrollmentDialog({
   open,
   onClose,
   onSaved,
+  defaultProvider = "CAP",
 }: {
   enrollment: PTEnrollment | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  defaultProvider?: string;
 }) {
   const isReadOnly = useIsReadOnly();
   const queryClient = useQueryClient();
   const [analyte, setAnalyte] = useState(enrollment?.analyte ?? "");
   const [specialty, setSpecialty] = useState(enrollment?.specialty ?? "Chemistry");
-  const [provider, setProvider] = useState(enrollment?.pt_provider ?? "CAP");
+  const [provider, setProvider] = useState(enrollment?.pt_provider ?? defaultProvider);
   const [programCode, setProgramCode] = useState(enrollment?.program_code ?? "");
   const [year, setYear] = useState(enrollment?.enrollment_year ?? new Date().getFullYear());
   const [status, setStatus] = useState(enrollment?.status ?? "active");
@@ -169,7 +171,18 @@ function EnrollmentDialog({
     },
   });
 
-  // Reset when dialog opens
+  // Reset when dialog opens with fresh values
+  useEffect(() => {
+    if (open) {
+      setAnalyte(enrollment?.analyte ?? "");
+      setSpecialty(enrollment?.specialty ?? "Chemistry");
+      setProvider(enrollment?.pt_provider ?? defaultProvider);
+      setProgramCode(enrollment?.program_code ?? "");
+      setYear(enrollment?.enrollment_year ?? new Date().getFullYear());
+      setStatus(enrollment?.status ?? "active");
+    }
+  }, [open, enrollment, defaultProvider]);
+
   const handleOpenChange = (v: boolean) => {
     if (!v) onClose();
   };
@@ -892,6 +905,11 @@ export default function VeritaPTAppPage() {
           <Sparkles className="w-5 h-5 text-purple-600" />
           <h2 className="text-lg font-semibold text-gray-900">PT Program Recommendations</h2>
           <span className="text-sm text-gray-500 ml-1">Based on your VeritaMap test menu</span>
+          {recData?.preferredVendor && recData.preferredVendor !== 'none' && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded ml-auto">
+              Preferred: {recData.preferredVendor.toUpperCase()}
+            </span>
+          )}
         </div>
         <div className="p-6">
           {recLoading ? (
@@ -1008,6 +1026,7 @@ export default function VeritaPTAppPage() {
         open={enrollmentDialog.open}
         onClose={() => setEnrollmentDialog({ open: false, enrollment: null })}
         onSaved={() => {}}
+        defaultProvider={recData?.preferredVendor === 'api' ? 'API' : 'CAP'}
       />
       <EventDialog
         event={eventDialog.event}

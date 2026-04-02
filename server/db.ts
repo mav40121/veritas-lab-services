@@ -579,6 +579,11 @@ if (!colNames.includes("preferred_standards")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_standards TEXT DEFAULT NULL"); } catch {}
 }
 
+// Add preferred_pt_vendor column for VeritaPT vendor preference
+if (!colNames.includes("preferred_pt_vendor")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_pt_vendor TEXT DEFAULT 'none'"); } catch {}
+}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);

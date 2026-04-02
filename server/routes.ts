@@ -5380,7 +5380,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         { provider: "API", catalogNumber: "API-IMMU-I01", programName: "Immunology", url: API_URL, analytes: ["CRP","ESR","RF","ANA","Anti-dsDNA","Complement C3","Complement C4","IgG","IgA","IgM","IgE"] },
       ];
 
-      // 8. Score programs by gap coverage
+      // 8. Fetch preferred PT vendor
+      const prefRow = (db as any).$client.prepare("SELECT preferred_pt_vendor FROM users WHERE id = ?").get(userId) as any;
+      const preferredVendor = prefRow?.preferred_pt_vendor || 'none';
+
+      // 9. Score programs by gap coverage
       const gapSet = new Set(gaps);
       const recommendations = catalog
         .map(prog => {
@@ -5397,9 +5401,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .filter(r => r.coverageCount > 0)
         .sort((a, b) => b.coverageCount - a.coverageCount);
 
+      // Sort preferred vendor's programs first
+      if (preferredVendor !== 'none') {
+        recommendations.sort((a, b) => {
+          const aPreferred = a.provider.toLowerCase() === preferredVendor ? 1 : 0;
+          const bPreferred = b.provider.toLowerCase() === preferredVendor ? 1 : 0;
+          if (bPreferred !== aPreferred) return bPreferred - aPreferred;
+          return b.coverageCount - a.coverageCount;
+        });
+      }
+
       res.json({
         hasMap: true,
         mapName: map.name,
+        preferredVendor,
         waived,
         nonWaived,
         gaps,
@@ -5416,7 +5431,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
       const userRow = (db as any).$client.prepare(
-        "SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?"
+        "SELECT clia_number, clia_lab_name, preferred_standards, preferred_pt_vendor FROM users WHERE id = ?"
       ).get(req.userId) as any;
       let preferredStandards: string[] = [];
       if (userRow?.preferred_standards) {
@@ -5426,6 +5441,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         clia_number: userRow?.clia_number || '',
         clia_lab_name: userRow?.clia_lab_name || '',
         preferred_standards: preferredStandards,
+        preferred_pt_vendor: userRow?.preferred_pt_vendor || 'none',
       });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to fetch account settings" });
@@ -5434,7 +5450,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
-      const { clia_number, clia_lab_name, preferred_standards } = req.body;
+      const { clia_number, clia_lab_name, preferred_standards, preferredPtVendor } = req.body;
       // Validate preferred_standards: must be array of valid accreditation bodies, max 2
       const VALID_BODIES = ["CAP", "TJC", "COLA", "AABB"];
       let standardsJson: string | null = null;
@@ -5442,9 +5458,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const filtered = preferred_standards.filter((s: string) => VALID_BODIES.includes(s)).slice(0, 2);
         standardsJson = JSON.stringify(filtered);
       }
+      // Validate preferred_pt_vendor
+      const VALID_VENDORS = ["cap", "api", "none"];
+      const vendorValue = VALID_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
       (db as any).$client.prepare(
-        "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ? WHERE id = ?"
-      ).run(clia_number || null, clia_lab_name || null, standardsJson, req.userId);
+        "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
+      ).run(clia_number || null, clia_lab_name || null, standardsJson, vendorValue, req.userId);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to update account settings" });
