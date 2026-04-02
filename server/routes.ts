@@ -1816,17 +1816,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (discountCode) {
       // Check internal discount_codes table first
       discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
-      if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual" || discountRow.applies_to === "all")) {
+      if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual")) {
+        discountPct = discountRow.discount_pct;
+        // First try using the code itself as a direct Stripe coupon ID (e.g. TdFkdMWg)
         try {
-          const coupon = await stripe.coupons.create({
-            percent_off: discountRow.discount_pct,
-            duration: "once",
-            name: `${discountRow.partner_name} - ${discountRow.discount_pct}% off`,
-          });
-          couponId = coupon.id;
-          discountPct = discountRow.discount_pct;
-        } catch (err: any) {
-          console.error("Stripe coupon creation error:", err.message);
+          const existing = await stripe.coupons.retrieve(discountCode.trim());
+          if (existing && existing.valid) {
+            couponId = existing.id;
+          }
+        } catch {}
+        // If not a Stripe coupon ID, create one on the fly
+        if (!couponId) {
+          try {
+            const name = `${discountRow.partner_name} - ${discountRow.discount_pct}% off`.slice(0, 40);
+            const coupon = await stripe.coupons.create({
+              percent_off: discountRow.discount_pct,
+              duration: "once",
+              name,
+            });
+            couponId = coupon.id;
+          } catch (err: any) {
+            console.error("Stripe coupon creation error:", err.message);
+          }
         }
       } else if (!discountRow) {
         // Try as a direct Stripe coupon ID
@@ -1842,7 +1853,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     try {
       // Reuse or create Stripe customer
+      // Verify existing customer ID is valid in current mode (live vs test)
       let customerId = user.stripeCustomerId || undefined;
+      if (customerId) {
+        try {
+          await stripe.customers.retrieve(customerId);
+        } catch {
+          // Stale customer ID (e.g. test mode ID in live mode) - create a fresh one
+          console.log(`[checkout] Stale customer ID ${customerId} - creating new customer`);
+          customerId = undefined;
+          db.$client.prepare("UPDATE users SET stripe_customer_id = NULL WHERE id = ?").run(user.id);
+        }
+      }
       if (!customerId) {
         const customer = await stripe.customers.create({
           email: user.email,
