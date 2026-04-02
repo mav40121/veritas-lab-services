@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   Pencil,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -578,6 +579,16 @@ export default function VeritaPTAppPage() {
     enabled: isLoggedIn && hasPlanAccess,
   });
 
+  const { data: recData, isLoading: recLoading } = useQuery({
+    queryKey: ['veritapt-recommendations'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/veritapt/recommendations`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch recommendations');
+      return res.json();
+    },
+    enabled: !!localStorage.getItem('veritas_token'),
+  });
+
   // Delete mutations
   const deleteEnrollment = useMutation({
     mutationFn: async (id: number) => {
@@ -874,6 +885,122 @@ export default function VeritaPTAppPage() {
           </div>
         </div>
       )}
+
+      {/* PT Program Recommendations */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-purple-600" />
+          <h2 className="text-lg font-semibold text-gray-900">PT Program Recommendations</h2>
+          <span className="text-sm text-gray-500 ml-1">Based on your VeritaMap test menu</span>
+        </div>
+        <div className="p-6">
+          {recLoading ? (
+            <p className="text-gray-500 text-sm">Analyzing your test menu...</p>
+          ) : !recData?.hasMap ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-amber-800 font-medium">No VeritaMap found</p>
+              <p className="text-amber-700 text-sm mt-1">Build your test menu in VeritaMap to receive PT program recommendations.</p>
+              <a href="/#/veritamap" className="text-amber-700 underline text-sm mt-2 inline-block">{"Go to VeritaMap \u2192"}</a>
+            </div>
+          ) : (
+            <div className="space-y-6">
+
+              {/* Gaps Alert */}
+              {recData.gaps?.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-amber-800 font-semibold mb-1">Analytes with no PT enrollment ({recData.gaps.length})</p>
+                  <p className="text-amber-700 text-sm mb-2">The following analytes on your test menu have no active PT enrollment:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recData.gaps.map((analyte: string) => (
+                      <span key={analyte} className="bg-amber-100 text-amber-800 text-xs font-medium px-2 py-1 rounded">
+                        {analyte}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended Programs */}
+              {recData.recommendations?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Recommended Programs</h3>
+                  <div className="space-y-3">
+                    {recData.recommendations.map((rec: any, idx: number) => (
+                      <div key={idx} className="border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${rec.provider === 'CAP' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                              {rec.provider}
+                            </span>
+                            <span className="text-sm font-medium text-gray-900">{rec.catalogNumber}</span>
+                            <span className="text-sm text-gray-700">{rec.programName}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">
+                            Covers {rec.coverageCount} gap analyte{rec.coverageCount !== 1 ? 's' : ''}: {rec.gapAnalytesCovered.join(', ')}
+                          </p>
+                        </div>
+                        <a
+                          href={rec.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 whitespace-nowrap"
+                        >
+                          Order
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No gaps - all covered */}
+              {recData.gaps?.length === 0 && recData.nonWaived?.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-semibold">All non-waived analytes are enrolled in PT</p>
+                  <p className="text-green-700 text-sm mt-1">Great job - your PT enrollment covers your entire non-waived test menu.</p>
+                </div>
+              )}
+
+              {/* Already Covered */}
+              {recData.alreadyCovered?.length > 0 && (
+                <details className="group">
+                  <summary className="cursor-pointer text-sm font-semibold text-gray-600 flex items-center gap-2 list-none">
+                    <span className="group-open:rotate-90 transition-transform inline-block">{"\u25B6"}</span>
+                    Already Covered ({recData.alreadyCovered.length} analytes)
+                  </summary>
+                  <div className="mt-2 flex flex-wrap gap-2 pl-4">
+                    {recData.alreadyCovered.map((analyte: string) => (
+                      <span key={analyte} className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded flex items-center gap-1">
+                        {"\u2713"} {analyte}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {/* Waived Tests */}
+              {recData.waived?.length > 0 && (
+                <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                    Waived Tests ({recData.waived.length})
+                  </p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    {"PT not required for waived testing per CLIA (42 CFR \u00A7493.15)"}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {recData.waived.map((item: any) => (
+                      <span key={item.analyte} className="bg-white border border-gray-200 text-gray-600 text-xs font-medium px-2 py-1 rounded">
+                        {item.analyte}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Dialogs */}
       <EnrollmentDialog

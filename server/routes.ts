@@ -5133,6 +5133,198 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── PT Program Recommendations ─────────────────────────────────────────
+  app.get("/api/veritapt/recommendations", authMiddleware, (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+
+      // 1. Get the user's most recent VeritaMap
+      const map = (db as any).$client.prepare(
+        "SELECT id, name FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
+      ).get(userId) as any;
+
+      if (!map) {
+        return res.json({
+          hasMap: false,
+          mapName: null,
+          waived: [],
+          nonWaived: [],
+          gaps: [],
+          alreadyCovered: [],
+          recommendations: [],
+        });
+      }
+
+      // 2. Get all active analytes from the map
+      const tests = (db as any).$client.prepare(
+        "SELECT analyte, specialty, complexity FROM veritamap_instrument_tests WHERE map_id = ? AND active = 1"
+      ).all(map.id) as { analyte: string; specialty: string; complexity: string }[];
+
+      // 3. Separate waived vs non-waived
+      const waived: { analyte: string; specialty: string }[] = [];
+      const nonWaived: { analyte: string; specialty: string; complexity: string }[] = [];
+      const seen = new Set<string>();
+      for (const t of tests) {
+        const key = t.analyte.toLowerCase().trim();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (t.complexity.toLowerCase() === "waived") {
+          waived.push({ analyte: t.analyte, specialty: t.specialty });
+        } else {
+          nonWaived.push({ analyte: t.analyte, specialty: t.specialty, complexity: t.complexity });
+        }
+      }
+
+      // 4. Analyte normalization map
+      const normMap: Record<string, string> = {
+        "glucose": "Glucose",
+        "na": "Sodium", "sodium": "Sodium",
+        "k": "Potassium", "potassium": "Potassium",
+        "cl": "Chloride", "chloride": "Chloride",
+        "co2": "CO2", "bicarbonate": "CO2", "hco3": "CO2",
+        "bun": "BUN", "urea nitrogen": "BUN",
+        "creatinine": "Creatinine", "creat": "Creatinine",
+        "calcium": "Calcium", "ca": "Calcium",
+        "total protein": "Total Protein", "tp": "Total Protein",
+        "albumin": "Albumin", "alb": "Albumin",
+        "total bilirubin": "Total Bilirubin", "tbili": "Total Bilirubin", "t bili": "Total Bilirubin",
+        "direct bilirubin": "Direct Bilirubin", "dbili": "Direct Bilirubin", "d bili": "Direct Bilirubin",
+        "alt": "ALT", "sgpt": "ALT",
+        "ast": "AST", "sgot": "AST",
+        "alkaline phosphatase": "Alkaline Phosphatase", "alk phos": "Alkaline Phosphatase", "alp": "Alkaline Phosphatase",
+        "ldh": "LDH", "lactate dehydrogenase": "LDH",
+        "ggt": "GGT", "gamma gt": "GGT",
+        "uric acid": "Uric Acid",
+        "phosphorus": "Phosphorus", "phos": "Phosphorus", "phosphate": "Phosphorus",
+        "magnesium": "Magnesium", "mg": "Magnesium",
+        "iron": "Iron", "fe": "Iron",
+        "cholesterol": "Cholesterol", "chol": "Cholesterol",
+        "triglycerides": "Triglycerides", "trig": "Triglycerides", "tg": "Triglycerides",
+        "hdl": "HDL Cholesterol", "hdl cholesterol": "HDL Cholesterol", "hdl-c": "HDL Cholesterol",
+        "ldl": "LDL Cholesterol", "ldl cholesterol": "LDL Cholesterol", "ldl-c": "LDL Cholesterol",
+        "tsh": "TSH", "thyroid stimulating hormone": "TSH",
+        "free t4": "Free T4", "ft4": "Free T4", "thyroxine free": "Free T4",
+        "free t3": "Free T3", "ft3": "Free T3", "triiodothyronine free": "Free T3",
+        "hemoglobin a1c": "Hemoglobin A1c", "hba1c": "Hemoglobin A1c", "a1c": "Hemoglobin A1c",
+        "glycated hemoglobin": "Hemoglobin A1c", "glycohemoglobin": "Hemoglobin A1c",
+        "wbc": "WBC", "white blood cell": "WBC", "leukocyte count": "WBC",
+        "rbc": "RBC", "red blood cell": "RBC", "erythrocyte count": "RBC",
+        "hemoglobin": "Hemoglobin", "hgb": "Hemoglobin", "hb": "Hemoglobin",
+        "hematocrit": "Hematocrit", "hct": "Hematocrit", "packed cell volume": "Hematocrit", "pcv": "Hematocrit",
+        "mcv": "MCV", "mch": "MCH", "mchc": "MCHC", "rdw": "RDW",
+        "platelet count": "Platelet Count", "plt": "Platelet Count", "thrombocyte count": "Platelet Count",
+        "pt": "PT", "prothrombin time": "PT",
+        "inr": "INR", "international normalized ratio": "INR",
+        "aptt": "APTT", "ptt": "APTT", "activated partial thromboplastin time": "APTT",
+        "partial thromboplastin time": "APTT",
+        "fibrinogen": "Fibrinogen",
+        "troponin i": "Troponin I", "ctni": "Troponin I",
+        "troponin t": "Troponin T", "ctnt": "Troponin T", "troponin": "Troponin T",
+        "bnp": "BNP", "brain natriuretic peptide": "BNP",
+        "crp": "CRP", "c-reactive protein": "CRP", "c reactive protein": "CRP",
+        "esr": "ESR", "sed rate": "ESR", "erythrocyte sedimentation rate": "ESR",
+        "psa": "PSA", "prostate specific antigen": "PSA",
+        "urinalysis": "Urinalysis", "ua": "Urinalysis", "u/a": "Urinalysis",
+        "ph": "pH",
+        "pco2": "pCO2", "partial pressure co2": "pCO2",
+        "po2": "pO2", "partial pressure o2": "pO2",
+        "ionized calcium": "Ionized Calcium", "ica": "Ionized Calcium", "ca ionized": "Ionized Calcium",
+        "lactate": "Lactate", "lactic acid": "Lactate",
+        "rf": "RF", "rheumatoid factor": "RF",
+        "ana": "ANA", "antinuclear antibody": "ANA", "antinuclear antibodies": "ANA",
+        "ferritin": "Ferritin",
+        "tibc": "TIBC", "total iron binding capacity": "TIBC",
+      };
+
+      const normalizeAnalyte = (name: string): string => {
+        const key = name.toLowerCase().trim().replace(/\s+/g, ' ');
+        return normMap[key] || name;
+      };
+
+      // 5. Build canonical analyte sets
+      const nonWaivedCanonical = nonWaived.map(t => normalizeAnalyte(t.analyte));
+      const uniqueNonWaived = Array.from(new Set(nonWaivedCanonical));
+
+      // 6. Get active PT enrollments to determine already-covered analytes
+      const enrollments = (db as any).$client.prepare(
+        "SELECT analyte FROM pt_enrollments WHERE user_id = ? AND status = 'active'"
+      ).all(userId) as { analyte: string }[];
+      const enrolledSet = new Set(enrollments.map(e => normalizeAnalyte(e.analyte)));
+
+      const alreadyCovered: string[] = [];
+      const gaps: string[] = [];
+      for (const analyte of uniqueNonWaived) {
+        if (enrolledSet.has(analyte)) {
+          alreadyCovered.push(analyte);
+        } else {
+          gaps.push(analyte);
+        }
+      }
+
+      // 7. PT catalog
+      const CAP_URL = "https://www.cap.org/laboratory-improvement/proficiency-testing/proficiency-testing-programs";
+      const API_URL = "https://www.apipt.org";
+
+      const catalog: { provider: "CAP" | "API"; catalogNumber: string; programName: string; url: string; analytes: string[] }[] = [
+        { provider: "CAP", catalogNumber: "CAP-GEN-110", programName: "General Chemistry", url: CAP_URL, analytes: ["Glucose","Sodium","Potassium","Chloride","CO2","BUN","Creatinine","Calcium","Total Protein","Albumin","Total Bilirubin","ALT","AST","Alkaline Phosphatase","LDH","GGT","Uric Acid","Phosphorus","Magnesium","Iron","Cholesterol","Triglycerides","HDL Cholesterol","LDL Cholesterol"] },
+        { provider: "CAP", catalogNumber: "CAP-GEN-120", programName: "Glucose", url: CAP_URL, analytes: ["Glucose"] },
+        { provider: "CAP", catalogNumber: "CAP-HEM-210", programName: "Hematology", url: CAP_URL, analytes: ["WBC","RBC","Hemoglobin","Hematocrit","MCV","MCH","MCHC","Platelet Count","Differential Count"] },
+        { provider: "CAP", catalogNumber: "CAP-COA-310", programName: "Coagulation", url: CAP_URL, analytes: ["PT","INR","APTT","Fibrinogen","Thrombin Time"] },
+        { provider: "CAP", catalogNumber: "CAP-IMM-410", programName: "Immunology", url: CAP_URL, analytes: ["ANA","RF","CRP","ASO","Anti-dsDNA","Anti-SSA","Anti-SSB","Anti-Sm","Anti-Scl-70","Anti-Jo-1"] },
+        { provider: "CAP", catalogNumber: "CAP-TDM-510", programName: "Therapeutic Drug Monitoring", url: CAP_URL, analytes: ["Digoxin","Phenytoin","Phenobarbital","Carbamazepine","Valproic Acid","Theophylline","Lithium","Cyclosporine","Tacrolimus","Sirolimus","Vancomycin","Gentamicin","Tobramycin","Amikacin","Methotrexate"] },
+        { provider: "CAP", catalogNumber: "CAP-GLY-120", programName: "HbA1c", url: CAP_URL, analytes: ["Hemoglobin A1c"] },
+        { provider: "CAP", catalogNumber: "CAP-LPD-150", programName: "Lipids", url: CAP_URL, analytes: ["Cholesterol","Triglycerides","HDL Cholesterol","LDL Cholesterol"] },
+        { provider: "CAP", catalogNumber: "CAP-URN-610", programName: "Urinalysis", url: CAP_URL, analytes: ["Urinalysis","Urine Dipstick","Urine Microscopy","Urine Color","Urine Clarity","Urine pH","Urine Specific Gravity","Urine Protein","Urine Glucose","Urine Ketones","Urine Blood","Urine Bilirubin","Urine Urobilinogen","Urine Nitrite","Urine Leukocyte Esterase"] },
+        { provider: "CAP", catalogNumber: "CAP-BLG-710", programName: "Blood Gas", url: CAP_URL, analytes: ["pH","pCO2","pO2","HCO3","Base Excess","O2 Saturation","Ionized Calcium","Sodium","Potassium","Chloride","Glucose","Lactate","Hematocrit"] },
+        { provider: "API", catalogNumber: "API-CHEM-C01", programName: "Chemistry Survey", url: API_URL, analytes: ["Glucose","BUN","Creatinine","Sodium","Potassium","Chloride","CO2","Calcium","Total Protein","Albumin","Total Bilirubin","Direct Bilirubin","ALT","AST","Alkaline Phosphatase","GGT","LDH","Uric Acid","Phosphorus","Magnesium","Iron","TIBC","Ferritin"] },
+        { provider: "API", catalogNumber: "API-CHEM-C02", programName: "Lipid Panel", url: API_URL, analytes: ["Cholesterol","Triglycerides","HDL Cholesterol","LDL Cholesterol","VLDL Cholesterol"] },
+        { provider: "API", catalogNumber: "API-CHEM-C03", programName: "Glucose Monitoring", url: API_URL, analytes: ["Glucose","Hemoglobin A1c","Fructosamine"] },
+        { provider: "API", catalogNumber: "API-CHEM-C04", programName: "Thyroid", url: API_URL, analytes: ["TSH","Free T4","Free T3","Total T4","Total T3","Thyroglobulin","Anti-TPO","Anti-Tg"] },
+        { provider: "API", catalogNumber: "API-CHEM-C05", programName: "Cardiac Markers", url: API_URL, analytes: ["Troponin I","Troponin T","CK-MB","BNP","NT-proBNP","Myoglobin","CK"] },
+        { provider: "API", catalogNumber: "API-CHEM-C06", programName: "Tumor Markers", url: API_URL, analytes: ["PSA","CEA","AFP","CA 125","CA 19-9","CA 15-3","Beta-hCG"] },
+        { provider: "API", catalogNumber: "API-CHEM-C07", programName: "Renal", url: API_URL, analytes: ["Creatinine","BUN","Cystatin C","eGFR","Uric Acid","Phosphorus","Calcium","Magnesium"] },
+        { provider: "API", catalogNumber: "API-CHEM-C08", programName: "Hepatic", url: API_URL, analytes: ["ALT","AST","Alkaline Phosphatase","GGT","Total Bilirubin","Direct Bilirubin","Albumin","Total Protein","Prothrombin Time","INR"] },
+        { provider: "API", catalogNumber: "API-CHEM-C09", programName: "Electrolytes", url: API_URL, analytes: ["Sodium","Potassium","Chloride","CO2","Bicarbonate","Anion Gap"] },
+        { provider: "API", catalogNumber: "API-HEMA-H01", programName: "Complete Blood Count", url: API_URL, analytes: ["WBC","RBC","Hemoglobin","Hematocrit","MCV","MCH","MCHC","RDW","Platelet Count","MPV"] },
+        { provider: "API", catalogNumber: "API-HEMA-H02", programName: "Differential", url: API_URL, analytes: ["Neutrophils","Lymphocytes","Monocytes","Eosinophils","Basophils","Bands","Metamyelocytes"] },
+        { provider: "API", catalogNumber: "API-HEMA-H03", programName: "Reticulocyte", url: API_URL, analytes: ["Reticulocyte Count","Reticulocyte Hemoglobin","IRF"] },
+        { provider: "API", catalogNumber: "API-COAG-K01", programName: "Basic Coagulation", url: API_URL, analytes: ["PT","INR","APTT","Thrombin Time","Fibrinogen"] },
+        { provider: "API", catalogNumber: "API-COAG-K02", programName: "Special Coagulation", url: API_URL, analytes: ["Anti-Xa","Lupus Anticoagulant","DRVVT","Mixing Studies","Factor Assays","Protein C","Protein S","Antithrombin"] },
+        { provider: "API", catalogNumber: "API-IMMU-I01", programName: "Immunology", url: API_URL, analytes: ["CRP","ESR","RF","ANA","Anti-dsDNA","Complement C3","Complement C4","IgG","IgA","IgM","IgE"] },
+      ];
+
+      // 8. Score programs by gap coverage
+      const gapSet = new Set(gaps);
+      const recommendations = catalog
+        .map(prog => {
+          const covered = prog.analytes.filter(a => gapSet.has(a));
+          return {
+            provider: prog.provider,
+            catalogNumber: prog.catalogNumber,
+            programName: prog.programName,
+            url: prog.url,
+            gapAnalytesCovered: covered,
+            coverageCount: covered.length,
+          };
+        })
+        .filter(r => r.coverageCount > 0)
+        .sort((a, b) => b.coverageCount - a.coverageCount);
+
+      res.json({
+        hasMap: true,
+        mapName: map.name,
+        waived,
+        nonWaived,
+        gaps,
+        alreadyCovered,
+        recommendations,
+      });
+    } catch (err: any) {
+      console.error("Recommendations error:", err);
+      res.status(500).json({ error: "Failed to compute recommendations", detail: err.message });
+    }
+  });
+
   // ── ACCOUNT SETTINGS ────────────────────────────────────────────────────
   app.get("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
