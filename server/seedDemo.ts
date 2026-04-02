@@ -90,6 +90,12 @@ export async function seedDemoData() {
     seedCumsumData(sqlite, demoUserId, now);
   }
 
+  // ─── VeritaPT demo data ────────────────────────────────────────────────────
+  const existingPT = sqlite.prepare("SELECT id FROM pt_enrollments WHERE user_id = ?").get(demoUserId);
+  if (!existingPT) {
+    seedPTData(sqlite, demoUserId, now);
+  }
+
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
 }
 
@@ -592,4 +598,48 @@ function generateSpecimenData(n: number, oldMean: number, newMean: number) {
     });
   }
   return specimens;
+}
+
+// ─── PT seed data ─────────────────────────────────────────────────────────────
+function seedPTData(sqlite: any, demoUserId: number, now: string) {
+  // Enrollment 1: Glucose
+  const e1 = sqlite.prepare(
+    "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(demoUserId, "Glucose", "Chemistry", "CAP", "C-CHM-PT", 2026, "2026-01-01", "active", now, now);
+  const enrollId1 = Number(e1.lastInsertRowid);
+
+  const ev1 = sqlite.prepare(
+    "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(enrollId1, demoUserId, "2026-A", "Survey Event A", "2026-01-15", "Glucose", 98, "Enzymatic", 95, 3, 120, 85, 105, 1.00, "pass", null, now, now);
+
+  const ev2 = sqlite.prepare(
+    "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(enrollId1, demoUserId, "2026-B", "Survey Event B", "2026-03-15", "Glucose", 110, "Enzymatic", 96, 3, 118, 86, 106, 4.67, "fail", null, now, now);
+  const ev2Id = Number(ev2.lastInsertRowid);
+
+  sqlite.prepare(
+    "INSERT INTO pt_corrective_actions (event_id, user_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(ev2Id, demoUserId, "Calibration drift identified after reagent lot change", "Recalibrated instrument and repeated QC across 3 runs to confirm stability", "Implemented reagent lot acceptance criteria to require calibration verification before placing new lot in service", "Lab Supervisor", "2026-03-16", "2026-03-18", "completed", "M. Veri, MLS(ASCP)", "2026-03-19", now, now);
+
+  // Enrollment 2: Hemoglobin A1c
+  const e2 = sqlite.prepare(
+    "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(demoUserId, "Hemoglobin A1c", "Chemistry", "CAP", "C-HBA1C", 2026, "2026-01-01", "active", now, now);
+  const enrollId2 = Number(e2.lastInsertRowid);
+
+  sqlite.prepare(
+    "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(enrollId2, demoUserId, "2026-A", "Survey Event A", "2026-01-15", "Hemoglobin A1c", 6.8, "HPLC", 6.7, 0.2, 95, 6.1, 7.3, 0.50, "pass", null, now, now);
+
+  // Enrollment 3: PT/INR
+  const e3 = sqlite.prepare(
+    "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(demoUserId, "PT/INR", "Coagulation", "CAP", "C-COAG-PT", 2026, "2026-01-01", "active", now, now);
+  const enrollId3 = Number(e3.lastInsertRowid);
+
+  sqlite.prepare(
+    "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(enrollId3, demoUserId, "2026-A", "Survey Event A", "2026-01-15", "PT/INR", 1.02, "Clot-based", 1.00, 0.05, 88, 0.90, 1.10, 0.40, "pass", null, now, now);
+
+  console.log("[seed] VeritaPT demo data seeded");
 }

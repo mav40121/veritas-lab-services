@@ -2828,3 +2828,145 @@ export async function generateCMS209PDF(input: CMS209Input): Promise<Buffer> {
     await page.close();
   }
 }
+
+// ─── VeritaPT PDF ────────────────────────────────────────────────────────────
+
+interface VeritaPTPDFData {
+  labName: string;
+  cliaNumber: string;
+  generatedAt: string;
+  summary: { totalEnrollments: number; eventsThisYear: number; passRate: number; openCorrectiveActions: number };
+  enrollments: Array<{ analyte: string; specialty: string; pt_provider: string; program_code: string | null; enrollment_year: number; status: string }>;
+  events: Array<{ analyte: string; event_id: string | null; event_date: string; your_result: number | null; peer_mean: number | null; sdi: number | null; pass_fail: string; notes: string | null }>;
+  correctiveActions: Array<{ analyte: string; event_date: string; root_cause: string | null; corrective_action: string; status: string; verified_by: string | null }>;
+}
+
+function buildVeritaPTPDFHTML(data: VeritaPTPDFData): string {
+  const teal = "#01696F";
+
+  const enrollmentRows = data.enrollments.map(e => `
+    <tr>
+      <td>${e.analyte}</td>
+      <td>${e.specialty}</td>
+      <td>${e.pt_provider}</td>
+      <td>${e.program_code || "-"}</td>
+      <td>${e.enrollment_year}</td>
+      <td class="ctr">${e.status.charAt(0).toUpperCase() + e.status.slice(1)}</td>
+    </tr>`).join("");
+
+  const eventRows = data.events.map(e => `
+    <tr>
+      <td>${e.event_date}</td>
+      <td>${e.analyte}</td>
+      <td>${e.event_id || "-"}</td>
+      <td class="ctr">${e.your_result != null ? e.your_result : "-"}</td>
+      <td class="ctr">${e.peer_mean != null ? e.peer_mean : "-"}</td>
+      <td class="ctr">${e.sdi != null ? Number(e.sdi).toFixed(2) : "-"}</td>
+      <td class="ctr" style="font-weight:700; color:${e.pass_fail === "pass" ? "#166534" : e.pass_fail === "fail" ? "#991b1b" : "#6b7280"}">${e.pass_fail.toUpperCase()}</td>
+    </tr>`).join("");
+
+  const caRows = data.correctiveActions.map(ca => `
+    <tr>
+      <td>${ca.analyte}</td>
+      <td>${ca.event_date}</td>
+      <td>${ca.root_cause || "-"}</td>
+      <td>${ca.corrective_action}</td>
+      <td class="ctr">${ca.status.charAt(0).toUpperCase() + ca.status.slice(1)}</td>
+      <td>${ca.verified_by || "-"}</td>
+    </tr>`).join("");
+
+  const caSection = data.correctiveActions.length > 0 ? `
+    <h2>Corrective Actions</h2>
+    <table>
+      <thead><tr>
+        <th>Analyte</th><th>Event Date</th><th>Root Cause</th><th>Corrective Action</th><th class="ctr">Status</th><th>Verified By</th>
+      </tr></thead>
+      <tbody>${caRows}</tbody>
+    </table>` : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:9.5pt; color:#1a1a1a; background:white; }
+    @page { size:letter; margin:14mm 15mm 20mm 15mm; }
+    .page-header { border-bottom:3px solid ${teal}; padding-bottom:8px; margin-bottom:14px; }
+    .page-header-top { display:flex; justify-content:space-between; align-items:flex-end; }
+    .page-title { font-size:15pt; font-weight:700; color:${teal}; }
+    .page-subtitle { font-size:9pt; color:#555; margin-top:2px; }
+    .lab-block { text-align:right; font-size:8pt; color:#555; line-height:1.4; }
+    .lab-block strong { color:#1a1a1a; }
+    .kpi-row { display:flex; gap:12px; margin-bottom:16px; }
+    .kpi-card { flex:1; border:1px solid #e5e7eb; border-radius:6px; padding:10px 12px; text-align:center; }
+    .kpi-val { font-size:18pt; font-weight:700; color:${teal}; }
+    .kpi-label { font-size:7.5pt; color:#6b7280; margin-top:2px; }
+    h2 { font-size:11pt; font-weight:700; color:${teal}; margin:16px 0 8px 0; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
+    table { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:10px; }
+    table thead tr { background:${teal}; color:white; }
+    table thead th { padding:5px 7px; text-align:left; font-weight:600; font-size:8pt; }
+    table thead th.ctr { text-align:center; }
+    table tbody tr:nth-child(even) { background:#f9fafb; }
+    table tbody td { padding:4px 7px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+    table tbody td.ctr { text-align:center; }
+    .footer-note { margin-top:20px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:4px; background:#f9fafb; font-size:7.5pt; color:#555; line-height:1.5; }
+  </style></head><body>
+    <div class="page-header">
+      <div class="page-header-top">
+        <div>
+          <div class="page-title">VeritaPT\u2122 - Proficiency Testing Summary Report</div>
+          <div class="page-subtitle">VeritaAssure\u2122 Platform | Veritas Lab Services, LLC</div>
+        </div>
+        <div class="lab-block">
+          <strong>${data.labName || "Laboratory Name Not Configured"}</strong><br>
+          CLIA: ${data.cliaNumber || "Not on file - enter in account settings"}<br>
+          Generated: ${data.generatedAt}
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-val">${data.summary.totalEnrollments}</div><div class="kpi-label">Active Enrollments</div></div>
+      <div class="kpi-card"><div class="kpi-val">${data.summary.eventsThisYear}</div><div class="kpi-label">Events This Year</div></div>
+      <div class="kpi-card"><div class="kpi-val">${data.summary.passRate.toFixed(1)}%</div><div class="kpi-label">Pass Rate</div></div>
+      <div class="kpi-card"><div class="kpi-val" style="color:${data.summary.openCorrectiveActions > 0 ? "#991b1b" : "#01696F"}">${data.summary.openCorrectiveActions}</div><div class="kpi-label">Open Corrective Actions</div></div>
+    </div>
+
+    <h2>PT Enrollments</h2>
+    <table>
+      <thead><tr>
+        <th>Analyte</th><th>Specialty</th><th>PT Provider</th><th>Program Code</th><th>Year</th><th class="ctr">Status</th>
+      </tr></thead>
+      <tbody>${enrollmentRows || "<tr><td colspan='6' style='text-align:center;color:#6b7280'>No enrollments recorded</td></tr>"}</tbody>
+    </table>
+
+    <h2>PT Survey Events</h2>
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Analyte</th><th>Event ID</th><th class="ctr">Your Result</th><th class="ctr">Peer Mean</th><th class="ctr">SDI</th><th class="ctr">Result</th>
+      </tr></thead>
+      <tbody>${eventRows || "<tr><td colspan='7' style='text-align:center;color:#6b7280'>No events recorded</td></tr>"}</tbody>
+    </table>
+
+    ${caSection}
+
+    <div class="footer-note">
+      Final approval and clinical determination must be made by the laboratory director or designee.<br>
+      VeritaPT\u2122 is a component of VeritaAssure\u2122 | Veritas Lab Services, LLC | veritaslabservices.com
+    </div>
+  </body></html>`;
+}
+
+export async function generateVeritaPTPDF(data: VeritaPTPDFData): Promise<Buffer> {
+  const html = buildVeritaPTPDFHTML(data);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}

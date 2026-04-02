@@ -7,7 +7,7 @@ import { db } from "./db";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF } from "./pdfReport";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -5101,9 +5101,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PDF placeholder
-  app.post("/api/veritapt/pdf", authMiddleware, (req: any, res) => {
+  app.post("/api/veritapt/pdf", authMiddleware, async (req: any, res) => {
     if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
-    res.json({ message: "PDF coming soon" });
+    try {
+      const userId = req.user.userId;
+      const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+      const enrollments = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE user_id = ? AND status = 'active' ORDER BY enrollment_year DESC, analyte").all(userId);
+      const events = (db as any).$client.prepare("SELECT * FROM pt_events WHERE user_id = ? ORDER BY event_date DESC").all(userId);
+      const cas = (db as any).$client.prepare("SELECT ca.*, e.analyte, e.event_date FROM pt_corrective_actions ca JOIN pt_events e ON e.id = ca.event_id WHERE ca.user_id = ? ORDER BY ca.date_initiated DESC").all(userId);
+      const currentYear = new Date().getFullYear().toString();
+      const eventsThisYear = events.filter((e: any) => e.event_date?.startsWith(currentYear)).length;
+      const gradedEvents = events.filter((e: any) => e.pass_fail === 'pass' || e.pass_fail === 'fail');
+      const passRate = gradedEvents.length > 0 ? (gradedEvents.filter((e: any) => e.pass_fail === 'pass').length / gradedEvents.length) * 100 : 0;
+      const openCAs = cas.filter((c: any) => c.status === 'open').length;
+      const pdfBuffer = await generateVeritaPTPDF({
+        labName: userRow?.clia_lab_name || "",
+        cliaNumber: userRow?.clia_number || "",
+        generatedAt: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+        summary: { totalEnrollments: enrollments.length, eventsThisYear, passRate, openCorrectiveActions: openCAs },
+        enrollments,
+        events,
+        correctiveActions: cas,
+      });
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `VeritaPT_Report_${date}.pdf`;
+      const ptPdfToken = storePdfToken(pdfBuffer, filename);
+      res.json({ token: ptPdfToken });
+    } catch (err: any) {
+      console.error("VeritaPT PDF error:", err);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // ── ACCOUNT SETTINGS ────────────────────────────────────────────────────
