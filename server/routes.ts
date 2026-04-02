@@ -1121,6 +1121,77 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // Copy test menu from one instrument to another (merge - skip existing analytes)
+  app.post("/api/veritamap/maps/:id/instruments/:instId/copy-from/:sourceInstId",
+    authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'),
+    (req: any, res) => {
+      try {
+        const dataUserId = req.ownerUserId ?? req.user.userId;
+        const mapId = parseInt(req.params.id);
+        const targetInstId = parseInt(req.params.instId);
+        const sourceInstId = parseInt(req.params.sourceInstId);
+
+        // Verify map belongs to user
+        const map = (db as any).$client.prepare(
+          "SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?"
+        ).get(mapId, dataUserId);
+        if (!map) return res.status(404).json({ error: "Map not found" });
+
+        // Verify both instruments belong to this map
+        const targetInst = (db as any).$client.prepare(
+          "SELECT id FROM veritamap_instruments WHERE id = ? AND map_id = ?"
+        ).get(targetInstId, mapId);
+        const sourceInst = (db as any).$client.prepare(
+          "SELECT id, instrument_name FROM veritamap_instruments WHERE id = ? AND map_id = ?"
+        ).get(sourceInstId, mapId) as any;
+        if (!targetInst || !sourceInst) return res.status(404).json({ error: "Instrument not found" });
+
+        // Get all tests from source instrument
+        const sourceTests = (db as any).$client.prepare(
+          "SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?"
+        ).all(sourceInstId, mapId) as any[];
+
+        // Get existing analytes on target (to skip duplicates)
+        const existingAnalytes = new Set(
+          ((db as any).$client.prepare(
+            "SELECT analyte FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?"
+          ).all(targetInstId, mapId) as any[]).map((r: any) => r.analyte.toLowerCase().trim())
+        );
+
+        // Insert missing tests (merge only, skip if analyte already exists on target)
+        let copied = 0;
+        let skipped = 0;
+
+        const insertStmt = (db as any).$client.prepare(
+          "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
+        );
+
+        for (const t of sourceTests) {
+          if (existingAnalytes.has((t.analyte || '').toLowerCase().trim())) {
+            skipped++;
+            continue;
+          }
+          insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
+          copied++;
+        }
+
+        // Rebuild merged map tests
+        rebuildMapTests(mapId);
+
+        res.json({
+          ok: true,
+          sourceInstrumentName: sourceInst.instrument_name,
+          copied,
+          skipped,
+          message: `Copied ${copied} test${copied !== 1 ? 's' : ''} from ${sourceInst.instrument_name}. ${skipped} already present and skipped.`
+        });
+      } catch (err: any) {
+        console.error(`[VeritaMap] Error copying instrument tests:`, err);
+        res.status(500).json({ error: err.message || "Failed to copy tests" });
+      }
+    }
+  );
+
   // Set tests for an instrument (replaces all)
   app.put("/api/veritamap/maps/:id/instruments/:instId/tests", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     try {

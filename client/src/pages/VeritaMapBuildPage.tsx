@@ -497,6 +497,9 @@ function InstrumentTestSection({
   onSelectAll,
   onDeselectAll,
   onAddCustomTest,
+  otherInstruments,
+  onCopyFrom,
+  isCopying,
 }: {
   instrument: InstrumentEntry;
   tests: TestToggle[];
@@ -505,10 +508,15 @@ function InstrumentTestSection({
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onAddCustomTest: (test: TestToggle) => void;
+  otherInstruments: Array<{id: number, instrument_name: string, testCount: number}>;
+  onCopyFrom: (sourceInstId: number) => void;
+  isCopying: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [search, setSearch] = useState("");
   const [customTestOpen, setCustomTestOpen] = useState(false);
+  const [copyFromOpen, setCopyFromOpen] = useState(false);
+  const [copySourceId, setCopySourceId] = useState<number | ''>(otherInstruments[0]?.id ?? '');
 
   const isChemistry = instrument.category === "Chemistry";
   const isCustom = isCustomInstrument(instrument.instrument_name);
@@ -610,7 +618,93 @@ function InstrumentTestSection({
             >
               Deselect All
             </Button>
+            {otherInstruments.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2"
+                onClick={(e) => { e.stopPropagation(); setCopyFromOpen((v) => !v); }}
+              >
+                Copy test menu from...
+              </Button>
+            )}
           </div>
+
+          {/* Copy-from inline dialog */}
+          {copyFromOpen && otherInstruments.length > 0 && (
+            <div className="px-4 py-3 bg-blue-50 dark:bg-blue-950/20 border-b border-blue-200 dark:border-blue-800">
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-2 font-medium">
+                Copy tests from another instrument (merge only, existing tests kept):
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={copySourceId}
+                  onChange={e => setCopySourceId(Number(e.target.value))}
+                  className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {otherInstruments.map(inst => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.instrument_name}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={isCopying || !copySourceId}
+                  onClick={() => { if (copySourceId) { onCopyFrom(Number(copySourceId)); setCopyFromOpen(false); } }}
+                >
+                  {isCopying ? 'Copying...' : 'Copy (merge)'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setCopyFromOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Copy-from banner: shown when instrument has zero active tests and other instruments exist */}
+          {activeCount === 0 && tests.filter(t => t.active).length === 0 && otherInstruments.length > 0 && !copyFromOpen && (
+            <div className="mx-4 mt-3 mb-1 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                This instrument has no tests yet.
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                Copy a test menu from another instrument as a starting point, then adjust as needed.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={copySourceId}
+                  onChange={e => setCopySourceId(Number(e.target.value))}
+                  className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {otherInstruments.map(inst => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.instrument_name}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+                  disabled={isCopying || !copySourceId}
+                  onClick={() => { if (copySourceId) onCopyFrom(Number(copySourceId)); }}
+                >
+                  {isCopying ? 'Copying...' : 'Copy Test Menu'}
+                </Button>
+                <span className="text-xs text-blue-600 dark:text-blue-400">or start blank (add tests below)</span>
+              </div>
+            </div>
+          )}
 
           {/* Empty state for custom instruments with no tests */}
           {isCustom && tests.length === 0 && (
@@ -956,6 +1050,39 @@ export default function VeritaMapBuildPage() {
       toast({ title: "Failed to remove instrument", variant: "destructive" });
     },
   });
+
+  // Copy test menu from another instrument (merge)
+  const [isCopying, setIsCopying] = useState(false);
+
+  async function handleCopyFrom(targetInstId: number, sourceInstId: number) {
+    if (!mapId) return;
+    setIsCopying(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${targetInstId}/copy-from/${sourceInstId}`,
+        { method: 'POST', headers: authHeaders() }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Copy failed', description: data.error, variant: 'destructive' });
+      } else {
+        toast({ title: 'Test menu copied', description: data.message });
+        // Refresh instruments to pick up the new tests
+        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+        // Clear local test state for this instrument so it reloads from server
+        setTestsByInstrument((prev) => {
+          const next = { ...prev };
+          delete next[targetInstId];
+          return next;
+        });
+      }
+    } catch {
+      toast({ title: 'Copy failed', description: 'Network error. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsCopying(false);
+    }
+  }
 
   // Save all tests mutation
   const saveAllMutation = useMutation({
@@ -1545,6 +1672,15 @@ export default function VeritaMapBuildPage() {
             onSelectAll={() => selectAll(instr.id)}
             onDeselectAll={() => deselectAll(instr.id)}
             onAddCustomTest={(test) => addCustomTest(instr.id, test)}
+            otherInstruments={instruments
+              .filter(i => i.id !== instr.id)
+              .map(i => ({
+                id: i.id,
+                instrument_name: i.instrument_name,
+                testCount: (testsByInstrument[i.id] ?? []).filter(t => t.active).length,
+              }))}
+            onCopyFrom={(sourceInstId) => handleCopyFrom(instr.id, sourceInstId)}
+            isCopying={isCopying}
           />
         ))}
       </div>
