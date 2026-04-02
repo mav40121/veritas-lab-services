@@ -1105,7 +1105,7 @@ export default function VeritaMapMapPage() {
       </aside>
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 overflow-auto">
+      <div className="flex-1 min-w-0 overflow-y-auto">
         <div className="px-4 sm:px-6 py-5">
           {/* Mobile header */}
           <div className="flex items-center justify-between mb-4 lg:hidden">
@@ -1171,8 +1171,8 @@ export default function VeritaMapMapPage() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto rounded-xl border border-border" style={{WebkitOverflowScrolling: 'touch'}}>
+            <table className="min-w-full text-xs" style={{minWidth: '1100px'}}>
               <thead>
                 <tr className="bg-muted/60 border-b border-border">
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
