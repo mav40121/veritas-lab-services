@@ -358,6 +358,59 @@ sqlite.exec(`
     FOREIGN KEY (employee_id) REFERENCES staff_employees(id),
     FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
   );
+
+  CREATE TABLE IF NOT EXISTS pt_enrollments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    specialty TEXT NOT NULL,
+    pt_provider TEXT NOT NULL,
+    program_code TEXT,
+    enrollment_year INTEGER NOT NULL,
+    enrollment_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS pt_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enrollment_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    event_id TEXT,
+    event_name TEXT,
+    event_date TEXT NOT NULL,
+    analyte TEXT NOT NULL,
+    your_result REAL,
+    your_method TEXT,
+    peer_mean REAL,
+    peer_sd REAL,
+    peer_n INTEGER,
+    acceptable_low REAL,
+    acceptable_high REAL,
+    sdi REAL,
+    pass_fail TEXT NOT NULL DEFAULT 'pending',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS pt_corrective_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    root_cause TEXT,
+    corrective_action TEXT NOT NULL,
+    preventive_action TEXT,
+    responsible_person TEXT,
+    date_initiated TEXT NOT NULL,
+    date_completed TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    verified_by TEXT,
+    verified_date TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Add serial_number column to veritamap_instruments if upgrading

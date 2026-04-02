@@ -3,7 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const productLinks = [
   { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
   { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management", badge: "In Progress" },
   { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management", badge: "In Progress" },
+  { href: "/veritapt", label: "VeritaPT™", desc: "PT Tracking", badge: "New", badgeColor: "emerald" },
   { href: "/veritalab", label: "VeritaLab™", desc: "Certificate Tracking", badge: "New", badgeColor: "emerald" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];
@@ -30,6 +31,7 @@ const allMobileLinks = [
   { href: "/veritamap", label: "VeritaMap™" },
   { href: "/veritacomp", label: "VeritaComp™" },
   { href: "/veritastaff", label: "VeritaStaff™" },
+  { href: "/veritapt", label: "VeritaPT™" },
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
@@ -85,7 +87,7 @@ export function NavBar() {
               <button
                 className={cn(
                   "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  ["/veritaassure","/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritalab","/book","/cumsum"].includes(location)
+                  ["/veritaassure","/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritapt","/veritalab","/book","/cumsum"].includes(location)
                     ? "text-foreground bg-secondary"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 )}

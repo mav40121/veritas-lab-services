@@ -4875,6 +4875,237 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── VERITAPT - Proficiency Testing Tracker ─────────────────────────────
+  function hasPTAccess(user: any) {
+    return ["annual", "professional", "lab", "complete"].includes(user?.plan);
+  }
+
+  // List enrollments for user
+  app.get("/api/veritapt/enrollments", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM pt_enrollments WHERE user_id = ? ORDER BY enrollment_year DESC, analyte"
+    ).all(req.user.userId);
+    res.json(rows);
+  });
+
+  // Create enrollment
+  app.post("/api/veritapt/enrollments", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
+    if (!analyte?.trim() || !specialty?.trim() || !pt_provider?.trim() || !enrollment_year || !enrollment_date) {
+      return res.status(400).json({ error: "Analyte, specialty, PT provider, enrollment year, and enrollment date are required" });
+    }
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(req.user.userId, analyte.trim(), specialty.trim(), pt_provider.trim(), program_code || null, enrollment_year, enrollment_date, status || 'active', now, now);
+    const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.json(created);
+  });
+
+  // Update enrollment
+  app.put("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const existing = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
+    const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE pt_enrollments SET analyte = ?, specialty = ?, pt_provider = ?, program_code = ?, enrollment_year = ?, enrollment_date = ?, status = ?, updated_at = ? WHERE id = ?"
+    ).run(
+      analyte ?? existing.analyte, specialty ?? existing.specialty, pt_provider ?? existing.pt_provider,
+      program_code !== undefined ? program_code : existing.program_code,
+      enrollment_year ?? existing.enrollment_year, enrollment_date ?? existing.enrollment_date,
+      status ?? existing.status, now, req.params.id
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(req.params.id);
+    res.json(updated);
+  });
+
+  // Delete enrollment (cascade: events + their corrective actions)
+  app.delete("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const existing = (db as any).$client.prepare("SELECT id FROM pt_enrollments WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
+    // Get event IDs for cascade delete
+    const events = (db as any).$client.prepare("SELECT id FROM pt_events WHERE enrollment_id = ?").all(req.params.id) as any[];
+    for (const ev of events) {
+      (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(ev.id);
+    }
+    (db as any).$client.prepare("DELETE FROM pt_events WHERE enrollment_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM pt_enrollments WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // List events for user (optional enrollmentId filter)
+  app.get("/api/veritapt/events", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const enrollmentId = req.query.enrollmentId;
+    let rows;
+    if (enrollmentId) {
+      rows = (db as any).$client.prepare(
+        "SELECT * FROM pt_events WHERE user_id = ? AND enrollment_id = ? ORDER BY event_date DESC"
+      ).all(req.user.userId, enrollmentId);
+    } else {
+      rows = (db as any).$client.prepare(
+        "SELECT * FROM pt_events WHERE user_id = ? ORDER BY event_date DESC"
+      ).all(req.user.userId);
+    }
+    res.json(rows);
+  });
+
+  // Create event (auto-calculate SDI if peer_mean and peer_sd provided)
+  app.post("/api/veritapt/events", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes } = req.body;
+    if (!enrollment_id || !event_date || !analyte?.trim()) {
+      return res.status(400).json({ error: "Enrollment, event date, and analyte are required" });
+    }
+    // Auto-calculate SDI
+    let sdi = null;
+    if (your_result != null && peer_mean != null && peer_sd != null && peer_sd !== 0) {
+      sdi = Math.round(((your_result - peer_mean) / peer_sd) * 100) / 100;
+    }
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(enrollment_id, req.user.userId, event_id || null, event_name || null, event_date, analyte.trim(), your_result ?? null, your_method || null, peer_mean ?? null, peer_sd ?? null, peer_n ?? null, acceptable_low ?? null, acceptable_high ?? null, sdi, pass_fail || 'pending', notes || null, now, now);
+    const created = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.json(created);
+  });
+
+  // Update event (recalculate SDI if needed)
+  app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const existing = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!existing) return res.status(404).json({ error: "Event not found" });
+    const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes } = req.body;
+    const finalResult = your_result !== undefined ? your_result : existing.your_result;
+    const finalPeerMean = peer_mean !== undefined ? peer_mean : existing.peer_mean;
+    const finalPeerSd = peer_sd !== undefined ? peer_sd : existing.peer_sd;
+    let sdi = existing.sdi;
+    if (finalResult != null && finalPeerMean != null && finalPeerSd != null && finalPeerSd !== 0) {
+      sdi = Math.round(((finalResult - finalPeerMean) / finalPeerSd) * 100) / 100;
+    }
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE pt_events SET enrollment_id = ?, event_id = ?, event_name = ?, event_date = ?, analyte = ?, your_result = ?, your_method = ?, peer_mean = ?, peer_sd = ?, peer_n = ?, acceptable_low = ?, acceptable_high = ?, sdi = ?, pass_fail = ?, notes = ?, updated_at = ? WHERE id = ?"
+    ).run(
+      enrollment_id ?? existing.enrollment_id, event_id !== undefined ? event_id : existing.event_id,
+      event_name !== undefined ? event_name : existing.event_name, event_date ?? existing.event_date,
+      analyte ?? existing.analyte, finalResult, your_method !== undefined ? your_method : existing.your_method,
+      finalPeerMean, finalPeerSd, peer_n !== undefined ? peer_n : existing.peer_n,
+      acceptable_low !== undefined ? acceptable_low : existing.acceptable_low,
+      acceptable_high !== undefined ? acceptable_high : existing.acceptable_high,
+      sdi, pass_fail ?? existing.pass_fail, notes !== undefined ? notes : existing.notes, now, req.params.id
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(req.params.id);
+    res.json(updated);
+  });
+
+  // Delete event (cascade: corrective actions)
+  app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const existing = (db as any).$client.prepare("SELECT id FROM pt_events WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!existing) return res.status(404).json({ error: "Event not found" });
+    (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // List corrective actions for user
+  app.get("/api/veritapt/corrective-actions", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM pt_corrective_actions WHERE user_id = ? ORDER BY date_initiated DESC"
+    ).all(req.user.userId);
+    res.json(rows);
+  });
+
+  // Get corrective action for specific event
+  app.get("/api/veritapt/corrective-actions/event/:eventId", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM pt_corrective_actions WHERE event_id = ? AND user_id = ?"
+    ).get(req.params.eventId, req.user.userId);
+    res.json(row || null);
+  });
+
+  // Create corrective action
+  app.post("/api/veritapt/corrective-actions", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const { event_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
+    if (!event_id || !corrective_action?.trim() || !date_initiated) {
+      return res.status(400).json({ error: "Event ID, corrective action, and date initiated are required" });
+    }
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO pt_corrective_actions (event_id, user_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(event_id, req.user.userId, root_cause || null, corrective_action.trim(), preventive_action || null, responsible_person || null, date_initiated, date_completed || null, status || 'open', verified_by || null, verified_date || null, now, now);
+    const created = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.json(created);
+  });
+
+  // Update corrective action
+  app.put("/api/veritapt/corrective-actions/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const existing = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    if (!existing) return res.status(404).json({ error: "Corrective action not found" });
+    const { root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE pt_corrective_actions SET root_cause = ?, corrective_action = ?, preventive_action = ?, responsible_person = ?, date_initiated = ?, date_completed = ?, status = ?, verified_by = ?, verified_date = ?, updated_at = ? WHERE id = ?"
+    ).run(
+      root_cause !== undefined ? root_cause : existing.root_cause,
+      corrective_action ?? existing.corrective_action,
+      preventive_action !== undefined ? preventive_action : existing.preventive_action,
+      responsible_person !== undefined ? responsible_person : existing.responsible_person,
+      date_initiated ?? existing.date_initiated,
+      date_completed !== undefined ? date_completed : existing.date_completed,
+      status ?? existing.status,
+      verified_by !== undefined ? verified_by : existing.verified_by,
+      verified_date !== undefined ? verified_date : existing.verified_date,
+      now, req.params.id
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(req.params.id);
+    res.json(updated);
+  });
+
+  // Summary stats
+  app.get("/api/veritapt/summary", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    const totalEnrollments = ((db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM pt_enrollments WHERE user_id = ? AND status = 'active'"
+    ).get(req.user.userId) as any).cnt;
+
+    const currentYear = new Date().getFullYear().toString();
+    const eventsThisYear = ((db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM pt_events WHERE user_id = ? AND strftime('%Y', event_date) = ?"
+    ).get(req.user.userId, currentYear) as any).cnt;
+
+    const passCount = ((db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM pt_events WHERE user_id = ? AND pass_fail = 'pass'"
+    ).get(req.user.userId) as any).cnt;
+    const failCount = ((db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM pt_events WHERE user_id = ? AND pass_fail = 'fail'"
+    ).get(req.user.userId) as any).cnt;
+    const gradedTotal = passCount + failCount;
+    const passRate = gradedTotal > 0 ? Math.round((passCount / gradedTotal) * 1000) / 10 : 0;
+
+    const openCorrectiveActions = ((db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM pt_corrective_actions WHERE user_id = ? AND status = 'open'"
+    ).get(req.user.userId) as any).cnt;
+
+    res.json({ totalEnrollments, eventsThisYear, passRate, openCorrectiveActions });
+  });
+
+  // PDF placeholder
+  app.post("/api/veritapt/pdf", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    res.json({ message: "PDF coming soon" });
+  });
+
   // ── ACCOUNT SETTINGS ────────────────────────────────────────────────────
   app.get("/api/account/settings", authMiddleware, (req: any, res) => {
     try {

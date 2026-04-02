@@ -42,6 +42,11 @@ const completedItems: RoadmapItem[] = [
     description:
       "Validates new reagent lots for PT and coagulation testing using Deming regression, geometric mean analysis, and INR comparison. Generates a compliant PDF with full statistical tables. Laboratory director or designee review and approval required.",
   },
+  {
+    title: "VeritaPT\u2122 - Proficiency Testing Tracker",
+    description:
+      "Tracks PT enrollment, survey results, and corrective actions by analyte and specialty. Monitors unacceptable results, identifies trends, and generates documentation for surveyor review.",
+  },
 ];
 
 const inProgressItems: RoadmapItem[] = [
@@ -62,11 +67,6 @@ const comingSoonItems: RoadmapItem[] = [
     title: "VeritaComp\u2122 - Expanded Question Banks (Phase 2)",
     description:
       "Pre-built problem-solving questions for every major instrument and specialty. Chemistry, hematology, coagulation, blood bank, microbiology, urinalysis, and point-of-care. Required to fully activate Element 6 across all method groups.",
-  },
-  {
-    title: "VeritaPT\u2122 - Proficiency Testing Tracker",
-    description:
-      "Tracks PT enrollment, survey results, and corrective actions by analyte and specialty. Monitors unacceptable results, identifies trends, and generates documentation for surveyor review.",
   },
   {
     title: "VeritaLab\u2122 - Director and Staff Credential Tracking",
