@@ -669,7 +669,7 @@ export default function VeritaCheckPage() {
       if (lo >= hi) { toast({ title: "Reference interval low must be less than high", variant: "destructive" }); return; }
       const validData = refData.filter(dp => dp.value !== null && !isNaN(dp.value as number));
       if (validData.length < 20) { toast({ title: `Please enter at least 20 specimen values (${validData.length} entered)`, variant: "destructive" }); return; }
-      const results = calculateRefInterval(refData, refAnalyte, refUnits, lo, hi);
+      const results = calculateRefInterval(refData, lo, hi, refAnalyte, refUnits);
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "ref_interval", cliaAllowableError: 0.1,

@@ -1416,7 +1416,7 @@ export default function StudyResults() {
     results = calculateMultiAnalyteCoag(specimens, isi, normalMeanPT, teas);
   } else if (study.studyType === "ref_interval") {
     const { specimens, refLow, refHigh, analyte, units } = rawDataPoints;
-    results = calculateRefInterval(specimens, analyte || study.testName, units || "", refLow, refHigh);
+    results = calculateRefInterval(specimens, refLow, refHigh, analyte || study.testName, units || "");
   } else if (study.studyType === "method_comparison") {
     // Handle both old and new data formats for method comparison
     const dp = rawDataPoints as DataPoint[];
