@@ -337,7 +337,7 @@ function WipBanner() {
 function ProgramListView() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly('veritacomp');
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: programs, isLoading, error } = useQuery<Program[]>({

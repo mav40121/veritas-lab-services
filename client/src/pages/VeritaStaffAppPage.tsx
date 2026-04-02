@@ -127,7 +127,7 @@ function getCompetencyStatus(schedule: CompetencySchedule | null): { label: stri
 
 export default function VeritaStaffAppPage() {
   const { user, isLoggedIn } = useAuth();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly('veritastaff');
   const [, navigate] = useLocation();
   const params = useParams<{ employeeId?: string }>();
   const queryClient = useQueryClient();
@@ -839,7 +839,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly('veritastaff');
   const [showCompetency, setShowCompetency] = useState(false);
 
   const roleNames = [...new Set(employee.roles.map((r) => r.role))];

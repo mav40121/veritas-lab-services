@@ -133,7 +133,7 @@ export default function VeritaScanAppPage() {
   const { user, isLoggedIn } = useAuth();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly('veritascan');
 
   const [newScanName, setNewScanName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);

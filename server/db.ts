@@ -584,6 +584,11 @@ if (!colNames.includes("preferred_pt_vendor")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_pt_vendor TEXT DEFAULT 'none'"); } catch {}
 }
 
+// Add permissions column to user_seats for per-module view/edit permissions
+try {
+  sqlite.prepare(`ALTER TABLE user_seats ADD COLUMN permissions TEXT DEFAULT '{}'`).run();
+} catch {}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);

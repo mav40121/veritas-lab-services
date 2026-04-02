@@ -29,6 +29,9 @@ export interface AuthUser {
   cliaTier?: string | null;
   seatCount?: number;
   onboardingSeen?: boolean;
+  isSeatUser?: boolean;
+  seatPermissions?: Record<string, 'view' | 'edit'> | null;
+  ownerUserId?: number | null;
 }
 
 export function setAuth(token: string, user: AuthUser) {

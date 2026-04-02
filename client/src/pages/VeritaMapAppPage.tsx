@@ -105,7 +105,7 @@ export default function VeritaMapAppPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly('veritamap');
 
   const [newMapName, setNewMapName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);

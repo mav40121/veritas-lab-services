@@ -133,7 +133,7 @@ function EnrollmentDialog({
   onSaved: () => void;
   defaultProvider?: string;
 }) {
-  const isReadOnly = useIsReadOnly();
+  const isReadOnly = useIsReadOnly('veritapt');
   const queryClient = useQueryClient();
   const [analyte, setAnalyte] = useState(enrollment?.analyte ?? "");
   const [specialty, setSpecialty] = useState(enrollment?.specialty ?? "Chemistry");
@@ -255,7 +255,7 @@ function EventDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const isReadOnly = useIsReadOnly();
+  const isReadOnly = useIsReadOnly('veritapt');
   const queryClient = useQueryClient();
   const [enrollmentId, setEnrollmentId] = useState(event?.enrollment_id?.toString() ?? (enrollments[0]?.id?.toString() ?? ""));
   const [eventId, setEventId] = useState(event?.event_id ?? "");
@@ -417,7 +417,7 @@ function CADialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const isReadOnly = useIsReadOnly();
+  const isReadOnly = useIsReadOnly('veritapt');
   const queryClient = useQueryClient();
   const today = new Date().toISOString().split("T")[0];
   const [rootCause, setRootCause] = useState(ca?.root_cause ?? "");

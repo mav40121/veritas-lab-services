@@ -7,9 +7,18 @@ export function useAccessLevel() {
   return (user.accessLevel || 'free') as 'full' | 'read_only' | 'locked' | 'free';
 }
 
-export function useIsReadOnly() {
+export function useIsReadOnly(module?: string): boolean {
+  const { user } = useAuth();
   const level = useAccessLevel();
-  return level === 'read_only' || level === 'locked';
+  const baseReadOnly = level === 'read_only' || level === 'locked';
+  if (baseReadOnly) return true;
+
+  // Seat user module check
+  if (module && user?.isSeatUser && user?.seatPermissions) {
+    const perm = user.seatPermissions[module] || 'view';
+    return perm !== 'edit';
+  }
+  return false;
 }
 
 export function SubscriptionBanner() {

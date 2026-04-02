@@ -37,6 +37,21 @@ export default function AccountSettingsPage() {
   const [preferredStandards, setPreferredStandards] = useState<AccreditationBody[]>([]);
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
+  // Module permission constants
+  const MODULE_LIST = [
+    { key: 'veritacheck', label: 'VeritaCheck(TM)' },
+    { key: 'veritamap',   label: 'VeritaMap(TM)' },
+    { key: 'veritascan',  label: 'VeritaScan(TM)' },
+    { key: 'veritacomp',  label: 'VeritaComp(TM)' },
+    { key: 'veritastaff', label: 'VeritaStaff(TM)' },
+    { key: 'veritapt',    label: 'VeritaPT(TM)' },
+  ];
+
+  const DEFAULT_PERMISSIONS: Record<string, string> = {
+    veritacheck: 'view', veritamap: 'view', veritascan: 'view',
+    veritacomp: 'view', veritastaff: 'view', veritapt: 'view',
+  };
+
   // Team Members / Seats state
   const [seats, setSeats] = useState<any[]>([]);
   const [seatCount, setSeatCount] = useState(1);
@@ -44,6 +59,10 @@ export default function AccountSettingsPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [invitePermissions, setInvitePermissions] = useState<Record<string, string>>({ ...DEFAULT_PERMISSIONS });
+  const [editingSeatId, setEditingSeatId] = useState<number | null>(null);
+  const [editingPermissions, setEditingPermissions] = useState<Record<string, string>>({});
+  const [savingPermissions, setSavingPermissions] = useState(false);
 
   const activeSeats = seats.filter(s => s.status !== "deactivated");
   const usedSeats = activeSeats.length + 1; // +1 for owner
@@ -66,7 +85,7 @@ export default function AccountSettingsPage() {
       const res = await fetch(`${API_BASE}/api/account/seats`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail }),
+        body: JSON.stringify({ email: inviteEmail, permissions: invitePermissions }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -74,6 +93,7 @@ export default function AccountSettingsPage() {
       } else {
         setInviteSuccess(true);
         setInviteEmail("");
+        setInvitePermissions({ ...DEFAULT_PERMISSIONS });
         await fetchSeats();
       }
     } catch {
@@ -90,6 +110,22 @@ export default function AccountSettingsPage() {
       headers: authHeaders(),
     });
     await fetchSeats();
+  }
+
+  async function handleSaveSeatPermissions(seatId: number) {
+    setSavingPermissions(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/account/seats/${seatId}/permissions`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: editingPermissions }),
+      });
+      if (res.ok) {
+        setEditingSeatId(null);
+        await fetchSeats();
+      }
+    } catch {}
+    setSavingPermissions(false);
   }
 
   // Discount code state
@@ -402,45 +438,126 @@ export default function AccountSettingsPage() {
           <CardContent className="space-y-3">
             {activeSeats.length > 0 && (
               <div className="space-y-2">
-                {activeSeats.map((seat: any) => (
-                  <div key={seat.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{seat.seat_email}</p>
-                      <p className="text-xs text-gray-500 capitalize">{seat.status === "active" ? "Active" : "Invite pending"}</p>
+                {activeSeats.map((seat: any) => {
+                  const seatPerms = (() => { try { return typeof seat.permissions === 'string' ? JSON.parse(seat.permissions || '{}') : (seat.permissions || {}); } catch { return {}; } })();
+                  const isEditing = editingSeatId === seat.id;
+                  return (
+                    <div key={seat.id} className="py-2 border-b border-gray-100 last:border-0">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{seat.seat_email}</p>
+                          <p className="text-xs text-gray-500 capitalize">{seat.status === "active" ? "Active" : "Invite pending"}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (isEditing) { setEditingSeatId(null); }
+                              else { setEditingSeatId(seat.id); setEditingPermissions({ ...DEFAULT_PERMISSIONS, ...seatPerms }); }
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800 underline"
+                          >
+                            {isEditing ? "Cancel" : "Edit Permissions"}
+                          </button>
+                          <button
+                            onClick={() => handleDeactivateSeat(seat.id)}
+                            className="text-xs text-red-600 hover:text-red-800 underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      {!isEditing && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {MODULE_LIST.map(mod => (
+                            <span key={mod.key} className={`text-xs px-1.5 py-0.5 rounded ${(seatPerms[mod.key] || 'view') === 'edit' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {mod.label.replace('(TM)', '')}: {(seatPerms[mod.key] || 'view') === 'edit' ? 'Edit' : 'View'}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {isEditing && (
+                        <div className="mt-2 space-y-2">
+                          {MODULE_LIST.map(mod => (
+                            <div key={mod.key} className="flex items-center justify-between py-1">
+                              <span className="text-sm text-gray-900">{mod.label}</span>
+                              <div className="flex gap-1">
+                                <button type="button" onClick={() => setEditingPermissions(p => ({ ...p, [mod.key]: 'view' }))}
+                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${editingPermissions[mod.key] === 'view' ? 'bg-gray-200 text-gray-800' : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'}`}>View</button>
+                                <button type="button" onClick={() => setEditingPermissions(p => ({ ...p, [mod.key]: 'edit' }))}
+                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${editingPermissions[mod.key] === 'edit' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'}`}>Edit</button>
+                              </div>
+                            </div>
+                          ))}
+                          <Button size="sm" onClick={() => handleSaveSeatPermissions(seat.id)} disabled={savingPermissions} className="w-full mt-1">
+                            {savingPermissions ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                            {savingPermissions ? "Saving..." : "Save Permissions"}
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleDeactivateSeat(seat.id)}
-                      className="text-xs text-red-600 hover:text-red-800 underline"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {activeSeats.length === 0 && (
               <p className="text-sm text-muted-foreground">No team members added yet.</p>
             )}
             {usedSeats < seatCount ? (
-              <div className="pt-1">
-                <p className="text-sm font-medium text-gray-700 mb-2">Invite a team member</p>
-                <form onSubmit={handleInviteSeat} className="flex gap-2">
+              <form onSubmit={handleInviteSeat} className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Invite a team member</p>
                   <Input
                     type="email"
                     value={inviteEmail}
                     onChange={e => { setInviteEmail(e.target.value); setInviteSuccess(false); setInviteError(""); }}
                     placeholder="colleague@lab.com"
                     required
-                    className="flex-1"
                   />
-                  <Button type="submit" disabled={inviteLoading} size="sm">
-                    {inviteLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-                    {inviteLoading ? "Sending..." : "Send Invite"}
-                  </Button>
-                </form>
+                </div>
+
+                {/* Per-module permission toggles */}
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Module Access</p>
+                  <div className="space-y-2">
+                    {MODULE_LIST.map(mod => (
+                      <div key={mod.key} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                        <span className="text-sm text-gray-900">{mod.label}</span>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'view' }))}
+                            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                              invitePermissions[mod.key] === 'view'
+                                ? 'bg-gray-200 text-gray-800'
+                                : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'
+                            }`}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'edit' }))}
+                            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                              invitePermissions[mod.key] === 'edit'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'
+                            }`}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Button type="submit" disabled={inviteLoading} size="sm" className="w-full">
+                  {inviteLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                  {inviteLoading ? "Sending..." : "Send Invite"}
+                </Button>
                 {inviteError && <p className="text-xs text-red-500 mt-1">{inviteError}</p>}
                 {inviteSuccess && <p className="text-xs text-green-600 mt-1">Invite sent. They will receive an email to create their account.</p>}
-              </div>
+              </form>
             ) : (
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 All seats are in use. Remove a team member to invite someone new.
