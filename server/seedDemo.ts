@@ -332,6 +332,35 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
   );
+
+  // Study 4: Sodium Reference Interval Verification
+  const sodiumRefSpecimens = [
+    { specimenId: "S001", value: 137 }, { specimenId: "S002", value: 140 },
+    { specimenId: "S003", value: 138 }, { specimenId: "S004", value: 142 },
+    { specimenId: "S005", value: 136 }, { specimenId: "S006", value: 141 },
+    { specimenId: "S007", value: 139 }, { specimenId: "S008", value: 143 },
+    { specimenId: "S009", value: 137 }, { specimenId: "S010", value: 140 },
+    { specimenId: "S011", value: 138 }, { specimenId: "S012", value: 144 },
+    { specimenId: "S013", value: 136 }, { specimenId: "S014", value: 141 },
+    { specimenId: "S015", value: 139 }, { specimenId: "S016", value: 142 },
+    { specimenId: "S017", value: 137 }, { specimenId: "S018", value: 140 },
+    { specimenId: "S019", value: 138 }, { specimenId: "S020", value: 143 },
+  ];
+  sqlite.prepare(`
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+  `).run(
+    demoUserId,
+    "Sodium",
+    "Ortho VITROS 5600 [Primary]",
+    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+    "2026-01-29",
+    "ref_interval",
+    0.1,
+    JSON.stringify({ specimens: sodiumRefSpecimens, refLow: 136, refHigh: 145, analyte: "Sodium", units: "mmol/L" }),
+    JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
+    now
+  );
 }
 
 // ─── Competency data seeding ──────────────────────────────────────────────────

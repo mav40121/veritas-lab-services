@@ -120,6 +120,8 @@ export default function DemoLabPage() {
     lot_to_lot: "Lot-to-Lot",
     pt_coag: "PT/Coag",
     qc_range: "QC Range",
+    multi_analyte_coag: "Multi-Analyte Lot Comparison",
+    ref_interval: "Reference Interval Verification",
   };
 
   // Compute study statistics for inline results

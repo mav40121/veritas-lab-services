@@ -159,6 +159,16 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return "pass";
     }
 
+    if (studyType === "ref_interval") {
+      // CLSI EP28-A3c: pass if <=10% (<=2 of 20) fall outside reference interval
+      const { specimens, refLow, refHigh } = rawData;
+      if (!specimens || !Array.isArray(specimens) || specimens.length === 0) return "fail";
+      const n = specimens.length;
+      const outsideCount = specimens.filter((s: any) => s.value < refLow || s.value > refHigh).length;
+      const outsidePct = (outsideCount / n) * 100;
+      return outsidePct <= 10 ? "pass" : "fail";
+    }
+
     // pt_coag or unknown: trust client value (pt_coag is gated anyway)
     return "fail";
   } catch (err) {

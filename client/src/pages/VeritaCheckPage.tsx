@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, calculateINR } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, calculateINR } from "@/lib/calculations";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
@@ -295,7 +295,7 @@ export default function VeritaCheckPage() {
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<{ name: string; category: string }[]>([]);
   const [veritaMapLoaded, setVeritaMapLoaded] = useState(false);
@@ -362,6 +362,16 @@ export default function VeritaCheckPage() {
   );
   const [lotDataAbnormal, setLotDataAbnormal] = useState<LotToLotDataPoint[]>(
     Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Abnormal" as const }))
+  );
+
+  // Reference Interval state
+  const [refAnalyte, setRefAnalyte] = useState("");
+  const [refUnits, setRefUnits] = useState("");
+  const [refLow, setRefLow] = useState<number | "">("");
+  const [refHigh, setRefHigh] = useState<number | "">("");
+  const [refNumSpecimens, setRefNumSpecimens] = useState(20);
+  const [refData, setRefData] = useState<RefIntervalDataPoint[]>(
+    Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, value: null }))
   );
 
   // PT/Coag state
@@ -522,6 +532,8 @@ export default function VeritaCheckPage() {
     ? Object.values(qcRunData).filter(arr => arr.filter(v => !isNaN(v)).length >= 3).length
     : studyType === "multi_analyte_coag"
     ? maSpecimens.filter(s => (s.ptNew && s.ptOld) || (s.apttNew && s.apttOld) || (s.fibNew && s.fibOld)).length
+    : studyType === "ref_interval"
+    ? refData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
     : studyType === "method_comparison"
     ? dataPoints.filter(dp => instrumentNames.filter(n => dp.instrumentValues[n] !== null).length >= 2).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
@@ -643,6 +655,26 @@ export default function VeritaCheckPage() {
           instrument: maInstrument, sampleType: maSampleType,
         }),
         instruments: JSON.stringify([maInstrument]),
+        status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "ref_interval") {
+      if (refLow === "" || refHigh === "") { toast({ title: "Please enter reference interval low and high values", variant: "destructive" }); return; }
+      const lo = Number(refLow);
+      const hi = Number(refHigh);
+      if (lo >= hi) { toast({ title: "Reference interval low must be less than high", variant: "destructive" }); return; }
+      const validData = refData.filter(dp => dp.value !== null && !isNaN(dp.value as number));
+      if (validData.length < 20) { toast({ title: `Please enter at least 20 specimen values (${validData.length} entered)`, variant: "destructive" }); return; }
+      const results = calculateRefInterval(refData, refAnalyte, refUnits, lo, hi);
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
+        date, studyType: "ref_interval", cliaAllowableError: 0.1,
+        dataPoints: JSON.stringify({ specimens: refData.map(d => ({ specimenId: d.specimenId, value: d.value })), refLow: lo, refHigh: hi, analyte: refAnalyte, units: refUnits }),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
       };
@@ -853,6 +885,7 @@ export default function VeritaCheckPage() {
                           <SelectItem value="pt_coag">PT/Coag New Lot Validation</SelectItem>
                           <SelectItem value="qc_range">QC Range Establishment</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
+                          <SelectItem value="ref_interval">Reference Interval Verification</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -1352,6 +1385,75 @@ export default function VeritaCheckPage() {
                     </CardContent>
                   </Card>
                 </div>
+              ) : studyType === "ref_interval" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Reference Interval Verification Data Entry</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                      <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                      <span>CLSI EP28-A3c: enter at least 20 reference specimen values. The study passes if no more than 2 of 20 (10%) fall outside the stated reference interval.</span>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Sodium" value={refAnalyte} onChange={e => setRefAnalyte(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mmol/L" value={refUnits} onChange={e => setRefUnits(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Reference Interval Low *</Label><Input type="number" step="any" placeholder="e.g. 135" value={refLow} onChange={e => setRefLow(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Reference Interval High *</Label><Input type="number" step="any" placeholder="e.g. 145" value={refHigh} onChange={e => setRefHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Number of Specimens</Label>
+                        <Input type="number" min={20} max={200} value={refNumSpecimens} onChange={e => {
+                          const n = Math.max(20, Math.min(200, parseInt(e.target.value) || 20));
+                          setRefNumSpecimens(n);
+                          setRefData(prev => {
+                            if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, (_, i) => ({ specimenId: `S${String(prev.length + i + 1).padStart(3, "0")}`, value: null }))];
+                            return prev.slice(0, n);
+                          });
+                        }} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Specimen Values</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-border">
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-24">Specimen ID</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Result Value</th>
+                            <th className="text-left py-2 text-xs text-muted-foreground font-medium">Status</th>
+                          </tr></thead>
+                          <tbody>
+                            {refData.map((dp, idx) => {
+                              const val = dp.value;
+                              const lo = Number(refLow);
+                              const hi = Number(refHigh);
+                              const inRange = val !== null && refLow !== "" && refHigh !== "" && val >= lo && val <= hi;
+                              const outRange = val !== null && refLow !== "" && refHigh !== "" && (val < lo || val > hi);
+                              return (
+                                <tr key={idx} className="border-b border-border/50">
+                                  <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setRefData(d); }} className="h-8 text-sm w-24" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.value ?? ""} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], value: e.target.value === "" ? null : parseFloat(e.target.value) }; setRefData(d); }} className="h-8 text-sm w-32" /></td>
+                                  <td className="py-1.5">
+                                    {inRange && <span className="text-xs text-green-600 dark:text-green-400 font-medium">In range</span>}
+                                    {outRange && <span className="text-xs text-red-600 dark:text-red-400 font-medium">Outside</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {refLow !== "" && refHigh !== "" && (() => {
+                        const lo = Number(refLow);
+                        const hi = Number(refHigh);
+                        const filled = refData.filter(d => d.value !== null && !isNaN(d.value as number));
+                        const outside = filled.filter(d => (d.value as number) < lo || (d.value as number) > hi).length;
+                        const pct = filled.length > 0 ? ((outside / filled.length) * 100).toFixed(1) : "0.0";
+                        return filled.length > 0 ? (
+                          <div className={`text-xs mt-2 font-medium ${outside / filled.length <= 0.1 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                            {outside} of {filled.length} ({pct}%) outside reference interval - EP28-A3c limit: 10%
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : studyType === "precision" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
@@ -1566,9 +1668,9 @@ export default function VeritaCheckPage() {
 
           <div className="mt-8 flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {filledLevels >= (studyType === "precision" ? 1 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" ? "specimen" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : 3} minimum filled</span>}
+              {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : 3} minimum filled</span>}
             </div>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < 3 || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
               {saveMutation.isPending ? "Calculating…" : "Run Study & Generate Report"}
             </Button>
           </div>

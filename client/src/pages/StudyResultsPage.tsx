@@ -31,9 +31,12 @@ import {
   type PTCoagResults,
   type QCRangeResults,
   type MultiAnalyteResults,
+  type RefIntervalResults,
   type PrecisionDataPoint,
   type DataPoint,
   type QCRangeDataPoint,
+  calculateRefInterval,
+  isRefInterval,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
 import {
@@ -61,7 +64,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   // Use server-side token: browser navigates directly to GET endpoint,
@@ -101,7 +104,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Interval Verification" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -418,7 +421,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Interval Verification" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", `±${cliaPercent}%`],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -1090,6 +1093,65 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
   );
 }
 
+
+// --- REFERENCE INTERVAL VERIFICATION results ---
+function RefIntervalReport({ study, results }: { study: Study; results: RefIntervalResults }) {
+  const { refLow, refHigh, n, outsideCount, outsidePct, overallPass, specimens, analyte, units } = results;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Total Specimens", value: n },
+          { label: "Outside Reference Interval", value: `${outsideCount} / ${n}` },
+          { label: "% Outside", value: `${outsidePct.toFixed(1)}%` },
+          { label: "EP28-A3c Limit", value: "10%" },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">
+            {analyte || study.testName} Reference Interval: {refLow} - {refHigh} {units}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border">
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Value</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Units</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Status</th>
+              </tr></thead>
+              <tbody>
+                {(specimens || []).map((s: any, i: number) => {
+                  const inRange = s.value >= refLow && s.value <= refHigh;
+                  return (
+                    <tr key={i} className="border-b border-border/40">
+                      <td className="py-2 pr-3 font-mono">{s.specimenId}</td>
+                      <td className="text-right py-2 pr-3 font-mono">{s.value}</td>
+                      <td className="text-right py-2 pr-3 font-mono">{units}</td>
+                      <td className="text-right py-2 pr-3">
+                        <span className={inRange ? "pass-badge" : "fail-badge"}>{inRange ? "In range" : "Outside"}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 // ─── PT/COAG NEW LOT VALIDATION results ─────────────────────────────────────
 function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults }) {
   const { module1, module2, module3 } = results;
@@ -1352,6 +1414,9 @@ export default function StudyResults() {
   } else if (study.studyType === "multi_analyte_coag") {
     const { specimens, isi, normalMeanPT, teas } = rawDataPoints;
     results = calculateMultiAnalyteCoag(specimens, isi, normalMeanPT, teas);
+  } else if (study.studyType === "ref_interval") {
+    const { specimens, refLow, refHigh, analyte, units } = rawDataPoints;
+    results = calculateRefInterval(specimens, analyte || study.testName, units || "", refLow, refHigh);
   } else if (study.studyType === "method_comparison") {
     // Handle both old and new data formats for method comparison
     const dp = rawDataPoints as DataPoint[];
@@ -1387,6 +1452,7 @@ export default function StudyResults() {
       {isPTCoag(results) && <PTCoagReport study={study} results={results} />}
       {isQCRange(results) && <QCRangeReport study={study} results={results} />}
       {isMultiAnalyteCoag(results) && <MultiAnalyteCoagReport study={study} results={results} />}
+      {isRefInterval(results) && <RefIntervalReport study={study} results={results} />}
 
       {/* Related Tools for PT/Coag studies */}
       {(study.studyType === "pt_coag" || study.studyType === "multi_analyte_coag" || study.studyType === "qc_range") && (

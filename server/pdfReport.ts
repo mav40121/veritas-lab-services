@@ -281,6 +281,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     precision: "Precision Verification (EP15)",
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Lot-to-Lot Verification",
+    ref_interval: "Reference Interval Verification",
     pt_coag: "PT/Coag New Lot Validation",
     qc_range: "QC Range Establishment",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
@@ -310,7 +311,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931";
 
   const specs = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : "Correlation / Method Comparison"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "ref_interval" ? "Reference Interval Verification" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     ["CLIA Total Allowable Error", `±${cliaP}%`],
     ["CLIA CFR Reference", `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`],
@@ -389,7 +390,7 @@ function directorReviewHTML(): string {
 
 
 // ─── Regulatory Compliance References box ───────────────────────────────────
-type StudyTypeKey = "cal_ver" | "method_comp" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag";
+type StudyTypeKey = "cal_ver" | "method_comp" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval";
 export type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 
 interface RegulatoryRefs {
@@ -457,6 +458,14 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     aabb: ["5.14.1", "5.14.3"],
     clsi: ["H47-A2", "H21-A5", "EP26-A"],
     cfr:  ["42 CFR §493.1255(b)(3)"],
+  },
+  ref_interval: {
+    cap:  ["CHM.13900", "GEN.40460"],
+    tjc:  ["QSA.02.01.01", "QSA.02.02.01"],
+    cola: ["LAB.021"],
+    aabb: ["5.6.2"],
+    clsi: ["EP28-A3c", "C28-A3c"],
+    cfr:  ["42 CFR §493.1253(b)(2)", "42 CFR §493.1271(a)"],
   },
 };
 
@@ -1190,6 +1199,92 @@ function differencePlotSVG(
 }
 
 // ─── LOT-TO-LOT HTML report ──────────────────────────────────────────────────
+function buildRefIntervalHTML(study: Study, results: any): string {
+  const analyte = results.analyte || study.testName;
+  const units = results.units || "";
+  const refLow = results.refLow;
+  const refHigh = results.refHigh;
+  const n = results.n;
+  const outsideCount = results.outsideCount;
+  const outsidePct = typeof results.outsidePct === "number" ? results.outsidePct.toFixed(1) : "0.0";
+  const overallPass = results.overallPass;
+
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass ? "Meets CLSI EP28-A3c criteria" : "Does not meet CLSI EP28-A3c criteria";
+
+  const cliaStatement = overallPass
+    ? `<b>The reference interval verification for ${analyte} meets the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The reference interval verification for ${analyte} does not meet the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+
+  const specimens = (results.specimens || []) as { specimenId: string; value: number; inRange: boolean }[];
+  const dataRows = specimens.map((s, i) => {
+    const pfClass = s.inRange ? "pass" : "fail";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${s.specimenId}</td>
+      <td class="text-right">${sf(s.value, 4)}</td>
+      <td class="text-right">${refLow} – ${refHigh}</td>
+      <td class="text-right ${pfClass}">${s.inRange ? "In Range" : "Outside"}</td>
+    </tr>`;
+  }).join("");
+
+  // Distribution bar chart SVG
+  const values = specimens.map(s => s.value);
+  const minVal = Math.min(...values, refLow);
+  const maxVal = Math.max(...values, refHigh);
+  const range = maxVal - minVal || 1;
+  const W = 400; const H = 80;
+  const toX = (v: number) => ((v - minVal) / range) * (W - 40) + 20;
+  const lowX = toX(refLow); const highX = toX(refHigh);
+  const dots = specimens.map(s => {
+    const x = toX(s.value);
+    const color = s.inRange ? "#01696F" : "#C0392B";
+    return `<circle cx="${x}" cy="40" r="4" fill="${color}" opacity="0.8"/>`;
+  }).join("");
+  const chartSVG = `<svg width="${W}" height="${H}" style="display:block;margin:0 auto;">
+    <rect x="${lowX}" y="20" width="${highX - lowX}" height="40" fill="#01696F" opacity="0.12" rx="3"/>
+    <line x1="${lowX}" y1="15" x2="${lowX}" y2="65" stroke="#01696F" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <line x1="${highX}" y1="15" x2="${highX}" y2="65" stroke="#01696F" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="${lowX}" y="12" text-anchor="middle" font-size="7" fill="#01696F">${refLow}</text>
+    <text x="${highX}" y="12" text-anchor="middle" font-size="7" fill="#01696F">${refHigh}</text>
+    <text x="${(lowX + highX) / 2}" y="72" text-anchor="middle" font-size="7" fill="#01696F">Reference Interval</text>
+    ${dots}
+  </svg>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary} ${cliaStatement}</p>
+  </div>`;
+
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">Reference Interval</div><div class="stat-value">${refLow} – ${refHigh} ${units}</div></div>
+      <div class="stat-item"><div class="stat-label">Specimens Tested</div><div class="stat-value">${n}</div></div>
+      <div class="stat-item"><div class="stat-label">Outside Range</div><div class="stat-value">${outsideCount} (${outsidePct}%)</div></div>
+      <div class="stat-item"><div class="stat-label">CLSI EP28-A3c Criterion</div><div class="stat-value">≤10% outside</div></div>
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="section-heading">Reference Interval Verification</div>
+  <div class="verdict-banner ${passClass}">${overallPass ? "\u2714" : "\u2718"} ${verdictText}</div>
+  ${summaryStats}
+  <div style="margin:12px 0 6px;font-size:8pt;font-weight:600;color:#01696F;">Distribution Plot</div>
+  <div style="margin-bottom:12px;">${chartSVG}</div>
+  ${narrative}
+  ${regulatoryComplianceBoxHTML("ref_interval", (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  <div class="page-break"></div>
+  <div class="section-heading">Individual Specimen Results</div>
+  <table>
+    <thead><tr><th>Specimen ID</th><th class="text-right">Result (${units})</th><th class="text-right">Ref Interval</th><th class="text-right">In Range?</th></tr></thead>
+    <tbody>${dataRows}</tbody>
+  </table>
+  </body></html>`;
+}
+
 function buildLotToLotHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
@@ -1750,6 +1845,8 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildQCRangeHTML(study, results)
     : study.studyType === "multi_analyte_coag"
     ? buildMultiAnalyteCoagHTML(study, results)
+    : study.studyType === "ref_interval"
+    ? buildRefIntervalHTML(study, results)
     : buildMethodCompHTML(study, results);
 
   const browser = await getBrowser();

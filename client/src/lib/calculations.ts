@@ -920,7 +920,7 @@ export function calculateMultiAnalyteCoag(
 }
 
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults;
+export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -945,3 +945,52 @@ export function isLotToLot(r: StudyResults): r is LotToLotResults { return r.typ
 export function isPTCoag(r: StudyResults): r is PTCoagResults { return r.type === "pt_coag"; }
 export function isQCRange(r: StudyResults): r is QCRangeResults { return r.type === "qc_range"; }
 export function isMultiAnalyteCoag(r: StudyResults): r is MultiAnalyteResults { return r.type === "multi_analyte_coag"; }
+
+// ─── Reference Interval Verification ────────────────────────────────────────
+export interface RefIntervalDataPoint {
+  specimenId: string;
+  value: number | null;
+}
+
+export interface RefIntervalResults {
+  type: "ref_interval";
+  analyte: string;
+  units: string;
+  refLow: number;
+  refHigh: number;
+  n: number;
+  outsideCount: number;
+  outsidePct: number;
+  overallPass: boolean;
+  specimens: { specimenId: string; value: number; inRange: boolean }[];
+  summary: string;
+}
+
+export function calculateRefInterval(
+  dataPoints: RefIntervalDataPoint[],
+  refLow: number,
+  refHigh: number,
+  analyte: string,
+  units: string
+): RefIntervalResults {
+  const valid = dataPoints.filter(dp => dp.value !== null && !isNaN(dp.value as number));
+  const n = valid.length;
+  const specimens = valid.map(dp => ({
+    specimenId: dp.specimenId,
+    value: dp.value as number,
+    inRange: (dp.value as number) >= refLow && (dp.value as number) <= refHigh,
+  }));
+  const outsideCount = specimens.filter(s => !s.inRange).length;
+  const outsidePct = n > 0 ? (outsideCount / n) * 100 : 0;
+  // CLSI EP28-A3c: pass if ≤10% (≤2 of 20) fall outside the reference interval
+  const overallPass = n >= 20 && outsideCount <= Math.floor(n * 0.1);
+  const summary = n < 20
+    ? `Insufficient specimens: ${n} provided, minimum 20 required per CLSI EP28-A3c.`
+    : overallPass
+      ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}–${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of ≤10% outside.`
+      : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}–${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of ≤10% outside.`;
+
+  return { type: "ref_interval", analyte, units, refLow, refHigh, n, outsideCount, outsidePct, overallPass, specimens, summary };
+}
+
+export function isRefInterval(r: StudyResults | RefIntervalResults): r is RefIntervalResults { return (r as any).type === "ref_interval"; }
