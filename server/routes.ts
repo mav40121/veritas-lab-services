@@ -388,6 +388,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
+  app.post("/api/admin/set-seats", (req, res) => {
+    const { secret, userId, seatCount } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!userId || seatCount === undefined) return res.status(400).json({ error: "userId and seatCount required" });
+    db.$client.prepare("UPDATE users SET seat_count = ? WHERE id = ?").run(Number(seatCount), Number(userId));
+    const row = db.$client.prepare("SELECT id, email, name, seat_count FROM users WHERE id = ?").get(Number(userId)) as any;
+    res.json({ ok: true, user: { id: row?.id, email: row?.email, name: row?.name, seatCount: row?.seat_count } });
+  });
+
   // ── DISCOUNT CODES (admin) ───────────────────────────────────────────────
   app.get("/api/admin/discount-codes", (req, res) => {
     const { secret } = req.query as any;
