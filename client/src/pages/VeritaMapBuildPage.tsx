@@ -20,9 +20,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   ArrowRight,
@@ -35,6 +38,7 @@ import {
   ChevronRight,
   Lock,
   Info,
+  Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import fdaData from "@/lib/fdaInstrumentData.json";
@@ -362,11 +366,131 @@ function AddCustomTestDialog({
   );
 }
 
+// ── Edit Instrument Dialog ───────────────────────────────────────────────────
+
+interface EditInstrumentDialogProps {
+  instrument: InstrumentEntry;
+  mapId: string;
+  onSaved: () => void;
+}
+
+function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDialogProps) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(instrument.instrument_name);
+  const [role, setRole] = useState<Role>(instrument.role);
+  const [category, setCategory] = useState(instrument.category || "");
+  const [serial, setSerial] = useState(instrument.serial_number || "");
+
+  const queryClient = useQueryClient();
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instrument.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          instrument_name: name,
+          role,
+          category,
+          serial_number: serial,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update instrument");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+      onSaved();
+      setOpen(false);
+    },
+  });
+
+  const handleOpen = (val: boolean) => {
+    if (val) {
+      setName(instrument.instrument_name);
+      setRole(instrument.role);
+      setCategory(instrument.category || "");
+      setSerial(instrument.serial_number || "");
+    }
+    setOpen(val);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit instrument">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Instrument</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1">
+            <Label htmlFor="edit-inst-name">Instrument Name</Label>
+            <Input
+              id="edit-inst-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Sysmex XN-1000"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-inst-role">Role</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+              <SelectTrigger id="edit-inst-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Primary">Primary</SelectItem>
+                <SelectItem value="Backup">Backup</SelectItem>
+                <SelectItem value="Satellite">Satellite</SelectItem>
+                <SelectItem value="Reference">Reference</SelectItem>
+                <SelectItem value="POC">POC</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-inst-category">Category</Label>
+            <Input
+              id="edit-inst-category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="e.g. Hematology"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-inst-serial">Serial Number</Label>
+            <Input
+              id="edit-inst-serial"
+              value={serial}
+              onChange={(e) => setSerial(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => editMutation.mutate()}
+            disabled={!name.trim() || editMutation.isPending}
+          >
+            {editMutation.isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Instrument section for Step 2 ─────────────────────────────────────────────
 
 function InstrumentTestSection({
   instrument,
   tests,
+  mapId,
   onToggle,
   onSelectAll,
   onDeselectAll,
@@ -374,6 +498,7 @@ function InstrumentTestSection({
 }: {
   instrument: InstrumentEntry;
   tests: TestToggle[];
+  mapId: string;
   onToggle: (analyte: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -442,6 +567,9 @@ function InstrumentTestSection({
         <div className="flex items-center gap-2 shrink-0 ml-3">
           <span className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{activeCount}</span>/{tests.length} active
+          </span>
+          <span onClick={(e) => e.stopPropagation()}>
+            <EditInstrumentDialog instrument={instrument} mapId={mapId} onSaved={() => {}} />
           </span>
         </div>
       </button>
@@ -1380,6 +1508,7 @@ export default function VeritaMapBuildPage() {
             key={instr.id}
             instrument={instr}
             tests={testsByInstrument[instr.id] ?? []}
+            mapId={mapId!}
             onToggle={(analyte) => toggleTest(instr.id, analyte)}
             onSelectAll={() => selectAll(instr.id)}
             onDeselectAll={() => deselectAll(instr.id)}
