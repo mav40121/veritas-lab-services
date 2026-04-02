@@ -4388,7 +4388,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Logout (mark session inactive)
   app.post("/api/auth/logout", authMiddleware, (req: any, res) => {
-    const { session_token } = req.body;
+    const { session_token } = req.body || {};
     if (session_token) {
       (db as any).$client.prepare(
         "UPDATE user_sessions SET is_active = 0 WHERE session_token = ?"
