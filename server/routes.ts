@@ -649,6 +649,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const ownerUserId = seatInfo?.owner_user_id ?? null;
 
+    // For seat users, use the owner's plan and subscription fields
+    let effectivePlan = user.plan;
+    let effectiveSubExpiry = userRow?.subscription_expires_at || null;
+    let effectiveSubStatus = userRow?.subscription_status || 'free';
+    let effectiveSeatCount = userRow?.seat_count || 1;
+    if (isSeatUser && ownerUserId) {
+      const ownerRow = (db as any).$client.prepare(
+        "SELECT plan, subscription_expires_at, subscription_status, seat_count FROM users WHERE id = ?"
+      ).get(ownerUserId) as any;
+      if (ownerRow) {
+        effectivePlan = ownerRow.plan;
+        effectiveSubExpiry = ownerRow.subscription_expires_at || null;
+        effectiveSubStatus = ownerRow.subscription_status || 'free';
+        effectiveSeatCount = ownerRow.seat_count || 1;
+      }
+    }
+
     if (activeSession) {
       // Return session conflict - let frontend handle the force-logout choice
       const token = signToken(user.id);
@@ -659,15 +676,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         message: "Another session is active on another device. Log out that device to continue.",
         token,
         user: {
-          id: user.id, email: user.email, name: user.name, plan: user.plan,
+          id: user.id, email: user.email, name: user.name, plan: effectivePlan,
           studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding,
-          subscriptionExpiresAt: userRow?.subscription_expires_at || null,
-          subscriptionStatus: userRow?.subscription_status || 'free',
-          accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }),
+          subscriptionExpiresAt: effectiveSubExpiry,
+          subscriptionStatus: effectiveSubStatus,
+          accessLevel: getAccessLevel({ subscription_expires_at: effectiveSubExpiry }),
           cliaNumber: userRow?.clia_number || null,
           cliaLabName: userRow?.clia_lab_name || null,
           cliaTier: userRow?.clia_tier || null,
-          seatCount: userRow?.seat_count || 1,
+          seatCount: effectiveSeatCount,
           onboardingSeen: !!(userRow?.onboarding_seen),
           isSeatUser,
           seatPermissions,
@@ -687,15 +704,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({
       token, session_token: sessionToken,
       user: {
-        id: user.id, email: user.email, name: user.name, plan: user.plan,
+        id: user.id, email: user.email, name: user.name, plan: effectivePlan,
         studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding,
-        subscriptionExpiresAt: userRow?.subscription_expires_at || null,
-        subscriptionStatus: userRow?.subscription_status || 'free',
-        accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }),
+        subscriptionExpiresAt: effectiveSubExpiry,
+        subscriptionStatus: effectiveSubStatus,
+        accessLevel: getAccessLevel({ subscription_expires_at: effectiveSubExpiry }),
         cliaNumber: userRow?.clia_number || null,
         cliaLabName: userRow?.clia_lab_name || null,
         cliaTier: userRow?.clia_tier || null,
-        seatCount: userRow?.seat_count || 1,
+        seatCount: effectiveSeatCount,
         onboardingSeen: !!(userRow?.onboarding_seen),
         isSeatUser,
         seatPermissions,
@@ -727,16 +744,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const ownerUserId = seatInfo?.owner_user_id ?? null;
 
+    // For seat users, resolve the owner's plan and subscription so they see the correct access level
+    let effectivePlan = user.plan;
+    let effectiveSubExpiry = userRow?.subscription_expires_at || null;
+    let effectiveSubStatus = userRow?.subscription_status || 'free';
+    let effectiveSeatCount = userRow?.seat_count || 1;
+    if (isSeatUser && ownerUserId) {
+      const ownerRow = (db as any).$client.prepare(
+        "SELECT plan, subscription_expires_at, subscription_status, seat_count FROM users WHERE id = ?"
+      ).get(ownerUserId) as any;
+      if (ownerRow) {
+        effectivePlan = ownerRow.plan;
+        effectiveSubExpiry = ownerRow.subscription_expires_at || null;
+        effectiveSubStatus = ownerRow.subscription_status || 'free';
+        effectiveSeatCount = ownerRow.seat_count || 1;
+      }
+    }
+
     res.json({
-      id: user.id, email: user.email, name: user.name, plan: user.plan,
+      id: user.id, email: user.email, name: user.name, plan: effectivePlan,
       studyCredits: user.studyCredits, hasCompletedOnboarding: !!hasCompletedOnboarding,
-      subscriptionExpiresAt: userRow?.subscription_expires_at || null,
-      subscriptionStatus: userRow?.subscription_status || 'free',
-      accessLevel: getAccessLevel({ subscription_expires_at: userRow?.subscription_expires_at }),
+      subscriptionExpiresAt: effectiveSubExpiry,
+      subscriptionStatus: effectiveSubStatus,
+      accessLevel: getAccessLevel({ subscription_expires_at: effectiveSubExpiry }),
       cliaNumber: userRow?.clia_number || null,
       cliaLabName: userRow?.clia_lab_name || null,
       cliaTier: userRow?.clia_tier || null,
-      seatCount: userRow?.seat_count || 1,
+      seatCount: effectiveSeatCount,
       onboardingSeen: !!(userRow?.onboarding_seen),
       isSeatUser,
       seatPermissions,
