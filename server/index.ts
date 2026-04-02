@@ -126,6 +126,11 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
+  // Permanent redirects for old URLs
+  app.get('/meet-our-team', (_req, res) => {
+    res.redirect(301, '/team');
+  });
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
