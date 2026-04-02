@@ -2457,6 +2457,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.send(pdfBuffer);
       }
 
+      // ── Reference Interval PDF ──
+      if (studyRow.study_type === "ref_interval") {
+        const { specimens, refLow, refHigh, analyte, units } = dp as any;
+        const validSpecimens = (specimens || []).filter((s: any) => s.value !== null && !isNaN(s.value));
+        const n = validSpecimens.length;
+        const enriched = validSpecimens.map((s: any) => ({
+          specimenId: s.specimenId,
+          value: s.value,
+          inRange: s.value >= refLow && s.value <= refHigh,
+        }));
+        const outsideCount = enriched.filter((s: any) => !s.inRange).length;
+        const outsidePct = n > 0 ? (outsideCount / n) * 100 : 0;
+        const overallPass = n >= 20 && outsideCount <= Math.floor(n * 0.1);
+        const summary = n < 20
+          ? `Insufficient specimens: ${n} provided, minimum 20 required per CLSI EP28-A3c.`
+          : overallPass
+            ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}\u2013${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of \u226410% outside.`
+            : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}\u2013${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of \u226410% outside.`;
+
+        const study = {
+          testName: studyRow.test_name, instrument: studyRow.instrument,
+          analyst: studyRow.analyst, date: studyRow.date,
+          studyType: "ref_interval", cliaAllowableError: 0.1,
+          dataPoints: dp, instruments: instNames, status: studyRow.status,
+          _labName: "Riverside Regional Medical Center",
+          _cliaNumber: "22D0999999",
+        };
+        const results = {
+          type: "ref_interval", analyte: analyte || studyRow.test_name, units: units || "",
+          refLow, refHigh, n, outsideCount, outsidePct, overallPass, specimens: enriched, summary,
+        };
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const filename = `VeritaCheck_RefInterval_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", pdfBuffer.length);
+        return res.send(pdfBuffer);
+      }
+
       // ── Method Comparison PDF (default) ──
       // Compute mean of primary values for converting absolute TEa to fraction
       const dpXs: number[] = dp.map((p: any) => p.instrumentValues?.[primaryName] ?? 0);
