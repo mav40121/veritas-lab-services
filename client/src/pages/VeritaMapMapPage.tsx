@@ -3,6 +3,7 @@ import { Link, useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -718,6 +719,7 @@ export default function VeritaMapMapPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const readOnly = useIsReadOnly('veritamap');
 
   const [localTests, setLocalTests] = useState<TestRecord[]>([]);
   const [filterSpecialty, setFilterSpecialty] = useState<string>("all");

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -428,6 +429,7 @@ export default function VeritaScanScanPage() {
   const scanId = Number(params.id);
   useAuth();
   const qc = useQueryClient();
+  const readOnly = useIsReadOnly('veritascan');
 
   // Local item state
   const [items, setItems] = useState<Record<number, ItemState>>(buildInitialItems);

@@ -12,7 +12,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 
 export default function Dashboard() {
   const { toast } = useToast();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly('veritacheck');
 
   const { data: studies, isLoading } = useQuery<Study[]>({
     queryKey: ["/api/studies"],
