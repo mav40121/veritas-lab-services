@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   ArrowLeft,
+  Copy,
   Download,
   Edit,
   FlaskConical,
@@ -711,6 +712,103 @@ function TestRow({ test, onChange, onRowMount }: TestRowProps) {
   );
 }
 
+// ── Copy-from banner ─────────────────────────────────────────────────────────
+
+function CopyFromBanner({
+  instruments,
+  onCopy,
+  isCopying
+}: {
+  instruments: Array<{id: number, name: string, testCount?: number}>,
+  onCopy: (sourceInstId: number) => void,
+  isCopying: boolean
+}) {
+  const [selected, setSelected] = useState<number | ''>(instruments[0]?.id ?? '');
+
+  return (
+    <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-blue-900 mb-1">
+            This instrument has no tests yet.
+          </p>
+          <p className="text-xs text-blue-700 mb-3">
+            Copy a test menu from another instrument as a starting point, then adjust as needed.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={selected}
+              onChange={e => setSelected(Number(e.target.value))}
+              className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {instruments.map(inst => (
+                <option key={inst.id} value={inst.id}>
+                  {inst.name}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => selected && onCopy(Number(selected))}
+              disabled={isCopying || !selected}
+              className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isCopying ? 'Copying...' : 'Copy Test Menu'}
+            </button>
+            <span className="text-xs text-blue-600">or</span>
+            <span className="text-xs text-blue-600 font-medium">start blank (add tests below)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CopyFromBannerInline({
+  targetName,
+  targetId,
+  sources,
+  onCopy,
+  isCopying
+}: {
+  targetName: string,
+  targetId: number,
+  sources: Array<{id: number, name: string, testCount?: number}>,
+  onCopy: (sourceInstId: number) => void,
+  isCopying: boolean
+}) {
+  const [selected, setSelected] = useState<number>(sources[0]?.id ?? 0);
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Copy size={14} className="text-blue-600 shrink-0" />
+        <span className="text-sm text-blue-900 font-medium">
+          {targetName} has no tests.
+        </span>
+        <span className="text-xs text-blue-700">Copy from:</span>
+        <select
+          value={selected}
+          onChange={e => setSelected(Number(e.target.value))}
+          className="text-xs border border-blue-300 rounded-lg px-2 py-1 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {sources.map(inst => (
+            <option key={inst.id} value={inst.id}>
+              {inst.name}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => selected && onCopy(selected)}
+          disabled={isCopying || !selected}
+          className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {isCopying ? 'Copying...' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function VeritaMapMapPage() {
@@ -725,6 +823,8 @@ export default function VeritaMapMapPage() {
   const [filterSpecialty, setFilterSpecialty] = useState<string>("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [excelLoading, setExcelLoading] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
+  const [copyFromInstrumentId, setCopyFromInstrumentId] = useState<number | null>(null);
 
   // Refs for row scrolling (keyed by analyte)
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -741,6 +841,80 @@ export default function VeritaMapMapPage() {
     staleTime: 0,
     refetchOnMount: true,
   });
+
+  // Fetch instruments for copy-from feature
+  const { data: allInstruments = [] } = useQuery<
+    Array<{id: number, instrument_name: string, role: string, category: string, tests?: any[]}>
+  >({
+    queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+    enabled: !!mapId,
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+        { headers: authHeaders() }
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  // Instruments with test counts for the copy-from UI
+  const instrumentsWithCounts = useMemo(() =>
+    allInstruments.map(i => ({
+      id: i.id,
+      name: i.instrument_name,
+      testCount: (i.tests ?? []).filter((t: any) => t.active).length,
+    })),
+    [allInstruments]
+  );
+
+  // Find instruments that have zero tests (candidates for copy-to)
+  const emptyInstruments = useMemo(() =>
+    instrumentsWithCounts.filter(i => i.testCount === 0),
+    [instrumentsWithCounts]
+  );
+
+  // Instruments with tests (candidates for copy-from source)
+  const instrumentsWithTests = useMemo(() =>
+    instrumentsWithCounts.filter(i => i.testCount > 0),
+    [instrumentsWithCounts]
+  );
+
+  // Current instrument for copy-to (first empty instrument by default)
+  const currentInstrumentId = useMemo(() => {
+    if (copyFromInstrumentId && emptyInstruments.some(i => i.id === copyFromInstrumentId)) {
+      return copyFromInstrumentId;
+    }
+    return emptyInstruments[0]?.id ?? null;
+  }, [copyFromInstrumentId, emptyInstruments]);
+
+  // Copy-from handler
+  async function handleCopyFrom(sourceInstId: number) {
+    if (!mapId || !currentInstrumentId) return;
+    setIsCopying(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${currentInstrumentId}/copy-from/${sourceInstId}`,
+        {
+          method: 'POST',
+          headers: authHeaders(),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Copy failed', description: data.error, variant: 'destructive' });
+      } else {
+        toast({ title: 'Test menu copied', description: data.message });
+        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
+      }
+    } catch {
+      toast({ title: 'Copy failed', description: 'Network error. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsCopying(false);
+    }
+  }
 
   // Fetch intelligence data
   const { data: intelligenceRaw } = useQuery<IntelligenceData>({
@@ -916,16 +1090,44 @@ export default function VeritaMapMapPage() {
   if (localTests.length === 0 && !isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh] flex-col gap-4">
-        <p className="text-muted-foreground text-sm">
-          This map has no tests yet.
-        </p>
-        <Button
-          onClick={() => navigate(`/veritamap-app/${mapId}/build`)}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-        >
-          Build Test Menu
-          <ChevronRight size={13} className="ml-1" />
-        </Button>
+        {/* Copy-from banner: show when map has no tests but instruments exist */}
+        {instrumentsWithTests.length > 0 && emptyInstruments.length > 0 && (
+          <div className="w-full max-w-lg">
+            {emptyInstruments.length > 1 && (
+              <div className="mb-3">
+                <label className="text-xs text-muted-foreground mb-1 block">Copy tests to:</label>
+                <select
+                  value={currentInstrumentId ?? ''}
+                  onChange={e => setCopyFromInstrumentId(Number(e.target.value))}
+                  className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background text-foreground w-full"
+                >
+                  {emptyInstruments.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <CopyFromBanner
+              instruments={instrumentsWithTests}
+              onCopy={handleCopyFrom}
+              isCopying={isCopying}
+            />
+          </div>
+        )}
+        {instrumentsWithTests.length === 0 && (
+          <>
+            <p className="text-muted-foreground text-sm">
+              This map has no tests yet.
+            </p>
+            <Button
+              onClick={() => navigate(`/veritamap-app/${mapId}/build`)}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              Build Test Menu
+              <ChevronRight size={13} className="ml-1" />
+            </Button>
+          </>
+        )}
       </div>
     );
   }
@@ -1169,6 +1371,43 @@ export default function VeritaMapMapPage() {
               Fully compliant
             </span>
           </div>
+
+          {/* Copy-from banner: show when some instruments have no tests */}
+          {emptyInstruments.length > 0 && instrumentsWithTests.length > 0 && (
+            <div className="mb-4">
+              {emptyInstruments.map(emptyInst => (
+                <CopyFromBannerInline
+                  key={emptyInst.id}
+                  targetName={emptyInst.name}
+                  targetId={emptyInst.id}
+                  sources={instrumentsWithTests}
+                  onCopy={async (sourceId) => {
+                    setIsCopying(true);
+                    try {
+                      const res = await fetch(
+                        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${emptyInst.id}/copy-from/${sourceId}`,
+                        { method: 'POST', headers: authHeaders() }
+                      );
+                      const data = await res.json();
+                      if (!res.ok) {
+                        toast({ title: 'Copy failed', description: data.error, variant: 'destructive' });
+                      } else {
+                        toast({ title: 'Test menu copied', description: data.message });
+                        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+                        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+                        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
+                      }
+                    } catch {
+                      toast({ title: 'Copy failed', description: 'Network error.', variant: 'destructive' });
+                    } finally {
+                      setIsCopying(false);
+                    }
+                  }}
+                  isCopying={isCopying}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Table */}
           <div className="overflow-x-auto rounded-xl border border-border" style={{WebkitOverflowScrolling: 'touch'}}>
