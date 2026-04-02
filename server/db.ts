@@ -579,7 +579,7 @@ if (!colNames.includes("preferred_standards")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_standards TEXT DEFAULT NULL"); } catch {}
 }
 
-// Add preferred_pt_vendor column for VeritaPT vendor preference
+// Add preferred PT vendor column for VeritaPT(TM) vendor preference
 if (!colNames.includes("preferred_pt_vendor")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_pt_vendor TEXT DEFAULT 'none'"); } catch {}
 }

@@ -5230,10 +5230,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT id, name FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
       ).get(userId) as any;
 
+      // Fetch preferred PT vendor
+      const prefRow = (db as any).$client.prepare("SELECT preferred_pt_vendor FROM users WHERE id = ?").get(userId) as any;
+      const preferredVendor = prefRow?.preferred_pt_vendor || 'none';
+
       if (!map) {
         return res.json({
           hasMap: false,
           mapName: null,
+          preferredVendor,
           waived: [],
           nonWaived: [],
           gaps: [],
@@ -5380,11 +5385,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         { provider: "API", catalogNumber: "API-IMMU-I01", programName: "Immunology", url: API_URL, analytes: ["CRP","ESR","RF","ANA","Anti-dsDNA","Complement C3","Complement C4","IgG","IgA","IgM","IgE"] },
       ];
 
-      // 8. Fetch preferred PT vendor
-      const prefRow = (db as any).$client.prepare("SELECT preferred_pt_vendor FROM users WHERE id = ?").get(userId) as any;
-      const preferredVendor = prefRow?.preferred_pt_vendor || 'none';
-
-      // 9. Score programs by gap coverage
+      // 8. Score programs by gap coverage
       const gapSet = new Set(gaps);
       const recommendations = catalog
         .map(prog => {
@@ -5458,12 +5459,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const filtered = preferred_standards.filter((s: string) => VALID_BODIES.includes(s)).slice(0, 2);
         standardsJson = JSON.stringify(filtered);
       }
-      // Validate preferred_pt_vendor
-      const VALID_VENDORS = ["cap", "api", "none"];
-      const vendorValue = VALID_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
+      // Validate preferred PT vendor
+      const VALID_PT_VENDORS = ["cap", "api", "none"];
+      const ptVendor = VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
       (db as any).$client.prepare(
         "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
-      ).run(clia_number || null, clia_lab_name || null, standardsJson, vendorValue, req.userId);
+      ).run(clia_number || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to update account settings" });

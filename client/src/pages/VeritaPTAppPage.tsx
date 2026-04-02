@@ -171,7 +171,7 @@ function EnrollmentDialog({
     },
   });
 
-  // Reset when dialog opens with fresh values
+  // Reset form when dialog opens with new data
   useEffect(() => {
     if (open) {
       setAnalyte(enrollment?.analyte ?? "");
