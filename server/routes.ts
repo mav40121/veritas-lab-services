@@ -4389,18 +4389,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const now = new Date().toISOString();
-    const existing = (db as any).$client.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ?"
+    const existingActive = (db as any).$client.prepare(
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
     ).get(req.userId, email.toLowerCase());
-    if (existing) return res.status(409).json({ error: "This email already has a seat assigned" });
+    if (existingActive) return res.status(409).json({ error: "This email already has a seat assigned" });
 
     // Check if invited user already has an account
     const existingUser = storage.getUserByEmail(email.toLowerCase());
     const seatUserId = existingUser ? existingUser.id : null;
+    const newStatus = seatUserId ? "active" : "pending";
 
-    (db as any).$client.prepare(
-      "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status) VALUES (?, ?, ?, ?, ?)"
-    ).run(req.userId, email.toLowerCase(), seatUserId, now, seatUserId ? "active" : "pending");
+    // Reactivate a previously deactivated seat if one exists
+    const deactivated = (db as any).$client.prepare(
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
+    ).get(req.userId, email.toLowerCase()) as any;
+    if (deactivated) {
+      (db as any).$client.prepare(
+        "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ? WHERE id = ?"
+      ).run(seatUserId, newStatus, now, seatUserId ? now : null, deactivated.id);
+    } else {
+      (db as any).$client.prepare(
+        "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status) VALUES (?, ?, ?, ?, ?)"
+      ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus);
+    }
 
     // Send invite email via Resend
     const owner = storage.getUserById(req.userId);
