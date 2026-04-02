@@ -110,11 +110,9 @@ export default function VeritaMapAppPage() {
   const [newMapName, setNewMapName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Access check
+  // Access check — must match server-side hasMapAccess plus all paid plans
   const hasPlanAccess =
-    user?.plan === "annual" ||
-    user?.plan === "lab" ||
-    user?.plan === "veritamap";
+    ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(user?.plan);
 
   // Fetch maps
   const { data: maps, isLoading } = useQuery<MapSummary[]>({
