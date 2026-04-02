@@ -716,7 +716,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   const minRecovery = recoveries.length > 0 ? sf(Math.min(...recoveries), 1) + "%" : "---";
   const compactPassCount = `${results.passCount}/${results.totalCount}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Calibration Verification / Linearity - ${study.testName}</title><style>${CSS}
   /* Page numbering */
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
@@ -955,7 +955,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   const p1pctDiffs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].pctDifference);
   const p1BaSvg = blandAltmanSVG(p1avgs, p1pctDiffs, study.cliaAllowableError, firstBAEntry?.pctMeanDiff ?? 0, firstCompName);
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Correlation / Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
@@ -1073,7 +1073,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
   const precMaxCV = levelResults.length > 0 ? sf(Math.max(...levelResults.map((r: any) => r.cv ?? 0)), 2) + "%" : "---";
   const precPassCount = `${results.passCount}/${results.totalCount}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Precision Verification (EP15) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
@@ -1265,7 +1265,7 @@ function buildRefIntervalHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reference Interval Verification - ${study.testName}</title><style>${CSS}</style></head><body>
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
   <div class="section-heading">Reference Interval Verification</div>
@@ -1347,7 +1347,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary} ${cliaStatement}</p>
   </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Lot-to-Lot Verification - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
@@ -1547,7 +1547,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const ptCompactM2Pass = module2.pass ? "PASS" : "FAIL";
   const ptCompactM3Pass = module3 ? (module3.pass ? "PASS" : "FAIL") : "N/A";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT Coag New Lot Validation - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
@@ -1650,7 +1650,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
     (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`) +
     ` ${qcCliaStatement}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - QC Range Establishment - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
   </style></head><body>
@@ -1718,7 +1718,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
 
   const isiNote = r.ptINRValidation ? `<div class="eval-text" style="margin:8px 0;font-size:7.5px">${r.ptINRValidation.isiCheck}</div>` : '';
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Multi-Analyte Lot Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
   </style></head><body>
