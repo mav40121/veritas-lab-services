@@ -497,6 +497,11 @@ sqlite.exec(`
   );
 `);
 
+// Owner account - permanent free access
+sqlite.prepare(
+  "UPDATE users SET plan = 'lab', study_credits = 99999, subscription_status = 'active', subscription_expires_at = '2099-12-31T00:00:00.000Z', plan_expires_at = '2099-12-31T00:00:00.000Z' WHERE email = 'verilabguy@gmail.com'"
+).run();
+
 // Set test accounts (userId 1-11) to active with subscription_expires_at = 2 years from now
 const twoYearsFromNow = new Date();
 twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
