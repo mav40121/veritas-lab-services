@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity } from "lucide-react";
+import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets } from "lucide-react";
 
 // ─── External reference links ─────────────────────────────────────────────────
 const REFS = {
@@ -200,7 +200,7 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains the three core study types, what they are, when CLIA requires them, and how VeritaCheck automates each one.
+            This guide explains all six study types supported by VeritaCheck(TM), what they are, when CLIA requires them, and how VeritaCheck(TM) automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
@@ -237,11 +237,29 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4">When introducing a new method; annually recommended</td>
                   <td className="py-3 px-4"><a href={REFS.cfr493933.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.933</a></td>
                 </tr>
-                <tr className="hover:bg-muted/20 transition-colors">
-                  <td className="py-3 px-4 font-medium text-primary">Precision Verification (EP15)</td>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Precision</td>
                   <td className="py-3 px-4 text-muted-foreground">Is my instrument producing consistent, reproducible results?</td>
                   <td className="py-3 px-4">When introducing a new method; after major maintenance</td>
                   <td className="py-3 px-4"><a href={REFS.cfr493941.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.941</a></td>
+                </tr>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Reference Interval Verification</td>
+                  <td className="py-3 px-4 text-muted-foreground">Can we adopt the manufacturer's reference intervals for our patient population?</td>
+                  <td className="py-3 px-4">When adopting manufacturer reference intervals</td>
+                  <td className="py-3 px-4">CLSI EP28-A3c</td>
+                </tr>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Lot-to-Lot Verification</td>
+                  <td className="py-3 px-4 text-muted-foreground">Does the new reagent lot perform equivalently to the current lot?</td>
+                  <td className="py-3 px-4">When changing reagent lots for select analytes</td>
+                  <td className="py-3 px-4">42 CFR §493.1255</td>
+                </tr>
+                <tr className="hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Multi-Analyte Coagulation Verification</td>
+                  <td className="py-3 px-4 text-muted-foreground">Are all analytes on my coagulation analyzer performing within specification?</td>
+                  <td className="py-3 px-4">At verification; each analyte assessed individually</td>
+                  <td className="py-3 px-4">42 CFR §493.1255</td>
                 </tr>
               </tbody>
             </table>
@@ -311,7 +329,7 @@ export default function StudyGuidePage() {
             icon={<FlaskConical size={22} className="text-white" />}
             color="bg-[#7c3aed]"
             badge="New Method Verification"
-            title="Precision Verification (EP15)"
+            title="Precision"
             subtitle="Confirm your instrument is producing reproducible, consistent results"
             what="Precision verification measures how consistently an instrument produces the same result when the same sample is tested multiple times. Imprecision (variability) is expressed as a standard deviation (SD) or coefficient of variation (CV%). CLIA requires laboratories to verify that their instruments meet the manufacturer's stated precision claims before reporting patient results."
             howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to your CLIA allowable imprecision (CV%) for each analyte."
@@ -332,6 +350,79 @@ export default function StudyGuidePage() {
               REFS.clsiOverview,
             ]}
             ctaStudyType="precision"
+          />
+
+          <StudyCard
+            icon={<Beaker size={22} className="text-white" />}
+            color="bg-[#0d9488]"
+            badge="Reference Range Adoption"
+            title="Reference Interval Verification"
+            subtitle="Verify manufacturer reference intervals for your patient population"
+            what="Reference interval verification determines whether a manufacturer's published reference intervals are appropriate for your laboratory's patient population. This is required when your laboratory adopts reference intervals from the manufacturer rather than establishing its own. The CLSI EP28-A3c protocol provides the standard methodology."
+            howIt="You collect specimens from a minimum of 20 healthy individuals representative of your patient population. Each specimen is tested using your method. If 2 or fewer of the 20 results fall outside the manufacturer's stated reference interval, the interval is considered verified for your population. If more than 2 results fall outside, further investigation or a full reference interval study may be required."
+            when={[
+              "When adopting manufacturer reference intervals for a new test or method",
+              "When changing to a new instrument platform with different reference intervals",
+              "When your patient population demographics change significantly",
+              "When the manufacturer updates its reference intervals",
+            ]}
+            frequency="At method introduction or reference interval change"
+            regulation="CLSI EP28-A3c"
+            passFail="Pass if 2 or fewer of 20 specimens fall outside the manufacturer's stated reference interval. If more than 2 fall outside, the reference interval may not be appropriate for your population, and a full reference interval study or further investigation is required. Your laboratory director or designee makes the final determination."
+            refs={[
+              REFS.cliaVerificationBrochure,
+              REFS.clsiOverview,
+            ]}
+            ctaStudyType="ref_interval"
+          />
+
+          <StudyCard
+            icon={<Repeat size={22} className="text-white" />}
+            color="bg-[#d97706]"
+            badge="Reagent Change"
+            title="Lot-to-Lot Verification"
+            subtitle="Confirm new reagent lot performs equivalently to the current lot"
+            what="Lot-to-lot verification compares the performance of a new reagent lot against the current lot to confirm analytical equivalence before the new lot is placed into routine use. This is required for select analytes where reagent lot changes can affect calibration, measurement bias, or reportable range."
+            howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck(TM) calculates the bias between lots and evaluates it against CLIA TEa for each analyte."
+            when={[
+              "When changing to a new reagent lot for select analytes (manufacturer-specified)",
+              "When the manufacturer recommends lot-to-lot verification in its instructions for use",
+              "When QC results after a lot change suggest a shift in performance",
+              "As a best practice for high-volume or clinically sensitive analytes",
+            ]}
+            frequency="At each qualifying reagent lot change"
+            regulation="42 CFR §493.1255"
+            passFail="The bias between lots must fall within your CLIA allowable error (TEa) for each analyte. VeritaCheck(TM) evaluates measured bias against TEa and reports pass or fail per analyte. Your laboratory director or designee reviews and approves results before the new lot enters service."
+            refs={[
+              REFS.cliaCalVerBrochure,
+              REFS.cfr493931,
+            ]}
+            ctaStudyType="lot_to_lot"
+          />
+
+          <StudyCard
+            icon={<Droplets size={22} className="text-white" />}
+            color="bg-[#dc2626]"
+            badge="Coagulation Panel"
+            title="Multi-Analyte Coagulation Verification"
+            subtitle="Verify all coagulation analytes on a single analyzer in one study"
+            what="Multi-analyte coagulation verification is designed for coagulation analyzers that run multiple assays (PT/INR, aPTT, fibrinogen, D-dimer, and others). Each analyte is assessed individually within a single verification study, allowing the laboratory to document performance across the full coagulation test menu in one organized report."
+            howIt="You test verification materials at multiple levels for each coagulation analyte on the instrument. VeritaCheck(TM) evaluates each analyte independently, calculating recovery, bias, and pass or fail against CLIA TEa. The report groups all analytes together but maintains individual pass or fail determinations for each, producing a single document that covers the entire coagulation panel."
+            when={[
+              "At calibration verification intervals (every 6 months) for coagulation analyzers",
+              "When adding a new coagulation analyzer to service",
+              "After major maintenance or component replacement on a coagulation instrument",
+              "When changing reagent lots for coagulation assays",
+            ]}
+            frequency="Every 6 months minimum; at qualifying events"
+            regulation="42 CFR §493.1255"
+            passFail="Each analyte is evaluated independently against its CLIA TEa. All analytes must pass for the overall verification to be acceptable. If any single analyte fails, that analyte requires investigation and corrective action before the instrument continues reporting results for that test. Your laboratory director or designee reviews the complete panel results."
+            refs={[
+              REFS.cliaCalVerBrochure,
+              REFS.cfr493931,
+              REFS.clsiEP6,
+            ]}
+            ctaStudyType="coag_multi"
           />
         </div>
       </section>
@@ -359,7 +450,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck automates all three study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck(TM) automates all six study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck
