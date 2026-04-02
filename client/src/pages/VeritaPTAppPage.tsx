@@ -663,8 +663,8 @@ export default function VeritaPTAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaPT{"\u2122"}</h1>
-          <p className="text-muted-foreground text-sm mb-6">VeritaPT{"\u2122"} requires an account. Sign in to continue.</p>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaPT{"™"}</h1>
+          <p className="text-muted-foreground text-sm mb-6">VeritaPT{"™"} requires an account. Sign in to continue.</p>
           <Button asChild><Link href="/login">Sign In</Link></Button>
         </div>
       </div>
@@ -678,9 +678,9 @@ export default function VeritaPTAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 mb-4">
             <FlaskConical className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">VeritaPT{"\u2122"} Access Required</h1>
+          <h1 className="text-2xl font-bold mb-2">VeritaPT{"™"} Access Required</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            Your current plan does not include VeritaPT{"\u2122"}. Upgrade to access PT tracking.
+            Your current plan does not include VeritaPT{"™"}. Upgrade to access PT tracking.
           </p>
           <Button asChild><Link href="/veritapt">View Plans</Link></Button>
         </div>
@@ -697,7 +697,7 @@ export default function VeritaPTAppPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FlaskConical size={22} className="text-primary" />
-            VeritaPT{"\u2122"}
+            VeritaPT{"™"}
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">Proficiency Testing Tracking</p>
         </div>

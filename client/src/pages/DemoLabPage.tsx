@@ -106,11 +106,11 @@ export default function DemoLabPage() {
   const remainingItems = totalItems - compliantItems;
 
   const tabConfig = [
-    { id: "veritacheck", label: "VeritaCheck\u2122", icon: FlaskConical },
-    { id: "veritamap", label: "VeritaMap\u2122", icon: MapPin },
-    { id: "veritascan", label: "VeritaScan\u2122", icon: ClipboardList },
-    { id: "veritacomp", label: "VeritaComp\u2122", icon: Award },
-    { id: "veritastaff", label: "VeritaStaff\u2122", icon: Users },
+    { id: "veritacheck", label: "VeritaCheck™", icon: FlaskConical },
+    { id: "veritamap", label: "VeritaMap™", icon: MapPin },
+    { id: "veritascan", label: "VeritaScan™", icon: ClipboardList },
+    { id: "veritacomp", label: "VeritaComp™", icon: Award },
+    { id: "veritastaff", label: "VeritaStaff™", icon: Users },
   ];
 
   const typeLabel: Record<string, string> = {

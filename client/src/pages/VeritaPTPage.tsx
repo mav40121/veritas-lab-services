@@ -10,7 +10,7 @@ const FEATURES = [
   "Enter survey results with peer comparison and automatic SDI calculation",
   "Corrective action documentation with root cause, action taken, and verification",
   "Surveyor-ready PDF report with full PT history by analyte",
-  "Integrates with VeritaScan\u2122 to auto-complete PT compliance checklist items",
+  "Integrates with VeritaScan™ to auto-complete PT compliance checklist items",
 ];
 
 const HOW_IT_WORKS = [
@@ -32,10 +32,10 @@ export default function VeritaPTPage() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <FlaskConical size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">VeritaPT\u2122</Badge>
+                <Badge className="bg-primary/10 text-primary border-0">VeritaPT™</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaPT\u2122</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaPT™</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 Proficiency Testing Tracking
               </p>
@@ -54,7 +54,7 @@ export default function VeritaPTPage() {
                   </Button>
                 ) : (
                   <Button asChild size="lg">
-                    <Link href="/login">Sign In to Access VeritaPT\u2122 <ChevronRight size={16} className="ml-1" /></Link>
+                    <Link href="/login">Sign In to Access VeritaPT™ <ChevronRight size={16} className="ml-1" /></Link>
                   </Button>
                 )}
                 <Button variant="outline" size="lg" asChild>
@@ -108,7 +108,7 @@ export default function VeritaPTPage() {
       <section className="border-b border-border">
         <div className="container-default py-14">
           <div className="max-w-3xl mx-auto">
-            <h2 className="font-serif text-3xl font-bold mb-2 text-center">What VeritaPT\u2122 Tracks</h2>
+            <h2 className="font-serif text-3xl font-bold mb-2 text-center">What VeritaPT™ Tracks</h2>
             <p className="text-muted-foreground text-center mb-10">Everything an inspector expects to find, organized and retrievable in seconds.</p>
             <div className="grid sm:grid-cols-2 gap-4">
               {FEATURES.map((f) => (
@@ -168,7 +168,7 @@ export default function VeritaPTPage() {
             <div className="mt-6 p-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 flex items-start gap-3">
               <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
               <p className="text-sm text-amber-800 dark:text-amber-300">
-                Unacceptable PT results require documented corrective action including root cause analysis. VeritaPT\u2122 provides the documentation structure. Final review and approval must be completed by the laboratory director or designee.
+                Unacceptable PT results require documented corrective action including root cause analysis. VeritaPT™ provides the documentation structure. Final review and approval must be completed by the laboratory director or designee.
               </p>
             </div>
           </div>
@@ -180,11 +180,11 @@ export default function VeritaPTPage() {
         <div className="container-default py-14 text-center">
           <h2 className="font-serif text-3xl font-bold mb-3">Ready to track PT the right way?</h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-8">
-            VeritaPT\u2122 is included in your VeritaAssure\u2122 subscription. Sign in to get started.
+            VeritaPT™ is included in your VeritaAssure™ subscription. Sign in to get started.
           </p>
           {isLoggedIn ? (
             <Button asChild size="lg">
-              <Link href="/veritapt/app">Open VeritaPT\u2122 <ChevronRight size={16} className="ml-1" /></Link>
+              <Link href="/veritapt/app">Open VeritaPT™ <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
           ) : (
             <div className="flex justify-center gap-3 flex-wrap">

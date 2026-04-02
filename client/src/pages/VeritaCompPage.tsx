@@ -75,7 +75,7 @@ export default function VeritaCompPage() {
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaComp{"\u2122"}</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaComp{"™"}</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 TJC/CLIA/CAP Competency Assessment Management
               </p>
@@ -86,7 +86,7 @@ export default function VeritaCompPage() {
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Every non-waived laboratory must demonstrate staff competency using the 6 CLIA-required methods. Every facility performing waived testing must document 2-of-4 methods per test. And every lab must assess non-technical duties at orientation and biennially.
-                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"\u2122"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"\u2122"} for automatic instrument and method group setup.
+                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"™"} for automatic instrument and method group setup.
               </p>
 
               {/* Pricing */}
@@ -99,7 +99,7 @@ export default function VeritaCompPage() {
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritacomp-app">Launch VeritaComp{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href="/veritacomp-app">Launch VeritaComp{"™"} <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -113,7 +113,7 @@ export default function VeritaCompPage() {
                 <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                   <Users size={40} className="text-white/80 mb-4" />
                   <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                    VeritaComp{"\u2122"}
+                    VeritaComp{"™"}
                   </div>
                   <div className="text-sm text-white/70 text-center mb-4">TJC/CLIA/CAP Competency<br />Assessment Management</div>
                   <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -132,7 +132,7 @@ export default function VeritaCompPage() {
         <div className="bg-amber-50 border border-amber-400 text-amber-800 rounded-lg px-5 py-4 flex items-start gap-3">
           <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed">
-            VeritaComp{"\u2122"} is actively being developed and refined. You may access and use all features, but some functionality is still being improved. We appreciate your patience.
+            VeritaComp{"™"} is actively being developed and refined. You may access and use all features, but some functionality is still being improved. We appreciate your patience.
           </p>
         </div>
       </div>
@@ -141,7 +141,7 @@ export default function VeritaCompPage() {
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Three Competency Types. One System.</h2>
-          <p className="text-muted-foreground mb-8">TJC, CLIA, and CAP require different assessment methods for different staff roles. VeritaComp{"\u2122"} handles all three.</p>
+          <p className="text-muted-foreground mb-8">TJC, CLIA, and CAP require different assessment methods for different staff roles. VeritaComp{"™"} handles all three.</p>
           <div className="grid lg:grid-cols-3 gap-6">
             {COMPETENCY_TYPES.map((ct, i) => (
               <Card key={i} className="border-2 hover:border-primary/30 transition-colors">
@@ -186,17 +186,17 @@ export default function VeritaCompPage() {
       {/* What it does */}
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <h2 className="font-serif text-3xl font-bold mb-2">What is VeritaComp{"\u2122"}?</h2>
+          <h2 className="font-serif text-3xl font-bold mb-2">What is VeritaComp{"™"}?</h2>
           <div className="grid lg:grid-cols-2 gap-10">
             <div className="space-y-4">
               <p className="text-muted-foreground leading-relaxed">
                 Competency assessment is one of the most frequently cited deficiencies during TJC and CAP laboratory surveys. The requirement is deceptively simple: demonstrate that every person who touches a patient specimen is competent to do so. The reality is that most labs manage this with a filing cabinet full of paper forms, inconsistent documentation, and no systematic way to know who is due.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaComp{"\u2122"} replaces the filing cabinet. It reads your test menu directly from VeritaMap{"\u2122"}, automatically groups instruments into method groups (because competency is assessed per workflow, not per analyte), and generates the correct assessment form for each staff member: 6-method technical matrix, 2-of-4 waived form, or departmental checklist.
+                VeritaComp{"™"} replaces the filing cabinet. It reads your test menu directly from VeritaMap{"™"}, automatically groups instruments into method groups (because competency is assessed per workflow, not per analyte), and generates the correct assessment form for each staff member: 6-method technical matrix, 2-of-4 waived form, or departmental checklist.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                When an assessment is completed, the system generates a signed PDF report and auto-completes the relevant VeritaScan{"\u2122"} Domain IX items. No dual entry. No missed deadlines. No citations.
+                When an assessment is completed, the system generates a signed PDF report and auto-completes the relevant VeritaScan{"™"} Domain IX items. No dual entry. No missed deadlines. No citations.
               </p>
             </div>
             <div className="space-y-3">
@@ -247,7 +247,7 @@ export default function VeritaCompPage() {
                 <Badge className="bg-emerald-500 text-white border-0">Now Live</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">VeritaComp{"\u2122"}</div>
+                <div className="font-bold text-lg mb-1">VeritaComp{"™"}</div>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-4xl font-bold">Included</span>
                 </div>
@@ -270,7 +270,7 @@ export default function VeritaCompPage() {
                   ))}
                 </ul>
                 <Link href="/veritacomp-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
-                  Launch VeritaComp{"\u2122"} {"\u2192"}
+                  Launch VeritaComp{"™"} {"\u2192"}
                 </Link>
               </CardContent>
             </Card>
@@ -286,7 +286,7 @@ export default function VeritaCompPage() {
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck{"\u2122"} + VeritaScan{"\u2122"} + VeritaMap{"\u2122"} + VeritaComp{"\u2122"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  VeritaCheck{"™"} + VeritaScan{"™"} + VeritaMap{"™"} + VeritaComp{"™"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
                 <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
@@ -325,11 +325,11 @@ export default function VeritaCompPage() {
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to manage competency the right way?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaComp{"\u2122"} is live. Sign in and create your first competency program today.
+            VeritaComp{"™"} is live. Sign in and create your first competency program today.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritacomp-app">Launch VeritaComp{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href="/veritacomp-app">Launch VeritaComp{"™"} <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>
@@ -338,12 +338,12 @@ export default function VeritaCompPage() {
           <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/veritascan" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <Shield size={14} />
-              VeritaScan{"\u2122"} - Inspection Readiness
+              VeritaScan{"™"} - Inspection Readiness
               <ChevronRight size={13} />
             </Link>
             <Link href="/veritamap" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <ClipboardCheck size={14} />
-              VeritaMap{"\u2122"} - Test Menu Mapping
+              VeritaMap{"™"} - Test Menu Mapping
               <ChevronRight size={13} />
             </Link>
           </div>

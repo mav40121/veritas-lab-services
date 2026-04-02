@@ -253,9 +253,9 @@ export default function VeritaCompAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaComp{"\u2122"}</h1>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaComp{"™"}</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            VeritaComp{"\u2122"} requires an account. Sign in to continue.
+            VeritaComp{"™"} requires an account. Sign in to continue.
           </p>
           <Button asChild><Link href="/login">Sign In</Link></Button>
         </div>
@@ -270,9 +270,9 @@ export default function VeritaCompAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 mb-4">
             <Users className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">VeritaComp{"\u2122"} Access Required</h1>
+          <h1 className="text-2xl font-bold mb-2">VeritaComp{"™"} Access Required</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            Your current plan doesn't include VeritaComp{"\u2122"}. Upgrade to access competency assessment management.
+            Your current plan doesn't include VeritaComp{"™"}. Upgrade to access competency assessment management.
           </p>
           <Button asChild><Link href="/veritacomp">View Plans</Link></Button>
         </div>
@@ -311,7 +311,7 @@ function WipBanner() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-start gap-3">
         <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
         <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed flex-1">
-          <span className="font-semibold">Work in Progress:</span> VeritaComp{"\u2122"} is actively being developed. You may encounter incomplete features or changes. Your data is safe and saved.
+          <span className="font-semibold">Work in Progress:</span> VeritaComp{"™"} is actively being developed. You may encounter incomplete features or changes. Your data is safe and saved.
         </p>
         <button
           onClick={() => { setDismissed(true); try { sessionStorage.setItem("veritacomp-wip-dismissed", "1"); } catch {} }}
@@ -353,7 +353,7 @@ function ProgramListView() {
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight">VeritaComp{"\u2122"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">VeritaComp{"™"}</h1>
             <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">Beta</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -615,7 +615,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
             </div>
             {(type === "technical" || type === "waived") && maps && maps.length > 0 && (
               <div>
-                <label className="text-sm font-medium mb-1 block">Link to VeritaMap{"\u2122"} (optional)</label>
+                <label className="text-sm font-medium mb-1 block">Link to VeritaMap{"™"} (optional)</label>
                 <Select value={mapId ? String(mapId) : "none"} onValueChange={v => setMapId(v === "none" ? null : parseInt(v))}>
                   <SelectTrigger><SelectValue placeholder="Select a map..." /></SelectTrigger>
                   <SelectContent>

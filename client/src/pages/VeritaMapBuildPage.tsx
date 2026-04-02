@@ -1017,7 +1017,7 @@ export default function VeritaMapBuildPage() {
     },
     onError: (err: any) => {
       if (err.limitReached) {
-        setUpgradeMessage(`You've reached the free plan limit of ${err.limit} ${err.type}. Upgrade to VeritaMap\u2122 for unlimited instruments, analytes, and full intelligence features.`);
+        setUpgradeMessage(`You've reached the free plan limit of ${err.limit} ${err.type}. Upgrade to VeritaMap™ for unlimited instruments, analytes, and full intelligence features.`);
         setUpgradeOpen(true);
       } else {
         toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -1115,7 +1115,7 @@ export default function VeritaMapBuildPage() {
     },
     onError: (err: any) => {
       if (err.limitReached) {
-        setUpgradeMessage(`You've reached the free plan limit of ${err.limit} ${err.type}. Upgrade to VeritaMap\u2122 for unlimited instruments, analytes, and full intelligence features.`);
+        setUpgradeMessage(`You've reached the free plan limit of ${err.limit} ${err.type}. Upgrade to VeritaMap™ for unlimited instruments, analytes, and full intelligence features.`);
         setUpgradeOpen(true);
       } else {
         toast({ title: "Error saving tests", description: err.message, variant: "destructive" });

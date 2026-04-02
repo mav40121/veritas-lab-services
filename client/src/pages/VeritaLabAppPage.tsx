@@ -338,7 +338,7 @@ export default function VeritaLabAppPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaLab{"\u2122"}</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaLab{"™"}</h2>
         <p className="text-muted-foreground mb-6 max-w-md">Certificate tracking, document archive, and renewal reminders for your laboratory.</p>
         <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
           <Link href="/login">Sign In</Link>
@@ -351,7 +351,7 @@ export default function VeritaLabAppPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaLab{"\u2122"}</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaLab{"™"}</h2>
         <p className="text-muted-foreground mb-6 max-w-md">VeritaLab is included in all VeritaAssure plans. Subscribe to get started.</p>
         <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
           <Link href="/veritacheck">View Plans</Link>
@@ -368,7 +368,7 @@ export default function VeritaLabAppPage() {
           <div>
             <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
               <Award size={28} className="text-primary" />
-              VeritaLab{"\u2122"} - Certificate Tracking
+              VeritaLab{"™"} - Certificate Tracking
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Track certificates, store documents, and get renewal reminders.

@@ -160,7 +160,7 @@ const featureTooltips: Record<string, string> = {
 
 const plans = [
   { priceType: "perStudy",        name: "Per Study",              price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                               features: ["Single study run", "Full PDF report", "All study types included", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
-  { priceType: "veritacheck_only", name: "VeritaCheck\u2122 Unlimited", price: "$299",   unit: "per year",  description: "Single user. Method validation suite only. No CLIA number required.",                                                    features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "veritacheck_only", name: "VeritaCheck™ Unlimited", price: "$299",   unit: "per year",  description: "Single user. Method validation suite only. No CLIA number required.",                                                    features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
   { priceType: "waived",          name: "Waived",                 price: "$499",   unit: "per year",  description: "Certificate of Waiver labs. Full VeritaAssure suite.",                                                                   features: ["Everything in VeritaCheck Unlimited", "VeritaMap regulatory mapping", "VeritaScan self-inspection audit", "VeritaComp competency management", "Full VeritaAssure suite, including all future modules"],                                                              cta: "Subscribe",      highlight: false, badge: null },
   { priceType: "community",       name: "Community",              price: "$799",   unit: "per year",  description: "1-8 specialties. Full suite for community and physician office labs.",                                                    features: ["Full VeritaAssure suite, including all future modules", "VeritaStaff personnel management", "Named seat support", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure specialist"],                                                                                           cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
   { priceType: "hospital",        name: "Hospital",               price: "$1,299", unit: "per year",  description: "9-15 specialties. Full suite for hospital laboratories.",                                                                features: ["Everything in Community", "Higher seat capacity", "Priority support", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure specialist"],                                                                                                                                cta: "Subscribe",      highlight: false, badge: null },
@@ -756,7 +756,7 @@ export default function VeritaCheckPage() {
                     <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                     <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
                   </div>
-                  <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"\u2122"}</h1>
+                  <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"™"}</h1>
                   <p className="text-xl text-muted-foreground font-medium mb-5">
                     EP Evaluation and Study Management Platform
                   </p>
@@ -804,7 +804,7 @@ export default function VeritaCheckPage() {
                     <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                       <FlaskConical size={40} className="text-white/80 mb-4" />
                       <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                        VeritaCheck{"\u2122"}
+                        VeritaCheck{"™"}
                       </div>
                       <div className="text-xs text-white/70 text-center space-y-1 mb-4">
                         <div>Calibration Verification / Linearity</div>

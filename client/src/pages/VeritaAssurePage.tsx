@@ -10,7 +10,7 @@ import {
 const MODULES = [
   {
     href: "/veritacheck",
-    label: "VeritaCheck\u2122",
+    label: "VeritaCheck™",
     desc: "EP Study Analysis",
     detail:
       "Calibration Verification / Linearity, Correlation / Method Comparison, Precision, Lot-to-Lot Reagent Verification, QC Range Establishment, and Coagulation New Lot studies. CLIA-compliant PDF reports with signature block on page 1.",
@@ -21,7 +21,7 @@ const MODULES = [
   },
   {
     href: "/veritamap",
-    label: "VeritaMap\u2122",
+    label: "VeritaMap™",
     desc: "Test Menu Regulatory Mapping",
     detail:
       "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. 189 instruments across 18 departments. Feeds VeritaCheck instrument selection and VeritaComp competency programs.",
@@ -32,7 +32,7 @@ const MODULES = [
   },
   {
     href: "/veritascan",
-    label: "VeritaScan\u2122",
+    label: "VeritaScan™",
     desc: "Inspection Readiness",
     detail:
       "168 compliance items across 10 domains aligned to TJC and CAP standards. Know exactly where you stand before a surveyor arrives. Executive summary and full PDF export.",
@@ -43,7 +43,7 @@ const MODULES = [
   },
   {
     href: "/veritacomp",
-    label: "VeritaComp\u2122",
+    label: "VeritaComp™",
     desc: "Competency Management",
     detail:
       "Technical, waived, and non-technical competency programs using all 6 CLIA assessment elements. Competency timelines (Initial, 6-month, Annual). Quiz engine with addendum PDF.",
@@ -54,7 +54,7 @@ const MODULES = [
   },
   {
     href: "/veritastaff",
-    label: "VeritaStaff\u2122",
+    label: "VeritaStaff™",
     desc: "Personnel Management",
     detail:
       "Employee roster with CLIA role assignments (LD, TC, TS, GS, TP) and specialty tracking. CMS 209 Laboratory Personnel Report auto-generation. NYS additional requirements supported.",
@@ -65,7 +65,7 @@ const MODULES = [
   },
   {
     href: "/veritalab",
-    label: "VeritaLab\u2122",
+    label: "VeritaLab™",
     desc: "Certificate and Accreditation Tracking",
     detail:
       "Track CLIA, CAP, TJC, COLA, state licenses, and lab director credentials. Advance email reminders at 90, 60, and 30 days before expiration. Document archive for certificate PDFs.",
@@ -78,7 +78,7 @@ const MODULES = [
 
 const PRICING = [
   { tier: "Per Study", price: "$25", note: "One-time, VeritaCheck only" },
-  { tier: "VeritaCheck\u2122 Unlimited", price: "$299/yr", note: "CLIA required, single user" },
+  { tier: "VeritaCheck™ Unlimited", price: "$299/yr", note: "CLIA required, single user" },
   { tier: "Waived", price: "$499/yr", note: "Certificate of Waiver labs, all modules" },
   { tier: "Community", price: "$799/yr", note: "1-8 specialties, all modules" },
   { tier: "Hospital", price: "$1,299/yr", note: "9-15 specialties, all modules" },
@@ -87,16 +87,16 @@ const PRICING = [
 
 const DOWNLOADS = [
   {
-    title: "VeritaCheck\u2122 CLSI Compliance Matrix",
-    desc: "One-page landscape reference. Maps all 6 VeritaCheck\u2122 study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
+    title: "VeritaCheck™ CLSI Compliance Matrix",
+    desc: "One-page landscape reference. Maps all 6 VeritaCheck™ study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
     badge: "Free Download",
     url: "/api/downloads/clsi-compliance-matrix",
     filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
     icon: Shield,
   },
   {
-    title: "VeritaCheck\u2122 Software Validation Template",
-    desc: "4-page fillable validation template. Structured workflow to validate VeritaCheck\u2122 for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+    title: "VeritaCheck™ Software Validation Template",
+    desc: "4-page fillable validation template. Structured workflow to validate VeritaCheck™ for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
     badge: "Free Download",
     url: "/api/downloads/software-validation-template",
     filename: "VeritaCheck_Software_Validation_Template.pdf",

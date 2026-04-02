@@ -51,7 +51,7 @@ export default function VeritaLabPage() {
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaLab{"\u2122"}</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaLab{"™"}</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 Laboratory Certificate and Accreditation Tracking
               </p>
@@ -61,7 +61,7 @@ export default function VeritaLabPage() {
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Every laboratory inspection begins with a review of your certificates and accreditations. Surveyors check CLIA certificates, state licenses, accreditation status, and lab director credentials before they even walk through the door. VeritaLab{"\u2122"} keeps all of these records organized, sends you reminders well before anything expires, and stores your actual certificate documents so you can retrieve them in seconds.
+                Every laboratory inspection begins with a review of your certificates and accreditations. Surveyors check CLIA certificates, state licenses, accreditation status, and lab director credentials before they even walk through the door. VeritaLab{"™"} keeps all of these records organized, sends you reminders well before anything expires, and stores your actual certificate documents so you can retrieve them in seconds.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-8">
@@ -73,7 +73,7 @@ export default function VeritaLabPage() {
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritalab-app">Open VeritaLab{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href="/veritalab-app">Open VeritaLab{"™"} <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -86,7 +86,7 @@ export default function VeritaLabPage() {
                 <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                   <Award size={40} className="text-white/80 mb-4" />
                   <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                    VeritaLab{"\u2122"}
+                    VeritaLab{"™"}
                   </div>
                   <div className="text-sm text-white/70 text-center mb-4">Certificate &<br />Accreditation Tracking</div>
                   <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -106,7 +106,7 @@ export default function VeritaLabPage() {
         <div className="bg-amber-50 border border-amber-400 text-amber-800 rounded-lg px-5 py-4 flex items-start gap-3">
           <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed">
-            VeritaLab{"\u2122"} is newly launched. Core tracking and reminders are functional. Additional features are being added.
+            VeritaLab{"™"} is newly launched. Core tracking and reminders are functional. Additional features are being added.
           </p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function VeritaLabPage() {
       <section className="section-padding border-b border-border">
         <div className="container-default">
           <div className="max-w-5xl mx-auto">
-            <h2 className="font-serif text-3xl font-bold text-center mb-3">What VeritaLab{"\u2122"} Does</h2>
+            <h2 className="font-serif text-3xl font-bold text-center mb-3">What VeritaLab{"™"} Does</h2>
             <p className="text-muted-foreground text-center max-w-2xl mx-auto mb-10">
               Three core functions to keep your certificates and accreditations current, documented, and accessible.
             </p>
@@ -183,11 +183,11 @@ export default function VeritaLabPage() {
         <div className="container-default text-center">
           <h2 className="font-serif text-3xl font-bold mb-4">Ready to track your certificates?</h2>
           <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-            Stop scrambling to find certificates before an inspection. VeritaLab{"\u2122"} keeps everything organized and reminds you before anything expires.
+            Stop scrambling to find certificates before an inspection. VeritaLab{"™"} keeps everything organized and reminds you before anything expires.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritalab-app">Open VeritaLab{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href="/veritalab-app">Open VeritaLab{"™"} <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

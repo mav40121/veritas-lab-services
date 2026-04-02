@@ -170,7 +170,7 @@ export default function VeritaStaffAppPage() {
     return (
       <div className="container-default py-20 text-center">
         <Lock size={40} className="text-muted-foreground mx-auto mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to use VeritaStaff{"\u2122"}</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to use VeritaStaff{"™"}</h2>
         <p className="text-muted-foreground mb-6">Manage your laboratory personnel, CLIA roles, and CMS 209 reports.</p>
         <Button asChild><Link href="/login">Sign In</Link></Button>
       </div>
@@ -181,7 +181,7 @@ export default function VeritaStaffAppPage() {
     return (
       <div className="container-default py-20 text-center">
         <Lock size={40} className="text-muted-foreground mx-auto mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">VeritaStaff{"\u2122"} requires a Professional plan or above</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">VeritaStaff{"™"} requires a Professional plan or above</h2>
         <p className="text-muted-foreground mb-6">Upgrade your subscription to access personnel management features.</p>
         <Button asChild><Link href="/veritastaff">Learn More</Link></Button>
       </div>
@@ -208,7 +208,7 @@ export default function VeritaStaffAppPage() {
         <div>
           <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
             <Building2 size={28} className="text-primary" />
-            VeritaStaff{"\u2122"}
+            VeritaStaff{"™"}
           </h1>
           {lab && (
             <p className="text-muted-foreground mt-1">
@@ -468,7 +468,7 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
             </Select>
           </div>
           <Button variant="outline" size="sm" onClick={loadSuggestions} className="w-full">
-            Import departments from VeritaMap{"\u2122"}
+            Import departments from VeritaMap{"™"}
           </Button>
           {suggestions.length > 0 && (
             <div className="bg-muted/50 rounded-lg p-3 text-sm">
@@ -696,7 +696,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground">Use a separate line on the CMS 209 for each specialty. VeritaStaff{"\u2122"} handles this automatically.</p>
+            <p className="text-xs text-muted-foreground">Use a separate line on the CMS 209 for each specialty. VeritaStaff{"™"} handles this automatically.</p>
           </div>
 
           <div className="flex gap-2 pt-2">

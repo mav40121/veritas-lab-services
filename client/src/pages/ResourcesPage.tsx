@@ -163,15 +163,15 @@ export default function ResourcesPage() {
           <div className="grid sm:grid-cols-2 gap-3">
             {[
               {
-                title: "VeritaCheck\u2122 CLSI Compliance Matrix",
-                desc: "One-page landscape reference mapping all 6 VeritaCheck\u2122 study types to CLSI, CLIA (42 CFR), CAP, and TJC standards. Use this with inspectors to demonstrate regulatory alignment.",
+                title: "VeritaCheck™ CLSI Compliance Matrix",
+                desc: "One-page landscape reference mapping all 6 VeritaCheck™ study types to CLSI, CLIA (42 CFR), CAP, and TJC standards. Use this with inspectors to demonstrate regulatory alignment.",
                 url: "/api/downloads/clsi-compliance-matrix",
                 filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
                 icon: Shield,
               },
               {
-                title: "VeritaCheck\u2122 Software Validation Template",
-                desc: "4-page fillable template to validate VeritaCheck\u2122 for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+                title: "VeritaCheck™ Software Validation Template",
+                desc: "4-page fillable template to validate VeritaCheck™ for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
                 url: "/api/downloads/software-validation-template",
                 filename: "VeritaCheck_Software_Validation_Template.pdf",
                 icon: CheckCircle2,

@@ -51,7 +51,7 @@ export default function VeritaStaffPage() {
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaStaff{"\u2122"}</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaStaff{"™"}</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 Laboratory Personnel Management
               </p>
@@ -61,7 +61,7 @@ export default function VeritaStaffPage() {
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"\u2122"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation.
+                Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"™"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-8">
@@ -73,7 +73,7 @@ export default function VeritaStaffPage() {
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritastaff-app">Launch VeritaStaff{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href="/veritastaff-app">Launch VeritaStaff{"™"} <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -86,7 +86,7 @@ export default function VeritaStaffPage() {
                 <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                   <Building2 size={40} className="text-white/80 mb-4" />
                   <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                    VeritaStaff{"\u2122"}
+                    VeritaStaff{"™"}
                   </div>
                   <div className="text-sm text-white/70 text-center mb-4">Laboratory Personnel<br />Management</div>
                   <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -106,7 +106,7 @@ export default function VeritaStaffPage() {
         <div className="bg-amber-50 border border-amber-400 text-amber-800 rounded-lg px-5 py-4 flex items-start gap-3">
           <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed">
-            VeritaStaff{"\u2122"} is actively being developed and refined. You may access and use all features, but some functionality is still being improved. We appreciate your patience.
+            VeritaStaff{"™"} is actively being developed and refined. You may access and use all features, but some functionality is still being improved. We appreciate your patience.
           </p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function VeritaStaffPage() {
       <section className="section-padding border-b border-border">
         <div className="container-default">
           <div className="max-w-5xl mx-auto">
-            <h2 className="font-serif text-3xl font-bold text-center mb-3">What VeritaStaff{"\u2122"} Does</h2>
+            <h2 className="font-serif text-3xl font-bold text-center mb-3">What VeritaStaff{"™"} Does</h2>
             <p className="text-muted-foreground text-center max-w-2xl mx-auto mb-10">
               Three core functions that cover your personnel management requirements from hire to annual competency review.
             </p>
@@ -142,7 +142,7 @@ export default function VeritaStaffPage() {
           <div className="max-w-5xl mx-auto">
             <h2 className="font-serif text-3xl font-bold text-center mb-3">CLIA Role Assignments</h2>
             <p className="text-muted-foreground text-center max-w-2xl mx-auto mb-8">
-              VeritaStaff{"\u2122"} enforces correct role assignment rules so your CMS 209 is always accurate.
+              VeritaStaff{"™"} enforces correct role assignment rules so your CMS 209 is always accurate.
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
@@ -219,7 +219,7 @@ export default function VeritaStaffPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritastaff-app">Launch VeritaStaff{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href="/veritastaff-app">Launch VeritaStaff{"™"} <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

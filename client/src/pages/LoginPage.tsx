@@ -30,7 +30,7 @@ const TIER_LABELS: Record<string, string> = {
   community: "Community",
   hospital: "Hospital",
   large_hospital: "Large Hospital",
-  veritacheck_only: "VeritaCheck\u2122 Unlimited",
+  veritacheck_only: "VeritaCheck™ Unlimited",
 };
 
 export default function LoginPage() {
