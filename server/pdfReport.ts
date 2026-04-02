@@ -1830,6 +1830,9 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
 }
 
 export async function generatePDFBuffer(study: Study, results: any, cliaNumber?: string, preferredStandards?: AccreditationBody[] | null): Promise<Buffer> {
+  if (!study || typeof study !== "object") {
+    throw new Error("generatePDFBuffer: study must be a valid object, received " + typeof study);
+  }
   // Attach cliaNumber and preferredStandards to study object for internal builder use
   (study as any)._cliaNumber = cliaNumber || null;
   (study as any)._preferredStandards = preferredStandards || null;

@@ -900,15 +900,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/generate-pdf", async (req: any, res) => {
     try {
       const { study, results } = req.body;
-      if (!study || !results) return res.status(400).json({ error: "study and results required" });
+      if (!study || typeof study !== "object" || !results || typeof results !== "object") {
+        return res.status(400).json({ error: "study and results must be JSON objects" });
+      }
       // Fetch CLIA number from user record if authenticated
+      // For seat users, look up the owner's CLIA number (seat users inherit owner lab identity)
       let cliaNumber: string | undefined;
       let preferredStandards: string[] | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
         try {
           const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-          const userRow = (db as any).$client.prepare("SELECT clia_number, preferred_standards FROM users WHERE id = ?").get(payload.userId) as any;
+          // Check if this is a seat user — if so, use the owner's CLIA/settings
+          const seatRow = (db as any).$client.prepare(
+            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+          ).get(payload.userId) as any;
+          const effectiveUserId = seatRow ? seatRow.owner_user_id : payload.userId;
+          const userRow = (db as any).$client.prepare("SELECT clia_number, preferred_standards FROM users WHERE id = ?").get(effectiveUserId) as any;
           cliaNumber = userRow?.clia_number || undefined;
           if (userRow?.preferred_standards) {
             try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
