@@ -289,6 +289,84 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── ADMIN ────────────────────────────────────────────────────────────────
   const ADMIN_SECRET = process.env.ADMIN_SECRET || "veritas-admin-2026";
+
+  // Plan display name mapping
+  const PLAN_DISPLAY_NAMES: Record<string, string> = {
+    free: "Free",
+    per_study: "Per Study",
+    waived: "Waived",
+    community: "Community",
+    hospital: "Hospital",
+    large_hospital: "Large Hospital",
+    veritacheck_only: "VeritaCheck Unlimited",
+    annual: "Annual (Legacy)",
+    starter: "Starter (Legacy)",
+    professional: "Professional (Legacy)",
+    lab: "Lab",
+    complete: "Complete (Legacy)",
+    veritamap: "VeritaMap Add-on",
+    veritascan: "VeritaScan Add-on",
+    veritacomp: "VeritaComp Add-on",
+  };
+
+  app.get("/api/admin/report", (req, res) => {
+    const { secret, plan, status } = req.query as { secret?: string; plan?: string; status?: string };
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+
+    let sql = `
+      SELECT
+        u.*,
+        COALESCE(s.active_seats, 0) as active_seats,
+        COALESCE(s.pending_seats, 0) as pending_seats
+      FROM users u
+      LEFT JOIN (
+        SELECT
+          owner_user_id,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_seats,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_seats
+        FROM user_seats
+        GROUP BY owner_user_id
+      ) s ON s.owner_user_id = u.id
+    `;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (plan) {
+      conditions.push("u.plan = ?");
+      params.push(plan);
+    }
+    if (status) {
+      conditions.push("u.subscription_status = ?");
+      params.push(status);
+    }
+
+    if (conditions.length > 0) {
+      sql += " WHERE " + conditions.join(" AND ");
+    }
+
+    sql += " ORDER BY u.created_at DESC";
+
+    try {
+      const rows = (db as any).$client.prepare(sql).all(...params) as any[];
+      const users = rows.map((row: any) => {
+        const { password_hash, ...rest } = row;
+        return {
+          ...rest,
+          planDisplayName: PLAN_DISPLAY_NAMES[rest.plan] || rest.plan || "Unknown",
+        };
+      });
+      res.json({
+        generatedAt: new Date().toISOString(),
+        totalUsers: users.length,
+        users,
+      });
+    } catch (err: any) {
+      console.error("Admin report error:", err.message);
+      res.status(500).json({ error: "Failed to generate report" });
+    }
+  });
+
   app.post("/api/admin/users", (req, res) => {
     const { secret } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });

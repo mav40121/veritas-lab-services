@@ -56,6 +56,7 @@ import RoadmapPage from "@/pages/RoadmapPage";
 import GettingStartedPage from "@/pages/GettingStartedPage";
 import AccountSettingsPage from "@/pages/AccountSettingsPage";
 import VeritaAssurePage from "@/pages/VeritaAssurePage";
+import AdminReportPage from "@/pages/AdminReportPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function SiteFooter() {
@@ -164,6 +165,13 @@ function OnboardingGuard() {
 }
 
 function AppContent() {
+  const [location] = useLocation();
+
+  // Standalone admin page: no NavBar, no footer, no subscription banners
+  if (location === "/admin") {
+    return <AdminReportPage />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
