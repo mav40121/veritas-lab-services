@@ -66,6 +66,7 @@ interface InstrumentEntry {
   role: Role;
   category: string;
   serial_number?: string | null;
+  tests?: { analyte: string; specialty: string; complexity: string; active: boolean }[];
 }
 
 interface TestToggle {
@@ -789,18 +790,47 @@ export default function VeritaMapBuildPage() {
       const next = { ...prev };
       for (const instr of instruments) {
         if (!next[instr.id]) {
-          const fdaInstr = INSTRUMENT_DATA[instr.instrument_name];
-          if (fdaInstr) {
-            next[instr.id] = Object.entries(fdaInstr.tests).map(
-              ([analyte, info]) => ({
-                analyte,
-                specialty: info.specialty,
-                complexity: info.complexity as Complexity,
-                active: true,
-              })
-            );
+          // If the API returned saved tests for this instrument, use them
+          if (instr.tests && instr.tests.length > 0) {
+            const savedAnalytes = new Set(instr.tests.map((t) => t.analyte));
+            const fdaInstr = INSTRUMENT_DATA[instr.instrument_name];
+            // Start with saved tests (preserving their active state)
+            const toggles: TestToggle[] = instr.tests.map((t) => ({
+              analyte: t.analyte,
+              specialty: t.specialty,
+              complexity: t.complexity as Complexity,
+              active: Boolean(t.active),
+              isCustom: fdaInstr ? !fdaInstr.tests[t.analyte] : true,
+            }));
+            // Add any FDA tests not yet saved (as inactive) so the full menu is shown
+            if (fdaInstr) {
+              for (const [analyte, info] of Object.entries(fdaInstr.tests)) {
+                if (!savedAnalytes.has(analyte)) {
+                  toggles.push({
+                    analyte,
+                    specialty: info.specialty,
+                    complexity: info.complexity as Complexity,
+                    active: false,
+                  });
+                }
+              }
+            }
+            next[instr.id] = toggles;
           } else {
-            next[instr.id] = [];
+            // No saved tests: initialize from FDA data (new instrument)
+            const fdaInstr = INSTRUMENT_DATA[instr.instrument_name];
+            if (fdaInstr) {
+              next[instr.id] = Object.entries(fdaInstr.tests).map(
+                ([analyte, info]) => ({
+                  analyte,
+                  specialty: info.specialty,
+                  complexity: info.complexity as Complexity,
+                  active: true,
+                })
+              );
+            } else {
+              next[instr.id] = [];
+            }
           }
         }
       }
