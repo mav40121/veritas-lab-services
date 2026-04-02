@@ -69,9 +69,10 @@ export async function seedDemoData() {
   }
 
   // ─── 4. VeritaCheck Studies (Sodium + Potassium method comparisons) ─────
-  // Always reseed studies to ensure correct instrument names and data
-  sqlite.prepare("DELETE FROM studies WHERE user_id = ?").run(demoUserId);
-  seedStudies(sqlite, demoUserId, now);
+  const existingStudies = sqlite.prepare("SELECT id FROM studies WHERE user_id = ?").get(demoUserId);
+  if (!existingStudies) {
+    seedStudies(sqlite, demoUserId, now);
+  }
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
