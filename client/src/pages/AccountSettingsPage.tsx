@@ -37,6 +37,61 @@ export default function AccountSettingsPage() {
   const [preferredStandards, setPreferredStandards] = useState<AccreditationBody[]>([]);
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
+  // Team Members / Seats state
+  const [seats, setSeats] = useState<any[]>([]);
+  const [seatCount, setSeatCount] = useState(1);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState(false);
+
+  const activeSeats = seats.filter(s => s.status !== "deactivated");
+  const usedSeats = activeSeats.length + 1; // +1 for owner
+
+  async function fetchSeats() {
+    try {
+      const res = await fetch(`${API_BASE}/api/account/seats`, { headers: authHeaders() });
+      const data = await res.json();
+      setSeats(data.seats || []);
+      setSeatCount(data.seat_count || 1);
+    } catch {}
+  }
+
+  async function handleInviteSeat(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteLoading(true);
+    setInviteError("");
+    setInviteSuccess(false);
+    try {
+      const res = await fetch(`${API_BASE}/api/account/seats`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInviteError(data.error || "Failed to send invite.");
+      } else {
+        setInviteSuccess(true);
+        setInviteEmail("");
+        await fetchSeats();
+      }
+    } catch {
+      setInviteError("Network error. Please try again.");
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  async function handleDeactivateSeat(seatId: number) {
+    if (!confirm("Remove this team member?")) return;
+    await fetch(`${API_BASE}/api/account/seats/${seatId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    await fetchSeats();
+  }
+
   // Discount code state
   const [discountCode, setDiscountCode] = useState("");
   const [discountLoading, setDiscountLoading] = useState(false);
@@ -103,6 +158,10 @@ export default function AccountSettingsPage() {
       setPreferredPtVendor(settings.preferred_pt_vendor || "none");
     }
   }, [settings]);
+
+  useEffect(() => {
+    fetchSeats();
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("PUT", "/api/account/settings", {
@@ -330,6 +389,66 @@ export default function AccountSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Team Members */}
+      {seatCount > 1 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Team Members</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Invite staff to access your VeritaAssure(TM) account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {activeSeats.length > 0 && (
+              <div className="space-y-2">
+                {activeSeats.map((seat: any) => (
+                  <div key={seat.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{seat.seat_email}</p>
+                      <p className="text-xs text-gray-500 capitalize">{seat.status === "active" ? "Active" : "Invite pending"}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeactivateSeat(seat.id)}
+                      className="text-xs text-red-600 hover:text-red-800 underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeSeats.length === 0 && (
+              <p className="text-sm text-muted-foreground">No team members added yet.</p>
+            )}
+            {usedSeats < seatCount ? (
+              <div className="pt-1">
+                <p className="text-sm font-medium text-gray-700 mb-2">Invite a team member</p>
+                <form onSubmit={handleInviteSeat} className="flex gap-2">
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => { setInviteEmail(e.target.value); setInviteSuccess(false); setInviteError(""); }}
+                    placeholder="colleague@lab.com"
+                    required
+                    className="flex-1"
+                  />
+                  <Button type="submit" disabled={inviteLoading} size="sm">
+                    {inviteLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                    {inviteLoading ? "Sending..." : "Send Invite"}
+                  </Button>
+                </form>
+                {inviteError && <p className="text-xs text-red-500 mt-1">{inviteError}</p>}
+                {inviteSuccess && <p className="text-xs text-green-600 mt-1">Invite sent. They will receive an email to create their account.</p>}
+              </div>
+            ) : (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                All seats are in use. Remove a team member to invite someone new.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
