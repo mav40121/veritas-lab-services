@@ -4363,8 +4363,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const seats = (db as any).$client.prepare(
       "SELECT * FROM user_seats WHERE owner_user_id = ? ORDER BY id"
     ).all(req.userId);
-    const userRow = (db as any).$client.prepare("SELECT seat_count FROM users WHERE id = ?").get(req.userId);
-    res.json({ seats, seat_count: userRow?.seat_count || 1 });
+    const userRow = (db as any).$client.prepare("SELECT seat_count, plan FROM users WHERE id = ?").get(req.userId) as any;
+    const dbSeats = userRow?.seat_count || 1;
+    const planMax = (PLAN_LIMITS as any)[userRow?.plan]?.maxAnalysts || 1;
+    const effectiveSeats = Math.max(dbSeats, planMax);
+    res.json({ seats, seat_count: effectiveSeats });
   });
 
   // Add a seat (invite)
@@ -4372,8 +4375,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { email } = req.body;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
 
-    const userRow = (db as any).$client.prepare("SELECT seat_count FROM users WHERE id = ?").get(req.userId) as any;
-    const maxSeats = userRow?.seat_count || 1;
+    const userRow = (db as any).$client.prepare("SELECT seat_count, plan FROM users WHERE id = ?").get(req.userId) as any;
+    const dbSeats = userRow?.seat_count || 1;
+    const planMax = (PLAN_LIMITS as any)[userRow?.plan]?.maxAnalysts || 1;
+    const maxSeats = Math.max(dbSeats, planMax);
     const currentSeats = (db as any).$client.prepare(
       "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
     ).get(req.userId) as any;
