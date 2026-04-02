@@ -426,7 +426,7 @@ function SidebarDomainRow({
 export default function VeritaScanScanPage() {
   const params = useParams<{ id: string }>();
   const scanId = Number(params.id);
-  const { token } = useAuth();
+  useAuth();
   const qc = useQueryClient();
 
   // Local item state
@@ -562,17 +562,17 @@ export default function VeritaScanScanPage() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token ?? localStorage.getItem("veritas_token")}`,
+            ...authHeaders(),
           },
           body: JSON.stringify({ referenceItems }),
         }
       );
       if (!res.ok) throw new Error("PDF generation failed");
-      const { token } = await res.json();
+      const { token: pdfToken } = await res.json();
       const a = document.createElement("a");
       const date = new Date().toISOString().split("T")[0];
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      a.href = `/api/pdf/${token}`;
+      a.href = `/api/pdf/${pdfToken}`;
       a.download =
         type === "executive"
           ? `VeritaScan_Executive_${safeName}_${date}.pdf`
@@ -604,7 +604,7 @@ export default function VeritaScanScanPage() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token ?? localStorage.getItem("veritas_token")}`,
+            ...authHeaders(),
           },
           body: JSON.stringify({ referenceItems }),
         }
