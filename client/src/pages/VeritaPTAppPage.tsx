@@ -534,14 +534,7 @@ export default function VeritaPTAppPage() {
   const { user, isLoggedIn } = useAuth();
   const queryClient = useQueryClient();
 
-  const hasPlanAccess =
-    user?.plan === "annual" ||
-    user?.plan === "professional" ||
-    user?.plan === "lab" ||
-    user?.plan === "complete" ||
-    user?.plan === "veritamap" ||
-    user?.plan === "veritascan" ||
-    user?.plan === "veritacomp";
+  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
   // Dialog states
   const [enrollmentDialog, setEnrollmentDialog] = useState<{ open: boolean; enrollment: PTEnrollment | null }>({ open: false, enrollment: null });

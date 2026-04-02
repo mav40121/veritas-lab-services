@@ -244,14 +244,7 @@ export default function VeritaCompAppPage() {
   const params = useParams<{ programId?: string }>();
   const programId = params?.programId ? parseInt(params.programId) : null;
 
-  const hasPlanAccess =
-    user?.plan === "annual" ||
-    user?.plan === "professional" ||
-    user?.plan === "lab" ||
-    user?.plan === "complete" ||
-    user?.plan === "veritamap" ||
-    user?.plan === "veritascan" ||
-    user?.plan === "veritacomp";
+  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
   if (!isLoggedIn) {
     return (

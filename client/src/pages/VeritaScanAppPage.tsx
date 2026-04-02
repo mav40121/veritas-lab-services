@@ -139,10 +139,7 @@ export default function VeritaScanAppPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Access check
-  const hasPlanAccess =
-    user?.plan === "annual" ||
-    user?.plan === "lab" ||
-    user?.plan === "veritascan";
+  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
   // Fetch scans
   const {

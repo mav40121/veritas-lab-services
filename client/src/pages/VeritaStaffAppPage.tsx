@@ -140,7 +140,7 @@ export default function VeritaStaffAppPage() {
   const [generating209, setGenerating209] = useState(false);
 
   // Auth + plan check
-  const hasAccess = isLoggedIn && user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp"].includes((user as any).plan);
+  const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
   // Fetch lab
   const { data: lab, isLoading: labLoading } = useQuery<Lab | null>({
