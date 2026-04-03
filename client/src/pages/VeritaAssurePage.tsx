@@ -79,10 +79,10 @@ const MODULES = [
 const PRICING = [
   { tier: "Per Study", price: "$25", note: "One-time, VeritaCheck™ only" },
   { tier: "VeritaCheck™ Unlimited", price: "$299/yr", note: "Single user, method validation only" },
-  { tier: "Clinic", price: "$499/mo", note: "0-25 beds, 2 seats" },
-  { tier: "Community", price: "$799/mo", note: "26-100 beds, 5 seats" },
-  { tier: "Hospital", price: "$1,299/mo", note: "101-300 beds, 15 seats" },
-  { tier: "Enterprise", price: "$1,999/mo", note: "300+ beds, 25 seats" },
+  { tier: "Clinic", price: "$499/yr", note: "0-25 beds, 2 seats" },
+  { tier: "Community", price: "$799/yr", note: "26-100 beds, 5 seats" },
+  { tier: "Hospital", price: "$1,299/yr", note: "101-300 beds, 15 seats" },
+  { tier: "Enterprise", price: "$1,999/yr", note: "300+ beds, 25 seats" },
 ];
 
 const DOWNLOADS = [

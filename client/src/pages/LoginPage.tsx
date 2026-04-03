@@ -31,6 +31,7 @@ const TIER_OPTIONS = [
   { id: "hospital",   label: "Hospital",   price: 1299, seats: 15, beds: "101-300 beds", desc: "Regional or acute care hospital" },
   { id: "enterprise", label: "Enterprise", price: 1999, seats: 25, beds: "300+ beds",    desc: "Multi-dept or health system" },
 ];
+const TIER_UNIT = "yr";
 
 // Lab type options
 type LabType = "hospital" | "independent" | "pol" | "other";
@@ -222,14 +223,14 @@ export default function LoginPage() {
       const tier = TIER_OPTIONS.find(t => t.id === selectedTier);
       return {
         name: selectedHospital.name,
-        sub: `${selectedHospital.state} - ${selectedHospital.beds} beds - ${tier?.label || selectedTier} Plan - $${tier?.price || 0}/mo - ${tier?.seats || 0} seats`,
+        sub: `${selectedHospital.state} - ${selectedHospital.beds} beds - ${tier?.label || selectedTier} Plan - $${tier?.price || 0}/yr - ${tier?.seats || 0} seats`,
       };
     }
     const tier = TIER_OPTIONS.find(t => t.id === selectedTier);
     const lt = LAB_TYPE_OPTIONS.find(l => l.id === labType);
     return {
       name: lt?.label || "Laboratory",
-      sub: tier ? `${tier.label} Plan - $${tier.price}/mo - ${tier.seats} seats` : "Plan not selected",
+      sub: tier ? `${tier.label} Plan - $${tier.price}/yr - ${tier.seats} seats` : "Plan not selected",
     };
   }
 
@@ -368,7 +369,7 @@ export default function LoginPage() {
                         <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700">
                           <p className="text-xs text-muted-foreground mb-0.5">Recommended plan:</p>
                           <p className="font-semibold text-primary">
-                            {selectedHospital.tierLabel} - ${selectedHospital.tierPrice}/mo
+                            {selectedHospital.tierLabel} - ${selectedHospital.tierPrice}/yr
                           </p>
                           <p className="text-xs text-muted-foreground">{selectedHospital.tierSeats} seats included</p>
                         </div>
@@ -430,7 +431,7 @@ export default function LoginPage() {
                               <p className="text-xs text-muted-foreground">{t.beds} - {t.seats} seats</p>
                               <p className="text-xs text-muted-foreground">{t.desc}</p>
                             </div>
-                            <p className="text-sm font-semibold text-primary shrink-0 ml-3">${t.price}/mo</p>
+                            <p className="text-sm font-semibold text-primary shrink-0 ml-3">${t.price}/yr</p>
                           </div>
                         </button>
                       ))}
