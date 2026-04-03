@@ -1089,13 +1089,13 @@ export default function VeritaMapBuildPage() {
     mutationFn: async () => {
       for (const instr of instruments) {
         const tests = testsByInstrument[instr.id] ?? [];
-        const activeParts = tests.filter((t) => t.active);
+        // Save all tests (active and inactive) so user can re-activate deselected tests later
         const res = await fetch(
           `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json", ...authHeaders() },
-            body: JSON.stringify({ tests: activeParts }),
+            body: JSON.stringify({ tests }),
           }
         );
         if (!res.ok) {
