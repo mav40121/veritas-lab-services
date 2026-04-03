@@ -6303,28 +6303,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let saved = 0;
       for (const user of users) {
         try {
-          // Capture snapshot data inline (same db instance)
+          // Capture snapshot - each query wrapped to handle missing tables gracefully
+          const safeQuery = (sql: string, ...params: any[]) => { try { return sqlite.prepare(sql).all(...params); } catch { return []; } };
+          const maps = safeQuery("SELECT id, name, created_at FROM veritamap_maps WHERE user_id = ?", user.id) as any[];
+          const mapIds = maps.map((m: any) => m.id);
+          const instrRows = mapIds.length ? safeQuery(`SELECT id, instrument_name, role, category FROM veritamap_instruments WHERE map_id IN (${mapIds.map(() => '?').join(',')})`, ...mapIds) as any[] : [];
+          const instrIds = instrRows.map((i: any) => i.id);
           const snap = {
             snapshot_version: 1,
             user_id: user.id,
-            studies: sqlite.prepare("SELECT id, test_name, study_type, instrument, analyst, date, status FROM studies WHERE user_id = ?").all(user.id),
-            maps: sqlite.prepare("SELECT id, name, created_at FROM veritamap_maps WHERE user_id = ?").all(user.id),
-            instruments: (() => {
-              const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").all(user.id) as any[];
-              if (!maps.length) return [];
-              return sqlite.prepare(`SELECT * FROM veritamap_instruments WHERE map_id IN (${maps.map(() => '?').join(',')})`).all(...maps.map((m: any) => m.id));
-            })(),
-            instrument_tests: (() => {
-              const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").all(user.id) as any[];
-              if (!maps.length) return [];
-              const instrs = sqlite.prepare(`SELECT id FROM veritamap_instruments WHERE map_id IN (${maps.map(() => '?').join(',')})`).all(...maps.map((m: any) => m.id)) as any[];
-              if (!instrs.length) return [];
-              return sqlite.prepare(`SELECT analyte, specialty, complexity, active, instrument_id FROM veritamap_instrument_tests WHERE instrument_id IN (${instrs.map(() => '?').join(',')})`).all(...instrs.map((i: any) => i.id));
-            })(),
-            scans: sqlite.prepare("SELECT id, name, created_at FROM veritascan_scans WHERE user_id = ?").all(user.id),
-            assessments: sqlite.prepare("SELECT id, employee_name, program_name, assessment_type, status, created_at FROM competency_assessments WHERE user_id = ?").all(user.id),
-            staff: sqlite.prepare("SELECT id, first_name, last_name, title, hire_date FROM staff_employees WHERE lab_id IN (SELECT id FROM staff_labs WHERE user_id = ?)").all(user.id),
-            certificates: sqlite.prepare("SELECT id, cert_type, cert_name, expiration_date, is_active FROM lab_certificates WHERE user_id = ? AND is_active = 1").all(user.id),
+            captured_at: now,
+            studies: safeQuery("SELECT id, test_name, study_type, instrument, analyst, date, status FROM studies WHERE user_id = ?", user.id),
+            maps,
+            instruments: instrRows,
+            instrument_tests: instrIds.length ? safeQuery(`SELECT analyte, specialty, complexity, active, instrument_id FROM veritamap_instrument_tests WHERE instrument_id IN (${instrIds.map(() => '?').join(',')})`, ...instrIds) : [],
+            scans: safeQuery("SELECT id, name, created_at FROM veritascan_scans WHERE user_id = ?", user.id),
+            assessments: safeQuery("SELECT id, employee_name, program_name, assessment_type, status, created_at FROM competency_assessments WHERE user_id = ?", user.id),
+            certificates: safeQuery("SELECT id, cert_type, cert_name, expiration_date FROM lab_certificates WHERE user_id = ? AND is_active = 1", user.id),
           };
           const jsonStr = JSON.stringify(snap);
           sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(user.id, today);
