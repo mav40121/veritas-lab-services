@@ -72,11 +72,25 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const PLAN_OPTIONS = [
+  { value: "free",            label: "Free" },
+  { value: "per_study",       label: "Per Study" },
+  { value: "clinic",          label: "Clinic ($499/mo - 2 seats)" },
+  { value: "community",       label: "Community ($799/mo - 5 seats)" },
+  { value: "hospital",        label: "Hospital ($1,299/mo - 15 seats)" },
+  { value: "enterprise",      label: "Enterprise ($1,999/mo - 25 seats)" },
+  { value: "waived",          label: "Waived" },
+  { value: "large_hospital",  label: "Large Hospital" },
+  { value: "veritacheck_only",label: "VeritaCheck Only" },
+  { value: "lab",             label: "Lab" },
+];
+
 export default function AdminReportPage() {
   const [secret, setSecret] = useState("");
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [setPlanLoading, setSetPlanLoading] = useState<number | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -86,6 +100,31 @@ export default function AdminReportPage() {
   // Sort
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  async function handleSetPlan(userId: number, plan: string) {
+    setSetPlanLoading(userId);
+    try {
+      const res = await fetch("/api/admin/set-plan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-secret": secret },
+        body: JSON.stringify({ userId, plan }),
+      });
+      const result = await res.json();
+      if (!res.ok) { alert(result.error || "Failed to set plan"); return; }
+      // Update local data
+      if (data) {
+        setData({
+          ...data,
+          users: data.users.map(u =>
+            u.id === userId
+              ? { ...u, plan: result.user.plan, seat_count: result.user.seatCount, planDisplayName: PLAN_OPTIONS.find(p => p.value === result.user.plan)?.label || result.user.plan }
+              : u
+          ),
+        });
+      }
+    } catch { alert("Network error"); }
+    finally { setSetPlanLoading(null); }
+  }
 
   async function fetchReport() {
     setLoading(true);
@@ -431,7 +470,20 @@ export default function AdminReportPage() {
                     {u.clia_director || u.name || ""}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{u.email}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{u.planDisplayName}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <select
+                      value={u.plan || "free"}
+                      disabled={setPlanLoading === u.id}
+                      onChange={e => handleSetPlan(u.id, e.target.value)}
+                      className="text-xs border rounded px-1.5 py-1 bg-background cursor-pointer"
+                      title={u.planDisplayName}
+                    >
+                      {PLAN_OPTIONS.map(p => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                    {setPlanLoading === u.id && <span className="ml-1 text-xs text-muted-foreground">Saving...</span>}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <StatusBadge status={u.subscription_status} />
                   </td>
