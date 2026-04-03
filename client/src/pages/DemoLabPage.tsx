@@ -37,9 +37,10 @@ export default function DemoLabPage() {
   const [activeTab, setActiveTab] = useState("veritacheck");
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedStudy, setExpandedStudy] = useState<number | null>(null);
-  const [showFullScan, setShowFullScan] = useState(false);
   const [generating209, setGenerating209] = useState(false);
   const [scanPdfLoading, setScanPdfLoading] = useState<string | null>(null);
+  // Demo VeritaScan is limited to 3 items per domain
+  const DEMO_SCAN_ITEMS_PER_DOMAIN = 3;
 
   useEffect(() => {
     Promise.all([
@@ -277,14 +278,21 @@ export default function DemoLabPage() {
   async function downloadScanPdf(type: "executive" | "full") {
     setScanPdfLoading(type);
     try {
-      const referenceItems = SCAN_ITEMS.map((item) => ({
-        id: item.id,
-        domain: item.domain,
-        question: item.question,
-        tjc: item.tjc || "",
-        cap: item.cap || "",
-        cfr: item.cfr || "",
-      }));
+      // Limit demo PDF to 3 items per domain
+      const domainCounts: Record<string, number> = {};
+      const referenceItems = SCAN_ITEMS
+        .filter((item) => {
+          domainCounts[item.domain] = (domainCounts[item.domain] || 0) + 1;
+          return domainCounts[item.domain] <= DEMO_SCAN_ITEMS_PER_DOMAIN;
+        })
+        .map((item) => ({
+          id: item.id,
+          domain: item.domain,
+          question: item.question,
+          tjc: item.tjc || "",
+          cap: item.cap || "",
+          cfr: item.cfr || "",
+        }));
       const res = await fetch(`${API_BASE}/api/demo/scan/pdf/${type}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -752,8 +760,7 @@ export default function DemoLabPage() {
                       const isExpanded = expandedDomains.has(domain);
                       const hasVcItems = domainItems.some((i) => scanItemMap[i.id]?.completion_source === "veritacheck_auto");
 
-                      // Show items based on showFullScan toggle
-                      const visibleItems = showFullScan ? domainItems : domainItems.slice(0, 3);
+                      const visibleItems = domainItems.slice(0, DEMO_SCAN_ITEMS_PER_DOMAIN);
 
                       return (
                         <Card key={domain} className="overflow-hidden">
@@ -827,14 +834,11 @@ export default function DemoLabPage() {
                                   </div>
                                 );
                               })}
-                              {!showFullScan && domainItems.length > 3 && (
+                              {domainItems.length > DEMO_SCAN_ITEMS_PER_DOMAIN && (
                                 <div className="px-4 py-2 text-center">
-                                  <button
-                                    className="text-xs text-primary hover:underline"
-                                    onClick={(e) => { e.stopPropagation(); setShowFullScan(true); }}
-                                  >
-                                    Show all {domainItems.length} items
-                                  </button>
+                                  <span className="text-xs text-muted-foreground italic">
+                                    + {domainItems.length - DEMO_SCAN_ITEMS_PER_DOMAIN} more items in full version
+                                  </span>
                                 </div>
                               )}
                             </div>
