@@ -70,7 +70,7 @@ export default function DemoLabPage() {
       const a = document.createElement("a");
       a.href = `/api/pdf/${token}`;
       a.download = `CMS_209_22D0999999_${new Date().toISOString().split("T")[0]}.pdf`;
-      a.click();
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
     } catch (err: any) {
       console.error("CMS 209 generation failed:", err.message);
     } finally {

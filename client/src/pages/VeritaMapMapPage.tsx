@@ -424,11 +424,12 @@ async function exportExcel(mapId: number, mapName: string): Promise<void> {
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
+  document.body.appendChild(a);
   a.href = url;
   const date = new Date().toISOString().split("T")[0];
   const safeName = mapName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
   a.download = `VeritaMap_${safeName}_${date}.xlsx`;
-  a.click();
+  a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   URL.revokeObjectURL(url);
 }
 

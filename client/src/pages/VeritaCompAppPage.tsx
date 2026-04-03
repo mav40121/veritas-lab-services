@@ -1017,7 +1017,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     const a = document.createElement("a");
     a.href = `/api/pdf/${token}`;
     a.download = `VeritaComp_Assessment_${assessmentId}.pdf`;
-    a.click();
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
   const deleteAssessment = async (id: number) => {

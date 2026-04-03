@@ -287,7 +287,7 @@ export default function VeritaLabAppPage() {
         const a = document.createElement("a");
         a.href = url;
         a.download = filename;
-        a.click();
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
     } catch (err) {
@@ -325,7 +325,7 @@ export default function VeritaLabAppPage() {
         const a = document.createElement("a");
         a.href = url;
         a.download = `VeritaLab_Certificates_${new Date().toISOString().split("T")[0]}.xlsx`;
-        a.click();
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
     } catch (err) {

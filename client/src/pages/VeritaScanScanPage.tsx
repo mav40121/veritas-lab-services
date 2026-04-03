@@ -579,7 +579,7 @@ export default function VeritaScanScanPage() {
         type === "executive"
           ? `VeritaScan_Executive_${safeName}_${date}.pdf`
           : `VeritaScan_Full_${safeName}_${date}.pdf`;
-      a.click();
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
     } catch (e) {
       // fail silently — server may not be ready
       console.error("PDF error:", e);
@@ -619,7 +619,7 @@ export default function VeritaScanScanPage() {
       const date = new Date().toISOString().split("T")[0];
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       a.download = `VeritaScan_${safeName}_${date}.xlsx`;
-      a.click();
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("Excel error:", e);

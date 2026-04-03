@@ -317,7 +317,7 @@ export default function VeritaStaffAppPage() {
       const a = document.createElement("a");
       a.href = `/api/pdf/${token}`;
       a.download = `CMS_209_${lab?.clia_number || "report"}_${new Date().toISOString().split("T")[0]}.pdf`;
-      a.click();
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       toast({ title: "CMS 209 generated", description: "Your personnel report has been downloaded." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });

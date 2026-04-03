@@ -312,7 +312,7 @@ export default function AdminReportPage() {
     const today = new Date().toISOString().slice(0, 10);
     a.href = url;
     a.download = `veritaassure-customer-report-${today}.xlsx`;
-    a.click();
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
