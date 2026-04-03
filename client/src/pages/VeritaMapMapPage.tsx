@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Complexity = "MODERATE" | "HIGH" | "WAIVED";
-type Role = "Primary" | "Backup" | "Satellite" | "Reference" | "POC";
+type Role = "Primary" | "Backup" | "Satellite" | "POC";
 
 interface InstrumentOnTest {
   instrument_name: string;

@@ -74,6 +74,11 @@ export async function seedDemoData() {
     seedStudies(sqlite, demoUserId, now);
   }
 
+  // ─── 4a. Patch demo instruments - remove Reference role
+  (db as any).$client.prepare(
+    "UPDATE veritamap_instruments SET role = 'Primary' WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?) AND role = 'Reference'"
+  ).run(demoUserId);
+
   // ─── 4b. Patch creatinine cal ver with real Atellica 2 data ──────────────
   // Update any existing creatinine cal_ver study for demo user to use real values
   const creatStudy = sqlite.prepare(
@@ -151,7 +156,7 @@ function seedMapData(sqlite: any, mapId: number, now: string) {
       { analyte: "Platelet Count", specialty: "Hematology", complexity: "MODERATE" },
       { analyte: "Differential", specialty: "Hematology", complexity: "HIGH" },
     ]},
-    { name: "Manual Differential", role: "Reference", category: "Hematology", tests: [
+    { name: "Manual Differential", role: "Primary", category: "Hematology", tests: [
       { analyte: "Differential", specialty: "Hematology", complexity: "HIGH" },
     ]},
     { name: "CA-660 Primary", role: "Primary", category: "Coagulation", tests: [
@@ -185,7 +190,7 @@ function seedMapData(sqlite: any, mapId: number, now: string) {
       { analyte: "Crossmatch IS", specialty: "Blood Bank", complexity: "HIGH" },
       { analyte: "Crossmatch AHG", specialty: "Blood Bank", complexity: "HIGH" },
     ]},
-    { name: "Tube Method", role: "Reference", category: "Blood Bank", tests: [
+    { name: "Tube Method", role: "Primary", category: "Blood Bank", tests: [
       { analyte: "ABO", specialty: "Blood Bank", complexity: "HIGH" },
       { analyte: "Rh", specialty: "Blood Bank", complexity: "HIGH" },
       { analyte: "Antibody Screen", specialty: "Blood Bank", complexity: "HIGH" },

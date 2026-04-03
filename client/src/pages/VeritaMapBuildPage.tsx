@@ -47,7 +47,7 @@ import fdaData from "@/lib/fdaInstrumentData.json";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Complexity = "MODERATE" | "HIGH" | "WAIVED";
-type Role = "Primary" | "Backup" | "Satellite" | "Reference" | "POC";
+type Role = "Primary" | "Backup" | "Satellite" | "POC";
 
 interface FDATest {
   complexity: Complexity;
@@ -141,13 +141,12 @@ function getSpecialtyOrder(specialty: string, isChemistry: boolean): number {
   return order === -1 ? 998 : order;
 }
 
-const ROLES: Role[] = ["Primary", "Backup", "Satellite", "Reference", "POC"];
+const ROLES: Role[] = ["Primary", "Backup", "Satellite", "POC"];
 
-const ROLE_STYLES: Record<Role, string> = {
+const ROLE_STYLES: Record<string, string> = {
   Primary: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border-teal-200 dark:border-teal-800",
   Backup: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800",
   Satellite: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800",
-  Reference: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border-purple-200 dark:border-purple-800",
   POC: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300 border-green-200 dark:border-green-800",
 };
 
@@ -449,7 +448,6 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
                 <SelectItem value="Primary">Primary</SelectItem>
                 <SelectItem value="Backup">Backup</SelectItem>
                 <SelectItem value="Satellite">Satellite</SelectItem>
-                <SelectItem value="Reference">Reference</SelectItem>
                 <SelectItem value="POC">POC</SelectItem>
               </SelectContent>
             </Select>
@@ -1225,7 +1223,7 @@ export default function VeritaMapBuildPage() {
     }
     // Default role to Reference for Manual Procedures
     if (v === "Manual Procedures") {
-      setRole("Reference");
+      setRole("Primary");
     } else {
       setRole("Primary");
     }

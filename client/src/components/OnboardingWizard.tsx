@@ -14,7 +14,7 @@ import { authHeaders } from "@/lib/auth";
 
 const ACCREDITATION_OPTIONS = ["CAP", "TJC", "COLA", "CLIA only", "Other"];
 const DEPARTMENT_OPTIONS = ["Chemistry", "Hematology", "Coagulation", "Urinalysis", "Blood Bank", "Microbiology", "Other"];
-const ROLE_OPTIONS = ["Primary", "Backup", "Satellite", "Reference", "POC"];
+const ROLE_OPTIONS = ["Primary", "Backup", "Satellite", "POC"];
 
 export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
