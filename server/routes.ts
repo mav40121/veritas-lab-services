@@ -2771,10 +2771,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
         const filename = `VeritaCheck_CalVer_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-        res.setHeader("Content-Length", pdfBuffer.length);
-        return res.send(pdfBuffer);
+        return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
 
       // ── Reference Interval PDF ──
@@ -2810,10 +2807,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
         const filename = `VeritaCheck_RefInterval_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-        res.setHeader("Content-Length", pdfBuffer.length);
-        return res.send(pdfBuffer);
+        return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
 
       // ── Method Comparison PDF (default) ──
@@ -2959,10 +2953,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
       const filename = `VeritaCheck_MethodComp_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
       console.error("Demo PDF generation error:", err.message);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
@@ -3355,11 +3346,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `VeritaComp_Technical_${safeName}_Demo.pdf`;
-
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token });
     } catch (err: any) {
       console.error("Demo competency PDF error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });

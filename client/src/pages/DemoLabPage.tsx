@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
-import { saveAs } from "file-saver";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -228,10 +227,10 @@ export default function DemoLabPage() {
     try {
       const res = await fetch(`${API_BASE}/api/demo/studies/${studyId}/pdf`);
       if (!res.ok) return;
-      const blob = await res.blob();
+      const { token } = await res.json();
       const name = (testName || "Study").replace(/\s+/g, "_");
       const type = studyType === "cal_ver" ? "CalVer" : studyType === "method_comparison" ? "MethodComp" : studyType === "ref_interval" ? "RefInterval" : "Study";
-      saveAs(blob, `VeritaCheck_${name}_${type}.pdf`);
+      downloadPdfToken(token, `VeritaCheck_${name}_${type}.pdf`);
     } catch {}
   }
 
@@ -248,8 +247,8 @@ export default function DemoLabPage() {
     try {
       const res = await fetch(`${API_BASE}/api/demo/competency/pdf`);
       if (!res.ok) return;
-      const blob = await res.blob();
-      saveAs(blob, "VeritaComp_Competency_Assessment.pdf");
+      const { token } = await res.json();
+      downloadPdfToken(token, "VeritaComp_Competency_Assessment.pdf");
     } catch {}
   }
 
