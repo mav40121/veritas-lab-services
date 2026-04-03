@@ -3151,6 +3151,70 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // POST /api/demo/scan/pdf/:type - demo VeritaScan PDF (executive or full)
+  app.post("/api/demo/scan/pdf/:type", async (req, res) => {
+    const { type } = req.params;
+    if (type !== "executive" && type !== "full") return res.status(400).json({ error: "type must be 'executive' or 'full'" });
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.status(404).json({ error: "Demo data not found" });
+
+      const scan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").get(userId) as any;
+      if (!scan) return res.status(404).json({ error: "Demo scan not found" });
+
+      const dbItems = (db as any).$client.prepare(
+        "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+      ).all(scan.id);
+      const itemMap: Record<number, any> = {};
+      for (const row of dbItems as any[]) {
+        itemMap[row.item_id] = row;
+      }
+
+      const { referenceItems } = req.body || {};
+      if (!Array.isArray(referenceItems) || referenceItems.length === 0) {
+        return res.status(400).json({ error: "referenceItems array required" });
+      }
+
+      const mergedItems = referenceItems.map((ref: any) => {
+        const saved = itemMap[ref.id] || {};
+        return {
+          id: ref.id,
+          domain: ref.domain,
+          question: ref.question,
+          tjc: ref.tjc || "",
+          cap: ref.cap || "",
+          cfr: ref.cfr || "",
+          status: saved.status || "Not Assessed",
+          notes: saved.notes || "",
+          owner: saved.owner || "",
+          due_date: saved.due_date || "",
+        };
+      });
+
+      const pdfBuffer = await generateVeritaScanPDF(
+        {
+          scanName: scan.name || "Riverside Regional - 2026 Inspection Readiness",
+          createdAt: scan.created_at,
+          updatedAt: scan.updated_at,
+          items: mergedItems,
+          cliaNumber: "22D0999999",
+          preferredStandards: ["TJC", "CAP"] as any,
+        },
+        type as "executive" | "full"
+      );
+
+      const safeName = "Riverside_Regional";
+      const date = new Date().toISOString().split("T")[0];
+      const label = type === "executive" ? "Executive" : "Full";
+      const filename = `VeritaScan_${label}_${safeName}_${date}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token });
+    } catch (err: any) {
+      console.error("Demo scan PDF error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
   // GET /api/demo/competency - demo competency assessment data
   app.get("/api/demo/competency", (_req, res) => {
     try {

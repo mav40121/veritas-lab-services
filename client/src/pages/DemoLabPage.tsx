@@ -39,6 +39,7 @@ export default function DemoLabPage() {
   const [expandedStudy, setExpandedStudy] = useState<number | null>(null);
   const [showFullScan, setShowFullScan] = useState(false);
   const [generating209, setGenerating209] = useState(false);
+  const [scanPdfLoading, setScanPdfLoading] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -271,6 +272,36 @@ export default function DemoLabPage() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch {}
+  }
+
+  async function downloadScanPdf(type: "executive" | "full") {
+    setScanPdfLoading(type);
+    try {
+      const referenceItems = SCAN_ITEMS.map((item) => ({
+        id: item.id,
+        domain: item.domain,
+        question: item.question,
+        tjc: item.tjc || "",
+        cap: item.cap || "",
+        cfr: item.cfr || "",
+      }));
+      const res = await fetch(`${API_BASE}/api/demo/scan/pdf/${type}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ referenceItems }),
+      });
+      if (!res.ok) return;
+      const { token } = await res.json();
+      const a = document.createElement("a");
+      const date = new Date().toISOString().split("T")[0];
+      a.href = `/api/pdf/${token}`;
+      a.download = `VeritaScan_${type === "executive" ? "Executive" : "Full"}_Riverside_Regional_${date}.pdf`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } catch (err) {
+      console.error("Scan PDF error:", err);
+    } finally {
+      setScanPdfLoading(null);
+    }
   }
 
   return (
@@ -815,6 +846,32 @@ export default function DemoLabPage() {
                 </>
               ) : (
                 <div className="text-center text-muted-foreground py-12">No scan data available</div>
+              )}
+
+              {/* Export buttons */}
+              {scan && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-8"
+                    onClick={() => downloadScanPdf("executive")}
+                    disabled={scanPdfLoading === "executive"}
+                  >
+                    <Download size={12} className="mr-1.5" />
+                    {scanPdfLoading === "executive" ? "Generating..." : "Executive Summary PDF"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-8"
+                    onClick={() => downloadScanPdf("full")}
+                    disabled={scanPdfLoading === "full"}
+                  >
+                    <Download size={12} className="mr-1.5" />
+                    {scanPdfLoading === "full" ? "Generating..." : "Full Report PDF"}
+                  </Button>
+                </div>
               )}
 
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
