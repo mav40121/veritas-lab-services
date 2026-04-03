@@ -1,18 +1,20 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { saveAs } from "file-saver";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 /**
- * Fetches a PDF from a one-time token URL and forces a download using file-saver.
- * Uses saveAs() which is reliable across Edge, Chrome, Firefox, and Safari.
+ * Triggers a PDF download by navigating directly to the token URL.
+ * Direct browser navigation lets Adobe/Edge handle the PDF with a proper title.
+ * Do NOT use fetch+blob - that causes about:blank with Adobe.
  */
-export async function downloadPdfToken(token: string, filename: string): Promise<void> {
-  const res = await fetch(`/api/pdf/${token}`);
-  if (!res.ok) throw new Error(`PDF fetch failed: ${res.status}`);
-  const blob = await res.blob();
-  saveAs(blob, filename);
+export function downloadPdfToken(token: string, filename: string): void {
+  const a = document.createElement("a");
+  a.href = `/api/pdf/${token}`;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }

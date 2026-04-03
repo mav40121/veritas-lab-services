@@ -1015,7 +1015,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     });
     if (!res.ok) return;
     const { token } = await res.json();
-    await downloadPdfToken(token, `VeritaComp_Assessment_${assessmentId}.pdf`);
+    downloadPdfToken(token, `VeritaComp_Assessment_${assessmentId}.pdf`);
   };
 
   const deleteAssessment = async (id: number) => {

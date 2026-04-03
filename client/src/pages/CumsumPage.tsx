@@ -214,7 +214,7 @@ export default function CumsumPage() {
       });
       if (!res.ok) throw new Error();
       const { token } = await res.json();
-      await downloadPdfToken(token, `CUMSUM_${selectedTracker.instrument_name}.pdf`);
+      downloadPdfToken(token, `CUMSUM_${selectedTracker.instrument_name}.pdf`);
     } catch { toast({ title: "PDF export failed", variant: "destructive" }); }
     setPdfLoading(false);
   };

@@ -315,7 +315,7 @@ export default function VeritaStaffAppPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const { token } = await res.json();
-      await downloadPdfToken(token, `CMS_209_${lab?.clia_number || "report"}_${new Date().toISOString().split("T")[0]}.pdf`);
+      downloadPdfToken(token, `CMS_209_${lab?.clia_number || "report"}_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "CMS 209 generated", description: "Your personnel report has been downloaded." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });

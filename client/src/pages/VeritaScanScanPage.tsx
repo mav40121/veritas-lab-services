@@ -578,7 +578,7 @@ export default function VeritaScanScanPage() {
       const filename = type === "executive"
         ? `VeritaScan_Executive_${safeName}_${date}.pdf`
         : `VeritaScan_Full_${safeName}_${date}.pdf`;
-      await downloadPdfToken(pdfToken, filename);
+      downloadPdfToken(pdfToken, filename);
     } catch (e) {
       // fail silently — server may not be ready
       console.error("PDF error:", e);

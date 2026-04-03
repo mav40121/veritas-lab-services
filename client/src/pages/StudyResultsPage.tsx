@@ -69,7 +69,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
-  await downloadPdfToken(token, filename);
+  downloadPdfToken(token, filename);
 }
 
 const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];

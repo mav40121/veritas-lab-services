@@ -71,7 +71,7 @@ export default function DemoLabPage() {
       const res = await fetch(`${API_BASE}/api/demo/staff/cms209`);
       if (!res.ok) throw new Error(await res.text());
       const { token } = await res.json();
-      await downloadPdfToken(token, `CMS_209_22D0999999_${new Date().toISOString().split("T")[0]}.pdf`);
+      downloadPdfToken(token, `CMS_209_22D0999999_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (err: any) {
       console.error("CMS 209 generation failed:", err.message);
     } finally {
@@ -279,7 +279,7 @@ export default function DemoLabPage() {
       if (!res.ok) return;
       const { token } = await res.json();
       const date = new Date().toISOString().split("T")[0];
-      await downloadPdfToken(token, `VeritaScan_${type === "executive" ? "Executive" : "Full"}_Riverside_Regional_${date}.pdf`);
+      downloadPdfToken(token, `VeritaScan_${type === "executive" ? "Executive" : "Full"}_Riverside_Regional_${date}.pdf`);
     } catch (err) {
       console.error("Scan PDF error:", err);
     } finally {
