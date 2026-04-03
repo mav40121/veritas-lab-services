@@ -512,7 +512,134 @@ export default function AdminReportPage() {
         <div className="text-xs text-gray-500 text-right">
           Generated: {data.generatedAt ? new Date(data.generatedAt).toLocaleString() : ""}
         </div>
+
+        {/* Audit Log Viewer */}
+        <AuditLogPanel secret={secret} />
       </div>
+    </div>
+  );
+}
+
+function AuditLogPanel({ secret }: { secret: string }) {
+  const [userId, setUserId] = useState("");
+  const [module, setModule] = useState("");
+  const [entries, setEntries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [snapshots, setSnapshots] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState(false);
+
+  async function fetchAuditLog() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ secret, limit: "100" });
+      if (userId) params.set("userId", userId);
+      if (module) params.set("module", module);
+      const res = await fetch(`/api/admin/audit-log?${params}`);
+      const d = await res.json();
+      setEntries(d.entries || []);
+
+      if (userId) {
+        const snapRes = await fetch(`/api/admin/snapshots?secret=${secret}&userId=${userId}`);
+        const snapData = await snapRes.json();
+        setSnapshots(snapData.snapshots || []);
+      }
+    } catch { setEntries([]); }
+    setLoading(false);
+  }
+
+  async function triggerSnapshot() {
+    await fetch(`/api/admin/run-snapshot?secret=${secret}`, { method: "POST" });
+    alert("Snapshot triggered for all paid users.");
+  }
+
+  return (
+    <div className="mt-8 border rounded-lg overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 text-sm font-semibold text-left"
+        onClick={() => setExpanded(e => !e)}
+      >
+        Audit Log + Snapshots
+        <span className="text-xs text-gray-400">{expanded ? "Hide" : "Show"}</span>
+      </button>
+
+      {expanded && (
+        <div className="p-4 space-y-4">
+          <div className="flex flex-wrap gap-2 items-end">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">User ID (optional)</label>
+              <input value={userId} onChange={e => setUserId(e.target.value)} placeholder="e.g. 15" className="border rounded px-2 py-1 text-sm w-28" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Module (optional)</label>
+              <select value={module} onChange={e => setModule(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                <option value="">All</option>
+                <option value="veritamap">VeritaMap</option>
+                <option value="veritascan">VeritaScan</option>
+                <option value="veritacomp">VeritaComp</option>
+                <option value="veritastaff">VeritaStaff</option>
+                <option value="veritalab">VeritaLab</option>
+                <option value="veritacheck">VeritaCheck</option>
+              </select>
+            </div>
+            <button onClick={fetchAuditLog} disabled={loading} className="bg-primary text-white text-sm px-3 py-1.5 rounded hover:bg-primary/90">
+              {loading ? "Loading..." : "Fetch Log"}
+            </button>
+            <button onClick={triggerSnapshot} className="bg-amber-600 text-white text-sm px-3 py-1.5 rounded hover:bg-amber-700">
+              Run Snapshot Now
+            </button>
+          </div>
+
+          {snapshots.length > 0 && (
+            <div className="bg-blue-50 rounded p-3">
+              <p className="text-xs font-semibold text-blue-800 mb-2">Available Snapshots for User {userId}</p>
+              <div className="flex flex-wrap gap-2">
+                {snapshots.map((s: any) => (
+                  <a key={s.id} href={`/api/admin/snapshots/${s.id}?secret=${secret}`} target="_blank" rel="noreferrer"
+                    className="text-xs bg-white border border-blue-200 rounded px-2 py-1 text-blue-700 hover:bg-blue-100">
+                    {s.snapshot_date} ({Math.round(s.size_bytes / 1024)}KB)
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {entries.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="px-2 py-1.5 text-left border">Time</th>
+                    <th className="px-2 py-1.5 text-left border">User</th>
+                    <th className="px-2 py-1.5 text-left border">Module</th>
+                    <th className="px-2 py-1.5 text-left border">Action</th>
+                    <th className="px-2 py-1.5 text-left border">Entity</th>
+                    <th className="px-2 py-1.5 text-left border">Label</th>
+                    <th className="px-2 py-1.5 text-left border">Before (size)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((e: any) => (
+                    <tr key={e.id} className={`border-b ${
+                      e.action === "delete" ? "bg-red-50" :
+                      e.action === "restore" ? "bg-green-50" : ""
+                    }`}>
+                      <td className="px-2 py-1 border whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
+                      <td className="px-2 py-1 border">{e.owner_user_id}</td>
+                      <td className="px-2 py-1 border">{e.module}</td>
+                      <td className="px-2 py-1 border font-semibold">{e.action}</td>
+                      <td className="px-2 py-1 border">{e.entity_type}</td>
+                      <td className="px-2 py-1 border max-w-[200px] truncate">{e.entity_label}</td>
+                      <td className="px-2 py-1 border text-gray-500">{e.before_json ? `${Math.round(e.before_json.length / 1024 * 10) / 10}KB` : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : entries.length === 0 && !loading ? (
+            <p className="text-sm text-gray-400">No entries. Click Fetch Log to load.</p>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
