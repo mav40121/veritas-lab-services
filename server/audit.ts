@@ -142,19 +142,24 @@ export function captureUserSnapshot(userId: number): object {
  */
 export function saveNightlySnapshot(userId: number): void {
   try {
+    const sqlite = (db as any).$client;
     const data = captureUserSnapshot(userId);
     const today = new Date().toISOString().split("T")[0];
-    (db as any).$client.prepare(`
-      INSERT OR REPLACE INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at)
-      VALUES (?, ?, ?, datetime('now'))
-    `).run(userId, today, JSON.stringify(data));
+    const jsonStr = JSON.stringify(data);
+    const now = new Date().toISOString();
 
-    // Purge snapshots older than 30 days for this user
-    (db as any).$client.prepare(`
-      DELETE FROM nightly_snapshots
-      WHERE user_id = ?
-        AND snapshot_date < date('now', '-30 days')
-    `).run(userId);
+    // Delete existing snapshot for today first, then insert fresh
+    sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(userId, today);
+    sqlite.prepare(
+      "INSERT INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at) VALUES (?, ?, ?, ?)"
+    ).run(userId, today, jsonStr, now);
+
+    // Purge snapshots older than 30 days
+    sqlite.prepare(
+      "DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date < ?"
+    ).run(userId, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+
+    console.log(`[snapshot] Saved ${Math.round(jsonStr.length / 1024)}KB snapshot for user ${userId} on ${today}`);
   } catch (err: any) {
     console.error(`[snapshot] Failed to save snapshot for user ${userId}:`, err.message);
   }
