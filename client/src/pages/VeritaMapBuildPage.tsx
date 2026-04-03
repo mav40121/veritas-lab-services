@@ -215,42 +215,61 @@ function isCustomInstrument(instrumentName: string): boolean {
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
-function StepIndicator({ step }: { step: 1 | 2 }) {
+const ROLE_ORDER: Role[] = ["Primary", "Backup", "Satellite", "POC"];
+
+const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  Primary:   "Select the tests your primary analyzers run.",
+  Backup:    "Copy from your primary instruments and deactivate any tests not run on backup.",
+  Satellite: "Configure satellite analyzers - typically a smaller test menu.",
+  POC:       "Configure point-of-care devices and their test menus.",
+};
+
+function StepIndicator({
+  step,
+  roleGroups,
+  currentRole,
+}: {
+  step: 1 | 2;
+  roleGroups?: Role[];
+  currentRole?: Role;
+}) {
   return (
-    <div className="flex items-center gap-2 mb-1">
+    <div className="flex items-center gap-2 mb-1 flex-wrap">
+      {/* Step 1 */}
       <div className="flex items-center gap-1.5">
-        <div
-          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-            step >= 1 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}
-        >
-          1
-        </div>
-        <span
-          className={`text-xs font-medium ${
-            step === 1 ? "text-foreground" : "text-muted-foreground"
-          }`}
-        >
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+          step >= 1 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+        }`}>1</div>
+        <span className={`text-xs font-medium ${step === 1 ? "text-foreground" : "text-muted-foreground"}`}>
           Add Instruments
         </span>
       </div>
       <ChevronRight size={12} className="text-muted-foreground" />
-      <div className="flex items-center gap-1.5">
-        <div
-          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+      {/* Step 2 role sub-steps */}
+      {step === 2 && roleGroups && roleGroups.length > 0 ? (
+        roleGroups.map((r, i) => (
+          <div key={r} className="flex items-center gap-1.5">
+            {i > 0 && <ChevronRight size={12} className="text-muted-foreground" />}
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+              r === currentRole ? "bg-primary text-primary-foreground" :
+              ROLE_ORDER.indexOf(r) < ROLE_ORDER.indexOf(currentRole!) ? "bg-primary/40 text-primary-foreground" :
+              "bg-muted text-muted-foreground"
+            }`}>{i + 2}</div>
+            <span className={`text-xs font-medium ${r === currentRole ? "text-foreground" : "text-muted-foreground"}`}>
+              {r}s
+            </span>
+          </div>
+        ))
+      ) : (
+        <div className="flex items-center gap-1.5">
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
             step >= 2 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-          }`}
-        >
-          2
+          }`}>2</div>
+          <span className={`text-xs font-medium ${step === 2 ? "text-foreground" : "text-muted-foreground"}`}>
+            Select Tests
+          </span>
         </div>
-        <span
-          className={`text-xs font-medium ${
-            step === 2 ? "text-foreground" : "text-muted-foreground"
-          }`}
-        >
-          Select Tests
-        </span>
-      </div>
+      )}
     </div>
   );
 }
@@ -509,6 +528,7 @@ function InstrumentTestSection({
   otherInstruments: Array<{id: number, instrument_name: string, testCount: number}>;
   onCopyFrom: (sourceInstId: number) => void;
   isCopying: boolean;
+  roleContext?: Role;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [search, setSearch] = useState("");
@@ -821,6 +841,7 @@ export default function VeritaMapBuildPage() {
   const readOnly = useIsReadOnly('veritamap');
 
   const [step, setStep] = useState<1 | 2>(1);
+  const [currentRole, setCurrentRole] = useState<Role>("Primary");
 
   // Step 1 state — 3-step cascade
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
@@ -876,6 +897,38 @@ export default function VeritaMapBuildPage() {
       return res.json();
     },
   });
+
+  // Compute which role groups are present (in order), used for step navigation
+  const presentRoleGroups = useMemo(() =>
+    ROLE_ORDER.filter(r => instruments.some(i => i.role === r)),
+    [instruments]
+  );
+
+  // Instruments for the current role step
+  const currentRoleInstruments = useMemo(() =>
+    instruments.filter(i => i.role === currentRole),
+    [instruments, currentRole]
+  );
+
+  // When entering step 2, start at the first present role group
+  const enterStep2 = () => {
+    const firstRole = presentRoleGroups[0] ?? "Primary";
+    setCurrentRole(firstRole);
+    setStep(2);
+  };
+
+  // Advance to next role group, or save if last
+  const advanceRole = () => {
+    const idx = presentRoleGroups.indexOf(currentRole);
+    if (idx < presentRoleGroups.length - 1) {
+      setCurrentRole(presentRoleGroups[idx + 1]);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      saveAllMutation.mutate();
+    }
+  };
+
+  const isLastRoleGroup = presentRoleGroups.indexOf(currentRole) === presentRoleGroups.length - 1;
 
   // Initialize test toggles when instruments load or change
   useEffect(() => {
@@ -1592,7 +1645,7 @@ export default function VeritaMapBuildPage() {
           <Button
             disabled={instruments.length === 0}
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
-            onClick={() => setStep(2)}
+            onClick={enterStep2}
           >
             Next: Select Tests
             <ArrowRight size={14} className="ml-1.5" />
@@ -1635,11 +1688,12 @@ export default function VeritaMapBuildPage() {
         <ArrowLeft size={14} className="mr-1" /> Back to Instrument Selection
       </Button>
 
-      <StepIndicator step={2} />
-      <h1 className="text-2xl font-bold mt-2 mb-1">Step 2: Select Your Test Menu</h1>
+      <StepIndicator step={2} roleGroups={presentRoleGroups} currentRole={currentRole} />
+      <h1 className="text-2xl font-bold mt-2 mb-1">
+        {currentRole} Instruments: Select Tests
+      </h1>
       <p className="text-sm text-muted-foreground mb-2 max-w-2xl">
-        For each instrument, select only the tests your lab actually runs. Deactivate tests
-        you don't perform.
+        {ROLE_DESCRIPTIONS[currentRole]}
       </p>
       {limits?.isFree && (
         <div className="mb-3 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
@@ -1658,9 +1712,9 @@ export default function VeritaMapBuildPage() {
         </span>
       </div>
 
-      {/* One section per instrument */}
+      {/* Instruments for current role group */}
       <div className="space-y-3 mb-8">
-        {instruments.map((instr) => (
+        {currentRoleInstruments.map((instr) => (
           <InstrumentTestSection
             key={instr.id}
             instrument={instr}
@@ -1675,29 +1729,46 @@ export default function VeritaMapBuildPage() {
               .map(i => ({
                 id: i.id,
                 instrument_name: i.instrument_name,
-                testCount: (testsByInstrument[i.id] ?? []).filter(t => t.active).length,
+                testCount: (testsByInstrument[i.id] ?? []).length,
               }))}
+            roleContext={currentRole}
             onCopyFrom={(sourceInstId) => handleCopyFrom(instr.id, sourceInstId)}
             isCopying={isCopying}
           />
         ))}
       </div>
 
-      {/* Build button */}
+      {/* Next / Build button */}
       <div className="flex items-center justify-between pt-6 border-t border-border">
-        <span className="text-sm text-muted-foreground">
-          {totalActiveTests} test{totalActiveTests !== 1 ? "s" : ""} will be saved to your map.
-        </span>
-        <Button
-          onClick={() => saveAllMutation.mutate()}
-          disabled={totalActiveTests === 0 || saveAllMutation.isPending}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-        >
-          {saveAllMutation.isPending ? "Building…" : "Build My Map"}
-          {!saveAllMutation.isPending && (
-            <ArrowRight size={14} className="ml-1.5" />
+        <div className="text-sm text-muted-foreground space-y-0.5">
+          <p>{totalActiveTests} test{totalActiveTests !== 1 ? "s" : ""} active across all instruments.</p>
+          {!isLastRoleGroup && (
+            <p className="text-xs">Next: configure your {presentRoleGroups[presentRoleGroups.indexOf(currentRole) + 1]} instruments.</p>
           )}
-        </Button>
+        </div>
+        <div className="flex gap-2">
+          {presentRoleGroups.indexOf(currentRole) > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const idx = presentRoleGroups.indexOf(currentRole);
+                setCurrentRole(presentRoleGroups[idx - 1]);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <ArrowLeft size={14} className="mr-1.5" />
+              Back to {presentRoleGroups[presentRoleGroups.indexOf(currentRole) - 1]}s
+            </Button>
+          )}
+          <Button
+            onClick={advanceRole}
+            disabled={saveAllMutation.isPending}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            {saveAllMutation.isPending ? "Building…" : isLastRoleGroup ? "Build My Map" : `Next: ${presentRoleGroups[presentRoleGroups.indexOf(currentRole) + 1]}s`}
+            {!saveAllMutation.isPending && <ArrowRight size={14} className="ml-1.5" />}
+          </Button>
+        </div>
       </div>
 
       {/* Upgrade dialog */}
