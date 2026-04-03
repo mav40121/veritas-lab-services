@@ -6248,8 +6248,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (module) { query += ` AND module = ?`; params.push(module); }
     query += ` ORDER BY created_at DESC LIMIT ?`;
     params.push(Number(limit));
-    const rows = (db as any).$client.prepare(query).all(...params);
-    res.json({ entries: rows, count: rows.length });
+    const rows = (db as any).$client.prepare(query).all(...params) as any[];
+    // Return without before/after JSON (too large for list view)
+    const lite = rows.map(r => ({ ...r, before_json: r.before_json ? `${Math.round(r.before_json.length/1024*10)/10}KB` : null, after_json: r.after_json ? `${Math.round(r.after_json.length/1024*10)/10}KB` : null }));
+    res.json({ entries: lite, count: lite.length });
   });
 
   // ── ADMIN: Snapshots viewer ────────────────────────────────────────────────────
@@ -6258,9 +6260,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
     if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
     const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: "userId required" });
-    const { getSnapshots } = require("./audit");
-    res.json({ snapshots: getSnapshots(Number(userId)) });
+    // Query directly from db to avoid any module caching issues
+    if (!userId) {
+      // Return all snapshots summary if no userId
+      const all = (db as any).$client.prepare(
+        "SELECT user_id, snapshot_date, created_at, length(modules_json) as size_bytes FROM nightly_snapshots ORDER BY created_at DESC LIMIT 50"
+      ).all();
+      return res.json({ snapshots: all, total: all.length });
+    }
+    const snaps = (db as any).$client.prepare(
+      "SELECT id, snapshot_date, created_at, length(modules_json) as size_bytes FROM nightly_snapshots WHERE user_id = ? ORDER BY snapshot_date DESC LIMIT 30"
+    ).all(Number(userId));
+    res.json({ snapshots: snaps });
   });
 
   app.get("/api/admin/snapshots/:id", (req, res) => {
@@ -6274,24 +6285,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── ADMIN: Trigger nightly snapshot manually ─────────────────────────────────────
-  app.post("/api/admin/run-snapshot", async (req, res) => {
+  app.post("/api/admin/run-snapshot", (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
     const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
     if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
     try {
-      const { runNightlySnapshots, saveNightlySnapshot } = await import("./audit");
-      const { userId } = req.body || req.query;
-      if (userId) {
-        // Single user snapshot
-        saveNightlySnapshot(Number(userId));
-        res.json({ ok: true, message: `Snapshot saved for user ${userId}` });
-      } else {
-        runNightlySnapshots();
-        // Count snapshots saved today
-        const today = new Date().toISOString().split("T")[0];
-        const cnt = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM nightly_snapshots WHERE snapshot_date = ?").get(today) as any;
-        res.json({ ok: true, message: `Snapshots run. ${cnt?.cnt ?? 0} saved for today.` });
+      const sqlite = (db as any).$client;
+      const targetUserId = req.body?.userId || req.query?.userId;
+      const today = new Date().toISOString().split("T")[0];
+      const now = new Date().toISOString();
+
+      // Get users to snapshot
+      const users: { id: number }[] = targetUserId
+        ? [{ id: Number(targetUserId) }]
+        : sqlite.prepare("SELECT id FROM users").all();
+
+      let saved = 0;
+      for (const user of users) {
+        try {
+          // Capture snapshot data inline (same db instance)
+          const snap = {
+            snapshot_version: 1,
+            user_id: user.id,
+            studies: sqlite.prepare("SELECT id, test_name, study_type, instrument, analyst, date, status FROM studies WHERE user_id = ?").all(user.id),
+            maps: sqlite.prepare("SELECT id, name, created_at FROM veritamap_maps WHERE user_id = ?").all(user.id),
+            instruments: (() => {
+              const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").all(user.id) as any[];
+              if (!maps.length) return [];
+              return sqlite.prepare(`SELECT * FROM veritamap_instruments WHERE map_id IN (${maps.map(() => '?').join(',')})`).all(...maps.map((m: any) => m.id));
+            })(),
+            instrument_tests: (() => {
+              const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").all(user.id) as any[];
+              if (!maps.length) return [];
+              const instrs = sqlite.prepare(`SELECT id FROM veritamap_instruments WHERE map_id IN (${maps.map(() => '?').join(',')})`).all(...maps.map((m: any) => m.id)) as any[];
+              if (!instrs.length) return [];
+              return sqlite.prepare(`SELECT analyte, specialty, complexity, active, instrument_id FROM veritamap_instrument_tests WHERE instrument_id IN (${instrs.map(() => '?').join(',')})`).all(...instrs.map((i: any) => i.id));
+            })(),
+            scans: sqlite.prepare("SELECT id, name, created_at FROM veritascan_scans WHERE user_id = ?").all(user.id),
+            assessments: sqlite.prepare("SELECT id, employee_name, program_name, assessment_type, status, created_at FROM competency_assessments WHERE user_id = ?").all(user.id),
+            staff: sqlite.prepare("SELECT id, first_name, last_name, title, hire_date FROM staff_employees WHERE lab_id IN (SELECT id FROM staff_labs WHERE user_id = ?)").all(user.id),
+            certificates: sqlite.prepare("SELECT id, cert_type, cert_name, expiration_date, is_active FROM lab_certificates WHERE user_id = ? AND is_active = 1").all(user.id),
+          };
+          const jsonStr = JSON.stringify(snap);
+          sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(user.id, today);
+          sqlite.prepare("INSERT INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at) VALUES (?, ?, ?, ?)").run(user.id, today, jsonStr, now);
+          saved++;
+        } catch (uerr: any) {
+          console.error(`[snapshot] User ${user.id} failed:`, uerr.message);
+        }
       }
+
+      // Purge old snapshots
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      sqlite.prepare("DELETE FROM nightly_snapshots WHERE snapshot_date < ?").run(cutoff);
+
+      res.json({ ok: true, message: `Snapshots saved for ${saved} of ${users.length} users on ${today}.` });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
