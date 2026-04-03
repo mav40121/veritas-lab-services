@@ -74,6 +74,27 @@ export async function seedDemoData() {
     seedStudies(sqlite, demoUserId, now);
   }
 
+  // ─── 4b. Patch creatinine cal ver with real Atellica 2 data ──────────────
+  // Update any existing creatinine cal_ver study for demo user to use real values
+  const creatStudy = sqlite.prepare(
+    "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Creatinine' AND study_type = 'cal_ver' LIMIT 1"
+  ).get(demoUserId);
+  if (creatStudy) {
+    const realData = generateCreatinineCalVerData();
+    sqlite.prepare(
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, data_points = ?, instruments = ? WHERE id = ?"
+    ).run(
+      "Siemens Atellica 2",
+      "SED",
+      "2025-02-06",
+      7.5,
+      JSON.stringify(realData),
+      JSON.stringify(["Siemens Atellica 2"]),
+      creatStudy.id
+    );
+    console.log(`[seed] Patched creatinine cal ver study id=${creatStudy.id} with real Atellica 2 data`);
+  }
+
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
     "SELECT id FROM competency_programs WHERE user_id = ?"
@@ -323,6 +344,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
   );
 
   // Study 3: Creatinine Calibration Verification / Linearity
+  // Real data from Milford Regional Medical Center, 06 Feb 2025, Atellica 2
   const creatinineDataPoints = generateCreatinineCalVerData();
   sqlite.prepare(`
     INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
@@ -330,13 +352,13 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
   `).run(
     demoUserId,
     "Creatinine",
-    "Ortho VITROS 5600 [Primary]",
-    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
-    "2026-01-22",
+    "Siemens Atellica 2",
+    "SED",
+    "2025-02-06",
     "cal_ver",
-    15, // 15% or 0.3 mg/dL CLIA TEa (percentage stored)
+    7.5, // 7.5% or 0.1 mg/dL TEa per CLIA
     JSON.stringify(creatinineDataPoints),
-    JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
+    JSON.stringify(["Siemens Atellica 2"]),
     now
   );
 
@@ -566,23 +588,23 @@ function generatePotassiumData() {
 }
 
 function generateCreatinineCalVerData() {
-  // 5 levels, two runs each (stored as two instrument columns: Primary = Run 1, Backup = Run 2)
-  // Pre-computed: slope=0.9963, intercept=0.0125, r2=0.9999
-  // maxPercentRecovery=101.4%, minPercentRecovery=99.4%, allPass=true, 10/10
+  // Real data: Milford Regional Medical Center, Siemens Atellica 2, 06 Feb 2025
+  // Controls: VALIDATE 10691662 exp 12 Feb 2026
+  // TEa: 0.1 mg/dL or 7.5% | Reportable range: 0.15 to 30 mg/dL
+  // All 5 levels PASS. Max % recovery 105.3% (L2). Slope 0.996, intercept 0.263.
   const levels = [
-    { level: 1, assignedValue: 0.5,  run1: 0.50,  run2: 0.51 },
-    { level: 2, assignedValue: 2.0,  run1: 2.02,  run2: 2.01 },
-    { level: 3, assignedValue: 5.0,  run1: 5.08,  run2: 5.06 },
-    { level: 4, assignedValue: 10.0, run1: 10.15, run2: 10.12 },
-    { level: 5, assignedValue: 20.0, run1: 19.85, run2: 19.90 },
+    { level: 1, assignedValue: 0.30,  run1: 0.31, run2: 0.29 },
+    { level: 2, assignedValue: 7.00,  run1: 7.37, run2: 7.37 },
+    { level: 3, assignedValue: 13.80, run1: 14.25, run2: 14.21 },
+    { level: 4, assignedValue: 20.50, run1: 20.88, run2: 20.91 },
+    { level: 5, assignedValue: 27.30, run1: 27.22, run2: 27.11 },
   ];
   return levels.map(l => ({
     level: l.level,
     assignedValue: l.assignedValue,
-    expectedValue: l.assignedValue, // alias used by computeStudyStatus
+    expectedValue: l.assignedValue,
     instrumentValues: {
-      "Ortho VITROS 5600 [Primary]": l.run1,
-      "Ortho VITROS 5600 [Backup]": l.run2,
+      "Siemens Atellica 2": (l.run1 + l.run2) / 2, // mean of two replicates
     },
   }));
 }
