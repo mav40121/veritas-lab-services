@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { authHeaders } from "@/lib/auth";
+import { downloadPdfToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -214,10 +215,7 @@ export default function CumsumPage() {
       });
       if (!res.ok) throw new Error();
       const { token } = await res.json();
-      const a = document.createElement("a");
-      a.href = `/api/pdf/${token}`;
-      a.download = `CUMSUM_${selectedTracker.instrument_name}.pdf`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      await downloadPdfToken(token, `CUMSUM_${selectedTracker.instrument_name}.pdf`);
     } catch { toast({ title: "PDF export failed", variant: "destructive" }); }
     setPdfLoading(false);
   };

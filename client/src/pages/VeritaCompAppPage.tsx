@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { downloadPdfToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1014,10 +1015,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     });
     if (!res.ok) return;
     const { token } = await res.json();
-    const a = document.createElement("a");
-    a.href = `/api/pdf/${token}`;
-    a.download = `VeritaComp_Assessment_${assessmentId}.pdf`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    await downloadPdfToken(token, `VeritaComp_Assessment_${assessmentId}.pdf`);
   };
 
   const deleteAssessment = async (id: number) => {

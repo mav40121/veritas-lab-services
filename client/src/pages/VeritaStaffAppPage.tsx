@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { downloadPdfToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -314,10 +315,7 @@ export default function VeritaStaffAppPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const { token } = await res.json();
-      const a = document.createElement("a");
-      a.href = `/api/pdf/${token}`;
-      a.download = `CMS_209_${lab?.clia_number || "report"}_${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      await downloadPdfToken(token, `CMS_209_${lab?.clia_number || "report"}_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "CMS 209 generated", description: "Your personnel report has been downloaded." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });

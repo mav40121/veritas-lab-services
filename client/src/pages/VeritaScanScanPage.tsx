@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { downloadPdfToken } from "@/lib/utils";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -571,15 +572,12 @@ export default function VeritaScanScanPage() {
       );
       if (!res.ok) throw new Error("PDF generation failed");
       const { token: pdfToken } = await res.json();
-      const a = document.createElement("a");
       const date = new Date().toISOString().split("T")[0];
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      a.href = `/api/pdf/${pdfToken}`;
-      a.download =
-        type === "executive"
-          ? `VeritaScan_Executive_${safeName}_${date}.pdf`
-          : `VeritaScan_Full_${safeName}_${date}.pdf`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      const filename = type === "executive"
+        ? `VeritaScan_Executive_${safeName}_${date}.pdf`
+        : `VeritaScan_Full_${safeName}_${date}.pdf`;
+      await downloadPdfToken(pdfToken, filename);
     } catch (e) {
       // fail silently — server may not be ready
       console.error("PDF error:", e);
