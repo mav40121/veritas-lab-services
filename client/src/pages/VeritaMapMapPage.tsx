@@ -859,7 +859,9 @@ export default function VeritaMapMapPage() {
     allInstruments.map(i => ({
       id: i.id,
       name: i.instrument_name,
-      testCount: (i.tests ?? []).filter((t: any) => t.active).length,
+      // Use total test count (not just active) to determine if instrument has been configured
+      testCount: (i.tests ?? []).length,
+      activeCount: (i.tests ?? []).filter((t: any) => t.active).length,
     })),
     [allInstruments]
   );

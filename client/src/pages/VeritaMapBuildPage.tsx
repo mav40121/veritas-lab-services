@@ -671,8 +671,8 @@ function InstrumentTestSection({
             </div>
           )}
 
-          {/* Copy-from banner: shown when instrument has zero active tests and other instruments exist */}
-          {activeCount === 0 && tests.filter(t => t.active).length === 0 && otherInstruments.length > 0 && !copyFromOpen && (
+          {/* Copy-from banner: shown only when instrument has NO tests at all (not just all-deactivated) */}
+          {tests.length === 0 && otherInstruments.length > 0 && !copyFromOpen && (
             <div className="mx-4 mt-3 mb-1 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
               <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
                 This instrument has no tests yet.
