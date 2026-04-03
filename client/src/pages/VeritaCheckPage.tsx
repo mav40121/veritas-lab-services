@@ -161,10 +161,10 @@ const featureTooltips: Record<string, string> = {
 const plans = [
   { priceType: "perStudy",        name: "Per Study",              price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                               features: ["Single study run", "Full PDF report", "All study types included", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
   { priceType: "veritacheck_only", name: "VeritaCheck™ Unlimited", price: "$299",   unit: "per year",  description: "Single user. Method validation suite only. No CLIA number required.",                                                    features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "waived",          name: "Waived",                 price: "$499",   unit: "per year",  description: "Certificate of Waiver labs. Full VeritaAssure suite.",                                                                   features: ["Everything in VeritaCheck Unlimited", "VeritaMap regulatory mapping", "VeritaScan self-inspection audit", "VeritaComp competency management", "Full VeritaAssure suite, including all future modules"],                                                              cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "community",       name: "Community",              price: "$799",   unit: "per year",  description: "1-8 specialties. Full suite for community and physician office labs.",                                                    features: ["Full VeritaAssure suite, including all future modules", "VeritaStaff personnel management", "Named seat support", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure specialist"],                                                                                           cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
-  { priceType: "hospital",        name: "Hospital",               price: "$1,299", unit: "per year",  description: "9-15 specialties. Full suite for hospital laboratories.",                                                                features: ["Everything in Community", "Higher seat capacity", "Priority support", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure specialist"],                                                                                                                                cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "large_hospital",  name: "Large Hospital",         price: "$1,999", unit: "per year",  description: "16+ specialties. Full suite for large hospital and reference labs.",                                                     features: ["Everything in Hospital", "Maximum seat capacity", "Priority support", "Consulting access", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure specialist"],                                                                                                           cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "clinic",          name: "Clinic",                 price: "$499",   unit: "per month", description: "0-25 beds. Solo director or designee and one tech.",                                                                      features: ["2 seats included", "Full VeritaAssure™ suite, all modules", "VeritaMap™ regulatory mapping", "VeritaScan™ self-inspection audit", "VeritaComp™ competency management", "CLIA number on all reports"],                                                                                                 cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "community",       name: "Community",              price: "$799",   unit: "per month", description: "26-100 beds. Full suite for community hospital labs.",                                                                    features: ["5 seats included", "Full VeritaAssure™ suite, all modules", "VeritaStaff™ personnel management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure™ specialist"],                                                                   cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
+  { priceType: "hospital",        name: "Hospital",               price: "$1,299", unit: "per month", description: "101-300 beds. Full suite for regional and acute care hospital labs.",                                                     features: ["15 seats included", "Everything in Community", "Priority support", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure™ specialist"],                                                                                                                             cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "enterprise",      name: "Enterprise",             price: "$1,999", unit: "per month", description: "300+ beds. Multi-department or health system.",                                                                         features: ["25 seats included", "Everything in Hospital", "Priority support", "Consulting access", "BAA available", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure™ specialist"],                                                                                       cta: "Subscribe",      highlight: false, badge: null },
 ];
 
 export default function VeritaCheckPage() {
@@ -195,7 +195,7 @@ export default function VeritaCheckPage() {
   }, [search]);
 
   // Plans that require a CLIA number before checkout
-  const CLIA_REQUIRED_PLANS = new Set(["waived", "community", "hospital", "large_hospital"]);
+  const CLIA_REQUIRED_PLANS = new Set(["clinic", "community", "hospital", "enterprise"]);
 
   const handleBuy = async (priceType: string) => {
     if (!isLoggedIn) {
@@ -783,7 +783,7 @@ export default function VeritaCheckPage() {
                       <div className="text-xs text-muted-foreground">VeritaCheck&#8482; Unlimited (single user)</div>
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                      <div className="text-2xl font-bold text-primary">From $499/yr</div>
+                      <div className="text-2xl font-bold text-primary">From $499/mo</div>
                       <div className="text-xs text-muted-foreground">Full VeritaAssure&#8482; Suite</div>
                     </div>
                   </div>
@@ -1774,10 +1774,10 @@ export default function VeritaCheckPage() {
               <Shield size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  Enterprise: <span className="text-primary">Custom pricing</span>
+                  Need a custom arrangement? <span className="text-primary">Contact us</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Unlimited users, multiple sites. Contact us for a custom quote.
+                  Multi-site health systems, academic medical centers, or reference labs with unique requirements. Contact us to discuss.
                 </p>
                 <Link href="/contact" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   Contact Us <ChevronRight size={13} />
