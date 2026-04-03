@@ -957,7 +957,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     pdfTokenStore.delete(req.params.token); // one-time use
     const encoded = encodeURIComponent(entry.filename);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
+    res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
     res.setHeader("Content-Length", entry.buffer.length);
     res.setHeader("Cache-Control", "no-store");
     res.send(entry.buffer);
