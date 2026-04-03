@@ -545,14 +545,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
 
     // Save HIPAA acknowledgment + hospital info + plan from signup
+    const { plan: reqPlan, hospital_name, hospital_state, bed_count } = req.body;
+    const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
+    const selectedPlan = validPlans.includes(reqPlan) ? reqPlan : "free";
+    const selectedSeatCount = PLAN_SEATS[selectedPlan] || 1;
     try {
-      const { plan, hospital_name, hospital_state, bed_count } = req.body;
-      const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
-      const selectedPlan = validPlans.includes(plan) ? plan : "free";
-      const seatCount = PLAN_SEATS[selectedPlan] || 1;
       (db as any).$client.prepare(
         "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ? WHERE id = ?"
-      ).run(new Date().toISOString(), selectedPlan, seatCount, hospital_name || null, hospital_state || null, bed_count || null, user.id);
+      ).run(new Date().toISOString(), selectedPlan, selectedSeatCount, hospital_name || null, hospital_state || null, bed_count || null, user.id);
+      // Also update in-memory storage so the returned user object reflects the new plan
+      storage.updateUserPlan(user.id, selectedPlan, user.studyCredits);
     } catch {}
 
 
@@ -575,7 +577,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
     ).run(user.id, sessionToken, req.headers["user-agent"] || "Unknown", now, now);
 
-    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: 'free', accessLevel: 'free', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: 1 } });
+    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: selectedPlan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: selectedPlan === 'free' ? 'free' : 'active', accessLevel: selectedPlan === 'free' ? 'free' : 'paid', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: selectedSeatCount } });
 
     // Send welcome email via Resend
     if (resend) {
