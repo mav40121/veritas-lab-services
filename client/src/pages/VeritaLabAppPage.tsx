@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -283,12 +284,7 @@ export default function VeritaLabAppPage() {
       });
       if (res.ok) {
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        saveAs(blob, filename);
       }
     } catch (err) {
       toast({ title: "Download failed", variant: "destructive" });
@@ -321,12 +317,7 @@ export default function VeritaLabAppPage() {
       });
       if (res.ok) {
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `VeritaLab_Certificates_${new Date().toISOString().split("T")[0]}.xlsx`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        saveAs(blob, `VeritaLab_Certificates_${new Date().toISOString().split("T")[0]}.xlsx`);
       }
     } catch (err) {
       toast({ title: "Export failed", variant: "destructive" });

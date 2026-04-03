@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 interface UserRecord {
   id: number;
@@ -307,13 +308,8 @@ export default function AdminReportPage() {
     const blob = new Blob([buf], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
     const today = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `veritaassure-customer-report-${today}.xlsx`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    saveAs(blob, `veritaassure-customer-report-${today}.xlsx`);
   }
 
   // Login screen

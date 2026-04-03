@@ -3,6 +3,7 @@ import { Link, useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { saveAs } from "file-saver";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -422,15 +423,9 @@ async function exportExcel(mapId: number, mapName: string): Promise<void> {
   );
   if (!res.ok) throw new Error("Excel generation failed");
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  document.body.appendChild(a);
-  a.href = url;
   const date = new Date().toISOString().split("T")[0];
   const safeName = mapName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-  a.download = `VeritaMap_${safeName}_${date}.xlsx`;
-  a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  URL.revokeObjectURL(url);
+  saveAs(blob, `VeritaMap_${safeName}_${date}.xlsx`);
 }
 
 // ── Compliance score ──────────────────────────────────────────────────────────

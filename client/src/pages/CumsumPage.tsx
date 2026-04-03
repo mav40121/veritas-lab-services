@@ -3,6 +3,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
+import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -195,9 +196,7 @@ export default function CumsumPage() {
       const res = await fetch(`${API_BASE}/api/cumsum/trackers/${selectedTracker.id}/excel`, { headers: authHeaders() });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `CUMSUM_${selectedTracker.instrument_name}.xlsx`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      saveAs(blob, `CUMSUM_${selectedTracker.instrument_name}.xlsx`);
     } catch { toast({ title: "Excel export failed", variant: "destructive" }); }
     setExcelLoading(false);
   };

@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
+import { saveAs } from "file-saver";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -611,14 +612,9 @@ export default function VeritaScanScanPage() {
       );
       if (!res.ok) throw new Error("Excel generation failed");
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
       const date = new Date().toISOString().split("T")[0];
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      a.download = `VeritaScan_${safeName}_${date}.xlsx`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, `VeritaScan_${safeName}_${date}.xlsx`);
     } catch (e) {
       console.error("Excel error:", e);
     } finally {

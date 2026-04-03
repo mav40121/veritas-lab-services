@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
+import { saveAs } from "file-saver";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -228,16 +229,9 @@ export default function DemoLabPage() {
       const res = await fetch(`${API_BASE}/api/demo/studies/${studyId}/pdf`);
       if (!res.ok) return;
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
       const name = (testName || "Study").replace(/\s+/g, "_");
       const type = studyType === "cal_ver" ? "CalVer" : studyType === "method_comparison" ? "MethodComp" : studyType === "ref_interval" ? "RefInterval" : "Study";
-      a.download = `VeritaCheck_${name}_${type}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      saveAs(blob, `VeritaCheck_${name}_${type}.pdf`);
     } catch {}
   }
 
@@ -246,14 +240,7 @@ export default function DemoLabPage() {
       const res = await fetch(`${API_BASE}/api/demo/map/excel`);
       if (!res.ok) return;
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "VeritaMap_Riverside_Regional.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      saveAs(blob, "VeritaMap_Riverside_Regional.xlsx");
     } catch {}
   }
 
@@ -262,14 +249,7 @@ export default function DemoLabPage() {
       const res = await fetch(`${API_BASE}/api/demo/competency/pdf`);
       if (!res.ok) return;
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "VeritaComp_Competency_Assessment.pdf";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      saveAs(blob, "VeritaComp_Competency_Assessment.pdf");
     } catch {}
   }
 
