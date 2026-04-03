@@ -753,6 +753,43 @@ export function suggestTierFromBeds(beds: number): { tier: string; label: string
   return { tier: 'enterprise', label: 'Enterprise', price: 1999, seats: 25 };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────
+// Audit log table - records before/after state for all destructive operations
+// ─────────────────────────────────────────────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    owner_user_id INTEGER,
+    module TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT,
+    entity_label TEXT,
+    before_json TEXT,
+    after_json TEXT,
+    ip_address TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
+// Nightly snapshots table - full data dump per user, kept 30 days
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS nightly_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    modules_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, snapshot_date)
+  )
+`);
+
+// Index for fast audit log queries
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(owner_user_id, created_at DESC)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_module ON audit_log(module, entity_type, entity_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_user ON nightly_snapshots(user_id, snapshot_date DESC)`); } catch {}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
