@@ -3,7 +3,7 @@ import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -544,11 +544,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
 
-    // Save HIPAA acknowledgment
+    // Save HIPAA acknowledgment + hospital info + plan from signup
     try {
+      const { plan, hospital_name, hospital_state, bed_count } = req.body;
+      const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
+      const selectedPlan = validPlans.includes(plan) ? plan : "free";
+      const seatCount = PLAN_SEATS[selectedPlan] || 1;
       (db as any).$client.prepare(
-        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ? WHERE id = ?"
-      ).run(new Date().toISOString(), user.id);
+        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ? WHERE id = ?"
+      ).run(new Date().toISOString(), selectedPlan, seatCount, hospital_name || null, hospital_state || null, bed_count || null, user.id);
     } catch {}
 
 
@@ -4868,16 +4872,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
 
     const userRow = (db as any).$client.prepare("SELECT seat_count, plan FROM users WHERE id = ?").get(req.userId) as any;
-    const dbSeats = userRow?.seat_count || 1;
-    const planMax = (PLAN_LIMITS as any)[userRow?.plan]?.maxAnalysts || 1;
-    const maxSeats = Math.max(dbSeats, planMax);
+    const userPlan = userRow?.plan || "free";
+    // Use PLAN_SEATS for new tier plans, fall back to old PLAN_LIMITS for legacy plans
+    const planSeatLimit = PLAN_SEATS[userPlan] ?? (PLAN_LIMITS as any)[userPlan]?.maxAnalysts ?? 1;
+    const dbSeats = userRow?.seat_count || 0;
+    const maxSeats = Math.max(dbSeats, planSeatLimit);
     const currentSeats = (db as any).$client.prepare(
       "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
     ).get(req.userId) as any;
 
-    // +1 for the owner seat
-    if ((currentSeats?.cnt || 0) + 1 >= maxSeats) {
-      return res.status(403).json({ error: "Seat limit reached. Purchase additional seats to add more users." });
+    if ((currentSeats?.cnt || 0) >= maxSeats) {
+      const nextTier = userPlan === "clinic" ? { label: "Community", price: 799, seats: 5, plan: "community" }
+        : userPlan === "community" ? { label: "Hospital", price: 1299, seats: 15, plan: "hospital" }
+        : userPlan === "hospital" ? { label: "Enterprise", price: 1999, seats: 25, plan: "enterprise" }
+        : null;
+      return res.status(402).json({
+        error: "seat_limit_reached",
+        limit: maxSeats,
+        current: currentSeats?.cnt || 0,
+        plan: userPlan,
+        nextTier,
+      });
     }
 
     const now = new Date().toISOString();
@@ -6016,6 +6031,103 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       res.status(500).json({ error: "Failed to update account settings" });
     }
+  });
+
+  // ── HOSPITAL LOOKUP (bed count) ──────────────────────────────────────────
+  let hospitalCache: any[] | null = null;
+
+  app.get("/api/lookup/hospital", (req, res) => {
+    const { name, state } = req.query as { name?: string; state?: string };
+    if (!name || name.length < 3) return res.json({ results: [] });
+
+    // Lazy-load hospitals.json
+    if (!hospitalCache) {
+      try {
+        const fs = require("fs");
+        const path = require("path");
+        const dataPath = path.join(__dirname, "data", "hospitals.json");
+        hospitalCache = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
+      } catch (err: any) {
+        console.error("[hospital-lookup] Failed to load hospitals.json:", err.message);
+        return res.status(500).json({ error: "Hospital data unavailable" });
+      }
+    }
+
+    const queryWords = name.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean);
+    if (queryWords.length === 0) return res.json({ results: [] });
+
+    type ScoredHospital = { hospital: any; score: number };
+    const scored: ScoredHospital[] = [];
+
+    for (const h of hospitalCache!) {
+      if (state && h.state !== state.toUpperCase()) continue;
+
+      const hName = h.nameNormalized || h.name.toLowerCase();
+
+      // Score: exact match > all words present > partial match
+      let score = 0;
+      if (hName === name.toLowerCase()) {
+        score = 1000;
+      } else {
+        let allPresent = true;
+        for (const w of queryWords) {
+          if (hName.includes(w)) {
+            score += 10;
+          } else {
+            allPresent = false;
+          }
+        }
+        if (allPresent && queryWords.length > 0) score += 50;
+      }
+
+      if (score > 0) {
+        scored.push({ hospital: h, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score || a.hospital.name.localeCompare(b.hospital.name));
+    const top5 = scored.slice(0, 5);
+
+    const results = top5.map(({ hospital }) => {
+      const suggestion = suggestTierFromBeds(hospital.beds);
+      return {
+        name: hospital.name,
+        state: hospital.state,
+        zip: hospital.zip,
+        beds: hospital.beds,
+        ccn: hospital.ccn,
+        facilityType: hospital.facilityType,
+        suggestedTier: suggestion.tier,
+        tierLabel: suggestion.label,
+        tierPrice: suggestion.price,
+        tierSeats: suggestion.seats,
+      };
+    });
+
+    res.json({ results });
+  });
+
+  // ── ADMIN SET PLAN (PATCH) ──────────────────────────────────────────────
+  app.patch("/api/admin/set-plan", (req, res) => {
+    const secret = req.headers["x-admin-secret"] as string;
+    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
+    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+
+    const { userId, plan } = req.body;
+    if (!userId || !plan) return res.status(400).json({ error: "userId and plan required" });
+
+    const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
+    if (!validPlans.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
+
+    const planCredits = plan === "free" || plan === "per_study" ? 0 : 99999;
+    storage.updateUserPlan(Number(userId), plan, planCredits);
+
+    // Also update seat_count to match plan defaults
+    const seats = PLAN_SEATS[plan] || 1;
+    (db as any).$client.prepare("UPDATE users SET seat_count = ? WHERE id = ?").run(seats, Number(userId));
+
+    const user = storage.getUserById(Number(userId));
+    res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits, seatCount: seats } });
   });
 
   return httpServer;

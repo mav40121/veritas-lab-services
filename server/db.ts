@@ -706,6 +706,53 @@ sqlite.exec(`
   }
 }
 
+// Add bed_count, hospital_name, hospital_state columns for hospital lookup signup
+const bedCols: [string, string][] = [
+  ["bed_count", "INTEGER"],
+  ["hospital_name", "TEXT"],
+  ["hospital_state", "TEXT"],
+];
+for (const [col, colType] of bedCols) {
+  if (!colNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE users ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
+// Plan/tier definitions: seat limits, pricing, bed ranges
+export const PLAN_SEATS: Record<string, number> = {
+  clinic: 2,
+  community: 5,
+  hospital: 15,
+  enterprise: 25,
+  free: 1,
+  per_study: 1,
+  waived: 1,
+  veritacheck_only: 1,
+  large_hospital: 50,
+  lab: 25,
+};
+
+export const PLAN_PRICES: Record<string, number> = {
+  clinic: 499,
+  community: 799,
+  hospital: 1299,
+  enterprise: 1999,
+};
+
+export const PLAN_BED_RANGES: Record<string, [number, number]> = {
+  clinic: [0, 25],
+  community: [26, 100],
+  hospital: [101, 300],
+  enterprise: [301, Infinity],
+};
+
+export function suggestTierFromBeds(beds: number): { tier: string; label: string; price: number; seats: number } {
+  if (beds <= 25) return { tier: 'clinic', label: 'Clinic', price: 499, seats: 2 };
+  if (beds <= 100) return { tier: 'community', label: 'Community', price: 799, seats: 5 };
+  if (beds <= 300) return { tier: 'hospital', label: 'Hospital', price: 1299, seats: 15 };
+  return { tier: 'enterprise', label: 'Enterprise', price: 1999, seats: 25 };
+}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
