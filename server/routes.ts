@@ -6274,13 +6274,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── ADMIN: Trigger nightly snapshot manually ─────────────────────────────────────
-  app.post("/api/admin/run-snapshot", (req, res) => {
+  app.post("/api/admin/run-snapshot", async (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
     const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
     if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
-    const { runNightlySnapshots } = require("./audit");
-    runNightlySnapshots();
-    res.json({ ok: true, message: "Snapshot run triggered" });
+    try {
+      const { runNightlySnapshots, saveNightlySnapshot } = await import("./audit");
+      const { userId } = req.body || req.query;
+      if (userId) {
+        // Single user snapshot
+        saveNightlySnapshot(Number(userId));
+        res.json({ ok: true, message: `Snapshot saved for user ${userId}` });
+      } else {
+        runNightlySnapshots();
+        // Count snapshots saved today
+        const today = new Date().toISOString().split("T")[0];
+        const cnt = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM nightly_snapshots WHERE snapshot_date = ?").get(today) as any;
+        res.json({ ok: true, message: `Snapshots run. ${cnt?.cnt ?? 0} saved for today.` });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   return httpServer;
