@@ -3373,6 +3373,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/demo/pt - VeritaPT demo data (public)
+  app.get("/api/demo/pt", (_req, res) => {
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.status(404).json({ error: "Demo user not found" });
+
+      const enrollments = (db as any).$client.prepare(
+        "SELECT * FROM pt_enrollments WHERE user_id = ? AND status = 'active' ORDER BY analyte"
+      ).all(userId) as any[];
+
+      const events = (db as any).$client.prepare(
+        "SELECT * FROM pt_events WHERE user_id = ? ORDER BY survey_period DESC"
+      ).all(userId) as any[];
+
+      const cas = (db as any).$client.prepare(
+        "SELECT * FROM pt_corrective_actions WHERE user_id = ? ORDER BY created_at DESC"
+      ).all(userId) as any[];
+
+      const totalEvents = events.length;
+      const passEvents = events.filter((e: any) => e.result === 'pass').length;
+      const passRate = totalEvents > 0 ? Math.round((passEvents / totalEvents) * 100 * 10) / 10 : 0;
+      const openCAs = cas.filter((c: any) => c.status !== 'completed').length;
+
+      res.json({
+        enrollments,
+        events,
+        correctiveActions: cas,
+        summary: {
+          activeEnrollments: enrollments.length,
+          eventsThisYear: events.filter((e: any) => e.survey_period?.startsWith('2026')).length,
+          passRate,
+          openCAs,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to load PT demo data", detail: err.message });
+    }
+  });
+
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
