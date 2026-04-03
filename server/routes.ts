@@ -8,6 +8,7 @@ import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS,
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF } from "./pdfReport";
+import { logAudit } from "./audit";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 
@@ -897,6 +898,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const delStudy = (db as any).$client.prepare("SELECT id, test_name, study_type, analyst, date FROM studies WHERE id = ?").get(parseInt(req.params.id)) as any;
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "delete", entityType: "study", entityId: req.params.id, entityLabel: delStudy ? `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})` : undefined, before: delStudy, ipAddress: req.ip });
     storage.deleteStudy(parseInt(req.params.id));
     res.json({ success: true });
   });
@@ -1014,6 +1017,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
+    const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
+    const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -1131,6 +1137,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
+    const delInstr = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id) as any;
+    const delInstTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "instrument", entityId: req.params.instId, entityLabel: delInstr?.instrument_name, before: { instrument: delInstr, tests: delInstTests }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE id = ? AND map_id = ?").run(req.params.instId, req.params.id);
     res.json({ ok: true });
@@ -1225,6 +1234,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const newActive = tests.filter((t: any) => t.active !== 0 && t.active !== false).length;
         if (otherCount + newActive > 10) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 10 analytes", limitReached: true, limit: 10, type: "analytes", current: otherCount + newActive });
       }
+      // Capture before state for audit log
+      const beforeTests = (db as any).$client.prepare(
+        "SELECT analyte, specialty, complexity, active FROM veritamap_instrument_tests WHERE instrument_id = ?"
+      ).all(req.params.instId);
+      const instrRow = (db as any).$client.prepare("SELECT instrument_name FROM veritamap_instruments WHERE id = ?").get(req.params.instId) as any;
+      logAudit({
+        userId: req.userId,
+        ownerUserId: req.ownerUserId ?? req.userId,
+        module: "veritamap",
+        action: beforeTests.length === 0 ? "create" : "update",
+        entityType: "instrument_tests",
+        entityId: req.params.instId,
+        entityLabel: instrRow?.instrument_name ?? `instrument_${req.params.instId}`,
+        before: beforeTests,
+        after: tests,
+        ipAddress: req.ip,
+      });
       // Replace all tests for this instrument
       (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
       const stmt = (db as any).$client.prepare(
@@ -1667,6 +1693,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
+    const delScanItems = (db as any).$client.prepare("SELECT item_id, status, notes FROM veritascan_items WHERE scan_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritascan", action: "delete", entityType: "scan", entityId: req.params.id, entityLabel: delScan?.name, before: { scan: delScan, items: delScanItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM veritascan_items WHERE scan_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritascan_scans WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -4066,6 +4095,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE a.id = ?`
     ).get(req.params.id);
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    const delAssessment = (db as any).$client.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id) as any;
+    const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: delAssessment ? `${delAssessment.employee_name} - ${delAssessment.program_name}` : undefined, before: { assessment: delAssessment, items: delAssessItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -4623,6 +4655,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!lab) return res.status(400).json({ error: "Lab not found" });
     const emp = (db as any).$client.prepare("SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const delEmployee = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id) as any;
+    const delRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastaff", action: "delete", entityType: "employee", entityId: req.params.id, entityLabel: delEmployee ? `${delEmployee.first_name} ${delEmployee.last_name}` : undefined, before: { employee: delEmployee, roles: delRoles }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM staff_competency_schedules WHERE employee_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
@@ -5229,6 +5264,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.id, req.userId);
     if (!existing) return res.status(404).json({ error: "Certificate not found" });
 
+    const delCertRow = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id) as any;
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritalab", action: "delete", entityType: "certificate", entityId: req.params.id, entityLabel: delCertRow?.cert_type ?? delCertRow?.name, before: delCertRow, ipAddress: req.ip });
     const now = new Date().toISOString();
     (db as any).$client.prepare("UPDATE lab_certificates SET is_active = 0, updated_at = ? WHERE id = ?").run(now, req.params.id);
     // Remove pending reminders
@@ -6196,6 +6233,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const user = storage.getUserById(Number(userId));
     res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits, seatCount: seats } });
+  });
+
+  // ── ADMIN: Audit log viewer ────────────────────────────────────────────────────────
+  app.get("/api/admin/audit-log", (req, res) => {
+    const secret = (req.query.secret || req.headers["x-admin-secret"]) as string;
+    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
+    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+
+    const { userId, module, limit = 200 } = req.query;
+    let query = `SELECT * FROM audit_log WHERE 1=1`;
+    const params: any[] = [];
+    if (userId) { query += ` AND owner_user_id = ?`; params.push(Number(userId)); }
+    if (module) { query += ` AND module = ?`; params.push(module); }
+    query += ` ORDER BY created_at DESC LIMIT ?`;
+    params.push(Number(limit));
+    const rows = (db as any).$client.prepare(query).all(...params);
+    res.json({ entries: rows, count: rows.length });
+  });
+
+  // ── ADMIN: Snapshots viewer ────────────────────────────────────────────────────
+  app.get("/api/admin/snapshots", (req, res) => {
+    const secret = (req.query.secret || req.headers["x-admin-secret"]) as string;
+    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
+    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    const { getSnapshots } = require("./audit");
+    res.json({ snapshots: getSnapshots(Number(userId)) });
+  });
+
+  app.get("/api/admin/snapshots/:id", (req, res) => {
+    const secret = (req.query.secret || req.headers["x-admin-secret"]) as string;
+    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
+    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    const { getSnapshot } = require("./audit");
+    const snap = getSnapshot(Number(req.params.id));
+    if (!snap) return res.status(404).json({ error: "Snapshot not found" });
+    res.json(snap);
+  });
+
+  // ── ADMIN: Trigger nightly snapshot manually ─────────────────────────────────────
+  app.post("/api/admin/run-snapshot", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
+    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    const { runNightlySnapshots } = require("./audit");
+    runNightlySnapshots();
+    res.json({ ok: true, message: "Snapshot run triggered" });
   });
 
   return httpServer;

@@ -111,6 +111,31 @@ app.use((req, res, next) => {
     console.error("[migration] Study status recompute error:", err.message);
   }
 
+  // Schedule nightly snapshot at midnight UTC
+  // Runs once at startup to catch any missed snapshot, then schedules daily
+  try {
+    const { runNightlySnapshots } = await import("./audit");
+    const scheduleNightlySnapshot = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[snapshot] Running nightly snapshot...");
+        runNightlySnapshots();
+        // Schedule again for next midnight
+        setInterval(() => {
+          console.log("[snapshot] Running nightly snapshot...");
+          runNightlySnapshots();
+        }, 24 * 60 * 60 * 1000);
+      }, msUntilMidnight);
+      console.log(`[snapshot] Nightly snapshot scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`);
+    };
+    scheduleNightlySnapshot();
+  } catch (err: any) {
+    console.error("[snapshot] Scheduler setup error:", err.message);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
