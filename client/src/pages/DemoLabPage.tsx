@@ -223,16 +223,54 @@ export default function DemoLabPage() {
     };
   }
 
-  function downloadStudyPdf(studyId: number) {
-    window.open(`${API_BASE}/api/demo/studies/${studyId}/pdf`, "_blank");
+  async function downloadStudyPdf(studyId: number, testName?: string, studyType?: string) {
+    try {
+      const res = await fetch(`${API_BASE}/api/demo/studies/${studyId}/pdf`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const name = (testName || "Study").replace(/\s+/g, "_");
+      const type = studyType === "cal_ver" ? "CalVer" : studyType === "method_comparison" ? "MethodComp" : studyType === "ref_interval" ? "RefInterval" : "Study";
+      a.download = `VeritaCheck_${name}_${type}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {}
   }
 
-  function downloadMapExcel() {
-    window.open(`${API_BASE}/api/demo/map/excel`, "_blank");
+  async function downloadMapExcel() {
+    try {
+      const res = await fetch(`${API_BASE}/api/demo/map/excel`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "VeritaMap_Riverside_Regional.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {}
   }
 
-  function downloadCompetencyPdf() {
-    window.open(`${API_BASE}/api/demo/competency/pdf`, "_blank");
+  async function downloadCompetencyPdf() {
+    try {
+      const res = await fetch(`${API_BASE}/api/demo/competency/pdf`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "VeritaComp_Competency_Assessment.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {}
   }
 
   return (
@@ -350,7 +388,7 @@ export default function DemoLabPage() {
                             {isExpanded ? <ChevronUp size={11} className="mr-1" /> : <ChevronDown size={11} className="mr-1" />}
                             {isExpanded ? "Collapse Results" : "View Full Results"}
                           </Button>
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => downloadStudyPdf(study.id)}>
+                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => downloadStudyPdf(study.id, study.test_name, study.study_type)}>
                             <Download size={11} className="mr-1" /> Download PDF Report
                           </Button>
                         </div>
