@@ -643,7 +643,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
             <label className="text-sm font-medium mb-2 block">CLIA Role Assignments</label>
             {hasLD && (
               <p className="text-xs text-amber-600 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 mb-2">
-                The Laboratory Director does not need to be listed as CC, TC, TS, or GS -- those are delegated positions.
+                The Laboratory Director does not need to be listed as CC, TC, TS, or GS. Those are delegated positions.
               </p>
             )}
             <div className="flex flex-wrap gap-2 mb-3">

@@ -57,7 +57,7 @@ export default function VeritaStaffPage() {
               </p>
               <div className="border-l-4 border-primary pl-4 mb-6">
                 <p className="text-base leading-relaxed italic text-foreground/90">
-                  "Staff roster, CLIA role assignments, competency scheduling, and CMS 209 generation -- all in one place."
+                  "Staff roster, CLIA role assignments, competency scheduling, and CMS 209 generation: all in one place."
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">

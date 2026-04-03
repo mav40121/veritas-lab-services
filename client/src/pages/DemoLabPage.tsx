@@ -291,7 +291,7 @@ export default function DemoLabPage() {
             <div className="space-y-6">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional has completed 3 EP studies for their chemistry department -- 2 method comparisons and 1 calibration verification.
+                  Riverside Regional has completed 3 EP studies for their chemistry department: 2 method comparisons and 1 calibration verification.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   Both study types are recurring requirements. Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
@@ -945,7 +945,7 @@ export default function DemoLabPage() {
                   {generating209 ? "Generating..." : "Generate CMS 209"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  CMS 209 -- Laboratory Personnel Report required at every CLIA survey
+                  CMS 209 - Laboratory Personnel Report required at every CLIA survey
                 </p>
               </div>
 

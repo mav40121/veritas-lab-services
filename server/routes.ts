@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF } from "./pdfReport";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
+import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -3377,7 +3378,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Helper: compute PT coverage for a given userId
   function computePTCoverage(userId: number) {
-    const { cliaAnalytes, ptCategoryLinks } = require("./cliaAnalytes");
+    // cliaAnalytes and ptCategoryLinks imported at top of file
 
     // Get the lab's test menu (unique analytes from VeritaMap)
     const mapRow = (db as any).$client.prepare(
