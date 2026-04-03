@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle, ChevronDown } from "lucide-react";
+import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle } from "lucide-react";
 
 // Hospital result from /api/lookup/hospital
 interface HospitalResult {
