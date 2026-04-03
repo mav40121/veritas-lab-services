@@ -1139,7 +1139,10 @@ export default function VeritaMapBuildPage() {
   const saveAllMutation = useMutation({
     mutationFn: async () => {
       for (const instr of instruments) {
-        const tests = testsByInstrument[instr.id] ?? [];
+        // Skip instruments where we have no local state - their tests were saved
+        // directly to the server (e.g. via Copy Test Menu) and we should not overwrite them
+        if (!(instr.id in testsByInstrument)) continue;
+        const tests = testsByInstrument[instr.id];
         // Save all tests (active and inactive) so user can re-activate deselected tests later
         const res = await fetch(
           `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
