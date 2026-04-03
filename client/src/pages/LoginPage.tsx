@@ -1,37 +1,52 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle } from "lucide-react";
+import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle, ChevronDown } from "lucide-react";
 
-interface CLIAResult {
-  clia_number: string;
-  facility_name: string;
-  address: string;
-  city: string;
+// Hospital result from /api/lookup/hospital
+interface HospitalResult {
+  name: string;
   state: string;
   zip: string;
-  lab_director: string;
-  certificate_type: string;
-  specialty_count: number;
-  valid_through: string | null;
-  tier: string;
-  base_price: number;
+  beds: number;
+  ccn: string;
+  facilityType: string;
+  suggestedTier: string;
+  tierLabel: string;
+  tierPrice: number;
+  tierSeats: number;
 }
 
-const TIER_LABELS: Record<string, string> = {
-  waived: "Waived",
-  community: "Community",
-  hospital: "Hospital",
-  large_hospital: "Large Hospital",
-  veritacheck_only: "VeritaCheck™ Unlimited",
-};
+// Tier definitions for self-selection
+const TIER_OPTIONS = [
+  { id: "clinic",     label: "Clinic",     price: 499,  seats: 2,  beds: "0-25 beds",    desc: "Solo director or designee + one tech" },
+  { id: "community",  label: "Community",  price: 799,  seats: 5,  beds: "26-100 beds",  desc: "Community hospital lab" },
+  { id: "hospital",   label: "Hospital",   price: 1299, seats: 15, beds: "101-300 beds", desc: "Regional or acute care hospital" },
+  { id: "enterprise", label: "Enterprise", price: 1999, seats: 25, beds: "300+ beds",    desc: "Multi-dept or health system" },
+];
+
+// Lab type options
+type LabType = "hospital" | "independent" | "pol" | "other";
+const LAB_TYPE_OPTIONS: { id: LabType; label: string; desc: string }[] = [
+  { id: "hospital",     label: "Hospital / Health System",  desc: "Search by hospital name to get a recommended plan" },
+  { id: "independent",  label: "Independent / Reference Lab", desc: "Stand-alone reference or send-out lab" },
+  { id: "pol",          label: "Physician Office Lab (POL)", desc: "Lab in a physician practice" },
+  { id: "other",        label: "FQHC / Tribal / Other",     desc: "Federally qualified health center, tribal lab, or other" },
+];
+
+// US States for dropdown
+const US_STATES = [
+  "AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY",
+  "LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH",
+  "OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY",
+];
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -43,53 +58,81 @@ export default function LoginPage() {
   const [hipaaAcknowledged, setHipaaAcknowledged] = useState(false);
   const [hipaaError, setHipaaError] = useState("");
 
-  // CLIA lookup state
-  const [regStep, setRegStep] = useState<"clia" | "form">("clia");
-  const [cliaInput, setCliaInput] = useState("");
-  const [cliaLooking, setCliaLooking] = useState(false);
-  const [cliaResult, setCliaResult] = useState<CLIAResult | null>(null);
-  const [cliaConfirmed, setCliaConfirmed] = useState(false);
-  const [skipClia, setSkipClia] = useState(false);
-  const [manualEntry, setManualEntry] = useState(false);
-  const [manualLabName, setManualLabName] = useState("");
-  const [lookupFailed, setLookupFailed] = useState(false);
+  // Registration step: "labtype" | "hospital-search" | "self-select" | "form"
+  const [regStep, setRegStep] = useState<"labtype" | "hospital-search" | "self-select" | "form">("labtype");
+  const [labType, setLabType] = useState<LabType | null>(null);
+
+  // Hospital search state
+  const [hospitalQuery, setHospitalQuery] = useState("");
+  const [hospitalState, setHospitalState] = useState("");
+  const [hospitalSearching, setHospitalSearching] = useState(false);
+  const [hospitalResults, setHospitalResults] = useState<HospitalResult[]>([]);
+  const [selectedHospital, setSelectedHospital] = useState<HospitalResult | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Self-selection state
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
 
   // Session conflict state
   const [sessionConflict, setSessionConflict] = useState(false);
   const [conflictData, setConflictData] = useState<any>(null);
 
-  async function handleCLIALookup() {
-    if (!cliaInput.trim()) return;
-    setCliaLooking(true);
-    setCliaResult(null);
-    setLookupFailed(false);
-    try {
-      const res = await apiRequest("POST", "/api/clia/lookup", { clia_number: cliaInput.trim() });
-      const data = await res.json();
-      if (!res.ok) {
-        setLookupFailed(true);
-        return;
+  // Debounced hospital search
+  useEffect(() => {
+    if (hospitalQuery.length < 3) {
+      setHospitalResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setHospitalSearching(true);
+      try {
+        const params = new URLSearchParams({ name: hospitalQuery });
+        if (hospitalState) params.set("state", hospitalState);
+        const res = await fetch(`/api/lookup/hospital?${params.toString()}`);
+        const data = await res.json();
+        setHospitalResults(data.results || []);
+        setShowDropdown((data.results || []).length > 0);
+      } catch {
+        setHospitalResults([]);
+      } finally {
+        setHospitalSearching(false);
       }
-      setCliaResult(data);
-    } catch {
-      setLookupFailed(true);
-    } finally {
-      setCliaLooking(false);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [hospitalQuery, hospitalState]);
+
+  function handleLabTypeSelect(lt: LabType) {
+    setLabType(lt);
+    if (lt === "hospital") {
+      setRegStep("hospital-search");
+    } else {
+      setRegStep("self-select");
     }
   }
 
-  function handleManualEntry() {
-    setManualEntry(true);
+  function handleSelectHospital(h: HospitalResult) {
+    setSelectedHospital(h);
+    setHospitalQuery(h.name);
+    setShowDropdown(false);
+    setHospitalResults([]);
+  }
+
+  function handleConfirmHospital() {
+    if (!selectedHospital) return;
+    setSelectedTier(selectedHospital.suggestedTier);
     setRegStep("form");
   }
 
-  function handleConfirmLab() {
-    setCliaConfirmed(true);
-    setRegStep("form");
+  function handleChooseDifferentTier() {
+    setSelectedHospital(null);
+    setRegStep("self-select");
   }
 
-  function handleSkipClia() {
-    setSkipClia(true);
+  function handleTierSelect(tierId: string) {
+    setSelectedTier(tierId);
     setRegStep("form");
   }
 
@@ -108,7 +151,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Store session token
       if (data.session_token) {
         localStorage.setItem("veritas_session_token", data.session_token);
       }
@@ -128,9 +170,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        if (data.session_token) {
-          localStorage.setItem("veritas_session_token", data.session_token);
-        }
+        if (data.session_token) localStorage.setItem("veritas_session_token", data.session_token);
         login(conflictData.token, conflictData.user);
         navigate("/dashboard");
       }
@@ -151,63 +191,46 @@ export default function LoginPage() {
     setHipaaError("");
     setLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/auth/register", { ...registerForm, hipaa_acknowledged: true });
+      const payload: Record<string, any> = {
+        ...registerForm,
+        hipaa_acknowledged: true,
+        plan: selectedTier || "free",
+      };
+      if (selectedHospital) {
+        payload.hospital_name = selectedHospital.name;
+        payload.hospital_state = selectedHospital.state;
+        payload.bed_count = selectedHospital.beds;
+      }
+
+      const res = await apiRequest("POST", "/api/auth/register", payload);
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Registration failed", variant: "destructive" }); return; }
 
-      // Store session token
       if (data.session_token) {
         localStorage.setItem("veritas_session_token", data.session_token);
-      }
-
-      // If CLIA was confirmed, save it to the user's account
-      if (cliaConfirmed && cliaResult) {
-        try {
-          await fetch("/api/clia/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${data.token}` },
-            body: JSON.stringify({
-              clia_number: cliaResult.clia_number,
-              facility_name: cliaResult.facility_name,
-              address: cliaResult.address,
-              lab_director: cliaResult.lab_director,
-              specialty_count: cliaResult.specialty_count,
-              certificate_type: cliaResult.certificate_type,
-              tier: cliaResult.tier,
-            }),
-          });
-        } catch {}
-      } else if (manualEntry) {
-        // Manual CLIA entry - lookup was unavailable
-        try {
-          await fetch("/api/clia/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${data.token}` },
-            body: JSON.stringify({
-              clia_number: cliaInput.trim().toUpperCase(),
-              facility_name: manualLabName.trim(),
-              tier: "community",
-            }),
-          });
-        } catch {}
-      } else if (skipClia) {
-        // VeritaCheck-only tier
-        try {
-          await fetch("/api/clia/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${data.token}` },
-            body: JSON.stringify({
-              clia_number: "",
-              tier: "veritacheck_only",
-            }),
-          });
-        } catch {}
       }
 
       login(data.token, data.user);
       navigate("/dashboard");
     } catch { toast({ title: "Registration failed", variant: "destructive" }); }
     finally { setLoading(false); }
+  }
+
+  // Summary chip for form step header
+  function getFormSummary() {
+    if (selectedHospital) {
+      const tier = TIER_OPTIONS.find(t => t.id === selectedTier);
+      return {
+        name: selectedHospital.name,
+        sub: `${selectedHospital.state} - ${selectedHospital.beds} beds - ${tier?.label || selectedTier} Plan - $${tier?.price || 0}/mo - ${tier?.seats || 0} seats`,
+      };
+    }
+    const tier = TIER_OPTIONS.find(t => t.id === selectedTier);
+    const lt = LAB_TYPE_OPTIONS.find(l => l.id === labType);
+    return {
+      name: lt?.label || "Laboratory",
+      sub: tier ? `${tier.label} Plan - $${tier.price}/mo - ${tier.seats} seats` : "Plan not selected",
+    };
   }
 
   return (
@@ -227,6 +250,8 @@ export default function LoginPage() {
                 <TabsTrigger value="login">Sign In</TabsTrigger>
                 <TabsTrigger value="register">Create Account</TabsTrigger>
               </TabsList>
+
+              {/* ── LOGIN TAB ── */}
               <TabsContent value="login">
                 {sessionConflict ? (
                   <div className="space-y-4">
@@ -256,121 +281,179 @@ export default function LoginPage() {
                   </form>
                 )}
               </TabsContent>
+
+              {/* ── REGISTER TAB ── */}
               <TabsContent value="register">
-                {regStep === "clia" ? (
+
+                {/* STEP 1: Lab type selection */}
+                {regStep === "labtype" && (
                   <div className="space-y-4">
-                    <div className="text-center mb-2">
-                      <Building2 size={28} className="mx-auto text-primary mb-2" />
-                      <p className="text-sm font-medium">Step 1: Look up your laboratory</p>
-                      <p className="text-xs text-muted-foreground">Your CLIA certificate determines your tier and pricing</p>
+                    <div className="text-center mb-1">
+                      <Building2 size={26} className="mx-auto text-primary mb-2" />
+                      <p className="text-sm font-medium">Step 1: What type of lab do you operate?</p>
+                      <p className="text-xs text-muted-foreground">This helps us recommend the right pricing tier</p>
                     </div>
-
-                    <div className="space-y-1.5">
-                      <Label>CLIA Number</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={cliaInput}
-                          onChange={e => setCliaInput(e.target.value)}
-                          placeholder="e.g. 05D2187634"
-                          className="flex-1"
-                        />
-                        <Button type="button" onClick={handleCLIALookup} disabled={cliaLooking || !cliaInput.trim()}>
-                          {cliaLooking ? <Search className="animate-spin" size={16} /> : <Search size={16} />}
-                          <span className="ml-1.5">{cliaLooking ? "Looking up..." : "Look Up"}</span>
-                        </Button>
-                      </div>
-                    </div>
-
-                    {cliaResult && (
-                      <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 space-y-2">
-                        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                          <CheckCircle size={16} />
-                          <span className="font-medium text-sm">We found your laboratory:</span>
-                        </div>
-                        <div className="text-sm space-y-1 text-foreground">
-                          <p className="font-semibold">{cliaResult.facility_name}</p>
-                          <p className="text-muted-foreground text-xs">{cliaResult.address}</p>
-                          <p className="text-xs">CLIA: {cliaResult.clia_number}</p>
-                          <p className="text-xs">Certificate Type: {cliaResult.certificate_type}</p>
-                          {cliaResult.lab_director && <p className="text-xs">Laboratory Director: {cliaResult.lab_director}</p>}
-                          <p className="text-xs">Certified Specialties: {cliaResult.specialty_count}</p>
-                          {cliaResult.valid_through && <p className="text-xs">Certificate Valid Through: {cliaResult.valid_through}</p>}
-                          <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700">
-                            <p className="font-medium text-primary">
-                              Your tier: {TIER_LABELS[cliaResult.tier] || cliaResult.tier} - ${cliaResult.base_price}/yr
-                              <span className="text-xs text-muted-foreground ml-1">(includes first seat)</span>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 mt-3">
-                          <Button onClick={handleConfirmLab} className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-                            This is my lab - Continue
-                          </Button>
-                          <Button variant="outline" onClick={() => { setCliaResult(null); setCliaInput(""); }} className="shrink-0">
-                            Search again
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {lookupFailed && (
-                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
-                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Lab not found in CMS registry</p>
-                        <p className="text-xs text-amber-700 dark:text-amber-400">
-                          The CMS lookup service may be temporarily unavailable, or your lab may not be in the database yet.
-                          You can enter your lab name manually and proceed.
-                        </p>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Laboratory Name</Label>
-                          <Input
-                            value={manualLabName}
-                            onChange={e => setManualLabName(e.target.value)}
-                            placeholder="e.g. Riverside Regional Medical Center"
-                            className="text-sm"
-                          />
-                        </div>
-                        <Button
+                    <div className="space-y-2">
+                      {LAB_TYPE_OPTIONS.map(lt => (
+                        <button
+                          key={lt.id}
                           type="button"
-                          onClick={handleManualEntry}
-                          disabled={!manualLabName.trim()}
-                          className="w-full"
-                          variant="outline"
+                          onClick={() => handleLabTypeSelect(lt.id)}
+                          className="w-full text-left border rounded-lg px-4 py-3 hover:border-primary hover:bg-primary/5 transition-colors"
                         >
-                          Continue with manual entry
-                        </Button>
-                      </div>
-                    )}
-
-                    <div className="text-center pt-2 border-t">
-                      <button
-                        type="button"
-                        onClick={handleSkipClia}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Purchasing VeritaCheck&#8482; only? Click here - no CLIA number required.
-                      </button>
+                          <p className="text-sm font-medium">{lt.label}</p>
+                          <p className="text-xs text-muted-foreground">{lt.desc}</p>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                ) : (
+                )}
+
+                {/* STEP 2A: Hospital name search */}
+                {regStep === "hospital-search" && (
+                  <div className="space-y-4">
+                    <div className="text-center mb-1">
+                      <Search size={24} className="mx-auto text-primary mb-2" />
+                      <p className="text-sm font-medium">Step 2: Find your hospital</p>
+                      <p className="text-xs text-muted-foreground">We will look up your licensed bed count and suggest a plan</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <select
+                        value={hospitalState}
+                        onChange={e => setHospitalState(e.target.value)}
+                        className="border rounded-md px-2 py-1.5 text-sm bg-background w-20 shrink-0"
+                      >
+                        <option value="">State</option>
+                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <div className="relative flex-1">
+                        <Input
+                          value={hospitalQuery}
+                          onChange={e => { setHospitalQuery(e.target.value); setSelectedHospital(null); }}
+                          placeholder="Type hospital name..."
+                          className="w-full"
+                          autoComplete="off"
+                        />
+                        {hospitalSearching && (
+                          <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />
+                        )}
+                        {showDropdown && (
+                          <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                            {hospitalResults.map((h, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleSelectHospital(h)}
+                                className="w-full text-left px-3 py-2.5 hover:bg-muted text-sm border-b last:border-b-0"
+                              >
+                                <p className="font-medium truncate">{h.name}</p>
+                                <p className="text-xs text-muted-foreground">{h.state} - {h.beds} beds - {h.tierLabel} recommended</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tier suggestion card */}
+                    {selectedHospital && (
+                      <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle size={15} />
+                          <span className="font-medium text-sm">Hospital found</span>
+                        </div>
+                        <p className="font-semibold text-sm">{selectedHospital.name}</p>
+                        <p className="text-xs text-muted-foreground">{selectedHospital.state} - {selectedHospital.beds} licensed beds</p>
+                        <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700">
+                          <p className="text-xs text-muted-foreground mb-0.5">Recommended plan:</p>
+                          <p className="font-semibold text-primary">
+                            {selectedHospital.tierLabel} - ${selectedHospital.tierPrice}/mo
+                          </p>
+                          <p className="text-xs text-muted-foreground">{selectedHospital.tierSeats} seats included</p>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button onClick={handleConfirmHospital} className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground text-sm">
+                            Continue with {selectedHospital.tierLabel}
+                          </Button>
+                          <Button variant="outline" onClick={handleChooseDifferentTier} className="text-sm shrink-0">
+                            Choose different
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {hospitalQuery.length >= 3 && !hospitalSearching && hospitalResults.length === 0 && !selectedHospital && !showDropdown && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
+                        <p className="font-medium text-amber-800 dark:text-amber-300 text-xs">No match found</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">Try a different name or state, or select your plan below.</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full text-xs"
+                          onClick={() => { setRegStep("self-select"); }}
+                        >
+                          Select plan manually
+                        </Button>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setRegStep("labtype")}
+                      className="text-xs text-muted-foreground hover:underline w-full text-center pt-1"
+                    >
+                      Back to lab type
+                    </button>
+                  </div>
+                )}
+
+                {/* STEP 2B: Self-selection for non-hospital or no-match */}
+                {regStep === "self-select" && (
+                  <div className="space-y-3">
+                    <div className="text-center mb-1">
+                      <p className="text-sm font-medium">Step 2: Choose your plan</p>
+                      <p className="text-xs text-muted-foreground">All plans include a 14-day trial period</p>
+                    </div>
+                    <div className="space-y-2">
+                      {TIER_OPTIONS.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => handleTierSelect(t.id)}
+                          className={`w-full text-left border rounded-lg px-4 py-3 transition-colors hover:border-primary hover:bg-primary/5 ${selectedTier === t.id ? "border-primary bg-primary/5" : ""}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-semibold">{t.label}</p>
+                              <p className="text-xs text-muted-foreground">{t.beds} - {t.seats} seats</p>
+                              <p className="text-xs text-muted-foreground">{t.desc}</p>
+                            </div>
+                            <p className="text-sm font-semibold text-primary shrink-0 ml-3">${t.price}/mo</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRegStep("labtype")}
+                      className="text-xs text-muted-foreground hover:underline w-full text-center"
+                    >
+                      Back to lab type
+                    </button>
+                  </div>
+                )}
+
+                {/* STEP 3: Registration form */}
+                {regStep === "form" && (
                   <form onSubmit={handleRegister} className="space-y-4">
-                    {(cliaConfirmed && cliaResult) && (
+                    {(() => { const s = getFormSummary(); return (
                       <div className="bg-muted rounded-lg p-3 text-xs space-y-0.5">
-                        <p className="font-medium">{cliaResult.facility_name}</p>
-                        <p className="text-muted-foreground">CLIA: {cliaResult.clia_number} | Tier: {TIER_LABELS[cliaResult.tier]}</p>
+                        <p className="font-medium">{s.name}</p>
+                        <p className="text-muted-foreground">{s.sub}</p>
                       </div>
-                    )}
-                    {manualEntry && (
-                      <div className="bg-muted rounded-lg p-3 text-xs space-y-0.5">
-                        <p className="font-medium">{manualLabName || "Laboratory"}</p>
-                        <p className="text-muted-foreground">CLIA: {cliaInput.trim().toUpperCase()} | Manually entered</p>
-                      </div>
-                    )}
-                    {skipClia && (
-                      <div className="bg-muted rounded-lg p-3 text-xs">
-                        <p className="font-medium">VeritaCheck&#8482; Unlimited - $299/yr</p>
-                        <p className="text-muted-foreground">Single user, method validation suite</p>
-                      </div>
-                    )}
+                    ); })()}
                     <div className="space-y-1.5"><Label>Full Name</Label><Input value={registerForm.name} onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required /></div>
                     <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
                     <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 6 characters" required /></div>
@@ -388,12 +471,22 @@ export default function LoginPage() {
                       </label>
                       {hipaaError && <p className="text-sm text-red-600">{hipaaError}</p>}
                     </div>
-                    <Button type="submit" disabled={loading || !hipaaAcknowledged} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">{loading ? "Creating account..." : "Create Account"}</Button>
-                    <button type="button" onClick={() => { setRegStep("clia"); setCliaConfirmed(false); setSkipClia(false); }} className="text-xs text-muted-foreground hover:underline w-full text-center">
-                      Back to CLIA lookup
+                    <Button type="submit" disabled={loading || !hipaaAcknowledged} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                      {loading ? "Creating account..." : "Create Account"}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegStep(labType === "hospital" ? "hospital-search" : "self-select");
+                        setSelectedTier(null);
+                      }}
+                      className="text-xs text-muted-foreground hover:underline w-full text-center"
+                    >
+                      Back to plan selection
                     </button>
                   </form>
                 )}
+
               </TabsContent>
             </Tabs>
           </CardContent>

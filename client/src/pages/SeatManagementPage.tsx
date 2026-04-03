@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Trash2, LogOut, Mail, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Users, Plus, Trash2, LogOut, Mail, CheckCircle, Clock, XCircle, ArrowUpCircle } from "lucide-react";
 import { authHeaders } from "@/lib/auth";
 
 interface Seat {
@@ -37,6 +37,7 @@ export default function SeatManagementPage() {
   const [newEmail, setNewEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ limit: number; current: number; plan: string; nextTier: { label: string; price: number; seats: number; plan: string } | null } | null>(null);
 
   const fetchSeats = useCallback(async () => {
     try {
@@ -62,6 +63,11 @@ export default function SeatManagementPage() {
         body: JSON.stringify({ email: newEmail.trim() }),
       });
       const data = await res.json();
+      if (res.status === 402 && data.error === "seat_limit_reached") {
+        setUpgradePrompt(data);
+        setShowAddForm(false);
+        return;
+      }
       if (!res.ok) {
         toast({ title: data.error || "Failed to add seat", variant: "destructive" });
         return;
@@ -176,8 +182,41 @@ export default function SeatManagementPage() {
         </Card>
       ))}
 
+      {/* Upgrade prompt (shown when seat limit is hit) */}
+      {upgradePrompt && (
+        <div className="mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <ArrowUpCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-sm text-amber-900 dark:text-amber-200">
+                You have reached your {upgradePrompt.limit}-seat limit on the {upgradePrompt.plan.charAt(0).toUpperCase() + upgradePrompt.plan.slice(1)} plan.
+              </p>
+              {upgradePrompt.nextTier && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                  Upgrade to {upgradePrompt.nextTier.label} (${upgradePrompt.nextTier.price}/mo) to get {upgradePrompt.nextTier.seats} seats.
+                </p>
+              )}
+              <div className="flex gap-2 mt-3">
+                {upgradePrompt.nextTier && (
+                  <a href="/#/account-settings" className="inline-flex items-center gap-1 text-xs bg-primary text-primary-foreground rounded px-3 py-1.5 hover:bg-primary/90">
+                    <ArrowUpCircle size={12} /> Upgrade Plan
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setUpgradePrompt(null)}
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add seat */}
-      {usedSeats < seatCount ? (
+      {!upgradePrompt && (usedSeats < seatCount ? (
         showAddForm ? (
           <Card className="mt-4">
             <CardContent className="py-4">
@@ -204,10 +243,12 @@ export default function SeatManagementPage() {
           </Button>
         )
       ) : (
-        <div className="mt-4 p-4 bg-muted rounded-lg text-sm text-muted-foreground text-center">
-          All {seatCount} seats are in use. <a href="/#/veritacheck" className="text-primary hover:underline">Upgrade to add more seats</a>.
+        <div className="mt-4">
+          <Button variant="outline" className="w-full" onClick={() => setShowAddForm(true)}>
+            <Plus size={14} className="mr-1.5" /> Add Seat
+          </Button>
         </div>
-      )}
+      ))}
 
       {/* Seat pricing info */}
       <div className="mt-8 text-xs text-muted-foreground space-y-1">
