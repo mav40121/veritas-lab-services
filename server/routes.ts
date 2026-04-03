@@ -6045,8 +6045,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       try {
         const fs = require("fs");
         const path = require("path");
-        const dataPath = path.join(__dirname, "data", "hospitals.json");
-        hospitalCache = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
+        // Try multiple locations: adjacent to bundle (dist/), project root server/data/, or cwd
+        const candidates = [
+          path.join(__dirname, "data", "hospitals.json"),
+          path.join(process.cwd(), "server", "data", "hospitals.json"),
+          path.join(process.cwd(), "dist", "data", "hospitals.json"),
+          path.join(__dirname, "..", "server", "data", "hospitals.json"),
+        ];
+        let loaded = false;
+        for (const candidate of candidates) {
+          if (fs.existsSync(candidate)) {
+            hospitalCache = JSON.parse(fs.readFileSync(candidate, "utf-8"));
+            loaded = true;
+            break;
+          }
+        }
+        if (!loaded) throw new Error("hospitals.json not found in any candidate path: " + candidates.join(", "));
       } catch (err: any) {
         console.error("[hospital-lookup] Failed to load hospitals.json:", err.message);
         return res.status(500).json({ error: "Hospital data unavailable" });

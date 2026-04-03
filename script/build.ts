@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, cp, mkdir } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -59,7 +59,18 @@ async function buildAll() {
   });
 }
 
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+buildAll()
+  .then(async () => {
+    // Copy static data files into dist/ so they are adjacent to index.cjs
+    try {
+      await mkdir("dist/data", { recursive: true });
+      await cp("server/data", "dist/data", { recursive: true });
+      console.log("Copied server/data -> dist/data");
+    } catch (e) {
+      console.warn("Could not copy server/data:", e);
+    }
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
