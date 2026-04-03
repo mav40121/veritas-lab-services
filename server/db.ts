@@ -411,6 +411,16 @@ sqlite.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS pt_enrollments_v2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    vendor TEXT NOT NULL CHECK(vendor IN ('CAP', 'API', 'Other')),
+    program_name TEXT NOT NULL,
+    pt_category TEXT NOT NULL,
+    year_enrolled INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Add serial_number column to veritamap_instruments if upgrading

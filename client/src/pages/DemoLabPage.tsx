@@ -32,7 +32,7 @@ interface CompetencyData {
 export default function DemoLabPage() {
   const [data, setData] = useState<DemoData | null>(null);
   const [competencyData, setCompetencyData] = useState<CompetencyData | null>(null);
-  const [ptData, setPtData] = useState<any>(null);
+  const [ptCoverage, setPtCoverage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("veritacheck");
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
@@ -48,7 +48,7 @@ export default function DemoLabPage() {
     ]).then(([demoData, compData, ptResult]) => {
       setData(demoData);
       setCompetencyData(compData);
-      setPtData(ptResult);
+      setPtCoverage(ptResult);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -114,7 +114,7 @@ export default function DemoLabPage() {
     { id: "veritascan", label: "VeritaScan™", icon: ClipboardList },
     { id: "veritacomp", label: "VeritaComp™", icon: Award },
     { id: "veritastaff", label: "VeritaStaff™", icon: Users },
-    { id: "veritapt", label: "VeritaPT™", icon: TestTubes },
+    { id: "veritapt", label: "VeritaPT™", icon: TestTubes }, // coverage analyzer
   ];
 
   const typeLabel: Record<string, string> = {
@@ -963,74 +963,131 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional tracks proficiency testing enrollments, survey results, and corrective actions in one place.
+                  Riverside Regional knows exactly which analytes are covered by PT and which need attention.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaPT&#8482; manages your CAP and state PT program enrollments, logs every survey event with pass/fail results and SDI scores, and links corrective actions directly to failed events. Always know your pass rate and open action items before the next survey.
+                  VeritaPT&#8482; reads your VeritaMap&#8482; test menu, checks each analyte against CLIA PT requirements, and shows you gaps, recommended programs, and what you already have covered.
                 </p>
               </div>
 
-              {!ptData ? (
-                <div className="text-center text-muted-foreground py-12">Loading proficiency testing data...</div>
+              {!ptCoverage ? (
+                <div className="text-center text-muted-foreground py-12">Loading PT coverage analysis...</div>
               ) : (
                 <>
                   {/* Summary Cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <Card>
                       <CardContent className="pt-4 pb-4 text-center">
-                        <div className="text-2xl font-bold text-foreground">{ptData?.summary?.activeEnrollments ?? 0}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Active Enrollments</div>
+                        <div className={`text-2xl font-bold ${(ptCoverage?.summary?.regulatedGaps ?? 0) > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                          {ptCoverage?.summary?.regulatedGaps ?? 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Required PT Gaps</div>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardContent className="pt-4 pb-4 text-center">
-                        <div className="text-2xl font-bold text-foreground">{ptData?.summary?.eventsThisYear ?? 0}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Events This Year</div>
+                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                          {ptCoverage?.summary?.regulatedCovered ?? 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Required PT Covered</div>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardContent className="pt-4 pb-4 text-center">
-                        <div className="text-2xl font-bold text-foreground">{ptData?.summary?.passRate ?? 0}%</div>
-                        <div className="text-xs text-muted-foreground mt-1">Pass Rate</div>
+                        <div className={`text-2xl font-bold ${(ptCoverage?.summary?.recommendedGaps ?? 0) > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                          {ptCoverage?.summary?.recommendedGaps ?? 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Recommended (Not Enrolled)</div>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardContent className="pt-4 pb-4 text-center">
-                        <div className="text-2xl font-bold text-foreground">{ptData?.summary?.openCAs ?? 0}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Open Corrective Actions</div>
+                        <div className="text-2xl font-bold text-muted-foreground">
+                          {ptCoverage?.summary?.waived ?? 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Waived Tests</div>
                       </CardContent>
                     </Card>
                   </div>
 
-                  {/* Active PT Enrollments Table */}
+                  {/* Coverage Table */}
                   <Card>
                     <CardHeader className="py-4 px-4">
-                      <CardTitle className="text-base font-semibold">Active PT Enrollments</CardTitle>
+                      <CardTitle className="text-base font-semibold">PT Coverage Analysis</CardTitle>
                     </CardHeader>
                     <CardContent className="py-3 px-4 border-t">
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm" style={{ minWidth: 640 }}>
                           <thead>
                             <tr className="text-muted-foreground border-b text-xs">
                               <th className="text-left py-2 pr-4">Analyte</th>
-                              <th className="text-left py-2 pr-4">Program</th>
-                              <th className="text-left py-2 pr-4">Enrollment Date</th>
-                              <th className="text-center py-2">Status</th>
+                              <th className="text-left py-2 pr-4">Specialty</th>
+                              <th className="text-left py-2 pr-4">PT Category</th>
+                              <th className="text-left py-2 pr-4">Status</th>
+                              <th className="text-left py-2">Action</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {(ptData?.enrollments ?? []).map((enrollment: any, idx: number) => (
-                              <tr key={enrollment.id || idx} className="border-b border-border/50">
-                                <td className="py-2.5 pr-4 font-medium">{enrollment.analyte}</td>
-                                <td className="py-2.5 pr-4 text-muted-foreground">{enrollment.program}</td>
-                                <td className="py-2.5 pr-4 text-muted-foreground">{enrollment.enrollment_date}</td>
-                                <td className="py-2.5 text-center">
-                                  <Badge className={enrollment.status === "active"
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs"
-                                    : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 text-xs"
-                                  }>
-                                    {enrollment.status === "active" ? "Active" : "Inactive"}
-                                  </Badge>
+                            {(ptCoverage?.coverage ?? []).map((row: any, idx: number) => (
+                              <tr key={idx} className="border-b border-border/50">
+                                <td className="py-2.5 pr-4 font-medium">{row.analyteName}</td>
+                                <td className="py-2.5 pr-4 text-muted-foreground text-xs">{row.subspecialty || row.specialty}</td>
+                                <td className="py-2.5 pr-4 text-muted-foreground text-xs">{row.ptCategory || "-"}</td>
+                                <td className="py-2.5 pr-4">
+                                  {row.status === "gap" && (
+                                    <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs whitespace-nowrap">
+                                      PT Required - Not Enrolled
+                                    </Badge>
+                                  )}
+                                  {row.status === "recommended" && (
+                                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs whitespace-nowrap">
+                                      PT Recommended
+                                    </Badge>
+                                  )}
+                                  {row.status === "covered" && (
+                                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs whitespace-nowrap">
+                                      Enrolled
+                                    </Badge>
+                                  )}
+                                  {row.status === "waived" && (
+                                    <Badge className="bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-xs whitespace-nowrap">
+                                      Waived
+                                    </Badge>
+                                  )}
+                                  {row.status === "unmatched" && (
+                                    <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs whitespace-nowrap">
+                                      Verify Complexity
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="py-2.5">
+                                  {(row.status === "gap" || row.status === "recommended") && row.ptCategory && (
+                                    <div className="flex gap-2 flex-wrap">
+                                      <a
+                                        href="https://www.cap.org/laboratory-improvement/proficiency-testing/find-a-pt-program"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-[#006064] underline hover:no-underline"
+                                      >
+                                        CAP
+                                      </a>
+                                      <span className="text-muted-foreground text-xs">|</span>
+                                      <a
+                                        href="https://www.aphl.org/programs/proficiency_testing/Pages/default.aspx"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-[#006064] underline hover:no-underline"
+                                      >
+                                        APHL
+                                      </a>
+                                    </div>
+                                  )}
+                                  {row.status === "covered" && (
+                                    <span className="text-xs text-muted-foreground">{row.enrolledProgram}</span>
+                                  )}
+                                  {row.status === "waived" && (
+                                    <span className="text-xs text-muted-foreground">PT not required per CLIA</span>
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -1040,78 +1097,15 @@ export default function DemoLabPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Recent PT Events Table */}
-                  <Card>
-                    <CardHeader className="py-4 px-4">
-                      <CardTitle className="text-base font-semibold">Recent PT Events</CardTitle>
-                    </CardHeader>
-                    <CardContent className="py-3 px-4 border-t">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-muted-foreground border-b text-xs">
-                              <th className="text-left py-2 pr-4">Analyte</th>
-                              <th className="text-left py-2 pr-4">Survey</th>
-                              <th className="text-center py-2 pr-4">Result</th>
-                              <th className="text-left py-2 pr-4">Score/SDI</th>
-                              <th className="text-left py-2">Date</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(ptData?.events ?? []).map((event: any, idx: number) => (
-                              <tr key={event.id || idx} className="border-b border-border/50">
-                                <td className="py-2.5 pr-4 font-medium">{event.analyte}</td>
-                                <td className="py-2.5 pr-4 text-muted-foreground">{event.survey_period}</td>
-                                <td className="py-2.5 pr-4 text-center">
-                                  <Badge className={event.result === "pass"
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs"
-                                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs"
-                                  }>
-                                    {event.result === "pass" ? "Pass" : "Fail"}
-                                  </Badge>
-                                </td>
-                                <td className="py-2.5 pr-4 text-muted-foreground">
-                                  {event.result === "fail" && event.sdi ? `SDI ${event.sdi}` : "-"}
-                                </td>
-                                <td className="py-2.5 text-muted-foreground">{event.event_date}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Corrective Actions */}
-                  <Card>
-                    <CardHeader className="py-4 px-4">
-                      <CardTitle className="text-base font-semibold">Corrective Actions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="py-3 px-4 border-t">
-                      {(ptData?.summary?.openCAs ?? 0) > 0 ? (
-                        <div className="space-y-2">
-                          {(ptData?.correctiveActions ?? [])
-                            .filter((ca: any) => ca.status !== "completed")
-                            .map((ca: any, idx: number) => (
-                              <div key={ca.id || idx} className="flex items-start gap-2 text-sm">
-                                <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
-                                <div>
-                                  <span className="font-medium">{ca.analyte}</span>
-                                  <span className="text-muted-foreground"> - {ca.description}</span>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">No open corrective actions.</p>
-                      )}
-                    </CardContent>
-                  </Card>
+                  {/* Info Banner */}
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300">
+                    Unregulated nonwaived tests are not required to have PT under CLIA Subpart I, but enrolling in a PT program is strongly recommended as standard practice and may be required by your accreditation organization.
+                  </div>
                 </>
               )}
 
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
-                <p className="text-white font-medium">Track proficiency testing from enrollment to corrective action.</p>
+                <p className="text-white font-medium">Know your PT coverage status before your next inspection.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
                   <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>

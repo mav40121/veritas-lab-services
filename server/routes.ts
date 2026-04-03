@@ -3373,43 +3373,239 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // GET /api/demo/pt - VeritaPT demo data (public)
+  // ── VERITAPT v2 - Coverage Gap Analyzer ──────────────────────────────────
+
+  // Helper: compute PT coverage for a given userId
+  function computePTCoverage(userId: number) {
+    const { cliaAnalytes, ptCategoryLinks } = require("./cliaAnalytes");
+
+    // Get the lab's test menu (unique analytes from VeritaMap)
+    const mapRow = (db as any).$client.prepare(
+      "SELECT id FROM veritamap_maps WHERE user_id = ? LIMIT 1"
+    ).get(userId) as any;
+
+    if (!mapRow) return { coverage: [], summary: { totalAnalytes: 0, regulatedGaps: 0, regulatedCovered: 0, recommendedGaps: 0, recommendedCovered: 0, waived: 0 } };
+
+    const testMenu = (db as any).$client.prepare(
+      "SELECT DISTINCT analyte, specialty, complexity FROM veritamap_tests WHERE map_id = ? AND active = 1"
+    ).all(mapRow.id) as any[];
+
+    // Get lab's current pt_enrollments_v2 - seed demo defaults if needed
+    const enrollments = (db as any).$client.prepare(
+      "SELECT * FROM pt_enrollments_v2 WHERE user_id = ?"
+    ).all(userId) as any[];
+
+    const enrolledCategories = new Set(enrollments.map((e: any) => e.pt_category));
+
+    // Map each analyte on test menu to CLIA status
+    const coverage: any[] = [];
+    let regulatedGaps = 0, regulatedCovered = 0, recommendedGaps = 0, recommendedCovered = 0, waived = 0;
+
+    for (const test of testMenu) {
+      // Check if waived
+      if (test.complexity === "WAIVED") {
+        coverage.push({
+          analyteName: test.analyte,
+          specialty: test.specialty,
+          subspecialty: test.specialty,
+          ptCategory: null,
+          tier: "waived",
+          status: "waived",
+          enrolledProgram: null,
+          notes: "PT is not required for waived testing per CLIA.",
+        });
+        waived++;
+        continue;
+      }
+
+      // Look up in CLIA analyte map (case-insensitive name/alias match)
+      const lowerName = test.analyte.toLowerCase();
+      const match = cliaAnalytes.find((a: any) => {
+        if (a.name.toLowerCase() === lowerName) return true;
+        return a.aliases.some((alias: string) => alias.toLowerCase() === lowerName);
+      });
+
+      if (!match) {
+        // Not in regulated or common unregulated list
+        coverage.push({
+          analyteName: test.analyte,
+          specialty: test.specialty,
+          subspecialty: test.specialty,
+          ptCategory: null,
+          tier: "unmatched",
+          status: "unmatched",
+          enrolledProgram: null,
+          notes: "Not found in CLIA regulated or common unregulated list. Verify test complexity.",
+        });
+        continue;
+      }
+
+      const isCovered = enrolledCategories.has(match.ptCategory);
+      const covEnrollment = enrollments.find((e: any) => e.pt_category === match.ptCategory);
+
+      if (match.tier === "regulated") {
+        if (isCovered) {
+          regulatedCovered++;
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: match.specialty,
+            subspecialty: match.subspecialty,
+            ptCategory: match.ptCategory,
+            tier: "regulated",
+            status: "covered",
+            enrolledProgram: covEnrollment ? `${covEnrollment.vendor} - ${covEnrollment.program_name} (${covEnrollment.year_enrolled})` : null,
+            notes: match.notes || null,
+            links: ptCategoryLinks[match.ptCategory] || null,
+          });
+        } else {
+          regulatedGaps++;
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: match.specialty,
+            subspecialty: match.subspecialty,
+            ptCategory: match.ptCategory,
+            tier: "regulated",
+            status: "gap",
+            enrolledProgram: null,
+            notes: match.notes || null,
+            links: ptCategoryLinks[match.ptCategory] || null,
+          });
+        }
+      } else {
+        // unregulated
+        if (isCovered) {
+          recommendedCovered++;
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: match.specialty,
+            subspecialty: match.subspecialty,
+            ptCategory: match.ptCategory,
+            tier: "unregulated",
+            status: "covered",
+            enrolledProgram: covEnrollment ? `${covEnrollment.vendor} - ${covEnrollment.program_name} (${covEnrollment.year_enrolled})` : null,
+            notes: match.notes || null,
+            links: ptCategoryLinks[match.ptCategory] || null,
+          });
+        } else {
+          recommendedGaps++;
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: match.specialty,
+            subspecialty: match.subspecialty,
+            ptCategory: match.ptCategory,
+            tier: "unregulated",
+            status: "recommended",
+            enrolledProgram: null,
+            notes: match.notes || null,
+            links: ptCategoryLinks[match.ptCategory] || null,
+          });
+        }
+      }
+    }
+
+    // Sort: regulated gaps first, regulated covered, unregulated recommended, unregulated covered, waived, unmatched
+    const sortOrder: Record<string, number> = { gap: 0, recommended: 1, covered: 2, waived: 3, unmatched: 4 };
+    coverage.sort((a, b) => {
+      const ao = sortOrder[a.status] ?? 5;
+      const bo = sortOrder[b.status] ?? 5;
+      if (ao !== bo) return ao - bo;
+      // Within same status: regulated before unregulated
+      if (a.tier === "regulated" && b.tier !== "regulated") return -1;
+      if (b.tier === "regulated" && a.tier !== "regulated") return 1;
+      return a.analyteName.localeCompare(b.analyteName);
+    });
+
+    return {
+      coverage,
+      summary: {
+        totalAnalytes: testMenu.length,
+        regulatedGaps,
+        regulatedCovered,
+        recommendedGaps,
+        recommendedCovered,
+        waived,
+      },
+    };
+  }
+
+  // GET /api/demo/pt - VeritaPT coverage analysis for demo (public)
   app.get("/api/demo/pt", (_req, res) => {
     try {
       const userId = getDemoUserId();
       if (!userId) return res.status(404).json({ error: "Demo user not found" });
 
-      const enrollments = (db as any).$client.prepare(
-        "SELECT * FROM pt_enrollments WHERE user_id = ? AND status = 'active' ORDER BY analyte"
-      ).all(userId) as any[];
+      // Seed demo enrollments if none exist
+      const existingEnrollments = (db as any).$client.prepare(
+        "SELECT id FROM pt_enrollments_v2 WHERE user_id = ? LIMIT 1"
+      ).get(userId);
+      if (!existingEnrollments) {
+        const currentYear = new Date().getFullYear();
+        const seedEnrollments = [
+          { vendor: "CAP", program_name: "CAP General Chemistry Survey", pt_category: "General Chemistry", year: currentYear },
+          { vendor: "CAP", program_name: "CAP Hematology Survey", pt_category: "Hematology", year: currentYear },
+          { vendor: "CAP", program_name: "CAP Coagulation Survey", pt_category: "Coagulation", year: currentYear },
+        ];
+        const stmt = (db as any).$client.prepare(
+          "INSERT INTO pt_enrollments_v2 (user_id, vendor, program_name, pt_category, year_enrolled) VALUES (?, ?, ?, ?, ?)"
+        );
+        for (const e of seedEnrollments) {
+          stmt.run(userId, e.vendor, e.program_name, e.pt_category, e.year);
+        }
+      }
 
-      const events = (db as any).$client.prepare(
-        "SELECT * FROM pt_events WHERE user_id = ? ORDER BY survey_period DESC"
-      ).all(userId) as any[];
-
-      const cas = (db as any).$client.prepare(
-        "SELECT * FROM pt_corrective_actions WHERE user_id = ? ORDER BY created_at DESC"
-      ).all(userId) as any[];
-
-      const totalEvents = events.length;
-      const passEvents = events.filter((e: any) => e.result === 'pass').length;
-      const passRate = totalEvents > 0 ? Math.round((passEvents / totalEvents) * 100 * 10) / 10 : 0;
-      const openCAs = cas.filter((c: any) => c.status !== 'completed').length;
-
-      res.json({
-        enrollments,
-        events,
-        correctiveActions: cas,
-        summary: {
-          activeEnrollments: enrollments.length,
-          eventsThisYear: events.filter((e: any) => e.survey_period?.startsWith('2026')).length,
-          passRate,
-          openCAs,
-        },
-      });
+      const result = computePTCoverage(userId);
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: "Failed to load PT demo data", detail: err.message });
     }
+  });
+
+  // GET /api/pt/coverage - Coverage analysis for authenticated lab
+  app.get("/api/pt/coverage", authMiddleware, (req: any, res) => {
+    try {
+      const dataUserId = req.ownerUserId ?? req.user?.userId;
+      const result = computePTCoverage(dataUserId);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to compute PT coverage", detail: err.message });
+    }
+  });
+
+  // GET /api/pt/enrollments
+  app.get("/api/pt/enrollments", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM pt_enrollments_v2 WHERE user_id = ? ORDER BY year_enrolled DESC, pt_category"
+    ).all(dataUserId);
+    res.json(rows);
+  });
+
+  // POST /api/pt/enrollments
+  app.post("/api/pt/enrollments", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const { vendor, program_name, pt_category, year_enrolled } = req.body;
+    if (!vendor || !program_name || !pt_category || !year_enrolled) {
+      return res.status(400).json({ error: "vendor, program_name, pt_category, and year_enrolled are required" });
+    }
+    if (!["CAP", "API", "Other"].includes(vendor)) {
+      return res.status(400).json({ error: "vendor must be CAP, API, or Other" });
+    }
+    const result = (db as any).$client.prepare(
+      "INSERT INTO pt_enrollments_v2 (user_id, vendor, program_name, pt_category, year_enrolled) VALUES (?, ?, ?, ?, ?)"
+    ).run(dataUserId, vendor, program_name, pt_category, Number(year_enrolled));
+    const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments_v2 WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.status(201).json(created);
+  });
+
+  // DELETE /api/pt/enrollments/:id
+  app.delete("/api/pt/enrollments/:id", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
+    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
   });
 
   // ── VERITACOMP ─────────────────────────────────────────────────────────
