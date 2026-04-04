@@ -158,13 +158,15 @@ export default function DemoLabPage() {
     const meanPctDiff = pctDiffs.reduce((a: number, b: number) => a + b, 0) / n;
 
     const tea = study.clia_allowable_error;
+    // TEa >= 5 indicates percentage-based allowable error (e.g., 30% for Troponin I)
+    const teaIsPercent = tea >= 5;
 
     const rows = dp.map((p: any, i: number) => {
       const pVal = p.instrumentValues?.[primary] ?? 0;
       const cVal = p.instrumentValues?.[comparison] ?? 0;
       const bias = cVal - pVal;
       const pctDiff = pVal === 0 ? 0 : ((cVal - pVal) / pVal) * 100;
-      const pass = Math.abs(bias) <= tea;
+      const pass = teaIsPercent ? Math.abs(pctDiff) <= tea : Math.abs(bias) <= tea;
       return { level: i + 1, primary: pVal, comparison: cVal, bias: Math.round(bias * 1000) / 1000, pctDiff: Math.round(pctDiff * 100) / 100, pass };
     });
 
@@ -174,7 +176,7 @@ export default function DemoLabPage() {
     }));
 
     return {
-      n, slope, intercept, rSquared, meanBias, meanPctDiff, tea,
+      n, slope, intercept, rSquared, meanBias, meanPctDiff, tea, teaIsPercent,
       rows, scatterData, primary, comparison,
       allPass: rows.every((r: any) => r.pass),
     };
@@ -343,10 +345,10 @@ export default function DemoLabPage() {
             <div className="space-y-6">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional has completed 3 EP studies for their chemistry department: 2 method comparisons and 1 calibration verification.
+                  Riverside Regional has completed 4 EP studies for their chemistry department. Three studies passed - and one identified a systematic bias requiring investigation. Below you can see how VeritaAssure&#8482; documents both outcomes.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  Both study types are recurring requirements. Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
+                  Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
                 </p>
               </div>
 
@@ -355,8 +357,10 @@ export default function DemoLabPage() {
                 {studies.map((study: any) => {
                   const isExpanded = expandedStudy === study.id;
                   const isCalVer = study.study_type === "cal_ver";
-                  const stats = isCalVer ? computeCalVerStats(study) : computeStudyStats(study);
+                  const isRefInterval = study.study_type === "ref_interval";
+                  const stats = isCalVer ? computeCalVerStats(study) : (!isRefInterval ? computeStudyStats(study) : null);
                   const instruments = study.instruments ? JSON.parse(study.instruments) : [];
+                  const studyPasses = stats ? stats.allPass : true;
 
                   return (
                     <Card key={study.id} className={`overflow-hidden ${isExpanded ? "sm:col-span-2" : ""}`}>
@@ -368,9 +372,15 @@ export default function DemoLabPage() {
                               {typeLabel[study.study_type] || study.study_type}
                             </div>
                           </div>
-                          <Badge className="pass-badge shrink-0">
-                            <CheckCircle2 size={10} className="mr-1" /> PASS
-                          </Badge>
+                          {studyPasses ? (
+                            <Badge className="pass-badge shrink-0">
+                              <CheckCircle2 size={10} className="mr-1" /> PASS
+                            </Badge>
+                          ) : (
+                            <Badge className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                              <AlertTriangle size={10} className="mr-1" /> FAIL
+                            </Badge>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent className="py-3 px-4 border-t space-y-3">
@@ -388,7 +398,7 @@ export default function DemoLabPage() {
                               <div><span className="text-muted-foreground">Comparison:</span> {instruments[1]}</div>
                               <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
                               <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
-                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.clia_allowable_error} {study.test_name === "Sodium" ? "mmol/L" : "mmol/L"}</div>
+                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.clia_allowable_error >= 5 ? `${study.clia_allowable_error}%` : `${study.clia_allowable_error} mmol/L`}</div>
                             </>
                           )}
                         </div>
@@ -538,6 +548,16 @@ export default function DemoLabPage() {
                                 </tbody>
                               </table>
                             </div>
+
+                            {/* Regulatory narrative */}
+                            {!(stats as any).allPass && (
+                              <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20 p-4 mt-2">
+                                <p className="text-xs leading-relaxed text-foreground">
+                                  <strong>The results for {study.test_name} do not meet the CLIA minimum total allowable error criteria per 42 CFR &#167;493.931.</strong>{" "}
+                                  Final approval and clinical determination must be made by the laboratory director or designee.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </CardContent>

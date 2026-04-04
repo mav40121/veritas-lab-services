@@ -74,6 +74,30 @@ export async function seedDemoData() {
     seedStudies(sqlite, demoUserId, now);
   }
 
+  // ─── 4.5. Troponin I failing method comparison study ──────────────
+  const troponinStudy = sqlite.prepare(
+    "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Troponin I' AND study_type = 'method_comparison' LIMIT 1"
+  ).get(demoUserId);
+  if (!troponinStudy) {
+    seedTroponinStudy(sqlite, demoUserId, now);
+  } else {
+    // Backfill UPDATE in case study exists with wrong data
+    const troponinDataPoints = generateTroponinData();
+    sqlite.prepare(
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, data_points = ?, instruments = ?, status = ? WHERE id = ?"
+    ).run(
+      'Abbott ARCHITECT i2000SR [Primary]',
+      'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
+      '2026-02-14',
+      30,
+      JSON.stringify(troponinDataPoints),
+      JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
+      'completed',
+      troponinStudy.id
+    );
+    console.log(`[seed] Backfilled Troponin I study id=${troponinStudy.id}`);
+  }
+
   // ─── 4a. Patch demo instruments - remove Reference role
   (db as any).$client.prepare(
     "UPDATE veritamap_instruments SET role = 'Primary' WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?) AND role = 'Reference'"
@@ -610,6 +634,45 @@ function generateCreatinineCalVerData() {
     expectedValue: l.assignedValue,
     instrumentValues: {
       "Siemens Atellica 2": (l.run1 + l.run2) / 2, // mean of two replicates
+    },
+  }));
+}
+
+function seedTroponinStudy(sqlite: any, demoUserId: number, now: string) {
+  const troponinDataPoints = generateTroponinData();
+  sqlite.prepare(`
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+  `).run(
+    demoUserId,
+    'Troponin I',
+    'Abbott ARCHITECT i2000SR [Primary]',
+    'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
+    '2026-02-14',
+    'method_comparison',
+    30, // 30% CLIA TEa
+    JSON.stringify(troponinDataPoints),
+    JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
+    now
+  );
+  console.log('[seed] Troponin I failing method comparison study seeded');
+}
+
+function generateTroponinData() {
+  // 20 patient samples with systematic ~30% proportional bias (comparison reads higher)
+  // Primary vs Backup Abbott ARCHITECT i2000SR instruments
+  const pairs: [number, number][] = [
+    [0.02, 0.03], [0.05, 0.07], [0.12, 0.16], [0.25, 0.33], [0.48, 0.62],
+    [0.89, 1.15], [1.45, 1.88], [2.10, 2.73], [3.20, 4.15], [4.85, 6.30],
+    [6.50, 8.45], [8.20, 10.66], [10.50, 13.65], [12.80, 16.64], [15.20, 19.76],
+    [18.50, 24.05], [22.30, 28.99], [26.80, 34.84], [31.50, 40.95], [38.20, 49.66],
+  ];
+  return pairs.map(([primary, comparison], i) => ({
+    level: i + 1,
+    expectedValue: null,
+    instrumentValues: {
+      'Abbott ARCHITECT i2000SR [Primary]': primary,
+      'Abbott ARCHITECT i2000SR [Backup]': comparison,
     },
   }));
 }
