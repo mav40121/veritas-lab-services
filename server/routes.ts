@@ -75,18 +75,32 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       }
       const valid = mappedPoints.filter(dp => dp.expectedValue !== null && comparisonNames.some(n => dp.instrumentValues[n] !== null));
       let passCount = 0, totalCount = 0;
+      const pctDiffsAll: number[] = [];
       for (const dp of valid) {
         const ref = dp.expectedValue!;
         for (const n of comparisonNames) {
           const v = dp.instrumentValues[n];
           if (v !== null && v !== undefined) {
             totalCount++;
+            // cliaAllowableError is stored as decimal fraction (e.g., 0.30 for 30%)
+            // pctDiff is also a fraction (e.g., 0.3165 for 31.65%)
             const pctDiff = ref !== 0 ? (v - ref) / ref : 0;
-            if (Math.abs(pctDiff) < cliaAllowableError) passCount++;
+            pctDiffsAll.push(pctDiff);
+            if (Math.abs(pctDiff) <= cliaAllowableError) passCount++;
           }
         }
       }
-      return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
+
+      // Validation guard: verify pass/fail matches computed mean % bias
+      let computedResult: "pass" | "fail" = (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
+      if (pctDiffsAll.length > 0) {
+        const meanAbsPctBias = pctDiffsAll.reduce((a, b) => a + Math.abs(b), 0) / pctDiffsAll.length;
+        if (meanAbsPctBias > cliaAllowableError && computedResult === "pass") {
+          console.error(`[VALIDATION] Method comparison computed as pass but mean |% bias| ${(meanAbsPctBias * 100).toFixed(2)}% exceeds TEa ${(cliaAllowableError * 100).toFixed(1)}% - overriding to FAIL`);
+          computedResult = "fail";
+        }
+      }
+      return computedResult;
     }
 
     if (studyType === "precision") {
@@ -183,10 +197,13 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
 export function recomputeAllStudyStatuses(): void {
   const allStudies = storage.getAllStudies();
   let fixed = 0;
+  const sqlite = (db as any).$client;
   for (const study of allStudies) {
     const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError);
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
+      // Also update the result column (not in drizzle schema, added via ALTER TABLE)
+      sqlite.prepare("UPDATE studies SET result = ? WHERE id = ?").run(computed, study.id);
       console.log(`[migration] Study #${study.id} "${study.testName}": ${study.status} -> ${computed}`);
       fixed++;
     }

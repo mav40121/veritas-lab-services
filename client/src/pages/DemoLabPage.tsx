@@ -157,16 +157,17 @@ export default function DemoLabPage() {
     const pctDiffs = xs.map((x: number, i: number) => x === 0 ? 0 : ((ys[i] - x) / x) * 100);
     const meanPctDiff = pctDiffs.reduce((a: number, b: number) => a + b, 0) / n;
 
+    // TEa stored as decimal fraction (e.g., 0.30 for 30%)
     const tea = study.clia_allowable_error;
-    // TEa >= 5 indicates percentage-based allowable error (e.g., 30% for Troponin I)
-    const teaIsPercent = tea >= 5;
+    const teaPct = tea * 100;
 
     const rows = dp.map((p: any, i: number) => {
       const pVal = p.instrumentValues?.[primary] ?? 0;
       const cVal = p.instrumentValues?.[comparison] ?? 0;
       const bias = cVal - pVal;
       const pctDiff = pVal === 0 ? 0 : ((cVal - pVal) / pVal) * 100;
-      const pass = teaIsPercent ? Math.abs(pctDiff) <= tea : Math.abs(bias) <= tea;
+      // Compare |% bias| against TEa percentage
+      const pass = Math.abs(pctDiff) <= teaPct;
       return { level: i + 1, primary: pVal, comparison: cVal, bias: Math.round(bias * 1000) / 1000, pctDiff: Math.round(pctDiff * 100) / 100, pass };
     });
 
@@ -176,7 +177,7 @@ export default function DemoLabPage() {
     }));
 
     return {
-      n, slope, intercept, rSquared, meanBias, meanPctDiff, tea, teaIsPercent,
+      n, slope, intercept, rSquared, meanBias, meanPctDiff, tea, teaPct,
       rows, scatterData, primary, comparison,
       allPass: rows.every((r: any) => r.pass),
     };
@@ -188,7 +189,7 @@ export default function DemoLabPage() {
     const instruments = study.instruments ? JSON.parse(study.instruments) : [];
     if (dp.length === 0) return null;
 
-    const teaPct = study.clia_allowable_error; // stored as percentage
+    const teaPct = study.clia_allowable_error * 100; // decimal fraction to percentage
     const rows = dp.map((p: any) => {
       const assigned = p.assignedValue ?? p.expectedValue ?? 0;
       const run1 = p.instrumentValues?.[instruments[0]] ?? 0;

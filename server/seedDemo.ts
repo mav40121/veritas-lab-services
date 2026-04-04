@@ -89,7 +89,7 @@ export async function seedDemoData() {
       'Abbott ARCHITECT i2000SR [Primary]',
       'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
       '2026-02-14',
-      30,
+      0.30, // 30% TEa stored as decimal fraction
       JSON.stringify(troponinDataPoints),
       JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
       'completed',
@@ -116,7 +116,7 @@ export async function seedDemoData() {
       "Siemens Atellica 2",
       "SED",
       "2025-02-06",
-      7.5,
+      0.075, // 7.5% TEa stored as decimal fraction
       JSON.stringify(realData),
       JSON.stringify(["Siemens Atellica 2"]),
       creatStudy.id
@@ -124,11 +124,11 @@ export async function seedDemoData() {
     console.log(`[seed] Patched creatinine cal ver study id=${creatStudy.id} with real Atellica 2 data`);
   }
 
-  // ─── 4c. Backfill result field on all demo studies ──────────────────────
-  sqlite.prepare("UPDATE studies SET result = 'pass' WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'pass' WHERE user_id = ? AND test_name = 'Sodium'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'pass' WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'fail' WHERE user_id = ? AND test_name = 'Troponin I'").run(demoUserId);
+  // ─── 4c. Backfill result field + correct TEa decimal fractions on all demo studies
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.075 WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.04 WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'method_comparison'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.05 WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30 WHERE user_id = ? AND test_name = 'Troponin I'").run(demoUserId);
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
@@ -354,7 +354,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-15",
     "method_comparison",
-    4.0, // 4 mmol/L absolute TEa for sodium
+    0.04, // 4% TEa for sodium (CLIA +/-4 mmol/L, stored as decimal fraction)
     JSON.stringify(sodiumDataPoints),
     JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
@@ -372,7 +372,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-15",
     "method_comparison",
-    0.5, // 0.5 mmol/L absolute TEa for potassium
+    0.05, // 5% TEa for potassium (CLIA +/-0.3 mmol/L, stored as decimal fraction)
     JSON.stringify(potassiumDataPoints),
     JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
@@ -391,7 +391,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "SED",
     "2025-02-06",
     "cal_ver",
-    7.5, // 7.5% or 0.1 mg/dL TEa per CLIA
+    0.075, // 7.5% TEa per CLIA (stored as decimal fraction)
     JSON.stringify(creatinineDataPoints),
     JSON.stringify(["Siemens Atellica 2"]),
     now
@@ -656,7 +656,7 @@ function seedTroponinStudy(sqlite: any, demoUserId: number, now: string) {
     'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
     '2026-02-14',
     'method_comparison',
-    30, // 30% CLIA TEa
+    0.30, // 30% CLIA TEa (stored as decimal fraction)
     JSON.stringify(troponinDataPoints),
     JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
     now
