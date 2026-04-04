@@ -2018,8 +2018,7 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
       <tbody>${actionRows}</tbody>
     </table>
 
-    <!-- Signature on page 1 -->
-    ${directorReviewHTML()}
+    <div style="margin-top:14px;font-size:7.5pt;color:${MUTED};font-style:italic;line-height:1.5;">This report is for internal use only. It is designed to assist the laboratory in identifying compliance gaps before an inspection. It does not constitute an accreditation submission or regulatory filing.</div>
   </body></html>`;
 }
 
@@ -2112,8 +2111,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
       </div>
     </div>
 
-    <!-- Signature block on page 1 -->
-    ${directorReviewHTML()}
+    <div style="margin-top:14px;font-size:7.5pt;color:${MUTED};font-style:italic;line-height:1.5;">This report is for internal use only. It is designed to assist the laboratory in identifying compliance gaps before an inspection. It does not constitute an accreditation submission or regulatory filing.</div>
 
     <div style="text-align:center;font-size:7.5pt;color:${MUTED};margin-top:10px;font-style:italic;">Detailed results continued on page 2.</div>
 
