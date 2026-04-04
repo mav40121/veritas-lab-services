@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -175,6 +175,15 @@ export function NavBar() {
                   <div>
                     <div className="text-sm font-medium">Roadmap</div>
                     <div className="text-xs text-muted-foreground">Product development status</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/resources#faq" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">FAQ</div>
+                    <div className="text-xs text-muted-foreground">Common questions answered</div>
                   </div>
                 </Link>
               </DropdownMenuItem>

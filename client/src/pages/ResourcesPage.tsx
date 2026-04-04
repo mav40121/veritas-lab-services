@@ -265,7 +265,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 function FaqSection() {
   return (
-    <section>
+    <section id="faq">
       <div className="flex items-center gap-2 mb-1">
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">FAQ</div>
       </div>
