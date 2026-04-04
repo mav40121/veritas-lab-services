@@ -390,7 +390,7 @@ function directorReviewHTML(): string {
 
 
 // ─── Regulatory Compliance References box ───────────────────────────────────
-type StudyTypeKey = "cal_ver" | "method_comp" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval";
+type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval";
 export type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 
 interface RegulatoryRefs {
@@ -411,37 +411,37 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     clsi: ["EP06-Ed3", "EP15-A3"],
     cfr:  ["42 CFR §493.1255(b)(3)", "42 CFR §493.1271(b)"],
   },
-  method_comp: {
-    cap:  ["CHM.13650", "CHM.13700", "GEN.40810"],
-    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+  method_comparison: {
+    cap:  ["CHM.13820"],
+    tjc:  ["TJC standard"],
     cola: ["LAB.022", "LAB.023"],
     aabb: ["5.7.1", "5.7.3"],
-    clsi: ["EP09-A3", "EP15-A3"],
-    cfr:  ["42 CFR §493.1255(b)(2)", "42 CFR §493.1271(b)"],
+    clsi: ["EP09-A3"],
+    cfr:  ["42 CFR §493.1213"],
   },
   precision: {
-    cap:  ["CHM.13600", "GEN.40800"],
-    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+    cap:  ["CHM.13830"],
+    tjc:  ["TJC standard"],
     cola: ["LAB.021", "LAB.023"],
     aabb: ["5.7.1"],
-    clsi: ["EP05-A3", "EP15-A3"],
-    cfr:  ["42 CFR §493.1255(b)(1)", "42 CFR §493.1271(a)"],
+    clsi: ["EP15-A3"],
+    cfr:  ["42 CFR §493.1213(b)(2)"],
   },
   lot_to_lot: {
-    cap:  ["CHM.13800", "GEN.40860"],
-    tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
+    cap:  ["CHM.13840"],
+    tjc:  ["TJC standard"],
     cola: ["LAB.024"],
     aabb: ["5.7.2"],
-    clsi: ["EP07-A2", "EP26-A"],
-    cfr:  ["42 CFR §493.1255(b)(3)", "42 CFR §493.1271(b)(3)"],
+    clsi: ["EP26-A"],
+    cfr:  ["42 CFR §493.1255(b)"],
   },
   qc_range: {
-    cap:  ["COM.30450", "GEN.40500"],
-    tjc:  ["QSA.02.04.01", "QSA.02.10.01"],
+    cap:  ["GEN.41316", "CHM.13850"],
+    tjc:  ["TJC standard"],
     cola: ["LAB.030", "LAB.031"],
     aabb: ["5.8.1"],
     clsi: ["EP23-A", "C24-A3"],
-    cfr:  ["42 CFR §493.1256(d)(3)", "42 CFR §493.1256(e)"],
+    cfr:  ["42 CFR §493.1256"],
   },
   multi_analyte_coag: {
     cap:  ["HEM.36160", "HEM.36180", "GEN.40860"],
@@ -452,12 +452,12 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cfr:  ["42 CFR §493.1255(b)(3)"],
   },
   pt_coag: {
-    cap:  ["HEM.36160", "HEM.36200", "GEN.40860"],
-    tjc:  ["QSA.02.02.01", "QSA.13.05.01"],
+    cap:  ["HEM.37600", "HEM.37800"],
+    tjc:  ["TJC standard"],
     cola: ["LAB.023", "LAB.025"],
     aabb: ["5.14.1", "5.14.3"],
-    clsi: ["H47-A2", "H21-A5", "EP26-A"],
-    cfr:  ["42 CFR §493.1255(b)(3)"],
+    clsi: ["EP26-A", "H21-A5"],
+    cfr:  ["42 CFR §493.1255", "42 CFR §493.1213"],
   },
   ref_interval: {
     cap:  ["CHM.13900", "GEN.40460"],
