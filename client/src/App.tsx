@@ -150,18 +150,28 @@ function GATracker() {
 function OnboardingGuard() {
   const { user, isLoggedIn } = useAuth();
   const [showWizard, setShowWizard] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (isLoggedIn && user && (user as any).hasCompletedOnboarding === false && !dismissed) {
-      setShowWizard(true);
-    } else {
+    if (!isLoggedIn || !user) { setShowWizard(false); return; }
+    // Check localStorage first - if permanently dismissed for this user, never show again
+    const lsKey = `onboarding_dismissed_${user.id}`;
+    const locallyDismissed = localStorage.getItem(lsKey) === "1";
+    const serverCompleted = (user as any).hasCompletedOnboarding !== false;
+    if (locallyDismissed || serverCompleted) {
       setShowWizard(false);
+    } else {
+      setShowWizard(true);
     }
-  }, [isLoggedIn, user, dismissed]);
+  }, [isLoggedIn, user]);
 
-  if (!showWizard) return null;
-  return <OnboardingWizard onComplete={() => { setDismissed(true); setShowWizard(false); }} />;
+  if (!showWizard || !user) return null;
+
+  const handleComplete = () => {
+    localStorage.setItem(`onboarding_dismissed_${user.id}`, "1");
+    setShowWizard(false);
+  };
+
+  return <OnboardingWizard onComplete={handleComplete} />;
 }
 
 function AppContent() {
