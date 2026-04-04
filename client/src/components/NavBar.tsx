@@ -180,7 +180,7 @@ export function NavBar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/resources#faq" className="flex items-start gap-2 py-2">
+                <Link href="/resources?section=faq" className="flex items-start gap-2 py-2">
                   <div>
                     <div className="text-sm font-medium">FAQ</div>
                     <div className="text-xs text-muted-foreground">Common questions answered</div>

@@ -292,6 +292,15 @@ function FaqSection() {
 }
 
 export default function ResourcesPage() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("section") === "faq") {
+      setTimeout(() => {
+        document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
 
