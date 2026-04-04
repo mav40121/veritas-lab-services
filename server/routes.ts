@@ -2837,8 +2837,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const summary = n < 20
           ? `Insufficient specimens: ${n} provided, minimum 20 required per CLSI EP28-A3c.`
           : overallPass
-            ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}\u2013${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of \u226410% outside.`
-            : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}\u2013${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of \u226410% outside.`;
+            ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}-${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of \u226410% outside.`
+            : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}-${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of \u226410% outside.`;
 
         const study = {
           testName: studyRow.test_name, instrument: studyRow.instrument,

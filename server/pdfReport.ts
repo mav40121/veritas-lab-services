@@ -1621,7 +1621,7 @@ const FOOTER_TEMPLATE = `
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaCheck is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential &mdash; For Internal Lab Use Only</span>
+      <span>VeritaAssure&trade; | VeritaCheck&trade; | Confidential - For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
@@ -1789,7 +1789,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
       <div>
         <div class="logo">VeritaCheck\u2122</div>
         <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
-        <div style="font-size:8pt;color:${cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
+        <div style="font-size:8pt;color:${cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${cliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
       </div>
       <div class="header-right">Instrument: ${tracker.instrument_name}</div>
     </div>
@@ -2249,7 +2249,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   html += `<div class="header">
     <h1>VeritaAssure\u2122</h1>
     <div class="sub">${typeLabel}</div>
-    <div style="font-size:9pt;color:rgba(255,255,255,0.8);margin-top:2px;">CLIA: ${input.cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
+    <div style="font-size:9pt;color:rgba(255,255,255,0.8);margin-top:2px;">CLIA: ${input.cliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
     <div class="divider"></div>
   </div>`;
 
@@ -2582,7 +2582,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
 const COMPETENCY_FOOTER = `<div style="width:100%;padding:4px 15mm;font-family:sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure\u2122 | VeritaComp\u2122 | Confidential \u2014 For Internal Lab Use Only</span>
+      <span>VeritaAssure\u2122 | VeritaComp\u2122 | Confidential - For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>

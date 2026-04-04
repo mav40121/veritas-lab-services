@@ -114,7 +114,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
               <div>
                 <h2 className="text-2xl font-serif font-bold">Is your lab ready for its next inspection?</h2>
                 <p className="text-muted-foreground mt-2">
-                  VeritaAssure&#8482; helps you find out &mdash; and fix what you find.
+                  VeritaAssure&#8482; helps you find out - and fix what you find.
                 </p>
               </div>
               <div className="flex flex-col gap-3">

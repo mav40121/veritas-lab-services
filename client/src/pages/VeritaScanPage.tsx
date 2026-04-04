@@ -18,14 +18,14 @@ const DOMAINS = [
 ];
 
 const STANDARDS = [
-  { name: "TJC standard", desc: "Every question maps to the exact Standard and Element of Performance" },
+  { name: "TJC Standards", desc: "Every question maps to the exact QSA Standard and Element of Performance" },
   { name: "CAP Checklists",  desc: "CAP checklist requirement numbers cited for each item" },
   { name: "42 CFR Part 493", desc: "Specific CFR section for every federal regulatory requirement" },
 ];
 
 const FEATURES = [
   "168 compliance questions across 10 laboratory domains",
-  "Triple-mapped to TJC standard, CAP checklists, and 42 CFR §493",
+  "Triple-mapped to TJC standards, CAP checklists, and 42 CFR §493",
   "Live compliance dashboard with real-time scores by domain",
   "Status tracking: Compliant / Needs Attention / Immediate Action / N/A",
   "Finding documentation fields with owner assignment and due dates",
@@ -59,7 +59,7 @@ export default function VeritaScanPage() {
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                168 compliance questions. Triple-mapped to TJC standard, CAP checklists, and 42 CFR Part 493. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
+                168 compliance questions. Triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
               </p>
 
               {/* Pricing */}
@@ -110,7 +110,7 @@ export default function VeritaScanPage() {
                 Every non-waived laboratory in the United States operates under the same fundamental anxiety: the survey is coming. Whether it arrives from The Joint Commission, the College of American Pathologists, or CMS directly, the inspector will walk through your laboratory domain by domain, standard by standard, and they will find what you haven't looked for.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaScan gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance from the TJC standard, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
+                VeritaScan gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director or designee, your CNO, or your accreditation body as evidence of proactive self-assessment.

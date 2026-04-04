@@ -29,7 +29,7 @@ const FEATURES = [
   "Sort by complexity: see all high-complexity tests instantly",
   "Know your PT obligations before the enrollment deadline",
   "Last Verified and Verified By columns for review cycle tracking",
-  "Built on CLIA '88 (42 CFR Part 493), CAP LAP standards, and TJC standard",
+  "Built on CLIA '88 (42 CFR Part 493), CAP LAP standards, and TJC standards",
 ];
 
 export default function VeritaMapPage() {
@@ -55,7 +55,7 @@ export default function VeritaMapPage() {
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                VeritaMap is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standard that requires it.
+                VeritaMap is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standards that require it.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Most laboratories discover regulatory gaps during inspections. VeritaMap finds them first.
@@ -119,7 +119,7 @@ export default function VeritaMapPage() {
                 Every clinical laboratory has a test menu. Every test on that menu carries a specific set of regulatory obligations: a CLIA complexity designation, a proficiency testing requirement, a competency assessment obligation, a linearity or correlation study requirement, a quality control standard, a reference range verification requirement, and a written procedure. Most laboratories track these obligations inconsistently, if at all.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standard that mandates it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
+                VeritaMap is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standards that mandate it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 VeritaMap is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap can answer any regulatory question about any test in seconds, because the documentation is already there.

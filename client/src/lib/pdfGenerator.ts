@@ -272,7 +272,7 @@ function pdfSignatureBlock(doc: jsPDF, study: Study, _y: number, pw: number, mar
   // Switch to page 1 to place signature
   doc.setPage(1);
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Accepted by:", margin, sigY);
+  doc.text("LABORATORY DIRECTOR OR DESIGNEE REVIEW", margin, sigY);
   const lineY = sigY + 9;
   hLine(doc, lineY, margin, margin + contentW * 0.55);
   hLine(doc, lineY, pw - margin - contentW * 0.28, pw - margin);
