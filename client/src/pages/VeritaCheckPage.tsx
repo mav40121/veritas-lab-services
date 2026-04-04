@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import CLIALookupModal from "@/components/CLIALookupModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation } from "@tanstack/react-query";
@@ -428,6 +429,235 @@ export default function VeritaCheckPage() {
   const [maSpecimens, setMaSpecimens] = useState<{ id: string; ptNew: string; ptOld: string; apttNew: string; apttOld: string; fibNew: string; fibOld: string }[]>(
     Array.from({ length: 24 }, (_, i) => ({ id: `S${String(i + 1).padStart(3, "0")}`, ptNew: "", ptOld: "", apttNew: "", apttOld: "", fibNew: "", fibOld: "" }))
   );
+
+  // CSV Import state
+  type CsvImportStep = "upload" | "mapping" | "preview" | "done";
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvStep, setCsvStep] = useState<CsvImportStep>("upload");
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvMapping, setCsvMapping] = useState<Record<string, string>>({});
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
+  const [csvConfirmReplace, setCsvConfirmReplace] = useState(false);
+  const csvFileRef = useRef<HTMLInputElement>(null);
+
+  const parseCsvFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) {
+        setCsvErrors(["File must contain at least a header row and one data row."]);
+        return;
+      }
+      // Try comma first, if only 1 column detected try tab
+      let delimiter = ",";
+      const commaCount = (lines[0].match(/,/g) || []).length;
+      if (commaCount === 0) {
+        const tabCount = (lines[0].match(/\t/g) || []).length;
+        if (tabCount > 0) delimiter = "\t";
+      }
+      const parseLine = (line: string) => {
+        const cells: string[] = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+            else if (ch === '"') { inQuotes = false; }
+            else { current += ch; }
+          } else {
+            if (ch === '"') { inQuotes = true; }
+            else if (ch === delimiter) { cells.push(current.trim()); current = ""; }
+            else { current += ch; }
+          }
+        }
+        cells.push(current.trim());
+        return cells;
+      };
+      const headers = parseLine(lines[0]);
+      const rows = lines.slice(1).map(parseLine).filter(r => r.some(c => c.trim()));
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+      setCsvErrors([]);
+      setCsvWarnings([]);
+      // Auto-detect column mappings
+      const autoMap: Record<string, string> = {};
+      const lowerHeaders = headers.map(h => h.toLowerCase());
+      if (studyType === "method_comparison") {
+        const primaryKeys = ["primary", "instrument 1", "method 1", "result 1", "reference"];
+        const compKeys = ["comparison", "instrument 2", "method 2", "result 2", "test"];
+        const sampleKeys = ["sample", "specimen", "id", "sample id", "specimen id"];
+        for (let i = 0; i < lowerHeaders.length; i++) {
+          const h = lowerHeaders[i];
+          if (!autoMap.primary && primaryKeys.some(k => h.includes(k))) autoMap.primary = headers[i];
+          if (!autoMap.comparison && compKeys.some(k => h.includes(k))) autoMap.comparison = headers[i];
+          if (!autoMap.sampleId && sampleKeys.some(k => h.includes(k))) autoMap.sampleId = headers[i];
+        }
+        // Fallback: if columns have "result" or "value", assign first to primary, second to comparison
+        if (!autoMap.primary || !autoMap.comparison) {
+          const resultCols = headers.filter((_, i) => lowerHeaders[i].includes("result") || lowerHeaders[i].includes("value"));
+          if (resultCols.length >= 2) {
+            if (!autoMap.primary) autoMap.primary = resultCols[0];
+            if (!autoMap.comparison) autoMap.comparison = resultCols[1];
+          }
+        }
+      } else {
+        // cal_ver
+        const assignedKeys = ["assigned", "expected", "target", "nominal", "known"];
+        const measuredKeys = ["measured", "instrument", "result", "observed", "actual"];
+        const levelKeys = ["level", "concentration", "tier"];
+        for (let i = 0; i < lowerHeaders.length; i++) {
+          const h = lowerHeaders[i];
+          if (!autoMap.assigned && assignedKeys.some(k => h.includes(k))) autoMap.assigned = headers[i];
+          if (!autoMap.measured && measuredKeys.some(k => h.includes(k))) autoMap.measured = headers[i];
+          if (!autoMap.levelLabel && levelKeys.some(k => h.includes(k))) autoMap.levelLabel = headers[i];
+        }
+      }
+      setCsvMapping(autoMap);
+      setCsvStep("mapping");
+    };
+    reader.readAsText(file);
+  };
+
+  const validateCsvMapping = () => {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    if (studyType === "method_comparison") {
+      if (!csvMapping.primary) errors.push("Please select the Primary instrument column.");
+      if (!csvMapping.comparison) errors.push("Please select the Comparison instrument column.");
+      if (csvMapping.primary && csvMapping.comparison && csvMapping.primary === csvMapping.comparison) {
+        errors.push("Primary and Comparison columns must be different.");
+      }
+    } else {
+      if (!csvMapping.assigned) errors.push("Please select the Assigned/Expected value column.");
+      if (!csvMapping.measured) errors.push("Please select the Measured/Instrument result column.");
+      if (csvMapping.assigned && csvMapping.measured && csvMapping.assigned === csvMapping.measured) {
+        errors.push("Assigned and Measured columns must be different.");
+      }
+    }
+    if (errors.length > 0) { setCsvErrors(errors); return false; }
+    // Validate data values
+    const primaryCol = studyType === "method_comparison" ? csvMapping.primary : csvMapping.assigned;
+    const secondCol = studyType === "method_comparison" ? csvMapping.comparison : csvMapping.measured;
+    const priIdx = csvHeaders.indexOf(primaryCol!);
+    const secIdx = csvHeaders.indexOf(secondCol!);
+    let validRows = 0;
+    csvRows.forEach((row, rowNum) => {
+      const priVal = row[priIdx]?.trim();
+      const secVal = row[secIdx]?.trim();
+      if (!priVal && !secVal) return; // skip blank rows
+      if (!priVal) errors.push(`Row ${rowNum + 2}: Missing ${studyType === "method_comparison" ? "Primary" : "Assigned"} value.`);
+      else if (isNaN(parseFloat(priVal))) errors.push(`Row ${rowNum + 2}: "${priVal}" is not a valid number.`);
+      else if (parseFloat(priVal) < 0) warnings.push(`Row ${rowNum + 2}: Negative value (${priVal}) in ${studyType === "method_comparison" ? "Primary" : "Assigned"} column.`);
+      if (!secVal) errors.push(`Row ${rowNum + 2}: Missing ${studyType === "method_comparison" ? "Comparison" : "Measured"} value.`);
+      else if (isNaN(parseFloat(secVal))) errors.push(`Row ${rowNum + 2}: "${secVal}" is not a valid number.`);
+      else if (parseFloat(secVal) < 0) warnings.push(`Row ${rowNum + 2}: Negative value (${secVal}) in ${studyType === "method_comparison" ? "Comparison" : "Measured"} column.`);
+      if (priVal && secVal && !isNaN(parseFloat(priVal)) && !isNaN(parseFloat(secVal))) validRows++;
+    });
+    setCsvErrors(errors.slice(0, 10)); // cap at 10 errors
+    setCsvWarnings(warnings.slice(0, 5));
+    return errors.length === 0 && validRows > 0;
+  };
+
+  const getCsvPreviewRows = () => {
+    const primaryCol = studyType === "method_comparison" ? csvMapping.primary : csvMapping.assigned;
+    const secondCol = studyType === "method_comparison" ? csvMapping.comparison : csvMapping.measured;
+    const idCol = studyType === "method_comparison" ? csvMapping.sampleId : csvMapping.levelLabel;
+    const priIdx = csvHeaders.indexOf(primaryCol!);
+    const secIdx = csvHeaders.indexOf(secondCol!);
+    const idIdx = idCol ? csvHeaders.indexOf(idCol) : -1;
+    return csvRows.slice(0, 5).map(row => ({
+      id: idIdx >= 0 ? row[idIdx] || "" : "",
+      primary: row[priIdx] || "",
+      secondary: row[secIdx] || "",
+    }));
+  };
+
+  const getValidCsvRowCount = () => {
+    const primaryCol = studyType === "method_comparison" ? csvMapping.primary : csvMapping.assigned;
+    const secondCol = studyType === "method_comparison" ? csvMapping.comparison : csvMapping.measured;
+    const priIdx = csvHeaders.indexOf(primaryCol!);
+    const secIdx = csvHeaders.indexOf(secondCol!);
+    return csvRows.filter(row => {
+      const p = row[priIdx]?.trim();
+      const s = row[secIdx]?.trim();
+      return p && s && !isNaN(parseFloat(p)) && !isNaN(parseFloat(s));
+    }).length;
+  };
+
+  const executeCsvImport = () => {
+    const primaryCol = studyType === "method_comparison" ? csvMapping.primary : csvMapping.assigned;
+    const secondCol = studyType === "method_comparison" ? csvMapping.comparison : csvMapping.measured;
+    const priIdx = csvHeaders.indexOf(primaryCol!);
+    const secIdx = csvHeaders.indexOf(secondCol!);
+    const validRows = csvRows.filter(row => {
+      const p = row[priIdx]?.trim();
+      const s = row[secIdx]?.trim();
+      return p && s && !isNaN(parseFloat(p)) && !isNaN(parseFloat(s));
+    });
+    if (studyType === "method_comparison") {
+      const inst1 = instrumentNames[0] || "Instrument 1";
+      const inst2 = instrumentNames[1] || "Instrument 2";
+      const newPoints: DataPoint[] = validRows.map((row, i) => ({
+        level: i + 1,
+        expectedValue: null,
+        instrumentValues: {
+          [inst1]: parseFloat(row[priIdx]),
+          [inst2]: parseFloat(row[secIdx]),
+          ...Object.fromEntries(instrumentNames.slice(2).map(n => [n, null])),
+        },
+      }));
+      // Pad to at least MIN_LEVELS
+      while (newPoints.length < MIN_LEVELS) {
+        newPoints.push({
+          level: newPoints.length + 1,
+          expectedValue: null,
+          instrumentValues: Object.fromEntries(instrumentNames.map(n => [n, null])),
+        });
+      }
+      setNumLevels(newPoints.length);
+      setDataPoints(newPoints);
+    } else {
+      // cal_ver
+      const inst1 = instrumentNames[0] || "Instrument 1";
+      const newPoints: DataPoint[] = validRows.map((row, i) => ({
+        level: i + 1,
+        expectedValue: parseFloat(row[priIdx]),
+        instrumentValues: {
+          [inst1]: parseFloat(row[secIdx]),
+          ...Object.fromEntries(instrumentNames.slice(1).map(n => [n, null])),
+        },
+      }));
+      while (newPoints.length < MIN_LEVELS) {
+        newPoints.push({
+          level: newPoints.length + 1,
+          expectedValue: null,
+          instrumentValues: Object.fromEntries(instrumentNames.map(n => [n, null])),
+        });
+      }
+      setNumLevels(newPoints.length);
+      setDataPoints(newPoints);
+    }
+    toast({ title: `${validRows.length} rows imported successfully`, description: "Review the data grid and edit any values as needed." });
+    setCsvStep("done");
+    setCsvModalOpen(false);
+    // Reset for next use
+    setCsvConfirmReplace(false);
+  };
+
+  const resetCsvState = () => {
+    setCsvStep("upload");
+    setCsvHeaders([]);
+    setCsvRows([]);
+    setCsvMapping({});
+    setCsvErrors([]);
+    setCsvWarnings([]);
+    setCsvConfirmReplace(false);
+    if (csvFileRef.current) csvFileRef.current.value = "";
+  };
 
   // When switching to method_comparison, default to 20 samples (EP9 minimum)
   useEffect(() => {
@@ -998,6 +1228,27 @@ export default function VeritaCheckPage() {
                   </button>
                 </div>
               )}
+              {/* CSV Import Button */}
+              <div className="mb-4">
+                {(studyType === "method_comparison" || studyType === "cal_ver") ? (
+                  <Button variant="outline" size="sm" onClick={() => { resetCsvState(); setCsvModalOpen(true); }}>
+                    <Upload size={14} className="mr-1.5" />Import from CSV
+                  </Button>
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button variant="outline" size="sm" disabled className="opacity-50">
+                            <Upload size={14} className="mr-1.5" />Import from CSV
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent><p>CSV import coming soon for this study type.</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
               {studyType === "lot_to_lot" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base">Lot-to-Lot Verification Data Entry</CardTitle></CardHeader>
@@ -1845,6 +2096,240 @@ export default function VeritaCheckPage() {
           </p>
         </div>
       </section>
+      {/* CSV Import Modal */}
+      <Dialog open={csvModalOpen} onOpenChange={(open) => { if (!open) { setCsvModalOpen(false); resetCsvState(); } }}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet size={18} />
+              Import from CSV
+            </DialogTitle>
+            <DialogDescription>
+              {csvStep === "upload" && "Upload a CSV file exported from your LIS to populate the data entry grid."}
+              {csvStep === "mapping" && "Map your CSV columns to the study fields below."}
+              {csvStep === "preview" && "Review the mapped data before importing."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Step 1: Upload */}
+          {csvStep === "upload" && (
+            <div className="space-y-4">
+              <div
+                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                onClick={() => csvFileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const file = e.dataTransfer.files[0];
+                  if (file && (file.name.endsWith(".csv") || file.name.endsWith(".tsv") || file.name.endsWith(".txt"))) {
+                    parseCsvFile(file);
+                  } else {
+                    setCsvErrors(["Please upload a .csv file."]);
+                  }
+                }}
+              >
+                <Upload size={32} className="mx-auto mb-3 text-muted-foreground" />
+                <p className="text-sm font-medium mb-1">Drop your CSV file here, or click to browse</p>
+                <p className="text-xs text-muted-foreground">Accepts .csv files only</p>
+              </div>
+              <input
+                ref={csvFileRef}
+                type="file"
+                accept=".csv,.tsv,.txt"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) parseCsvFile(file);
+                }}
+              />
+              <div className="bg-muted/50 rounded p-3 text-xs text-muted-foreground space-y-1">
+                <p>Export your results from your LIS as a CSV file, then upload it here. Your data will be mapped to the study fields below.</p>
+                <p>First row should be column headers. Numeric values only in result columns.</p>
+              </div>
+              {csvErrors.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded p-3">
+                  {csvErrors.map((err, i) => <p key={i} className="text-xs text-red-600 dark:text-red-400">{err}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: Column Mapping */}
+          {csvStep === "mapping" && (
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded p-3 text-xs text-muted-foreground">
+                Detected {csvHeaders.length} columns and {csvRows.length} data rows.
+              </div>
+              <div className="space-y-3">
+                {studyType === "method_comparison" ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Which column contains the Primary instrument result?</Label>
+                      <Select value={csvMapping.primary || ""} onValueChange={v => setCsvMapping(prev => ({ ...prev, primary: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select column..." /></SelectTrigger>
+                        <SelectContent>
+                          {csvHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Which column contains the Comparison instrument result?</Label>
+                      <Select value={csvMapping.comparison || ""} onValueChange={v => setCsvMapping(prev => ({ ...prev, comparison: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select column..." /></SelectTrigger>
+                        <SelectContent>
+                          {csvHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Which column contains the Sample ID? (optional)</Label>
+                      <Select value={csvMapping.sampleId || "_none_"} onValueChange={v => setCsvMapping(prev => ({ ...prev, sampleId: v === "_none_" ? "" : v }))}>
+                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none_">None</SelectItem>
+                          {csvHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Which column contains the Assigned/Expected value?</Label>
+                      <Select value={csvMapping.assigned || ""} onValueChange={v => setCsvMapping(prev => ({ ...prev, assigned: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select column..." /></SelectTrigger>
+                        <SelectContent>
+                          {csvHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Which column contains the Measured/Instrument result?</Label>
+                      <Select value={csvMapping.measured || ""} onValueChange={v => setCsvMapping(prev => ({ ...prev, measured: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select column..." /></SelectTrigger>
+                        <SelectContent>
+                          {csvHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Which column contains the Level label? (optional)</Label>
+                      <Select value={csvMapping.levelLabel || "_none_"} onValueChange={v => setCsvMapping(prev => ({ ...prev, levelLabel: v === "_none_" ? "" : v }))}>
+                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none_">None</SelectItem>
+                          {csvHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </div>
+              {csvErrors.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded p-3">
+                  {csvErrors.map((err, i) => <p key={i} className="text-xs text-red-600 dark:text-red-400">{err}</p>)}
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => { setCsvStep("upload"); setCsvErrors([]); }}>Back</Button>
+                <Button size="sm" onClick={() => { if (validateCsvMapping()) setCsvStep("preview"); }}>
+                  Next: Preview
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Step 3: Preview */}
+          {csvStep === "preview" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 text-sm">
+                <Badge variant="outline">{getValidCsvRowCount()} valid rows</Badge>
+                {csvRows.length > getValidCsvRowCount() && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400">{csvRows.length - getValidCsvRowCount()} rows skipped (missing or invalid values)</span>
+                )}
+              </div>
+              <div className="overflow-x-auto border rounded">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      {studyType === "method_comparison" ? (
+                        <>
+                          {csvMapping.sampleId && <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Sample ID</th>}
+                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Primary</th>
+                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Comparison</th>
+                        </>
+                      ) : (
+                        <>
+                          {csvMapping.levelLabel && <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Level</th>}
+                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Assigned</th>
+                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Measured</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getCsvPreviewRows().map((row, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        {(studyType === "method_comparison" ? csvMapping.sampleId : csvMapping.levelLabel) && (
+                          <td className="py-1.5 px-3 text-xs text-muted-foreground">{row.id || "-"}</td>
+                        )}
+                        <td className="py-1.5 px-3 text-sm font-mono">{row.primary}</td>
+                        <td className="py-1.5 px-3 text-sm font-mono">{row.secondary}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {csvRows.length > 5 && (
+                <p className="text-xs text-muted-foreground text-center">Showing first 5 of {csvRows.length} rows</p>
+              )}
+              {csvWarnings.length > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangle size={13} className="text-amber-600" />
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Warnings</span>
+                  </div>
+                  {csvWarnings.map((w, i) => <p key={i} className="text-xs text-amber-600 dark:text-amber-400">{w}</p>)}
+                </div>
+              )}
+              {csvErrors.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <XCircle size={13} className="text-red-600" />
+                    <span className="text-xs font-medium text-red-700 dark:text-red-400">Errors - fix before importing</span>
+                  </div>
+                  {csvErrors.map((err, i) => <p key={i} className="text-xs text-red-600 dark:text-red-400">{err}</p>)}
+                </div>
+              )}
+              {/* Replace data warning */}
+              {filledLevels > 0 && !csvConfirmReplace && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-3 flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">This will replace your current data entry.</p>
+                    <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" onClick={() => setCsvConfirmReplace(true)}>
+                      I understand, continue
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => { setCsvStep("mapping"); setCsvErrors([]); setCsvWarnings([]); }}>Back</Button>
+                <Button
+                  size="sm"
+                  disabled={csvErrors.length > 0 || getValidCsvRowCount() === 0 || (filledLevels > 0 && !csvConfirmReplace)}
+                  onClick={executeCsvImport}
+                >
+                  <CheckCircle2 size={14} className="mr-1.5" />
+                  Import {getValidCsvRowCount()} rows
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <CLIALookupModal
         open={cliaModalOpen}
         onClose={() => setCliaModalOpen(false)}
