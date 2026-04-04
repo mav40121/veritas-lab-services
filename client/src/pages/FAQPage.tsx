@@ -1,6 +1,10 @@
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 
 const FAQ_CATEGORIES = [
   {
@@ -139,28 +143,6 @@ const FAQ_CATEGORIES = [
   },
 ];
 
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-border last:border-b-0">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-start justify-between gap-4 py-4 text-left group"
-      >
-        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors leading-snug">{q}</span>
-        {open
-          ? <ChevronUp size={15} className="shrink-0 text-primary mt-0.5" />
-          : <ChevronDown size={15} className="shrink-0 text-muted-foreground mt-0.5" />}
-      </button>
-      {open && (
-        <div className="pb-4 pr-8">
-          <p className="text-sm text-muted-foreground leading-relaxed">{a}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function FAQPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -186,11 +168,18 @@ export default function FAQPage() {
               <h3 className="text-xs font-semibold text-primary uppercase tracking-widest mb-1 pb-2 border-b border-primary/20">
                 {cat.category}
               </h3>
-              <div>
-                {cat.items.map(item => (
-                  <FaqItem key={item.q} q={item.q} a={item.a} />
+              <Accordion type="multiple" className="w-full">
+                {cat.items.map((item, i) => (
+                  <AccordionItem key={item.q} value={`${cat.category}-${i}`}>
+                    <AccordionTrigger className="text-sm font-medium text-foreground hover:text-primary transition-colors leading-snug text-left">
+                      {item.q}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <p className="text-sm text-muted-foreground leading-relaxed pr-8">{item.a}</p>
+                    </AccordionContent>
+                  </AccordionItem>
                 ))}
-              </div>
+              </Accordion>
             </div>
           ))}
         </div>
