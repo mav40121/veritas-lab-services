@@ -1,7 +1,18 @@
+import { useEffect } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 
 export default function NotFound() {
+  const [location, navigate] = useLocation();
+
+  useEffect(() => {
+    // Redirect common malformed hash routes to their correct destinations
+    if (location.includes("resources#faq") || location.includes("resources%23faq")) {
+      navigate("/faq");
+    }
+  }, [location, navigate]);
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md mx-4">
