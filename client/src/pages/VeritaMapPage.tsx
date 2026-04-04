@@ -245,7 +245,7 @@ export default function VeritaMapPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/veritacheck#pricing" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
+                <Link href="/pricing" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
                   View All Plans →
                 </Link>
               </CardContent>
@@ -274,7 +274,7 @@ export default function VeritaMapPage() {
                   </div>
                 ))}
               </div>
-              <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+              <Link href="/pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                 View all plans <ChevronRight size={13} />
               </Link>
             </div>

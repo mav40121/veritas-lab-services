@@ -288,7 +288,7 @@ export default function VeritaCompPage() {
                 <p className="text-sm text-muted-foreground mb-2">
                   VeritaCheck{"™"} + VeritaScan{"™"} + VeritaMap{"™"} + VeritaComp{"™"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
-                <Link href="/veritacheck#pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
+                <Link href="/pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
                 </Link>
               </div>

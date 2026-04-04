@@ -266,7 +266,7 @@ export default function HomePage() {
               <Link href="/veritacheck">Try VeritaCheck Free <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link href="/veritacheck">See Pricing</Link>
+              <Link href="/pricing">See Pricing</Link>
             </Button>
           </div>
         </div>

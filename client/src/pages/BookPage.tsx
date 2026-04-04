@@ -252,7 +252,7 @@ export default function BookPage() {
                   <Link href="/demo" className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                     Explore the Demo <ChevronRight size={13} />
                   </Link>
-                  <Link href="/veritacheck#pricing" className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                  <Link href="/pricing" className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                     View Pricing <ChevronRight size={13} />
                   </Link>
                 </div>
@@ -394,7 +394,7 @@ export default function BookPage() {
                   Lab Management 101 included free with any VeritaAssure&#8482; annual plan.
                 </p>
                 <Link
-                  href="/veritacheck#pricing"
+                  href="/pricing"
                   className="w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center block transition-colors"
                 >
                   View Plans

@@ -23,6 +23,7 @@ const productLinks = [
 const allMobileLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/veritaassure", label: "VeritaAssure\u2122" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck™" },
@@ -79,6 +80,12 @@ export function NavBar() {
           <Link href="/services" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/services") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Services
+          </Link>
+
+          {/* Pricing */}
+          <Link href="/pricing" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            isActive("/pricing") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+            Pricing
           </Link>
 
           {/* VeritaAssure dropdown */}

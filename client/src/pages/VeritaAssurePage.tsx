@@ -259,7 +259,7 @@ export default function VeritaAssurePage() {
           </div>
           <div className="mt-4 text-center">
             <Button asChild variant="outline" size="sm">
-              <Link href="/services">
+              <Link href="/pricing">
                 Full pricing and feature comparison <ChevronRight size={13} className="ml-1" />
               </Link>
             </Button>

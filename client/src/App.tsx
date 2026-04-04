@@ -30,6 +30,7 @@ import VeritaMapPage from "@/pages/VeritaMapPage";
 import DemoLabPage from "@/pages/DemoLabPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import FAQPage from "@/pages/FAQPage";
+import PricingPage from "@/pages/PricingPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
 import ArticleTeaPage from "@/pages/ArticleTeaPage";
 import ArticleTrainingPage from "@/pages/ArticleTrainingPage";
@@ -211,6 +212,7 @@ function AppContent() {
           <Route path="/demo" component={DemoLabPage} />
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/faq" component={FAQPage} />
+          <Route path="/pricing" component={PricingPage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
           <Route path="/resources/how-veritaassure-trains-lab-leaders" component={ArticleTrainingPage} />
