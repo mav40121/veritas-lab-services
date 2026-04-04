@@ -293,11 +293,11 @@ function FaqSection() {
 
 export default function ResourcesPage() {
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("section") === "faq") {
+    // Auto-scroll to FAQ when navigated via /faq route
+    if (window.location.hash.includes("/faq")) {
       setTimeout(() => {
         document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      }, 150);
     }
   }, []);
 

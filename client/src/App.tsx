@@ -211,6 +211,7 @@ function AppContent() {
           <Route path="/veritamap" component={VeritaMapPage} />
           <Route path="/demo" component={DemoLabPage} />
           <Route path="/resources" component={ResourcesPage} />
+          <Route path="/faq" component={ResourcesPage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
           <Route path="/resources/how-veritaassure-trains-lab-leaders" component={ArticleTrainingPage} />
