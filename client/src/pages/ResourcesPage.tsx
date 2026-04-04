@@ -295,9 +295,16 @@ export default function ResourcesPage() {
   useEffect(() => {
     // Auto-scroll to FAQ when navigated via /faq route
     if (window.location.hash.includes("/faq")) {
-      setTimeout(() => {
-        document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" });
-      }, 150);
+      const scrollToFaq = () => {
+        const el = document.getElementById("faq");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth" });
+        } else {
+          // Retry if DOM not ready yet
+          setTimeout(scrollToFaq, 100);
+        }
+      };
+      setTimeout(scrollToFaq, 200);
     }
   }, []);
 

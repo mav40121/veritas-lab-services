@@ -119,11 +119,11 @@ function SiteFooter() {
 }
 
 // Scrolls to top on every route change — fixes mid-page landing after navigation
+// Skips /faq so the ResourcesPage FAQ auto-scroll is not overridden
 function ScrollToTop() {
   const [location] = useLocation();
   useEffect(() => {
-    // Small timeout lets the new page render before scrolling
-    // so the page height is correct before we reset position
+    if (location === "/faq") return;
     const t = setTimeout(() => window.scrollTo({ top: 0, behavior: "instant" }), 0);
     return () => clearTimeout(t);
   }, [location]);

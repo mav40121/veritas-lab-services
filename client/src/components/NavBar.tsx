@@ -128,7 +128,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/resources","/book","/study-guide","/roadmap","/getting-started"].some(p => location.startsWith(p))
+                ["/resources","/faq","/book","/study-guide","/roadmap","/getting-started"].some(p => location.startsWith(p))
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
