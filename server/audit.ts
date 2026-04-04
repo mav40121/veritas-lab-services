@@ -103,12 +103,16 @@ export function captureUserSnapshot(userId: number): object {
 
   // VeritaComp
   const assessments = sqlite.prepare(
-    "SELECT id, employee_name, program_name, assessment_type, department, status, created_at FROM competency_assessments WHERE user_id = ?"
+    `SELECT a.id, e.name as employee_name, p.name as program_name, a.assessment_type, p.department, a.status, a.created_at
+     FROM competency_assessments a
+     LEFT JOIN competency_employees e ON a.employee_id = e.id
+     LEFT JOIN competency_programs p ON a.program_id = p.id
+     WHERE p.user_id = ?`
   ).all(userId);
 
   // VeritaStaff
   const staff = sqlite.prepare(
-    "SELECT * FROM lab_staff WHERE user_id = ?"
+    "SELECT e.* FROM staff_employees e JOIN staff_labs l ON e.lab_id = l.id WHERE l.user_id = ?"
   ).all(userId);
 
   // VeritaLab

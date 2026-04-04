@@ -352,7 +352,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   };
 
   app.get("/api/admin/report", (req, res) => {
-    const { secret, plan, status } = req.query as { secret?: string; plan?: string; status?: string };
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    const { plan, status } = req.query as { plan?: string; status?: string };
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
     let sql = `
@@ -6318,7 +6319,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             instruments: instrRows,
             instrument_tests: instrIds.length ? safeQuery(`SELECT analyte, specialty, complexity, active, instrument_id FROM veritamap_instrument_tests WHERE instrument_id IN (${instrIds.map(() => '?').join(',')})`, ...instrIds) : [],
             scans: safeQuery("SELECT id, name, created_at FROM veritascan_scans WHERE user_id = ?", user.id),
-            assessments: safeQuery("SELECT id, employee_name, program_name, assessment_type, status, created_at FROM competency_assessments WHERE user_id = ?", user.id),
+            assessments: safeQuery("SELECT a.id, e.name as employee_name, p.name as program_name, a.assessment_type, a.status, a.created_at FROM competency_assessments a LEFT JOIN competency_employees e ON a.employee_id = e.id LEFT JOIN competency_programs p ON a.program_id = p.id WHERE p.user_id = ?", user.id),
             certificates: safeQuery("SELECT id, cert_type, cert_name, expiration_date FROM lab_certificates WHERE user_id = ? AND is_active = 1", user.id),
           };
           const jsonStr = JSON.stringify(snap);

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
+import { saveAs } from "file-saver";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,

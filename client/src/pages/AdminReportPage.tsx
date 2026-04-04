@@ -131,7 +131,7 @@ export default function AdminReportPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/admin/report?secret=${encodeURIComponent(secret)}`);
+      const res = await fetch(`/api/admin/report`, { headers: { "x-admin-secret": secret } });
       if (res.status === 403) {
         setError("Invalid admin secret");
         setData(null);
@@ -531,15 +531,15 @@ function AuditLogPanel({ secret }: { secret: string }) {
   async function fetchAuditLog() {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ secret, limit: "100" });
+      const params = new URLSearchParams({ limit: "100" });
       if (userId) params.set("userId", userId);
       if (module) params.set("module", module);
-      const res = await fetch(`/api/admin/audit-log?${params}`);
+      const res = await fetch(`/api/admin/audit-log?${params}`, { headers: { "x-admin-secret": secret } });
       const d = await res.json();
       setEntries(d.entries || []);
 
       if (userId) {
-        const snapRes = await fetch(`/api/admin/snapshots?secret=${secret}&userId=${userId}`);
+        const snapRes = await fetch(`/api/admin/snapshots?userId=${userId}`, { headers: { "x-admin-secret": secret } });
         const snapData = await snapRes.json();
         setSnapshots(snapData.snapshots || []);
       }
@@ -548,7 +548,7 @@ function AuditLogPanel({ secret }: { secret: string }) {
   }
 
   async function triggerSnapshot() {
-    await fetch(`/api/admin/run-snapshot?secret=${secret}`, { method: "POST" });
+    await fetch(`/api/admin/run-snapshot`, { method: "POST", headers: { "x-admin-secret": secret } });
     alert("Snapshot triggered for all paid users.");
   }
 
@@ -594,10 +594,17 @@ function AuditLogPanel({ secret }: { secret: string }) {
               <p className="text-xs font-semibold text-blue-800 mb-2">Available Snapshots for User {userId}</p>
               <div className="flex flex-wrap gap-2">
                 {snapshots.map((s: any) => (
-                  <a key={s.id} href={`/api/admin/snapshots/${s.id}?secret=${secret}`} target="_blank" rel="noreferrer"
-                    className="text-xs bg-white border border-blue-200 rounded px-2 py-1 text-blue-700 hover:bg-blue-100">
+                  <button key={s.id}
+                    onClick={async () => {
+                      const res = await fetch(`/api/admin/snapshots/${s.id}`, { headers: { "x-admin-secret": secret } });
+                      const data = await res.json();
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, "_blank");
+                    }}
+                    className="text-xs bg-white border border-blue-200 rounded px-2 py-1 text-blue-700 hover:bg-blue-100 cursor-pointer">
                     {s.snapshot_date} ({Math.round(s.size_bytes / 1024)}KB)
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>

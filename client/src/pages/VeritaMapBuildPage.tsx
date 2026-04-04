@@ -1277,12 +1277,7 @@ export default function VeritaMapBuildPage() {
     if (vendors.length === 1) {
       setSelectedVendor(vendors[0]);
     }
-    // Default role to Reference for Manual Procedures
-    if (v === "Manual Procedures") {
-      setRole("Primary");
-    } else {
-      setRole("Primary");
-    }
+    setRole("Primary");
   }
 
   function handleVendorChange(v: string) {
