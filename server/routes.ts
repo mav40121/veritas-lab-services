@@ -4364,7 +4364,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
-      const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
+      const filename = `VeritaStaff_${typeLabel}_${safeName}_${date}.pdf`;
 
       const veritastaffToken = storePdfToken(pdfBuffer, filename);
       res.json({ token: veritastaffToken });
@@ -4432,7 +4432,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumUserRow?.clia_number || undefined);
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
+      const filename = `VeritaCheck_CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
       const cumsumToken = storePdfToken(pdfBuffer, filename);
       res.json({ token: cumsumToken });
     } catch (e: any) {
