@@ -1985,12 +1985,12 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
       <div>
         <div class="logo">VeritaScan\u2122</div>
         <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
-        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
+        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
         ${scanStandardsBadgesHTML(data.preferredStandards)}
       </div>
       <div class="header-right">Generated ${today()}</div>
     </div>
-    <div class="report-title">Executive Compliance Summary</div>
+    <div class="report-title">Executive Summary Report</div>
     <div class="report-title-sub">${scanName} · Created ${new Date(createdAt).toLocaleDateString("en-US")} · Last Updated ${new Date(updatedAt).toLocaleDateString("en-US")}</div>
     <hr class="divider">
 
@@ -2018,19 +2018,20 @@ function buildVeritaScanExecutiveHTML(data: VeritaScanPDFData): string {
       <tbody>${actionRows}</tbody>
     </table>
 
-    <!-- Signature -->
-    <div class="signature-block" style="margin-top:24px">
-      <div class="accepted-label">Reviewed by:</div>
-      <div class="sig-lines">
-        <div class="sig-line" style="flex:2"><div class="line"></div><div class="label">Signature / Name &amp; Title</div></div>
-        <div class="sig-line sig-date"><div class="line"></div><div class="label">Date</div></div>
-      </div>
-    </div>
+    <!-- Signature on page 1 -->
+    ${directorReviewHTML()}
   </body></html>`;
 }
 
 function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
   const { scanName, createdAt, updatedAt, items } = data;
+  const total = items.length;
+  const notAssessed = items.filter(i => i.status === "Not Assessed").length;
+  const na = items.filter(i => i.status === "N/A").length;
+  const compliant = items.filter(i => i.status === "Compliant").length;
+  const applicableItems = total - na;
+  const complianceRate = applicableItems > 0 ? Math.round((compliant / applicableItems) * 100) : 0;
+  const overallColor = complianceRate >= 90 ? PASS : complianceRate >= 70 ? "#d97706" : FAIL;
 
   // Group by domain
   const domainMap = new Map<string, VeritaScanPDFItem[]>();
@@ -2040,12 +2041,23 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     domainMap.set(item.domain, arr);
   }
 
+  // Domain summary rows for page 1 compact table
+  const domainSummaryRows = Array.from(domainMap.entries()).map(([domain, domItems]) => {
+    const dTotal = domItems.length;
+    const dCompliant = domItems.filter(i => i.status === "Compliant").length;
+    const dNA = domItems.filter(i => i.status === "N/A").length;
+    const dApplicable = dTotal - dNA;
+    const dRate = dApplicable > 0 ? Math.round((dCompliant / dApplicable) * 100) : 100;
+    const rateColor = dRate >= 90 ? PASS : dRate >= 70 ? "#d97706" : FAIL;
+    return `<tr><td style="font-weight:600;font-size:7.5pt">${domain}</td><td class="text-center" style="font-size:7.5pt;color:${rateColor};font-weight:700">${dRate}%</td></tr>`;
+  }).join("");
+
+  // Domain detail sections - natural flow, no forced page breaks
   let domainSections = "";
-  let domainIndex = 0;
   for (const [domain, domItems] of domainMap.entries()) {
     const rows = domItems.map((item, idx) => {
       const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
-      return `<tr class="${idx % 2 === 1 ? "stripe" : ""}">
+      return `<tr class="${idx % 2 === 1 ? "stripe" : ""}" style="page-break-inside:avoid">
         <td>${item.id}</td>
         <td style="max-width:200px;word-wrap:break-word;font-size:7pt">${item.question}</td>
         <td style="font-size:6.5pt">${item.tjc || "-"}</td>
@@ -2059,13 +2071,13 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     }).join("");
 
     domainSections += `
-      ${domainIndex > 0 ? '<div style="page-break-before:always"></div>' : ""}
-      <div class="section-label" style="font-size:10pt;margin:10px 0 6px;color:${TEAL}">${domain}</div>
+      <div style="border-top:2px solid #B0D8D8;margin-top:14px;padding-top:6px;page-break-after:avoid">
+        <div class="section-label" style="font-size:10pt;margin:0 0 6px;color:${TEAL};page-break-after:avoid">${domain}</div>
+      </div>
       <table>
         <thead><tr><th>#</th><th>Compliance Question</th><th>TJC</th><th>CAP</th><th>CFR</th><th>Status</th><th>Owner</th><th>Due</th><th>Notes</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
-    domainIndex++;
   }
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
@@ -2076,7 +2088,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
       <div>
         <div class="logo">VeritaScan\u2122</div>
         <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
-        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not on file \u2014 enter your CLIA number in account settings'}</div>
+        <div style="font-size:8pt;color:${data.cliaNumber ? '#555' : '#999'};margin-top:2px;">CLIA: ${data.cliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
         ${scanStandardsBadgesHTML(data.preferredStandards)}
       </div>
       <div class="header-right">Generated ${today()}</div>
@@ -2084,25 +2096,40 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     <div class="report-title">Full Compliance Report</div>
     <div class="report-title-sub">${scanName} · Created ${new Date(createdAt).toLocaleDateString("en-US")} · Last Updated ${new Date(updatedAt).toLocaleDateString("en-US")}</div>
     <hr class="divider">
-    ${domainSections}
 
-    <div class="signature-block" style="margin-top:24px;page-break-before:always">
-      <div class="accepted-label">Reviewed by:</div>
-      <div class="sig-lines">
-        <div class="sig-line" style="flex:2"><div class="line"></div><div class="label">Signature / Name &amp; Title</div></div>
-        <div class="sig-line sig-date"><div class="line"></div><div class="label">Date</div></div>
+    <!-- Overall compliance summary -->
+    <div style="display:flex;gap:18px;align-items:flex-start;margin:6px 0 8px;">
+      <div style="flex:0 0 auto;text-align:center;padding:6px 16px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;">
+        <div style="font-size:20pt;font-weight:700;color:${overallColor};line-height:1.2">${complianceRate}%</div>
+        <div style="font-size:7pt;color:${MUTED};text-transform:uppercase;letter-spacing:0.04em">Overall</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:7.5pt;color:${MUTED};margin-bottom:3px;">${total} total items, ${compliant} compliant, ${na} N/A, ${notAssessed} unassessed</div>
+        <table style="font-size:7.5pt;">
+          <thead><tr><th style="text-align:left;padding:2px 10px 2px 4px">Domain</th><th class="text-center" style="padding:2px 4px">Score</th></tr></thead>
+          <tbody>${domainSummaryRows}</tbody>
+        </table>
       </div>
     </div>
+
+    <!-- Signature block on page 1 -->
+    ${directorReviewHTML()}
+
+    <div style="text-align:center;font-size:7.5pt;color:${MUTED};margin-top:10px;font-style:italic;">Detailed results continued on page 2.</div>
+
+    <!-- Page 2+: domain detail sections, natural flow -->
+    <div style="page-break-before:always"></div>
+    ${domainSections}
   </body></html>`;
 }
 
 const VERITASCAN_FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
-    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaScan is a compliance assessment tool for qualified laboratory professionals. Results require review by laboratory leadership and do not constitute legal or regulatory advice.</div>
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaScan\u2122 is a compliance assessment tool for qualified laboratory professionals. Results require review by laboratory leadership and do not constitute legal or regulatory advice.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaScan by Veritas Lab Services &middot; veritaslabservices.com &middot; Generated <span class="date"></span></span>
-      <span>Page <span class="pageNumber"></span></span>
+      <span>VeritaAssure\u2122 | VeritaScan\u2122 | Confidential - For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
 </div>`;
