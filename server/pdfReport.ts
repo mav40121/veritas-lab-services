@@ -413,7 +413,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
   },
   method_comparison: {
     cap:  ["CHM.13820"],
-    tjc:  ["TJC standard"],
+    tjc:  ["QSA.02.08.01"],
     cola: ["LAB.022", "LAB.023"],
     aabb: ["5.7.1", "5.7.3"],
     clsi: ["EP09-A3"],
@@ -421,7 +421,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
   },
   precision: {
     cap:  ["CHM.13830"],
-    tjc:  ["TJC standard"],
+    tjc:  ["QSA.02.01.01"],
     cola: ["LAB.021", "LAB.023"],
     aabb: ["5.7.1"],
     clsi: ["EP15-A3"],
@@ -429,7 +429,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
   },
   lot_to_lot: {
     cap:  ["CHM.13840"],
-    tjc:  ["TJC standard"],
+    tjc:  ["QSA.02.13.01"],
     cola: ["LAB.024"],
     aabb: ["5.7.2"],
     clsi: ["EP26-A"],
@@ -437,7 +437,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
   },
   qc_range: {
     cap:  ["GEN.41316", "CHM.13850"],
-    tjc:  ["TJC standard"],
+    tjc:  ["QSA.02.07.01"],
     cola: ["LAB.030", "LAB.031"],
     aabb: ["5.8.1"],
     clsi: ["EP23-A", "C24-A3"],
@@ -453,7 +453,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
   },
   pt_coag: {
     cap:  ["HEM.37600", "HEM.37800"],
-    tjc:  ["TJC standard"],
+    tjc:  ["QSA.02.08.01", "QSA.02.13.01"],
     cola: ["LAB.023", "LAB.025"],
     aabb: ["5.14.1", "5.14.3"],
     clsi: ["EP26-A", "H21-A5"],
