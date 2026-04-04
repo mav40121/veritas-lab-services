@@ -718,6 +718,9 @@ for (const [col, colType] of bedCols) {
   }
 }
 
+// Add result column to studies table (stores pass/fail so frontend does not recompute)
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN result TEXT"); } catch {}
+
 // Plan/tier definitions: seat limits, pricing, bed ranges
 export const PLAN_SEATS: Record<string, number> = {
   clinic: 2,

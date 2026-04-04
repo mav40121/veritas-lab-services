@@ -124,6 +124,12 @@ export async function seedDemoData() {
     console.log(`[seed] Patched creatinine cal ver study id=${creatStudy.id} with real Atellica 2 data`);
   }
 
+  // ─── 4c. Backfill result field on all demo studies ──────────────────────
+  sqlite.prepare("UPDATE studies SET result = 'pass' WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass' WHERE user_id = ? AND test_name = 'Sodium'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass' WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'fail' WHERE user_id = ? AND test_name = 'Troponin I'").run(demoUserId);
+
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
     "SELECT id FROM competency_programs WHERE user_id = ?"

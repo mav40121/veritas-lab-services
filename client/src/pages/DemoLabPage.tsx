@@ -360,7 +360,11 @@ export default function DemoLabPage() {
                   const isRefInterval = study.study_type === "ref_interval";
                   const stats = isCalVer ? computeCalVerStats(study) : (!isRefInterval ? computeStudyStats(study) : null);
                   const instruments = study.instruments ? JSON.parse(study.instruments) : [];
-                  const studyPasses = stats ? stats.allPass : true;
+                  const studyPasses = study.result === 'pass' || study.result === 'PASS' || study.overallPass === true
+                    ? true
+                    : study.result === 'fail' || study.result === 'FAIL' || study.overallPass === false
+                      ? false
+                      : true;
 
                   return (
                     <Card key={study.id} className={`overflow-hidden ${isExpanded ? "sm:col-span-2" : ""}`}>
