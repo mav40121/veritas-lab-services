@@ -29,6 +29,7 @@ import VeritaScanPage from "@/pages/VeritaScanPage";
 import VeritaMapPage from "@/pages/VeritaMapPage";
 import DemoLabPage from "@/pages/DemoLabPage";
 import ResourcesPage from "@/pages/ResourcesPage";
+import FAQPage from "@/pages/FAQPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
 import ArticleTeaPage from "@/pages/ArticleTeaPage";
 import ArticleTrainingPage from "@/pages/ArticleTrainingPage";
@@ -118,12 +119,10 @@ function SiteFooter() {
   );
 }
 
-// Scrolls to top on every route change — fixes mid-page landing after navigation
-// Skips /faq so the ResourcesPage FAQ auto-scroll is not overridden
+// Scrolls to top on every route change
 function ScrollToTop() {
   const [location] = useLocation();
   useEffect(() => {
-    if (location === "/faq") return;
     const t = setTimeout(() => window.scrollTo({ top: 0, behavior: "instant" }), 0);
     return () => clearTimeout(t);
   }, [location]);
@@ -211,7 +210,7 @@ function AppContent() {
           <Route path="/veritamap" component={VeritaMapPage} />
           <Route path="/demo" component={DemoLabPage} />
           <Route path="/resources" component={ResourcesPage} />
-          <Route path="/faq" component={ResourcesPage} />
+          <Route path="/faq" component={FAQPage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
           <Route path="/resources/how-veritaassure-trains-lab-leaders" component={ArticleTrainingPage} />
