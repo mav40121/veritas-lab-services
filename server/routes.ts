@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import bcrypt from "bcryptjs";
@@ -2289,34 +2290,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Stripe webhook — handle checkout.session.completed, subscription events
-  app.post("/api/stripe/webhook", async (req, res) => {
-    if (!stripe) return res.status(503).json({ error: "Payments not configured" });
+  // Stripe webhook - raw body required for signature verification
+  // express.raw() on the route itself guarantees req.body is a Buffer
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    if (!stripe) {
+      console.error("[webhook] Stripe not configured");
+      return res.status(200).json({ received: true });
+    }
     const sig = req.headers["stripe-signature"] as string;
+    if (!sig) {
+      console.error("[webhook] Missing stripe-signature header");
+      return res.status(400).json({ error: "Missing signature" });
+    }
+    if (!WEBHOOK_SECRET) {
+      console.error("[webhook] STRIPE_WEBHOOK_SECRET not set");
+      return res.status(200).json({ received: true });
+    }
+
     let event: any;
     try {
       event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
     } catch (err: any) {
-      console.error("Webhook signature error:", err.message);
-      return res.status(400).json({ error: "Invalid signature" });
+      console.error("[webhook] Signature verification failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
+    // Always return 200 after signature verification succeeds
+    // Log processing errors but do not return 500 (prevents Stripe retries)
     try {
+      console.log("[webhook] Processing event:", event.type, event.id);
+
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as any;
         const userId = parseInt(session.metadata?.userId || "0");
         const priceType = session.metadata?.priceType;
         const totalSeats = parseInt(session.metadata?.totalSeats || "1");
         if (userId) {
-          // Calculate subscription expiry (1 year from now for annual plans)
           const expiresAt = new Date();
           expiresAt.setFullYear(expiresAt.getFullYear() + 1);
           const expiresAtISO = expiresAt.toISOString();
 
           if (priceType === "perStudy") {
             storage.addStudyCredits(userId, 1);
+            console.log("[webhook] Added study credit for user", userId);
           } else if (["waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(priceType) && session.subscription) {
-            // New tiered plans
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
               plan: priceType,
@@ -2324,13 +2341,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             (db as any).$client.prepare(
               "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active', plan_expires_at = ?, seat_count = ? WHERE id = ?"
             ).run(expiresAtISO, expiresAtISO, totalSeats, userId);
+            console.log("[webhook] Activated plan", priceType, "for user", userId);
           } else if (["starter", "professional", "lab", "complete", "annual"].includes(priceType) && session.subscription) {
-            // Backward compatibility for legacy plans
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
               plan: priceType === "complete" ? "lab" : priceType,
             });
             (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
+            console.log("[webhook] Activated legacy plan", priceType, "for user", userId);
           }
         }
       } else if (event.type === "customer.subscription.deleted") {
@@ -2338,33 +2356,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const user = storage.getUserByStripeCustomerId(sub.customer);
         if (user) {
           storage.updateUserStripe(user.id, { stripeSubscriptionId: null, plan: "free" });
-          // Set expiry to now and status to expired for data retention policy
           const nowISO = new Date().toISOString();
           (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'expired' WHERE id = ?").run(nowISO, user.id);
+          console.log("[webhook] Subscription deleted for user", user.id);
         }
       } else if (event.type === "customer.subscription.updated") {
-        // Subscription renewed — update expiry
         const sub = event.data.object as any;
         const user = storage.getUserByStripeCustomerId(sub.customer);
         if (user && sub.current_period_end) {
           const newExpiry = new Date(sub.current_period_end * 1000).toISOString();
           (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(newExpiry, user.id);
+          console.log("[webhook] Subscription updated for user", user.id);
         }
       } else if (event.type === "invoice.payment_failed") {
-        // Set payment_failed status — grace period of 7 days, then read_only
         const invoice = event.data.object as any;
-        console.warn("Payment failed for customer:", invoice.customer);
+        console.warn("[webhook] Payment failed for customer:", invoice.customer);
         const user = storage.getUserByStripeCustomerId(invoice.customer);
         if (user) {
-          // Set expiry to 7 days from now (grace period)
           const gracePeriod = new Date();
           gracePeriod.setDate(gracePeriod.getDate() + 7);
           (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?").run(gracePeriod.toISOString(), user.id);
         }
       }
     } catch (err: any) {
-      console.error("Webhook processing error:", err.message);
-      return res.status(500).json({ error: "Webhook processing failed" });
+      // Log but do NOT return 500 - Stripe would retry endlessly
+      console.error("[webhook] Processing error for event", event.type, event.id, ":", err.message, err.stack);
     }
 
     res.json({ received: true });
