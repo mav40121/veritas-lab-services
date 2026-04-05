@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText } from "lucide-react";
 
 const PLANS = [
   {
@@ -126,6 +126,36 @@ export default function PricingPage() {
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
             Your tier is automatically determined by your lab's CLIA certificate type and specialty count at signup.
+          </p>
+        </div>
+      </section>
+
+      {/* Payment Methods */}
+      <section className="border-y border-teal-800/40 bg-teal-950/50">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 text-center">
+          <div className="flex items-center justify-center gap-10 sm:gap-14 mb-4">
+            <div className="flex flex-col items-center gap-1.5">
+              <CreditCard size={24} className="text-teal-400" />
+              <span className="text-xs text-muted-foreground font-medium">Credit Card</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <Building2 size={24} className="text-teal-400" />
+              <span className="text-xs text-muted-foreground font-medium">ACH Transfer</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <FileText size={24} className="text-teal-400" />
+              <span className="text-xs text-muted-foreground font-medium">Purchase Order</span>
+            </div>
+          </div>
+          <p className="text-sm text-foreground">
+            We accept credit cards, ACH bank transfer, and purchase orders.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Need invoiced billing? Contact us at{" "}
+            <a href="mailto:info@veritaslabservices.com" className="text-teal-400 hover:underline">
+              info@veritaslabservices.com
+            </a>{" "}
+            and we will set up your account.
           </p>
         </div>
       </section>
