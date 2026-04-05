@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import * as XLSX from "xlsx";
 import { useLocation, useSearch, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -442,43 +443,7 @@ export default function VeritaCheckPage() {
   const [csvConfirmReplace, setCsvConfirmReplace] = useState(false);
   const csvFileRef = useRef<HTMLInputElement>(null);
 
-  const parseCsvFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) {
-        setCsvErrors(["File must contain at least a header row and one data row."]);
-        return;
-      }
-      // Try comma first, if only 1 column detected try tab
-      let delimiter = ",";
-      const commaCount = (lines[0].match(/,/g) || []).length;
-      if (commaCount === 0) {
-        const tabCount = (lines[0].match(/\t/g) || []).length;
-        if (tabCount > 0) delimiter = "\t";
-      }
-      const parseLine = (line: string) => {
-        const cells: string[] = [];
-        let current = "";
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const ch = line[i];
-          if (inQuotes) {
-            if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-            else if (ch === '"') { inQuotes = false; }
-            else { current += ch; }
-          } else {
-            if (ch === '"') { inQuotes = true; }
-            else if (ch === delimiter) { cells.push(current.trim()); current = ""; }
-            else { current += ch; }
-          }
-        }
-        cells.push(current.trim());
-        return cells;
-      };
-      const headers = parseLine(lines[0]);
-      const rows = lines.slice(1).map(parseLine).filter(r => r.some(c => c.trim()));
+  const processImportedData = (headers: string[], rows: string[][]) => {
       setCsvHeaders(headers);
       setCsvRows(rows);
       setCsvErrors([]);
@@ -518,8 +483,73 @@ export default function VeritaCheckPage() {
       }
       setCsvMapping(autoMap);
       setCsvStep("mapping");
-    };
-    reader.readAsText(file);
+  };
+
+  const parseImportFile = (file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext === "xlsx" || ext === "xls") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          if (rawRows.length < 2) {
+            setCsvErrors(["File must contain at least a header row and one data row."]);
+            return;
+          }
+          const headers = rawRows[0].map((c: any) => String(c ?? "").trim());
+          const rows = rawRows.slice(1)
+            .map(r => headers.map((_, i) => String(r[i] ?? "").trim()))
+            .filter(r => r.some(c => c));
+          processImportedData(headers, rows);
+        } catch {
+          setCsvErrors(["Could not read this Excel file. Please check the file and try again."]);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // CSV / TSV / TXT
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) {
+          setCsvErrors(["File must contain at least a header row and one data row."]);
+          return;
+        }
+        let delimiter = ",";
+        const commaCount = (lines[0].match(/,/g) || []).length;
+        if (commaCount === 0) {
+          const tabCount = (lines[0].match(/\t/g) || []).length;
+          if (tabCount > 0) delimiter = "\t";
+        }
+        const parseLine = (line: string) => {
+          const cells: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (inQuotes) {
+              if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+              else if (ch === '"') { inQuotes = false; }
+              else { current += ch; }
+            } else {
+              if (ch === '"') { inQuotes = true; }
+              else if (ch === delimiter) { cells.push(current.trim()); current = ""; }
+              else { current += ch; }
+            }
+          }
+          cells.push(current.trim());
+          return cells;
+        };
+        const headers = parseLine(lines[0]);
+        const rows = lines.slice(1).map(parseLine).filter(r => r.some(c => c.trim()));
+        processImportedData(headers, rows);
+      };
+      reader.readAsText(file);
+    }
   };
 
   const validateCsvMapping = () => {
@@ -1232,7 +1262,7 @@ export default function VeritaCheckPage() {
               <div className="mb-4">
                 {(studyType === "method_comparison" || studyType === "cal_ver") ? (
                   <Button variant="outline" size="sm" onClick={() => { resetCsvState(); setCsvModalOpen(true); }}>
-                    <Upload size={14} className="mr-1.5" />Import from CSV
+                    <Upload size={14} className="mr-1.5" />Import from CSV / Excel
                   </Button>
                 ) : (
                   <TooltipProvider>
@@ -1240,11 +1270,11 @@ export default function VeritaCheckPage() {
                       <TooltipTrigger asChild>
                         <span tabIndex={0}>
                           <Button variant="outline" size="sm" disabled className="opacity-50">
-                            <Upload size={14} className="mr-1.5" />Import from CSV
+                            <Upload size={14} className="mr-1.5" />Import from CSV / Excel
                           </Button>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent><p>CSV import coming soon for this study type.</p></TooltipContent>
+                      <TooltipContent><p>File import coming soon for this study type.</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
@@ -2102,11 +2132,11 @@ export default function VeritaCheckPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet size={18} />
-              Import from CSV
+              Import from CSV or Excel
             </DialogTitle>
             <DialogDescription>
-              {csvStep === "upload" && "Upload a CSV file exported from your LIS to populate the data entry grid."}
-              {csvStep === "mapping" && "Map your CSV columns to the study fields below."}
+              {csvStep === "upload" && "Upload a CSV or Excel file exported from your LIS to populate the data entry grid."}
+              {csvStep === "mapping" && "Map your file columns to the study fields below."}
               {csvStep === "preview" && "Review the mapped data before importing."}
             </DialogDescription>
           </DialogHeader>
@@ -2122,29 +2152,29 @@ export default function VeritaCheckPage() {
                   e.preventDefault();
                   e.stopPropagation();
                   const file = e.dataTransfer.files[0];
-                  if (file && (file.name.endsWith(".csv") || file.name.endsWith(".tsv") || file.name.endsWith(".txt"))) {
-                    parseCsvFile(file);
+                  if (file && (file.name.endsWith(".csv") || file.name.endsWith(".tsv") || file.name.endsWith(".txt") || file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
+                    parseImportFile(file);
                   } else {
-                    setCsvErrors(["Please upload a .csv file."]);
+                    setCsvErrors(["Please upload a .csv or Excel (.xlsx, .xls) file."]);
                   }
                 }}
               >
                 <Upload size={32} className="mx-auto mb-3 text-muted-foreground" />
-                <p className="text-sm font-medium mb-1">Drop your CSV file here, or click to browse</p>
-                <p className="text-xs text-muted-foreground">Accepts .csv files only</p>
+                <p className="text-sm font-medium mb-1">Upload CSV or Excel file</p>
+                <p className="text-xs text-muted-foreground">Accepts .csv, .xlsx, and .xls files</p>
               </div>
               <input
                 ref={csvFileRef}
                 type="file"
-                accept=".csv,.tsv,.txt"
+                accept=".csv,.tsv,.txt,.xlsx,.xls"
                 className="hidden"
                 onChange={e => {
                   const file = e.target.files?.[0];
-                  if (file) parseCsvFile(file);
+                  if (file) parseImportFile(file);
                 }}
               />
               <div className="bg-muted/50 rounded p-3 text-xs text-muted-foreground space-y-1">
-                <p>Export your results from your LIS as a CSV file, then upload it here. Your data will be mapped to the study fields below.</p>
+                <p>Export your results from your LIS as a CSV or Excel file (.xlsx, .xls, .csv), then upload it here. Your data will be mapped to the study fields below.</p>
                 <p>First row should be column headers. Numeric values only in result columns.</p>
               </div>
               {csvErrors.length > 0 && (
