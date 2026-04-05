@@ -150,12 +150,12 @@ export default function PricingPage() {
           <p className="text-sm text-foreground">
             We accept credit cards, ACH bank transfer, and purchase orders.
           </p>
-          <p className="text-xs text-muted-foreground mt-1.5">
-            Need invoiced billing? Contact us at{" "}
+          <p className="text-sm text-foreground mt-1.5">
+            Invoiced billing and purchase orders available for institutions. Contact{" "}
             <a href="mailto:info@veritaslabservices.com" className="text-teal-400 hover:underline">
               info@veritaslabservices.com
             </a>{" "}
-            and we will set up your account.
+            to get started.
           </p>
         </div>
       </section>
