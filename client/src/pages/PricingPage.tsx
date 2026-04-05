@@ -122,10 +122,10 @@ export default function PricingPage() {
             Simple, Transparent Pricing
           </h1>
           <p className="text-xl text-primary font-semibold mb-3">
-            Tied to your CLIA certificate. No self-reporting. No surprises.
+            Simple annual pricing based on your lab type. No hidden fees. No long-term contracts.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
-            Your tier is automatically determined by your lab's CLIA certificate type and specialty count at signup.
+            Choose the plan that fits your lab's size and complexity. Certificate of Waiver labs start at the Clinic tier.
           </p>
         </div>
       </section>
@@ -272,7 +272,7 @@ export default function PricingPage() {
             All plans include 2 years of read-only data access after cancellation.
           </p>
           <p className="text-xs text-muted-foreground max-w-2xl mx-auto">
-            Your tier is automatically assigned based on your CLIA certificate. Certificate of Waiver labs are always placed in the Clinic tier regardless of specialty count.
+            Your tier is based on your lab size and complexity. Certificate of Waiver labs are always placed in the Clinic tier. Not sure which tier fits your lab? Contact us at info@veritaslabservices.com.
           </p>
         </div>
 
