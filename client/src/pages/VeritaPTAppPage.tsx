@@ -349,12 +349,12 @@ export default function VeritaPTAppPage() {
                           </a>
                           <span className="text-muted-foreground text-xs">|</span>
                           <a
-                            href="https://www.aphl.org/programs/proficiency_testing/Pages/default.aspx"
+                            href="https://www.api-pt.com"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-[#006064] underline hover:no-underline"
                           >
-                            APHL <ExternalLink size={10} />
+                            API <ExternalLink size={10} />
                           </a>
                         </div>
                       )}

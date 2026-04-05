@@ -1172,12 +1172,12 @@ export default function DemoLabPage() {
                                       </a>
                                       <span className="text-muted-foreground text-xs">|</span>
                                       <a
-                                        href="https://www.aphl.org/programs/proficiency_testing/Pages/default.aspx"
+                                        href="https://www.api-pt.com"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs text-[#006064] underline hover:no-underline"
                                       >
-                                        APHL
+                                        API
                                       </a>
                                     </div>
                                   )}
