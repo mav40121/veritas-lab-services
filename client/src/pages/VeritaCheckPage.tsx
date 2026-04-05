@@ -1958,14 +1958,16 @@ export default function VeritaCheckPage() {
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Pricing CTA */}
       <section className="section-padding bg-secondary/20" id="pricing">
-        <div className="container-default max-w-4xl">
+        <div className="container-default max-w-2xl text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
             <DollarSign size={18} className="text-primary" />
-            <h2 className="font-serif text-2xl font-bold">Simple Pricing</h2>
+            <h2 className="font-serif text-2xl font-bold">Ready to Run Unlimited Studies?</h2>
           </div>
-          <p className="text-muted-foreground text-center mb-4">No hidden fees. Cancel anytime.</p>
+          <p className="text-muted-foreground mb-6">
+            View our full pricing to find the right plan for your lab.
+          </p>
 
           {/* Payment result banners */}
           {paymentStatus === "success" && (
@@ -1985,145 +1987,11 @@ export default function VeritaCheckPage() {
             </Alert>
           )}
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {plans.map(plan => {
-              const isLoading = checkoutLoading === plan.priceType;
-              return (
-                <Card key={plan.name} className={`relative border-2 ${plan.highlight ? "border-primary bg-primary/5" : "border-border"}`}>
-                  {plan.badge && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><Badge className="bg-primary text-primary-foreground">{plan.badge}</Badge></div>}
-                  <CardContent className="p-6">
-                    <h3 className="font-bold text-lg mb-1">{plan.name}</h3>
-                    <div className="flex items-baseline gap-1.5 mb-1">
-                      <span className="text-3xl font-bold">{plan.price}</span>
-                      {plan.unit !== "one-time" && <span className="text-sm text-muted-foreground">/{plan.unit.split("per ")[1]}</span>}
-                    </div>
-                    {discountApplied && plan.priceType !== "perStudy" && (
-                      <p className="text-xs text-green-600 dark:text-green-400 font-semibold mb-1">
-                        {discountApplied.pct}% off with code {discountApplied.code}
-                      </p>
-                    )}
-                    <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                    <TooltipProvider delayDuration={150}>
-                      <ul className="space-y-2 mb-5">
-                        {plan.features.map(f => {
-                          const tip = featureTooltips[f];
-                          return (
-                            <li key={f} className="flex items-center gap-2 text-sm">
-                              <CheckCircle2 size={13} className="text-primary shrink-0" />
-                              {tip ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="cursor-help border-b border-dotted border-muted-foreground/40 inline-flex items-center gap-1">
-                                      {f}
-                                      <HelpCircle size={11} className="text-muted-foreground/50 shrink-0" />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    side="top"
-                                    collisionPadding={8}
-                                    showArrow
-                                    className="max-w-[250px] bg-zinc-900 dark:bg-zinc-800 text-white text-xs leading-relaxed border-zinc-700 px-3 py-2"
-                                  >
-                                    {tip}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                <span>{f}</span>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </TooltipProvider>
-                    <Button
-                      className={`w-full ${plan.highlight ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
-                      variant={plan.highlight ? "default" : "outline"}
-                      disabled={isLoading || checkoutLoading !== null}
-                      onClick={() => handleBuy(plan.priceType)}
-                    >
-                      {isLoading ? <><Loader2 size={14} className="mr-2 animate-spin" />Redirecting…</> : plan.cta}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Enterprise callout */}
-          <div className="max-w-5xl mx-auto mt-8">
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 flex items-start gap-4">
-              <Shield size={20} className="text-primary mt-0.5 shrink-0" />
-              <div>
-                <div className="font-semibold text-sm mb-1">
-                  Enterprise+: <span className="text-primary">Custom pricing</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Multi-site health systems, academic medical centers, and reference labs with requirements beyond the Enterprise plan. Unlimited seats, multiple CLIA numbers, dedicated support. Contact us for a custom quote.
-                </p>
-                <Link href="/contact" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-                  Contact Us <ChevronRight size={13} />
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* Data retention trust signal */}
-          <div className="max-w-5xl mx-auto mt-6">
-            <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-center">
-              <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">
-                All plans include 2 years of read-only data access after cancellation.
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                Your data is always safe. Cancel anytime and keep viewing your studies, maps, scans, and reports.
-              </p>
-            </div>
-          </div>
-
-          {/* Discount code input */}
-          <div className="max-w-sm mx-auto mt-6">
-            <p className="text-xs text-center text-muted-foreground mb-2">Have a discount code?</p>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter code"
-                value={discountCode}
-                onChange={e => { setDiscountCode(e.target.value.toUpperCase()); setDiscountApplied(null); setDiscountError(""); }}
-                className="text-sm uppercase"
-                maxLength={20}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={discountLoading || !discountCode.trim()}
-                onClick={() => applyDiscount("professional")}
-                className="shrink-0"
-              >
-                {discountLoading ? <Loader2 size={13} className="animate-spin" /> : "Apply"}
-              </Button>
-            </div>
-            {discountApplied && (
-              <div className="mt-2 flex items-center gap-1.5 text-green-600 dark:text-green-400 text-sm">
-                <CheckCircle2 size={13} />
-                <span><strong>{discountApplied.code}</strong>: {discountApplied.pct}% off applied via {discountApplied.partnerName}</span>
-              </div>
-            )}
-            {discountError && (
-              <p className="mt-2 text-sm text-red-500">{discountError}</p>
-            )}
-          </div>
-
-          {/* Suite links */}
-          <div className="max-w-5xl mx-auto mt-4 flex justify-center gap-6">
-            <Link href="/veritascan" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-              VeritaScan <ChevronRight size={13} />
+          <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+            <Link href="/pricing">
+              View Pricing <ChevronRight size={15} className="ml-1" />
             </Link>
-            <Link href="/veritamap" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
-              VeritaMap <ChevronRight size={13} />
-            </Link>
-          </div>
-
-          <p className="text-center text-xs text-muted-foreground mt-6">
-            Questions? <a href="/#/contact" className="text-primary hover:underline">Contact us</a> - we're happy to help.
-          </p>
+          </Button>
         </div>
       </section>
       {/* CSV Import Modal */}

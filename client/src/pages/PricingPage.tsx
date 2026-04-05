@@ -111,7 +111,7 @@ export default function PricingPage() {
 
       {/* Hero */}
       <section className="border-b border-border bg-gradient-to-br from-primary/10 via-primary/4 to-transparent">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16 text-center">
           <Badge
             variant="outline"
             className="mb-4 text-primary border-primary/30 bg-primary/5 font-medium"
@@ -232,7 +232,7 @@ export default function PricingPage() {
           <p className="text-muted-foreground mb-5 max-w-xl mx-auto">
             Multi-site health systems and national reference labs. Contact us for custom pricing.
           </p>
-          <Button asChild variant="outline" size="lg">
+          <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
             <Link href="/contact">
               Contact Us <ChevronRight size={14} className="ml-1" />
             </Link>

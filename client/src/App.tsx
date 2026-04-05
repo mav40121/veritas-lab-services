@@ -11,6 +11,7 @@ import { NavBar } from "@/components/NavBar";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { ChevronUp } from "lucide-react";
 import HomePage from "@/pages/HomePage";
 import ServicesPage from "@/pages/ServicesPage";
 import TeamPage from "@/pages/TeamPage";
@@ -60,6 +61,25 @@ import AccountSettingsPage from "@/pages/AccountSettingsPage";
 import VeritaAssurePage from "@/pages/VeritaAssurePage";
 import AdminReportPage from "@/pages/AdminReportPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
+
+function BackToTop() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => setVisible(window.scrollY > 400);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  if (!visible) return null;
+  return (
+    <button
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      className="fixed bottom-6 right-6 z-50 bg-teal-600 text-white rounded-full p-3 shadow-lg hover:bg-teal-700 transition-all"
+      aria-label="Back to top"
+    >
+      <ChevronUp className="h-5 w-5" />
+    </button>
+  );
+}
 
 function SiteFooter() {
   return (
@@ -247,6 +267,7 @@ function AppContent() {
         </Switch>
       </main>
       <SiteFooter />
+      <BackToTop />
       <Toaster />
       <SubscriptionModal />
       <PerplexityAttribution />

@@ -165,7 +165,7 @@ export default function FAQPage() {
         <div className="space-y-8">
           {FAQ_CATEGORIES.map(cat => (
             <div key={cat.category}>
-              <h3 className="text-xs font-semibold text-primary uppercase tracking-widest mb-1 pb-2 border-b border-primary/20">
+              <h3 className="text-xs font-semibold text-primary uppercase tracking-widest mb-1 pb-2 border-b border-primary/20 scroll-mt-20">
                 {cat.category}
               </h3>
               <Accordion type="multiple" className="w-full">
