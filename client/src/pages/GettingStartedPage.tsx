@@ -133,12 +133,49 @@ export default function GettingStartedPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-2xl font-bold mb-4">Getting Started with VeritaAssure&#8482;</h1>
-        <p className="text-muted-foreground mb-6">Sign in to access your onboarding checklist.</p>
-        <Button asChild>
-          <Link href="/login">Sign In</Link>
-        </Button>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold mb-2">Getting Started with VeritaAssure&#8482;</h1>
+          <p className="text-muted-foreground">Seven steps to a fully configured lab. Most labs complete setup in under an hour.</p>
+        </div>
+
+        <div className="relative">
+          {/* Dimmed step cards */}
+          <div className="space-y-3 opacity-50 select-none" aria-hidden="true">
+            {STEPS.map((step) => (
+              <Card key={step.key} className="border-border">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground shrink-0">
+                    {step.number}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{step.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{step.time}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Overlay CTA */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Card className="border-primary/30 shadow-lg bg-card/95 backdrop-blur-sm max-w-sm mx-4 w-full">
+              <CardContent className="p-6 text-center">
+                <p className="text-sm text-muted-foreground mb-5">
+                  Sign in to track your progress and complete your setup.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button asChild>
+                    <Link href="/login">Sign In</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/login">Create Account</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }

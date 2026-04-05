@@ -27,7 +27,7 @@ export default function HomePage() {
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-border">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-28">
           <div className="max-w-3xl">
             <div className="flex gap-2 mb-5">
               <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 font-medium">
@@ -108,7 +108,7 @@ export default function HomePage() {
           {stats.map(({ value, label }) => (
             <div key={label}>
               <div className="text-2xl font-bold text-primary font-serif">{value}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+              <div className="text-sm sm:text-xs text-muted-foreground mt-0.5">{label}</div>
             </div>
           ))}
         </div>

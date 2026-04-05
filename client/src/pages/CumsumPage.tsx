@@ -268,8 +268,8 @@ export default function CumsumPage() {
               {selectedTracker.entries.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No entries yet. Add the Install Lot to establish the baseline.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto w-full">
+                  <table className="min-w-[600px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
                         <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Year</th>
@@ -301,6 +301,7 @@ export default function CumsumPage() {
                       ))}
                     </tbody>
                   </table>
+                  <p className="text-xs text-muted-foreground mt-2 sm:hidden">Scroll horizontally to see all columns</p>
                 </div>
               )}
             </CardContent>

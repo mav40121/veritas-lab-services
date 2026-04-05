@@ -605,8 +605,8 @@ export default function DemoLabPage() {
                           </div>
                         </div>
                         {tracker.entries?.length > 0 && (
-                          <div className="mt-3 overflow-x-auto">
-                            <table className="w-full text-xs">
+                          <div className="mt-3 overflow-x-auto w-full">
+                            <table className="min-w-[600px] w-full text-xs">
                               <thead>
                                 <tr className="text-muted-foreground border-b">
                                   <th className="text-left py-1 pr-3">Year</th>
@@ -634,6 +634,7 @@ export default function DemoLabPage() {
                                 ))}
                               </tbody>
                             </table>
+                            <p className="text-xs text-muted-foreground mt-2 sm:hidden">Scroll horizontally to see all columns</p>
                           </div>
                         )}
                       </CardContent>
