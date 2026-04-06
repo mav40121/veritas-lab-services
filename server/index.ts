@@ -103,6 +103,14 @@ app.use((req, res, next) => {
     console.error("[seed] Demo data seed error:", err.message);
   }
 
+  // Verify demo data integrity -- restores any accidentally deleted demo studies
+  try {
+    const { verifyDemoIntegrity } = await import("./demoGuard");
+    await verifyDemoIntegrity();
+  } catch (err: any) {
+    console.error("[demoGuard] Integrity check error:", err.message);
+  }
+
   // Recompute pass/fail status for all existing studies to fix any stale values
   try {
     const { recomputeAllStudyStatuses } = await import("./routes");
