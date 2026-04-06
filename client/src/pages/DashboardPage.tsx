@@ -120,7 +120,7 @@ export default function Dashboard() {
                     <span>·</span>
                     <span>Analyst: {study.analyst}</span>
                     <span>·</span>
-                    <span>TEa: ±{(study.cliaAllowableError * 100).toFixed(1)}%</span>
+                    <span>TEa: ±{(study as any).teaIsPercentage === 0 ? `${study.cliaAllowableError} ${(study as any).teaUnit || ''}` : `${(study.cliaAllowableError * 100).toFixed(1)}%`}</span>
                   </div>
                 </div>
 

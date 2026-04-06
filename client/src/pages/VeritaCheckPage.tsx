@@ -712,6 +712,8 @@ export default function VeritaCheckPage() {
   }, []);
 
   const cliaValue = CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
+  const teaIsPercentage = (CLIA_PRESETS[cliaPreset] as any).isPercentage !== false;
+  const teaUnit = (CLIA_PRESETS[cliaPreset] as any).unit || '%';
 
   const handleGridKeyDown = (e: React.KeyboardEvent, row: number, col: number) => {
     if (e.key !== "Tab") return;
@@ -822,6 +824,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "lot_to_lot", cliaAllowableError: cliaValue,
+        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
         dataPoints: JSON.stringify({ data: allData, sampleType: lotSampleType, currentLot: lotCurrentLotNum, newLot: lotNewLotNum, analyte: lotAnalyte, units: lotUnits }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
@@ -852,6 +855,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "-",
         date, studyType: "pt_coag", cliaAllowableError: ptModule2TEa,
+        teaIsPercentage: 1, teaUnit: '%',
         dataPoints: JSON.stringify({
           module1: { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
           module2: { data: m2Valid, tea: ptModule2TEa, inst1: ptInstrumentName, inst2: ptInstrument2Name },
@@ -884,6 +888,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "-",
         date, studyType: "qc_range", cliaAllowableError: 0.10,
+        teaIsPercentage: 1, teaUnit: '%',
         dataPoints: JSON.stringify({ dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels, dateRange: { start: qcDateStart, end: qcDateEnd }, oldLotData: qcOldLotData }),
         instruments: JSON.stringify(qcAnalyzers),
         status: results.overallShiftCount === 0 ? "pass" : "fail",
@@ -908,6 +913,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: maInstrument, analyst: analyst.trim() || "-",
         date, studyType: "multi_analyte_coag", cliaAllowableError: maTeaPT,
+        teaIsPercentage: 1, teaUnit: '%',
         dataPoints: JSON.stringify({
           specimens: rawSpecimens, isi: maISI, normalMeanPT: maNormalMeanPT,
           teas: { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib },
@@ -933,6 +939,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "ref_interval", cliaAllowableError: 0.1,
+        teaIsPercentage: 1, teaUnit: '%',
         dataPoints: JSON.stringify({ specimens: refData.map(d => ({ specimenId: d.specimenId, value: d.value })), refLow: lo, refHigh: hi, analyte: refAnalyte, units: refUnits }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
@@ -960,6 +967,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "precision", cliaAllowableError: cliaValue,
+        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
         dataPoints: JSON.stringify(precDataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
@@ -980,10 +988,11 @@ export default function VeritaCheckPage() {
         expectedValue: dp.instrumentValues[primaryName] ?? null,
         instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentValues[n] ?? null])),
       }));
-      const results = calculateStudy(mappedPoints, comparisonNames, cliaValue, "method_comparison");
+      const results = calculateStudy(mappedPoints, comparisonNames, cliaValue, "method_comparison", teaIsPercentage);
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
         date, studyType: "method_comparison", cliaAllowableError: cliaValue,
+        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
         dataPoints: JSON.stringify(dataPoints),
         instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -992,10 +1001,12 @@ export default function VeritaCheckPage() {
       return;
     }
 
-    const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison");
+    const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison", teaIsPercentage);
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
-      date, studyType, cliaAllowableError: cliaValue, dataPoints: JSON.stringify(dataPoints),
+      date, studyType, cliaAllowableError: cliaValue,
+      teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+      dataPoints: JSON.stringify(dataPoints),
       instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
       createdAt: new Date().toISOString(),
     };

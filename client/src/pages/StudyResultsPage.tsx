@@ -405,7 +405,10 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
 }
 
 function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
-  const cliaPercent = (study.cliaAllowableError * 100).toFixed(1);
+  const isAbsolute = (study as any).teaIsPercentage === 0;
+  const teaDisplay = isAbsolute
+    ? `\u00B1${study.cliaAllowableError} ${(study as any).teaUnit || ''}`
+    : `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -415,7 +418,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
             ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Interval Verification" : "Correlation / Method Comparison"],
-            [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", `±${cliaPercent}%`],
+            [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", teaDisplay],
             ["Analyst", study.analyst],
             ["Date", study.date],
             ["Instruments / Methods", instrumentNames.join(", ")],
@@ -1424,14 +1427,17 @@ export default function StudyResults() {
         expectedValue: d.instrumentValues[primaryName] ?? null,
         instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
       }));
-      results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError);
+      const isPercentage = (study as any).teaIsPercentage !== 0;
+      results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage);
     } else {
       // Old format: expectedValue is already the reference, instrumentValues has test instruments
       const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
-      results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError);
+      const isPercentage = (study as any).teaIsPercentage !== 0;
+      results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage);
     }
   } else {
-    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison");
+    const isPercentage = (study as any).teaIsPercentage !== 0;
+    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage);
   }
 
   return (

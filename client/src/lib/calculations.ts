@@ -266,7 +266,8 @@ export interface MethodCompResults {
 export function calculateMethodComparison(
   dataPoints: DataPoint[],
   instrumentNames: string[],
-  cliaError: number
+  cliaError: number,
+  teaIsPercentage: boolean = true
 ): MethodCompResults {
   const valid = dataPoints.filter(
     (dp) => dp.expectedValue !== null && instrumentNames.some((n) => dp.instrumentValues[n] !== null)
@@ -280,7 +281,10 @@ export function calculateMethodComparison(
       if (v !== null && v !== undefined) {
         const diff = v - ref;
         const pctDiff = ref !== 0 ? (diff / ref) * 100 : 0;
-        instruments[n] = { value: v, difference: diff, pctDifference: pctDiff, passFail: Math.abs(pctDiff / 100) <= cliaError ? "Pass" : "Fail" };
+        const passed = teaIsPercentage
+          ? Math.abs(pctDiff / 100) <= cliaError
+          : Math.abs(diff) <= cliaError;
+        instruments[n] = { value: v, difference: diff, pctDifference: pctDiff, passFail: passed ? "Pass" : "Fail" };
       }
     });
     return { level: dp.level, referenceValue: ref, instruments };
@@ -926,10 +930,11 @@ export function calculateStudy(
   dataPoints: DataPoint[],
   instrumentNames: string[],
   cliaError: number,
-  studyType: "cal_ver" | "method_comparison" = "cal_ver"
+  studyType: "cal_ver" | "method_comparison" = "cal_ver",
+  teaIsPercentage: boolean = true
 ): CalVerResults | MethodCompResults {
   if (studyType === "method_comparison") {
-    return calculateMethodComparison(dataPoints, instrumentNames, cliaError);
+    return calculateMethodComparison(dataPoints, instrumentNames, cliaError, teaIsPercentage);
   }
   return calculateCalVer(dataPoints, instrumentNames, cliaError);
 }

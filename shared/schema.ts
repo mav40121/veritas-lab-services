@@ -37,6 +37,8 @@ export const studies = sqliteTable("studies", {
   dataPoints: text("data_points").notNull(),
   instruments: text("instruments").notNull(),
   status: text("status").notNull().default("completed"),
+  teaIsPercentage: integer("tea_is_percentage").default(1),
+  teaUnit: text("tea_unit").default("%"),
   createdAt: text("created_at").notNull(),
 });
 

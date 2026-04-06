@@ -30,7 +30,7 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // ── Server-side pass/fail recomputation ─────────────────────────────────────
 // Mirrors the client calculation logic so the stored status is always correct.
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
-function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number): "pass" | "fail" {
+function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true): "pass" | "fail" {
   try {
     const rawData = safeJsonParse(dataPointsJson, null);
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
@@ -76,28 +76,37 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       }
       const valid = mappedPoints.filter(dp => dp.expectedValue !== null && comparisonNames.some(n => dp.instrumentValues[n] !== null));
       let passCount = 0, totalCount = 0;
-      const pctDiffsAll: number[] = [];
+      const biasVals: number[] = [];
       for (const dp of valid) {
         const ref = dp.expectedValue!;
         for (const n of comparisonNames) {
           const v = dp.instrumentValues[n];
           if (v !== null && v !== undefined) {
             totalCount++;
-            // cliaAllowableError is stored as decimal fraction (e.g., 0.30 for 30%)
-            // pctDiff is also a fraction (e.g., 0.3165 for 31.65%)
-            const pctDiff = ref !== 0 ? (v - ref) / ref : 0;
-            pctDiffsAll.push(pctDiff);
-            if (Math.abs(pctDiff) <= cliaAllowableError) passCount++;
+            if (teaIsPercentage) {
+              // Percentage TEa: cliaAllowableError stored as decimal fraction (e.g., 0.30 for 30%)
+              const pctDiff = ref !== 0 ? (v - ref) / ref : 0;
+              biasVals.push(pctDiff);
+              if (Math.abs(pctDiff) <= cliaAllowableError) passCount++;
+            } else {
+              // Absolute TEa: cliaAllowableError stored as actual value (e.g., 4 for 4 mmol/L)
+              const absDiff = v - ref;
+              biasVals.push(absDiff);
+              if (Math.abs(absDiff) <= cliaAllowableError) passCount++;
+            }
           }
         }
       }
 
-      // Validation guard: verify pass/fail matches computed mean % bias
+      // Validation guard: verify pass/fail matches computed mean bias
       let computedResult: "pass" | "fail" = (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
-      if (pctDiffsAll.length > 0) {
-        const meanAbsPctBias = pctDiffsAll.reduce((a, b) => a + Math.abs(b), 0) / pctDiffsAll.length;
-        if (meanAbsPctBias > cliaAllowableError && computedResult === "pass") {
-          console.error(`[VALIDATION] Method comparison computed as pass but mean |% bias| ${(meanAbsPctBias * 100).toFixed(2)}% exceeds TEa ${(cliaAllowableError * 100).toFixed(1)}% - overriding to FAIL`);
+      if (biasVals.length > 0) {
+        const meanAbsBias = biasVals.reduce((a, b) => a + Math.abs(b), 0) / biasVals.length;
+        if (meanAbsBias > cliaAllowableError && computedResult === "pass") {
+          const biasLabel = teaIsPercentage
+            ? `${(meanAbsBias * 100).toFixed(2)}% exceeds TEa ${(cliaAllowableError * 100).toFixed(1)}%`
+            : `${meanAbsBias.toFixed(3)} exceeds TEa ${cliaAllowableError}`;
+          console.error(`[VALIDATION] Method comparison computed as pass but mean |bias| ${biasLabel} - overriding to FAIL`);
           computedResult = "fail";
         }
       }
@@ -200,7 +209,7 @@ export function recomputeAllStudyStatuses(): void {
   let fixed = 0;
   const sqlite = (db as any).$client;
   for (const study of allStudies) {
-    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError);
+    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0);
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
       // Also update the result column (not in drizzle schema, added via ALTER TABLE)
@@ -916,7 +925,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed.data.studyType,
       parsed.data.dataPoints,
       parsed.data.instruments,
-      parsed.data.cliaAllowableError
+      parsed.data.cliaAllowableError,
+      (parsed.data as any).teaIsPercentage !== 0
     );
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId });
 
@@ -2775,6 +2785,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           date: studyRow.date,
           studyType: "cal_ver",
           cliaAllowableError: teaFraction,
+          teaIsPercentage: studyRow.tea_is_percentage ?? 1,
+          tea_is_percentage: studyRow.tea_is_percentage ?? 1,
+          teaUnit: studyRow.tea_unit ?? '%',
+          tea_unit: studyRow.tea_unit ?? '%',
           dataPoints: dp,
           instruments: instNames,
           status: studyRow.status,
@@ -2880,6 +2894,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           testName: studyRow.test_name, instrument: studyRow.instrument,
           analyst: studyRow.analyst, date: studyRow.date,
           studyType: "ref_interval", cliaAllowableError: 0.1,
+          teaIsPercentage: 1, tea_is_percentage: 1, teaUnit: '%', tea_unit: '%',
           dataPoints: dp, instruments: instNames, status: studyRow.status,
           _labName: "Riverside Regional Medical Center",
           _cliaNumber: "22D0999999",
@@ -2896,6 +2911,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // ── Method Comparison PDF (default) ──
       const dpXs: number[] = dp.map((p: any) => p.instrumentValues?.[primaryName] ?? 0);
       const teaFraction = teaFractionStored; // already a decimal fraction (0.30 = 30%)
+      const teaIsPct = studyRow.tea_is_percentage ?? 1;
+      const teaUnitVal = studyRow.tea_unit ?? '%';
 
       const study = {
         testName: studyRow.test_name,
@@ -2904,6 +2921,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         date: studyRow.date,
         studyType: studyRow.study_type,
         cliaAllowableError: teaFraction, // fraction for PDF narrative/eval display
+        teaIsPercentage: teaIsPct,
+        tea_is_percentage: teaIsPct,
+        teaUnit: teaUnitVal,
+        tea_unit: teaUnitVal,
         dataPoints: dp,
         instruments: instNames,
         status: studyRow.status,
@@ -2963,13 +2984,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Build levelResults for sample-by-sample table
       const teaPct = teaFractionStored * 100; // 0.30 -> 30%
+      const isAbsoluteTea = teaIsPct === 0;
       let passCount = 0;
       const levelResults = dp.map((p: any, i: number) => {
         const xVal = p.instrumentValues?.[primaryName] ?? 0;
         const yVal = p.instrumentValues?.[comparisonName] ?? 0;
         const diff = yVal - xVal;
         const pctDiff = xVal === 0 ? 0 : ((yVal - xVal) / xVal) * 100;
-        const pass = Math.abs(pctDiff) <= teaPct;
+        const pass = isAbsoluteTea
+          ? Math.abs(diff) <= teaFractionStored
+          : Math.abs(pctDiff) <= teaPct;
         if (pass) passCount++;
         return {
           level: i + 1,
@@ -3029,8 +3053,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         xRange: { min: Math.min(...xs), max: Math.max(...xs) },
         yRange: { [comparisonName]: { min: Math.min(...ys), max: Math.max(...ys) } },
         summary: overallPass
-          ? `All ${n} samples passed within CLIA TEa of ±${(teaFractionStored * 100).toFixed(1)}%. Method is acceptable for patient testing.`
-          : `${n - passCount} of ${n} samples exceeded CLIA TEa of ±${(teaFractionStored * 100).toFixed(1)}%. Corrective action required.`,
+          ? `All ${n} samples passed within CLIA TEa of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
+          : `${n - passCount} of ${n} samples exceeded CLIA TEa of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Corrective action required.`,
       };
 
       const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");

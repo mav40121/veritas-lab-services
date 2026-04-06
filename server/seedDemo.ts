@@ -84,12 +84,14 @@ export async function seedDemoData() {
     // Backfill UPDATE in case study exists with wrong data
     const troponinDataPoints = generateTroponinData();
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, data_points = ?, instruments = ?, status = ? WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, status = ? WHERE id = ?"
     ).run(
       'Abbott ARCHITECT i2000SR [Primary]',
       'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
       '2026-02-14',
       0.30, // 30% TEa stored as decimal fraction
+      1, // percentage
+      '%',
       JSON.stringify(troponinDataPoints),
       JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
       'completed',
@@ -111,12 +113,14 @@ export async function seedDemoData() {
   if (creatStudy) {
     const realData = generateCreatinineCalVerData();
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, data_points = ?, instruments = ? WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ? WHERE id = ?"
     ).run(
       "Siemens Atellica 2",
       "SED",
       "2025-02-06",
       0.075, // 7.5% TEa stored as decimal fraction
+      1, // percentage
+      "%",
       JSON.stringify(realData),
       JSON.stringify(["Siemens Atellica 2"]),
       creatStudy.id
@@ -124,11 +128,11 @@ export async function seedDemoData() {
     console.log(`[seed] Patched creatinine cal ver study id=${creatStudy.id} with real Atellica 2 data`);
   }
 
-  // ─── 4c. Backfill result field + correct TEa decimal fractions on all demo studies
-  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.075 WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.04 WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'method_comparison'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.05 WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30 WHERE user_id = ? AND test_name = 'Troponin I'").run(demoUserId);
+  // ─── 4c. Backfill result field + correct TEa decimal fractions + tea_is_percentage on all demo studies
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.075, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'method_comparison'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Troponin I'").run(demoUserId);
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
@@ -342,11 +346,11 @@ function seedScanData(sqlite: any, demoUserId: number, now: string) {
 
 // ─── Studies seeding (Sodium + Potassium method comparison, Creatinine cal ver) ─
 function seedStudies(sqlite: any, demoUserId: number, now: string) {
-  // Study 1: Sodium Method Comparison
+  // Study 1: Sodium Method Comparison (absolute TEa: 4 mmol/L)
   const sodiumDataPoints = generateSodiumData();
   sqlite.prepare(`
-    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
     "Sodium",
@@ -354,17 +358,19 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-15",
     "method_comparison",
-    0.04, // 4% TEa for sodium (CLIA +/-4 mmol/L, stored as decimal fraction)
+    4, // 4 mmol/L absolute TEa
+    0, // not percentage
+    "mmol/L",
     JSON.stringify(sodiumDataPoints),
     JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
   );
 
-  // Study 2: Potassium Method Comparison
+  // Study 2: Potassium Method Comparison (absolute TEa: 0.3 mmol/L)
   const potassiumDataPoints = generatePotassiumData();
   sqlite.prepare(`
-    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
     "Potassium",
@@ -372,7 +378,9 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-15",
     "method_comparison",
-    0.05, // 5% TEa for potassium (CLIA +/-0.3 mmol/L, stored as decimal fraction)
+    0.3, // 0.3 mmol/L absolute TEa
+    0, // not percentage
+    "mmol/L",
     JSON.stringify(potassiumDataPoints),
     JSON.stringify(["Ortho VITROS 5600 [Primary]", "Ortho VITROS 5600 [Backup]"]),
     now
@@ -382,8 +390,8 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
   // Real data from Milford Regional Medical Center, 06 Feb 2025, Atellica 2
   const creatinineDataPoints = generateCreatinineCalVerData();
   sqlite.prepare(`
-    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
     "Creatinine",
@@ -392,6 +400,8 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "2025-02-06",
     "cal_ver",
     0.075, // 7.5% TEa per CLIA (stored as decimal fraction)
+    1, // percentage
+    "%",
     JSON.stringify(creatinineDataPoints),
     JSON.stringify(["Siemens Atellica 2"]),
     now
@@ -411,8 +421,8 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     { specimenId: "S019", value: 138 }, { specimenId: "S020", value: 143 },
   ];
   sqlite.prepare(`
-    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
     "Sodium",
@@ -421,6 +431,8 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "2026-01-29",
     "ref_interval",
     0.1,
+    1, // percentage
+    "%",
     JSON.stringify({ specimens: sodiumRefSpecimens, refLow: 136, refHigh: 145, analyte: "Sodium", units: "mmol/L" }),
     JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
     now
@@ -647,8 +659,8 @@ function generateCreatinineCalVerData() {
 function seedTroponinStudy(sqlite: any, demoUserId: number, now: string) {
   const troponinDataPoints = generateTroponinData();
   sqlite.prepare(`
-    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
   `).run(
     demoUserId,
     'Troponin I',
@@ -657,6 +669,8 @@ function seedTroponinStudy(sqlite: any, demoUserId: number, now: string) {
     '2026-02-14',
     'method_comparison',
     0.30, // 30% CLIA TEa (stored as decimal fraction)
+    1, // percentage
+    '%',
     JSON.stringify(troponinDataPoints),
     JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
     now

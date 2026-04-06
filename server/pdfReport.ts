@@ -194,6 +194,19 @@ const FAIL   = "#c8323c";
 const MUTED  = "#646e78";
 const DARK   = "#14141e";
 
+// ─── TEa display helper (absolute vs percentage) ─────────────────────────────
+function teaDisplayStr(study: Study): string {
+  const isAbsolute = (study as any).teaIsPercentage === 0 || (study as any).tea_is_percentage === 0;
+  if (isAbsolute) {
+    const unit = (study as any).teaUnit || (study as any).tea_unit || '';
+    return `\u00B1${study.cliaAllowableError} ${unit}`.trim();
+  }
+  return `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
+}
+function isAbsoluteTea(study: Study): boolean {
+  return (study as any).teaIsPercentage === 0 || (study as any).tea_is_percentage === 0;
+}
+
 // ─── CFR URL map ──────────────────────────────────────────────────────────────
 const CFR_URLS: Record<string, string> = {
   "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
@@ -522,11 +535,11 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
 }
 
 // ─── Evaluation section HTML ──────────────────────────────────────────────────
-function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number): string {
-  const cliaP = (cliaError * 100).toFixed(1);
+function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number, study?: Study): string {
+  const teaStr = study ? teaDisplayStr(study) : `\u00B1${(cliaError * 100).toFixed(1)}%`;
   const verdictText = overallPass
-    ? `Meets CLIA criteria - ${passCount}/${totalCount} results within TEa of \u00B1${cliaP}%`
-    : `Does not meet CLIA criteria - ${passCount}/${totalCount} results within TEa of \u00B1${cliaP}%`;
+    ? `Meets CLIA criteria - ${passCount}/${totalCount} results within TEa of ${teaStr}`
+    : `Does not meet CLIA criteria - ${passCount}/${totalCount} results within TEa of ${teaStr}`;
   return `
   <div class="eval-section">
     <hr class="divider">
@@ -541,8 +554,11 @@ function narrativeHTML(
   studyType: "cal_ver" | "method_comp" | "precision",
   results: any,
   cliaError: number,
-  analyteName: string
+  analyteName: string,
+  study?: Study
 ): string {
+  const isAbsolute = study ? isAbsoluteTea(study) : false;
+  const teaStr = study ? teaDisplayStr(study) : `\u00B1${(cliaError * 100).toFixed(1)}%`;
   const cliaPct = (cliaError * 100).toFixed(1);
   const adlmPct = (cliaError * 50).toFixed(1); // ADLM = half of CLIA TEa
   let narrative = "";
@@ -591,6 +607,7 @@ function narrativeHTML(
     const rVal = Math.sqrt(r2Val);
     const ba: any = results.blandAltman ? Object.values(results.blandAltman)[0] : null;
     const meanBiasPct: number = ba?.pctMeanDiff ?? ba?.meanPctBias ?? 0;
+    const meanBiasAbs: number = ba?.meanDiff ?? 0;
 
     const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline, review carefully";
     const slopeInterp = Math.abs(slopeVal - 1) < 0.02
@@ -598,19 +615,27 @@ function narrativeHTML(
       : slopeVal > 1
         ? `a ${sf((slopeVal - 1) * 100, 1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
         : `a ${sf((1 - slopeVal) * 100, 1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
-    const biasInterp = Math.abs(meanBiasPct) <= cliaError * 100
-      ? `within the CLIA total allowable error of \u00B1${cliaPct}%`
-      : `exceeds the CLIA total allowable error of \u00B1${cliaPct}% and requires investigation`;
+
+    const biasDescr = isAbsolute
+      ? `${meanBiasAbs >= 0 ? "+" : ""}${sf(meanBiasAbs, 2)} ${(study as any)?.teaUnit || (study as any)?.tea_unit || ''}`
+      : `${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}%`;
+    const biasInterp = isAbsolute
+      ? (Math.abs(meanBiasAbs) <= cliaError
+        ? `within the CLIA total allowable error of ${teaStr}`
+        : `exceeds the CLIA total allowable error of ${teaStr} and requires investigation`)
+      : (Math.abs(meanBiasPct) <= cliaError * 100
+        ? `within the CLIA total allowable error of ${teaStr}`
+        : `exceeds the CLIA total allowable error of ${teaStr} and requires investigation`);
 
     if (results.overallPass) {
       narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
       narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
-      narrative += `The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% is ${biasInterp}. `;
+      narrative += `The mean bias of ${biasDescr} is ${biasInterp}. `;
       narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting. `;
       narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
-      narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. `;
+      narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${biasDescr} (CLIA limit: ${teaStr}) indicate unacceptable agreement between methods. `;
       narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
@@ -740,7 +765,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
     </tbody>
   </table>
 
-  ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName)}
+  ${narrativeHTML("cal_ver", results, study.cliaAllowableError, study.testName, study)}
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
@@ -771,7 +796,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
       </tr></thead>
       <tbody>${dataRows}</tbody>
     </table>
-    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError, study)}
   </div>
 
   ${supportingPageHTML(study, instrumentNames)}
@@ -867,7 +892,9 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
     // Bland-Altman row for this comparison
     const baRow = baEntry ? (() => {
-      const biasClass = Math.abs(baEntry.pctMeanDiff ?? 0) <= study.cliaAllowableError * 100 ? "pass" : "fail";
+      const biasClass = isAbsoluteTea(study)
+        ? (Math.abs(baEntry.meanDiff ?? 0) <= study.cliaAllowableError ? "pass" : "fail")
+        : (Math.abs(baEntry.pctMeanDiff ?? 0) <= study.cliaAllowableError * 100 ? "pass" : "fail");
       return `<tr>
         <td>${compName}</td>
         <td class="text-right">${sf(baEntry.meanDiff, 4)}</td>
@@ -979,7 +1006,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     </tbody>
   </table>
 
-  ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName)}
+  ${narrativeHTML("method_comp", results, study.cliaAllowableError, study.testName, study)}
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
@@ -1000,7 +1027,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       </tr></thead>
       <tbody>${levelRows}</tbody>
     </table>
-    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError, study)}
   </div>
 
   ${supportingPageHTML(study, allInstrumentNames)}
@@ -1094,7 +1121,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
     </tbody>
   </table>
 
-  ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName)}
+  ${narrativeHTML("precision", results, study.cliaAllowableError, study.testName, study)}
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
@@ -1120,7 +1147,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
     <hr class="divider" style="margin-top:8px">
     <div class="section-label">Individual Measurements</div>
     ${valuesSection}
-    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError, study)}
   </div>
 
   ${supportingPageHTML(study, instrumentNames)}
@@ -1376,7 +1403,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
     ${cohortDataSections}
-    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError)}
+    ${evalHTML(results.summary, results.overallPass, results.passCount, results.totalCount, study.cliaAllowableError, study)}
   </div>
 
   ${supportingPageHTML(study, instrumentNames)}
