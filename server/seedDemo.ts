@@ -161,16 +161,16 @@ export async function seedDemoData() {
       "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
       "2026-01-29",
       "ref_interval",
-      0.1,
-      1,
-      "%",
+      4, // 4 mmol/L absolute TEa (same as Sodium method comparison)
+      0, // not percentage
+      "mmol/L",
       JSON.stringify({ specimens: sodiumRefSpecimens, refLow: 136, refHigh: 145, analyte: "Sodium", units: "mmol/L" }),
       JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
       now
     );
     console.log("[seed] Restored Sodium Reference Interval Verification study");
   } else {
-    sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.1, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval'").run(demoUserId);
+    sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval'").run(demoUserId);
   }
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
@@ -470,9 +470,9 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
     "2026-01-29",
     "ref_interval",
-    0.1, // 10% TEa (stored as decimal)
-    1, // percentage
-    "%",
+    4, // 4 mmol/L absolute TEa (same as Sodium method comparison)
+    0, // not percentage
+    "mmol/L",
     JSON.stringify({ specimens: sodiumRefSpecimens, refLow: 136, refHigh: 145, analyte: "Sodium", units: "mmol/L" }),
     JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
     now
