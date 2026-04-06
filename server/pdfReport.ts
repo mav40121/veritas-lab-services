@@ -537,9 +537,10 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
 // ─── Evaluation section HTML ──────────────────────────────────────────────────
 function evalHTML(summary: string, overallPass: boolean, passCount: number, totalCount: number, cliaError: number, study?: Study): string {
   const teaStr = study ? teaDisplayStr(study) : `\u00B1${(cliaError * 100).toFixed(1)}%`;
+  const failCount = totalCount - passCount;
   const verdictText = overallPass
     ? `Meets CLIA criteria - ${passCount}/${totalCount} results within TEa of ${teaStr}`
-    : `Does not meet CLIA criteria - ${passCount}/${totalCount} results within TEa of ${teaStr}`;
+    : `Does not meet CLIA criteria - ${failCount}/${totalCount} results exceeded TEa of ${teaStr}`;
   return `
   <div class="eval-section">
     <hr class="divider">
