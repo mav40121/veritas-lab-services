@@ -151,10 +151,10 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // Permanent redirects for old URLs
-  app.get('/meet-our-team', (_req, res) => {
-    res.redirect(301, '/team');
-  });
+  // 301 redirects for old URLs found in Google Search Console
+  app.get('/m/create-account', (_req, res) => res.redirect(301, '/'));
+  app.get('/meet-our-team', (_req, res) => res.redirect(301, '/'));
+  app.get('/m/reset', (_req, res) => res.redirect(301, '/'));
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
