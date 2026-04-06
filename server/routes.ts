@@ -48,7 +48,7 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
           if (v !== null && v !== undefined) {
             totalCount++;
             const obsError = assigned !== 0 ? (v - assigned) / assigned : 0;
-            if (Math.abs(obsError) < cliaAllowableError) passCount++;
+            if (Math.abs(obsError) <= cliaAllowableError) passCount++;
           }
         }
       }

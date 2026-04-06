@@ -676,8 +676,8 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   // Linearity summary table
   const linRows = Object.entries(results.regression || {}).map(([name, reg]) => {
     const r = Math.sqrt(reg.r2 ?? 0);
-    const biasColor = Math.abs(reg.proportionalBias ?? 0) < study.cliaAllowableError ? PASS : FAIL;
-    const biasClass = Math.abs(reg.proportionalBias ?? 0) < study.cliaAllowableError ? "pass" : "fail";
+    const biasColor = Math.abs(reg.proportionalBias ?? 0) <= study.cliaAllowableError ? PASS : FAIL;
+    const biasClass = Math.abs(reg.proportionalBias ?? 0) <= study.cliaAllowableError ? "pass" : "fail";
     return `<tr>
       <td>${name}</td>
       <td class="text-right">${reg.n ?? 0}</td>
@@ -852,7 +852,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
         const shortName = name.includes("Deming") ? "Deming" : "OLS";
         const slopeStr = reg.slopeLo !== undefined ? `${sf(reg.slope, 4)} (${sf(reg.slopeLo, 3)}-${sf(reg.slopeHi, 3)})` : sf(reg.slope, 4);
         const intStr = reg.interceptLo !== undefined ? `${sf(reg.intercept, 4)} (${sf(reg.interceptLo, 3)}-${sf(reg.interceptHi, 3)})` : sf(reg.intercept, 4);
-        const biasClass = Math.abs(reg.proportionalBias ?? 0) < study.cliaAllowableError ? "pass" : "fail";
+        const biasClass = Math.abs(reg.proportionalBias ?? 0) <= study.cliaAllowableError ? "pass" : "fail";
         return `<tr>
           <td>${shortName}</td>
           <td class="text-right">${reg.n ?? 0}</td>
@@ -867,7 +867,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
     // Bland-Altman row for this comparison
     const baRow = baEntry ? (() => {
-      const biasClass = Math.abs(baEntry.pctMeanDiff ?? 0) < study.cliaAllowableError * 100 ? "pass" : "fail";
+      const biasClass = Math.abs(baEntry.pctMeanDiff ?? 0) <= study.cliaAllowableError * 100 ? "pass" : "fail";
       return `<tr>
         <td>${compName}</td>
         <td class="text-right">${sf(baEntry.meanDiff, 4)}</td>

@@ -164,7 +164,7 @@ export function calculateCalVer(
       const v = dp.instrumentValues[n];
       if (v !== null && v !== undefined) {
         const e = assigned !== 0 ? (v - assigned) / assigned : 0;
-        instruments[n] = { value: v, obsError: e, passFail: Math.abs(e) < cliaError ? "Pass" : "Fail" };
+        instruments[n] = { value: v, obsError: e, passFail: Math.abs(e) <= cliaError ? "Pass" : "Fail" };
       }
     });
 
@@ -174,7 +174,7 @@ export function calculateCalVer(
       mean: meanVal,
       pctRecovery,
       obsError,
-      passFailMean: Math.abs(obsError) < cliaError ? "Pass" : "Fail",
+      passFailMean: Math.abs(obsError) <= cliaError ? "Pass" : "Fail",
       instruments,
     };
   });
@@ -280,7 +280,7 @@ export function calculateMethodComparison(
       if (v !== null && v !== undefined) {
         const diff = v - ref;
         const pctDiff = ref !== 0 ? (diff / ref) * 100 : 0;
-        instruments[n] = { value: v, difference: diff, pctDifference: pctDiff, passFail: Math.abs(pctDiff / 100) < cliaError ? "Pass" : "Fail" };
+        instruments[n] = { value: v, difference: diff, pctDifference: pctDiff, passFail: Math.abs(pctDiff / 100) <= cliaError ? "Pass" : "Fail" };
       }
     });
     return { level: dp.level, referenceValue: ref, instruments };
