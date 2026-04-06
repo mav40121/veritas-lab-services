@@ -1,0 +1,21 @@
+#!/bin/bash
+# VeritaAssure Pre-Commit Hook (managed by husky -- survives fresh clones)
+# Runs the Python audit script before every commit.
+# To bypass in a genuine emergency: git commit --no-verify
+# (document the reason in the commit message)
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo "Running pre-commit audit..."
+python3 "$REPO_ROOT/script/audit.py"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "Commit blocked by pre-commit audit. Fix the errors above."
+  echo "To bypass in a genuine emergency: git commit --no-verify"
+  echo "(You must document why in the commit message.)"
+  exit 1
+fi
+
+exit 0
