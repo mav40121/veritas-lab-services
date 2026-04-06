@@ -132,7 +132,8 @@ export async function seedDemoData() {
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.075, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'method_comparison'").run(demoUserId);
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Troponin I'").run(demoUserId);
+  // Troponin I: backfill verified data points + result for existing deployments
+  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%', data_points = ? WHERE user_id = ? AND test_name = 'Troponin I'").run(JSON.stringify(generateTroponinData()), demoUserId);
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
@@ -679,13 +680,15 @@ function seedTroponinStudy(sqlite: any, demoUserId: number, now: string) {
 }
 
 function generateTroponinData() {
-  // 20 patient samples with systematic ~30% proportional bias (comparison reads higher)
-  // Primary vs Backup Abbott ARCHITECT i2000SR instruments
+  // 20 patient samples - mathematically verified, no floating point boundary issues
+  // S1-S9: 20.0%-29.5% bias = PASS at 30% TEa; S10-S20: 31.0%-38.0% bias = FAIL
+  // Pass count: 9/20, overall FAIL, mean bias 30.69%
+  // Deming slope: 1.3742, intercept: -0.1976, R2: 0.9999
   const pairs: [number, number][] = [
-    [0.02, 0.03], [0.05, 0.07], [0.12, 0.16], [0.25, 0.33], [0.48, 0.62],
-    [0.89, 1.15], [1.45, 1.88], [2.10, 2.73], [3.20, 4.15], [4.85, 6.30],
-    [6.50, 8.45], [8.20, 10.66], [10.50, 13.65], [12.80, 16.64], [15.20, 19.76],
-    [18.50, 24.05], [22.30, 28.99], [26.80, 34.84], [31.50, 40.95], [38.20, 49.66],
+    [0.02, 0.024], [0.05, 0.062], [0.12, 0.149], [0.25, 0.314], [0.48, 0.605],
+    [0.89, 1.135], [1.45, 1.856], [2.10, 2.709], [3.20, 4.144], [4.85, 6.353],
+    [6.50, 8.547], [8.20, 10.824], [10.50, 14.018], [12.80, 17.152], [15.20, 20.520],
+    [18.50, 25.067], [22.30, 30.328], [26.80, 36.582], [31.50, 43.155], [38.20, 52.716],
   ];
   return pairs.map(([primary, comparison], i) => ({
     level: i + 1,
