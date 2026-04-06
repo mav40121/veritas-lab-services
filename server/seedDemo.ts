@@ -131,7 +131,7 @@ export async function seedDemoData() {
   // ─── 4c. Backfill result field + correct TEa decimal fractions + tea_is_percentage on all demo studies
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.075, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L', data_points = ? WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'method_comparison'").run(JSON.stringify(generateSodiumData()), demoUserId);
-  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Potassium'").run(demoUserId);
+  sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L', data_points = ? WHERE user_id = ? AND test_name = 'Potassium'").run(JSON.stringify(generatePotassiumData()), demoUserId);
   // Troponin I: backfill verified data points + result for existing deployments
   sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%', data_points = ? WHERE user_id = ? AND test_name = 'Troponin I'").run(JSON.stringify(generateTroponinData()), demoUserId);
 
@@ -607,27 +607,24 @@ function generateSodiumData() {
 
 function generatePotassiumData() {
   // 20 patient samples, potassium range 3.2-5.8 mmol/L
-  // Primary vs Backup with 0.1-0.2 mmol/L variation, all within CLIA TEa (0.5 mmol/L)
-  // Target: slope ~0.999, intercept ~0.02, r² ≈ 0.997
-  const points: any[] = [];
-  const baseValues = [
-    3.2, 3.4, 3.6, 3.8, 3.9, 4.0, 4.2, 4.3, 4.5, 4.6,
-    4.7, 4.8, 5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.8,
+  // Verified values - realistic variation between Primary and Backup
+  // Mean bias: 0.0925 mmol/L, R=0.9969, R^2=0.9938, SD of Diff: 0.0527
+  // 95% LoA: [-0.011, 0.196] mmol/L - well within 0.3 mmol/L TEa
+  // Two samples show slight negative bias (S11: -0.010, S17: -0.010)
+  const pairs: [number, number][] = [
+    [3.2, 3.29], [3.4, 3.44], [3.5, 3.58], [3.6, 3.76], [3.7, 3.82],
+    [3.8, 3.91], [3.9, 3.92], [4.0, 4.06], [4.1, 4.22], [4.2, 4.33],
+    [4.3, 4.29], [4.4, 4.48], [4.5, 4.69], [4.6, 4.70], [4.7, 4.82],
+    [4.8, 4.95], [4.9, 4.89], [5.0, 5.08], [5.1, 5.20], [5.8, 5.92],
   ];
-  for (let i = 0; i < 20; i++) {
-    const primary = baseValues[i];
-    const noise = (Math.sin(i * 1.618) * 0.04);
-    const backup = Math.round((primary * 0.999 + 0.02 + noise) * 100) / 100;
-    points.push({
-      level: i + 1,
-      expectedValue: null,
-      instrumentValues: {
-        "Ortho VITROS 5600 [Primary]": primary,
-        "Ortho VITROS 5600 [Backup]": backup,
-      },
-    });
-  }
-  return points;
+  return pairs.map(([primary, backup], i) => ({
+    level: i + 1,
+    expectedValue: null,
+    instrumentValues: {
+      "Ortho VITROS 5600 [Primary]": primary,
+      "Ortho VITROS 5600 [Backup]": backup,
+    },
+  }));
 }
 
 function generateCreatinineCalVerData() {
