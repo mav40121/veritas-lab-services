@@ -1118,15 +1118,40 @@ export default function VeritaMapBuildPage() {
         toast({ title: 'Copy failed', description: data.error, variant: 'destructive' });
       } else {
         toast({ title: 'Test menu copied', description: data.message });
-        // Refresh instruments to pick up the new tests
+        // Fetch the updated tests for this instrument directly and apply immediately.
+        // Do not rely solely on query invalidation -- the async refetch cycle can leave
+        // a window where testsByInstrument[targetInstId] is empty, showing the wrong empty state.
+        try {
+          const testsRes = await fetch(
+            `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+            { headers: authHeaders() }
+          );
+          if (testsRes.ok) {
+            const updatedInstruments: any[] = await testsRes.json();
+            const updatedInstr = updatedInstruments.find((i: any) => i.id === targetInstId);
+            if (updatedInstr?.tests?.length) {
+              const fdaInstr = INSTRUMENT_DATA[updatedInstr.instrument_name];
+              const toggles: TestToggle[] = updatedInstr.tests.map((t: any) => ({
+                analyte: t.analyte,
+                specialty: t.specialty,
+                complexity: t.complexity as Complexity,
+                active: Boolean(t.active),
+                isCustom: fdaInstr ? !fdaInstr.tests[t.analyte] : true,
+              }));
+              setTestsByInstrument(prev => ({ ...prev, [targetInstId]: toggles }));
+            }
+          }
+        } catch {
+          // Fallback: clear local state and let the query reload handle it
+          setTestsByInstrument((prev) => {
+            const next = { ...prev };
+            delete next[targetInstId];
+            return next;
+          });
+        }
+        // Also invalidate so the instruments query stays in sync
         qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
         qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
-        // Clear local test state for this instrument so it reloads from server
-        setTestsByInstrument((prev) => {
-          const next = { ...prev };
-          delete next[targetInstId];
-          return next;
-        });
       }
     } catch {
       toast({ title: 'Copy failed', description: 'Network error. Please try again.', variant: 'destructive' });
