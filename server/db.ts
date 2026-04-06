@@ -599,6 +599,11 @@ try {
   sqlite.prepare(`ALTER TABLE user_seats ADD COLUMN permissions TEXT DEFAULT '{}'`).run();
 } catch {}
 
+// Add invite_token column to user_seats for token-based invitation flow
+try {
+  sqlite.prepare(`ALTER TABLE user_seats ADD COLUMN invite_token TEXT`).run();
+} catch {}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);

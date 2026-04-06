@@ -578,14 +578,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {}
 
 
-    // Check if this user was invited as a seat
-    const seatInvite = (db as any).$client.prepare(
-      "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
-    ).get(email.toLowerCase()) as any;
+    // Check if this user was invited as a seat (by token or by email)
+    const { inviteToken: reqInviteToken } = req.body;
+    let seatInvite: any = null;
+    if (reqInviteToken) {
+      seatInvite = (db as any).$client.prepare(
+        "SELECT id, owner_user_id FROM user_seats WHERE invite_token = ? AND status = 'pending'"
+      ).get(reqInviteToken) as any;
+    }
+    if (!seatInvite) {
+      seatInvite = (db as any).$client.prepare(
+        "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
+      ).get(email.toLowerCase()) as any;
+    }
+    let isSeatUser = false;
+    let ownerPlan = selectedPlan;
     if (seatInvite) {
       (db as any).$client.prepare(
         "UPDATE user_seats SET seat_user_id = ?, status = 'active', accepted_at = ? WHERE id = ?"
       ).run(user.id, new Date().toISOString(), seatInvite.id);
+      isSeatUser = true;
+      // Get owner's plan so seat user inherits it
+      const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
+      ownerPlan = ownerRow?.plan || selectedPlan;
+      // Mark seat user's onboarding as completed so they skip the wizard
+      try {
+        (db as any).$client.prepare("UPDATE users SET has_completed_onboarding = 1 WHERE id = ?").run(user.id);
+      } catch {}
     }
 
     const token = signToken(user.id);
@@ -597,7 +616,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
     ).run(user.id, sessionToken, req.headers["user-agent"] || "Unknown", now, now);
 
-    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: selectedPlan, studyCredits: user.studyCredits, hasCompletedOnboarding: false, subscriptionExpiresAt: null, subscriptionStatus: selectedPlan === 'free' ? 'free' : 'active', accessLevel: selectedPlan === 'free' ? 'free' : 'paid', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: selectedSeatCount } });
+    const responsePlan = isSeatUser ? ownerPlan : selectedPlan;
+    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, subscriptionExpiresAt: null, subscriptionStatus: responsePlan === 'free' ? 'free' : 'active', accessLevel: responsePlan === 'free' ? 'free' : 'paid', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
     // Send welcome email via Resend
     if (resend) {
@@ -5035,22 +5055,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     const permJson = JSON.stringify(req.body.permissions || JSON.parse(DEFAULT_PERMISSIONS));
 
+    // Generate invite token for the invitation link
+    const inviteToken = crypto.randomUUID();
+
     // Reactivate a previously deactivated seat if one exists
     const deactivated = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
     ).get(req.userId, email.toLowerCase()) as any;
     if (deactivated) {
       (db as any).$client.prepare(
-        "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ? WHERE id = ?"
-      ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, deactivated.id);
+        "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ? WHERE id = ?"
+      ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, deactivated.id);
     } else {
       (db as any).$client.prepare(
-        "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions) VALUES (?, ?, ?, ?, ?, ?)"
-      ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson);
+        "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson, inviteToken);
     }
 
     // Send invite email via Resend
     const owner = storage.getUserById(req.userId);
+    const ownerRow = (db as any).$client.prepare("SELECT clia_lab_name, hospital_name FROM users WHERE id = ?").get(req.userId) as any;
+    const labName = ownerRow?.clia_lab_name || ownerRow?.hospital_name || owner?.name || "your lab";
+    const inviterName = owner?.name || "Your lab administrator";
     try {
       await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -5061,15 +5087,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         body: JSON.stringify({
           from: "VeritaAssure <noreply@veritaslabservices.com>",
           to: email.toLowerCase(),
-          subject: `You've been invited to ${owner?.name || "a lab"}'s VeritaAssure account`,
+          subject: `You've been invited to join ${labName} on VeritaAssure\u2122`,
           html: `
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-              <h2 style="color:#01696F">VeritaAssure\u2122 Seat Invitation</h2>
-              <p>${owner?.name || "Your lab administrator"} has assigned you a seat on their VeritaAssure account.</p>
-              <p>Create your account using this email address (${email}) to get started:</p>
-              <a href="${FRONTEND_URL}/#/login" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Create Account</a>
+              <h2 style="color:#01696F">VeritaAssure\u2122</h2>
+              <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u2122 as a team member.</p>
+              <p style="font-size:14px;color:#374151;line-height:1.6">Click the link below to create your account and get started:</p>
+              <a href="${FRONTEND_URL}/#/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
+              <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 7 days.</p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-              <p style="color:#999;font-size:12px">Veritas Lab Services, LLC</p>
+              <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
             </div>
           `,
         }),
@@ -5079,6 +5106,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     res.json({ ok: true, status: seatUserId ? "active" : "pending" });
+  });
+
+  // Look up a seat invitation by token (no auth required - user is not yet logged in)
+  app.get("/api/seats/invite/:token", (req, res) => {
+    const { token } = req.params;
+    if (!token) return res.json({ valid: false, reason: "not_found" });
+
+    const seat = (db as any).$client.prepare(
+      "SELECT s.*, u.name as owner_name, u.clia_lab_name, u.hospital_name FROM user_seats s JOIN users u ON s.owner_user_id = u.id WHERE s.invite_token = ?"
+    ).get(token) as any;
+
+    if (!seat) return res.json({ valid: false, reason: "not_found" });
+    if (seat.status === "active") return res.json({ valid: false, reason: "already_accepted" });
+    if (seat.status === "deactivated") return res.json({ valid: false, reason: "not_found" });
+
+    // Check 7-day expiration
+    const invitedAt = new Date(seat.invited_at);
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - invitedAt.getTime() > sevenDaysMs) {
+      return res.json({ valid: false, reason: "expired" });
+    }
+
+    const labName = seat.clia_lab_name || seat.hospital_name || seat.owner_name || "your lab";
+    res.json({
+      valid: true,
+      labName,
+      inviterName: seat.owner_name || "Your lab administrator",
+      seatEmail: seat.seat_email,
+    });
   });
 
   // Update seat permissions

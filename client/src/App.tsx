@@ -60,6 +60,7 @@ import GettingStartedPage from "@/pages/GettingStartedPage";
 import AccountSettingsPage from "@/pages/AccountSettingsPage";
 import VeritaAssurePage from "@/pages/VeritaAssurePage";
 import AdminReportPage from "@/pages/AdminReportPage";
+import JoinPage from "@/pages/JoinPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -177,7 +178,8 @@ function OnboardingGuard() {
     const lsKey = `onboarding_dismissed_${user.id}`;
     const locallyDismissed = localStorage.getItem(lsKey) === "1";
     const serverCompleted = (user as any).hasCompletedOnboarding !== false;
-    if (locallyDismissed || serverCompleted) {
+    const isSeatUser = (user as any).isSeatUser === true;
+    if (locallyDismissed || serverCompleted || isSeatUser) {
       setShowWizard(false);
     } else {
       setShowWizard(true);
@@ -222,6 +224,7 @@ function AppContent() {
           <Route path="/contact" component={ContactPage} />
           <Route path="/login" component={LoginPage} />
           <Route path="/register" component={LoginPage} />
+          <Route path="/join" component={JoinPage} />
           <Route path="/terms" component={TermsPage} />
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />

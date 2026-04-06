@@ -59,6 +59,15 @@ export default function LoginPage() {
   const [hipaaAcknowledged, setHipaaAcknowledged] = useState(false);
   const [hipaaError, setHipaaError] = useState("");
 
+  // Redirect to /join page if there's an invite token in the URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    const inviteToken = params.get("token");
+    if (inviteToken) {
+      navigate(`/join?token=${inviteToken}`);
+    }
+  }, [navigate]);
+
   // Registration step: "labtype" | "hospital-search" | "self-select" | "form"
   const [regStep, setRegStep] = useState<"labtype" | "hospital-search" | "self-select" | "form">("labtype");
   const [labType, setLabType] = useState<LabType | null>(null);
