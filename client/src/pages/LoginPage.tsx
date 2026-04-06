@@ -473,7 +473,7 @@ export default function LoginPage() {
                           type="checkbox"
                           checked={hipaaAcknowledged}
                           onChange={e => { setHipaaAcknowledged(e.target.checked); if (e.target.checked) setHipaaError(""); }}
-                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+                          className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary shrink-0"
                         />
                         <span className="text-sm text-foreground leading-relaxed">
                           I understand that VeritaAssure&#8482; is not a HIPAA-covered platform and is not designed to store, process, or transmit protected health information (PHI). I agree to use only de-identified data, sample IDs, QC lot numbers, and non-patient-identifiable information when entering data into any VeritaAssure&#8482; module.

@@ -334,7 +334,7 @@ export default function AccountSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Preferred PT Vendor</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-2">Preferred PT Vendor</h3>
             <p className="text-xs text-muted-foreground mb-3">
               Your preferred vendor's programs will appear first in PT recommendations.
             </p>
@@ -346,7 +346,7 @@ export default function AccountSettingsPage() {
                   className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                     preferredPtVendor === val
                       ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+                      : "bg-background text-foreground border-border hover:border-blue-400"
                   }`}
                 >
                   {val === "none" ? "No Preference" : val.toUpperCase()}

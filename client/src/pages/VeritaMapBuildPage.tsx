@@ -659,7 +659,7 @@ function InstrumentTestSection({
                 <select
                   value={copySourceId}
                   onChange={e => setCopySourceId(Number(e.target.value))}
-                  className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {otherInstruments.map(inst => (
                     <option key={inst.id} value={inst.id}>
@@ -702,7 +702,7 @@ function InstrumentTestSection({
                 <select
                   value={copySourceId}
                   onChange={e => setCopySourceId(Number(e.target.value))}
-                  className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {otherInstruments.map(inst => (
                     <option key={inst.id} value={inst.id}>

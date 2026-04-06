@@ -735,7 +735,7 @@ function CopyFromBanner({
             <select
               value={selected}
               onChange={e => setSelected(Number(e.target.value))}
-              className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {instruments.map(inst => (
                 <option key={inst.id} value={inst.id}>
@@ -785,7 +785,7 @@ function CopyFromBannerInline({
         <select
           value={selected}
           onChange={e => setSelected(Number(e.target.value))}
-          className="text-xs border border-blue-300 rounded-lg px-2 py-1 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-xs border border-blue-300 rounded-lg px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {sources.map(inst => (
             <option key={inst.id} value={inst.id}>

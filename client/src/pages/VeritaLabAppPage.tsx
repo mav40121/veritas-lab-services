@@ -66,11 +66,11 @@ const TYPE_COLORS: Record<string, string> = {
   tjc: "bg-purple-500/10 text-purple-700 border-purple-500/20",
   state_license: "bg-orange-500/10 text-orange-700 border-orange-500/20",
   lab_director_license: "bg-orange-500/10 text-orange-700 border-orange-500/20",
-  other: "bg-gray-500/10 text-gray-700 border-gray-500/20",
+  other: "bg-muted text-muted-foreground border-border",
 };
 
 function getExpirationStatus(expirationDate: string | null): { label: string; color: string; days?: number } {
-  if (!expirationDate) return { label: "No expiration date", color: "bg-gray-500/10 text-gray-600 border-gray-500/20" };
+  if (!expirationDate) return { label: "No expiration date", color: "bg-muted text-muted-foreground border-border" };
   const exp = new Date(expirationDate);
   const now = new Date();
   const diffMs = exp.getTime() - now.getTime();

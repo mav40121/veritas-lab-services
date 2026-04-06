@@ -62,10 +62,10 @@ function getExpires(u: UserRecord): string {
 
 function StatusBadge({ status }: { status: string }) {
   const s = (status || "").toLowerCase();
-  let bg = "bg-gray-200 text-gray-700";
+  let bg = "bg-muted text-muted-foreground";
   if (s === "active") bg = "bg-green-100 text-green-800";
   else if (s === "canceled" || s === "past_due") bg = "bg-red-100 text-red-800";
-  else if (s === "free") bg = "bg-gray-100 text-gray-600";
+  else if (s === "free") bg = "bg-muted/60 text-muted-foreground";
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${bg}`}>
       {status || "N/A"}
@@ -315,10 +315,10 @@ export default function AdminReportPage() {
   // Login screen
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-md p-8 max-w-sm w-full">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="bg-card rounded-lg shadow-md p-8 max-w-sm w-full border border-border">
           <h1 className="text-xl font-bold mb-1">VeritaAssure(TM) Admin Report</h1>
-          <p className="text-gray-500 text-sm mb-6">Enter admin secret to continue</p>
+          <p className="text-muted-foreground text-sm mb-6">Enter admin secret to continue</p>
           {error && (
             <div className="bg-red-50 text-red-700 text-sm rounded px-3 py-2 mb-4">
               {error}
@@ -326,7 +326,7 @@ export default function AdminReportPage() {
           )}
           <input
             type="password"
-            className="w-full border border-gray-300 rounded px-3 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-border rounded px-3 py-2 mb-4 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Admin secret"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
@@ -361,12 +361,12 @@ export default function AdminReportPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+      <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">VeritaAssure(TM) Admin Report</h1>
-          <p className="text-gray-500 text-sm">Customer account overview</p>
+          <p className="text-muted-foreground text-sm">Customer account overview</p>
         </div>
         <button
           onClick={exportExcel}
@@ -382,12 +382,12 @@ export default function AdminReportPage() {
           <input
             type="text"
             placeholder="Search lab name, email, name, CLIA number..."
-            className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 min-w-[220px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground flex-1 min-w-[220px] focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <select
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
+            className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground"
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
           >
@@ -401,7 +401,7 @@ export default function AdminReportPage() {
             <option value="veritacheck_only">VeritaCheck Unlimited</option>
           </select>
           <select
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
+            className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -415,34 +415,34 @@ export default function AdminReportPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm border p-4">
-            <div className="text-sm text-gray-500">Total Accounts</div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground">Total Accounts</div>
             <div className="text-2xl font-bold">{totalAccounts}</div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm border p-4">
-            <div className="text-sm text-gray-500">Active Paid</div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground">Active Paid</div>
             <div className="text-2xl font-bold text-green-600">{activePaid}</div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm border p-4">
-            <div className="text-sm text-gray-500">Free/Expired</div>
-            <div className="text-2xl font-bold text-gray-500">{freeExpired}</div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground">Free/Expired</div>
+            <div className="text-2xl font-bold text-muted-foreground">{freeExpired}</div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm border p-4">
-            <div className="text-sm text-gray-500">Total Seats</div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground">Total Seats</div>
             <div className="text-2xl font-bold text-blue-600">{totalSeats}</div>
           </div>
         </div>
 
         {/* Data table */}
-        <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+        <div className="bg-card rounded-lg shadow-sm border border-border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-gray-50">
+              <tr className="border-b bg-muted/50">
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     onClick={() => toggleSort(col.key)}
-                    className="px-3 py-2 text-left font-semibold text-gray-900 cursor-pointer hover:bg-gray-100 whitespace-nowrap select-none"
+                    className="px-3 py-2 text-left font-semibold text-foreground cursor-pointer hover:bg-muted whitespace-nowrap select-none"
                   >
                     {col.label}
                     {sortIndicator(col.key)}
@@ -454,13 +454,13 @@ export default function AdminReportPage() {
               {filtered.map((u, i) => (
                 <tr
                   key={u.id}
-                  className={`text-gray-900 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                  className={`text-foreground ${i % 2 === 0 ? "bg-background" : "bg-muted/30"}`}
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {u.clia_lab_name || <span className="text-gray-500">Not set</span>}
+                    {u.clia_lab_name || <span className="text-muted-foreground">Not set</span>}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {u.clia_number || <span className="text-gray-500">Not on file</span>}
+                    {u.clia_number || <span className="text-muted-foreground">Not on file</span>}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u.clia_director || u.name || ""}
@@ -500,7 +500,7 @@ export default function AdminReportPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">
                     No users found
                   </td>
                 </tr>
@@ -509,7 +509,7 @@ export default function AdminReportPage() {
           </table>
         </div>
 
-        <div className="text-xs text-gray-500 text-right">
+        <div className="text-xs text-muted-foreground text-right">
           Generated: {data.generatedAt ? new Date(data.generatedAt).toLocaleString() : ""}
         </div>
 
@@ -555,22 +555,22 @@ function AuditLogPanel({ secret }: { secret: string }) {
   return (
     <div className="mt-8 border rounded-lg overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 text-sm font-semibold text-left"
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted text-sm font-semibold text-left text-foreground"
         onClick={() => setExpanded(e => !e)}
       >
         Audit Log + Snapshots
-        <span className="text-xs text-gray-400">{expanded ? "Hide" : "Show"}</span>
+        <span className="text-xs text-muted-foreground">{expanded ? "Hide" : "Show"}</span>
       </button>
 
       {expanded && (
         <div className="p-4 space-y-4">
           <div className="flex flex-wrap gap-2 items-end">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">User ID (optional)</label>
+              <label className="text-xs text-muted-foreground block mb-1">User ID (optional)</label>
               <input value={userId} onChange={e => setUserId(e.target.value)} placeholder="e.g. 15" className="border rounded px-2 py-1 text-sm w-28" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Module (optional)</label>
+              <label className="text-xs text-muted-foreground block mb-1">Module (optional)</label>
               <select value={module} onChange={e => setModule(e.target.value)} className="border rounded px-2 py-1 text-sm">
                 <option value="">All</option>
                 <option value="veritamap">VeritaMap</option>
@@ -602,7 +602,7 @@ function AuditLogPanel({ secret }: { secret: string }) {
                       const url = URL.createObjectURL(blob);
                       window.open(url, "_blank");
                     }}
-                    className="text-xs bg-white border border-blue-200 rounded px-2 py-1 text-blue-700 hover:bg-blue-100 cursor-pointer">
+                    className="text-xs bg-background border border-blue-200 rounded px-2 py-1 text-blue-700 hover:bg-blue-100 cursor-pointer">
                     {s.snapshot_date} ({Math.round(s.size_bytes / 1024)}KB)
                   </button>
                 ))}
@@ -614,7 +614,7 @@ function AuditLogPanel({ secret }: { secret: string }) {
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
-                  <tr className="bg-gray-100">
+                  <tr className="bg-muted">
                     <th className="px-2 py-1.5 text-left border">Time</th>
                     <th className="px-2 py-1.5 text-left border">User</th>
                     <th className="px-2 py-1.5 text-left border">Module</th>
@@ -636,14 +636,14 @@ function AuditLogPanel({ secret }: { secret: string }) {
                       <td className="px-2 py-1 border font-semibold">{e.action}</td>
                       <td className="px-2 py-1 border">{e.entity_type}</td>
                       <td className="px-2 py-1 border max-w-[200px] truncate">{e.entity_label}</td>
-                      <td className="px-2 py-1 border text-gray-500">{e.before_json ? `${Math.round(e.before_json.length / 1024 * 10) / 10}KB` : "-"}</td>
+                      <td className="px-2 py-1 border text-muted-foreground">{e.before_json ? `${Math.round(e.before_json.length / 1024 * 10) / 10}KB` : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : entries.length === 0 && !loading ? (
-            <p className="text-sm text-gray-400">No entries. Click Fetch Log to load.</p>
+            <p className="text-sm text-muted-foreground">No entries. Click Fetch Log to load.</p>
           ) : null}
         </div>
       )}
