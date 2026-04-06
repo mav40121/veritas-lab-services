@@ -2761,12 +2761,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const instNames = safeJsonParse(studyRow.instruments) || [];
       const primaryName = instNames[0] || "Primary";
       const comparisonName = instNames[1] || "Comparison";
-      const teaAbsolute: number = studyRow.clia_allowable_error;
+      const teaFractionStored: number = studyRow.clia_allowable_error; // stored as decimal fraction (e.g. 0.075 = 7.5%, 0.30 = 30%)
 
       if (studyRow.study_type === "cal_ver") {
         // ── Calibration Verification / Linearity PDF ──
-        const teaPct = teaAbsolute; // stored as percentage (e.g. 15)
-        const teaFraction = teaPct / 100;
+        const teaPct = teaFractionStored * 100; // 0.075 -> 7.5
+        const teaFraction = teaFractionStored;   // 0.075
 
         const study = {
           testName: studyRow.test_name,
@@ -2894,10 +2894,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       // ── Method Comparison PDF (default) ──
-      // Compute mean of primary values for converting absolute TEa to fraction
       const dpXs: number[] = dp.map((p: any) => p.instrumentValues?.[primaryName] ?? 0);
-      const dpMean = dpXs.length > 0 ? dpXs.reduce((a: number, b: number) => a + b, 0) / dpXs.length : 1;
-      const teaFraction = dpMean > 0 ? teaAbsolute / dpMean : 0.04; // fraction for PDF display
+      const teaFraction = teaFractionStored; // already a decimal fraction (0.30 = 30%)
 
       const study = {
         testName: studyRow.test_name,
@@ -2964,13 +2962,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const propBias = demSlope - 1;
 
       // Build levelResults for sample-by-sample table
+      const teaPct = teaFractionStored * 100; // 0.30 -> 30%
       let passCount = 0;
       const levelResults = dp.map((p: any, i: number) => {
         const xVal = p.instrumentValues?.[primaryName] ?? 0;
         const yVal = p.instrumentValues?.[comparisonName] ?? 0;
         const diff = yVal - xVal;
         const pctDiff = xVal === 0 ? 0 : ((yVal - xVal) / xVal) * 100;
-        const pass = Math.abs(diff) <= teaAbsolute;
+        const pass = Math.abs(pctDiff) <= teaPct;
         if (pass) passCount++;
         return {
           level: i + 1,
@@ -3030,8 +3029,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         xRange: { min: Math.min(...xs), max: Math.max(...xs) },
         yRange: { [comparisonName]: { min: Math.min(...ys), max: Math.max(...ys) } },
         summary: overallPass
-          ? `All ${n} samples passed within CLIA TEa of ±${teaAbsolute} mmol/L (±${(teaFraction * 100).toFixed(1)}%). Method is acceptable for patient testing.`
-          : `${n - passCount} of ${n} samples exceeded CLIA TEa of ±${teaAbsolute} mmol/L. Corrective action required.`,
+          ? `All ${n} samples passed within CLIA TEa of ±${(teaFractionStored * 100).toFixed(1)}%. Method is acceptable for patient testing.`
+          : `${n - passCount} of ${n} samples exceeded CLIA TEa of ±${(teaFractionStored * 100).toFixed(1)}%. Corrective action required.`,
       };
 
       const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
