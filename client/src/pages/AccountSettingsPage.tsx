@@ -335,7 +335,7 @@ export default function AccountSettingsPage() {
         <CardContent className="space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Preferred PT Vendor</h3>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-muted-foreground mb-3">
               Your preferred vendor's programs will appear first in PT recommendations.
             </p>
             <div className="flex gap-3">
@@ -442,11 +442,11 @@ export default function AccountSettingsPage() {
                   const seatPerms = (() => { try { return typeof seat.permissions === 'string' ? JSON.parse(seat.permissions || '{}') : (seat.permissions || {}); } catch { return {}; } })();
                   const isEditing = editingSeatId === seat.id;
                   return (
-                    <div key={seat.id} className="py-2 border-b border-gray-100 last:border-0">
+                    <div key={seat.id} className="py-2 border-b border-border last:border-0">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{seat.seat_email}</p>
-                          <p className="text-xs text-gray-500 capitalize">{seat.status === "active" ? "Active" : "Invite pending"}</p>
+                          <p className="text-sm font-medium text-foreground">{seat.seat_email}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{seat.status === "active" ? "Active" : "Invite pending"}</p>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -469,7 +469,7 @@ export default function AccountSettingsPage() {
                       {!isEditing && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {MODULE_LIST.map(mod => (
-                            <span key={mod.key} className={`text-xs px-1.5 py-0.5 rounded ${(seatPerms[mod.key] || 'view') === 'edit' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                            <span key={mod.key} className={`text-xs px-1.5 py-0.5 rounded ${(seatPerms[mod.key] || 'view') === 'edit' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
                               {mod.label.replace('(TM)', '')}: {(seatPerms[mod.key] || 'view') === 'edit' ? 'Edit' : 'View'}
                             </span>
                           ))}
@@ -479,12 +479,12 @@ export default function AccountSettingsPage() {
                         <div className="mt-2 space-y-2">
                           {MODULE_LIST.map(mod => (
                             <div key={mod.key} className="flex items-center justify-between py-1">
-                              <span className="text-sm text-gray-900">{mod.label}</span>
+                              <span className="text-sm text-foreground">{mod.label}</span>
                               <div className="flex gap-1">
                                 <button type="button" onClick={() => setEditingPermissions(p => ({ ...p, [mod.key]: 'view' }))}
-                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${editingPermissions[mod.key] === 'view' ? 'bg-gray-200 text-gray-800' : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'}`}>View</button>
+                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${editingPermissions[mod.key] === 'view' ? 'bg-muted text-foreground' : 'bg-background border border-border text-muted-foreground hover:border-foreground'}`}>View</button>
                                 <button type="button" onClick={() => setEditingPermissions(p => ({ ...p, [mod.key]: 'edit' }))}
-                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${editingPermissions[mod.key] === 'edit' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'}`}>Edit</button>
+                                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${editingPermissions[mod.key] === 'edit' ? 'bg-blue-600 text-white' : 'bg-background border border-border text-muted-foreground hover:border-foreground'}`}>Edit</button>
                               </div>
                             </div>
                           ))}
@@ -505,7 +505,7 @@ export default function AccountSettingsPage() {
             {usedSeats < seatCount ? (
               <form onSubmit={handleInviteSeat} className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Invite a team member</p>
+                  <p className="text-sm font-medium text-foreground mb-2">Invite a team member</p>
                   <Input
                     type="email"
                     value={inviteEmail}
@@ -517,19 +517,19 @@ export default function AccountSettingsPage() {
 
                 {/* Per-module permission toggles */}
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Module Access</p>
+                  <p className="text-sm font-medium text-foreground mb-2">Module Access</p>
                   <div className="space-y-2">
                     {MODULE_LIST.map(mod => (
-                      <div key={mod.key} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                        <span className="text-sm text-gray-900">{mod.label}</span>
+                      <div key={mod.key} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                        <span className="text-sm text-foreground">{mod.label}</span>
                         <div className="flex gap-1">
                           <button
                             type="button"
                             onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'view' }))}
                             className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                               invitePermissions[mod.key] === 'view'
-                                ? 'bg-gray-200 text-gray-800'
-                                : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'
+                                ? 'bg-muted text-foreground'
+                                : 'bg-background border border-border text-muted-foreground hover:border-foreground'
                             }`}
                           >
                             View
@@ -540,7 +540,7 @@ export default function AccountSettingsPage() {
                             className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                               invitePermissions[mod.key] === 'edit'
                                 ? 'bg-blue-600 text-white'
-                                : 'bg-white border border-gray-300 text-gray-500 hover:border-gray-400'
+                                : 'bg-background border border-border text-muted-foreground hover:border-foreground'
                             }`}
                           >
                             Edit
