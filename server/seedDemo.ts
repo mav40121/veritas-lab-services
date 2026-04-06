@@ -134,8 +134,44 @@ export async function seedDemoData() {
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L', data_points = ? WHERE user_id = ? AND test_name = 'Potassium'").run(JSON.stringify(generatePotassiumData()), demoUserId);
   // Troponin I: backfill verified data points + result for existing deployments
   sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%', data_points = ? WHERE user_id = ? AND test_name = 'Troponin I'").run(JSON.stringify(generateTroponinData()), demoUserId);
-  // Remove erroneous Sodium ref_interval study (duplicate - only method_comparison should exist)
-  sqlite.prepare("DELETE FROM studies WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval'").run(demoUserId);
+  // Sodium Reference Interval Verification -- restore if deleted, backfill if exists
+  const existingSodiumRefInterval = sqlite.prepare(
+    "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval' LIMIT 1"
+  ).get(demoUserId);
+  if (!existingSodiumRefInterval) {
+    const sodiumRefSpecimens = [
+      { specimenId: "S001", value: 137 }, { specimenId: "S002", value: 140 },
+      { specimenId: "S003", value: 138 }, { specimenId: "S004", value: 142 },
+      { specimenId: "S005", value: 136 }, { specimenId: "S006", value: 141 },
+      { specimenId: "S007", value: 139 }, { specimenId: "S008", value: 143 },
+      { specimenId: "S009", value: 137 }, { specimenId: "S010", value: 140 },
+      { specimenId: "S011", value: 138 }, { specimenId: "S012", value: 144 },
+      { specimenId: "S013", value: 136 }, { specimenId: "S014", value: 141 },
+      { specimenId: "S015", value: 139 }, { specimenId: "S016", value: 142 },
+      { specimenId: "S017", value: 137 }, { specimenId: "S018", value: 140 },
+      { specimenId: "S019", value: 138 }, { specimenId: "S020", value: 143 },
+    ];
+    sqlite.prepare(`
+      INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, result, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'completed', ?)
+    `).run(
+      demoUserId,
+      "Sodium",
+      "Ortho VITROS 5600 [Primary]",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-01-29",
+      "ref_interval",
+      0.1,
+      1,
+      "%",
+      JSON.stringify({ specimens: sodiumRefSpecimens, refLow: 136, refHigh: 145, analyte: "Sodium", units: "mmol/L" }),
+      JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
+      now
+    );
+    console.log("[seed] Restored Sodium Reference Interval Verification study");
+  } else {
+    sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.1, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval'").run(demoUserId);
+  }
 
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
@@ -347,7 +383,7 @@ function seedScanData(sqlite: any, demoUserId: number, now: string) {
   seedScanItems();
 }
 
-// ─── Studies seeding (Sodium + Potassium method comparison, Creatinine cal ver) ─
+// ─── Studies seeding: Sodium MC, Potassium MC, Creatinine Cal Ver, Sodium Ref Interval ─
 function seedStudies(sqlite: any, demoUserId: number, now: string) {
   // Study 1: Sodium Method Comparison (absolute TEa: 4 mmol/L)
   const sodiumDataPoints = generateSodiumData();
@@ -407,6 +443,38 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     "%",
     JSON.stringify(creatinineDataPoints),
     JSON.stringify(["Siemens Atellica 2"]),
+    now
+  );
+
+
+  // Study 4: Sodium Reference Interval Verification
+  const sodiumRefSpecimens = [
+    { specimenId: "S001", value: 137 }, { specimenId: "S002", value: 140 },
+    { specimenId: "S003", value: 138 }, { specimenId: "S004", value: 142 },
+    { specimenId: "S005", value: 136 }, { specimenId: "S006", value: 141 },
+    { specimenId: "S007", value: 139 }, { specimenId: "S008", value: 143 },
+    { specimenId: "S009", value: 137 }, { specimenId: "S010", value: 140 },
+    { specimenId: "S011", value: 138 }, { specimenId: "S012", value: 144 },
+    { specimenId: "S013", value: 136 }, { specimenId: "S014", value: 141 },
+    { specimenId: "S015", value: 139 }, { specimenId: "S016", value: 142 },
+    { specimenId: "S017", value: 137 }, { specimenId: "S018", value: 140 },
+    { specimenId: "S019", value: 138 }, { specimenId: "S020", value: 143 },
+  ];
+  sqlite.prepare(`
+    INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, result, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'completed', ?)
+  `).run(
+    demoUserId,
+    "Sodium",
+    "Ortho VITROS 5600 [Primary]",
+    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+    "2026-01-29",
+    "ref_interval",
+    0.1, // 10% TEa (stored as decimal)
+    1, // percentage
+    "%",
+    JSON.stringify({ specimens: sodiumRefSpecimens, refLow: 136, refHigh: 145, analyte: "Sodium", units: "mmol/L" }),
+    JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
     now
   );
 
