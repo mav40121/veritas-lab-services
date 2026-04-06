@@ -1,5 +1,4 @@
 import { Switch, Route, Router, useLocation } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
@@ -104,14 +103,14 @@ function SiteFooter() {
             <div className="mt-3">
               <div className="font-semibold text-sm mb-2">Resources</div>
               <ul className="space-y-1 text-sm text-muted-foreground">
-                <li><a href="/#/resources" className="hover:text-primary transition-colors">Resources: Clinical Lab Knowledge Base</a></li>
-                <li><a href="/#/veritamap" className="hover:text-primary transition-colors">VeritaMap: Test Menu Regulatory Mapping</a></li>
-                <li><a href="/#/veritascan" className="hover:text-primary transition-colors">VeritaScan: Compliance Audit Tool</a></li>
-                <li><a href="/#/veritacomp" className="hover:text-primary transition-colors">VeritaComp: Competency Management</a></li>
-                <li><a href="/#/veritastaff" className="hover:text-primary transition-colors">VeritaStaff: Personnel Management</a></li>
-                <li><a href="/#/veritalab" className="hover:text-primary transition-colors">VeritaLab: Certificate Tracking</a></li>
-                <li><a href="/#/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
-                <li><a href="/#/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
+                <li><a href="/resources" className="hover:text-primary transition-colors">Resources: Clinical Lab Knowledge Base</a></li>
+                <li><a href="/veritamap" className="hover:text-primary transition-colors">VeritaMap: Test Menu Regulatory Mapping</a></li>
+                <li><a href="/veritascan" className="hover:text-primary transition-colors">VeritaScan: Compliance Audit Tool</a></li>
+                <li><a href="/veritacomp" className="hover:text-primary transition-colors">VeritaComp: Competency Management</a></li>
+                <li><a href="/veritastaff" className="hover:text-primary transition-colors">VeritaStaff: Personnel Management</a></li>
+                <li><a href="/veritalab" className="hover:text-primary transition-colors">VeritaLab: Certificate Tracking</a></li>
+                <li><a href="/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
+                <li><a href="/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
                 <li><a href="https://www.cms.gov/medicare/quality/clinical-laboratory-improvement-amendments/brochures" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Brochures (CMS)</a></li>
                 <li><a href="https://www.medlabmag.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Medical Lab Management</a></li>
@@ -126,8 +125,8 @@ function SiteFooter() {
             Results require interpretation by a licensed medical director or designee and do not constitute medical advice, diagnosis, or treatment.
             Veritas Lab Services, LLC assumes no liability for clinical decisions made based on VeritaCheck output.
             By using this tool you agree to our{" "}
-            <a href="/#/terms" className="text-primary hover:underline">Terms of Service</a>{" "}and{" "}
-            <a href="/#/privacy" className="text-primary hover:underline">Privacy Policy</a>.
+            <a href="/terms" className="text-primary hover:underline">Terms of Service</a>{" "}and{" "}
+            <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -151,7 +150,29 @@ function ScrollToTop() {
   return null;
 }
 
-// Fires a GA4 page_view on every hash route change (including initial load,
+// Updates <link rel="canonical"> on every route change so Google sees
+// the correct canonical URL for each page, not just the homepage.
+function CanonicalUpdater() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const base = 'https://www.veritaslabservices.com';
+    // Strip query params from canonical (search params are not canonical)
+    const path = location.split('?')[0];
+    const canonical = base + (path === '/' ? '' : path);
+    let tag = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!tag) {
+      tag = document.createElement('link');
+      tag.rel = 'canonical';
+      document.head.appendChild(tag);
+    }
+    tag.href = canonical;
+  }, [location]);
+
+  return null;
+}
+
+// Fires a GA4 page_view on every route change (including initial load,
 // since gtag config uses send_page_view:false to avoid double-counting)
 function GATracker() {
   const [location] = useLocation();
@@ -208,6 +229,7 @@ function AppContent() {
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
       <GATracker />
+      <CanonicalUpdater />
       <NavBar />
       <SubscriptionBanner />
       <OnboardingBanner />
@@ -265,7 +287,7 @@ function AppContent() {
           <Route path="/getting-started" component={GettingStartedPage} />
           <Route path="/account/settings" component={AccountSettingsPage} />
           <Route path="/account/seats" component={SeatManagementPage} />
-          <Route path="/account">{() => { window.location.replace("/#/account/settings"); return null; }}</Route>
+          <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route component={NotFound} />
         </Switch>
       </main>
@@ -283,7 +305,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <Router hook={useHashLocation}>
+          <Router>
             <AppContent />
           </Router>
         </AuthProvider>

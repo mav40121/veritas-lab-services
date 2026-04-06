@@ -83,7 +83,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Can I try VeritaAssure\u2122 before subscribing?",
-        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/#/demo with no login required. You can also run individual VeritaCheck\u2122 studies on a per-study basis before committing to a subscription.",
+        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. You can also run individual VeritaCheck\u2122 studies on a per-study basis before committing to a subscription.",
       },
       {
         q: "What payment methods do you accept?",

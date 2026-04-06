@@ -198,7 +198,7 @@ export default function SeatManagementPage() {
               )}
               <div className="flex gap-2 mt-3">
                 {upgradePrompt.nextTier && (
-                  <a href="/#/account-settings" className="inline-flex items-center gap-1 text-xs bg-primary text-primary-foreground rounded px-3 py-1.5 hover:bg-primary/90">
+                  <a href="/account/settings" className="inline-flex items-center gap-1 text-xs bg-primary text-primary-foreground rounded px-3 py-1.5 hover:bg-primary/90">
                     <ArrowUpCircle size={12} /> Upgrade Plan
                   </a>
                 )}

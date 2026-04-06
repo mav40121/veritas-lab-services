@@ -648,7 +648,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 20px;">
                 Start with the Getting Started guide to configure your lab in under an hour.
               </p>
-              <a href="https://www.veritaslabservices.com/#/getting-started" style="display: inline-block; background: #01696F; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 24px; border-radius: 6px; margin-bottom: 24px;">Get Started</a>
+              <a href="https://www.veritaslabservices.com/getting-started" style="display: inline-block; background: #01696F; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 24px; border-radius: 6px; margin-bottom: 24px;">Get Started</a>
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
               <p style="font-size: 13px; color: #6B7280; font-weight: 600; margin: 0 0 8px;">Free Downloads</p>
               <p style="font-size: 13px; color: #374151; line-height: 1.6; margin: 0 0 10px;">
@@ -2097,8 +2097,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     <li><strong>Tools and resources</strong> - Free guides, lookup tools, and study aids for your lab</li>
   </ul>
   <p>While you're here, two free resources worth bookmarking:</p>
-  <a href="https://www.veritaslabservices.com/#/resources/clia-tea-lookup" class="cta">CLIA TEa Lookup Tool</a>
-  <a href="https://www.veritaslabservices.com/#/resources/clia-calibration-verification-method-comparison" class="cta-outline">Calibration Verification Guide</a>
+  <a href="https://www.veritaslabservices.com/resources/clia-tea-lookup" class="cta">CLIA TEa Lookup Tool</a>
+  <a href="https://www.veritaslabservices.com/resources/clia-calibration-verification-method-comparison" class="cta-outline">Calibration Verification Guide</a>
   <hr class="divider">
   <p class="sig">
     Michael Veri, MS, MBA, MLS(ASCP), CPHQ<br>
@@ -2154,7 +2154,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
     db.$client.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
 
-    const resetUrl = `${FRONTEND_URL}/#/reset-password?token=${token}`;
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}`;
 
     if (resend) {
       await resend.emails.send({
@@ -2209,8 +2209,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const priceId = PRICES[priceType as keyof typeof PRICES];
     const isSubscription = priceType !== "perStudy";
-    const successUrl = `${FRONTEND_URL}/#/veritacheck?payment=success&type=${priceType}`;
-    const cancelUrl = `${FRONTEND_URL}/#/veritacheck?payment=cancelled`;
+    const successUrl = `${FRONTEND_URL}/veritacheck?payment=success&type=${priceType}`;
+    const cancelUrl = `${FRONTEND_URL}/veritacheck?payment=cancelled`;
 
     // Validate discount code if provided
     let couponId: string | undefined;
@@ -5126,7 +5126,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               <h2 style="color:#01696F">VeritaAssure\u2122</h2>
               <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u2122 as a team member.</p>
               <p style="font-size:14px;color:#374151;line-height:1.6">Click the link below to create your account and get started:</p>
-              <a href="${FRONTEND_URL}/#/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
+              <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
               <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 7 days.</p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
@@ -5507,7 +5507,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             <tr><td style="padding:6px 0;color:#666">Lab:</td><td style="padding:6px 0">${user.clia_lab_name || "Your laboratory"}</td></tr>
           </table>
           <p style="margin-bottom:20px">Log in to VeritaAssure to view your certificate details and upload renewal documentation.</p>
-          <a href="https://www.veritaslabservices.com/#/veritalab-app" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open VeritaLab\u2122</a>
+          <a href="https://www.veritaslabservices.com/veritalab-app" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open VeritaLab\u2122</a>
           <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
           <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC</p>
         </div>

@@ -42,7 +42,7 @@ export function SubscriptionBanner() {
             Your subscription has expired. You have read-only access to your data until {dateStr}.
           </span>
           <a
-            href="/#/veritacheck"
+            href="/veritacheck"
             className="inline-flex items-center gap-1 font-semibold text-amber-900 dark:text-amber-100 hover:underline ml-1"
           >
             Resubscribe <ArrowRight size={13} />
@@ -66,7 +66,7 @@ export function SubscriptionBanner() {
             Your data retention period ended on {dateStr}.
           </span>
           <a
-            href="/#/veritacheck"
+            href="/veritacheck"
             className="inline-flex items-center gap-1 font-semibold text-red-900 dark:text-red-100 hover:underline ml-1"
           >
             Resubscribe to restore access <ArrowRight size={13} />

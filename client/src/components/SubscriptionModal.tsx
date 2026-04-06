@@ -50,7 +50,7 @@ export function SubscriptionModal() {
             Close
           </button>
           <a
-            href="/#/veritacheck"
+            href="/veritacheck"
             onClick={() => setOpen(false)}
             className="flex-1 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-center font-medium"
           >
