@@ -2763,8 +2763,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = getDemoUserId();
     if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
-    const studyRow = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    // Primary lookup by ID
+    let studyRow = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND user_id = ?").get(req.params.id, userId);
+
+    // Fallback: if not found, IDs may have changed after a server update
+    if (!studyRow) {
+      const demoStudies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id ASC").all(userId);
+      return res.status(404).json({
+        error: "Study not found",
+        validIds: demoStudies.map((s: any) => s.id),
+        hint: "Demo study IDs may have changed after a server update"
+      });
+    }
 
     try {
       const dp = safeJsonParse(studyRow.data_points) || [];

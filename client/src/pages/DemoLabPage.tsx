@@ -395,7 +395,7 @@ export default function DemoLabPage() {
                               <div><span className="text-muted-foreground">Instrument:</span> {instruments[0]}</div>
                               <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
                               <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
-                              <div><span className="text-muted-foreground">CLIA TEa:</span> &plusmn;{study.clia_allowable_error}%</div>
+                              <div><span className="text-muted-foreground">CLIA TEa:</span> &plusmn;{study.tea_is_percentage ? `${(study.clia_allowable_error * 100).toFixed(1).replace(/\.0$/, '')}%` : `${study.clia_allowable_error} ${study.tea_unit || ''}`}</div>
                             </>
                           ) : (
                             <>
@@ -403,7 +403,7 @@ export default function DemoLabPage() {
                               <div><span className="text-muted-foreground">Comparison:</span> {instruments[1]}</div>
                               <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
                               <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
-                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.clia_allowable_error >= 5 ? `${study.clia_allowable_error}%` : `${study.clia_allowable_error} mmol/L`}</div>
+                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.tea_is_percentage ? `\u00B1${(study.clia_allowable_error * 100).toFixed(1).replace(/\.0$/, '')}%` : `\u00B1${study.clia_allowable_error} ${study.tea_unit || 'mmol/L'}`}</div>
                             </>
                           )}
                         </div>
