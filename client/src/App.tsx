@@ -52,6 +52,8 @@ import VeritaStaffPage from "@/pages/VeritaStaffPage";
 import VeritaStaffAppPage from "@/pages/VeritaStaffAppPage";
 import VeritaLabPage from "@/pages/VeritaLabPage";
 import VeritaLabAppPage from "@/pages/VeritaLabAppPage";
+import VeritaPolicyAppPage from "@/pages/VeritaPolicyAppPage";
+import VeritaPolicyPage from "@/pages/VeritaPolicyPage";
 import CumsumPage from "@/pages/CumsumPage";
 import SeatManagementPage from "@/pages/SeatManagementPage";
 import RoadmapPage from "@/pages/RoadmapPage";
@@ -109,6 +111,7 @@ function SiteFooter() {
                 <li><a href="/veritacomp" className="hover:text-primary transition-colors">VeritaComp: Competency Management</a></li>
                 <li><a href="/veritastaff" className="hover:text-primary transition-colors">VeritaStaff: Personnel Management</a></li>
                 <li><a href="/veritalab" className="hover:text-primary transition-colors">VeritaLab: Certificate Tracking</a></li>
+                <li><a href="/veritapolicy" className="hover:text-primary transition-colors">VeritaPolicy: TJC Policy Tracker</a></li>
                 <li><a href="/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
                 <li><a href="/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
@@ -281,6 +284,8 @@ function AppContent() {
           <Route path="/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
           <Route path="/veritalab" component={VeritaLabPage} />
           <Route path="/veritalab-app" component={VeritaLabAppPage} />
+          <Route path="/veritapolicy-app" component={VeritaPolicyAppPage} />
+          <Route path="/veritapolicy" component={VeritaPolicyPage} />
           <Route path="/cumsum" component={CumsumPage} />
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />

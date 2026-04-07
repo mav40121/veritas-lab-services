@@ -74,6 +74,17 @@ const MODULES = [
     icon: FileText,
     color: "text-green-600 bg-green-500/10 border-green-500/20",
   },
+  {
+    href: "/veritapolicy",
+    label: "VeritaPolicy™",
+    desc: "TJC Policy Compliance Tracker",
+    detail:
+      "Tracks all 88 TJC-required laboratory policies. Service line toggles auto-apply N/A. Policy library links one document to multiple requirements. Inspection-ready PDF report with readiness score.",
+    badge: "New",
+    badgeColor: "emerald",
+    icon: Shield,
+    color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
 ];
 
 const PRICING = [

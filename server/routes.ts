@@ -6503,5 +6503,232 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── VeritaPolicy Routes ──────────────────────────────────────────────────
+  const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
+
+  // GET settings
+  app.get('/api/veritapolicy/settings', authMiddleware, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    let settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
+    if (!settings) {
+      sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
+      settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
+    }
+    res.json(settings);
+  });
+
+  // PUT settings (service line toggles)
+  app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    const { has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete } = req.body;
+    sqlite.prepare(`
+      INSERT INTO veritapolicy_settings (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id) DO UPDATE SET
+        has_blood_bank = excluded.has_blood_bank,
+        has_transplant = excluded.has_transplant,
+        has_microbiology = excluded.has_microbiology,
+        has_maternal_serum = excluded.has_maternal_serum,
+        is_independent = excluded.is_independent,
+        waived_only = excluded.waived_only,
+        setup_complete = excluded.setup_complete,
+        updated_at = excluded.updated_at
+    `).run(userId, has_blood_bank?1:0, has_transplant?1:0, has_microbiology?1:0, has_maternal_serum?1:0, is_independent?1:0, waived_only?1:0, setup_complete?1:0);
+    res.json({ ok: true });
+  });
+
+  // GET requirements with user status overlay
+  app.get('/api/veritapolicy/requirements', authMiddleware, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    // Get all user requirement statuses
+    const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
+    const statusMap: Record<number, any> = {};
+    for (const s of statuses) statusMap[s.requirement_id] = s;
+    // Get settings for applicability
+    const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
+    // Get lab policies for mapping display
+    const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
+    const policyMap: Record<number, any> = {};
+    for (const p of policies) policyMap[p.id] = p;
+    // Build response
+    const result = (TJC_REQUIREMENTS as any[]).map((req: any) => {
+      const userStatus = statusMap[req.id];
+      // Determine if applicable based on settings
+      let autoNa = false;
+      if (settings) {
+        if (req.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
+        if (req.service_line === 'transplant' && !settings.has_transplant) autoNa = true;
+        if (req.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
+        if (req.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
+        if (req.service_line === 'independent' && !settings.is_independent) autoNa = true;
+        if (req.service_line === 'waived_only' && !settings.waived_only) autoNa = true;
+      }
+      const isNa = autoNa || (userStatus?.is_na ? true : false);
+      const status = isNa ? 'na' : (userStatus?.status || 'not_started');
+      const linkedPolicy = userStatus?.lab_policy_id ? policyMap[userStatus.lab_policy_id] : null;
+      return {
+        ...req,
+        status,
+        is_na: isNa,
+        auto_na: autoNa,
+        na_reason: userStatus?.na_reason || null,
+        lab_policy_id: userStatus?.lab_policy_id || null,
+        lab_policy: linkedPolicy,
+        notes: userStatus?.notes || null,
+        updated_at: userStatus?.updated_at || null,
+      };
+    });
+    res.json(result);
+  });
+
+  // PATCH requirement status
+  app.patch('/api/veritapolicy/requirements/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    const reqId = parseInt(req.params.id);
+    const { status, is_na, na_reason, lab_policy_id, notes } = req.body;
+    sqlite.prepare(`
+      INSERT INTO veritapolicy_requirement_status (user_id, requirement_id, status, is_na, na_reason, lab_policy_id, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, requirement_id) DO UPDATE SET
+        status = COALESCE(excluded.status, status),
+        is_na = COALESCE(excluded.is_na, is_na),
+        na_reason = COALESCE(excluded.na_reason, na_reason),
+        lab_policy_id = excluded.lab_policy_id,
+        notes = COALESCE(excluded.notes, notes),
+        updated_at = excluded.updated_at
+    `).run(userId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, notes || null);
+    res.json({ ok: true });
+  });
+
+  // GET lab policies
+  app.get('/api/veritapolicy/policies', authMiddleware, (req: any, res) => {
+    const sqlite = db.$client;
+    const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(req.user.id) as any[];
+    // For each policy, count how many requirements it covers
+    const counts = sqlite.prepare('SELECT lab_policy_id, COUNT(*) as count FROM veritapolicy_requirement_status WHERE user_id = ? AND lab_policy_id IS NOT NULL GROUP BY lab_policy_id').all(req.user.id) as any[];
+    const countMap: Record<number, number> = {};
+    for (const c of counts) countMap[c.lab_policy_id] = c.count;
+    res.json(policies.map((p: any) => ({ ...p, requirements_covered: countMap[p.id] || 0 })));
+  });
+
+  // POST lab policy
+  app.post('/api/veritapolicy/policies', authMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = db.$client;
+    const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
+    if (!policy_name) return res.status(400).json({ error: 'policy_name required' });
+    const result = sqlite.prepare(`
+      INSERT INTO veritapolicy_lab_policies (user_id, policy_number, policy_name, owner, status, last_reviewed, next_review, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(req.user.id, policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null) as any;
+    res.json({ ok: true, id: result.lastInsertRowid });
+  });
+
+  // PUT lab policy
+  app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
+    sqlite.prepare(`
+      UPDATE veritapolicy_lab_policies SET
+        policy_number = ?, policy_name = ?, owner = ?, status = ?,
+        last_reviewed = ?, next_review = ?, notes = ?, updated_at = datetime('now')
+      WHERE id = ? AND user_id = ?
+    `).run(policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null, parseInt(req.params.id), userId);
+    res.json({ ok: true });
+  });
+
+  // DELETE lab policy
+  app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    const policyId = parseInt(req.params.id);
+    // Unlink from requirements
+    sqlite.prepare('UPDATE veritapolicy_requirement_status SET lab_policy_id = NULL WHERE user_id = ? AND lab_policy_id = ?').run(userId, policyId);
+    sqlite.prepare('DELETE FROM veritapolicy_lab_policies WHERE id = ? AND user_id = ?').run(policyId, userId);
+    res.json({ ok: true });
+  });
+
+  // POST document upload for a policy
+  app.post('/api/veritapolicy/policies/:id/upload', authMiddleware, requireWriteAccess, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const userId = req.user.id;
+      const policyId = parseInt(req.params.id);
+      const policy = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE id = ? AND user_id = ?').get(policyId, userId) as any;
+      if (!policy) return res.status(404).json({ error: 'Policy not found' });
+      const data = await req.file();
+      if (!data) return res.status(400).json({ error: 'No file' });
+      const buf = await data.toBuffer();
+      const ext = path.extname(data.filename) || '.pdf';
+      const fname = `policy_${userId}_${policyId}_${Date.now()}${ext}`;
+      const uploadDir = path.join(process.cwd(), 'uploads', 'policies');
+      await fs.promises.mkdir(uploadDir, { recursive: true });
+      await fs.promises.writeFile(path.join(uploadDir, fname), buf);
+      sqlite.prepare('UPDATE veritapolicy_lab_policies SET document_name = ?, document_path = ?, updated_at = datetime(\'now\') WHERE id = ? AND user_id = ?')
+        .run(data.filename, fname, policyId, userId);
+      res.json({ ok: true, document_name: data.filename, document_path: fname });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET readiness summary
+  app.get('/api/veritapolicy/summary', authMiddleware, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.user.id;
+    const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
+    const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
+    const statusMap: Record<number, any> = {};
+    for (const s of statuses) statusMap[s.requirement_id] = s;
+    let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
+    for (const req of TJC_REQUIREMENTS as any[]) {
+      let autoNa = false;
+      if (settings) {
+        if (req.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
+        if (req.service_line === 'transplant' && !settings.has_transplant) autoNa = true;
+        if (req.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
+        if (req.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
+        if (req.service_line === 'independent' && !settings.is_independent) autoNa = true;
+        if (req.service_line === 'waived_only' && !settings.waived_only) autoNa = true;
+      }
+      const userStatus = statusMap[req.id];
+      const isNa = autoNa || (userStatus?.is_na ? true : false);
+      if (isNa) { na++; continue; }
+      total++;
+      const s = userStatus?.status || 'not_started';
+      if (s === 'complete') complete++;
+      else if (s === 'in_progress') inProgress++;
+      else notStarted++;
+    }
+    const score = total > 0 ? Math.round((complete / total) * 100) : 0;
+    res.json({ total, complete, in_progress: inProgress, not_started: notStarted, na, score, setup_complete: settings?.setup_complete || 0 });
+  });
+
+  // POST PDF report
+  app.post('/api/veritapolicy/pdf', authMiddleware, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const userId = req.user.id;
+      const user = sqlite.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+      const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
+      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
+      const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
+      const statusMap: Record<number, any> = {};
+      for (const s of statuses) statusMap[s.requirement_id] = s;
+      const policyMap: Record<number, any> = {};
+      for (const p of policies) policyMap[p.id] = p;
+      const { generateVeritaPolicyPDF } = await import('./pdfReport');
+      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: TJC_REQUIREMENTS as any[], statusMap, policyMap, policies });
+      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
+      res.send(pdfBuf);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return httpServer;
 }

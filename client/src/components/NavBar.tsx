@@ -17,6 +17,7 @@ const productLinks = [
   { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management", badge: "In Progress" },
   { href: "/veritapt", label: "VeritaPT™", desc: "PT Tracking", badge: "New", badgeColor: "emerald" },
   { href: "/veritalab", label: "VeritaLab™", desc: "Certificate Tracking", badge: "New", badgeColor: "emerald" },
+  { href: "/veritapolicy", label: "VeritaPolicy™", desc: "Policy Compliance Tracker", badge: "New", badgeColor: "emerald" },
   { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
 ];
 
@@ -34,6 +35,7 @@ const allMobileLinks = [
   { href: "/veritastaff", label: "VeritaStaff™" },
   { href: "/veritapt", label: "VeritaPT™" },
   { href: "/veritalab", label: "VeritaLab™" },
+  { href: "/veritapolicy", label: "VeritaPolicy™" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Resources" },
@@ -94,7 +96,7 @@ export function NavBar() {
               <button
                 className={cn(
                   "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  ["/veritaassure","/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritapt","/veritalab","/book","/cumsum"].includes(location)
+                  ["/veritaassure","/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/book","/cumsum"].includes(location)
                     ? "text-foreground bg-secondary"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 )}

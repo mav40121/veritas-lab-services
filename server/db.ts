@@ -802,6 +802,59 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(ow
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_module ON audit_log(module, entity_type, entity_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_user ON nightly_snapshots(user_id, snapshot_date DESC)`); } catch {}
 
+// VeritaPolicy tables
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    has_blood_bank INTEGER NOT NULL DEFAULT 1,
+    has_transplant INTEGER NOT NULL DEFAULT 0,
+    has_microbiology INTEGER NOT NULL DEFAULT 1,
+    has_maternal_serum INTEGER NOT NULL DEFAULT 0,
+    is_independent INTEGER NOT NULL DEFAULT 0,
+    waived_only INTEGER NOT NULL DEFAULT 0,
+    setup_complete INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_lab_policies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    policy_number TEXT,
+    policy_name TEXT NOT NULL,
+    owner TEXT,
+    status TEXT NOT NULL DEFAULT 'not_started',
+    last_reviewed TEXT,
+    next_review TEXT,
+    document_name TEXT,
+    document_path TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_requirement_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    requirement_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_started',
+    is_na INTEGER NOT NULL DEFAULT 0,
+    na_reason TEXT,
+    lab_policy_id INTEGER,
+    notes TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, requirement_id)
+  )
+`);
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_req_user ON veritapolicy_requirement_status(user_id, requirement_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_policies_user ON veritapolicy_lab_policies(user_id)`); } catch {}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");

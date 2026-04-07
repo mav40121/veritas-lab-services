@@ -47,6 +47,11 @@ const completedItems: RoadmapItem[] = [
     description:
       "Tracks PT enrollment, survey results, and corrective actions by analyte and specialty. Monitors unacceptable results, identifies trends, and generates documentation for surveyor review.",
   },
+  {
+    title: "VeritaPolicy™ - TJC Policy Compliance Tracker",
+    description:
+      "Tracks all 88 policies required by The Joint Commission for laboratory accreditation. Service line toggles automatically mark non-applicable requirements as N/A. Lab policy library links one document to multiple requirements. Readiness score with inspector-ready PDF report. Covers all 13 TJC chapters from the January 2024 Comprehensive Accreditation Manual.",
+  },
 ];
 
 const inProgressItems: RoadmapItem[] = [

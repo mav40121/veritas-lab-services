@@ -3026,3 +3026,424 @@ export async function generateVeritaPTPDF(data: VeritaPTPDFData): Promise<Buffer
     await page.close();
   }
 }
+
+// ─── VeritaPolicy™ PDF ────────────────────────────────────────────────────────
+
+interface VeritaPolicyPDFInput {
+  user: any;
+  settings: any;
+  requirements: any[];
+  statusMap: Record<number, any>;
+  policyMap: Record<number, any>;
+  policies: any[];
+}
+
+function escHtml(s: string | null | undefined): string {
+  if (!s) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
+  const { user, settings, requirements, statusMap, policyMap, policies } = input;
+
+  const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
+  const cliaRaw = user?.clia_number || user?.cliaNumber || "";
+  const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file - enter in account settings";
+  const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  // Compute summary
+  let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
+  const reqWithStatus = requirements.map((req: any) => {
+    let autoNa = false;
+    if (settings) {
+      if (req.service_line === "blood_bank" && !settings.has_blood_bank) autoNa = true;
+      if (req.service_line === "transplant" && !settings.has_transplant) autoNa = true;
+      if (req.service_line === "microbiology" && !settings.has_microbiology) autoNa = true;
+      if (req.service_line === "maternal_serum" && !settings.has_maternal_serum) autoNa = true;
+      if (req.service_line === "independent" && !settings.is_independent) autoNa = true;
+      if (req.service_line === "waived_only" && !settings.waived_only) autoNa = true;
+    }
+    const userStatus = statusMap[req.id];
+    const isNa = autoNa || (userStatus?.is_na ? true : false);
+    const status = isNa ? "na" : (userStatus?.status || "not_started");
+    const linkedPolicy = userStatus?.lab_policy_id ? policyMap[userStatus.lab_policy_id] : null;
+
+    if (isNa) { na++; }
+    else {
+      total++;
+      if (status === "complete") complete++;
+      else if (status === "in_progress") inProgress++;
+      else notStarted++;
+    }
+    return { ...req, status, is_na: isNa, auto_na: autoNa, linkedPolicy };
+  });
+
+  const score = total > 0 ? Math.round((complete / total) * 100) : 0;
+
+  // Group by chapter
+  const chapters: Record<string, { label: string; reqs: any[] }> = {};
+  for (const r of reqWithStatus) {
+    if (!chapters[r.chapter]) chapters[r.chapter] = { label: r.chapter_label, reqs: [] };
+    chapters[r.chapter].reqs.push(r);
+  }
+
+  // Service line settings display
+  const serviceLines = [
+    { key: "has_blood_bank", label: "Blood Bank / Transfusion Service" },
+    { key: "has_transplant", label: "Transplant Testing" },
+    { key: "has_microbiology", label: "Microbiology" },
+    { key: "has_maternal_serum", label: "Maternal Serum Marker Screening" },
+    { key: "is_independent", label: "Independent Laboratory" },
+    { key: "waived_only", label: "Waived Testing Only" },
+  ];
+
+  function statusColor(s: string) {
+    if (s === "complete") return "#437A22";
+    if (s === "in_progress") return "#964219";
+    if (s === "na") return "#7A7974";
+    return "#7A7974";
+  }
+  function statusLabel(s: string) {
+    if (s === "complete") return "Complete";
+    if (s === "in_progress") return "In Progress";
+    if (s === "na") return "N/A";
+    return "Not Started";
+  }
+
+  // Build chapter sections
+  const chapterSections = Object.entries(chapters).map(([ch, data]) => {
+    const rows = data.reqs.map((r: any) => {
+      const rowStyle = r.is_na ? "opacity: 0.55;" : "";
+      const stdStyle = r.is_na ? "text-decoration: line-through;" : "";
+      const lp = r.linkedPolicy;
+      const lpText = lp ? escHtml((lp.policy_number ? lp.policy_number + " - " : "") + lp.policy_name) : "-";
+      return `
+        <tr style="${rowStyle}">
+          <td style="font-family:monospace;font-size:7pt;${stdStyle}">${escHtml(r.standard.length > 30 ? r.standard.slice(0, 30) + "..." : r.standard)}</td>
+          <td>${escHtml(r.name)}</td>
+          <td style="text-align:center"><span style="color:${statusColor(r.status)};font-weight:700">${statusLabel(r.status)}</span></td>
+          <td>${lpText}</td>
+        </tr>`;
+    }).join("");
+
+    return `
+      <div class="chapter-section">
+        <div class="chapter-header">${escHtml(ch)} - ${escHtml(data.label)}</div>
+        <table class="req-table">
+          <thead>
+            <tr>
+              <th style="width:22%">Standard</th>
+              <th style="width:38%">Policy Name</th>
+              <th style="width:14%;text-align:center">Status</th>
+              <th style="width:26%">Linked Policy</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join("");
+
+  // Policy library table
+  function policyReviewBadge(nextReview: string | null): string {
+    if (!nextReview) return "";
+    const d = new Date(nextReview);
+    const diff = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return `<span style="color:#A12C7B;font-weight:700"> (OVERDUE)</span>`;
+    if (diff <= 90) return `<span style="color:#964219;font-weight:700"> (Due Soon)</span>`;
+    return "";
+  }
+
+  const policyRows = policies.map((p: any, i: number) => {
+    const bg = i % 2 === 0 ? "#FFFFFF" : "#EBF3F8";
+    const countMap: Record<number, number> = {};
+    // count from statusMap
+    for (const s of Object.values(statusMap) as any[]) {
+      if (s.lab_policy_id) countMap[s.lab_policy_id] = (countMap[s.lab_policy_id] || 0) + 1;
+    }
+    const covered = countMap[p.id] || 0;
+    const nr = p.next_review ? new Date(p.next_review).toLocaleDateString() : "-";
+    const lr = p.last_reviewed ? new Date(p.last_reviewed).toLocaleDateString() : "-";
+    return `
+      <tr style="background:${bg}">
+        <td style="font-family:monospace">${escHtml(p.policy_number) || "-"}</td>
+        <td><strong>${escHtml(p.policy_name)}</strong></td>
+        <td>${escHtml(p.owner) || "-"}</td>
+        <td><span style="color:${statusColor(p.status)};font-weight:700">${statusLabel(p.status)}</span></td>
+        <td>${lr}</td>
+        <td>${nr}${policyReviewBadge(p.next_review)}</td>
+        <td style="text-align:center">${covered}</td>
+      </tr>`;
+  }).join("") || `<tr><td colspan="7" style="text-align:center;color:#7A7974;padding:12px">No policies in library</td></tr>`;
+
+  // Service line summary rows
+  const slRows = serviceLines.map(sl => {
+    const active = settings && settings[sl.key] ? true : false;
+    return `<tr>
+      <td>${sl.label}</td>
+      <td style="text-align:center;color:${active ? "#437A22" : "#7A7974"};font-weight:700">${active ? "Yes" : "No"}</td>
+    </tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9pt; color: #1a1a1a; background: white; }
+
+/* Page 1 only styles */
+.page1 { min-height: 100vh; page-break-after: always; }
+.page-break { page-break-before: always; }
+
+h1.report-title { font-size: 18pt; font-weight: 700; color: #01696F; margin-bottom: 2px; }
+h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bottom: 0; }
+
+.header-block { border-bottom: 2px solid #01696F; padding-bottom: 10px; margin-bottom: 16px; }
+.meta-row { display: flex; gap: 20px; font-size: 8pt; color: #555; margin-top: 6px; flex-wrap: wrap; }
+.meta-row span { display: flex; gap: 4px; }
+.meta-row strong { color: #1a1a1a; }
+
+/* Score box */
+.score-section { display: flex; gap: 16px; margin-bottom: 16px; align-items: flex-start; }
+.score-circle { text-align: center; flex-shrink: 0; }
+.score-num { font-size: 28pt; font-weight: 700; color: #01696F; line-height: 1; }
+.score-label { font-size: 7pt; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 1; }
+.stat-box { border: 1px solid #D0D0D0; border-radius: 6px; padding: 8px 10px; text-align: center; }
+.stat-val { font-size: 18pt; font-weight: 700; }
+.stat-lbl { font-size: 7pt; color: #888; margin-top: 2px; }
+.stat-complete .stat-val { color: #437A22; }
+.stat-progress .stat-val { color: #964219; }
+.stat-ns .stat-val { color: #7A7974; }
+.stat-total .stat-val { color: #01696F; }
+
+/* Summary table */
+.summary-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 14px; }
+.summary-table th { background: #01696F; color: white; font-weight: 700; padding: 4px 8px; text-align: center; }
+.summary-table td { padding: 3px 8px; border: 0.5px solid #D0D0D0; text-align: center; font-weight: 600; }
+.summary-table tr:nth-child(even) td { background: #EBF3F8; }
+
+/* Service lines */
+.service-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 14px; }
+.service-table th { background: #01696F; color: white; font-weight: 700; padding: 3px 8px; text-align: left; }
+.service-table td { padding: 3px 8px; border: 0.5px solid #D0D0D0; }
+.service-table tr:nth-child(even) td { background: #EBF3F8; }
+
+/* Signature */
+.sig-block { border: 1px solid #D0D0D0; border-radius: 6px; padding: 14px 16px; margin-top: 20px; background: #fafafa; }
+.sig-title { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #01696F; border-bottom: 1px solid #D0D0D0; padding-bottom: 8px; margin-bottom: 12px; }
+.sig-row { display: flex; gap: 16px; margin-bottom: 10px; }
+.sig-field { flex: 1; }
+.sig-line { border-bottom: 1px solid #1a1a1a; height: 22px; margin-bottom: 2px; }
+.sig-lbl { font-size: 7pt; color: #888; }
+.check-row { display: flex; gap: 24px; margin-bottom: 12px; }
+.check-item { display: flex; align-items: center; gap: 6px; font-size: 8.5pt; }
+.check-box { width: 14px; height: 14px; border: 1px solid #888; display: inline-block; }
+
+/* Chapter sections */
+.section-heading { font-size: 10pt; font-weight: 700; color: #01696F; margin: 18px 0 10px 0; border-bottom: 1px solid #D0D0D0; padding-bottom: 4px; }
+.chapter-section { margin-bottom: 18px; }
+.chapter-header { font-size: 9pt; font-weight: 700; color: white; background: #01696F; padding: 5px 8px; border-radius: 3px 3px 0 0; margin-bottom: 0; }
+
+/* Requirements table */
+.req-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
+.req-table th { background: #4a9a9f; color: white; font-weight: 600; padding: 3px 6px; text-align: left; font-size: 7pt; }
+.req-table td { padding: 3px 6px; border-bottom: 0.5px solid #D0D0D0; vertical-align: top; }
+.req-table tr:nth-child(even) td { background: #EBF3F8; }
+.req-table tr:nth-child(odd) td { background: #FFFFFF; }
+
+/* Policy table */
+.policy-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 10px; }
+.policy-table th { background: #01696F; color: white; font-weight: 700; padding: 4px 6px; text-align: left; font-size: 7pt; }
+.policy-table td { padding: 3px 6px; border-bottom: 0.5px solid #D0D0D0; vertical-align: top; }
+
+.footer-line { font-size: 7pt; color: #888; text-align: center; margin-top: 14px; padding-top: 6px; border-top: 1px solid #D0D0D0; }
+.page-section-title { font-size: 12pt; font-weight: 700; color: #01696F; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1: Summary + Signature -->
+<div class="page1">
+  <div class="header-block">
+    <h1 class="report-title">VeritaPolicy&#8482; Compliance Report</h1>
+    <h2 class="report-subtitle">TJC Laboratory Policy Tracker - 88 Required Policies</h2>
+    <div class="meta-row">
+      <span><strong>Laboratory:</strong> ${labName}</span>
+      <span><strong>CLIA:</strong> ${clia}</span>
+      <span><strong>Generated:</strong> ${dateGen}</span>
+    </div>
+  </div>
+
+  <!-- Score + Stat boxes -->
+  <div class="score-section">
+    <div class="score-circle">
+      <div class="score-num">${score}%</div>
+      <div class="score-label">Readiness</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-box stat-total">
+        <div class="stat-val">${total}</div>
+        <div class="stat-lbl">Total Applicable</div>
+      </div>
+      <div class="stat-box stat-complete">
+        <div class="stat-val">${complete}</div>
+        <div class="stat-lbl">Complete</div>
+      </div>
+      <div class="stat-box stat-progress">
+        <div class="stat-val">${inProgress}</div>
+        <div class="stat-lbl">In Progress</div>
+      </div>
+      <div class="stat-box stat-ns">
+        <div class="stat-val">${notStarted}</div>
+        <div class="stat-lbl">Not Started</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary table -->
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Total Applicable</th>
+        <th>Complete</th>
+        <th>In Progress</th>
+        <th>Not Started</th>
+        <th>N/A (Excluded)</th>
+        <th>Readiness Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>${total}</td>
+        <td style="color:#437A22">${complete}</td>
+        <td style="color:#964219">${inProgress}</td>
+        <td style="color:#7A7974">${notStarted}</td>
+        <td>${na}</td>
+        <td style="color:#01696F">${score}%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Service line settings -->
+  <div style="font-size:8.5pt;font-weight:700;margin-bottom:6px;color:#1a1a1a">Service Line Settings</div>
+  <table class="service-table">
+    <thead>
+      <tr>
+        <th style="width:70%">Service Line</th>
+        <th style="width:30%;text-align:center">Active</th>
+      </tr>
+    </thead>
+    <tbody>${slRows}</tbody>
+  </table>
+
+  <!-- Signature block -->
+  <div class="sig-block">
+    <div class="sig-title">LABORATORY DIRECTOR OR DESIGNEE REVIEW</div>
+    <div style="font-size:8pt;margin-bottom:10px">
+      Final approval and clinical determination must be made by the laboratory director or designee. Review this report and indicate your determination below.
+    </div>
+    <div class="check-row">
+      <div class="check-item"><span class="check-box"></span> Accepted - Readiness status reviewed and approved</div>
+      <div class="check-item"><span class="check-box"></span> Not Accepted - Corrective action required</div>
+    </div>
+    <div class="sig-row">
+      <div class="sig-field" style="flex:2">
+        <div class="sig-line"></div>
+        <div class="sig-lbl">Print Name</div>
+      </div>
+      <div class="sig-field" style="flex:1">
+        <div class="sig-line"></div>
+        <div class="sig-lbl">Initials</div>
+      </div>
+      <div class="sig-field" style="flex:1">
+        <div class="sig-line"></div>
+        <div class="sig-lbl">Date</div>
+      </div>
+    </div>
+    <div class="sig-row">
+      <div class="sig-field" style="flex:2">
+        <div class="sig-line"></div>
+        <div class="sig-lbl">Signature</div>
+      </div>
+      <div class="sig-field" style="flex:2">
+        <div class="sig-line"></div>
+        <div class="sig-lbl">Title</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
+</div>
+
+<!-- PAGE 2+: Requirements by Chapter -->
+<div class="page-break">
+  <div class="header-block">
+    <h1 class="report-title">VeritaPolicy&#8482; - Requirements Detail</h1>
+    <div class="meta-row">
+      <span><strong>Laboratory:</strong> ${labName}</span>
+      <span><strong>CLIA:</strong> ${clia}</span>
+      <span><strong>Generated:</strong> ${dateGen}</span>
+    </div>
+  </div>
+
+  ${chapterSections}
+
+  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only | Detailed results continued from page 1</div>
+</div>
+
+<!-- FINAL PAGE: Policy Library -->
+<div class="page-break">
+  <div class="header-block">
+    <h1 class="report-title">VeritaPolicy&#8482; - Policy Library Index</h1>
+    <div class="meta-row">
+      <span><strong>Laboratory:</strong> ${labName}</span>
+      <span><strong>CLIA:</strong> ${clia}</span>
+      <span><strong>Generated:</strong> ${dateGen}</span>
+    </div>
+  </div>
+
+  <table class="policy-table">
+    <thead>
+      <tr>
+        <th style="width:10%">Policy #</th>
+        <th style="width:28%">Policy Name</th>
+        <th style="width:14%">Owner</th>
+        <th style="width:10%">Status</th>
+        <th style="width:12%">Last Reviewed</th>
+        <th style="width:14%">Next Review</th>
+        <th style="width:12%;text-align:center">Req. Covered</th>
+      </tr>
+    </thead>
+    <tbody>${policyRows}</tbody>
+  </table>
+
+  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
+</div>
+
+</body>
+</html>`;
+}
+
+export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput): Promise<Buffer> {
+  const html = buildVeritaPolicyPDFHTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
