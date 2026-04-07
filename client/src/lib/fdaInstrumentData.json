@@ -24980,14 +24980,38 @@
     "category": "Manual Procedures",
     "testCount": 8,
     "tests": {
-      "Neutrophils": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Lymphocytes": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Monocytes": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Eosinophils": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Basophils": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Bands": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Blasts": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "NRBC (manual)": { "specialty": "Hematology", "complexity": "MODERATE" }
+      "Neutrophils": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Lymphocytes": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Monocytes": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Eosinophils": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Basophils": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Bands": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Blasts": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "NRBC (manual)": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Peripheral Blood Smear Review": {
@@ -24995,9 +25019,18 @@
     "category": "Manual Procedures",
     "testCount": 3,
     "tests": {
-      "Red Cell Morphology": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "White Cell Morphology": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Platelet Estimate": { "specialty": "Hematology", "complexity": "MODERATE" }
+      "Red Cell Morphology": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "White Cell Morphology": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Platelet Estimate": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Urine Microscopic Examination": {
@@ -25005,13 +25038,34 @@
     "category": "Manual Procedures",
     "testCount": 7,
     "tests": {
-      "RBC (urine micro)": { "specialty": "Urinalysis", "complexity": "MODERATE" },
-      "WBC (urine micro)": { "specialty": "Urinalysis", "complexity": "MODERATE" },
-      "Epithelial cells (urine)": { "specialty": "Urinalysis", "complexity": "MODERATE" },
-      "Casts (urine)": { "specialty": "Urinalysis", "complexity": "MODERATE" },
-      "Bacteria (urine)": { "specialty": "Urinalysis", "complexity": "MODERATE" },
-      "Crystals (urine)": { "specialty": "Urinalysis", "complexity": "MODERATE" },
-      "Yeast (urine)": { "specialty": "Urinalysis", "complexity": "MODERATE" }
+      "RBC (urine micro)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      },
+      "WBC (urine micro)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      },
+      "Epithelial cells (urine)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      },
+      "Casts (urine)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      },
+      "Bacteria (urine)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      },
+      "Crystals (urine)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      },
+      "Yeast (urine)": {
+        "specialty": "Urinalysis",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Gram Stain": {
@@ -25019,8 +25073,14 @@
     "category": "Manual Procedures",
     "testCount": 2,
     "tests": {
-      "Gram Stain Morphology": { "specialty": "Microbiology", "complexity": "MODERATE" },
-      "Gram Stain Organism ID (presumptive)": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Gram Stain Morphology": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      },
+      "Gram Stain Organism ID (presumptive)": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "KOH Preparation": {
@@ -25028,7 +25088,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Fungal Elements (KOH)": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Fungal Elements (KOH)": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Wet Mount / Wet Prep": {
@@ -25036,9 +25099,18 @@
     "category": "Manual Procedures",
     "testCount": 3,
     "tests": {
-      "Trichomonas (wet prep)": { "specialty": "Microbiology", "complexity": "MODERATE" },
-      "Clue cells": { "specialty": "Microbiology", "complexity": "MODERATE" },
-      "Yeast (wet prep)": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Trichomonas (wet prep)": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      },
+      "Clue cells": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      },
+      "Yeast (wet prep)": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Catalase Test": {
@@ -25046,7 +25118,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Catalase": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Catalase": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Coagulase Test": {
@@ -25054,7 +25129,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Coagulase": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Coagulase": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Oxidase Test": {
@@ -25062,7 +25140,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Oxidase": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Oxidase": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Blood Bank Tube Testing": {
@@ -25070,12 +25151,30 @@
     "category": "Manual Procedures",
     "testCount": 6,
     "tests": {
-      "ABO (tube)": { "specialty": "Blood Bank", "complexity": "MODERATE" },
-      "Rh (tube)": { "specialty": "Blood Bank", "complexity": "MODERATE" },
-      "Antibody Screen (tube)": { "specialty": "Blood Bank", "complexity": "MODERATE" },
-      "Crossmatch IS (tube)": { "specialty": "Blood Bank", "complexity": "MODERATE" },
-      "Crossmatch AHG (tube)": { "specialty": "Blood Bank", "complexity": "MODERATE" },
-      "DAT (tube)": { "specialty": "Blood Bank", "complexity": "MODERATE" }
+      "ABO (tube)": {
+        "specialty": "Blood Bank",
+        "complexity": "MODERATE"
+      },
+      "Rh (tube)": {
+        "specialty": "Blood Bank",
+        "complexity": "MODERATE"
+      },
+      "Antibody Screen (tube)": {
+        "specialty": "Blood Bank",
+        "complexity": "MODERATE"
+      },
+      "Crossmatch IS (tube)": {
+        "specialty": "Blood Bank",
+        "complexity": "MODERATE"
+      },
+      "Crossmatch AHG (tube)": {
+        "specialty": "Blood Bank",
+        "complexity": "MODERATE"
+      },
+      "DAT (tube)": {
+        "specialty": "Blood Bank",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Urine Pregnancy Test (Manual)": {
@@ -25083,7 +25182,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "hCG (urine, qualitative)": { "specialty": "Endocrinology", "complexity": "WAIVED" }
+      "hCG (urine, qualitative)": {
+        "specialty": "Endocrinology",
+        "complexity": "WAIVED"
+      }
     }
   },
   "Fecal Occult Blood (Manual)": {
@@ -25091,7 +25193,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Fecal Occult Blood (guaiac)": { "specialty": "General Chemistry", "complexity": "WAIVED" }
+      "Fecal Occult Blood (guaiac)": {
+        "specialty": "General Chemistry",
+        "complexity": "WAIVED"
+      }
     }
   },
   "Strep A Rapid (Manual Kit)": {
@@ -25099,7 +25204,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Strep A Antigen (rapid)": { "specialty": "Microbiology", "complexity": "WAIVED" }
+      "Strep A Antigen (rapid)": {
+        "specialty": "Microbiology",
+        "complexity": "WAIVED"
+      }
     }
   },
   "Monospot (Manual)": {
@@ -25107,7 +25215,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Heterophile Antibody (monospot)": { "specialty": "Immunology", "complexity": "MODERATE" }
+      "Heterophile Antibody (monospot)": {
+        "specialty": "Immunology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Acetone (Manual)": {
@@ -25115,7 +25226,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Acetone (serum, qualitative)": { "specialty": "General Chemistry", "complexity": "MODERATE" }
+      "Acetone (serum, qualitative)": {
+        "specialty": "General Chemistry",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Cryptococcal Antigen (Lateral Flow)": {
@@ -25123,7 +25237,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Cryptococcal Antigen": { "specialty": "Microbiology", "complexity": "MODERATE" }
+      "Cryptococcal Antigen": {
+        "specialty": "Microbiology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Beta-hCG Card (Manual)": {
@@ -25131,7 +25248,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "hCG (serum, qualitative)": { "specialty": "Endocrinology", "complexity": "MODERATE" }
+      "hCG (serum, qualitative)": {
+        "specialty": "Endocrinology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Influenza A/B Rapid (Manual Kit)": {
@@ -25139,8 +25259,14 @@
     "category": "Manual Procedures",
     "testCount": 2,
     "tests": {
-      "Influenza A Antigen (rapid)": { "specialty": "Microbiology", "complexity": "WAIVED" },
-      "Influenza B Antigen (rapid)": { "specialty": "Microbiology", "complexity": "WAIVED" }
+      "Influenza A Antigen (rapid)": {
+        "specialty": "Microbiology",
+        "complexity": "WAIVED"
+      },
+      "Influenza B Antigen (rapid)": {
+        "specialty": "Microbiology",
+        "complexity": "WAIVED"
+      }
     }
   },
   "RSV Rapid (Manual Kit)": {
@@ -25148,7 +25274,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "RSV Antigen (rapid)": { "specialty": "Microbiology", "complexity": "WAIVED" }
+      "RSV Antigen (rapid)": {
+        "specialty": "Microbiology",
+        "complexity": "WAIVED"
+      }
     }
   },
   "Reticulocyte Count (Manual)": {
@@ -25156,7 +25285,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Reticulocyte Count (manual)": { "specialty": "Hematology", "complexity": "MODERATE" }
+      "Reticulocyte Count (manual)": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Body Fluid Cell Count (Manual)": {
@@ -25164,9 +25296,18 @@
     "category": "Manual Procedures",
     "testCount": 3,
     "tests": {
-      "Body Fluid WBC": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Body Fluid RBC": { "specialty": "Hematology", "complexity": "MODERATE" },
-      "Body Fluid Differential": { "specialty": "Hematology", "complexity": "MODERATE" }
+      "Body Fluid WBC": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Body Fluid RBC": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      },
+      "Body Fluid Differential": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Sickle Cell Screen (Manual)": {
@@ -25174,7 +25315,10 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Sickle Cell Screen": { "specialty": "Hematology", "complexity": "MODERATE" }
+      "Sickle Cell Screen": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      }
     }
   },
   "Malaria Smear (Manual)": {
@@ -25182,7 +25326,744 @@
     "category": "Manual Procedures",
     "testCount": 1,
     "tests": {
-      "Malaria Smear (thick and thin)": { "specialty": "Hematology", "complexity": "MODERATE" }
+      "Malaria Smear (thick and thin)": {
+        "specialty": "Hematology",
+        "complexity": "MODERATE"
+      }
+    }
+  },
+  "Roche cobas pro integrated solutions": {
+    "vendor": "Roche",
+    "category": "Chemistry / Immunoassay",
+    "testCount": 8,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      }
+    }
+  },
+  "Roche cobas c 703": {
+    "vendor": "Roche",
+    "category": "Chemistry",
+    "testCount": 6,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Roche cobas i 601": {
+    "vendor": "Roche",
+    "category": "Mass Spectrometry",
+    "testCount": 7,
+    "tests": {
+      "25-Hydroxyvitamin D": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "DHEA-Sulfate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "17-Hydroxyprogesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Androstenedione": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "DHEA": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      }
+    }
+  },
+  "Beckman Coulter DxC 500i": {
+    "vendor": "Beckman Coulter",
+    "category": "Chemistry / Immunoassay",
+    "testCount": 8,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-reactive protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Beckman Coulter UniCel DxI 600": {
+    "vendor": "Beckman Coulter",
+    "category": "Immunoassay",
+    "testCount": 6,
+    "tests": {
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free T4": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Prostate specific antigen (PSA)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Human chorionic gonadotropin (HCG)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Brain natriuretic peptide (BNP)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Beckman Coulter UniCel DxC 880i": {
+    "vendor": "Beckman Coulter",
+    "category": "Chemistry / Immunoassay",
+    "testCount": 7,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Beckman Coulter UniCel DxC 680i": {
+    "vendor": "Beckman Coulter",
+    "category": "Chemistry / Immunoassay",
+    "testCount": 6,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Beckman Coulter AU640": {
+    "vendor": "Beckman Coulter",
+    "category": "Chemistry",
+    "testCount": 6,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Sysmex XN-330": {
+    "vendor": "Sysmex",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "White blood cell count (WBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell count (RBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Differential count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Mean corpuscular volume (MCV)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Sysmex XN-430": {
+    "vendor": "Sysmex",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "White blood cell count (WBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell count (RBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Differential count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Mean corpuscular volume (MCV)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Sysmex XN-9100": {
+    "vendor": "Sysmex",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "White blood cell count (WBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell count (RBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Differential count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Mean corpuscular volume (MCV)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Sysmex XN-3100": {
+    "vendor": "Sysmex",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "White blood cell count (WBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell count (RBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Differential count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Mean corpuscular volume (MCV)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Siemens Atellica CI Analyzer": {
+    "vendor": "Siemens",
+    "category": "Chemistry / Immunoassay",
+    "testCount": 8,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "C-reactive protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Brain natriuretic peptide (BNP)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Siemens ADVIA 2400": {
+    "vendor": "Siemens",
+    "category": "Chemistry",
+    "testCount": 6,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Siemens IMMULITE 2000 XPi": {
+    "vendor": "Siemens",
+    "category": "Immunoassay",
+    "testCount": 8,
+    "tests": {
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free T4": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free T3": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prostate specific antigen (PSA)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Immunoglobulin E (IgE)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Allergen-specific IgE": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      }
+    }
+  },
+  "Siemens Dimension Vista 1000T": {
+    "vendor": "Siemens",
+    "category": "Chemistry / Immunoassay",
+    "testCount": 7,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Thyroid stimulating hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Abbott Alinity hs": {
+    "vendor": "Abbott",
+    "category": "Hematology",
+    "testCount": 5,
+    "tests": {
+      "White blood cell count (WBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell count (RBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Differential count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Abbott ARCHITECT c4000": {
+    "vendor": "Abbott",
+    "category": "Chemistry",
+    "testCount": 6,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Ortho VITROS 4600": {
+    "vendor": "QuidelOrtho",
+    "category": "Chemistry",
+    "testCount": 6,
+    "tests": {
+      "Alanine aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "QuidelOrtho Savanna": {
+    "vendor": "QuidelOrtho",
+    "category": "Molecular",
+    "testCount": 3,
+    "tests": {
+      "Herpes simplex virus 1 (HSV-1)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Herpes simplex virus 2 (HSV-2)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Varicella-zoster virus (VZV)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "QuidelOrtho ORTHO VISION Swift": {
+    "vendor": "QuidelOrtho",
+    "category": "Blood Bank",
+    "testCount": 5,
+    "tests": {
+      "ABO blood group": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Rh (D) typing": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Antibody screen": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Antibody identification": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Direct antiglobulin test (DAT)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      }
+    }
+  },
+  "QuidelOrtho ORTHO VISION Swift Max": {
+    "vendor": "QuidelOrtho",
+    "category": "Blood Bank",
+    "testCount": 5,
+    "tests": {
+      "ABO blood group": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Rh (D) typing": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Antibody screen": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Antibody identification": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Direct antiglobulin test (DAT)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      }
     }
   }
 }
