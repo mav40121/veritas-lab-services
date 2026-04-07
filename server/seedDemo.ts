@@ -196,6 +196,12 @@ export async function seedDemoData() {
     seedPTData(sqlite, demoUserId, now);
   }
 
+  // VeritaPolicy: seed settings + sample policies + requirement statuses
+  const existingPolicy = sqlite.prepare("SELECT id FROM veritapolicy_settings WHERE user_id = ?").get(demoUserId);
+  if (!existingPolicy) {
+    seedPolicyData(sqlite, demoUserId, now);
+  }
+
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
 }
 
@@ -788,4 +794,83 @@ function seedPTData(sqlite: any, demoUserId: number, now: string) {
   ).run(enrollId3, demoUserId, "2026-A", "Survey Event A", "2026-01-15", "PT/INR", 1.02, "Clot-based", 1.00, 0.05, 88, 0.90, 1.10, 0.40, "pass", null, now, now);
 
   console.log("[seed] VeritaPT demo data seeded");
+}
+
+// ─── VeritaPolicy seeding ──────────────────────────────────────────────────────
+function seedPolicyData(sqlite: any, demoUserId: number, now: string) {
+  // Service line settings -- hospital lab with blood bank and microbiology
+  sqlite.prepare(`
+    INSERT INTO veritapolicy_settings
+      (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete)
+    VALUES (?, 1, 0, 1, 0, 0, 0, 1)
+  `).run(demoUserId);
+
+  // Sample lab policies
+  const policies = [
+    { num: "POL-001", name: "Specimen Collection Procedures", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-15", next: "2027-01-15" },
+    { num: "POL-002", name: "Critical Value Reporting Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-15", next: "2027-01-15" },
+    { num: "POL-003", name: "Quality Control Plan (IQCP)", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-02-01", next: "2027-02-01" },
+    { num: "POL-004", name: "Staff Competency Assessment Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-20", next: "2027-01-20" },
+    { num: "POL-005", name: "Method Validation Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-20", next: "2027-01-20" },
+    { num: "POL-006", name: "Record Retention Policy", owner: "Michael Veri, MLS(ASCP)", status: "in_progress", last: null, next: null },
+    { num: "POL-007", name: "Infection Prevention and Control Program", owner: "Infection Control Officer", status: "complete", last: "2026-01-10", next: "2027-01-10" },
+    { num: "POL-008", name: "Health Information Privacy Policy", owner: "Compliance Officer", status: "in_progress", last: null, next: null },
+  ];
+
+  const policyIds: Record<string, number> = {};
+  for (const p of policies) {
+    const result = sqlite.prepare(`
+      INSERT INTO veritapolicy_lab_policies (user_id, policy_number, policy_name, owner, status, last_reviewed, next_review, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(demoUserId, p.num, p.name, p.owner, p.status, p.last, p.next, now, now) as any;
+    policyIds[p.num] = result.lastInsertRowid;
+  }
+
+  // Map requirements to policies and set statuses
+  // id, status, is_na, lab_policy_id
+  const reqStatuses = [
+    // APR chapter
+    { id: 1, status: "in_progress", policyId: null },
+    { id: 2, status: "complete", policyId: null },
+    { id: 3, status: "complete", policyId: null },
+    { id: 4, status: "complete", policyId: null },
+    // DC chapter -- specimen collection covers multiple
+    { id: 5, status: "complete", policyId: policyIds["POL-001"] },
+    { id: 6, status: "in_progress", policyId: null },
+    { id: 8, status: "in_progress", policyId: null },
+    { id: 9, status: "complete", policyId: policyIds["POL-005"] },
+    { id: 11, status: "complete", policyId: policyIds["POL-002"] },
+    { id: 12, status: "in_progress", policyId: policyIds["POL-006"] },
+    // HR chapter
+    { id: 17, status: "complete", policyId: null },
+    { id: 18, status: "complete", policyId: null },
+    { id: 19, status: "complete", policyId: null },
+    { id: 20, status: "complete", policyId: policyIds["POL-004"] },
+    { id: 21, status: "in_progress", policyId: null },
+    // IC chapter
+    { id: 22, status: "complete", policyId: policyIds["POL-007"] },
+    { id: 23, status: "complete", policyId: policyIds["POL-007"] },
+    // IM chapter
+    { id: 25, status: "in_progress", policyId: policyIds["POL-008"] },
+    { id: 26, status: "in_progress", policyId: policyIds["POL-008"] },
+    // QSA chapter
+    { id: 35, status: "complete", policyId: policyIds["POL-003"] },
+    { id: 36, status: "complete", policyId: policyIds["POL-005"] },
+    { id: 37, status: "complete", policyId: null },
+    { id: 38, status: "in_progress", policyId: null },
+    // Blood bank -- has_blood_bank=true so these apply
+    { id: 41, status: "in_progress", policyId: null },
+    { id: 42, status: "not_started", policyId: null },
+    { id: 43, status: "complete", policyId: null },
+  ];
+
+  for (const rs of reqStatuses) {
+    sqlite.prepare(`
+      INSERT OR IGNORE INTO veritapolicy_requirement_status
+        (user_id, requirement_id, status, is_na, lab_policy_id, updated_at)
+      VALUES (?, ?, ?, 0, ?, ?)
+    `).run(demoUserId, rs.id, rs.status, rs.policyId || null, now);
+  }
+
+  console.log("[seed] VeritaPolicy demo data seeded");
 }
