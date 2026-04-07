@@ -256,7 +256,7 @@ function StepIndicator({
               "bg-muted text-muted-foreground"
             }`}>{i + 2}</div>
             <span className={`text-xs font-medium ${r === currentRole ? "text-foreground" : "text-muted-foreground"}`}>
-              {r}s
+              {r} Instruments
             </span>
           </div>
         ))

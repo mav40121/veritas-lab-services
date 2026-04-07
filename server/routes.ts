@@ -3601,17 +3601,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       if (!match) {
-        // Not in regulated or common unregulated list
-        coverage.push({
-          analyteName: test.analyte,
-          specialty: test.specialty,
-          subspecialty: test.specialty,
-          ptCategory: null,
-          tier: "unmatched",
-          status: "unmatched",
-          enrolledProgram: null,
-          notes: "Not found in CLIA regulated or common unregulated list. Verify test complexity.",
-        });
+        // Not in regulated or common unregulated list.
+        // If complexity is known from VeritaMap (MODERATE or HIGH), the test exists in the
+        // FDA database but simply has no PT requirement under CLIA for this analyte.
+        // Only flag "Verify Complexity" if the complexity is genuinely unknown.
+        const knownComplexity = test.complexity && test.complexity !== "UNKNOWN" && test.complexity !== "";
+        if (knownComplexity) {
+          const complexityLabel = test.complexity.charAt(0) + test.complexity.slice(1).toLowerCase();
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: test.specialty,
+            subspecialty: test.specialty,
+            ptCategory: null,
+            tier: "no_pt_required",
+            status: "no_pt_required",
+            complexity: test.complexity,
+            enrolledProgram: null,
+            notes: complexityLabel + " complexity -- PT enrollment is not required for this analyte under CLIA.",
+          });
+        } else {
+          // Complexity truly unknown -- flag for user verification
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: test.specialty,
+            subspecialty: test.specialty,
+            ptCategory: null,
+            tier: "unmatched",
+            status: "unmatched",
+            enrolledProgram: null,
+            notes: "Not found in CLIA regulated or common unregulated list. Verify test complexity with your instrument manufacturer.",
+          });
+        }
         continue;
       }
 
@@ -3679,7 +3699,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     // Sort: regulated gaps first, regulated covered, unregulated recommended, unregulated covered, waived, unmatched
-    const sortOrder: Record<string, number> = { gap: 0, recommended: 1, covered: 2, waived: 3, unmatched: 4 };
+    const sortOrder: Record<string, number> = { gap: 0, recommended: 1, covered: 2, waived: 3, no_pt_required: 4, unmatched: 5 };
     coverage.sort((a, b) => {
       const ao = sortOrder[a.status] ?? 5;
       const bo = sortOrder[b.status] ?? 5;

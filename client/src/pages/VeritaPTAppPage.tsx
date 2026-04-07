@@ -330,6 +330,11 @@ export default function VeritaPTAppPage() {
                           Waived
                         </Badge>
                       )}
+                      {row.status === "no_pt_required" && (
+                        <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs whitespace-nowrap">
+                          {row.complexity ? row.complexity.charAt(0) + row.complexity.slice(1).toLowerCase() : "Moderate"} - PT Not Required
+                        </Badge>
+                      )}
                       {row.status === "unmatched" && (
                         <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs whitespace-nowrap">
                           Verify Complexity
