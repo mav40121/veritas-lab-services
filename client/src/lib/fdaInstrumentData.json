@@ -21050,6 +21050,17 @@
       }
     }
   },
+  "Sysmex UD-10": {
+    "vendor": "Sysmex",
+    "category": "Urinalysis",
+    "testCount": 1,
+    "tests": {
+      "Urine particle analysis": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      }
+    }
+  },
   "Instrumentation Laboratory GEM Premier 7000": {
     "vendor": "Werfen / Instrumentation Laboratory",
     "category": "Blood Gas",
