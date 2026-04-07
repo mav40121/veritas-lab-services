@@ -28,8 +28,9 @@ export default function JoinPage() {
   const [hipaaAcknowledged, setHipaaAcknowledged] = useState(false);
   const [hipaaError, setHipaaError] = useState("");
 
-  // Extract token from URL
-  const token = new URLSearchParams(window.location.hash.split("?")[1] || "").get("token") || "";
+  // Extract token from URL -- works for both path routing (/join?token=...) and
+  // legacy hash routing (/#/join?token=...) via the hash redirect in main.tsx
+  const token = new URLSearchParams(window.location.search).get("token") || "";
 
   useEffect(() => {
     if (!token) {

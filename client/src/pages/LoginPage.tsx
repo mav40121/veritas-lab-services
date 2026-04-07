@@ -61,7 +61,7 @@ export default function LoginPage() {
 
   // Redirect to /join page if there's an invite token in the URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    const params = new URLSearchParams(window.location.search);
     const inviteToken = params.get("token");
     if (inviteToken) {
       navigate(`/join?token=${inviteToken}`);
