@@ -467,6 +467,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, user: { id: row?.id, email: row?.email, name: row?.name, seatCount: row?.seat_count } });
   });
 
+  // Admin: attach an existing user as an active seat under an owner account
+  app.post("/api/admin/attach-seat", (req, res) => {
+    const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!ownerUserId || !seatEmail || !seatUserId) return res.status(400).json({ error: "ownerUserId, seatEmail, seatUserId required" });
+    const sqlite = db.$client;
+    // Remove any existing seat records for this email under this owner
+    sqlite.prepare("DELETE FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").run(Number(ownerUserId), seatEmail);
+    // Insert as active seat with full permissions
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions)
+      VALUES (?, ?, ?, ?, ?, 'active', '{}')
+    `).run(Number(ownerUserId), seatEmail, Number(seatUserId), now, now);
+    // Give the seat user community plan access (inherits from owner)
+    sqlite.prepare("UPDATE users SET plan = 'community', study_credits = 99999 WHERE id = ?").run(Number(seatUserId));
+    const seat = sqlite.prepare("SELECT * FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").get(Number(ownerUserId), seatEmail) as any;
+    res.json({ ok: true, seat });
+  });
+
   // ── DISCOUNT CODES (admin) ───────────────────────────────────────────────
   app.get("/api/admin/discount-codes", (req, res) => {
     const { secret } = req.query as any;
