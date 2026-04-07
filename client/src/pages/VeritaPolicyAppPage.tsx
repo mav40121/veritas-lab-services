@@ -1035,9 +1035,29 @@ export default function VeritaPolicyAppPage() {
     }
   }
 
-  function handleWizardComplete() {
+  async function handleWizardComplete() {
+    // Wizard already saved setup_complete:true before calling here.
+    // Close wizard first, then reload data -- but never re-trigger the wizard
+    // check based on stale server state. Set setup_complete locally immediately.
     setShowWizard(false);
-    loadAll();
+    setSettings(prev => prev ? { ...prev, setup_complete: 1 } : prev);
+    // Reload requirements, summary, policies without re-running the wizard gate
+    try {
+      const [settingsRes, summaryRes, reqRes, polRes] = await Promise.all([
+        fetch(`${API_BASE}/api/veritapolicy/settings`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/veritapolicy/policies`, { headers: authHeaders() }),
+      ]);
+      const [s, sum, r, p] = await Promise.all([settingsRes.json(), summaryRes.json(), reqRes.json(), polRes.json()]);
+      setSettings(s);
+      setSummary(sum);
+      setRequirements(r);
+      setPolicies(p);
+      // Never re-show wizard here -- user just completed it
+    } catch {
+      toast({ title: "Error loading data", variant: "destructive" });
+    }
   }
 
   // ── Auth / plan gates ──
