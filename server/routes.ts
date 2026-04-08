@@ -6529,6 +6529,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VeritaPolicy Routes ──────────────────────────────────────────────────
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
+  const { CAP_REQUIREMENTS } = await import('./capRequirements');
 
   // GET settings
   app.get('/api/veritapolicy/settings', authMiddleware, (req: any, res) => {
@@ -6546,10 +6547,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.user.id;
-    const { has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete } = req.body;
+    const { has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, accreditation_body } = req.body;
     sqlite.prepare(`
-      INSERT INTO veritapolicy_settings (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO veritapolicy_settings (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, accreditation_body, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(user_id) DO UPDATE SET
         has_blood_bank = excluded.has_blood_bank,
         has_transplant = excluded.has_transplant,
@@ -6558,8 +6559,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         is_independent = excluded.is_independent,
         waived_only = excluded.waived_only,
         setup_complete = excluded.setup_complete,
+        accreditation_body = excluded.accreditation_body,
         updated_at = excluded.updated_at
-    `).run(userId, has_blood_bank?1:0, has_transplant?1:0, has_microbiology?1:0, has_maternal_serum?1:0, is_independent?1:0, waived_only?1:0, setup_complete?1:0);
+    `).run(userId, has_blood_bank?1:0, has_transplant?1:0, has_microbiology?1:0, has_maternal_serum?1:0, is_independent?1:0, waived_only?1:0, setup_complete?1:0, accreditation_body || 'tjc');
     res.json({ ok: true });
   });
 
@@ -6577,8 +6579,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
     const policyMap: Record<number, any> = {};
     for (const p of policies) policyMap[p.id] = p;
+    // Determine which requirement sets to include based on accreditation_body
+    const body = settings?.accreditation_body || 'tjc';
+    const reqSets: any[] = [];
+    if (body === 'tjc' || body === 'both') {
+      reqSets.push(...(TJC_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+    }
+    if (body === 'cap' || body === 'both') {
+      reqSets.push(...(CAP_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+    }
+
     // Build response
-    const result = (TJC_REQUIREMENTS as any[]).map((req: any) => {
+    const result = reqSets.map((req: any) => {
       const userStatus = statusMap[req.id];
       // Determine if applicable based on settings
       let autoNa = false;
@@ -6601,6 +6613,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         na_reason: userStatus?.na_reason || null,
         lab_policy_id: userStatus?.lab_policy_id || null,
         lab_policy: linkedPolicy,
+        policy_name: userStatus?.policy_name || null,
         notes: userStatus?.notes || null,
         updated_at: userStatus?.updated_at || null,
       };
@@ -6613,18 +6626,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = db.$client;
     const userId = req.user.id;
     const reqId = parseInt(req.params.id);
-    const { status, is_na, na_reason, lab_policy_id, notes } = req.body;
+    const { status, is_na, na_reason, lab_policy_id, policy_name, notes } = req.body;
     sqlite.prepare(`
-      INSERT INTO veritapolicy_requirement_status (user_id, requirement_id, status, is_na, na_reason, lab_policy_id, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO veritapolicy_requirement_status (user_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(user_id, requirement_id) DO UPDATE SET
         status = COALESCE(excluded.status, status),
         is_na = COALESCE(excluded.is_na, is_na),
         na_reason = COALESCE(excluded.na_reason, na_reason),
         lab_policy_id = excluded.lab_policy_id,
+        policy_name = excluded.policy_name,
         notes = COALESCE(excluded.notes, notes),
         updated_at = excluded.updated_at
-    `).run(userId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, notes || null);
+    `).run(userId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, policy_name || null, notes || null);
     res.json({ ok: true });
   });
 
@@ -6708,8 +6722,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
     const statusMap: Record<number, any> = {};
     for (const s of statuses) statusMap[s.requirement_id] = s;
+    const bodySum = settings?.accreditation_body || 'tjc';
+    const summaryReqs: any[] = [];
+    if (bodySum === 'tjc' || bodySum === 'both') summaryReqs.push(...(TJC_REQUIREMENTS as any[]));
+    if (bodySum === 'cap' || bodySum === 'both') summaryReqs.push(...(CAP_REQUIREMENTS as any[]));
     let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
-    for (const req of TJC_REQUIREMENTS as any[]) {
+    for (const req of summaryReqs) {
       let autoNa = false;
       if (settings) {
         if (req.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
@@ -6740,13 +6758,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = sqlite.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
       const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
-      const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
       const statusMap: Record<number, any> = {};
       for (const s of statuses) statusMap[s.requirement_id] = s;
-      const policyMap: Record<number, any> = {};
-      for (const p of policies) policyMap[p.id] = p;
+      // Build full requirement list with status/policy_name overlaid
+      const body = settings?.accreditation_body || 'tjc';
+      const allReqs: any[] = [];
+      if (body === 'tjc' || body === 'both') allReqs.push(...(TJC_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+      if (body === 'cap' || body === 'both') allReqs.push(...(CAP_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+      const enrichedReqs = allReqs.map((reqItem: any) => {
+        const us = statusMap[reqItem.id];
+        let autoNa = false;
+        if (settings) {
+          if (reqItem.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
+          if (reqItem.service_line === 'transplant' && !settings.has_transplant) autoNa = true;
+          if (reqItem.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
+          if (reqItem.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
+          if (reqItem.service_line === 'independent' && !settings.is_independent) autoNa = true;
+          if (reqItem.service_line === 'waived_only' && !settings.waived_only) autoNa = true;
+        }
+        const isNa = autoNa || (us?.is_na ? true : false);
+        return {
+          ...reqItem,
+          status: isNa ? 'na' : (us?.status || 'not_started'),
+          is_na: isNa,
+          auto_na: autoNa,
+          policy_name: us?.policy_name || null,
+        };
+      });
       const { generateVeritaPolicyPDF } = await import('./pdfReport');
-      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: TJC_REQUIREMENTS as any[], statusMap, policyMap, policies });
+      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [] });
       res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {

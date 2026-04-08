@@ -1,55 +1,24 @@
-import { useState, useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
-import { API_BASE } from "@/lib/queryClient";
-import { authHeaders } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Lock,
-  Users,
-  FileDown,
-  Settings,
-  Plus,
-  Edit2,
-  Trash2,
-  Upload,
-  CheckCircle2,
-  Clock,
-  X,
-  Link2,
-  AlertTriangle,
-  Search,
-  RotateCcw,
-} from "lucide-react";
+import { useIsReadOnly } from "@/lib/useIsReadOnly";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Lock, Download, Settings, Search, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { API_BASE, authHeaders } from "@/lib/auth";
 
-// ── Types ───────────────────────────────────────────────────────────────────
-
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface PolicySettings {
+  id: number;
+  user_id: number;
   has_blood_bank: number;
   has_transplant: number;
   has_microbiology: number;
   has_maternal_serum: number;
   is_independent: number;
   waived_only: number;
+  accreditation_body: string; // "tjc" | "cap" | "both"
   setup_complete: number;
 }
 
@@ -61,31 +30,13 @@ interface Requirement {
   name: string;
   description: string;
   service_line: string;
-  status: "not_started" | "in_progress" | "complete" | "na";
+  source: string; // "tjc" | "cap"
+  status: string;
   is_na: boolean;
   auto_na: boolean;
   na_reason: string | null;
-  lab_policy_id: number | null;
-  lab_policy: { id: number; policy_number: string | null; policy_name: string } | null;
+  policy_name: string | null;
   notes: string | null;
-  updated_at: string | null;
-}
-
-interface LabPolicy {
-  id: number;
-  user_id: number;
-  policy_number: string | null;
-  policy_name: string;
-  owner: string | null;
-  status: "not_started" | "in_progress" | "complete";
-  last_reviewed: string | null;
-  next_review: string | null;
-  notes: string | null;
-  document_name: string | null;
-  document_path: string | null;
-  requirements_covered: number;
-  created_at: string;
-  updated_at: string;
 }
 
 interface Summary {
@@ -98,192 +49,103 @@ interface Summary {
   setup_complete: number;
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
-const CHAPTERS = [
-  { value: "APR", label: "APR - Accreditation Participation" },
-  { value: "DC", label: "DC - Document and Process Control" },
-  { value: "EC", label: "EC - Environment of Care" },
-  { value: "EM", label: "EM - Emergency Management" },
-  { value: "HR", label: "HR - Human Resources" },
-  { value: "IC", label: "IC - Infection Prevention and Control" },
-  { value: "IM", label: "IM - Information Management" },
-  { value: "LD", label: "LD - Leadership" },
-  { value: "PI", label: "PI - Performance Improvement" },
-  { value: "QSA", label: "QSA - Quality System Assessment" },
-  { value: "SE", label: "SE - Safety and Equipment" },
-  { value: "TS", label: "TS - Transplant Safety" },
-  { value: "WT", label: "WT - Waived Testing" },
+// ── Setup wizard questions ─────────────────────────────────────────────────────
+const WIZARD_QUESTIONS = [
+  { key: "accreditation_body", label: "Which accreditation body applies to your lab?", type: "select", options: [
+    { value: "tjc", label: "The Joint Commission (TJC)" },
+    { value: "cap", label: "College of American Pathologists (CAP)" },
+    { value: "both", label: "Both TJC and CAP" },
+  ]},
+  { key: "has_blood_bank", label: "Does your lab have a Blood Bank / Transfusion Service?", type: "yesno" },
+  { key: "has_transplant", label: "Does your lab perform Transplant testing?", type: "yesno" },
+  { key: "has_microbiology", label: "Does your lab have a Microbiology section?", type: "yesno" },
+  { key: "has_maternal_serum", label: "Does your lab perform Maternal Serum Marker screening?", type: "yesno" },
+  { key: "is_independent", label: "Is your lab an independent laboratory (not hospital-based)?", type: "yesno" },
+  { key: "waived_only", label: "Does your lab perform Waived testing ONLY?", type: "yesno" },
 ];
 
-const STATUS_CYCLE: Record<string, "not_started" | "in_progress" | "complete"> = {
-  not_started: "in_progress",
-  in_progress: "complete",
-  complete: "not_started",
+// ── Status config ──────────────────────────────────────────────────────────────
+const STATUS_CONFIG: Record<string, { label: string; color: string; next: string }> = {
+  not_started: { label: "Not Started", color: "bg-muted text-muted-foreground", next: "in_progress" },
+  in_progress: { label: "In Progress", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", next: "complete" },
+  complete:    { label: "Complete",    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", next: "not_started" },
+  na:          { label: "N/A",         color: "bg-muted/50 text-muted-foreground line-through", next: "not_started" },
 };
 
-// ── Helper components ────────────────────────────────────────────────────────
-
-function StatusBadge({ status, autoNa }: { status: string; autoNa?: boolean }) {
-  if (status === "na") {
-    return (
-      <Badge variant="outline" className="text-xs font-medium border-border text-muted-foreground bg-muted/40">
-        {autoNa ? "N/A (Auto)" : "N/A"}
-      </Badge>
-    );
-  }
-  if (status === "complete") {
-    return (
-      <Badge variant="outline" className="text-xs font-medium border-green-500/30 text-green-700 bg-green-500/10">
-        Complete
-      </Badge>
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <Badge variant="outline" className="text-xs font-medium border-amber-500/30 text-amber-700 bg-amber-500/10">
-        In Progress
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="text-xs font-medium border-border text-muted-foreground">
-      Not Started
-    </Badge>
-  );
-}
-
-function PolicyStatusBadge({ status }: { status: string }) {
-  if (status === "complete") {
-    return <Badge variant="outline" className="text-xs border-green-500/30 text-green-700 bg-green-500/10">Complete</Badge>;
-  }
-  if (status === "in_progress") {
-    return <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-700 bg-amber-500/10">In Progress</Badge>;
-  }
-  return <Badge variant="outline" className="text-xs border-border text-muted-foreground">Not Started</Badge>;
-}
-
-function getReviewStatus(nextReview: string | null): "overdue" | "due_soon" | "ok" | "none" {
-  if (!nextReview) return "none";
-  const d = new Date(nextReview);
-  const now = new Date();
-  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return "overdue";
-  if (diffDays <= 90) return "due_soon";
-  return "ok";
-}
-
-// ── Setup Wizard ─────────────────────────────────────────────────────────────
-
-const WIZARD_QUESTIONS = [
-  { key: "has_blood_bank", label: "Does your lab have a Blood Bank / Transfusion Service?" },
-  { key: "has_transplant", label: "Does your lab perform Transplant testing?" },
-  { key: "has_microbiology", label: "Does your lab have a Microbiology section?" },
-  { key: "has_maternal_serum", label: "Does your lab perform Maternal Serum Marker screening?" },
-  { key: "is_independent", label: "Is your lab an independent laboratory (not hospital-based)?" },
-  { key: "waived_only", label: "Does your lab perform Waived testing ONLY?" },
-];
-
-interface SetupWizardProps {
-  onComplete: () => void;
-  existingSettings?: PolicySettings | null;
-}
-
-function SetupWizard({ onComplete, existingSettings }: SetupWizardProps) {
+// ── SetupWizard ───────────────────────────────────────────────────────────────
+function SetupWizard({ onComplete, existing }: { onComplete: (s: Record<string, any>) => void; existing: PolicySettings | null }) {
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, boolean>>(() => ({
-    has_blood_bank: existingSettings ? !!existingSettings.has_blood_bank : false,
-    has_transplant: existingSettings ? !!existingSettings.has_transplant : false,
-    has_microbiology: existingSettings ? !!existingSettings.has_microbiology : false,
-    has_maternal_serum: existingSettings ? !!existingSettings.has_maternal_serum : false,
-    is_independent: existingSettings ? !!existingSettings.is_independent : false,
-    waived_only: existingSettings ? !!existingSettings.waived_only : false,
-  }));
-  const [saving, setSaving] = useState(false);
-  const { toast } = useToast();
+  const [answers, setAnswers] = useState<Record<string, any>>({
+    accreditation_body: existing?.accreditation_body || "tjc",
+    has_blood_bank: existing?.has_blood_bank ?? 1,
+    has_transplant: existing?.has_transplant ?? 0,
+    has_microbiology: existing?.has_microbiology ?? 1,
+    has_maternal_serum: existing?.has_maternal_serum ?? 0,
+    is_independent: existing?.is_independent ?? 0,
+    waived_only: existing?.waived_only ?? 0,
+  });
 
-  const current = WIZARD_QUESTIONS[step];
-  const isLast = step === WIZARD_QUESTIONS.length - 1;
+  const q = WIZARD_QUESTIONS[step];
 
-  async function handleAnswer(answer: boolean) {
-    const updated = { ...answers, [current.key]: answer };
+  function answer(val: any) {
+    const updated = { ...answers, [q.key]: val };
     setAnswers(updated);
-
-    if (isLast) {
-      setSaving(true);
-      try {
-        await fetch(`${API_BASE}/api/veritapolicy/settings`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ ...updated, setup_complete: true }),
-        });
-        onComplete();
-      } catch {
-        toast({ title: "Error saving settings", variant: "destructive" });
-      } finally {
-        setSaving(false);
-      }
+    if (step < WIZARD_QUESTIONS.length - 1) {
+      setStep(step + 1);
     } else {
-      setStep(s => s + 1);
+      onComplete(updated);
     }
   }
+
+  const progress = ((step) / WIZARD_QUESTIONS.length) * 100;
 
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-lg">
-        <div className="mb-8 text-center">
-          <h1 className="font-serif text-3xl font-bold mb-2">
-            VeritaPolicy{"™"} Setup
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Answer a few questions to customize your policy requirements. This determines which TJC standards apply to your lab.
-          </p>
+        <h1 className="text-2xl font-bold text-foreground text-center mb-2">VeritaPolicy&#8482; Setup</h1>
+        <p className="text-muted-foreground text-center text-sm mb-6">
+          Answer a few questions to customize which policy requirements apply to your lab.
+        </p>
+        {/* Progress bar */}
+        <div className="w-full bg-muted rounded-full h-1.5 mb-8">
+          <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
-
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mb-8">
-          {WIZARD_QUESTIONS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 w-2 rounded-full transition-all ${i === step ? "bg-primary w-6" : i < step ? "bg-primary/60" : "bg-border"}`}
-            />
-          ))}
-        </div>
-
-        <Card>
-          <CardContent className="p-8">
-            <div className="text-xs text-muted-foreground mb-3 font-medium">
-              Question {step + 1} of {WIZARD_QUESTIONS.length}
+        <div className="bg-card border border-border rounded-xl p-6">
+          <p className="text-xs text-muted-foreground mb-1">Question {step + 1} of {WIZARD_QUESTIONS.length}</p>
+          <p className="text-base font-semibold text-foreground mb-5">{q.label}</p>
+          {q.type === "select" ? (
+            <div className="space-y-2">
+              {q.options!.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => answer(opt.value)}
+                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm font-medium
+                    ${answers[q.key] === opt.value
+                      ? "bg-primary text-white border-primary"
+                      : "bg-background text-foreground border-border hover:border-primary"}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
-            <h2 className="text-lg font-semibold mb-8 leading-snug">{current.label}</h2>
-            <div className="flex gap-4">
-              <Button
-                size="lg"
-                className="flex-1 bg-primary hover:bg-primary/90"
-                onClick={() => handleAnswer(true)}
-                disabled={saving}
-              >
+          ) : (
+            <div className="flex gap-3">
+              <button onClick={() => answer(1)}
+                className={`flex-1 py-3 rounded-lg border font-medium text-sm transition-colors
+                  ${answers[q.key] === 1 ? "bg-primary text-white border-primary" : "bg-background text-foreground border-border hover:border-primary"}`}>
                 Yes
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="flex-1"
-                onClick={() => handleAnswer(false)}
-                disabled={saving}
-              >
+              </button>
+              <button onClick={() => answer(0)}
+                className={`flex-1 py-3 rounded-lg border font-medium text-sm transition-colors
+                  ${answers[q.key] === 0 ? "bg-primary text-white border-primary" : "bg-background text-foreground border-border hover:border-primary"}`}>
                 No
-              </Button>
+              </button>
             </div>
-          </CardContent>
-        </Card>
-
+          )}
+        </div>
         {step > 0 && (
-          <button
-            className="mt-4 text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto"
-            onClick={() => setStep(s => s - 1)}
-          >
-            <RotateCcw size={13} /> Go back
+          <button onClick={() => setStep(step - 1)} className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors mx-auto block">
+            Back
           </button>
         )}
       </div>
@@ -291,686 +153,7 @@ function SetupWizard({ onComplete, existingSettings }: SetupWizardProps) {
   );
 }
 
-// ── Readiness Score ──────────────────────────────────────────────────────────
-
-function ReadinessScore({ summary }: { summary: Summary }) {
-  const { score, total, complete, in_progress, not_started, na } = summary;
-  const circumference = 2 * Math.PI * 40;
-  const offset = circumference - (score / 100) * circumference;
-
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-6">
-      {/* Circular gauge */}
-      <div className="relative flex-shrink-0">
-        <svg width="96" height="96" viewBox="0 0 96 96">
-          <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" strokeWidth="8" className="text-border" />
-          <circle
-            cx="48"
-            cy="48"
-            r="40"
-            fill="none"
-            stroke="#01696F"
-            strokeWidth="8"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            transform="rotate(-90 48 48)"
-            style={{ transition: "stroke-dashoffset 0.6s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-foreground">{score}%</span>
-          <span className="text-[10px] text-muted-foreground font-medium">Ready</span>
-        </div>
-      </div>
-
-      {/* Stat boxes */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
-        <div className="bg-background border border-border rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-foreground">{total}</div>
-          <div className="text-xs text-muted-foreground">Total Applicable</div>
-        </div>
-        <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-green-700">{complete}</div>
-          <div className="text-xs text-muted-foreground">Complete</div>
-        </div>
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-amber-700">{in_progress}</div>
-          <div className="text-xs text-muted-foreground">In Progress</div>
-        </div>
-        <div className="bg-background border border-border rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-muted-foreground">{not_started}</div>
-          <div className="text-xs text-muted-foreground">Not Started</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Requirements Tab ─────────────────────────────────────────────────────────
-
-interface RequirementsTabProps {
-  requirements: Requirement[];
-  policies: LabPolicy[];
-  isReadOnly: boolean;
-  onRefresh: () => void;
-}
-
-function RequirementsTab({ requirements, policies, isReadOnly, onRefresh }: RequirementsTabProps) {
-  const [filter, setFilter] = useState<string>("all");
-  const [chapterFilter, setChapterFilter] = useState<string>("all");
-  const [search, setSearch] = useState("");
-  const [naRowId, setNaRowId] = useState<number | null>(null);
-  const [naReason, setNaReason] = useState("");
-  const [linkRowId, setLinkRowId] = useState<number | null>(null);
-  const [saving, setSaving] = useState<number | null>(null);
-  const { toast } = useToast();
-
-  async function patchRequirement(id: number, body: object) {
-    setSaving(id);
-    try {
-      const res = await fetch(`${API_BASE}/api/veritapolicy/requirements/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      onRefresh();
-    } catch {
-      toast({ title: "Error saving change", variant: "destructive" });
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  function cycleStatus(req: Requirement) {
-    if (req.auto_na || req.is_na) return;
-    const next = STATUS_CYCLE[req.status as keyof typeof STATUS_CYCLE] || "in_progress";
-    patchRequirement(req.id, { status: next, is_na: false });
-  }
-
-  async function saveNa(req: Requirement) {
-    await patchRequirement(req.id, { is_na: true, na_reason: naReason || null });
-    setNaRowId(null);
-    setNaReason("");
-  }
-
-  async function removeNa(req: Requirement) {
-    await patchRequirement(req.id, { is_na: false, na_reason: null });
-  }
-
-  async function linkPolicy(req: Requirement, policyId: number | null) {
-    await patchRequirement(req.id, { lab_policy_id: policyId });
-    setLinkRowId(null);
-  }
-
-  const filtered = requirements.filter(r => {
-    if (filter !== "all" && r.status !== filter) return false;
-    if (chapterFilter !== "all" && r.chapter !== chapterFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return r.name.toLowerCase().includes(q) || r.standard.toLowerCase().includes(q) || r.chapter_label.toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  return (
-    <div>
-      {/* Filter bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="flex gap-1 flex-wrap">
-          {[
-            { value: "all", label: "All" },
-            { value: "not_started", label: "Not Started" },
-            { value: "in_progress", label: "In Progress" },
-            { value: "complete", label: "Complete" },
-            { value: "na", label: "N/A" },
-          ].map(f => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`px-3 py-1 text-xs rounded-full border transition-all font-medium ${
-                filter === f.value
-                  ? "bg-primary text-white border-primary"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 ml-auto">
-          <Select value={chapterFilter} onValueChange={setChapterFilter}>
-            <SelectTrigger className="w-48 h-8 text-xs">
-              <SelectValue placeholder="All Chapters" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Chapters</SelectItem>
-              {CHAPTERS.map(c => (
-                <SelectItem key={c.value} value={c.value}>{c.value}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="relative">
-            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="h-8 pl-7 text-xs w-48"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="text-xs text-muted-foreground mb-2">{filtered.length} requirement{filtered.length !== 1 ? "s" : ""} shown</div>
-
-      {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-muted/40 border-b border-border">
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-8">#</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-14">Ch.</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground min-w-[180px]">Standard / Policy Name</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground min-w-[140px]">Linked Policy</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-28">Status</th>
-                <th className="text-right px-3 py-2 font-semibold text-muted-foreground w-36">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((req, idx) => {
-                const isNaRow = naRowId === req.id;
-                const isLinkRow = linkRowId === req.id;
-                const isSaving = saving === req.id;
-                const dimmed = req.is_na;
-
-                return (
-                  <tr
-                    key={req.id}
-                    className={`border-b border-border last:border-0 transition-colors ${
-                      idx % 2 === 0 ? "bg-background" : "bg-muted/20"
-                    } ${dimmed ? "opacity-50" : ""}`}
-                  >
-                    <td className="px-3 py-2 text-muted-foreground">{req.id}</td>
-                    <td className="px-3 py-2">
-                      <Badge variant="outline" className="text-[10px] font-mono border-border">
-                        {req.chapter}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className={`font-mono text-[10px] text-muted-foreground mb-0.5 ${dimmed ? "line-through" : ""}`}>
-                        {req.standard.length > 30 ? req.standard.slice(0, 30) + "..." : req.standard}
-                      </div>
-                      <div className="font-medium text-foreground leading-tight">{req.name}</div>
-                      {isNaRow && (
-                        <div className="mt-2 flex gap-2 items-center">
-                          <Input
-                            value={naReason}
-                            onChange={e => setNaReason(e.target.value)}
-                            placeholder="Reason (optional)"
-                            className="h-7 text-xs flex-1"
-                            autoFocus
-                          />
-                          <button
-                            className="text-xs text-primary font-medium hover:underline"
-                            onClick={() => saveNa(req)}
-                            disabled={isSaving}
-                          >
-                            Save
-                          </button>
-                          <button
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                            onClick={() => { setNaRowId(null); setNaReason(""); }}
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      )}
-                      {isLinkRow && (
-                        <div className="mt-2">
-                          <Select onValueChange={v => linkPolicy(req, v === "none" ? null : parseInt(v))}>
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="Select policy to link..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">- Remove link -</SelectItem>
-                              {policies.map(p => (
-                                <SelectItem key={p.id} value={String(p.id)}>
-                                  {p.policy_number ? `${p.policy_number} - ` : ""}{p.policy_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={() => setLinkRowId(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {req.lab_policy ? (
-                        <span className="text-primary text-[11px] font-medium">
-                          {req.lab_policy.policy_number ? `${req.lab_policy.policy_number} - ` : ""}
-                          {req.lab_policy.policy_name.length > 28
-                            ? req.lab_policy.policy_name.slice(0, 28) + "..."
-                            : req.lab_policy.policy_name}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-[11px]">None</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {!req.auto_na && (
-                        <button
-                          onClick={() => !isReadOnly && cycleStatus(req)}
-                          disabled={isReadOnly || req.auto_na || isSaving}
-                          className={`transition-opacity ${isReadOnly || req.auto_na ? "cursor-default" : "hover:opacity-80 cursor-pointer"}`}
-                          title={req.auto_na ? "Auto N/A based on service line settings" : "Click to cycle status"}
-                        >
-                          <StatusBadge status={req.status} autoNa={req.auto_na} />
-                        </button>
-                      )}
-                      {req.auto_na && <StatusBadge status="na" autoNa={true} />}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {!req.auto_na && !isReadOnly && (
-                        <div className="flex gap-1 justify-end">
-                          {!req.is_na ? (
-                            <button
-                              onClick={() => { setNaRowId(isNaRow ? null : req.id); setNaReason(""); setLinkRowId(null); }}
-                              className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border hover:border-foreground/30 transition-all"
-                            >
-                              N/A
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => removeNa(req)}
-                              className="text-[10px] text-amber-600 hover:text-amber-700 px-1.5 py-0.5 rounded border border-amber-300/50 hover:border-amber-400 transition-all"
-                            >
-                              Undo N/A
-                            </button>
-                          )}
-                          <button
-                            onClick={() => { setLinkRowId(isLinkRow ? null : req.id); setNaRowId(null); }}
-                            className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border hover:border-foreground/30 transition-all flex items-center gap-0.5"
-                          >
-                            <Link2 size={10} /> Link
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground text-sm">
-                    No requirements match the current filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Policies Tab ─────────────────────────────────────────────────────────────
-
-interface PoliciesTabProps {
-  policies: LabPolicy[];
-  isReadOnly: boolean;
-  onRefresh: () => void;
-}
-
-interface PolicyForm {
-  policy_number: string;
-  policy_name: string;
-  owner: string;
-  status: "not_started" | "in_progress" | "complete";
-  last_reviewed: string;
-  next_review: string;
-  notes: string;
-}
-
-const BLANK_FORM: PolicyForm = {
-  policy_number: "",
-  policy_name: "",
-  owner: "",
-  status: "not_started",
-  last_reviewed: "",
-  next_review: "",
-  notes: "",
-};
-
-function PoliciesTab({ policies, isReadOnly, onRefresh }: PoliciesTabProps) {
-  const [showModal, setShowModal] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<PolicyForm>(BLANK_FORM);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [uploadingId, setUploadingId] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-
-  function openAdd() {
-    setEditId(null);
-    setForm(BLANK_FORM);
-    setShowModal(true);
-  }
-
-  function openEdit(p: LabPolicy) {
-    setEditId(p.id);
-    setForm({
-      policy_number: p.policy_number || "",
-      policy_name: p.policy_name,
-      owner: p.owner || "",
-      status: p.status,
-      last_reviewed: p.last_reviewed || "",
-      next_review: p.next_review || "",
-      notes: p.notes || "",
-    });
-    setShowModal(true);
-  }
-
-  async function handleSubmit() {
-    if (!form.policy_name.trim()) {
-      toast({ title: "Policy name is required", variant: "destructive" });
-      return;
-    }
-    setSaving(true);
-    try {
-      const body = {
-        policy_number: form.policy_number || null,
-        policy_name: form.policy_name,
-        owner: form.owner || null,
-        status: form.status,
-        last_reviewed: form.last_reviewed || null,
-        next_review: form.next_review || null,
-        notes: form.notes || null,
-      };
-      if (editId) {
-        await fetch(`${API_BASE}/api/veritapolicy/policies/${editId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify(body),
-        });
-      } else {
-        await fetch(`${API_BASE}/api/veritapolicy/policies`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify(body),
-        });
-      }
-      setShowModal(false);
-      onRefresh();
-      toast({ title: editId ? "Policy updated" : "Policy added" });
-    } catch {
-      toast({ title: "Error saving policy", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this policy? It will be unlinked from all requirements.")) return;
-    setDeletingId(id);
-    try {
-      await fetch(`${API_BASE}/api/veritapolicy/policies/${id}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      onRefresh();
-      toast({ title: "Policy deleted" });
-    } catch {
-      toast({ title: "Error deleting policy", variant: "destructive" });
-    } finally {
-      setDeletingId(null);
-    }
-  }
-
-  async function handleUpload(policyId: number, file: File) {
-    setUploadingId(policyId);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      await fetch(`${API_BASE}/api/veritapolicy/policies/${policyId}/upload`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: fd,
-      });
-      onRefresh();
-      toast({ title: "Document uploaded" });
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
-    } finally {
-      setUploadingId(null);
-    }
-  }
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <div className="text-sm text-muted-foreground">{policies.length} polic{policies.length !== 1 ? "ies" : "y"} in library</div>
-        {!isReadOnly && (
-          <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={openAdd}>
-            <Plus size={14} className="mr-1.5" /> Add Policy
-          </Button>
-        )}
-      </div>
-
-      {policies.length === 0 ? (
-        <div className="rounded-lg border border-border border-dashed p-12 text-center">
-          <p className="text-muted-foreground text-sm mb-4">No policies added yet. Use "Add Policy" to start building your library.</p>
-          {!isReadOnly && (
-            <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={openAdd}>
-              <Plus size={14} className="mr-1.5" /> Add First Policy
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-muted/40 border-b border-border">
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">Policy #</th>
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground min-w-[160px]">Policy Name</th>
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">Owner</th>
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">Status</th>
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-24">Last Reviewed</th>
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-28">Next Review</th>
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-20">Req. Covered</th>
-                  <th className="text-right px-3 py-2 font-semibold text-muted-foreground w-28">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {policies.map((p, idx) => {
-                  const reviewStatus = getReviewStatus(p.next_review);
-                  return (
-                    <tr
-                      key={p.id}
-                      className={`border-b border-border last:border-0 ${idx % 2 === 0 ? "bg-background" : "bg-muted/20"}`}
-                    >
-                      <td className="px-3 py-2 font-mono text-muted-foreground">{p.policy_number || "-"}</td>
-                      <td className="px-3 py-2 font-medium text-foreground">
-                        {p.policy_name}
-                        {p.document_name && (
-                          <div className="text-[10px] text-primary mt-0.5 flex items-center gap-1">
-                            <Upload size={9} /> {p.document_name}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{p.owner || "-"}</td>
-                      <td className="px-3 py-2"><PolicyStatusBadge status={p.status} /></td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {p.last_reviewed ? new Date(p.last_reviewed).toLocaleDateString() : "-"}
-                      </td>
-                      <td className="px-3 py-2">
-                        {p.next_review ? (
-                          <span className={`font-medium ${reviewStatus === "overdue" ? "text-red-600" : reviewStatus === "due_soon" ? "text-amber-600" : "text-foreground"}`}>
-                            {new Date(p.next_review).toLocaleDateString()}
-                            {reviewStatus === "overdue" && (
-                              <AlertTriangle size={11} className="inline ml-1 text-red-500" />
-                            )}
-                            {reviewStatus === "due_soon" && (
-                              <Clock size={11} className="inline ml-1 text-amber-500" />
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`font-semibold ${p.requirements_covered > 0 ? "text-primary" : "text-muted-foreground"}`}>
-                          {p.requirements_covered}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {!isReadOnly && (
-                          <div className="flex gap-1 justify-end items-center">
-                            <label
-                              title="Upload document"
-                              className="cursor-pointer text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
-                            >
-                              <Upload size={13} />
-                              <input
-                                type="file"
-                                className="hidden"
-                                onChange={e => {
-                                  const f = e.target.files?.[0];
-                                  if (f) handleUpload(p.id, f);
-                                  e.target.value = "";
-                                }}
-                                disabled={uploadingId === p.id}
-                              />
-                            </label>
-                            <button
-                              onClick={() => openEdit(p)}
-                              className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(p.id)}
-                              disabled={deletingId === p.id}
-                              className="text-muted-foreground hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Add/Edit Modal */}
-      <Dialog open={showModal} onOpenChange={open => { if (!open) setShowModal(false); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editId ? "Edit Policy" : "Add Policy"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-foreground mb-1 block">Policy Number</label>
-                <Input
-                  value={form.policy_number}
-                  onChange={e => setForm(f => ({ ...f, policy_number: e.target.value }))}
-                  placeholder="e.g. LAB-001"
-                  className="text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-foreground mb-1 block">Owner</label>
-                <Input
-                  value={form.owner}
-                  onChange={e => setForm(f => ({ ...f, owner: e.target.value }))}
-                  placeholder="e.g. Lab Director"
-                  className="text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground mb-1 block">Policy Name <span className="text-red-500">*</span></label>
-              <Input
-                value={form.policy_name}
-                onChange={e => setForm(f => ({ ...f, policy_name: e.target.value }))}
-                placeholder="Policy name"
-                className="text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground mb-1 block">Status</label>
-              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as any }))}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="not_started">Not Started</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="complete">Complete</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-foreground mb-1 block">Last Reviewed</label>
-                <Input
-                  type="date"
-                  value={form.last_reviewed}
-                  onChange={e => setForm(f => ({ ...f, last_reviewed: e.target.value }))}
-                  className="text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-foreground mb-1 block">Next Review Date</label>
-                <Input
-                  type="date"
-                  value={form.next_review}
-                  onChange={e => setForm(f => ({ ...f, next_review: e.target.value }))}
-                  className="text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground mb-1 block">Notes</label>
-              <Textarea
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Optional notes..."
-                className="text-sm"
-                rows={3}
-              />
-            </div>
-            <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" size="sm" onClick={() => setShowModal(false)}>Cancel</Button>
-              <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleSubmit} disabled={saving}>
-                {saving ? "Saving..." : editId ? "Save Changes" : "Add Policy"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// ── Main Page ────────────────────────────────────────────────────────────────
-
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function VeritaPolicyAppPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly();
@@ -981,37 +164,90 @@ export default function VeritaPolicyAppPage() {
   const [settings, setSettings] = useState<PolicySettings | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [policies, setPolicies] = useState<LabPolicy[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"requirements" | "policies">("requirements");
   const [showWizard, setShowWizard] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  async function loadAll() {
+  // Filter/search state
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterChapter, setFilterChapter] = useState("all");
+  const [filterSource, setFilterSource] = useState("all");
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  // Inline editing state: reqId -> policy_name being typed
+  const [editingPolicyName, setEditingPolicyName] = useState<Record<number, string>>({});
+
+  const loadAll = useCallback(async () => {
     try {
-      const [settingsRes, summaryRes, reqRes, polRes] = await Promise.all([
+      const [settingsRes, summaryRes, reqRes] = await Promise.all([
         fetch(`${API_BASE}/api/veritapolicy/settings`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/veritapolicy/policies`, { headers: authHeaders() }),
       ]);
-      const [s, sum, r, p] = await Promise.all([settingsRes.json(), summaryRes.json(), reqRes.json(), polRes.json()]);
+      const [s, sum, r] = await Promise.all([settingsRes.json(), summaryRes.json(), reqRes.json()]);
       setSettings(s);
       setSummary(sum);
       setRequirements(r);
-      setPolicies(p);
       if (!s.setup_complete) setShowWizard(true);
     } catch {
       toast({ title: "Error loading data", variant: "destructive" });
-    } finally {
-      setLoading(false);
     }
-  }
+  }, [toast]);
 
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess) loadAll();
-    else setLoading(false);
-  }, [isLoggedIn, hasPlanAccess]);
+  }, [isLoggedIn, hasPlanAccess, loadAll]);
+
+  async function handleWizardComplete(answers: Record<string, any>) {
+    try {
+      await fetch(`${API_BASE}/api/veritapolicy/settings`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ ...answers, setup_complete: true }),
+      });
+      setShowWizard(false);
+      setSettings(prev => prev ? { ...prev, ...answers, setup_complete: 1 } : prev);
+      // Reload without re-triggering wizard
+      const [sum, r] = await Promise.all([
+        fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }).then(res => res.json()),
+        fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }).then(res => res.json()),
+      ]);
+      setSummary(sum);
+      setRequirements(r);
+    } catch {
+      toast({ title: "Error saving settings", variant: "destructive" });
+    }
+  }
+
+  async function updateRequirement(req: Requirement, patch: Partial<Requirement>) {
+    const updated = { ...req, ...patch };
+    setRequirements(prev => prev.map(r => r.id === req.id ? { ...r, ...patch } : r));
+    try {
+      await fetch(`${API_BASE}/api/veritapolicy/requirements/${req.id}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: patch.status ?? req.status,
+          is_na: patch.is_na ?? req.is_na,
+          na_reason: patch.na_reason ?? req.na_reason,
+          policy_name: patch.policy_name ?? req.policy_name,
+          notes: patch.notes ?? req.notes,
+        }),
+      });
+      // Refresh summary
+      const sum = await fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }).then(r => r.json());
+      setSummary(sum);
+    } catch {
+      toast({ title: "Error saving", variant: "destructive" });
+      setRequirements(prev => prev.map(r => r.id === req.id ? req : r)); // rollback
+    }
+  }
+
+  function cycleStatus(req: Requirement) {
+    if (req.auto_na || req.is_na) return;
+    const next = STATUS_CONFIG[req.status]?.next || "not_started";
+    updateRequirement(req, { status: next });
+  }
 
   async function handleDownloadPdf() {
     setDownloadingPdf(true);
@@ -1035,42 +271,13 @@ export default function VeritaPolicyAppPage() {
     }
   }
 
-  async function handleWizardComplete() {
-    // Wizard already saved setup_complete:true before calling here.
-    // Close wizard first, then reload data -- but never re-trigger the wizard
-    // check based on stale server state. Set setup_complete locally immediately.
-    setShowWizard(false);
-    setSettings(prev => prev ? { ...prev, setup_complete: 1 } : prev);
-    // Reload requirements, summary, policies without re-running the wizard gate
-    try {
-      const [settingsRes, summaryRes, reqRes, polRes] = await Promise.all([
-        fetch(`${API_BASE}/api/veritapolicy/settings`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/veritapolicy/policies`, { headers: authHeaders() }),
-      ]);
-      const [s, sum, r, p] = await Promise.all([settingsRes.json(), summaryRes.json(), reqRes.json(), polRes.json()]);
-      setSettings(s);
-      setSummary(sum);
-      setRequirements(r);
-      setPolicies(p);
-      // Never re-show wizard here -- user just completed it
-    } catch {
-      toast({ title: "Error loading data", variant: "destructive" });
-    }
-  }
-
-  // ── Auth / plan gates ──
-
+  // ── Auth / plan gates ──────────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaPolicy{"™"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">TJC policy compliance tracking for clinical laboratories.</p>
-        <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-          <Link href="/login">Sign In</Link>
-        </Button>
+        <h2 className="text-xl font-semibold text-foreground mb-2">Sign in to access VeritaPolicy&#8482;</h2>
+        <p className="text-muted-foreground text-sm">Your policy compliance tracker requires a VeritaAssure&#8482; account.</p>
       </div>
     );
   }
@@ -1078,131 +285,275 @@ export default function VeritaPolicyAppPage() {
   if (!hasPlanAccess) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
-        <Users size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaPolicy{"™"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">
-          VeritaPolicy{"™"} is included in all VeritaAssure{"™"} plans (Community and above). Subscribe to get started.
-        </p>
-        <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-          <Link href="/veritacheck">View Plans</Link>
-        </Button>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-muted-foreground text-sm">Loading...</div>
+        <Lock size={40} className="text-muted-foreground mb-4" />
+        <h2 className="text-xl font-semibold text-foreground mb-2">Upgrade to access VeritaPolicy&#8482;</h2>
+        <p className="text-muted-foreground text-sm mb-4">VeritaPolicy&#8482; is included with all paid VeritaAssure&#8482; plans.</p>
+        <a href="/pricing"><Button>View Plans</Button></a>
       </div>
     );
   }
 
   if (showWizard) {
-    return <SetupWizard onComplete={handleWizardComplete} existingSettings={settings} />;
+    return <SetupWizard onComplete={handleWizardComplete} existing={settings} />;
   }
 
+  // ── Filter requirements ────────────────────────────────────────────────────
+  const chapters = Array.from(new Set(requirements.map(r => r.chapter))).sort();
+  const filtered = requirements.filter(r => {
+    if (filterStatus !== "all" && r.status !== filterStatus) return false;
+    if (filterChapter !== "all" && r.chapter !== filterChapter) return false;
+    if (filterSource !== "all" && r.source !== filterSource) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      if (!r.name.toLowerCase().includes(s) && !r.standard.toLowerCase().includes(s) && !(r.policy_name || "").toLowerCase().includes(s)) return false;
+    }
+    return true;
+  });
+
+  const accredBody = settings?.accreditation_body || "tjc";
+  const showBothSources = accredBody === "both";
+
   return (
-    <div className="container-default py-8">
-      <div className="max-w-6xl mx-auto">
-
-        {/* Description banner */}
-        <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5 text-sm text-primary font-medium mb-6">
-          VeritaPolicy{"™"} tracks all 88 TJC-required laboratory policies. Use the Requirements tab to track status and link your policy documents. Use the Our Policies tab to manage your policy library.
+    <div className="container-default py-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">VeritaPolicy&#8482;</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Track required policies for{" "}
+            {accredBody === "tjc" ? "TJC accreditation" : accredBody === "cap" ? "CAP accreditation" : "TJC and CAP accreditation"}.
+            {summary && ` ${summary.total} applicable requirements.`}
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowWizard(true)} className="gap-1.5">
+            <Settings size={14} /> Settings
+          </Button>
+          <Button size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-1.5">
+            <Download size={14} /> {downloadingPdf ? "Generating..." : "Download PDF"}
+          </Button>
+        </div>
+      </div>
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
-              <CheckCircle2 size={28} className="text-primary" />
-              VeritaPolicy{"™"}
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              TJC Policy Compliance Tracker - 88 required laboratory policies
-            </p>
+      {/* Summary bar */}
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Complete", value: summary.complete, color: "text-green-600 dark:text-green-400" },
+            { label: "In Progress", value: summary.in_progress, color: "text-amber-600 dark:text-amber-400" },
+            { label: "Not Started", value: summary.not_started, color: "text-muted-foreground" },
+            { label: "N/A", value: summary.na, color: "text-muted-foreground" },
+          ].map(s => (
+            <div key={s.label} className="bg-card border border-border rounded-lg p-3 text-center">
+              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-muted-foreground">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Readiness bar */}
+      {summary && summary.total > 0 && (
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-foreground">Readiness Score</span>
+            <span className="text-sm font-bold text-primary">{summary.score}%</span>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowWizard(true)}
-              title="Re-run setup wizard to change service line settings"
-            >
-              <Settings size={14} className="mr-1.5" /> Settings
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadPdf}
-              disabled={downloadingPdf}
-            >
-              <FileDown size={14} className="mr-1.5" />
-              {downloadingPdf ? "Generating..." : "Download PDF"}
-            </Button>
+          <div className="w-full bg-muted rounded-full h-2">
+            <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${summary.score}%` }} />
           </div>
         </div>
+      )}
 
-        {/* Readiness score */}
-        {summary && (
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold text-sm text-foreground">Readiness Score</h2>
-                  {summary.na > 0 && (
-                    <span className="text-xs text-muted-foreground">{summary.na} N/A requirements excluded</span>
-                  )}
-                </div>
-                <ReadinessScore summary={summary} />
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {/* Info banner */}
+      <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-sm text-muted-foreground">
+        For each applicable requirement, enter the name of the policy in your policy manual that addresses it.
+        Click the status badge to cycle through Not Started, In Progress, and Complete.
+        Use N/A for requirements that do not apply to your lab.
+      </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-border mb-6">
-          <button
-            onClick={() => setActiveTab("requirements")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "requirements"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Requirements
-          </button>
-          <button
-            onClick={() => setActiveTab("policies")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "policies"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Our Policies
-            {policies.length > 0 && (
-              <span className="ml-1.5 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{policies.length}</span>
-            )}
-          </button>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search requirements or policies..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-8 h-8 text-sm"
+          />
         </div>
-
-        {activeTab === "requirements" && (
-          <RequirementsTab
-            requirements={requirements}
-            policies={policies}
-            isReadOnly={isReadOnly}
-            onRefresh={loadAll}
-          />
+        <select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8"
+        >
+          <option value="all">All Statuses</option>
+          <option value="not_started">Not Started</option>
+          <option value="in_progress">In Progress</option>
+          <option value="complete">Complete</option>
+          <option value="na">N/A</option>
+        </select>
+        <select
+          value={filterChapter}
+          onChange={e => setFilterChapter(e.target.value)}
+          className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8"
+        >
+          <option value="all">All Chapters</option>
+          {chapters.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        {showBothSources && (
+          <select
+            value={filterSource}
+            onChange={e => setFilterSource(e.target.value)}
+            className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8"
+          >
+            <option value="all">TJC + CAP</option>
+            <option value="tjc">TJC Only</option>
+            <option value="cap">CAP Only</option>
+          </select>
         )}
-        {activeTab === "policies" && (
-          <PoliciesTab
-            policies={policies}
-            isReadOnly={isReadOnly}
-            onRefresh={loadAll}
-          />
-        )}
+      </div>
 
+      {/* Requirements table */}
+      <div className="border border-border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b border-border">
+                <th className="text-left px-3 py-2 font-semibold text-foreground w-16">Chapter</th>
+                <th className="text-left px-3 py-2 font-semibold text-foreground">Requirement</th>
+                <th className="text-left px-3 py-2 font-semibold text-foreground min-w-[200px]">Our Policy Name</th>
+                <th className="text-left px-3 py-2 font-semibold text-foreground w-28">Status</th>
+                <th className="text-left px-3 py-2 font-semibold text-foreground w-16">N/A</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                    No requirements match your filters.
+                  </td>
+                </tr>
+              )}
+              {filtered.map((req, i) => {
+                const isExpanded = expandedRows.has(req.id);
+                const isNa = req.is_na;
+                const statusCfg = STATUS_CONFIG[isNa ? "na" : req.status] || STATUS_CONFIG.not_started;
+                const policyVal = editingPolicyName[req.id] ?? req.policy_name ?? "";
+
+                return (
+                  <tr
+                    key={req.id}
+                    className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${isNa ? "opacity-50" : ""}`}
+                  >
+                    {/* Chapter */}
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-xs font-bold text-primary">{req.chapter}</span>
+                        {showBothSources && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{req.source?.toUpperCase()}</Badge>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Requirement name + expand */}
+                    <td className="px-3 py-2 align-top">
+                      <button
+                        className="text-left w-full"
+                        onClick={() => setExpandedRows(prev => {
+                          const next = new Set(prev);
+                          next.has(req.id) ? next.delete(req.id) : next.add(req.id);
+                          return next;
+                        })}
+                      >
+                        <div className="flex items-start gap-1">
+                          <span className={`text-foreground ${isNa ? "line-through text-muted-foreground" : ""} text-left`}>
+                            {req.name}
+                          </span>
+                          {isExpanded ? <ChevronUp size={12} className="shrink-0 mt-1 text-muted-foreground" /> : <ChevronDown size={12} className="shrink-0 mt-1 text-muted-foreground" />}
+                        </div>
+                        {req.standard && (
+                          <div className="text-xs text-muted-foreground mt-0.5">{req.standard}</div>
+                        )}
+                        {isExpanded && req.description && (
+                          <div className="text-xs text-muted-foreground mt-2 leading-relaxed border-l-2 border-primary/30 pl-2">
+                            {req.description}
+                          </div>
+                        )}
+                      </button>
+                    </td>
+
+                    {/* Policy name input */}
+                    <td className="px-3 py-2 align-top">
+                      <Input
+                        value={policyVal}
+                        disabled={isNa || isReadOnly}
+                        placeholder={isNa ? "N/A" : "e.g. QC Policy (POL-003)"}
+                        className="h-7 text-xs"
+                        onChange={e => setEditingPolicyName(prev => ({ ...prev, [req.id]: e.target.value }))}
+                        onBlur={() => {
+                          const val = editingPolicyName[req.id];
+                          if (val !== undefined && val !== req.policy_name) {
+                            updateRequirement(req, { policy_name: val });
+                            setEditingPolicyName(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                      />
+                    </td>
+
+                    {/* Status badge -- click to cycle */}
+                    <td className="px-3 py-2 align-top">
+                      <button
+                        disabled={req.auto_na || isReadOnly}
+                        onClick={() => cycleStatus(req)}
+                        title={req.auto_na ? "Auto N/A from service line settings" : "Click to change status"}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${statusCfg.color} ${req.auto_na || isReadOnly ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}
+                      >
+                        {req.auto_na ? "N/A (Auto)" : statusCfg.label}
+                      </button>
+                    </td>
+
+                    {/* N/A toggle */}
+                    <td className="px-3 py-2 align-top">
+                      {!req.auto_na && (
+                        <button
+                          disabled={isReadOnly}
+                          onClick={() => updateRequirement(req, { is_na: !isNa, status: isNa ? "not_started" : req.status })}
+                          title={isNa ? "Mark as applicable" : "Mark as N/A"}
+                          className={`text-xs px-1.5 py-1 rounded border transition-colors ${isNa ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}
+                        >
+                          N/A
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Policy library -- Coming Soon */}
+      <div className="bg-card border border-border rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <h2 className="text-base font-semibold text-foreground">Policy Library</h2>
+          <Badge variant="outline" className="text-xs gap-1">
+            <Clock size={10} /> Coming Soon
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Upload your policy documents, track review dates, manage approval workflows, and give staff read-only access to current approved policies.
+          Policy library management is coming in a future update.
+        </p>
       </div>
     </div>
   );

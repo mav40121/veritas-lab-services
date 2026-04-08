@@ -854,6 +854,10 @@ sqlite.exec(`
 
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_req_user ON veritapolicy_requirement_status(user_id, requirement_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_policies_user ON veritapolicy_lab_policies(user_id)`); } catch {}
+// Add policy_name column to requirement_status (stores free-text policy name entered by user)
+try { sqlite.exec(`ALTER TABLE veritapolicy_requirement_status ADD COLUMN policy_name TEXT`); } catch {}
+// Add accreditation_body to settings (tjc | cap | both)
+try { sqlite.exec(`ALTER TABLE veritapolicy_settings ADD COLUMN accreditation_body TEXT NOT NULL DEFAULT 'tjc'`); } catch {}
 
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {

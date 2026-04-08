@@ -801,8 +801,8 @@ function seedPolicyData(sqlite: any, demoUserId: number, now: string) {
   // Service line settings -- hospital lab with blood bank and microbiology
   sqlite.prepare(`
     INSERT INTO veritapolicy_settings
-      (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete)
-    VALUES (?, 1, 0, 1, 0, 0, 0, 1)
+      (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, accreditation_body)
+    VALUES (?, 1, 0, 1, 0, 0, 0, 1, 'tjc')
   `).run(demoUserId);
 
   // Sample lab policies

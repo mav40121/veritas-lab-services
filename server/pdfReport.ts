@@ -3055,23 +3055,11 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
   const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file - enter in account settings";
   const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-  // Compute summary
+  // Compute summary -- requirements come pre-enriched with status and policy_name
   let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
   const reqWithStatus = requirements.map((req: any) => {
-    let autoNa = false;
-    if (settings) {
-      if (req.service_line === "blood_bank" && !settings.has_blood_bank) autoNa = true;
-      if (req.service_line === "transplant" && !settings.has_transplant) autoNa = true;
-      if (req.service_line === "microbiology" && !settings.has_microbiology) autoNa = true;
-      if (req.service_line === "maternal_serum" && !settings.has_maternal_serum) autoNa = true;
-      if (req.service_line === "independent" && !settings.is_independent) autoNa = true;
-      if (req.service_line === "waived_only" && !settings.waived_only) autoNa = true;
-    }
-    const userStatus = statusMap[req.id];
-    const isNa = autoNa || (userStatus?.is_na ? true : false);
-    const status = isNa ? "na" : (userStatus?.status || "not_started");
-    const linkedPolicy = userStatus?.lab_policy_id ? policyMap[userStatus.lab_policy_id] : null;
-
+    const isNa = req.is_na || false;
+    const status = req.status || "not_started";
     if (isNa) { na++; }
     else {
       total++;
@@ -3079,7 +3067,7 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
       else if (status === "in_progress") inProgress++;
       else notStarted++;
     }
-    return { ...req, status, is_na: isNa, auto_na: autoNa, linkedPolicy };
+    return { ...req, status, is_na: isNa };
   });
 
   const score = total > 0 ? Math.round((complete / total) * 100) : 0;
@@ -3119,8 +3107,7 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
     const rows = data.reqs.map((r: any) => {
       const rowStyle = r.is_na ? "opacity: 0.55;" : "";
       const stdStyle = r.is_na ? "text-decoration: line-through;" : "";
-      const lp = r.linkedPolicy;
-      const lpText = lp ? escHtml((lp.policy_number ? lp.policy_number + " - " : "") + lp.policy_name) : "-";
+      const lpText = r.policy_name ? escHtml(r.policy_name) : "<em style=\"color:#999\">Not entered</em>";
       return `
         <tr style="${rowStyle}">
           <td style="font-family:monospace;font-size:7pt;${stdStyle}">${escHtml(r.standard.length > 30 ? r.standard.slice(0, 30) + "..." : r.standard)}</td>
@@ -3137,9 +3124,9 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
           <thead>
             <tr>
               <th style="width:22%">Standard</th>
-              <th style="width:38%">Policy Name</th>
+              <th style="width:38%">Requirement</th>
               <th style="width:14%;text-align:center">Status</th>
-              <th style="width:26%">Linked Policy</th>
+              <th style="width:26%">Our Policy Name</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
