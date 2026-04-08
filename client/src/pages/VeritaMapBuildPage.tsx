@@ -993,9 +993,10 @@ export default function VeritaMapBuildPage() {
   const effectiveInstrumentName = manualEntry
     ? manualInstrumentName.trim()
     : isOtherDepartment
-      ? customInstrument.trim()
+      ? [customVendor.trim(), customInstrument.trim()].filter(Boolean).join(" ")
       : isOtherVendor
-        ? customInstrument.trim()
+        // Combine vendor + instrument so "DC" + "Cube" becomes "DC Cube"
+        ? [customVendor.trim(), customInstrument.trim()].filter(Boolean).join(" ")
         : isOtherInstrument
           ? customInstrument.trim()
           : instrumentName;
