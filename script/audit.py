@@ -134,7 +134,15 @@ def check_file(rel, fpath):
         if re.search(r'\bAPHL\b', line, re.IGNORECASE):
             WARNINGS.append(f"[{rel}:{i}] 'APHL' detected -- VeritaPT uses API (American Proficiency Institute), not APHL")
 
-    # ── 4. PDF COMPLIANCE (pdfReport.ts only) ────────────────────────────────
+    # ── 4. PLAN GATE PATTERN (App pages only) ────────────────────────────────
+    # All modules must use explicit allowlist, not blocklist.
+    # Wrong:  hasPlanAccess = !!user?.plan && !["free","per_study"].includes(...)
+    # Right:  hasPlanAccess = !!user && ["community","hospital",...].includes(...)
+    if is_checkable and is_client and "hasPlanAccess" in content:
+        if re.search(r'hasPlanAccess[^=]*=.*!\[', content):
+            ERRORS.append(f"[{rel}] Plan gate uses blocklist pattern -- use explicit allowlist (see VeritaLabAppPage.tsx for reference)")
+
+    # ── 5. PDF COMPLIANCE (pdfReport.ts only) ────────────────────────────────
     if "pdfReport" in rel:
         # Must reference CLIA
         if not re.search(r'clia', content, re.IGNORECASE):
