@@ -1,24 +1,24 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/lib/useIsReadOnly";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Lock, Download, Settings, Search, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight } from "lucide-react";
 import { API_BASE, authHeaders } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PolicySettings {
-  id: number;
-  user_id: number;
+  id?: number;
+  user_id?: number;
   has_blood_bank: number;
   has_transplant: number;
   has_microbiology: number;
   has_maternal_serum: number;
   is_independent: number;
   waived_only: number;
-  accreditation_body: string; // "tjc" | "cap" | "both"
+  accreditation_body: string;
   setup_complete: number;
 }
 
@@ -30,7 +30,7 @@ interface Requirement {
   name: string;
   description: string;
   service_line: string;
-  source: string; // "tjc" | "cap"
+  source: string;
   status: string;
   is_na: boolean;
   auto_na: boolean;
@@ -49,107 +49,40 @@ interface Summary {
   setup_complete: number;
 }
 
-// ── Setup wizard questions ─────────────────────────────────────────────────────
-const WIZARD_QUESTIONS = [
-  { key: "accreditation_body", label: "Which accreditation body applies to your lab?", type: "select", options: [
-    { value: "tjc", label: "The Joint Commission (TJC)" },
-    { value: "cap", label: "College of American Pathologists (CAP)" },
-    { value: "both", label: "Both TJC and CAP" },
-  ]},
-  { key: "has_blood_bank", label: "Does your lab have a Blood Bank / Transfusion Service?", type: "yesno" },
-  { key: "has_transplant", label: "Does your lab perform Transplant testing?", type: "yesno" },
-  { key: "has_microbiology", label: "Does your lab have a Microbiology section?", type: "yesno" },
-  { key: "has_maternal_serum", label: "Does your lab perform Maternal Serum Marker screening?", type: "yesno" },
-  { key: "is_independent", label: "Is your lab an independent laboratory (not hospital-based)?", type: "yesno" },
-  { key: "waived_only", label: "Does your lab perform Waived testing ONLY?", type: "yesno" },
-];
-
 // ── Status config ──────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string; next: string }> = {
   not_started: { label: "Not Started", color: "bg-muted text-muted-foreground", next: "in_progress" },
-  in_progress: { label: "In Progress", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", next: "complete" },
-  complete:    { label: "Complete",    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", next: "not_started" },
-  na:          { label: "N/A",         color: "bg-muted/50 text-muted-foreground line-through", next: "not_started" },
+  in_progress:  { label: "In Progress", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", next: "complete" },
+  complete:     { label: "Complete",    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", next: "not_started" },
+  na:           { label: "N/A",         color: "bg-muted/50 text-muted-foreground", next: "not_started" },
 };
 
-// ── SetupWizard ───────────────────────────────────────────────────────────────
-function SetupWizard({ onComplete, existing }: { onComplete: (s: Record<string, any>) => void; existing: PolicySettings | null }) {
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({
-    accreditation_body: existing?.accreditation_body || "tjc",
-    has_blood_bank: existing?.has_blood_bank ?? 1,
-    has_transplant: existing?.has_transplant ?? 0,
-    has_microbiology: existing?.has_microbiology ?? 1,
-    has_maternal_serum: existing?.has_maternal_serum ?? 0,
-    is_independent: existing?.is_independent ?? 0,
-    waived_only: existing?.waived_only ?? 0,
-  });
+const DEFAULT_SETTINGS: PolicySettings = {
+  has_blood_bank: 1,
+  has_transplant: 0,
+  has_microbiology: 1,
+  has_maternal_serum: 0,
+  is_independent: 0,
+  waived_only: 0,
+  accreditation_body: "tjc",
+  setup_complete: 1,
+};
 
-  const q = WIZARD_QUESTIONS[step];
-
-  function answer(val: any) {
-    const updated = { ...answers, [q.key]: val };
-    setAnswers(updated);
-    if (step < WIZARD_QUESTIONS.length - 1) {
-      setStep(step + 1);
-    } else {
-      onComplete(updated);
-    }
-  }
-
-  const progress = ((step) / WIZARD_QUESTIONS.length) * 100;
-
+// ── Toggle switch component ────────────────────────────────────────────────────
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-lg">
-        <h1 className="text-2xl font-bold text-foreground text-center mb-2">VeritaPolicy&#8482; Setup</h1>
-        <p className="text-muted-foreground text-center text-sm mb-6">
-          Answer a few questions to customize which policy requirements apply to your lab.
-        </p>
-        {/* Progress bar */}
-        <div className="w-full bg-muted rounded-full h-1.5 mb-8">
-          <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="bg-card border border-border rounded-xl p-6">
-          <p className="text-xs text-muted-foreground mb-1">Question {step + 1} of {WIZARD_QUESTIONS.length}</p>
-          <p className="text-base font-semibold text-foreground mb-5">{q.label}</p>
-          {q.type === "select" ? (
-            <div className="space-y-2">
-              {q.options!.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => answer(opt.value)}
-                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm font-medium
-                    ${answers[q.key] === opt.value
-                      ? "bg-primary text-white border-primary"
-                      : "bg-background text-foreground border-border hover:border-primary"}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex gap-3">
-              <button onClick={() => answer(1)}
-                className={`flex-1 py-3 rounded-lg border font-medium text-sm transition-colors
-                  ${answers[q.key] === 1 ? "bg-primary text-white border-primary" : "bg-background text-foreground border-border hover:border-primary"}`}>
-                Yes
-              </button>
-              <button onClick={() => answer(0)}
-                className={`flex-1 py-3 rounded-lg border font-medium text-sm transition-colors
-                  ${answers[q.key] === 0 ? "bg-primary text-white border-primary" : "bg-background text-foreground border-border hover:border-primary"}`}>
-                No
-              </button>
-            </div>
-          )}
-        </div>
-        {step > 0 && (
-          <button onClick={() => setStep(step - 1)} className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors mx-auto block">
-            Back
-          </button>
-        )}
-      </div>
-    </div>
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors
+        ${checked ? "bg-primary" : "bg-muted"}
+        ${disabled ? "opacity-50 cursor-not-allowed" : ""}
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+    >
+      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`} />
+    </button>
   );
 }
 
@@ -161,11 +94,12 @@ export default function VeritaPolicyAppPage() {
 
   const hasPlanAccess = !!user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital"].includes(user.plan);
 
-  const [settings, setSettings] = useState<PolicySettings | null>(null);
+  const [settings, setSettings] = useState<PolicySettings>(DEFAULT_SETTINGS);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [showWizard, setShowWizard] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Filter/search state
   const [search, setSearch] = useState("");
@@ -173,11 +107,13 @@ export default function VeritaPolicyAppPage() {
   const [filterChapter, setFilterChapter] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-
-  // Inline editing state: reqId -> policy_name being typed
   const [editingPolicyName, setEditingPolicyName] = useState<Record<number, string>>({});
 
+  // Debounce settings save
+  const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadAll = useCallback(async () => {
+    setLoading(true);
     try {
       const [settingsRes, summaryRes, reqRes] = await Promise.all([
         fetch(`${API_BASE}/api/veritapolicy/settings`, { headers: authHeaders() }),
@@ -185,12 +121,15 @@ export default function VeritaPolicyAppPage() {
         fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }),
       ]);
       const [s, sum, r] = await Promise.all([settingsRes.json(), summaryRes.json(), reqRes.json()]);
-      setSettings(s);
+      setSettings({ ...DEFAULT_SETTINGS, ...s });
       setSummary(sum);
       setRequirements(r);
-      if (!s.setup_complete) setShowWizard(true);
+      // Show settings panel on first visit (setup not yet complete)
+      if (!s.setup_complete) setSettingsOpen(true);
     } catch {
       toast({ title: "Error loading data", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   }, [toast]);
 
@@ -198,29 +137,37 @@ export default function VeritaPolicyAppPage() {
     if (isLoggedIn && hasPlanAccess) loadAll();
   }, [isLoggedIn, hasPlanAccess, loadAll]);
 
-  async function handleWizardComplete(answers: Record<string, any>) {
-    try {
-      await fetch(`${API_BASE}/api/veritapolicy/settings`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ ...answers, setup_complete: true }),
-      });
-      setShowWizard(false);
-      setSettings(prev => prev ? { ...prev, ...answers, setup_complete: 1 } : prev);
-      // Reload without re-triggering wizard
-      const [sum, r] = await Promise.all([
-        fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }).then(res => res.json()),
-        fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }).then(res => res.json()),
-      ]);
-      setSummary(sum);
-      setRequirements(r);
-    } catch {
-      toast({ title: "Error saving settings", variant: "destructive" });
-    }
+  // Save settings and reload requirements when settings change
+  async function saveSettings(updated: PolicySettings) {
+    if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current);
+    settingsSaveTimer.current = setTimeout(async () => {
+      try {
+        await fetch(`${API_BASE}/api/veritapolicy/settings`, {
+          method: "PUT",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ ...updated, setup_complete: true }),
+        });
+        // Reload requirements and summary since applicability may have changed
+        const [sumRes, reqRes] = await Promise.all([
+          fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }),
+          fetch(`${API_BASE}/api/veritapolicy/requirements`, { headers: authHeaders() }),
+        ]);
+        const [sum, r] = await Promise.all([sumRes.json(), reqRes.json()]);
+        setSummary(sum);
+        setRequirements(r);
+      } catch {
+        toast({ title: "Error saving settings", variant: "destructive" });
+      }
+    }, 600);
+  }
+
+  function updateSetting(key: keyof PolicySettings, value: any) {
+    const updated = { ...settings, [key]: value };
+    setSettings(updated);
+    saveSettings(updated);
   }
 
   async function updateRequirement(req: Requirement, patch: Partial<Requirement>) {
-    const updated = { ...req, ...patch };
     setRequirements(prev => prev.map(r => r.id === req.id ? { ...r, ...patch } : r));
     try {
       await fetch(`${API_BASE}/api/veritapolicy/requirements/${req.id}`, {
@@ -234,17 +181,16 @@ export default function VeritaPolicyAppPage() {
           notes: patch.notes ?? req.notes,
         }),
       });
-      // Refresh summary
       const sum = await fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }).then(r => r.json());
       setSummary(sum);
     } catch {
       toast({ title: "Error saving", variant: "destructive" });
-      setRequirements(prev => prev.map(r => r.id === req.id ? req : r)); // rollback
+      setRequirements(prev => prev.map(r => r.id === req.id ? req : r));
     }
   }
 
   function cycleStatus(req: Requirement) {
-    if (req.auto_na || req.is_na) return;
+    if (req.auto_na || req.is_na || isReadOnly) return;
     const next = STATUS_CONFIG[req.status]?.next || "not_started";
     updateRequirement(req, { status: next });
   }
@@ -252,10 +198,7 @@ export default function VeritaPolicyAppPage() {
   async function handleDownloadPdf() {
     setDownloadingPdf(true);
     try {
-      const res = await fetch(`${API_BASE}/api/veritapolicy/pdf`, {
-        method: "POST",
-        headers: authHeaders(),
-      });
+      const res = await fetch(`${API_BASE}/api/veritapolicy/pdf`, { method: "POST", headers: authHeaders() });
       if (!res.ok) throw new Error("PDF generation failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -293,12 +236,10 @@ export default function VeritaPolicyAppPage() {
     );
   }
 
-  if (showWizard) {
-    return <SetupWizard onComplete={handleWizardComplete} existing={settings} />;
-  }
-
   // ── Filter requirements ────────────────────────────────────────────────────
   const chapters = Array.from(new Set(requirements.map(r => r.chapter))).sort();
+  const showBothSources = settings.accreditation_body === "both";
+
   const filtered = requirements.filter(r => {
     if (filterStatus !== "all" && r.status !== filterStatus) return false;
     if (filterChapter !== "all" && r.chapter !== filterChapter) return false;
@@ -310,39 +251,92 @@ export default function VeritaPolicyAppPage() {
     return true;
   });
 
-  const accredBody = settings?.accreditation_body || "tjc";
-  const showBothSources = accredBody === "both";
-
   return (
-    <div className="container-default py-8 space-y-6">
+    <div className="container-default py-8 space-y-4">
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">VeritaPolicy&#8482;</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Track required policies for{" "}
-            {accredBody === "tjc" ? "TJC accreditation" : accredBody === "cap" ? "CAP accreditation" : "TJC and CAP accreditation"}.
-            {summary && ` ${summary.total} applicable requirements.`}
+            {settings.accreditation_body === "tjc" ? "TJC" : settings.accreditation_body === "cap" ? "CAP" : "TJC + CAP"} Policy Compliance Tracker
+            {summary ? ` - ${summary.total} applicable requirements` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowWizard(true)} className="gap-1.5">
-            <Settings size={14} /> Settings
-          </Button>
           <Button size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-1.5">
             <Download size={14} /> {downloadingPdf ? "Generating..." : "Download PDF"}
           </Button>
         </div>
       </div>
 
+      {/* Settings panel */}
+      <div className="border border-border rounded-lg overflow-hidden">
+        <button
+          onClick={() => setSettingsOpen(p => !p)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-sm font-medium text-foreground"
+        >
+          <span>Lab Settings</span>
+          {settingsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+        {settingsOpen && (
+          <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-border bg-card">
+            {/* Accreditation body */}
+            <div className="sm:col-span-2">
+              <p className="text-xs font-semibold text-foreground mb-2">Accreditation Body</p>
+              <div className="flex gap-2">
+                {[
+                  { value: "tjc", label: "TJC" },
+                  { value: "cap", label: "CAP" },
+                  { value: "both", label: "TJC + CAP" },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    disabled={isReadOnly}
+                    onClick={() => updateSetting("accreditation_body", opt.value)}
+                    className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors
+                      ${settings.accreditation_body === opt.value
+                        ? "bg-primary text-white border-primary"
+                        : "bg-background text-foreground border-border hover:border-primary"}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Service line toggles */}
+            {[
+              { key: "has_blood_bank",    label: "Blood Bank / Transfusion Service" },
+              { key: "has_microbiology",  label: "Microbiology Section" },
+              { key: "has_transplant",    label: "Transplant Testing" },
+              { key: "has_maternal_serum", label: "Maternal Serum Marker Screening" },
+              { key: "is_independent",    label: "Independent Laboratory (not hospital-based)" },
+              { key: "waived_only",       label: "Waived Testing Only" },
+            ].map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-foreground">{label}</span>
+                <Toggle
+                  checked={!!(settings as any)[key]}
+                  disabled={isReadOnly}
+                  onChange={v => updateSetting(key as keyof PolicySettings, v ? 1 : 0)}
+                />
+              </div>
+            ))}
+            <p className="sm:col-span-2 text-xs text-muted-foreground">
+              Turning off a service line automatically marks non-applicable requirements as N/A.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Summary bar */}
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Complete", value: summary.complete, color: "text-green-600 dark:text-green-400" },
+            { label: "Complete",    value: summary.complete,    color: "text-green-600 dark:text-green-400" },
             { label: "In Progress", value: summary.in_progress, color: "text-amber-600 dark:text-amber-400" },
             { label: "Not Started", value: summary.not_started, color: "text-muted-foreground" },
-            { label: "N/A", value: summary.na, color: "text-muted-foreground" },
+            { label: "N/A",         value: summary.na,          color: "text-muted-foreground" },
           ].map(s => (
             <div key={s.label} className="bg-card border border-border rounded-lg p-3 text-center">
               <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -365,11 +359,10 @@ export default function VeritaPolicyAppPage() {
         </div>
       )}
 
-      {/* Info banner */}
+      {/* Instruction banner */}
       <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-sm text-muted-foreground">
-        For each applicable requirement, enter the name of the policy in your policy manual that addresses it.
-        Click the status badge to cycle through Not Started, In Progress, and Complete.
-        Use N/A for requirements that do not apply to your lab.
+        For each requirement, enter the name of the policy in your manual that addresses it, then mark the status.
+        Click the status badge to cycle: Not Started, In Progress, Complete. Use N/A for requirements that do not apply.
       </div>
 
       {/* Filters */}
@@ -383,33 +376,22 @@ export default function VeritaPolicyAppPage() {
             className="pl-8 h-8 text-sm"
           />
         </div>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8"
-        >
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8">
           <option value="all">All Statuses</option>
           <option value="not_started">Not Started</option>
           <option value="in_progress">In Progress</option>
           <option value="complete">Complete</option>
           <option value="na">N/A</option>
         </select>
-        <select
-          value={filterChapter}
-          onChange={e => setFilterChapter(e.target.value)}
-          className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8"
-        >
+        <select value={filterChapter} onChange={e => setFilterChapter(e.target.value)}
+          className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8">
           <option value="all">All Chapters</option>
-          {chapters.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
+          {chapters.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         {showBothSources && (
-          <select
-            value={filterSource}
-            onChange={e => setFilterSource(e.target.value)}
-            className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8"
-          >
+          <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
+            className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8">
             <option value="all">TJC + CAP</option>
             <option value="tjc">TJC Only</option>
             <option value="cap">CAP Only</option>
@@ -427,28 +409,26 @@ export default function VeritaPolicyAppPage() {
                 <th className="text-left px-3 py-2 font-semibold text-foreground">Requirement</th>
                 <th className="text-left px-3 py-2 font-semibold text-foreground min-w-[200px]">Our Policy Name</th>
                 <th className="text-left px-3 py-2 font-semibold text-foreground w-28">Status</th>
-                <th className="text-left px-3 py-2 font-semibold text-foreground w-16">N/A</th>
+                <th className="text-left px-3 py-2 font-semibold text-foreground w-14">N/A</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
-                    No requirements match your filters.
-                  </td>
-                </tr>
+              {loading && (
+                <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Loading...</td></tr>
               )}
-              {filtered.map((req, i) => {
+              {!loading && filtered.length === 0 && (
+                <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">No requirements match your filters.</td></tr>
+              )}
+              {!loading && filtered.map((req, i) => {
                 const isExpanded = expandedRows.has(req.id);
                 const isNa = req.is_na;
                 const statusCfg = STATUS_CONFIG[isNa ? "na" : req.status] || STATUS_CONFIG.not_started;
                 const policyVal = editingPolicyName[req.id] ?? req.policy_name ?? "";
 
                 return (
-                  <tr
-                    key={req.id}
-                    className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${isNa ? "opacity-50" : ""}`}
-                  >
+                  <tr key={req.id}
+                    className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${isNa ? "opacity-50" : ""}`}>
+
                     {/* Chapter */}
                     <td className="px-3 py-2 align-top">
                       <div className="flex flex-col gap-1">
@@ -459,25 +439,23 @@ export default function VeritaPolicyAppPage() {
                       </div>
                     </td>
 
-                    {/* Requirement name + expand */}
+                    {/* Requirement name */}
                     <td className="px-3 py-2 align-top">
-                      <button
-                        className="text-left w-full"
+                      <button className="text-left w-full"
                         onClick={() => setExpandedRows(prev => {
                           const next = new Set(prev);
                           next.has(req.id) ? next.delete(req.id) : next.add(req.id);
                           return next;
-                        })}
-                      >
+                        })}>
                         <div className="flex items-start gap-1">
-                          <span className={`text-foreground ${isNa ? "line-through text-muted-foreground" : ""} text-left`}>
-                            {req.name}
-                          </span>
-                          {isExpanded ? <ChevronUp size={12} className="shrink-0 mt-1 text-muted-foreground" /> : <ChevronDown size={12} className="shrink-0 mt-1 text-muted-foreground" />}
+                          <span className={`text-foreground ${isNa ? "line-through text-muted-foreground" : ""}`}>{req.name}</span>
+                          {req.description && (
+                            isExpanded
+                              ? <ChevronUp size={12} className="shrink-0 mt-1 text-muted-foreground" />
+                              : <ChevronRight size={12} className="shrink-0 mt-1 text-muted-foreground" />
+                          )}
                         </div>
-                        {req.standard && (
-                          <div className="text-xs text-muted-foreground mt-0.5">{req.standard}</div>
-                        )}
+                        {req.standard && <div className="text-xs text-muted-foreground mt-0.5">{req.standard}</div>}
                         {isExpanded && req.description && (
                           <div className="text-xs text-muted-foreground mt-2 leading-relaxed border-l-2 border-primary/30 pl-2">
                             {req.description}
@@ -486,7 +464,7 @@ export default function VeritaPolicyAppPage() {
                       </button>
                     </td>
 
-                    {/* Policy name input */}
+                    {/* Policy name */}
                     <td className="px-3 py-2 align-top">
                       <Input
                         value={policyVal}
@@ -501,22 +479,17 @@ export default function VeritaPolicyAppPage() {
                             setEditingPolicyName(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                           }
                         }}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") {
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
+                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                       />
                     </td>
 
-                    {/* Status badge -- click to cycle */}
+                    {/* Status */}
                     <td className="px-3 py-2 align-top">
                       <button
                         disabled={req.auto_na || isReadOnly}
                         onClick={() => cycleStatus(req)}
-                        title={req.auto_na ? "Auto N/A from service line settings" : "Click to change status"}
-                        className={`px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${statusCfg.color} ${req.auto_na || isReadOnly ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}
-                      >
+                        title={req.auto_na ? "Auto N/A from lab settings" : "Click to change status"}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${statusCfg.color} ${req.auto_na || isReadOnly ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}>
                         {req.auto_na ? "N/A (Auto)" : statusCfg.label}
                       </button>
                     </td>
@@ -528,8 +501,7 @@ export default function VeritaPolicyAppPage() {
                           disabled={isReadOnly}
                           onClick={() => updateRequirement(req, { is_na: !isNa, status: isNa ? "not_started" : req.status })}
                           title={isNa ? "Mark as applicable" : "Mark as N/A"}
-                          className={`text-xs px-1.5 py-1 rounded border transition-colors ${isNa ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}
-                        >
+                          className={`text-xs px-1.5 py-1 rounded border transition-colors ${isNa ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
                           N/A
                         </button>
                       )}
@@ -546,15 +518,14 @@ export default function VeritaPolicyAppPage() {
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-2">
           <h2 className="text-base font-semibold text-foreground">Policy Library</h2>
-          <Badge variant="outline" className="text-xs gap-1">
-            <Clock size={10} /> Coming Soon
-          </Badge>
+          <Badge variant="outline" className="text-xs gap-1"><Clock size={10} /> Coming Soon</Badge>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Upload your policy documents, track review dates, manage approval workflows, and give staff read-only access to current approved policies.
+          Upload policy documents, track review dates, manage approval workflows, and give staff read-only access to current approved policies.
           Policy library management is coming in a future update.
         </p>
       </div>
+
     </div>
   );
 }
