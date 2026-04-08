@@ -620,6 +620,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
       ).get(email.toLowerCase()) as any;
     }
+    // Also check if user is already an active seat (e.g. manually attached via admin)
+    let activeSeat: any = null;
+    if (!seatInvite) {
+      activeSeat = (db as any).$client.prepare(
+        "SELECT id, owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+      ).get(user.id) as any;
+      if (!activeSeat) {
+        activeSeat = (db as any).$client.prepare(
+          "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'active' LIMIT 1"
+        ).get(email.toLowerCase()) as any;
+      }
+    }
     let isSeatUser = false;
     let ownerPlan = selectedPlan;
     if (seatInvite) {
@@ -631,6 +643,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
       // Mark seat user's onboarding as completed so they skip the wizard
+      try {
+        (db as any).$client.prepare("UPDATE users SET has_completed_onboarding = 1 WHERE id = ?").run(user.id);
+      } catch {}
+    } else if (activeSeat) {
+      // User is already an active seat (e.g. manually attached via admin endpoint)
+      isSeatUser = true;
+      const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(activeSeat.owner_user_id) as any;
+      ownerPlan = ownerRow?.plan || selectedPlan;
+      // Ensure seat_user_id is linked and onboarding skipped
+      (db as any).$client.prepare(
+        "UPDATE user_seats SET seat_user_id = ? WHERE id = ?"
+      ).run(user.id, activeSeat.id);
       try {
         (db as any).$client.prepare("UPDATE users SET has_completed_onboarding = 1 WHERE id = ?").run(user.id);
       } catch {}
