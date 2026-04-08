@@ -994,9 +994,11 @@ export default function VeritaMapBuildPage() {
     ? manualInstrumentName.trim()
     : isOtherDepartment
       ? customInstrument.trim()
-      : isOtherInstrument
+      : isOtherVendor
         ? customInstrument.trim()
-        : instrumentName;
+        : isOtherInstrument
+          ? customInstrument.trim()
+          : instrumentName;
 
   const effectiveCategory = isOtherDepartment
     ? customDepartment.trim()
