@@ -1,0 +1,36 @@
+#!/bin/bash
+# VeritaAssure Commit Message Hook
+# Enforces the mandatory self-check framework on every substantive commit.
+# To bypass in a genuine emergency: git commit --no-verify
+# (document the reason in the commit message)
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip enforcement for automated/chore commits
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -1)
+if echo "$FIRST_LINE" | grep -qE "^(chore|ci|bump|merge|revert|wip):"; then
+  exit 0
+fi
+
+# Require "Self-check:" as a labeled section in the commit message
+# Must appear as "Self-check:" at the start of a line (case-insensitive)
+if ! echo "$COMMIT_MSG" | grep -qiE "^Self-check:"; then
+  echo ""
+  echo "🚫 COMMIT BLOCKED: Missing self-check in commit message."
+  echo ""
+  echo "Every substantive commit must document a self-check."
+  echo "Add the following block to your commit message:"
+  echo ""
+  echo "  Self-check:"
+  echo "  - Potential error 1: [what could go wrong]"
+  echo "  - Potential error 2: [what could go wrong]"
+  echo "  - Potential error 3: [what could go wrong]"
+  echo "  - Verified: [what you checked to confirm correctness]"
+  echo ""
+  echo "To bypass in a genuine emergency: git commit --no-verify"
+  echo "(Document why in the commit message.)"
+  exit 1
+fi
+
+exit 0
