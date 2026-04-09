@@ -393,7 +393,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         seat_link.owner_user_id as seat_owner_id,
         owner.name as seat_owner_name,
         owner.email as seat_owner_email,
-        owner.clia_lab_name as seat_owner_lab_name
+        owner.clia_lab_name as seat_owner_lab_name,
+        owner.clia_number as seat_owner_clia_number
       FROM users u
       LEFT JOIN (
         SELECT

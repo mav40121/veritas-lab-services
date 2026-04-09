@@ -31,6 +31,7 @@ interface UserRecord {
   seat_owner_name: string | null;
   seat_owner_email: string | null;
   seat_owner_lab_name: string | null;
+  seat_owner_clia_number: string | null;
 }
 
 interface ReportData {
@@ -473,7 +474,10 @@ export default function AdminReportPage() {
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {u.clia_number || <span className="text-muted-foreground">Not on file</span>}
+                    {u.seat_owner_id
+                      ? (u.seat_owner_clia_number || <span className="text-muted-foreground">Not on file</span>)
+                      : (u.clia_number || <span className="text-muted-foreground">Not on file</span>)
+                    }
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u.clia_director || u.name || ""}
