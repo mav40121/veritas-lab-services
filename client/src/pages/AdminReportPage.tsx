@@ -212,6 +212,25 @@ export default function AdminReportPage() {
     return sorted;
   }, [data, search, planFilter, statusFilter, sortKey, sortDir]);
 
+  // Group: owners first, then their seats nested underneath
+  // Seat users are excluded from the top-level list and appended after their owner
+  const grouped = useMemo(() => {
+    const owners = filtered.filter(u => !u.seat_owner_id);
+    const seats  = filtered.filter(u =>  u.seat_owner_id);
+    const result: (UserRecord & { _isSeat?: boolean })[] = [];
+    for (const owner of owners) {
+      result.push(owner);
+      const ownerSeats = seats.filter(s => s.seat_owner_id === owner.id);
+      for (const seat of ownerSeats) {
+        result.push({ ...seat, _isSeat: true });
+      }
+    }
+    // Any seat whose owner isn't in the filtered list (e.g. filtered out)
+    const orphanSeats = seats.filter(s => !owners.find(o => o.id === s.seat_owner_id));
+    for (const seat of orphanSeats) result.push({ ...seat, _isSeat: true });
+    return result;
+  }, [filtered]);
+
   // Summary stats
   const totalAccounts = filtered.length;
   const activePaid = filtered.filter(
@@ -457,19 +476,24 @@ export default function AdminReportPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u, i) => (
+              {grouped.map((u, i) => (
                 <tr
                   key={u.id}
-                  className={`text-foreground ${i % 2 === 0 ? "bg-background" : "bg-muted/30"}`}
+                  className={`text-foreground ${
+                    u._isSeat
+                      ? "bg-blue-50/40 dark:bg-blue-950/20 border-l-4 border-l-blue-400"
+                      : i % 2 === 0 ? "bg-background" : "bg-muted/30"
+                  }`}
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
+                    {u._isSeat && <span className="inline-block w-4" />}
                     {u.seat_owner_id
-                      ? (u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
+                      ? (u.clia_lab_name || u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
                       : (u.clia_lab_name || <span className="text-muted-foreground">Not set</span>)
                     }
-                    {u.seat_owner_id && (
-                      <div className="text-xs text-blue-600 mt-0.5">
-                        Seat of: {u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email}
+                    {u._isSeat && (
+                      <div className="text-xs text-blue-500 mt-0.5 ml-4">
+                        Seat under: {u.seat_owner_lab_name || u.seat_owner_name}
                       </div>
                     )}
                   </td>
@@ -521,7 +545,7 @@ export default function AdminReportPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {grouped.length === 0 && (
                 <tr>
                   <td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">
                     No users found
