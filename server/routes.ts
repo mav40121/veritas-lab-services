@@ -3,6 +3,8 @@ import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
@@ -6583,10 +6585,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const body = settings?.accreditation_body || 'tjc';
     const reqSets: any[] = [];
     if (body === 'tjc' || body === 'both') {
-      reqSets.push(...(TJC_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+      reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
     }
     if (body === 'cap' || body === 'both') {
-      reqSets.push(...(CAP_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+      reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
     }
 
     // Build response
@@ -6724,8 +6726,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (const s of statuses) statusMap[s.requirement_id] = s;
     const bodySum = settings?.accreditation_body || 'tjc';
     const summaryReqs: any[] = [];
-    if (bodySum === 'tjc' || bodySum === 'both') summaryReqs.push(...(TJC_REQUIREMENTS as any[]));
-    if (bodySum === 'cap' || bodySum === 'both') summaryReqs.push(...(CAP_REQUIREMENTS as any[]));
+    if (bodySum === 'tjc' || bodySum === 'both') summaryReqs.push(...(TJC_REQUIREMENTS as unknown as any[]));
+    if (bodySum === 'cap' || bodySum === 'both') summaryReqs.push(...(CAP_REQUIREMENTS as unknown as any[]));
     let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
     for (const req of summaryReqs) {
       let autoNa = false;
@@ -6763,8 +6765,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Build full requirement list with status/policy_name overlaid
       const body = settings?.accreditation_body || 'tjc';
       const allReqs: any[] = [];
-      if (body === 'tjc' || body === 'both') allReqs.push(...(TJC_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
-      if (body === 'cap' || body === 'both') allReqs.push(...(CAP_REQUIREMENTS as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+      if (body === 'tjc' || body === 'both') allReqs.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+      if (body === 'cap' || body === 'both') allReqs.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
         let autoNa = false;

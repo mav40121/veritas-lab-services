@@ -12804,7 +12804,8 @@
         "specialty": "Electrolytes",
         "complexity": "MODERATE"
       }
-    }
+    },
+    "testCount": 14
   },
   "Instrumentation Laboratory GEM Premier 5000": {
     "vendor": "Werfen / Instrumentation Laboratory",
@@ -12886,7 +12887,8 @@
         "specialty": "General Chemistry",
         "complexity": "MODERATE"
       }
-    }
+    },
+    "testCount": 19
   },
   "Siemens Atellica CH 930": {
     "vendor": "Siemens Healthineers",

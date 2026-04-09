@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/lib/useIsReadOnly";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight } from "lucide-react";
-import { API_BASE, authHeaders } from "@/lib/auth";
+import { API_BASE } from "@/lib/queryClient";
+import { authHeaders } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PolicySettings {

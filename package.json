@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "prepare": "husky"
+    "prepare": "node -e \"if(process.env.CI || !require('fs').existsSync('.git')){process.exit(0)}else{require('child_process').execSync('husky',{stdio:'inherit'})}\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

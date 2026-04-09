@@ -80,7 +80,7 @@ interface TestToggle {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const INSTRUMENT_DATA = fdaData as Record<string, FDAInstrument>;
+const INSTRUMENT_DATA = fdaData as unknown as Record<string, FDAInstrument>;
 
 const CATEGORY_ORDER = [
   "Chemistry",
