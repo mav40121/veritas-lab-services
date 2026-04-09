@@ -164,12 +164,78 @@ def check_file(rel, fpath):
                 WARNINGS.append(f"[{rel}] Director signature block found in VeritaScan PDF context -- VeritaScan is internal use only")
 
 
+# ── KNOWN SEAT RELATIONSHIPS ─────────────────────────────────────────────────
+# These must always be intact on the live site. If any are missing the audit
+# fails so broken seat links are caught before the user notices.
+KNOWN_SEATS = [
+    # (owner_email, seat_email, description)
+    ("john.hall@scahealth.org",  "gaynoll.arthurs@scahealth.org", "Gaynoll under San Carlos / John Hall"),
+    ("verilabguy@gmail.com",     "lisa.j.veri@gmail.com",         "Lisa Veri under Michael Veri's lab"),
+]
+
+def check_live_seats():
+    """Hit the live admin API to verify known seat relationships are intact."""
+    import urllib.request
+    import json
+
+    url = "https://www.veritaslabservices.com/api/admin/users"
+    payload = json.dumps({"secret": "veritas-admin-2026"}).encode()
+    try:
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            users = json.loads(resp.read())
+    except Exception as e:
+        WARNINGS.append(f"[live-seats] Could not reach admin API to verify seats: {e}")
+        return
+
+    email_to_id = {u["email"]: u["id"] for u in users}
+
+    # Fetch seat records
+    seat_url = "https://www.veritaslabservices.com/api/admin/seats"
+    try:
+        req2 = urllib.request.Request(seat_url, data=payload,
+                                      headers={"Content-Type": "application/json"},
+                                      method="POST")
+        with urllib.request.urlopen(req2, timeout=10) as resp2:
+            seats = json.loads(resp2.read())
+    except Exception:
+        # Seat endpoint may not exist -- fall back to checking via user records
+        seats = None
+
+    for owner_email, seat_email, desc in KNOWN_SEATS:
+        owner_id = email_to_id.get(owner_email)
+        seat_id  = email_to_id.get(seat_email)
+        if not owner_id:
+            ERRORS.append(f"[live-seats] Owner account not found: {owner_email} ({desc})")
+            continue
+        if not seat_id:
+            ERRORS.append(f"[live-seats] Seat account not found: {seat_email} ({desc})")
+            continue
+        if seats is not None:
+            # Check seat record exists and is active
+            match = [s for s in seats
+                     if s.get("owner_user_id") == owner_id
+                     and s.get("seat_email") == seat_email
+                     and s.get("status") == "active"]
+            if not match:
+                ERRORS.append(f"[live-seats] SEAT BROKEN: {desc} -- {seat_email} not active under {owner_email}")
+                ERRORS.append(f"  Fix: POST /api/admin/attach-seat ownerUserId={owner_id} seatEmail={seat_email} seatUserId={seat_id}")
+        else:
+            WARNINGS.append(f"[live-seats] Could not verify seat record for {desc} (admin/seats endpoint unavailable)")
+
+
 def main():
     files = collect_files()
     print(f"Scanning {len(files)} files from {ROOT}\n")
 
     for rel, fpath in files:
         check_file(rel, fpath)
+
+    # Live seat integrity check
+    print("Checking live seat relationships...")
+    check_live_seats()
 
     print("=" * 60)
 

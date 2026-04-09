@@ -469,6 +469,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, user: { id: row?.id, email: row?.email, name: row?.name, seatCount: row?.seat_count } });
   });
 
+  // Admin: list all seat records (used by audit script to verify seat integrity)
+  app.post("/api/admin/seats", (req, res) => {
+    const { secret } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const seats = (db as any).$client.prepare("SELECT * FROM user_seats").all();
+    res.json(seats);
+  });
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
