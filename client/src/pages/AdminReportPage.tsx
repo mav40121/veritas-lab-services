@@ -462,7 +462,10 @@ export default function AdminReportPage() {
                   className={`text-foreground ${i % 2 === 0 ? "bg-background" : "bg-muted/30"}`}
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {u.clia_lab_name || <span className="text-muted-foreground">Not set</span>}
+                    {u.seat_owner_id
+                      ? (u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
+                      : (u.clia_lab_name || <span className="text-muted-foreground">Not set</span>)
+                    }
                     {u.seat_owner_id && (
                       <div className="text-xs text-blue-600 mt-0.5">
                         Seat of: {u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email}
