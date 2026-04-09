@@ -26067,5 +26067,60 @@
         "specialty": "Immunohematology"
       }
     }
+  },
+  "Siemens CLINITEK Advantus": {
+    "vendor": "Siemens",
+    "category": "Urinalysis",
+    "testCount": 12,
+    "tests": {
+      "Leukocyte esterase, urinary": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Nitrite, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Protein, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Blood, urine (hemoglobin)": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Glucose, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Ketone, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Bilirubin, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Urobilinogen, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "pH, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Specific gravity, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Creatinine, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      },
+      "Protein-to-Creatinine ratio, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Urinalysis"
+      }
+    }
   }
 }
