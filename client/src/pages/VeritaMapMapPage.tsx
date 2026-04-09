@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Complexity = "MODERATE" | "HIGH" | "WAIVED";
-type Role = "Primary" | "Backup" | "Satellite" | "POC";
+type Role = "Primary" | "Backup" | "Satellite" | "POC" | "Reference";
 
 interface InstrumentOnTest {
   instrument_name: string;
@@ -915,7 +915,7 @@ export default function VeritaMapMapPage() {
   }
 
   // Fetch intelligence data
-  const { data: intelligenceRaw } = useQuery<IntelligenceData>({
+  const { data: intelligenceRaw } = useQuery<IntelligenceData | null>({
     queryKey: [`/api/veritamap/maps/${mapId}/intelligence`],
     enabled: !!mapId,
     staleTime: 0,

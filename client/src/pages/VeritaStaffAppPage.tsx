@@ -250,7 +250,7 @@ export default function VeritaStaffAppPage() {
         <div className="grid gap-3">
           {employees.map((emp) => {
             const compStatus = getCompetencyStatus(emp.competencySchedule);
-            const roleNames = [...new Set(emp.roles.map((r) => r.role))];
+            const roleNames = Array.from(new Set(emp.roles.map((r) => r.role)));
             return (
               <Card key={emp.id} className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(`/veritastaff-app/${emp.id}`)}>
                 <CardContent className="py-4 px-5">
@@ -284,14 +284,14 @@ export default function VeritaStaffAppPage() {
       )}
 
       {/* Lab Setup Dialog */}
-      <LabSetupDialog open={showLabSetup} onOpenChange={setShowLabSetup} lab={lab} />
+      <LabSetupDialog open={showLabSetup} onOpenChange={setShowLabSetup} lab={lab ?? null} />
 
       {/* Add/Edit Employee Dialog */}
       <EmployeeDialog
         open={showAddEmployee || !!editingEmployee}
         onOpenChange={(open) => { if (!open) { setShowAddEmployee(false); setEditingEmployee(null); } }}
         employee={editingEmployee}
-        lab={lab}
+        lab={lab ?? null}
       />
 
       {/* Competency Dialog */}
@@ -543,7 +543,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
   }
 
   function addSpecialty(role: string, specNum: number) {
-    if (roles.some((r) => r.role === role && r.specialty_number === specNum)) return;
+    if (roles.some((r) => r.role === role && r.specialtyNumber === specNum)) return;
     setRoles([...roles, { role, specialtyNumber: specNum }]);
   }
 
@@ -840,7 +840,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
   const readOnly = useIsReadOnly('veritastaff');
   const [showCompetency, setShowCompetency] = useState(false);
 
-  const roleNames = [...new Set(employee.roles.map((r) => r.role))];
+  const roleNames = Array.from(new Set(employee.roles.map((r) => r.role)));
   const tcSpecs = employee.roles.filter((r) => r.role === "TC" && r.specialty_number);
   const tsSpecs = employee.roles.filter((r) => r.role === "TS" && r.specialty_number);
   const compStatus = getCompetencyStatus(employee.competencySchedule);

@@ -180,7 +180,7 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       for (const { getNew, getOld, tea } of analytes) {
         const valid = specimens.filter((s: any) => getNew(s) != null && getOld(s) != null);
         if (valid.length === 0) continue;
-        const pctDiffs = valid.map((s: any) => ((getNew(s) - getOld(s)) / getOld(s)) * 100);
+        const pctDiffs = valid.map((s: any) => ((getNew(s)! - getOld(s)!) / getOld(s)!) * 100);
         const meanPctDiff = meanFn(pctDiffs);
         if (Math.abs(meanPctDiff) > tea * 100) return "fail";
       }
@@ -343,7 +343,7 @@ function storePdfToken(buffer: Buffer, filename: string): string {
   const token = crypto.randomUUID();
   pdfTokenStore.set(token, { buffer, filename, expires: Date.now() + 60_000 });
   // Prune expired entries
-  for (const [k, v] of pdfTokenStore) { if (v.expires < Date.now()) pdfTokenStore.delete(k); }
+  for (const [k, v] of Array.from(pdfTokenStore)) { if (v.expires < Date.now()) pdfTokenStore.delete(k); }
   return token;
 }
 

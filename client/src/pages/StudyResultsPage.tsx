@@ -395,7 +395,7 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
               ? <CheckCircle2 size={16} className="text-green-400" />
               : <XCircle size={16} className="text-red-400" />}
             <span className={`text-sm font-semibold ${results.overallPass ? "text-green-400" : "text-red-400"}`}>
-              Overall: {results.overallPass ? "PASS" : "FAIL"}, {results.passCount}/{results.totalCount} {isPrecision(results) ? "levels within allowable CV" : "results within TEa"}
+              Overall: {results.overallPass ? "PASS" : "FAIL"}{(results as any).passCount != null ? `, ${(results as any).passCount}/${(results as any).totalCount} ${isPrecision(results) ? "levels within allowable CV" : "results within TEa"}` : ""}
             </span>
           </div>
         </div>
@@ -1371,7 +1371,7 @@ export default function StudyResults() {
   }
 
   // PT/Coag is now unlocked
-  if (false && study.studyType === "pt_coag") {
+  if (false && study?.studyType === "pt_coag") {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center">
         <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 px-3 py-1 text-sm font-semibold mb-4">Coming Soon</Badge>

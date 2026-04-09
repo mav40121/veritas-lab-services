@@ -236,9 +236,10 @@ function pdfEvalSection(doc: jsPDF, results: StudyResults, study: Study, y: numb
   doc.roundedRect(margin, y-4, contentW, 10, 2, 2, "F");
   doc.setFontSize(9); doc.setFont("helvetica","bold"); setRgb(doc, WHITE);
   const cliaP = (study.cliaAllowableError*100).toFixed(1);
+  const r = results as any;
   const verdict = results.overallPass
-    ? `PASS: ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`
-    : `FAIL: ${results.passCount}/${results.totalCount} results within TEa of ±${cliaP}%`;
+    ? `PASS: ${r.passCount != null ? `${r.passCount}/${r.totalCount} results within TEa of ±${cliaP}%` : "Criteria met"}`
+    : `FAIL: ${r.passCount != null ? `${r.passCount}/${r.totalCount} results exceeded TEa of ±${cliaP}%` : "Criteria not met"}`;
   doc.text(verdict, pw/2, y+2, { align: "center" });
   y += 16;
   return y;
@@ -666,9 +667,9 @@ export async function generatePDF(study: Study, results: StudyResults) {
   const doc = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
 
   if (results.type === "cal_ver") {
-    generateCalVerPDF(doc, study, results);
-  } else {
-    generateMethodCompPDF(doc, study, results);
+    generateCalVerPDF(doc, study, results as CalVerResults);
+  } else if (results.type === "method_comparison") {
+    generateMethodCompPDF(doc, study, results as MethodCompResults);
   }
 
   const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g,"_")}_${study.date}.pdf`;

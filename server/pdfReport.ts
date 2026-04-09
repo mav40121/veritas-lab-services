@@ -2081,7 +2081,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
 
   // Domain detail sections - natural flow, no forced page breaks
   let domainSections = "";
-  for (const [domain, domItems] of domainMap.entries()) {
+  for (const [domain, domItems] of Array.from(domainMap.entries())) {
     const rows = domItems.map((item, idx) => {
       const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
       return `<tr class="${idx % 2 === 1 ? "stripe" : ""}" style="page-break-inside:avoid">
@@ -2694,7 +2694,7 @@ function buildCMS209HTML(input: CMS209Input): string {
 
     if (tcSpecs.length > 0 || tsSpecs.length > 0) {
       // Combine: for each specialty, show which role(s) apply
-      const allSpecs = new Set([...tcSpecs, ...tsSpecs]);
+      const allSpecs = Array.from(new Set([...tcSpecs, ...tsSpecs]));
       for (const spec of allSpecs) {
         specRows.push({
           tc: tcSpecs.includes(spec) ? String(spec) : "",
