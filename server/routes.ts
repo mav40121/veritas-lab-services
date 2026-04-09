@@ -389,7 +389,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       SELECT
         u.*,
         COALESCE(s.active_seats, 0) as active_seats,
-        COALESCE(s.pending_seats, 0) as pending_seats
+        COALESCE(s.pending_seats, 0) as pending_seats,
+        seat_link.owner_user_id as seat_owner_id,
+        owner.name as seat_owner_name,
+        owner.email as seat_owner_email,
+        owner.clia_lab_name as seat_owner_lab_name
       FROM users u
       LEFT JOIN (
         SELECT
@@ -399,6 +403,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         FROM user_seats
         GROUP BY owner_user_id
       ) s ON s.owner_user_id = u.id
+      LEFT JOIN user_seats seat_link ON seat_link.seat_user_id = u.id AND seat_link.status = 'active'
+      LEFT JOIN users owner ON owner.id = seat_link.owner_user_id
     `;
 
     const conditions: string[] = [];
