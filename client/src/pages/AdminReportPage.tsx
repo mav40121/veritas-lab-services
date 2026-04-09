@@ -487,10 +487,23 @@ export default function AdminReportPage() {
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u._isSeat && <span className="inline-block w-4" />}
-                    {u.seat_owner_id
-                      ? (u.clia_lab_name || u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
-                      : (u.clia_lab_name || <span className="text-muted-foreground">Not set</span>)
-                    }
+                    <span className="font-medium">
+                      {u.seat_owner_id
+                        ? (u.clia_lab_name || u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
+                        : (u.clia_lab_name || <span className="text-muted-foreground font-normal">Not set</span>)
+                      }
+                    </span>
+                    {!u._isSeat && u.seat_count > 0 && (
+                      <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        u.active_seats >= u.seat_count
+                          ? "bg-red-100 text-red-700"
+                          : u.active_seats > 0
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        {u.active_seats} of {u.seat_count} seats used
+                      </span>
+                    )}
                     {u._isSeat && (
                       <div className="text-xs text-blue-500 mt-0.5 ml-4">
                         Seat under: {u.seat_owner_lab_name || u.seat_owner_name}
