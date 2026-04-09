@@ -484,18 +484,24 @@ export default function AdminReportPage() {
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{u.email}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    <select
-                      value={u.plan || "free"}
-                      disabled={setPlanLoading === u.id}
-                      onChange={e => handleSetPlan(u.id, e.target.value)}
-                      className="text-xs border rounded px-1.5 py-1 bg-background cursor-pointer"
-                      title={u.planDisplayName}
-                    >
-                      {PLAN_OPTIONS.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                    {setPlanLoading === u.id && <span className="ml-1 text-xs text-muted-foreground">Saving...</span>}
+                    {u.seat_owner_id ? (
+                      <span className="text-xs font-medium text-blue-500">Seat</span>
+                    ) : (
+                      <>
+                        <select
+                          value={u.plan || "free"}
+                          disabled={setPlanLoading === u.id}
+                          onChange={e => handleSetPlan(u.id, e.target.value)}
+                          className="text-xs border rounded px-1.5 py-1 bg-background cursor-pointer"
+                          title={u.planDisplayName}
+                        >
+                          {PLAN_OPTIONS.map(p => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                        {setPlanLoading === u.id && <span className="ml-1 text-xs text-muted-foreground">Saving...</span>}
+                      </>
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <StatusBadge status={u.subscription_status} />
