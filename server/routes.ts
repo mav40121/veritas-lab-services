@@ -659,9 +659,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Get owner's plan so seat user inherits it
       const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
-      // Write owner's plan into seat user's DB record so server-side checks work
+      // Write owner's plan into seat user's DB record AND in-memory store
       try {
         (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1 WHERE id = ?").run(ownerPlan, user.id);
+        storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     } else if (activeSeat) {
       // User is already an active seat (e.g. manually attached via admin endpoint)
@@ -674,6 +675,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).run(user.id, activeSeat.id);
       try {
         (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1 WHERE id = ?").run(ownerPlan, user.id);
+        storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     }
 
