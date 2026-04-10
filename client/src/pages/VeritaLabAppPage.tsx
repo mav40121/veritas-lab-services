@@ -116,7 +116,7 @@ export default function VeritaLabAppPage() {
   const [docLoading, setDocLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   async function loadCertificates() {
     try {

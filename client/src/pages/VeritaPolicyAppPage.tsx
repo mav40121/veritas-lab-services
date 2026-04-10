@@ -93,7 +93,7 @@ export default function VeritaPolicyAppPage() {
   const isReadOnly = useIsReadOnly();
   const { toast } = useToast();
 
-  const hasPlanAccess = !!user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital"].includes(user.plan);
+  const hasPlanAccess = !!user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   const [settings, setSettings] = useState<PolicySettings>(DEFAULT_SETTINGS);
   const [summary, setSummary] = useState<Summary | null>(null);
