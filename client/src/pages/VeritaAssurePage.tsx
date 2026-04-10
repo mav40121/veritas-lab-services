@@ -252,7 +252,7 @@ export default function VeritaAssurePage() {
           </div>
           <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
             Plan tier is suggested at signup based on your licensed bed count. Seats are included per plan.
-            All plans include a 14-day trial period. BAA available for covered entities.
+            Cancel anytime. CLIA number required at checkout.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {PRICING.map(({ tier, price, note }) => (

@@ -75,7 +75,7 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What plans are available?",
-        a: "VeritaAssure\u2122 offers plans based on your lab's size and needs. Per Study ($25 one-time, VeritaCheck\u2122 only), VeritaCheck\u2122 Unlimited ($299/yr, single user), Waived/Clinic ($499/yr, small labs, 2 seats), Community ($799/yr, 5 seats), Hospital ($1,299/yr, 15 seats), and Large Hospital ($1,999/yr, 25 seats). Certificate of Waiver labs are always placed in the lowest tier. Additional seats are available at volume pricing.",
+        a: "VeritaAssure\u2122 offers plans based on your lab's size and needs. Per Study ($25 one-time, VeritaCheck\u2122 only), VeritaCheck\u2122 Unlimited ($299/yr, single user), Clinic ($499/yr, small labs and Certificate of Waiver, 2 seats), Community ($799/yr, 1-8 specialties, 5 seats), Hospital ($1,299/yr, 9-15 specialties, 15 seats), and Large Hospital ($1,999/yr, 16+ specialties, 25 seats). Certificate of Waiver labs are always placed in the lowest tier. Additional seats are available at volume pricing.",
       },
       {
         q: "How is my plan tier determined?",

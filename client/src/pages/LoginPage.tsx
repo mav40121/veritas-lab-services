@@ -424,7 +424,7 @@ export default function LoginPage() {
                   <div className="space-y-3">
                     <div className="text-center mb-1">
                       <p className="text-sm font-medium">Step 2: Choose your plan</p>
-                      <p className="text-xs text-muted-foreground">All plans include a 14-day trial period</p>
+                      <p className="text-xs text-muted-foreground">Cancel anytime. CLIA number required at checkout.</p>
                     </div>
                     <div className="space-y-2">
                       {TIER_OPTIONS.map(t => (
