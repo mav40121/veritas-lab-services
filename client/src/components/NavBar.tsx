@@ -9,16 +9,11 @@ import { cn } from "@/lib/utils";
 
 // Products dropdown items
 const productLinks = [
-  { href: "/veritaassure", label: "VeritaAssure\u2122 Suite", desc: "All modules overview", highlight: false, badge: null, badgeColor: null },
-  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "EP Study Analysis", highlight: true, badge: "Live", badgeColor: "emerald" },
-  { href: "/veritascan", label: "VeritaScan™", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritamap", label: "VeritaMap™", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritacomp", label: "VeritaComp™", desc: "Competency Management", badge: "In Progress" },
-  { href: "/veritastaff", label: "VeritaStaff™", desc: "Personnel Management", badge: "In Progress" },
-  { href: "/veritapt", label: "VeritaPT™", desc: "PT Tracking", badge: "New", badgeColor: "emerald" },
-  { href: "/veritalab", label: "VeritaLab™", desc: "Certificate Tracking", badge: "New", badgeColor: "emerald" },
-  { href: "/veritapolicy", label: "VeritaPolicy™", desc: "Policy Compliance Tracker", badge: "New", badgeColor: "emerald" },
-  { href: "/book", label: "Lab Management 101", desc: "New Book", badge: "Coming Soon" },
+  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Validation", badge: "Live", badgeColor: "emerald" },
+  { href: "/veritascan", label: "VeritaScan\u2122", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
+  { href: "/veritamap", label: "VeritaMap\u2122", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
+  { href: "/veritatrack-app", label: "VeritaTrack\u2122", desc: "Regulatory Calendar", badge: "New", badgeColor: "emerald" },
+  { href: "/veritaassure", label: "All modules", desc: "View the full suite", highlight: false, badge: null, badgeColor: null },
 ];
 
 const allMobileLinks = [
@@ -36,6 +31,7 @@ const allMobileLinks = [
   { href: "/veritapt", label: "VeritaPT™" },
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/veritapolicy", label: "VeritaPolicy™" },
+  { href: "/veritatrack-app", label: "VeritaTrack™" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Resources" },
