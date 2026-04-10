@@ -72,8 +72,19 @@ const FREQUENCIES = [
   { label: "Biennial",  value: "Biennial",  months: 24 },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function statusColor(status: Task["status"]): string {
+// ── Status helpers ────────────────────────────────────────────────────────────
+const STATUS_ORDER: Record<Task["status"], number> = {
+  overdue: 0, due_soon: 1, not_started: 2, current: 3,
+};
+
+function worstStatus(tasks: Task[]): Task["status"] {
+  if (tasks.some(t => t.status === "overdue"))     return "overdue";
+  if (tasks.some(t => t.status === "due_soon"))    return "due_soon";
+  if (tasks.some(t => t.status === "not_started")) return "not_started";
+  return "current";
+}
+
+function statusBg(status: Task["status"]): string {
   switch (status) {
     case "overdue":     return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300";
     case "due_soon":    return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300";
@@ -91,12 +102,12 @@ function statusLabel(status: Task["status"]): string {
   }
 }
 
-function statusIcon(status: Task["status"]) {
+function statusDot(status: Task["status"]): string {
   switch (status) {
-    case "overdue":     return <AlertTriangle size={12} className="text-red-500" />;
-    case "due_soon":    return <Clock size={12} className="text-amber-500" />;
-    case "current":     return <CheckCircle2 size={12} className="text-emerald-500" />;
-    case "not_started": return <Clock size={12} className="text-muted-foreground" />;
+    case "overdue":     return "bg-red-500";
+    case "due_soon":    return "bg-amber-400";
+    case "current":     return "bg-emerald-400";
+    case "not_started": return "bg-muted-foreground/40";
   }
 }
 
@@ -106,12 +117,23 @@ function fmtDate(d?: string | null): string {
   return `${m}/${day}/${y}`;
 }
 
-function daysUntilLabel(next_due?: string | null): string {
+function daysLabel(next_due?: string | null): string {
   if (!next_due) return "";
   const diff = Math.floor((new Date(next_due).getTime() - Date.now()) / 86400000);
-  if (diff < 0) return `${-diff}d overdue`;
+  if (diff < 0)  return `${-diff}d overdue`;
   if (diff === 0) return "Due today";
-  return `${diff}d`;
+  return `in ${diff}d`;
+}
+
+function sortTasks(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const so = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+    if (so !== 0) return so;
+    // Within same status, sort by due date ascending (soonest first)
+    const da = a.next_due ? new Date(a.next_due).getTime() : Infinity;
+    const db = b.next_due ? new Date(b.next_due).getTime() : Infinity;
+    return da - db;
+  });
 }
 
 // ── Sign-off dialog ───────────────────────────────────────────────────────────
@@ -144,8 +166,8 @@ function SignoffDialog({ task, onDone }: { task: Task; onDone: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="h-7 text-xs">
-          <CheckCircle2 size={11} className="mr-1" />
+        <Button size="sm" className="h-6 text-[11px] px-2 shrink-0">
+          <CheckCircle2 size={10} className="mr-1" />
           Sign Off
         </Button>
       </DialogTrigger>
@@ -170,11 +192,7 @@ function SignoffDialog({ task, onDone }: { task: Task; onDone: () => void }) {
             <label className="text-xs text-muted-foreground font-medium block mb-1">Notes</label>
             <Input placeholder="Optional" value={notes} onChange={e => setNotes(e.target.value)} className="h-8 text-sm" />
           </div>
-          <Button
-            className="w-full"
-            disabled={!date || mut.isPending}
-            onClick={() => mut.mutate()}
-          >
+          <Button className="w-full" disabled={!date || mut.isPending} onClick={() => mut.mutate()}>
             {mut.isPending ? "Saving..." : "Save Sign-Off"}
           </Button>
         </div>
@@ -184,14 +202,8 @@ function SignoffDialog({ task, onDone }: { task: Task; onDone: () => void }) {
 }
 
 // ── Task form dialog ──────────────────────────────────────────────────────────
-function TaskFormDialog({
-  trigger,
-  existing,
-  onDone,
-}: {
-  trigger: React.ReactNode;
-  existing?: Task;
-  onDone: () => void;
+function TaskFormDialog({ trigger, existing, onDone }: {
+  trigger: React.ReactNode; existing?: Task; onDone: () => void;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -204,12 +216,9 @@ function TaskFormDialog({
 
   const mut = useMutation({
     mutationFn: async () => {
-      const url = existing
-        ? `${API_BASE}/api/veritatrack/tasks/${existing.id}`
-        : `${API_BASE}/api/veritatrack/tasks`;
-      const method = existing ? "PUT" : "POST";
+      const url = existing ? `${API_BASE}/api/veritatrack/tasks/${existing.id}` : `${API_BASE}/api/veritatrack/tasks`;
       const r = await fetch(url, {
-        method,
+        method: existing ? "PUT" : "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ name, category, instrument: instrument || null, owner: owner || null, frequency, notes: notes || null }),
       });
@@ -254,8 +263,8 @@ function TaskFormDialog({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-muted-foreground font-medium block mb-1">Instrument / Area</label>
-              <Input placeholder="e.g. Vista 1" value={instrument} onChange={e => setInstrument(e.target.value)} className="h-8 text-sm" />
+              <label className="text-xs text-muted-foreground font-medium block mb-1">Instrument / Serial</label>
+              <Input placeholder="e.g. Vista 1 - SN12345" value={instrument} onChange={e => setInstrument(e.target.value)} className="h-8 text-sm" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground font-medium block mb-1">Owner</label>
@@ -284,105 +293,9 @@ function TaskFormDialog({
   );
 }
 
-// ── Calendar view ─────────────────────────────────────────────────────────────
-function CalendarView({ tasks }: { tasks: Task[] }) {
-  const now = new Date();
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-  // Build a map of month -> tasks due that month
-  const byMonth = useMemo(() => {
-    const m: Record<number, Task[]> = {};
-    for (let i = 0; i < 12; i++) m[i] = [];
-    for (const t of tasks) {
-      if (!t.next_due) continue;
-      const d = new Date(t.next_due);
-      if (d.getFullYear() === viewYear) {
-        m[d.getMonth()].push(t);
-      }
-    }
-    return m;
-  }, [tasks, viewYear]);
-
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-4">
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setViewYear(y => y - 1)}>
-          &larr;
-        </Button>
-        <span className="font-semibold text-sm">{viewYear}</span>
-        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setViewYear(y => y + 1)}>
-          &rarr;
-        </Button>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {MONTHS.map((month, idx) => {
-          const monthTasks = byMonth[idx] || [];
-          const isCurrentMonth = idx === now.getMonth() && viewYear === now.getFullYear();
-          const overdueCt = monthTasks.filter(t => t.status === "overdue").length;
-          const dueSoonCt = monthTasks.filter(t => t.status === "due_soon").length;
-          return (
-            <div
-              key={month}
-              className={`rounded-xl border p-3 ${isCurrentMonth ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-sm font-semibold ${isCurrentMonth ? "text-primary" : "text-foreground"}`}>{month}</span>
-                {monthTasks.length > 0 && (
-                  <span className="text-[10px] text-muted-foreground">{monthTasks.length} task{monthTasks.length !== 1 ? "s" : ""}</span>
-                )}
-              </div>
-              {monthTasks.length === 0 ? (
-                <p className="text-[10px] text-muted-foreground italic">Nothing due</p>
-              ) : (
-                <div className="space-y-1">
-                  {overdueCt > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                      <span className="text-[10px] text-red-600 dark:text-red-400">{overdueCt} overdue</span>
-                    </div>
-                  )}
-                  {dueSoonCt > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                      <span className="text-[10px] text-amber-700 dark:text-amber-300">{dueSoonCt} due soon</span>
-                    </div>
-                  )}
-                  {monthTasks.slice(0, 4).map(t => (
-                    <div key={t.id} className="flex items-center gap-1">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${
-                        t.status === "overdue" ? "bg-red-500" :
-                        t.status === "due_soon" ? "bg-amber-400" : "bg-emerald-400"
-                      }`} />
-                      <span className="text-[10px] text-muted-foreground truncate">{t.name}</span>
-                    </div>
-                  ))}
-                  {monthTasks.length > 4 && (
-                    <span className="text-[10px] text-muted-foreground">+{monthTasks.length - 4} more</span>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Task row ──────────────────────────────────────────────────────────────────
-function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
+// ── Compact task row (inside accordion) ───────────────────────────────────────
+function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
   const qc = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
-
-  const { data: detail } = useQuery<Task>({
-    queryKey: [`/api/veritatrack/tasks/${task.id}`],
-    enabled: expanded,
-    queryFn: async () => {
-      const r = await fetch(`${API_BASE}/api/veritatrack/tasks/${task.id}`, { headers: authHeaders() });
-      return r.json();
-    },
-  });
 
   const deleteTask = useMutation({
     mutationFn: async () => {
@@ -394,86 +307,203 @@ function TaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
     },
   });
 
+  const isOverdue = task.status === "overdue";
+  const isDueSoon = task.status === "due_soon";
+
   return (
-    <div className="border border-border rounded-xl bg-card overflow-hidden">
-      {/* Main row */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <button onClick={() => setExpanded(e => !e)} className="text-muted-foreground hover:text-primary shrink-0">
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
+    <div className={`flex items-center gap-3 px-4 py-2.5 border-b border-border/50 last:border-0 text-xs group
+      ${isOverdue ? "bg-red-50/50 dark:bg-red-950/10" : isDueSoon ? "bg-amber-50/50 dark:bg-amber-950/10" : ""}`}>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm text-foreground truncate">{task.name}</span>
-            {task.map_analyte && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                Map linked
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            <span className="text-[11px] text-muted-foreground">{task.category}</span>
-            {task.instrument && <span className="text-[11px] text-muted-foreground">{task.instrument}</span>}
-            {task.owner && <span className="text-[11px] text-muted-foreground">Owner: {task.owner}</span>}
-            <span className="text-[11px] text-muted-foreground">{task.frequency}</span>
-          </div>
-        </div>
+      {/* Status dot */}
+      <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot(task.status)}`} />
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right">
-            <div className="text-[11px] text-muted-foreground">
-              {task.next_due ? `Due ${fmtDate(task.next_due)}` : "Not started"}
-            </div>
-            <div className="text-[10px] text-muted-foreground">{daysUntilLabel(task.next_due)}</div>
-          </div>
+      {/* Task name + instrument */}
+      <div className="flex-1 min-w-0">
+        <span className="font-medium text-foreground truncate block">{task.name}</span>
+        {task.instrument && (
+          <span className="text-[10px] text-muted-foreground">{task.instrument}</span>
+        )}
+      </div>
 
-          <div className="flex items-center gap-1">
-            {statusIcon(task.status)}
-            <Badge className={`text-[10px] px-1.5 py-0 border-0 ${statusColor(task.status)}`}>
-              {statusLabel(task.status)}
-            </Badge>
-          </div>
-
-          <SignoffDialog task={task} onDone={onRefresh} />
-
-          <TaskFormDialog
-            trigger={<Button size="sm" variant="ghost" className="h-7 w-7 p-0"><Pencil size={11} /></Button>}
-            existing={task}
-            onDone={onRefresh}
-          />
-
-          <Button
-            size="sm" variant="ghost"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-            onClick={() => { if (confirm(`Delete "${task.name}"?`)) deleteTask.mutate(); }}
-          >
-            <Trash2 size={11} />
-          </Button>
+      {/* Last performed */}
+      <div className="text-right w-24 shrink-0">
+        <div className="text-[10px] text-muted-foreground">Last performed</div>
+        <div className={`font-medium ${isOverdue ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
+          {fmtDate(task.last_signoff?.completed_date)}
         </div>
       </div>
 
-      {/* Expanded sign-off history */}
-      {expanded && detail && (
-        <div className="border-t border-border bg-muted/20 px-4 py-3">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Sign-off History</p>
-          {((detail as any).signoffs || []).length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No sign-offs recorded yet.</p>
-          ) : (
-            <div className="space-y-1">
-              {((detail as any).signoffs || []).map((s: Signoff) => (
-                <div key={s.id} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium">{fmtDate(s.completed_date)}</span>
-                    {s.initials && <span className="text-muted-foreground">Initials: {s.initials}</span>}
-                    {s.performed_by && <span className="text-muted-foreground">{s.performed_by}</span>}
-                    {s.notes && <span className="text-muted-foreground italic">{s.notes}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Due next */}
+      <div className="text-right w-24 shrink-0">
+        <div className="text-[10px] text-muted-foreground">Due next</div>
+        <div className={`font-medium ${isOverdue ? "text-red-600 dark:text-red-400" : isDueSoon ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+          {task.next_due ? fmtDate(task.next_due) : "-"}
+        </div>
+        {task.next_due && (
+          <div className={`text-[10px] ${isOverdue ? "text-red-500" : isDueSoon ? "text-amber-500" : "text-muted-foreground"}`}>
+            {daysLabel(task.next_due)}
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <SignoffDialog task={task} onDone={onRefresh} />
+        <TaskFormDialog
+          trigger={<Button size="sm" variant="ghost" className="h-6 w-6 p-0"><Pencil size={10} /></Button>}
+          existing={task}
+          onDone={onRefresh}
+        />
+        <Button
+          size="sm" variant="ghost"
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500"
+          onClick={() => { if (confirm(`Delete "${task.name}"?`)) deleteTask.mutate(); }}
+        >
+          <Trash2 size={10} />
+        </Button>
+      </div>
+
+      {/* Sign off always visible on overdue/due_soon */}
+      {(isOverdue || isDueSoon) && (
+        <div className="shrink-0 group-hover:hidden">
+          <SignoffDialog task={task} onDone={onRefresh} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Group accordion ───────────────────────────────────────────────────────────
+function GroupAccordion({ category, tasks, onRefresh, defaultOpen }: {
+  category: string;
+  tasks: Task[];
+  onRefresh: () => void;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  const sorted = useMemo(() => sortTasks(tasks), [tasks]);
+  const worst = worstStatus(tasks);
+  const overdueCt  = tasks.filter(t => t.status === "overdue").length;
+  const dueSoonCt  = tasks.filter(t => t.status === "due_soon").length;
+  const notStarted = tasks.filter(t => t.status === "not_started").length;
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Group header */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+        onClick={() => setOpen(o => !o)}
+      >
+        {open ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+
+        <span className="font-semibold text-sm text-foreground flex-1">{category}</span>
+
+        {/* Summary chips */}
+        <div className="flex items-center gap-2 text-[11px]">
+          {overdueCt > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300 font-semibold">
+              {overdueCt} overdue
+            </span>
+          )}
+          {dueSoonCt > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 font-semibold">
+              {dueSoonCt} due soon
+            </span>
+          )}
+          {notStarted > 0 && overdueCt === 0 && dueSoonCt === 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {notStarted} not started
+            </span>
+          )}
+          {overdueCt === 0 && dueSoonCt === 0 && notStarted === 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold">
+              All current
+            </span>
+          )}
+          <span className="text-muted-foreground">{tasks.length} task{tasks.length !== 1 ? "s" : ""}</span>
+        </div>
+
+        {/* Worst status badge */}
+        <Badge className={`text-[10px] px-2 py-0 border-0 shrink-0 ${statusBg(worst)}`}>
+          {statusLabel(worst)}
+        </Badge>
+      </button>
+
+      {/* Task rows */}
+      {open && (
+        <div className="border-t border-border">
+          {/* Column headers */}
+          <div className="flex items-center gap-3 px-4 py-1.5 bg-muted/30 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest border-b border-border/50">
+            <span className="w-2 shrink-0" />
+            <span className="flex-1">Task</span>
+            <span className="w-24 text-right shrink-0">Last Performed</span>
+            <span className="w-24 text-right shrink-0">Due Next</span>
+            <span className="w-24 shrink-0" />
+          </div>
+          {sorted.map(t => (
+            <CompactTaskRow key={t.id} task={t} onRefresh={onRefresh} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Calendar view ─────────────────────────────────────────────────────────────
+function CalendarView({ tasks }: { tasks: Task[] }) {
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  const byMonth = useMemo(() => {
+    const m: Record<number, Task[]> = {};
+    for (let i = 0; i < 12; i++) m[i] = [];
+    for (const t of tasks) {
+      if (!t.next_due) continue;
+      const d = new Date(t.next_due);
+      if (d.getFullYear() === viewYear) m[d.getMonth()].push(t);
+    }
+    return m;
+  }, [tasks, viewYear]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-4">
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setViewYear(y => y - 1)}>&larr;</Button>
+        <span className="font-semibold text-sm">{viewYear}</span>
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setViewYear(y => y + 1)}>&rarr;</Button>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {MONTHS.map((month, idx) => {
+          const monthTasks = byMonth[idx] || [];
+          const isCurrentMonth = idx === now.getMonth() && viewYear === now.getFullYear();
+          const overdueCt = monthTasks.filter(t => t.status === "overdue").length;
+          const dueSoonCt = monthTasks.filter(t => t.status === "due_soon").length;
+          return (
+            <div key={month} className={`rounded-xl border p-3 ${isCurrentMonth ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-sm font-semibold ${isCurrentMonth ? "text-primary" : "text-foreground"}`}>{month}</span>
+                {monthTasks.length > 0 && <span className="text-[10px] text-muted-foreground">{monthTasks.length}</span>}
+              </div>
+              {monthTasks.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground italic">Nothing due</p>
+              ) : (
+                <div className="space-y-1">
+                  {overdueCt > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 shrink-0" /><span className="text-[10px] text-red-600 dark:text-red-400">{overdueCt} overdue</span></div>}
+                  {dueSoonCt > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><span className="text-[10px] text-amber-700 dark:text-amber-300">{dueSoonCt} due soon</span></div>}
+                  {monthTasks.slice(0, 3).map(t => (
+                    <div key={t.id} className="flex items-center gap-1">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot(t.status)}`} />
+                      <span className="text-[10px] text-muted-foreground truncate">{t.name}</span>
+                    </div>
+                  ))}
+                  {monthTasks.length > 3 && <span className="text-[10px] text-muted-foreground">+{monthTasks.length - 3} more</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -509,24 +539,31 @@ export default function VeritaTrackAppPage() {
     enabled: hasPlanAccess,
   });
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(tasks.map(t => t.category))).sort();
-    return ["all", ...cats];
-  }, [tasks]);
-
   const filtered = useMemo(() => tasks.filter(t =>
     (filterCategory === "all" || t.category === filterCategory) &&
     (filterStatus === "all" || t.status === filterStatus)
   ), [tasks, filterCategory, filterStatus]);
 
+  // Group by category, sorted so worst-status groups appear first
   const grouped = useMemo(() => {
     const map: Record<string, Task[]> = {};
     for (const t of filtered) {
       if (!map[t.category]) map[t.category] = [];
       map[t.category].push(t);
     }
-    return map;
+    // Sort groups: worst status group first, then alphabetically
+    return Object.entries(map).sort(([, a], [, b]) => {
+      const wa = STATUS_ORDER[worstStatus(a)];
+      const wb = STATUS_ORDER[worstStatus(b)];
+      if (wa !== wb) return wa - wb;
+      return 0;
+    });
   }, [filtered]);
+
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(tasks.map(t => t.category))).sort();
+    return cats;
+  }, [tasks]);
 
   const handleImport = async () => {
     setImportLoading(true);
@@ -568,9 +605,7 @@ export default function VeritaTrackAppPage() {
           Regulatory compliance calendar with automated due-date tracking, sign-off logging, and VeritaMap integration.
           Available on all full-suite plans.
         </p>
-        <Button asChild>
-          <a href="/pricing">View Plans</a>
-        </Button>
+        <Button asChild><a href="/pricing">View Plans</a></Button>
       </div>
     );
   }
@@ -589,13 +624,8 @@ export default function VeritaTrackAppPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            size="sm" variant="outline"
-            className="h-8 text-xs gap-1"
-            onClick={handleImport}
-            disabled={importLoading}
-            title="Import calibration verification, method comparison, precision, and SOP review schedules from your VeritaMap"
-          >
+          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleImport} disabled={importLoading}
+            title="Import cal ver, method comparison, precision, and SOP schedules from VeritaMap">
             <Upload size={12} />
             {importLoading ? "Importing..." : "Import from VeritaMap"}
           </Button>
@@ -604,12 +634,7 @@ export default function VeritaTrackAppPage() {
             Export Excel
           </Button>
           <TaskFormDialog
-            trigger={
-              <Button size="sm" className="h-8 text-xs gap-1">
-                <Plus size={12} />
-                Add Task
-              </Button>
-            }
+            trigger={<Button size="sm" className="h-8 text-xs gap-1"><Plus size={12} />Add Task</Button>}
             onDone={() => refetch()}
           />
         </div>
@@ -630,9 +655,9 @@ export default function VeritaTrackAppPage() {
       {dashboard && dashboard.total > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Overdue",       val: dashboard.overdue,      color: "text-red-600 dark:text-red-400",    bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800" },
-            { label: "Due This Month", val: dashboard.dueThisMonth, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" },
-            { label: "Due Soon (30d)", val: dashboard.dueSoon,      color: "text-primary",                       bg: "bg-primary/5 border-primary/20" },
+            { label: "Overdue",        val: dashboard.overdue,      color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800" },
+            { label: "Due This Month", val: dashboard.dueThisMonth, color: "text-amber-600 dark:text-amber-400",     bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" },
+            { label: "Due Soon (30d)", val: dashboard.dueSoon,      color: "text-primary",                           bg: "bg-primary/5 border-primary/20" },
             { label: "Current",        val: dashboard.current,      color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800" },
           ].map(card => (
             <div key={card.label} className={`rounded-xl border px-4 py-3 ${card.bg}`}>
@@ -646,27 +671,23 @@ export default function VeritaTrackAppPage() {
       {/* View toggle + filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="flex rounded-lg border border-border overflow-hidden">
-          <button
-            onClick={() => setView("list")}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-          >
+          <button onClick={() => setView("list")}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
             <List size={12} /> List
           </button>
-          <button
-            onClick={() => setView("calendar")}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-          >
+          <button onClick={() => setView("calendar")}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
             <CalendarDays size={12} /> Calendar
           </button>
         </div>
 
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="h-8 text-xs w-44">
+          <SelectTrigger className="h-8 text-xs w-48">
             <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
-            {categories.filter(c => c !== "all").map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
 
@@ -696,8 +717,7 @@ export default function VeritaTrackAppPage() {
           </p>
           <div className="flex items-center justify-center gap-3">
             <Button size="sm" variant="outline" onClick={handleImport} disabled={importLoading}>
-              <Upload size={12} className="mr-1" />
-              Import from VeritaMap
+              <Upload size={12} className="mr-1" />Import from VeritaMap
             </Button>
             <TaskFormDialog trigger={<Button size="sm"><Plus size={12} className="mr-1" />Add Task</Button>} onDone={() => refetch()} />
           </div>
@@ -707,24 +727,17 @@ export default function VeritaTrackAppPage() {
       {/* Calendar view */}
       {view === "calendar" && tasks.length > 0 && <CalendarView tasks={filtered} />}
 
-      {/* List view */}
+      {/* Grouped accordion list view */}
       {view === "list" && tasks.length > 0 && (
-        <div className="space-y-6">
-          {Object.entries(grouped).sort().map(([cat, catTasks]) => (
-            <div key={cat}>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
-                {cat}
-                <span className="font-normal">({catTasks.length})</span>
-              </h3>
-              <div className="space-y-2">
-                {catTasks
-                  .sort((a, b) => {
-                    const order = { overdue: 0, due_soon: 1, not_started: 2, current: 3 };
-                    return (order[a.status] ?? 4) - (order[b.status] ?? 4);
-                  })
-                  .map(t => <TaskRow key={t.id} task={t} onRefresh={() => refetch()} />)}
-              </div>
-            </div>
+        <div className="space-y-3">
+          {grouped.map(([cat, catTasks]) => (
+            <GroupAccordion
+              key={cat}
+              category={cat}
+              tasks={catTasks}
+              onRefresh={() => refetch()}
+              defaultOpen={worstStatus(catTasks) === "overdue" || worstStatus(catTasks) === "due_soon"}
+            />
           ))}
         </div>
       )}

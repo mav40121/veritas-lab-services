@@ -237,12 +237,10 @@ export function registerVeritaTrackRoutes(
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Regulatory Calendar");
 
-    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const headers = ["Frequency","Category","Task","Instrument","Owner", ...MONTHS, "Last Sign-Off","Next Due","Status"];
-    const colWidths = [14, 28, 40, 20, 16, ...Array(12).fill(8), 16, 16, 14];
+    const headers = ["Frequency","Category","Task","Instrument / Serial","Owner","Last Performed","Performed By","Due Next","Days Until Due","Status","Notes"];
+    const colWidths = [14, 28, 44, 24, 16, 16, 20, 16, 14, 14, 30];
     ws.columns = headers.map((h, i) => ({ header: h, key: `c${i}`, width: colWidths[i] ?? 12 }));
 
-    const year = new Date().getFullYear();
     const thinBorder: any = { top:{style:"thin",color:{argb:"FFD0D0D0"}}, bottom:{style:"thin",color:{argb:"FFD0D0D0"}}, left:{style:"thin",color:{argb:"FFD0D0D0"}}, right:{style:"thin",color:{argb:"FFD0D0D0"}} };
 
     const headerRow = ws.getRow(1);
@@ -254,26 +252,20 @@ export function registerVeritaTrackRoutes(
       cell.border = thinBorder;
     });
 
+    const now = new Date();
     let rowIdx = 2;
     let lastFreq = "";
     for (const t of tasks) {
-      const signoffs = sqlite.prepare(
-        "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC"
-      ).all(t.id) as any[];
-      const last = signoffs[0] || null;
+      const last = sqlite.prepare(
+        "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+      ).get(t.id) as any;
       const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
       const status = last ? taskStatus(nextDueDate!) : "not_started";
-
-      // Build month columns -- mark X if due that month
-      const monthCols: string[] = Array(12).fill("");
-      for (const s of signoffs) {
-        const d = new Date(s.completed_date);
-        if (d.getFullYear() === year) monthCols[d.getMonth()] = "x";
-      }
-      if (nextDueDate) {
-        const nd = new Date(nextDueDate);
-        if (nd.getFullYear() === year && !monthCols[nd.getMonth()]) monthCols[nd.getMonth()] = "-";
-      }
+      const daysUntil = nextDueDate
+        ? Math.floor((new Date(nextDueDate).getTime() - now.getTime()) / 86400000)
+        : null;
+      const daysLabel = daysUntil === null ? "" : daysUntil < 0 ? `${-daysUntil}d overdue` : daysUntil === 0 ? "Due today" : `${daysUntil}d`;
+      const statusLabel = status === "overdue" ? "Overdue" : status === "due_soon" ? "Due Soon" : status === "current" ? "Current" : "Not Started";
 
       const row = ws.addRow([
         t.frequency !== lastFreq ? t.frequency : "",
@@ -281,10 +273,12 @@ export function registerVeritaTrackRoutes(
         t.name,
         t.instrument || "",
         t.owner || "",
-        ...monthCols,
         last ? last.completed_date : "",
+        last ? (last.performed_by || last.initials || "") : "",
         nextDueDate || "",
-        status === "overdue" ? "Overdue" : status === "due_soon" ? "Due Soon" : status === "current" ? "Current" : "Not Started",
+        daysLabel,
+        statusLabel,
+        t.notes || "",
       ]);
       lastFreq = t.frequency;
 
@@ -292,29 +286,30 @@ export function registerVeritaTrackRoutes(
       row.height = 18;
       row.eachCell({ includeEmpty: true }, (cell, colNum) => {
         cell.font = { name:"Calibri", size:10, color:{argb:"FF28251D"} };
-        cell.alignment = { vertical:"middle", horizontal: colNum >= 6 && colNum <= 17 ? "center" : "left" };
+        cell.alignment = { vertical:"middle", wrapText: false };
         cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb: isEven ? "FFEBF3F8" : "FFFFFFFF"} };
         cell.border = thinBorder;
-        // Status color
-        if (colNum === headers.length) {
+        // Status column (col 10) color coding
+        if (colNum === 10) {
           const val = String(cell.value || "");
-          if (val === "Overdue") cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FFA12C7B"} };
+          if (val === "Overdue")  cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FFA12C7B"} };
           else if (val === "Due Soon") cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FF964219"} };
-          else if (val === "Current") cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FF437A22"} };
+          else if (val === "Current")  cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FF437A22"} };
+          else cell.font = { name:"Calibri", size:10, color:{argb:"FF7A7974"} };
         }
-        // Month X cells
-        if (colNum >= 6 && colNum <= 17 && cell.value === "x") {
-          cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FF01696F"} };
+        // Days until (col 9) -- red if overdue
+        if (colNum === 9 && String(cell.value || "").includes("overdue")) {
+          cell.font = { name:"Calibri", bold:true, size:10, color:{argb:"FFA12C7B"} };
         }
       });
       rowIdx++;
     }
 
-    ws.views = [{ state:"frozen" as const, xSplit:2, ySplit:1, topLeftCell:"C2" }];
+    ws.views = [{ state:"frozen" as const, xSplit:3, ySplit:1, topLeftCell:"D2" }];
     ws.autoFilter = { from:"A1", to: ws.getCell(1, headers.length).address };
 
     const buf = await wb.xlsx.writeBuffer();
-    const filename = `VeritaTrack_${year}.xlsx`;
+    const filename = `VeritaTrack_${new Date().getFullYear()}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(Buffer.from(buf));
