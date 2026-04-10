@@ -14,9 +14,9 @@ export const stripe = stripeSecretKey
 export const PRICES = {
   perStudy:        "price_1TGXPo5dn6rqLgIxsnvNa2oi",   // $25 one-time
   waived:          "price_1TGXPl5dn6rqLgIx14yANdxj",   // $499/yr
-  community:       "price_1TGXPm5dn6rqLgIxHdfFVNfA",   // $799/yr
-  hospital:        "price_1TGXPm5dn6rqLgIxC5UCBXLn",   // $1,299/yr
-  large_hospital:  "price_1TGXPm5dn6rqLgIxzahbIaQV",   // $1,999/yr
+  community:       "price_1TKiEg5dn6rqLgIxrBKvqbGb",   // $999/yr  (was $799 -- grandfathered)
+  hospital:        "price_1TKiEg5dn6rqLgIxXioYyC5u",   // $1,999/yr (was $1,299 -- grandfathered)
+  large_hospital:  "price_1TKiEg5dn6rqLgIxZ9ktBavQ",   // $2,999/yr (was $1,999 -- grandfathered)
   veritacheck_only: "price_1TGXPn5dn6rqLgIxfyoLXVKo",  // $299/yr
 };
 

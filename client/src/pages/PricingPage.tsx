@@ -55,7 +55,7 @@ const PLANS = [
   },
   {
     name: "Community",
-    price: "$799",
+    price: "$999",
     period: "/yr",
     description: "Community hospitals and independent labs.",
     features: [
@@ -72,7 +72,7 @@ const PLANS = [
   },
   {
     name: "Hospital",
-    price: "$1,299",
+    price: "$1,999",
     period: "/yr",
     description: "Regional and acute care hospital labs.",
     features: [
@@ -88,7 +88,7 @@ const PLANS = [
   },
   {
     name: "Enterprise",
-    price: "$1,999",
+    price: "$2,999",
     period: "/yr",
     description: "Large hospitals, health systems, and reference labs.",
     features: [
