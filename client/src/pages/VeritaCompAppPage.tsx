@@ -6,6 +6,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1068,9 +1069,16 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)}>
                     <FileDown className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Delete" onClick={() => deleteAssessment(a.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <ConfirmDialog
+                    title="Delete Assessment?"
+                    message={`Delete the ${a.assessment_date} assessment for ${a.employee_name}? This cannot be undone.`}
+                    confirmLabel="Delete"
+                    onConfirm={() => deleteAssessment(a.id)}
+                  >
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Delete">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </ConfirmDialog>
                 </div>
               </div>
               {/* 6-element summary table */}
@@ -1234,9 +1242,16 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
                   </td>
                   <td className="p-3">
                     {emp.status === "active" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deactivate(emp.id)}>
-                        <X size={14} />
-                      </Button>
+                      <ConfirmDialog
+                        title="Deactivate Employee?"
+                        message={`Deactivate ${emp.name}? Their competency records will be retained but they will be marked inactive.`}
+                        confirmLabel="Deactivate"
+                        onConfirm={() => deactivate(emp.id)}
+                      >
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                          <X size={14} />
+                        </Button>
+                      </ConfirmDialog>
                     )}
                   </td>
                 </tr>

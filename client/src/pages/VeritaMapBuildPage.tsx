@@ -42,6 +42,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import fdaData from "@/lib/fdaInstrumentData.json";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1639,15 +1640,21 @@ export default function VeritaMapBuildPage() {
                       <span className="text-[10px] text-muted-foreground">S/N: {instr.serial_number}</span>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                    onClick={() => deleteInstrumentMutation.mutate(instr.id)}
-                    disabled={deleteInstrumentMutation.isPending}
+                  <ConfirmDialog
+                    title="Remove Instrument?"
+                    message={`Remove ${instr.instrument_name} from this test menu? All test assignments for this instrument will also be removed.`}
+                    confirmLabel="Remove"
+                    onConfirm={() => deleteInstrumentMutation.mutate(instr.id)}
                   >
-                    <Trash2 size={14} />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                      disabled={deleteInstrumentMutation.isPending}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </ConfirmDialog>
                 </div>
               );
             })}

@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Select,
   SelectContent,
@@ -121,7 +122,6 @@ export default function VeritaPTAppPage() {
   };
 
   const handleRemoveEnrollment = async (id: number) => {
-    if (!confirm("Remove this enrollment? This will update your coverage analysis.")) return;
     await fetch(`${API_BASE}/api/pt/enrollments/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
@@ -417,14 +417,20 @@ export default function VeritaPTAppPage() {
                         <td className="py-2 pr-3 text-muted-foreground text-xs">{e.pt_category}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{e.year_enrolled}</td>
                         <td className="py-2 pr-3">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                            onClick={() => handleRemoveEnrollment(e.id)}
+                          <ConfirmDialog
+                            title="Remove Enrollment?"
+                            message="Remove this PT enrollment? Your coverage analysis will be updated."
+                            confirmLabel="Remove"
+                            onConfirm={() => handleRemoveEnrollment(e.id)}
                           >
-                            <Trash2 size={13} />
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          </ConfirmDialog>
                         </td>
                       </tr>
                     ))}

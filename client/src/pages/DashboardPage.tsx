@@ -9,6 +9,7 @@ import type { Study } from "@shared/schema";
 import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -132,15 +133,21 @@ export default function Dashboard() {
                       View
                     </Link>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteMutation.mutate(study.id)}
-                    className="text-muted-foreground hover:text-destructive h-8 w-8"
-                    data-testid={`button-delete-${study.id}`}
+                  <ConfirmDialog
+                    title="Delete Study?"
+                    message={`Delete the "${study.testName}" study? All results will be permanently removed.`}
+                    confirmLabel="Delete"
+                    onConfirm={() => deleteMutation.mutate(study.id)}
                   >
-                    <Trash2 size={13} />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive h-8 w-8"
+                      data-testid={`button-delete-${study.id}`}
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  </ConfirmDialog>
                 </div>
               </CardContent>
             </Card>

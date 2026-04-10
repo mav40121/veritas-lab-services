@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plus, Trash2, LogOut, Mail, CheckCircle, Clock, XCircle, ArrowUpCircle } from "lucide-react";
 import { authHeaders } from "@/lib/auth";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface Seat {
   id: number;
@@ -172,9 +173,16 @@ export default function SeatManagementPage() {
                   </Button>
                 )}
                 {seat.status !== "deactivated" && (
-                  <Button size="sm" variant="ghost" onClick={() => handleDeactivateSeat(seat.id)} title="Deactivate seat">
-                    <Trash2 size={14} className="text-destructive" />
-                  </Button>
+                  <ConfirmDialog
+                    title="Deactivate Seat?"
+                    message="Deactivate this seat? The user will lose access immediately."
+                    confirmLabel="Deactivate"
+                    onConfirm={() => handleDeactivateSeat(seat.id)}
+                  >
+                    <Button size="sm" variant="ghost" title="Deactivate seat">
+                      <Trash2 size={14} className="text-destructive" />
+                    </Button>
+                  </ConfirmDialog>
                 )}
               </div>
             </div>

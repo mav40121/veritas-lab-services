@@ -23,6 +23,7 @@ import {
   Download, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Lab {
@@ -846,7 +847,6 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
   const compStatus = getCompetencyStatus(employee.competencySchedule);
 
   async function handleDelete() {
-    if (!confirm(`Remove ${employee.first_name} ${employee.last_name} from the roster?`)) return;
     try {
       const res = await fetch(`${API_BASE}/api/staff/employees/${employee.id}`, {
         method: "DELETE",
@@ -878,9 +878,16 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
           <Button variant="outline" size="sm" onClick={onEdit} disabled={readOnly}>
             <Edit2 size={14} className="mr-1" /> Edit
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDelete} disabled={readOnly} className="text-red-600 hover:text-red-700">
-            <Trash2 size={14} className="mr-1" /> Remove
-          </Button>
+          <ConfirmDialog
+            title="Remove Employee?"
+            message={`Remove ${employee.first_name} ${employee.last_name} from the roster? All competency records for this employee will also be removed.`}
+            confirmLabel="Remove"
+            onConfirm={handleDelete}
+          >
+            <Button variant="outline" size="sm" disabled={readOnly} className="text-red-600 hover:text-red-700">
+              <Trash2 size={14} className="mr-1" /> Remove
+            </Button>
+          </ConfirmDialog>
         </div>
       </div>
 

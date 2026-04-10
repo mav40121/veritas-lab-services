@@ -5,6 +5,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { saveAs } from "file-saver";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +18,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Lock, Users, Award, FileDown, Edit2, Trash2, Upload,
-  Download, FileText, AlertTriangle, CheckCircle2, Clock, X,
+  Plus, Lock, Users, Award, FileDown, Edit2, Trash2, Upload, Download,
+  FileText, AlertTriangle, CheckCircle2, Clock, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -215,7 +216,6 @@ export default function VeritaLabAppPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm("Remove this certificate?")) return;
     try {
       const res = await fetch(`${API_BASE}/api/veritalab/certificates/${id}`, {
         method: "DELETE",
@@ -292,7 +292,6 @@ export default function VeritaLabAppPage() {
   }
 
   async function handleDeleteDoc(certId: number, docId: number) {
-    if (!confirm("Delete this document?")) return;
     try {
       const res = await fetch(`${API_BASE}/api/veritalab/certificates/${certId}/documents/${docId}`, {
         method: "DELETE",
@@ -467,9 +466,16 @@ export default function VeritaLabAppPage() {
                       <Button variant="outline" size="sm" onClick={() => openEditModal(cert)} disabled={isReadOnly}>
                         <Edit2 size={13} />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(cert.id)} disabled={isReadOnly} className="text-destructive hover:text-destructive">
-                        <Trash2 size={13} />
-                      </Button>
+                      <ConfirmDialog
+                        title="Remove Certificate?"
+                        message="Remove this certificate and all attached documents? This cannot be undone."
+                        confirmLabel="Remove"
+                        onConfirm={() => handleDelete(cert.id)}
+                      >
+                        <Button variant="outline" size="sm" disabled={isReadOnly} className="text-destructive hover:text-destructive">
+                          <Trash2 size={13} />
+                        </Button>
+                      </ConfirmDialog>
                     </div>
                   </div>
                 </CardContent>
@@ -595,9 +601,16 @@ export default function VeritaLabAppPage() {
                       <Button variant="ghost" size="sm" onClick={() => handleDownloadDoc(docCertId!, doc.id, doc.original_filename)}>
                         <Download size={13} />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteDoc(docCertId!, doc.id)} disabled={isReadOnly} className="text-destructive hover:text-destructive">
-                        <Trash2 size={13} />
-                      </Button>
+                      <ConfirmDialog
+                        title="Delete Document?"
+                        message="Delete this document? This cannot be undone."
+                        confirmLabel="Delete"
+                        onConfirm={() => handleDeleteDoc(docCertId!, doc.id)}
+                      >
+                        <Button variant="ghost" size="sm" disabled={isReadOnly} className="text-destructive hover:text-destructive">
+                          <Trash2 size={13} />
+                        </Button>
+                      </ConfirmDialog>
                     </div>
                   </div>
                 ))}

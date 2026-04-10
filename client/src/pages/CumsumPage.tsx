@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, ArrowLeft, FileDown, Trash2, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Link } from "wouter";
 import { geometricMean } from "@/lib/calculations";
 
@@ -112,7 +113,6 @@ export default function CumsumPage() {
   };
 
   const deleteTracker = async (id: number) => {
-    if (!confirm("Delete this tracker and all its entries?")) return;
     await fetch(`${API_BASE}/api/cumsum/trackers/${id}`, { method: "DELETE", headers: authHeaders() });
     setSelectedTracker(null);
     fetchTrackers();
@@ -256,9 +256,16 @@ export default function CumsumPage() {
             <Button variant="outline" onClick={downloadPDF} disabled={pdfLoading || selectedTracker.entries.length === 0}>
               <FileDown size={14} className="mr-1.5" />{pdfLoading ? "Generating..." : "Export PDF"}
             </Button>
-            <Button variant="ghost" size="sm" className="text-destructive ml-auto" onClick={() => deleteTracker(selectedTracker.id)}>
-              <Trash2 size={14} className="mr-1" />Delete Tracker
-            </Button>
+            <ConfirmDialog
+              title="Delete Tracker?"
+              message="Delete this tracker and all its entries? This cannot be undone."
+              confirmLabel="Delete"
+              onConfirm={() => deleteTracker(selectedTracker.id)}
+            >
+              <Button variant="ghost" size="sm" className="text-destructive ml-auto">
+                <Trash2 size={14} className="mr-1" />Delete Tracker
+              </Button>
+            </ConfirmDialog>
           </div>
 
           {/* History table */}

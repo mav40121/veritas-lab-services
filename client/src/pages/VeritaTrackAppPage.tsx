@@ -16,6 +16,7 @@ import {
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Task {
@@ -388,13 +389,16 @@ function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void
           existing={task}
           onDone={onRefresh}
         />
-        <Button
-          size="sm" variant="ghost"
-          className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500"
-          onClick={() => { if (confirm(`Delete "${task.name}"?`)) deleteTask.mutate(); }}
+        <ConfirmDialog
+          title="Delete Task?"
+          message={`Delete "${task.name}"? This will remove all sign-off history for this task.`}
+          confirmLabel="Delete"
+          onConfirm={() => deleteTask.mutate()}
         >
-          <Trash2 size={10} />
-        </Button>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500">
+            <Trash2 size={10} />
+          </Button>
+        </ConfirmDialog>
       </div>
 
       {/* Sign off always visible on overdue/due_soon */}

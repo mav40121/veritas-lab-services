@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Tag, Loader2, CheckCircle2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const API_BASE = "https://www.veritaslabservices.com";
 
@@ -104,7 +105,6 @@ export default function AccountSettingsPage() {
   }
 
   async function handleDeactivateSeat(seatId: number) {
-    if (!confirm("Remove this team member?")) return;
     await fetch(`${API_BASE}/api/account/seats/${seatId}`, {
       method: "DELETE",
       headers: authHeaders(),
@@ -458,12 +458,16 @@ export default function AccountSettingsPage() {
                           >
                             {isEditing ? "Cancel" : "Edit Permissions"}
                           </button>
-                          <button
-                            onClick={() => handleDeactivateSeat(seat.id)}
-                            className="text-xs text-red-600 hover:text-red-800 underline"
+                          <ConfirmDialog
+                            title="Remove Team Member?"
+                            message="Remove this team member? They will lose access immediately."
+                            confirmLabel="Remove"
+                            onConfirm={() => handleDeactivateSeat(seat.id)}
                           >
-                            Remove
-                          </button>
+                            <button className="text-xs text-red-600 hover:text-red-800 underline">
+                              Remove
+                            </button>
+                          </ConfirmDialog>
                         </div>
                       </div>
                       {!isEditing && (
