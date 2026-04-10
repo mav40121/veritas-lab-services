@@ -498,8 +498,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions)
       VALUES (?, ?, ?, ?, ?, 'active', '{}')
     `).run(Number(ownerUserId), seatEmail, Number(seatUserId), now, now);
-    // Give the seat user community plan access (inherits from owner)
-    sqlite.prepare("UPDATE users SET plan = 'community', study_credits = 99999 WHERE id = ?").run(Number(seatUserId));
+    // Give the seat user the owner's actual plan (not hardcoded community)
+    const ownerUser = sqlite.prepare("SELECT plan FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
+    const inheritedPlan = ownerUser?.plan || 'community';
+    sqlite.prepare("UPDATE users SET plan = ?, study_credits = 99999 WHERE id = ?").run(inheritedPlan, Number(seatUserId));
     const seat = sqlite.prepare("SELECT * FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").get(Number(ownerUserId), seatEmail) as any;
     res.json({ ok: true, seat });
   });
