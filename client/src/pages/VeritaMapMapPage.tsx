@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
@@ -25,6 +25,7 @@ import {
   AlertOctagon,
   AlertCircle,
   ChevronRight,
+  ChevronDown,
   Filter,
   GitMerge,
   Info,
@@ -37,6 +38,7 @@ type Complexity = "MODERATE" | "HIGH" | "WAIVED";
 type Role = "Primary" | "Backup" | "Satellite" | "POC" | "Reference";
 
 interface InstrumentOnTest {
+  id: number;
   instrument_name: string;
   role: Role;
   serial_number?: string | null;
@@ -52,6 +54,18 @@ interface TestRecord {
   last_precision?: string | null;
   last_sop_review?: string | null;
   notes?: string;
+}
+
+interface AnalyteValues {
+  ref_range_low?: string | null;
+  ref_range_high?: string | null;
+  critical_low?: string | null;
+  critical_high?: string | null;
+  units?: string | null;
+}
+
+interface AmrValues {
+  [instrumentId: number]: { amr_low?: string | null; amr_high?: string | null };
 }
 
 interface MapDetail {
@@ -496,9 +510,21 @@ interface TestRowProps {
   test: TestRecord;
   onChange: (analyte: string, field: string, value: string) => void;
   onRowMount?: (el: HTMLTableRowElement | null) => void;
+  analyteValues?: AnalyteValues;
+  amrValues?: AmrValues;
+  onSaveAnalyteValues?: (analyte: string, values: AnalyteValues) => void;
+  onSaveAmrValues?: (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => void;
+  colCount: number;
 }
 
-function TestRow({ test, onChange, onRowMount }: TestRowProps) {
+function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveAnalyteValues, onSaveAmrValues, colCount }: TestRowProps) {
+  const [expanded, setExpanded] = React.useState(false);
+  const [localAv, setLocalAv] = React.useState<AnalyteValues>(analyteValues || {});
+  const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrValues || {});
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => { setLocalAv(analyteValues || {}); }, [analyteValues]);
+  React.useEffect(() => { setLocalAmr(amrValues || {}); }, [amrValues]);
   const isWaived = test.complexity === "WAIVED";
   const specialtyStyle = getSpecialtyStyle(test.specialty);
   const instruments = test.instruments ?? [];
@@ -532,13 +558,25 @@ function TestRow({ test, onChange, onRowMount }: TestRowProps) {
     : "border-l-2 border-l-transparent";
 
   return (
+    <>
     <tr
       ref={onRowMount}
       className={`border-b border-border text-xs group transition-colors hover:bg-muted/30 ${borderClass}`}
     >
       {/* Analyte */}
-      <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap max-w-[180px] truncate">
-        {test.analyte}
+      <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap max-w-[180px]">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+            title={expanded ? "Hide values" : "Enter reference range, critical values, AMR"}
+          >
+            {expanded
+              ? <ChevronDown size={12} />
+              : <ChevronRight size={12} />}
+          </button>
+          <span className="truncate">{test.analyte}</span>
+        </div>
       </td>
 
       {/* Instruments */}
@@ -705,6 +743,131 @@ function TestRow({ test, onChange, onRowMount }: TestRowProps) {
         </div>
       </td>
     </tr>
+    {expanded && (
+      <tr className="bg-muted/20 border-b border-border">
+        <td colSpan={colCount} className="px-4 py-3">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
+            Lab-Established Values for {test.analyte}
+            <a
+              href="/veritamap-app/resources"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline font-normal normal-case tracking-normal"
+            >
+              Reference literature
+            </a>
+            <span className="text-muted-foreground font-normal normal-case tracking-normal">
+              - CLIA requires each lab to establish and verify these values independently.
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+            {/* Units */}
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Units of Measure</label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="e.g. mEq/L"
+                value={localAv.units || ""}
+                onChange={e => setLocalAv(v => ({ ...v, units: e.target.value }))}
+              />
+            </div>
+            {/* Ref Range */}
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Reference Range Low</label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="e.g. 136"
+                value={localAv.ref_range_low || ""}
+                onChange={e => setLocalAv(v => ({ ...v, ref_range_low: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Reference Range High</label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="e.g. 145"
+                value={localAv.ref_range_high || ""}
+                onChange={e => setLocalAv(v => ({ ...v, ref_range_high: e.target.value }))}
+              />
+            </div>
+            {/* Critical Values */}
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Critical Value Low</label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="e.g. 120"
+                value={localAv.critical_low || ""}
+                onChange={e => setLocalAv(v => ({ ...v, critical_low: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Critical Value High</label>
+              <Input
+                className="h-7 text-xs"
+                placeholder="e.g. 160"
+                value={localAv.critical_high || ""}
+                onChange={e => setLocalAv(v => ({ ...v, critical_high: e.target.value }))}
+              />
+            </div>
+          </div>
+          {/* AMR per instrument */}
+          {instruments.length > 0 && (
+            <div className="mb-3">
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">AMR (Analytical Measurement Range) - per instrument</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {instruments.map(inst => (
+                  <div key={inst.id} className="flex items-center gap-2 bg-background rounded border border-border px-2 py-1.5">
+                    <span className="text-[10px] font-medium min-w-[100px] truncate text-foreground">{inst.instrument_name}</span>
+                    <Input
+                      className="h-6 text-xs w-20"
+                      placeholder="Low"
+                      value={localAmr[inst.id]?.amr_low || ""}
+                      onChange={e => setLocalAmr(v => ({ ...v, [inst.id]: { ...v[inst.id], amr_low: e.target.value } }))}
+                    />
+                    <span className="text-[10px] text-muted-foreground">to</span>
+                    <Input
+                      className="h-6 text-xs w-20"
+                      placeholder="High"
+                      value={localAmr[inst.id]?.amr_high || ""}
+                      onChange={e => setLocalAmr(v => ({ ...v, [inst.id]: { ...v[inst.id], amr_high: e.target.value } }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  if (onSaveAnalyteValues) await onSaveAnalyteValues(test.analyte, localAv);
+                  for (const inst of instruments) {
+                    if (onSaveAmrValues && localAmr[inst.id]) {
+                      await onSaveAmrValues(test.analyte, inst.id, {
+                        amr_low: localAmr[inst.id].amr_low || "",
+                        amr_high: localAmr[inst.id].amr_high || "",
+                      });
+                    }
+                  }
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              {saving ? "Saving..." : "Save values"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setExpanded(false)}>
+              Close
+            </Button>
+          </div>
+        </td>
+      </tr>
+    )}
+  </>
   );
 }
 
@@ -821,6 +984,9 @@ export default function VeritaMapMapPage() {
   const [excelLoading, setExcelLoading] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [copyFromInstrumentId, setCopyFromInstrumentId] = useState<number | null>(null);
+  // Analyte values and AMR values keyed by analyte and instId::analyte respectively
+  const [analyteValuesMap, setAnalyteValuesMap] = useState<Record<string, AnalyteValues>>({});
+  const [amrValuesMap, setAmrValuesMap] = useState<Record<string, { amr_low?: string; amr_high?: string }>>({});
 
   // Refs for row scrolling (keyed by analyte)
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -955,6 +1121,43 @@ export default function VeritaMapMapPage() {
       setLocalTests(mapDetail.tests);
     }
   }, [mapDetail?.tests]);
+
+  // Fetch lab-entered analyte values and AMR values
+  useEffect(() => {
+    if (!mapId) return;
+    fetch(`${API_BASE}/api/veritamap/maps/${mapId}/analyte-values`, { headers: authHeaders() })
+      .then(r => r.json()).then((rows: any[]) => {
+        const m: Record<string, AnalyteValues> = {};
+        for (const row of rows) m[row.analyte] = row;
+        setAnalyteValuesMap(m);
+      }).catch(() => {});
+    fetch(`${API_BASE}/api/veritamap/maps/${mapId}/amr-values`, { headers: authHeaders() })
+      .then(r => r.json()).then((rows: any[]) => {
+        const m: Record<string, { amr_low?: string; amr_high?: string }> = {};
+        for (const row of rows) m[`${row.instrument_id}::${row.analyte}`] = row;
+        setAmrValuesMap(m);
+      }).catch(() => {});
+  }, [mapId]);
+
+  // Save analyte values (ref range, critical values, units)
+  const handleSaveAnalyteValues = useCallback(async (analyte: string, values: AnalyteValues) => {
+    await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/analyte-values/${encodeURIComponent(analyte)}`, {
+      method: "PUT",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    setAnalyteValuesMap(prev => ({ ...prev, [analyte]: values }));
+  }, [mapId]);
+
+  // Save AMR values (per instrument)
+  const handleSaveAmrValues = useCallback(async (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => {
+    await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/amr-values/${instrumentId}/${encodeURIComponent(analyte)}`, {
+      method: "PUT",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: values }));
+  }, [mapId]);
 
   // Intelligence — use API data or compute client-side from localTests
   const intelligence: IntelligenceData = useMemo(
@@ -1463,6 +1666,16 @@ export default function VeritaMapMapPage() {
                       if (el) rowRefs.current.set(test.analyte, el);
                       else rowRefs.current.delete(test.analyte);
                     }}
+                    analyteValues={analyteValuesMap[test.analyte]}
+                    amrValues={Object.fromEntries(
+                      (test.instruments ?? []).map(inst => [
+                        inst.id,
+                        amrValuesMap[`${inst.id}::${test.analyte}`] || {}
+                      ])
+                    )}
+                    onSaveAnalyteValues={handleSaveAnalyteValues}
+                    onSaveAmrValues={handleSaveAmrValues}
+                    colCount={12}
                   />
                 ))}
               </tbody>

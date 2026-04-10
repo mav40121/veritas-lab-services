@@ -859,6 +859,36 @@ try { sqlite.exec(`ALTER TABLE veritapolicy_requirement_status ADD COLUMN policy
 // Add accreditation_body to settings (tjc | cap | both)
 try { sqlite.exec(`ALTER TABLE veritapolicy_settings ADD COLUMN accreditation_body TEXT NOT NULL DEFAULT 'tjc'`); } catch {}
 
+// VeritaMap analyte values -- per lab, per analyte (shared across instruments)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritamap_analyte_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    map_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    ref_range_low TEXT,
+    ref_range_high TEXT,
+    critical_low TEXT,
+    critical_high TEXT,
+    units TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(map_id, analyte)
+  );
+`);
+
+// VeritaMap AMR values -- per lab, per instrument, per analyte
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritamap_amr_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    map_id INTEGER NOT NULL,
+    instrument_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    amr_low TEXT,
+    amr_high TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(map_id, instrument_id, analyte)
+  );
+`);
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");

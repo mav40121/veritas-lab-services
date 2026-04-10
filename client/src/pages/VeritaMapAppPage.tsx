@@ -204,7 +204,14 @@ export default function VeritaMapAppPage() {
           </p>
         </div>
 
-        {/* New Map button + dialog */}
+        {/* New Map button + resources link + dialog */}
+        <div className="flex items-center gap-2">
+          <a
+            href="/veritamap-app/resources"
+            className="text-xs text-muted-foreground hover:text-primary underline transition-colors"
+          >
+            Reference literature
+          </a>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0" disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
@@ -254,6 +261,7 @@ export default function VeritaMapAppPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Free tier banner */}

@@ -1520,6 +1520,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
 
+    // Fetch lab-entered analyte values and AMR values
+    const analyteValuesRaw = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ?"
+    ).all(req.params.id);
+    const analyteValuesMap: Record<string, any> = {};
+    for (const av of analyteValuesRaw) analyteValuesMap[av.analyte] = av;
+
+    const amrValuesRaw = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ?"
+    ).all(req.params.id);
+    // Key: `${instrumentId}::${analyte}`
+    const amrValuesMap: Record<string, any> = {};
+    for (const av of amrValuesRaw) amrValuesMap[`${av.instrument_id}::${av.analyte}`] = av;
+
     // Sort by Department → Specialty → Analyte (A-Z)
     tests.sort((a: any, b: any) => {
       const catA = (a.instruments[0]?.category || "").toLowerCase();
@@ -1541,20 +1555,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const headers = [
         "Analyte", "Instruments", "Serial Number", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
-        "Unit of Measure", "Reference Range", "AMR",
-        "Critical Low (Mayo Clinic Laboratories)", "Critical High (Mayo Clinic Laboratories)", "Critical Value Units (Mayo Clinic Laboratories)",
-        "Lab Critical Low", "Lab Critical High", "Lab AMR Low", "Lab AMR High",
-        "Last Calibration Verification Date", "Calibration Verification Status", "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
+        "Units of Measure", "Reference Range Low", "Reference Range High",
+        "Critical Low", "Critical High",
+        "AMR Low", "AMR High (per instrument)",
+        "Last Calibration Verification Date", "Calibration Verification Status",
+        "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
         "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
         "Notes",
       ];
 
       // Column widths
       const colWidths = [
-        22, 55, 20, 18, 20, 14, 22, 14, 20, 24, 25, 20, 22, 22, 18, 14, 14, 12, 12,
-        30, 28, 36, 36, 18, 18, 18, 18, 18,
+        22, 55, 20, 18, 20, 14, 22, 14, 20,
+        18, 20, 20, 16, 16, 16, 22,
+        30, 28, 36, 36, 18, 18, 18, 18, 30,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
+
+      const NE = "Not established"; // shown when lab hasn't entered a value
 
       // Build data rows
       const rows = tests.map((t: any) => {
@@ -1566,14 +1584,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const isWaived = t.complexity === "WAIVED";
         const correlReq = !isWaived && instrCount >= 2 ? "Yes" : "No";
         const cfr = VERITAMAP_CFR_MAP[t.specialty] ?? "§493.945";
-        const mayo = lookupAnalyte(MAYO_CRITICAL_VALUES, t.analyte);
-        const unit = lookupAnalyte(UNITS_LOOKUP, t.analyte) || "";
-        const refRange = lookupAnalyte(REFERENCE_RANGES, t.analyte) || "";
-        const amr = lookupAnalyte(AMR_LOOKUP, t.analyte) || "";
         const calVerStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_cal_ver, 6);
         const mcStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_method_comp, 6);
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
         const sopStatus = getComplianceStatus(t.last_sop_review, 24);
+
+        // Lab-entered analyte values
+        const av = analyteValuesMap[t.analyte];
+        const units = av?.units || NE;
+        const refLow = av?.ref_range_low || NE;
+        const refHigh = av?.ref_range_high || NE;
+        const critLow = av?.critical_low || NE;
+        const critHigh = av?.critical_high || NE;
+
+        // AMR: one entry per instrument that runs this analyte
+        const amrLines = instruments.map((inst: any) => {
+          const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
+          const lo = amrEntry?.amr_low || NE;
+          const hi = amrEntry?.amr_high || NE;
+          return `${inst.instrument_name}: ${lo} - ${hi}`;
+        }).join("; ");
 
         return [
           t.analyte,
@@ -1585,16 +1615,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           instrCount,
           cfr,
           correlReq,
-          unit ? `${unit}` : "",
-          refRange || "",
-          amr || "",
-          mayo?.low || "",
-          mayo?.high || "",
-          mayo?.units || "",
-          "", // Lab Critical Low (blank for lab to fill)
-          "", // Lab Critical High (blank for lab to fill)
-          "", // Lab AMR Low (blank for lab to fill)
-          "", // Lab AMR High (blank for lab to fill)
+          units,
+          refLow,
+          refHigh,
+          critLow,
+          critHigh,
+          amrLines || NE,
+          "", // AMR High (per instrument) -- shown inline in AMR Low column above
           t.last_cal_ver || "",
           calVerStatus,
           t.last_method_comp || "",
@@ -1631,11 +1658,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       // ── Data rows (row 2 onward) ──
-      const statusCols = [21, 23, 25, 27]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
-      const dateCols = [20, 22, 24, 26];   // 1-indexed: date columns
+      const statusCols = [18, 20, 22, 24]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
+      const dateCols = [17, 19, 21, 23];   // 1-indexed: date columns
       const numCol = 7; // 1-indexed: Number of Instruments
       const complexityCol = 6; // 1-indexed: Complexity
       const correlCol = 9;     // 1-indexed: Correlation Required
+      const neCols = [10, 11, 12, 13, 14, 15]; // 1-indexed: columns that may show 'Not established'
       for (let r = 2; r <= rows.length + 1; r++) {
         const row = ws.getRow(r);
         const isEvenRow = r % 2 === 0; // row 2=even, row 3=odd, ...
@@ -1650,9 +1678,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           // Alternating row background
           let fillColor = bgColor;
 
-          // Lab fill-in columns (16-19, 1-indexed = Lab Critical Low/High, Lab AMR Low/High)
-          if (colNumber >= 16 && colNumber <= 19) {
-            fillColor = "FFDDEEFF";
+          // Not established values -- muted gray text
+          if (neCols.includes(colNumber) && String(cell.value || "") === "Not established") {
+            cell.font = { name: "Calibri", italic: true, color: { argb: "FF7A7974" }, size: 10 };
           }
 
           // Complexity column color coding
@@ -1707,22 +1735,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
       }
 
-      // ── Add notes to critical-value header cells (columns M, N, O = 13, 14, 15) ──
-      const critNote = "Source: Mayo Clinic Laboratories Critical Values / Critical Results List. These are Mayo Clinic's published critical thresholds, provided as a reference. Each laboratory must establish and approve its own critical value policy.";
-      for (const col of [13, 14, 15]) {
-        headerRow.getCell(col).note = critNote;
+      // ── Add notes to lab-entered value header cells ──
+      const labNote = "CLIA requires each laboratory to establish and verify these values for their specific instruments and patient population. Values shown are lab-entered only. \"Not established\" indicates the lab has not yet entered a value.";
+      for (const col of [10, 11, 12, 13, 14, 15]) {
+        headerRow.getCell(col).note = labNote;
       }
 
-      // ── Add notes to Reference Range and AMR header cells (columns K=11, L=12) ──
-      const refRangeNote = "Reference ranges must be established and verified by each laboratory per CLIA 493.1253. Values shown are lab-entered only.";
-      headerRow.getCell(11).note = refRangeNote;
-      const amrNote = "Analytical Measurement Range must be verified by each laboratory per CLIA 493.1253(b)(1). Values shown are lab-entered only.";
-      headerRow.getCell(12).note = amrNote;
 
-      // ── Add notes to Lab AMR header cells (columns R=18, S=19) ──
-      const labAmrNote = "Enter your instrument's verified AMR per CLIA 493.1253(b)(1).";
-      headerRow.getCell(18).note = labAmrNote;
-      headerRow.getCell(19).note = labAmrNote;
 
       // Freeze pane at C2: cols A-B frozen + header row frozen
       ws.views = [{ state: "frozen" as const, xSplit: 2, ySplit: 1, topLeftCell: "C2" }];
@@ -1758,6 +1777,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("VeritaMap Excel generation error:", e);
       res.status(500).json({ error: "Excel generation failed" });
     }
+  });
+
+  // ── VERITAMAP ANALYTE VALUES ─────────────────────────────────────────────
+  // GET all analyte values for a map
+  app.get("/api/veritamap/maps/:id/analyte-values", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const mapId = Number(req.params.id);
+    const values = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte"
+    ).all(mapId);
+    res.json(values);
+  });
+
+  // PUT (upsert) analyte values for a specific analyte
+  app.put("/api/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const mapId = Number(req.params.id);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      INSERT INTO veritamap_analyte_values (map_id, analyte, ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, analyte) DO UPDATE SET
+        ref_range_low = excluded.ref_range_low,
+        ref_range_high = excluded.ref_range_high,
+        critical_low = excluded.critical_low,
+        critical_high = excluded.critical_high,
+        units = excluded.units,
+        updated_at = excluded.updated_at
+    `).run(mapId, analyte, ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now);
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
+    ).get(mapId, analyte);
+    res.json(row);
+  });
+
+  // GET all AMR values for a map
+  app.get("/api/veritamap/maps/:id/amr-values", authMiddleware, (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const mapId = Number(req.params.id);
+    const values = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id"
+    ).all(mapId);
+    res.json(values);
+  });
+
+  // PUT (upsert) AMR values for a specific instrument + analyte
+  app.put("/api/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    const mapId = Number(req.params.id);
+    const instrumentId = Number(req.params.instId);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const { amr_low, amr_high } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      INSERT INTO veritamap_amr_values (map_id, instrument_id, analyte, amr_low, amr_high, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, instrument_id, analyte) DO UPDATE SET
+        amr_low = excluded.amr_low,
+        amr_high = excluded.amr_high,
+        updated_at = excluded.updated_at
+    `).run(mapId, instrumentId, analyte, amr_low || null, amr_high || null, now);
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).get(mapId, instrumentId, analyte);
+    res.json(row);
   });
 
   // ── VERITASCAN ───────────────────────────────────────────────────────────

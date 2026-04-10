@@ -44,6 +44,7 @@ import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
 import VeritaMapAppPage from "@/pages/VeritaMapAppPage";
 import VeritaMapBuildPage from "@/pages/VeritaMapBuildPage";
 import VeritaMapMapPage from "@/pages/VeritaMapMapPage";
+import VeritaMapResourcesPage from "@/pages/VeritaMapResourcesPage";
 import VeritaCompPage from "@/pages/VeritaCompPage";
 import VeritaCompAppPage from "@/pages/VeritaCompAppPage";
 import VeritaPTPage from "@/pages/VeritaPTPage";
@@ -272,6 +273,7 @@ function AppContent() {
           <Route path="/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/veritascan-app/:id" component={VeritaScanScanPage} />
           <Route path="/veritamap-app" component={VeritaMapAppPage} />
+          <Route path="/veritamap-app/resources" component={VeritaMapResourcesPage} />
           <Route path="/veritamap-app/:id/build" component={VeritaMapBuildPage} />
           <Route path="/veritamap-app/:id" component={VeritaMapMapPage} />
           <Route path="/veritacomp" component={VeritaCompPage} />
