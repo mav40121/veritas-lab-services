@@ -142,6 +142,12 @@ def check_file(rel, fpath):
         if re.search(r'hasPlanAccess[^=]*=.*!\[', content):
             ERRORS.append(f"[{rel}] Plan gate uses blocklist pattern -- use explicit allowlist (see VeritaLabAppPage.tsx for reference)")
 
+    # Every plan allowlist containing 'large_hospital' must also contain 'enterprise'
+    for m in re.finditer(r'\[([^\]]*large_hospital[^\]]*)\]\.includes', content):
+        arr = m.group(1)
+        if 'enterprise' not in arr:
+            ERRORS.append(f"[{rel}] Plan allowlist has 'large_hospital' but missing 'enterprise' -- add it")
+
     # ── 5. PDF COMPLIANCE (pdfReport.ts only) ────────────────────────────────
     if "pdfReport" in rel:
         # Must reference CLIA

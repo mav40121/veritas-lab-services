@@ -461,7 +461,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/set-plan", (req, res) => {
     const { secret, userId, plan, credits } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const planCredits = ["annual", "starter", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
+    const planCredits = ["annual", "starter", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
     storage.updateUserPlan(Number(userId), plan, planCredits);
     const user = storage.getUserById(Number(userId));
     res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
@@ -2424,7 +2424,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (priceType === "perStudy") {
             storage.addStudyCredits(userId, 1);
             console.log("[webhook] Added study credit for user", userId);
-          } else if (["waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(priceType) && session.subscription) {
+          } else if (["waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(priceType) && session.subscription) {
             storage.updateUserStripe(userId, {
               stripeSubscriptionId: session.subscription,
               plan: priceType,
@@ -2479,7 +2479,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
   function hasCheckAccess(user: any) {
-    return ["annual", "starter", "professional", "lab", "complete", "per_study", "waived", "community", "hospital", "large_hospital", "veritacheck_only"].includes(user?.plan) || (user?.userId && user.userId <= 11);
+    return ["annual", "starter", "professional", "lab", "complete", "per_study", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(user?.plan) || (user?.userId && user.userId <= 11);
   }
 
   // List trackers for user
