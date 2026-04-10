@@ -5137,13 +5137,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       base_price = 499;
     } else if (labData.specialty_count >= 16) {
       tier = "large_hospital";
-      base_price = 1999;
+      base_price = 2999;
     } else if (labData.specialty_count >= 9) {
       tier = "hospital";
-      base_price = 1299;
+      base_price = 1999;
     } else {
       tier = "community";
-      base_price = 799;
+      base_price = 999;
     }
 
     res.json({
@@ -5229,9 +5229,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.userId) as any;
 
     if ((currentSeats?.cnt || 0) >= maxSeats) {
-      const nextTier = userPlan === "clinic" ? { label: "Community", price: 799, seats: 5, plan: "community" }
-        : userPlan === "community" ? { label: "Hospital", price: 1299, seats: 15, plan: "hospital" }
-        : userPlan === "hospital" ? { label: "Enterprise", price: 1999, seats: 25, plan: "enterprise" }
+      const nextTier = userPlan === "clinic" ? { label: "Community", price: 999, seats: 5, plan: "community" }
+        : userPlan === "community" ? { label: "Hospital", price: 1999, seats: 15, plan: "hospital" }
+        : userPlan === "hospital" ? { label: "Enterprise", price: 2999, seats: 25, plan: "enterprise" }
         : null;
       return res.status(402).json({
         error: "seat_limit_reached",

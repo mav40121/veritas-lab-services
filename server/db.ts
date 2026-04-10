@@ -746,9 +746,9 @@ export const PLAN_SEATS: Record<string, number> = {
 
 export const PLAN_PRICES: Record<string, number> = {
   clinic: 499,
-  community: 799,
-  hospital: 1299,
-  enterprise: 1999,
+  community: 999,
+  hospital: 1999,
+  enterprise: 2999,
 };
 
 export const PLAN_BED_RANGES: Record<string, [number, number]> = {
@@ -760,9 +760,9 @@ export const PLAN_BED_RANGES: Record<string, [number, number]> = {
 
 export function suggestTierFromBeds(beds: number): { tier: string; label: string; price: number; seats: number } {
   if (beds <= 25) return { tier: 'clinic', label: 'Clinic', price: 499, seats: 2 };
-  if (beds <= 100) return { tier: 'community', label: 'Community', price: 799, seats: 5 };
-  if (beds <= 300) return { tier: 'hospital', label: 'Hospital', price: 1299, seats: 15 };
-  return { tier: 'enterprise', label: 'Enterprise', price: 1999, seats: 25 };
+  if (beds <= 100) return { tier: 'community', label: 'Community', price: 999, seats: 5 };
+  if (beds <= 300) return { tier: 'hospital', label: 'Hospital', price: 1999, seats: 15 };
+  return { tier: 'enterprise', label: 'Enterprise', price: 2999, seats: 25 };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────
