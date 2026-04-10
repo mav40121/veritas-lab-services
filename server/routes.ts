@@ -1760,7 +1760,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Check access: annual, lab, or veritascan plan
   function hasScanAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital", "enterprise"(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
   }
 
   // List scans for current user
@@ -3867,7 +3867,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
   }
 
   // List programs
@@ -4594,7 +4594,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITASTAFF ──────────────────────────────────────────────────────────
 
   function hasStaffAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
   }
 
   // CMS specialty list (for validation and labels)
@@ -5329,7 +5329,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITALAB ──────────────────────────────────────────────────────────
 
   function hasLabCertAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"(user?.plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
   }
 
   function scheduleReminders(certId: number, userId: number, expirationDate: string) {
