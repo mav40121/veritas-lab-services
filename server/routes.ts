@@ -659,21 +659,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Get owner's plan so seat user inherits it
       const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
-      // Mark seat user's onboarding as completed so they skip the wizard
+      // Write owner's plan into seat user's DB record so server-side checks work
       try {
-        (db as any).$client.prepare("UPDATE users SET has_completed_onboarding = 1 WHERE id = ?").run(user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1 WHERE id = ?").run(ownerPlan, user.id);
       } catch {}
     } else if (activeSeat) {
       // User is already an active seat (e.g. manually attached via admin endpoint)
       isSeatUser = true;
       const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(activeSeat.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
-      // Ensure seat_user_id is linked and onboarding skipped
+      // Ensure seat_user_id is linked, plan inherited, and onboarding skipped
       (db as any).$client.prepare(
         "UPDATE user_seats SET seat_user_id = ? WHERE id = ?"
       ).run(user.id, activeSeat.id);
       try {
-        (db as any).$client.prepare("UPDATE users SET has_completed_onboarding = 1 WHERE id = ?").run(user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1 WHERE id = ?").run(ownerPlan, user.id);
       } catch {}
     }
 
