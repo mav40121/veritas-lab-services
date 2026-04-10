@@ -251,27 +251,13 @@ export default function VeritaAssurePage() {
             Pricing
           </div>
           <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
-            Plan tier is suggested at signup based on your licensed bed count. Seats are included per plan.
-            Cancel anytime. CLIA number required at checkout.
+            Plans are available for labs of all sizes, from Certificate of Waiver clinics to large hospital systems.
+            Tier is suggested at signup based on your CLIA certificate. No setup fees. Cancel anytime.
           </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {PRICING.map(({ tier, price, note }) => (
-              <div
-                key={tier}
-                className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3"
-              >
-                <div>
-                  <div className="font-semibold text-sm">{tier}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{note}</div>
-                </div>
-                <div className="text-lg font-bold text-primary shrink-0">{price}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 text-center">
-            <Button asChild variant="outline" size="sm">
+          <div className="mt-2 text-center">
+            <Button asChild variant="default" size="sm">
               <Link href="/pricing">
-                Full pricing and feature comparison <ChevronRight size={13} className="ml-1" />
+                View full pricing and feature comparison <ChevronRight size={13} className="ml-1" />
               </Link>
             </Button>
           </div>
