@@ -75,11 +75,11 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What plans are available?",
-        a: "VeritaAssure\u2122 offers plans based on your lab's size and needs. Per Study ($25 one-time, VeritaCheck\u2122 only), VeritaCheck\u2122 Unlimited ($299/yr, single user), Clinic ($499/yr, small labs and Certificate of Waiver, 2 seats), Community ($799/yr, 1-8 specialties, 5 seats), Hospital ($1,299/yr, 9-15 specialties, 15 seats), and Large Hospital ($1,999/yr, 16+ specialties, 25 seats). Certificate of Waiver labs are always placed in the lowest tier. Additional seats are available at volume pricing.",
+        a: "VeritaAssure\u2122 offers plans based on your lab's size and needs. Per Study ($25 one-time, VeritaCheck\u2122 only), VeritaCheck\u2122 Unlimited ($299/yr, single user), Clinic ($499/yr, Certificate of Waiver labs and small clinics, 2 seats), Community ($799/yr, community hospitals and independent labs, 5 seats), Hospital ($1,299/yr, regional and acute care hospital labs, 15 seats), and Enterprise ($1,999/yr, large hospitals and health systems, 25 seats). Certificate of Waiver labs are always placed in the Clinic tier. Additional seats are available at volume pricing.",
       },
       {
         q: "How is my plan tier determined?",
-        a: "At signup, we look up your facility against CMS Provider of Services data and suggest a plan based on your CLIA certificate type and specialty count. You can always select a different tier. Certificate of Waiver labs are automatically placed in the lowest tier regardless of other factors.",
+        a: "At signup, we look up your facility against CMS Provider of Services data and suggest a plan based on your CLIA certificate type. You can always select a different tier. Certificate of Waiver labs are automatically placed in the Clinic tier.",
       },
       {
         q: "Can I try VeritaAssure\u2122 before subscribing?",

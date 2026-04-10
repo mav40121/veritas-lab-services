@@ -57,7 +57,7 @@ const PLANS = [
     name: "Community",
     price: "$799",
     period: "/yr",
-    description: "1-8 specialties. Community hospitals and independent labs.",
+    description: "Community hospitals and independent labs.",
     features: [
       "Everything in Clinic",
       "Up to 5 seats",
@@ -74,7 +74,7 @@ const PLANS = [
     name: "Hospital",
     price: "$1,299",
     period: "/yr",
-    description: "9-15 specialties. Hospital laboratories.",
+    description: "Regional and acute care hospital labs.",
     features: [
       "Everything in Community",
       "Up to 15 seats",
@@ -90,7 +90,7 @@ const PLANS = [
     name: "Enterprise",
     price: "$1,999",
     period: "/yr",
-    description: "16+ specialties. Large hospitals and reference labs.",
+    description: "Large hospitals, health systems, and reference labs.",
     features: [
       "Everything in Hospital",
       "Up to 25 seats",

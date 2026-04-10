@@ -26,10 +26,10 @@ interface HospitalResult {
 
 // Tier definitions for self-selection
 const TIER_OPTIONS = [
-  { id: "clinic",     label: "Clinic",     price: 499,  seats: 2,  beds: "0-25 beds",    desc: "Solo director or designee + one tech" },
-  { id: "community",  label: "Community",  price: 799,  seats: 5,  beds: "26-100 beds",  desc: "Community hospital lab" },
-  { id: "hospital",   label: "Hospital",   price: 1299, seats: 15, beds: "101-300 beds", desc: "Regional or acute care hospital" },
-  { id: "enterprise", label: "Enterprise", price: 1999, seats: 25, beds: "300+ beds",    desc: "Multi-dept or health system" },
+  { id: "clinic",     label: "Clinic",     price: 499,  seats: 2,  desc: "Certificate of Waiver labs and small clinics" },
+  { id: "community",  label: "Community",  price: 799,  seats: 5,  desc: "Community hospitals and independent labs" },
+  { id: "hospital",   label: "Hospital",   price: 1299, seats: 15, desc: "Regional and acute care hospital labs" },
+  { id: "enterprise", label: "Enterprise", price: 1999, seats: 25, desc: "Large hospitals, health systems, and reference labs" },
 ];
 const TIER_UNIT = "yr";
 
@@ -437,8 +437,7 @@ export default function LoginPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-semibold">{t.label}</p>
-                              <p className="text-xs text-muted-foreground">{t.beds} - {t.seats} seats</p>
-                              <p className="text-xs text-muted-foreground">{t.desc}</p>
+                              <p className="text-xs text-muted-foreground">{t.desc} • {t.seats} seats</p>
                             </div>
                             <p className="text-sm font-semibold text-primary shrink-0 ml-3">${t.price}/yr</p>
                           </div>

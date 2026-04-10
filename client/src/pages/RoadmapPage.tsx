@@ -30,7 +30,7 @@ const completedItems: RoadmapItem[] = [
   {
     title: "CLIA-Based Account Verification",
     description:
-      "Every account is tied to a specific CLIA certificate. Lab tier and pricing are determined automatically by certificate type and specialty count. Your pricing tier is automatically determined by your CLIA certificate, no self-reporting, no manual verification required.",
+      "Every account is tied to a specific CLIA certificate. Lab tier and pricing are suggested based on certificate type. You can always select a different tier. No self-reporting or manual verification required.",
   },
   {
     title: "VeritaAssure™ Consulting Services",
