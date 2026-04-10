@@ -859,6 +859,38 @@ try { sqlite.exec(`ALTER TABLE veritapolicy_requirement_status ADD COLUMN policy
 // Add accreditation_body to settings (tjc | cap | both)
 try { sqlite.exec(`ALTER TABLE veritapolicy_settings ADD COLUMN accreditation_body TEXT NOT NULL DEFAULT 'tjc'`); } catch {}
 
+// VeritaTrack -- regulatory compliance calendar
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritatrack_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Other',
+    instrument TEXT,
+    owner TEXT,
+    frequency TEXT NOT NULL DEFAULT 'Monthly',
+    frequency_months INTEGER NOT NULL DEFAULT 1,
+    map_analyte TEXT,
+    map_field TEXT,
+    notes TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS veritatrack_signoffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    completed_date TEXT NOT NULL,
+    initials TEXT,
+    performed_by TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES veritatrack_tasks(id)
+  );
+`);
+
 // VeritaMap analyte values -- per lab, per analyte (shared across instruments)
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritamap_analyte_values (

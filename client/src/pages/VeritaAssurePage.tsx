@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
-  ChevronRight, CheckCircle2, Download, Shield, Play,
+  ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
 } from "lucide-react";
 
 const MODULES = [
@@ -84,6 +84,17 @@ const MODULES = [
     badgeColor: "emerald",
     icon: Shield,
     color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
+  {
+    href: "/veritatrack-app",
+    label: "VeritaTrack™",
+    desc: "Regulatory Compliance Calendar",
+    detail:
+      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. Auto-imports schedules from VeritaMap. Sign-off logging with initials and dates. Excel export matches your existing regulatory calendar format.",
+    badge: "New",
+    badgeColor: "emerald",
+    icon: CalendarDays,
+    color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20",
   },
 ];
 
