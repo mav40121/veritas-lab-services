@@ -225,6 +225,77 @@ export function registerVeritaTrackRoutes(
     res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
   });
 
+  // POST seed default tasks (idempotent)
+  app.post("/api/veritatrack/seed-defaults", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    const userId = req.ownerUserId ?? req.user.userId;
+    const { categories } = req.body as { categories: string[] };
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({ error: "categories array required" });
+    }
+
+    // Default task definitions keyed by toggle id
+    const DEFAULT_TASKS: Record<string, Array<{ name: string; category: string; frequency: string; months: number }>> = {
+      qc_review: [
+        { name: "QC Review - Chemistry",    category: "QC Review", frequency: "Monthly", months: 1 },
+        { name: "QC Review - Hematology",   category: "QC Review", frequency: "Monthly", months: 1 },
+        { name: "QC Review - Urinalysis",   category: "QC Review", frequency: "Monthly", months: 1 },
+      ],
+      pt_review: [
+        { name: "Proficiency Testing Review - Chemistry",    category: "Quality Assessment", frequency: "Quarterly", months: 3 },
+        { name: "Proficiency Testing Review - Hematology",   category: "Quality Assessment", frequency: "Quarterly", months: 3 },
+        { name: "Proficiency Testing Review - Microbiology", category: "Quality Assessment", frequency: "Quarterly", months: 3 },
+      ],
+      hipaa_training: [
+        { name: "HIPAA Training - Annual Review", category: "HIPAA", frequency: "Annual", months: 12 },
+      ],
+      bbp_training: [
+        { name: "Bloodborne Pathogen Training - Annual", category: "Bloodborne Pathogen", frequency: "Annual", months: 12 },
+      ],
+      pipette_cal: [
+        { name: "Pipette Calibration", category: "Equipment Calibration", frequency: "Annual", months: 12 },
+      ],
+      therm_cal: [
+        { name: "Thermometer Calibration", category: "Equipment Calibration", frequency: "Annual", months: 12 },
+      ],
+      centrifuge_rpm: [
+        { name: "Centrifuge RPM Verification", category: "Equipment Calibration", frequency: "Annual", months: 12 },
+      ],
+      timer_verify: [
+        { name: "Timer Verification", category: "Equipment Calibration", frequency: "Annual", months: 12 },
+      ],
+      blood_bank_alarms: [
+        { name: "Blood Bank Alarm Check - Refrigerator",  category: "Blood Bank Alarm Checks", frequency: "Quarterly", months: 3 },
+        { name: "Blood Bank Alarm Check - Freezer",       category: "Blood Bank Alarm Checks", frequency: "Quarterly", months: 3 },
+        { name: "Blood Bank Alarm Check - Platelet Incubator", category: "Blood Bank Alarm Checks", frequency: "Quarterly", months: 3 },
+      ],
+      water_testing: [
+        { name: "Water Contamination Testing", category: "Water Contamination", frequency: "Monthly", months: 1 },
+      ],
+    };
+
+    const now = new Date().toISOString();
+    let created = 0;
+    let skipped = 0;
+
+    for (const cat of categories) {
+      const tasks = DEFAULT_TASKS[cat];
+      if (!tasks) continue;
+      for (const t of tasks) {
+        const existing = sqlite.prepare(
+          "SELECT id FROM veritatrack_tasks WHERE user_id=? AND name=? AND active=1"
+        ).get(userId, t.name);
+        if (existing) { skipped++; continue; }
+        sqlite.prepare(
+          "INSERT INTO veritatrack_tasks (user_id,name,category,frequency,frequency_months,created_at,updated_at) VALUES (?,?,?,?,?,?,?)"
+        ).run(userId, t.name, t.category, t.frequency, t.months, now, now);
+        created++;
+      }
+    }
+
+    res.json({ ok: true, created, skipped });
+  });
+
   // POST Excel export
   app.post("/api/veritatrack/export/excel", authMiddleware, async (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });

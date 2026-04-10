@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -12,8 +12,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertTriangle, CheckCircle2, Clock, Plus, Download, Upload,
-  ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List,
+  CheckCircle2, Plus, Download, Upload,
+  ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
 
@@ -71,6 +71,40 @@ const FREQUENCIES = [
   { label: "Annual",    value: "Annual",    months: 12 },
   { label: "Biennial",  value: "Biennial",  months: 24 },
 ];
+
+// ── Default task toggles ─────────────────────────────────────────────────────
+const DEFAULT_TOGGLES = [
+  { id: "qc_review",       label: "QC Review",                      sub: "Monthly - Chemistry, Hematology, Urinalysis" },
+  { id: "pt_review",       label: "Proficiency Testing Review",      sub: "Quarterly - Chemistry, Hematology, Microbiology" },
+  { id: "hipaa_training",  label: "HIPAA Training",                  sub: "Annual" },
+  { id: "bbp_training",    label: "Bloodborne Pathogen Training",    sub: "Annual" },
+  { id: "pipette_cal",     label: "Pipette Calibration",             sub: "Annual" },
+  { id: "therm_cal",       label: "Thermometer Calibration",         sub: "Annual" },
+  { id: "centrifuge_rpm",  label: "Centrifuge RPM Verification",     sub: "Annual" },
+  { id: "timer_verify",    label: "Timer Verification",              sub: "Annual" },
+  { id: "blood_bank_alarms", label: "Blood Bank Alarm Checks",       sub: "Quarterly - Refrigerator, Freezer, Platelet Incubator" },
+  { id: "water_testing",   label: "Water Contamination Testing",     sub: "Monthly" },
+] as const;
+
+type ToggleId = typeof DEFAULT_TOGGLES[number]["id"];
+
+// ── Toggle switch (re-used from VeritaPolicy pattern) ─────────────────────────
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors
+        ${checked ? "bg-primary" : "bg-muted"}
+        ${disabled ? "opacity-50 cursor-not-allowed" : ""}
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+    >
+      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`} />
+    </button>
+  );
+}
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_ORDER: Record<Task["status"], number> = {
@@ -518,6 +552,14 @@ export default function VeritaTrackAppPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(null);
 
+  // Default task panel state
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [selectedToggles, setSelectedToggles] = useState<Set<ToggleId>>(new Set(
+    DEFAULT_TOGGLES.map(t => t.id) // all on by default
+  ));
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<{ created: number; skipped: number } | null>(null);
+
   const hasPlanAccess = ["annual","professional","lab","complete","waived","community","hospital","large_hospital","enterprise"].includes(user?.plan || "");
 
   const { data: tasks = [], isLoading, refetch } = useQuery<Task[]>({
@@ -564,6 +606,34 @@ export default function VeritaTrackAppPage() {
     const cats = Array.from(new Set(tasks.map(t => t.category))).sort();
     return cats;
   }, [tasks]);
+
+  // Auto-open setup panel when no tasks exist
+  useEffect(() => {
+    if (!isLoading && tasks.length === 0) {
+      setSetupOpen(true);
+    }
+  }, [isLoading, tasks.length]);
+
+  const handleSeedDefaults = async () => {
+    if (selectedToggles.size === 0) return;
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/veritatrack/seed-defaults`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ categories: Array.from(selectedToggles) }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setSeedResult({ created: data.created, skipped: data.skipped });
+        qc.invalidateQueries({ queryKey: ["/api/veritatrack/tasks"] });
+        qc.invalidateQueries({ queryKey: ["/api/veritatrack/dashboard"] });
+      }
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const handleImport = async () => {
     setImportLoading(true);
@@ -624,6 +694,15 @@ export default function VeritaTrackAppPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm" variant="outline"
+            className={`h-8 text-xs gap-1 ${setupOpen ? "border-primary text-primary" : ""}`}
+            onClick={() => setSetupOpen(o => !o)}
+            title="Quick-add common lab tasks"
+          >
+            <Settings size={12} />
+            Quick Setup
+          </Button>
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleImport} disabled={importLoading}
             title="Import cal ver, method comparison, precision, and SOP schedules from VeritaMap">
             <Upload size={12} />
@@ -639,6 +718,70 @@ export default function VeritaTrackAppPage() {
           />
         </div>
       </div>
+
+      {/* Quick Setup panel */}
+      {setupOpen && (
+        <div className="border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b border-border">
+            <div>
+              <span className="text-sm font-semibold text-foreground">Quick Setup</span>
+              <span className="text-xs text-muted-foreground ml-2">Select categories to add common tasks automatically</span>
+            </div>
+            <button onClick={() => setSetupOpen(false)} className="text-muted-foreground hover:text-foreground text-xs px-2">Done</button>
+          </div>
+          <div className="px-4 py-4 bg-card">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              {DEFAULT_TOGGLES.map(toggle => (
+                <div key={toggle.id} className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm text-foreground">{toggle.label}</div>
+                    <div className="text-[11px] text-muted-foreground">{toggle.sub}</div>
+                  </div>
+                  <Toggle
+                    checked={selectedToggles.has(toggle.id)}
+                    onChange={v => setSelectedToggles(prev => {
+                      const next = new Set(prev);
+                      v ? next.add(toggle.id) : next.delete(toggle.id);
+                      return next;
+                    })}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 pt-1 border-t border-border">
+              <Button
+                size="sm"
+                disabled={selectedToggles.size === 0 || seeding}
+                onClick={handleSeedDefaults}
+                className="h-8 text-xs"
+              >
+                {seeding ? "Adding tasks..." : `Apply (${selectedToggles.size} selected)`}
+              </Button>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setSelectedToggles(new Set(DEFAULT_TOGGLES.map(t => t.id)))}
+              >
+                Select all
+              </button>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setSelectedToggles(new Set())}
+              >
+                Clear all
+              </button>
+              {seedResult && (
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-auto">
+                  Added {seedResult.created} task{seedResult.created !== 1 ? "s" : ""}
+                  {seedResult.skipped > 0 ? ` (${seedResult.skipped} already existed)` : ""}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-3">
+              Turning off a toggle does not delete existing tasks. Use this panel anytime to add new categories.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Import result banner */}
       {importResult && (
