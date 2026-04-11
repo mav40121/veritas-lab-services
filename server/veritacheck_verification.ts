@@ -98,7 +98,9 @@ export function registerVeritaCheckVerificationRoutes(
       return res.status(400).json({ error: "instrument_name and trigger_type are required" });
     }
     const now = new Date().toISOString();
-    const elemArr = elements || ["accuracy", "precision", "reportable_range", "reference_interval"];
+    const elemArr = (Array.isArray(elements) && elements.length > 0)
+      ? elements
+      : ["accuracy", "precision", "reportable_range", "reference_interval"];
     const result = sqlite.prepare(`
       INSERT INTO veritacheck_verifications
         (user_id, instrument_name, manufacturer, trigger_type, map_instrument_id,
