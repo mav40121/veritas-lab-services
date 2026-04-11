@@ -247,4 +247,256 @@ export function registerVeritaCheckVerificationRoutes(
   app.get("/api/veritacheck/verifications/clsi-guidance", authMiddleware, (req: any, res) => {
     res.json(CLSI_GUIDANCE);
   });
+
+  // POST generate PDF package
+  app.post("/api/veritacheck/verifications/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    const userId = req.ownerUserId ?? req.user.userId;
+
+    const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
+    if (!v) return res.status(404).json({ error: "Not found" });
+
+    const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id) as any[];
+    const studies = sqlite.prepare(`
+      SELECT vs.*, s.testName, s.studyType
+      FROM veritacheck_verification_studies vs
+      LEFT JOIN studies s ON s.id = vs.study_id
+      WHERE vs.verification_id = ?
+      ORDER BY vs.element
+    `).all(req.params.id) as any[];
+
+    const elements: string[] = JSON.parse(v.elements || "[]");
+    const elementReasons: Record<string, string> = JSON.parse(v.element_reasons || "{}");
+
+    const allElements = [
+      { key: "accuracy",           label: "Accuracy / Bias",    protocol: "CLSI EP15-A3" },
+      { key: "precision",          label: "Precision",          protocol: "CLSI EP15-A3" },
+      { key: "reportable_range",   label: "Reportable Range",   protocol: "CLSI EP06" },
+      { key: "reference_interval", label: "Reference Interval", protocol: "CLSI EP28-A3c" },
+    ];
+
+    const triggerLabels: Record<string, string> = {
+      new_instrument: "New instrument (first of this type in lab)",
+      new_analyte:    "New analyte added to existing instrument",
+      second_unit:    "Second unit of same make/model",
+      replacement:    "Replacement instrument (same make/model)",
+    };
+
+    const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const teal = "#01696F";
+
+    // ── Element rows for the summary table ──────────────────────────────────
+    const elementRows = allElements.map(el => {
+      const slot = studies.find((s: any) => s.element === el.key);
+      const included = elements.includes(el.key);
+      if (!included) {
+        return `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-style:italic">Excluded - see justification below</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">N/A</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${el.protocol}</td>
+        </tr>`;
+      }
+      const passLabel = slot?.passed === 1 ? "<span style='color:#059669;font-weight:600'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:600'>FAIL</span>" : "<span style='color:#d97706'>Pending</span>";
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${slot?.analyte || ""} ${slot?.sample_count ? `(n=${slot.sample_count})` : ""}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">${passLabel}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${el.protocol}</td>
+      </tr>`;
+    }).join("");
+
+    // ── Instrument units sign-off blocks ────────────────────────────────────
+    const unitBlocks = instruments.length > 0 ? instruments.map((u: any) => `
+      <div style="margin-top:24px;padding:16px;border:1px solid #e5e7eb;border-radius:6px;background:#fafafa">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:${teal}">Unit: S/N ${u.serial_number}${u.model ? " - " + u.model : ""}${u.location ? " (" + u.location + ")" : ""}</div>
+        <table style="width:100%;font-size:12px">
+          <tr>
+            <td style="width:40%;padding:6px 0"><strong>I approve this instrument/test for patient testing.</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0">
+              Signature: <span style="display:inline-block;width:200px;border-bottom:1px solid #000;">&nbsp;</span>
+            </td>
+            <td style="padding:6px 0">
+              Date: <span style="display:inline-block;width:120px;border-bottom:1px solid #000;">${u.approved_date || "&nbsp;"}</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0">Printed Name: <strong>${u.director_name || "_________________________"}</strong></td>
+            <td style="padding:6px 0">Title: ${u.director_title || "_________________________"}</td>
+          </tr>
+        </table>
+      </div>`).join("") : "";
+
+    // ── Element detail sections ─────────────────────────────────────────────
+    const elementDetails = allElements.map(el => {
+      const slot = studies.find((s: any) => s.element === el.key);
+      const included = elements.includes(el.key);
+      if (!included) {
+        return `<div style="margin-bottom:20px;padding:16px;border-left:3px solid #d1d5db;background:#f9fafb">
+          <div style="font-weight:600;font-size:13px;color:#374151">${el.label} - EXCLUDED</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:6px">Justification: ${elementReasons[el.key] || "Not documented"}</div>
+        </div>`;
+      }
+      return `<div style="margin-bottom:28px">
+        <div style="font-weight:700;font-size:14px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:4px;margin-bottom:12px">${el.label} (${el.protocol})</div>
+        ${slot?.analyte ? `<div style="font-size:12px;margin-bottom:6px"><strong>Analyte:</strong> ${slot.analyte}</div>` : ""}
+        ${slot?.sample_count ? `<div style="font-size:12px;margin-bottom:6px"><strong>Samples Run:</strong> ${slot.sample_count}</div>` : ""}
+        ${slot?.clsi_protocol ? `<div style="font-size:12px;margin-bottom:6px"><strong>CLSI Protocol:</strong> ${slot.clsi_protocol}</div>` : ""}
+        ${slot?.design_rationale ? `<div style="font-size:12px;margin-bottom:6px"><strong>Study Design Rationale:</strong><br><span style="color:#374151">${slot.design_rationale}</span></div>` : ""}
+        ${slot?.testName ? `<div style="font-size:12px;margin-bottom:6px"><strong>Linked Study:</strong> ${slot.testName}</div>` : ""}
+        <div style="font-size:12px;margin-top:8px">
+          <strong>Result:</strong>
+          ${slot?.passed === 1 ? "<span style='color:#059669;font-weight:700'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:700'>FAIL</span>" : "<span style='color:#d97706'>Pending evaluation</span>"}
+        </div>
+      </div>`;
+    }).join("");
+
+    // ── Remediation section ─────────────────────────────────────────────────
+    const remediationSection = v.remediation_notes ? `
+      <div style="margin-top:32px;padding:16px;border:1px solid #fca5a5;border-radius:6px;background:#fff5f5">
+        <div style="font-weight:700;font-size:14px;color:#dc2626;margin-bottom:10px">Remediation Log</div>
+        <div style="font-size:12px;white-space:pre-wrap;color:#374151">${v.remediation_notes}</div>
+      </div>` : "";
+
+    // ── Excluded element justifications ─────────────────────────────────────
+    const excludedJustifications = allElements
+      .filter(el => !elements.includes(el.key))
+      .map(el => `<div style="margin-bottom:12px">
+        <div style="font-weight:600;font-size:13px">${el.label}</div>
+        <div style="font-size:12px;color:#374151">${elementReasons[el.key] || "Not documented"}</div>
+      </div>`).join("");
+
+    // ── Full HTML ───────────────────────────────────────────────────────────
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: white; }
+    .page { padding: 48px 56px; max-width: 900px; margin: 0 auto; }
+    table { border-collapse: collapse; width: 100%; }
+    @page { margin: 0.5in; }
+    @media print { .page { padding: 0; } }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- COVER PAGE -->
+  <!-- Header bar -->
+  <div style="background:${teal};color:white;padding:20px 24px;border-radius:6px;margin-bottom:24px">
+    <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;opacity:0.8;margin-bottom:4px">Veritas Lab Services - VeritaCheck&trade; Verification Package</div>
+    <div style="font-size:20px;font-weight:700">Instrument/Test Performance Verification</div>
+    <div style="font-size:13px;opacity:0.9;margin-top:4px">${v.instrument_name}${v.manufacturer ? " - " + v.manufacturer : ""}</div>
+  </div>
+
+  <!-- Package info -->
+  <table style="margin-bottom:24px;font-size:12px">
+    <tr>
+      <td style="width:50%;padding:4px 0;color:#6b7280">Verification Trigger</td>
+      <td style="padding:4px 0;font-weight:500">${triggerLabels[v.trigger_type] || v.trigger_type}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Package Created</td>
+      <td style="padding:4px 0">${new Date(v.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Package Status</td>
+      <td style="padding:4px 0">${v.status === "complete" ? "<strong style='color:#059669'>Complete</strong>" : "In Progress"}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Units / Serial Numbers</td>
+      <td style="padding:4px 0">${instruments.length > 0 ? instruments.map((u: any) => u.serial_number).join(", ") : "Not specified"}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Report Generated</td>
+      <td style="padding:4px 0">${today}</td>
+    </tr>
+  </table>
+
+  <!-- Results summary table -->
+  <div style="font-weight:700;font-size:14px;color:${teal};margin-bottom:10px">Performance Summary</div>
+  <table style="font-size:12px;margin-bottom:28px;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden">
+    <thead>
+      <tr style="background:${teal};color:white">
+        <th style="padding:10px 12px;text-align:left">Element</th>
+        <th style="padding:10px 12px;text-align:left">Analyte / Samples</th>
+        <th style="padding:10px 12px;text-align:center">Result</th>
+        <th style="padding:10px 12px;text-align:left">CLSI Standard</th>
+      </tr>
+    </thead>
+    <tbody>${elementRows}</tbody>
+  </table>
+
+  <!-- Director approval signature block - PAGE 1 -->
+  <div style="border:2px solid ${teal};border-radius:6px;padding:20px;margin-bottom:28px">
+    <div style="font-weight:700;font-size:13px;color:${teal};margin-bottom:8px;letter-spacing:0.3px">LABORATORY DIRECTOR OR DESIGNEE REVIEW</div>
+    <div style="font-size:12px;color:#374151;margin-bottom:12px;line-height:1.6">
+      I have reviewed the verification study results for the instrument/test identified above and find that the performance specifications have been adequately verified.
+    </div>
+    <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:20px">
+      I approve this instrument/test for patient testing.
+    </div>
+    <table style="font-size:12px;width:100%">
+      <tr>
+        <td style="width:50%;padding-bottom:16px">
+          Signature: <span style="display:inline-block;width:200px;border-bottom:1px solid #000">&nbsp;</span>
+        </td>
+        <td style="padding-bottom:16px">
+          Date: <span style="display:inline-block;width:120px;border-bottom:1px solid #000">${v.approved_date || "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"}</span>
+        </td>
+      </tr>
+      <tr>
+        <td>Printed Name: <strong>${v.director_name || "_________________________"}</strong></td>
+        <td>Title: ${v.director_title || "_________________________"}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Per-unit sign-off blocks (multi-instrument) -->
+  ${unitBlocks}
+
+  <!-- Page break before details -->
+  <div style="page-break-before:always"></div>
+
+  <!-- ELEMENT DETAIL SECTIONS -->
+  <div style="font-weight:700;font-size:16px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:6px;margin-bottom:24px">Performance Study Details</div>
+  ${elementDetails}
+
+  <!-- Excluded element justifications -->
+  ${excludedJustifications ? `
+  <div style="margin-top:28px;padding:16px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb">
+    <div style="font-weight:700;font-size:14px;margin-bottom:12px">Element Exclusion Justifications</div>
+    ${excludedJustifications}
+  </div>` : ""}
+
+  <!-- Remediation log -->
+  ${remediationSection}
+
+  <!-- Footer -->
+  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center">
+    Generated by VeritaCheck&trade; - Veritas Lab Services, LLC | For internal laboratory use | Medical director or designee review required before patient testing
+  </div>
+
+</div>
+</body>
+</html>`;
+
+    try {
+      const puppeteer = await import("puppeteer");
+      const browser = await puppeteer.default.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "networkidle0" });
+      const pdf = await page.pdf({ format: "Letter", printBackground: true, margin: { top: "0.5in", bottom: "0.5in", left: "0.5in", right: "0.5in" } });
+      await browser.close();
+      const filename = `VeritaCheck_Verification_${v.instrument_name.replace(/[^a-zA-Z0-9]/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
+      res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` });
+      res.send(Buffer.from(pdf));
+    } catch (err: any) {
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
 }

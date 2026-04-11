@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, CheckCircle2, Circle,
-  AlertTriangle, FlaskConical, ClipboardCheck, BookOpen, Info,
+  AlertTriangle, FlaskConical, ClipboardCheck, BookOpen, Info, Download,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -550,13 +550,34 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
               {verification.manufacturer && <p className="text-sm text-muted-foreground">{verification.manufacturer}</p>}
               <p className="text-xs text-muted-foreground mt-1">{TRIGGER_TYPES.find(t => t.value === verification.trigger_type)?.label}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className={statusColor(verification)}>{statusLabel(verification)}</Badge>
               {verification.status !== "complete" && (
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-emerald-600 border-emerald-500/30" onClick={() => patchVerification({ status: "complete" })}>
                   <CheckCircle2 size={12} /> Mark Complete
                 </Button>
               )}
+              <Button
+                size="sm" variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={async () => {
+                  const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/pdf`, {
+                    method: "POST",
+                    headers: authHeaders(),
+                  });
+                  if (r.ok) {
+                    const blob = await r.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `VeritaCheck_Verification_${verification.instrument_name}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                }}
+              >
+                <Download size={12} /> Download PDF
+              </Button>
             </div>
           </div>
         </CardContent>
