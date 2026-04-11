@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -141,7 +142,8 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 }
 
 export default function VeritaAssurePage() {
-  return (
+    useSEO({ title: "VeritaAssure | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck, VeritaMap, VeritaScan, VeritaTrack, VeritaPolicy, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Hero */}

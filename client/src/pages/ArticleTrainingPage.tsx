@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,8 @@ import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, ExternalLink } f
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 export default function ArticleTrainingPage() {
-  return (
+    useSEO({ title: "How VeritaAssure Trains Lab Leaders | Veritas Lab Services", description: "How VeritaAssure helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

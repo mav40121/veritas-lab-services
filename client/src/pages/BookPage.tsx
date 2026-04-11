@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookOpen, CheckCircle2, FlaskConical, Users, Award, Mic, ChevronRight } from "lucide-react";
@@ -96,7 +97,8 @@ const PULL_QUOTES = [
 ];
 
 export default function BookPage() {
-  return (
+    useSEO({ title: "Book a Consultation | Veritas Lab Services", description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure can help your laboratory stay compliant and survey-ready." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

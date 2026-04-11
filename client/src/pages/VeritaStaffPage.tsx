@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,7 +40,8 @@ const FEATURE_CARDS = [
 ];
 
 export default function VeritaStaffPage() {
-  return (
+    useSEO({ title: "VeritaStaff | Laboratory Staff Roster and HR Compliance Software", description: "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

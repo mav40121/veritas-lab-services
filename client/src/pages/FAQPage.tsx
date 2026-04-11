@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -144,7 +145,8 @@ const FAQ_CATEGORIES = [
 ];
 
 export default function FAQPage() {
-  return (
+    useSEO({ title: "FAQ | VeritaAssure Lab Compliance Software", description: "Frequently asked questions about VeritaAssure, CLIA compliance software, method validation, and laboratory inspection readiness tools." });
+return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
       <section className="border-b border-border bg-gradient-to-br from-primary/8 via-transparent to-transparent">

@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,8 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
 }
 
 export default function ArticleCalVerPage() {
-  return (
+    useSEO({ title: "CLIA Calibration Verification and Method Comparison Guide | Veritas Lab Services", description: "A complete guide to CLIA calibration verification and method comparison requirements for clinical laboratories, including documentation and frequency requirements." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

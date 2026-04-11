@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,7 +129,8 @@ const serviceGroups = [
 ];
 
 export default function ServicesPage() {
-  return (
+    useSEO({ title: "Services | Veritas Lab Services Laboratory Consulting", description: "Laboratory consulting services including compliance assessments, accreditation preparation, method validation support, and staff education by Michael Veri, MLS(ASCP), CPHQ." });
+return (
     <div>
       {/* Header */}
       <section className="border-b border-border bg-secondary/20">

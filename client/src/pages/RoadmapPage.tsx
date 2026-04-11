@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, Clock, CalendarDays } from "lucide-react";
 
@@ -134,7 +135,8 @@ function RoadmapSection({ label, icon, accentColor, borderColor, items }: Sectio
 }
 
 export default function RoadmapPage() {
-  return (
+    useSEO({ title: "Product Roadmap | VeritaAssure Lab Compliance Software", description: "See what is coming next for VeritaAssure. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness." });
+return (
     <div>
       {/* Header */}
       <section className="border-b border-border bg-primary/5">

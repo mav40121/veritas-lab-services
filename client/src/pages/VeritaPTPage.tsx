@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,8 @@ const HOW_IT_WORKS = [
 export default function VeritaPTPage() {
   const { isLoggedIn } = useAuth();
 
-  return (
+    useSEO({ title: "VeritaPT | Proficiency Testing Gap Analyzer for Clinical Labs", description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

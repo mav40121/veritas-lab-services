@@ -1,11 +1,4 @@
 User-agent: *
 Allow: /
 
-# Sitemap
 Sitemap: https://www.veritaslabservices.com/sitemap.xml
-
-# Disallow private/auth routes
-Disallow: /api/
-Disallow: /#/dashboard
-Disallow: /#/login
-Disallow: /#/reset-password

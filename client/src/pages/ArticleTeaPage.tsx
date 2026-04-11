@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,8 @@ const teaSampleTable = [
 ];
 
 export default function ArticleTeaPage() {
-  return (
+    useSEO({ title: "CLIA Total Allowable Error: What Lab Directors Don't Know | Veritas Lab Services", description: "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to method validation studies and what surveyors look for in your documentation." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

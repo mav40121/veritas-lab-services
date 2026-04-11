@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,7 +23,8 @@ const stats = [
 ];
 
 export default function HomePage() {
-  return (
+    useSEO({ title: "Veritas Lab Services | Clinical Laboratory Compliance Software", description: "VeritaAssure is the all-in-one compliance platform for clinical laboratories. Method validation, inspection readiness, PT gap analysis, competency tracking, and more." });
+return (
     <div>
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-border">

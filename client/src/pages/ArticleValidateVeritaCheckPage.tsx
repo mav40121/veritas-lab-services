@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleValidateVeritaCheckPage() {
-  return (
+    useSEO({ title: "How to Validate VeritaCheck for CLIA Compliance | Veritas Lab Services", description: "Software validation documentation for VeritaCheck under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

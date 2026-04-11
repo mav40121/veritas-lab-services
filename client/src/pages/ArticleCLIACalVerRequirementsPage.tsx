@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleCLIACalVerRequirementsPage() {
-  return (
+    useSEO({ title: "Calibration Verification Requirements Under CLIA | Veritas Lab Services", description: "Detailed breakdown of CLIA calibration verification requirements including frequency, documentation, acceptable performance criteria, and common surveyor findings." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

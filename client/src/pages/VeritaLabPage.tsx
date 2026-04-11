@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,7 +40,8 @@ const FEATURES = [
 ];
 
 export default function VeritaLabPage() {
-  return (
+    useSEO({ title: "VeritaLab | Laboratory Certificate and Document Storage Software", description: "Centralized storage for laboratory accreditation certificates, licenses, and compliance documents. Never scramble for paperwork during a survey again." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

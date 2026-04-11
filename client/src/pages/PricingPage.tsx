@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,8 @@ const PLANS = [
 ];
 
 export default function PricingPage() {
-  return (
+    useSEO({ title: "Pricing | VeritaAssure Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Hero */}

@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,7 +34,8 @@ const FEATURES = [
 ];
 
 export default function VeritaMapPage() {
-  return (
+    useSEO({ title: "VeritaMap | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleMethodComparisonPage() {
-  return (
+    useSEO({ title: "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services", description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

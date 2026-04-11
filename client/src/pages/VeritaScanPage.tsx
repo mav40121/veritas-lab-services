@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,7 +38,8 @@ const FEATURES = [
 
 
 export default function VeritaScanPage() {
-  return (
+    useSEO({ title: "VeritaScan | Laboratory Inspection Readiness Checklist Software", description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

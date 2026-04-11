@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExternalLink, Award, BookOpen, Shield, Star } from "lucide-react";
@@ -22,7 +23,8 @@ const credentials = [
 ];
 
 export default function TeamPage() {
-  return (
+    useSEO({ title: "Our Team | Veritas Lab Services", description: "Meet Michael Veri, MS, MBA, MLS(ASCP), CPHQ - laboratory compliance expert, former Joint Commission surveyor, and founder of Veritas Lab Services." });
+return (
     <div>
       {/* Header */}
       <section className="border-b border-border bg-secondary/20">

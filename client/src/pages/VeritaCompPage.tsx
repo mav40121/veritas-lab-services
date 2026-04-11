@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,7 +64,8 @@ const FEATURES = [
 ];
 
 export default function VeritaCompPage() {
-  return (
+    useSEO({ title: "VeritaComp | Laboratory Competency Assessment Software", description: "Manage the six CLIA competency elements for every lab employee. Track assessments, generate PDF documentation, and stay survey-ready year-round." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

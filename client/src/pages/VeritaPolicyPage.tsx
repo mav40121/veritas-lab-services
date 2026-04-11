@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +48,8 @@ const FEATURES = [
 ];
 
 export default function VeritaPolicyPage() {
-  return (
+    useSEO({ title: "VeritaPolicy | Laboratory Policy and Procedure Management Software", description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready." });
+return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">

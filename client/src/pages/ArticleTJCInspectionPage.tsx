@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleTJCInspectionPage() {
-  return (
+    useSEO({ title: "TJC Laboratory Inspection Checklist and Preparation Guide | Veritas Lab Services", description: "Prepare your clinical laboratory for a Joint Commission survey. Common findings, checklist items, and strategies from a former TJC laboratory surveyor." });
+return (
     <div className="min-h-screen bg-background">
 
       {/* Header */}

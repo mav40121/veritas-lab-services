@@ -1,3 +1,4 @@
+import { useSEO } from "@/hooks/useSEO";
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { useLocation, useSearch, Link } from "wouter";
@@ -1013,7 +1014,8 @@ export default function VeritaCheckPage() {
     saveMutation.mutate(study);
   };
 
-  return (
+    useSEO({ title: "VeritaCheck | CLIA Method Validation Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference intervals. Generates director-signed, survey-ready verification documentation." });
+return (
     <div>
       {!isLoggedIn ? (
         <>
