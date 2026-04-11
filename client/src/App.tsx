@@ -1,4 +1,5 @@
 import { Switch, Route, Router, useLocation } from "wouter";
+import VeritaCheckVerificationPage from "@/pages/VeritaCheckVerificationPage";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
@@ -248,6 +249,7 @@ function AppContent() {
           <Route path="/study/new" component={VeritaCheckPage} />
           <Route path="/study/:id/results" component={StudyResultsPage} />
           <Route path="/dashboard" component={DashboardPage} />
+          <Route path="/dashboard/verifications" component={VeritaCheckVerificationPage} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/login" component={LoginPage} />
           <Route path="/register" component={LoginPage} />

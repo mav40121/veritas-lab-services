@@ -40,19 +40,27 @@ export default function Dashboard() {
             All saved studies
           </p>
         </div>
-        {readOnly ? (
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="Resubscribe to add new records">
-            <PlusCircle size={14} className="mr-1.5" />
-            New Study
-          </Button>
-        ) : (
-          <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href="/study/new">
-              <PlusCircle size={14} className="mr-1.5" />
-              New Study
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+            <Link href="/dashboard/verifications">
+              <FileText size={13} />
+              Instrument Verification Packages
             </Link>
           </Button>
-        )}
+          {readOnly ? (
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="Resubscribe to add new records">
+              <PlusCircle size={14} className="mr-1.5" />
+              New Study
+            </Button>
+          ) : (
+            <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Link href="/study/new">
+                <PlusCircle size={14} className="mr-1.5" />
+                New Study
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
