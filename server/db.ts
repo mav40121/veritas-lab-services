@@ -979,6 +979,41 @@ sqlite.exec(`
   );
 `);
 
+// ── Migrations: veritacheck_verifications columns ───────────────────────────
+try {
+  const vcvCols = (sqlite.prepare("PRAGMA table_info(veritacheck_verifications)").all() as any[]).map((c: any) => c.name);
+  if (!vcvCols.includes("elements"))         sqlite.exec(`ALTER TABLE veritacheck_verifications ADD COLUMN elements TEXT NOT NULL DEFAULT '["accuracy","precision","reportable_range","reference_interval"]'`);
+  if (!vcvCols.includes("element_reasons"))  sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN element_reasons TEXT NOT NULL DEFAULT '{}'");
+  if (!vcvCols.includes("clsi_notes"))        sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN clsi_notes TEXT NOT NULL DEFAULT '{}'");
+  if (!vcvCols.includes("director_name"))    sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN director_name TEXT");
+  if (!vcvCols.includes("director_title"))   sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN director_title TEXT");
+  if (!vcvCols.includes("approved_date"))    sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN approved_date TEXT");
+  if (!vcvCols.includes("remediation_notes")) sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN remediation_notes TEXT");
+  if (!vcvCols.includes("map_instrument_id")) sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN map_instrument_id INTEGER");
+  if (!vcvCols.includes("manufacturer"))     sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN manufacturer TEXT");
+} catch (e) { console.warn("veritacheck_verifications migration:", e); }
+
+try {
+  const vciCols = (sqlite.prepare("PRAGMA table_info(veritacheck_verification_instruments)").all() as any[]).map((c: any) => c.name);
+  if (!vciCols.includes("model"))          sqlite.exec("ALTER TABLE veritacheck_verification_instruments ADD COLUMN model TEXT");
+  if (!vciCols.includes("location"))       sqlite.exec("ALTER TABLE veritacheck_verification_instruments ADD COLUMN location TEXT");
+  if (!vciCols.includes("director_name"))  sqlite.exec("ALTER TABLE veritacheck_verification_instruments ADD COLUMN director_name TEXT");
+  if (!vciCols.includes("director_title")) sqlite.exec("ALTER TABLE veritacheck_verification_instruments ADD COLUMN director_title TEXT");
+  if (!vciCols.includes("approved_date"))  sqlite.exec("ALTER TABLE veritacheck_verification_instruments ADD COLUMN approved_date TEXT");
+} catch (e) { console.warn("veritacheck_verification_instruments migration:", e); }
+
+try {
+  const vcsCols = (sqlite.prepare("PRAGMA table_info(veritacheck_verification_studies)").all() as any[]).map((c: any) => c.name);
+  if (!vcsCols.includes("analyte"))           sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN analyte TEXT");
+  if (!vcsCols.includes("sample_count"))      sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN sample_count INTEGER");
+  if (!vcsCols.includes("clsi_protocol"))     sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN clsi_protocol TEXT");
+  if (!vcsCols.includes("design_rationale"))  sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN design_rationale TEXT");
+  if (!vcsCols.includes("result_summary"))    sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN result_summary TEXT");
+  if (!vcsCols.includes("passed"))            sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN passed INTEGER");
+  if (!vcsCols.includes("updated_at"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN updated_at TEXT");
+  if (!vcsCols.includes("study_id"))          sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN study_id INTEGER");
+} catch (e) { console.warn("veritacheck_verification_studies migration:", e); }
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
