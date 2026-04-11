@@ -921,6 +921,64 @@ sqlite.exec(`
   );
 `);
 
+// VeritaCheck Instrument Verification packages
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritacheck_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    instrument_name TEXT NOT NULL,
+    manufacturer TEXT,
+    trigger_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'in_progress',
+    map_instrument_id INTEGER,
+    elements TEXT NOT NULL DEFAULT '["accuracy","precision","reportable_range","reference_interval"]',
+    element_reasons TEXT NOT NULL DEFAULT '{}',
+    clsi_notes TEXT NOT NULL DEFAULT '{}',
+    director_name TEXT,
+    director_title TEXT,
+    approved_date TEXT,
+    remediation_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// Serial numbers / units per verification (multi-instrument support)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritacheck_verification_instruments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    serial_number TEXT NOT NULL,
+    model TEXT,
+    location TEXT,
+    director_name TEXT,
+    director_title TEXT,
+    approved_date TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (verification_id) REFERENCES veritacheck_verifications(id)
+  );
+`);
+
+// Study assignments per element per verification
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritacheck_verification_studies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    element TEXT NOT NULL,
+    study_id INTEGER,
+    analyte TEXT,
+    sample_count INTEGER,
+    clsi_protocol TEXT,
+    design_rationale TEXT,
+    result_summary TEXT,
+    passed INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (verification_id) REFERENCES veritacheck_verifications(id),
+    FOREIGN KEY (study_id) REFERENCES studies(id)
+  );
+`);
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
