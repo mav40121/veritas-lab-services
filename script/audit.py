@@ -164,10 +164,15 @@ def check_file(rel, fpath):
                         WARNINGS.append(f"[{rel}:{i}] 'laboratory director' without 'or designee':")
                         WARNINGS.append(f"  >> {stripped[:120]}")
 
-        # VeritaScan PDF must NOT have director signature block
-        if re.search(r'veritascan', content, re.IGNORECASE):
-            if re.search(r'LABORATORY DIRECTOR OR DESIGNEE REVIEW', content):
-                WARNINGS.append(f"[{rel}] Director signature block found in VeritaScan PDF context -- VeritaScan is internal use only")
+        # VeritaScan PDF functions must NOT have director signature block
+        # Check per-function: find VeritaScan-named functions and scan only their body
+        vs_fn_pattern = re.compile(r'(function\s+\w*[Vv]erita[Ss]can\w*|buildVeritaScan\w*|generateVeritaScan\w*)\s*[({]')
+        sig_pattern = re.compile(r'LABORATORY DIRECTOR OR DESIGNEE REVIEW')
+        for fn_match in vs_fn_pattern.finditer(content):
+            # Extract roughly 5000 chars after the function start as its body
+            fn_body = content[fn_match.start():fn_match.start() + 5000]
+            if sig_pattern.search(fn_body):
+                WARNINGS.append(f"[{rel}] Director signature block found in VeritaScan PDF function -- VeritaScan is internal use only")
 
 
 # ── KNOWN SEAT RELATIONSHIPS ─────────────────────────────────────────────────
