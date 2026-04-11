@@ -256,16 +256,18 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
               </div>
             </div>
             <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 shrink-0">
-              <ConfirmDialog
-                title="Delete Verification Package?"
-                message={`Delete the verification package for ${v.instrument_name}? All element data and serial numbers will be permanently removed.`}
-                confirmLabel="Delete"
-                onConfirm={() => handleDelete(v.id)}
-              >
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={e => e.stopPropagation()}>
-                  <Trash2 size={13} />
-                </Button>
-              </ConfirmDialog>
+              <div onClick={e => e.stopPropagation()}>
+                <ConfirmDialog
+                  title="Delete Verification Package?"
+                  message={`Delete the verification package for ${v.instrument_name}? All element data and serial numbers will be permanently removed.`}
+                  confirmLabel="Delete"
+                  onConfirm={() => handleDelete(v.id)}
+                >
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                    <Trash2 size={13} />
+                  </Button>
+                </ConfirmDialog>
+              </div>
               <ChevronRight size={16} className="text-muted-foreground" />
             </div>
           </CardContent>
