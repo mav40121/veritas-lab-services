@@ -218,8 +218,11 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
   onDeleted: () => void;
   onNew: () => void;
 }) {
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
   const handleDelete = async (id: number) => {
     await fetch(`${API_BASE}/api/veritacheck/verifications/${id}`, { method: "DELETE", headers: authHeaders() });
+    setConfirmId(null);
     onDeleted();
   };
 
@@ -241,7 +244,7 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
   return (
     <div className="space-y-2">
       {verifications.map(v => (
-        <Card key={v.id} className="hover:border-primary/30 transition-colors cursor-pointer group" onClick={() => onOpen(v.id)}>
+        <Card key={v.id} className="hover:border-primary/30 transition-colors cursor-pointer group" onClick={() => confirmId === null && onOpen(v.id)}>
           <CardContent className="p-4 flex items-center gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -254,20 +257,29 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
                 {v.unit_count > 0 && <span>· {v.unit_count} unit{v.unit_count !== 1 ? "s" : ""}</span>}
                 <span>· {new Date(v.created_at).toLocaleDateString()}</span>
               </div>
+              {/* Inline confirm - appears below text, no dialog conflict */}
+              {confirmId === v.id && (
+                <div className="mt-2 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                  <span className="text-xs text-red-500">Delete this package?</span>
+                  <button
+                    className="text-xs font-semibold text-red-500 hover:text-red-700 underline"
+                    onClick={() => handleDelete(v.id)}
+                  >Yes, delete</button>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setConfirmId(null)}
+                  >Cancel</button>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 shrink-0">
-              <div onClick={e => e.stopPropagation()}>
-                <ConfirmDialog
-                  title="Delete Verification Package?"
-                  message={`Delete the verification package for ${v.instrument_name}? All element data and serial numbers will be permanently removed.`}
-                  confirmLabel="Delete"
-                  onConfirm={() => handleDelete(v.id)}
-                >
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                    <Trash2 size={13} />
-                  </Button>
-                </ConfirmDialog>
-              </div>
+            <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 shrink-0" onClick={e => e.stopPropagation()}>
+              <Button
+                variant="ghost" size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={e => { e.stopPropagation(); setConfirmId(confirmId === v.id ? null : v.id); }}
+              >
+                <Trash2 size={13} />
+              </Button>
               <ChevronRight size={16} className="text-muted-foreground" />
             </div>
           </CardContent>
