@@ -77,7 +77,7 @@ export function registerVeritaCheckVerificationRoutes(
     if (!v) return res.status(404).json({ error: "Not found" });
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id);
     const studies = sqlite.prepare(`
-      SELECT vs.*, s.testName, s.studyType
+      SELECT vs.*, s.test_name AS testName, s.study_type AS studyType
       FROM veritacheck_verification_studies vs
       LEFT JOIN studies s ON s.id = vs.study_id
       WHERE vs.verification_id = ?
@@ -241,10 +241,10 @@ export function registerVeritaCheckVerificationRoutes(
     // Find studies where testName or instrument contains the instrument name (case-insensitive)
     const keyword = `%${v.instrument_name}%`;
     const matches = sqlite.prepare(`
-      SELECT id, testName, studyType, createdAt
+      SELECT id, test_name AS testName, study_type AS studyType, created_at AS createdAt
       FROM studies
-      WHERE userId = ? AND (testName LIKE ? OR instrument LIKE ?)
-      ORDER BY createdAt DESC
+      WHERE user_id = ? AND (test_name LIKE ? OR instrument LIKE ?)
+      ORDER BY created_at DESC
       LIMIT 20
     `).all(userId, keyword, keyword);
     res.json(matches);
@@ -260,7 +260,7 @@ export function registerVeritaCheckVerificationRoutes(
 
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id) as any[];
     const studies = sqlite.prepare(`
-      SELECT vs.*, s.testName, s.studyType
+      SELECT vs.*, s.test_name AS testName, s.study_type AS studyType
       FROM veritacheck_verification_studies vs
       LEFT JOIN studies s ON s.id = vs.study_id
       WHERE vs.verification_id = ?
