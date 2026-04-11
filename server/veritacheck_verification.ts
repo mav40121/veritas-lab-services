@@ -238,15 +238,14 @@ export function registerVeritaCheckVerificationRoutes(
     const userId = req.ownerUserId ?? req.user.userId;
     const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
     if (!v) return res.status(404).json({ error: "Not found" });
-    // Find studies where testName or instrument contains the instrument name (case-insensitive)
-    const keyword = `%${v.instrument_name}%`;
+    // Return all studies for this user so any can be linked
     const matches = sqlite.prepare(`
       SELECT id, test_name AS testName, study_type AS studyType, created_at AS createdAt
       FROM studies
-      WHERE user_id = ? AND (test_name LIKE ? OR instrument LIKE ?)
+      WHERE user_id = ?
       ORDER BY created_at DESC
-      LIMIT 20
-    `).all(userId, keyword, keyword);
+      LIMIT 50
+    `).all(userId);
     res.json(matches);
   });
 

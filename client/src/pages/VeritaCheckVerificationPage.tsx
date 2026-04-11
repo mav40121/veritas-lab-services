@@ -750,15 +750,13 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
                 <FlaskConical size={13} />
                 Run {studyLabel}
               </Button>
-              {suggested.length > 0 && (
-                <Button
-                  size="sm" variant="outline"
-                  className="h-8 text-xs"
-                  onClick={() => setShowLinkExisting(v => !v)}
-                >
-                  Link Existing Study
-                </Button>
-              )}
+              <Button
+                size="sm" variant="outline"
+                className="h-8 text-xs"
+                onClick={() => setShowLinkExisting(v => !v)}
+              >
+                Link Existing Study
+              </Button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -782,11 +780,14 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
         )}
 
         {/* Link existing study dropdown */}
-        {showLinkExisting && !slot?.study_id && (
+        {showLinkExisting && (
           <div className="mt-3">
             <Select onValueChange={(v) => { onPatch({ study_id: parseInt(v) }); setShowLinkExisting(false); }}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select a completed study to link" /></SelectTrigger>
               <SelectContent>
+                {suggested.length === 0 && (
+                  <SelectItem value="__none" disabled className="text-xs text-muted-foreground">No studies found</SelectItem>
+                )}
                 {suggested.map(s => (
                   <SelectItem key={s.id} value={String(s.id)} className="text-xs">
                     {s.testName} - {new Date(s.createdAt).toLocaleDateString()}
