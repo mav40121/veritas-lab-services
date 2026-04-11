@@ -175,6 +175,44 @@ def check_file(rel, fpath):
                 WARNINGS.append(f"[{rel}] Director signature block found in VeritaScan PDF function -- VeritaScan is internal use only")
 
 
+# ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
+# Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE
+# migration block. If a table is created without migrations, new columns
+# will be missing on the live server (CREATE TABLE IF NOT EXISTS is a no-op
+# on existing tables).
+# Tables established before migration enforcement was added -- grandfathered.
+# Any NEW table added after this list must have migrations or audit fails.
+GRANDFATHERED_TABLES = {
+    "users", "studies", "contact_messages", "reset_tokens", "discount_codes",
+    "veritamap_instruments", "veritamap_instrument_tests", "veritamap_maps",
+    "veritamap_tests", "veritascan_scans", "veritascan_items",
+    "newsletter_subscribers", "cumsum_trackers", "cumsum_entries",
+    "competency_programs", "competency_method_groups", "competency_employees",
+    "competency_assessments", "competency_assessment_items",
+    "competency_checklist_items", "staff_labs", "staff_employees", "staff_roles",
+    "lab_certificates", "lab_certificate_documents", "lab_certificate_reminders",
+    "staff_competency_schedules", "pt_enrollments", "pt_events",
+    "pt_corrective_actions", "pt_enrollments_v2", "user_seats", "user_sessions",
+    "competency_quizzes", "competency_quiz_results", "audit_log",
+    "nightly_snapshots", "veritapolicy_settings", "veritapolicy_lab_policies",
+    "veritapolicy_requirement_status", "veritatrack_tasks", "veritatrack_signoffs",
+    "veritamap_analyte_values", "veritamap_amr_values",
+}
+
+def check_db_migrations():
+    db_path = os.path.join(ROOT, "server", "db.ts")
+    if not os.path.exists(db_path):
+        return
+    with open(db_path) as f:
+        content = f.read()
+    tables = re.findall(r'CREATE TABLE IF NOT EXISTS (\w+)', content)
+    for table in tables:
+        if table in GRANDFATHERED_TABLES:
+            continue
+        if f'PRAGMA table_info({table})' not in content and f'ALTER TABLE {table}' not in content:
+            ERRORS.append(f"[server/db.ts] NEW table '{table}' has no ALTER TABLE migration block -- REQUIRED or existing live DB will have missing columns")
+
+
 # ── KNOWN SEAT RELATIONSHIPS ─────────────────────────────────────────────────
 # These must always be intact on the live site. If any are missing the audit
 # fails so broken seat links are caught before the user notices.
@@ -246,6 +284,7 @@ def main():
 
     # Live seat integrity check
     print("Checking live seat relationships...")
+    check_db_migrations()
     check_live_seats()
 
     print("=" * 60)
