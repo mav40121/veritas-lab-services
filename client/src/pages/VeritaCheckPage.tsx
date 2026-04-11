@@ -293,6 +293,9 @@ export default function VeritaCheckPage() {
     "lot-to-lot": "lot_to_lot",
     "pt_coag": "pt_coag",
     "pt-coag": "pt_coag",
+    "ref_interval": "ref_interval",
+    "reference_interval": "ref_interval",
+    "reportable_range": "cal_ver",
   };
   const rawInitialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
   const initialStudyType = rawInitialStudyType;
@@ -809,7 +812,14 @@ export default function VeritaCheckPage() {
     onSuccess: async (res) => {
       const data = await res.json();
       queryClient.invalidateQueries({ queryKey: ["/api/studies"] });
-      navigate(`/study/${data.id}/results`);
+      const verificationId = prePopParams.get("verificationId");
+      const verificationElement = prePopParams.get("element");
+      const verificationSlot = prePopParams.get("slotId");
+      if (verificationId && verificationElement && verificationSlot) {
+        navigate(`/study/${data.id}/results?verificationId=${verificationId}&element=${verificationElement}&slotId=${verificationSlot}&studyPassed=${data.status === "pass" ? "1" : "0"}`);
+      } else {
+        navigate(`/study/${data.id}/results`);
+      }
     },
     onError: () => toast({ title: "Failed to save study", variant: "destructive" }),
   });

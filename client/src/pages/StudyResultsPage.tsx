@@ -8,7 +8,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
 import { useAuth } from "@/components/AuthContext";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   calculateStudy,
   calculateMethodComparison,
@@ -1308,6 +1308,22 @@ export default function StudyResults() {
   const id = parseInt(params.id || "0");
   const { isLoggedIn } = useAuth();
   const [, navigate] = useLocation();
+  const search = useSearch();
+
+  // Auto-link this study back to a verification package if launched from there
+  useEffect(() => {
+    const p = new URLSearchParams(search);
+    const verificationId = p.get("verificationId");
+    const slotId = p.get("slotId");
+    const passed = p.get("studyPassed");
+    if (verificationId && slotId && id) {
+      fetch(`${import.meta.env.VITE_API_BASE || "https://www.veritaslabservices.com"}/api/veritacheck/verifications/${verificationId}/studies/${slotId}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ study_id: id, passed: passed === "1" ? 1 : 0 }),
+      });
+    }
+  }, [id, search]);
 
   // Scroll to top whenever study ID changes
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [id]);
@@ -1440,8 +1456,21 @@ export default function StudyResults() {
     results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage);
   }
 
+  const verifReturnId = new URLSearchParams(search).get("verificationId");
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      {verifReturnId && (
+        <div className="mb-4 flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
+          <span className="text-sm text-primary font-medium">Study linked to your Instrument Verification Package</span>
+          <button
+            onClick={() => navigate("/dashboard/verifications")}
+            className="text-sm text-primary underline font-semibold"
+          >
+            Back to Verification Package
+          </button>
+        </div>
+      )}
       <StudyHeader study={study} results={results} />
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}

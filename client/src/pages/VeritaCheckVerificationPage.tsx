@@ -124,6 +124,21 @@ const ELEMENT_TO_STUDY_TYPE: Record<string, string[]> = {
   reference_interval: ["ref_interval"],
 };
 
+// Maps element key -> studyType param for /study/new
+const ELEMENT_STUDY_PARAM: Record<string, string> = {
+  accuracy:           "method_comparison",
+  precision:          "precision",
+  reportable_range:   "reportable_range",
+  reference_interval: "ref_interval",
+};
+
+const ELEMENT_STUDY_LABEL: Record<string, string> = {
+  accuracy:           "Correlation / Method Comparison",
+  precision:          "Precision (EP15)",
+  reportable_range:   "Calibration Verification / Linearity",
+  reference_interval: "Reference Interval Verification",
+};
+
 const ELEMENT_LABELS: Record<string, string> = {
   accuracy: "Accuracy / Bias",
   precision: "Precision",
@@ -624,6 +639,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
                 element={el}
                 slot={slot}
                 suggested={suggested}
+                verificationId={id}
                 onPatch={(payload) => slot && patchStudy(slot.id, payload)}
               />
             );
@@ -683,50 +699,93 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
 }
 
 // ── Element card ──────────────────────────────────────────────────────────────
-function ElementCard({ element, slot, suggested, onPatch }: {
+function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
   element: typeof ALL_ELEMENTS[0];
   slot?: VerificationStudy;
   suggested: ExistingStudy[];
+  verificationId: number;
   onPatch: (payload: object) => void;
 }) {
-  const [rationaleEdit, setRationaleEdit] = useState(slot?.design_rationale || "");
-  const [sampleCount, setSampleCount] = useState(slot?.sample_count?.toString() || "");
-  const [analyte, setAnalyte] = useState(slot?.analyte || "");
-  const [dirty, setDirty] = useState(false);
+  const [, navigate] = useLocation();
+  const [showLinkExisting, setShowLinkExisting] = useState(false);
 
-  useEffect(() => { setRationaleEdit(slot?.design_rationale || ""); setSampleCount(slot?.sample_count?.toString() || ""); setAnalyte(slot?.analyte || ""); }, [slot]);
+  const isDone = slot?.passed === 1 || slot?.passed === 0;
+  const isPassed = slot?.passed === 1;
+  const isFailed = slot?.passed === 0;
 
-  const passIcon = slot?.passed === 1 ? <CheckCircle2 size={14} className="text-emerald-500" /> : slot?.passed === 0 ? <AlertTriangle size={14} className="text-red-500" /> : null;
+  const studyParam = ELEMENT_STUDY_PARAM[element.key];
+  const studyLabel = ELEMENT_STUDY_LABEL[element.key];
+
+  const runStudyUrl = `/veritacheck?studyType=${studyParam}&instrument1=${encodeURIComponent("")}&verificationId=${verificationId}&element=${element.key}&slotId=${slot?.id || ""}`;
 
   return (
-    <Card className={`border ${slot?.passed === 0 ? "border-red-500/30" : slot?.passed === 1 ? "border-emerald-500/20" : "border-border"}`}>
-      <CardHeader className="pb-2 pt-4 px-4">
-        <div className="flex items-center justify-between">
+    <Card className={`border transition-colors ${
+      isFailed ? "border-red-500/30 bg-red-500/5" :
+      isPassed ? "border-emerald-500/30 bg-emerald-500/5" :
+      "border-border"
+    }`}>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            {passIcon}
-            <CardTitle className="text-sm font-semibold">{element.label}</CardTitle>
-            <Badge variant="outline" className="text-xs">{element.protocol}</Badge>
+            {isPassed && <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />}
+            {isFailed && <AlertTriangle size={16} className="text-red-500 shrink-0" />}
+            {!isDone && <Circle size={16} className="text-muted-foreground shrink-0" />}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">{element.label}</span>
+                <Badge variant="outline" className="text-xs">{element.protocol}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">Recommended: {element.samples}</p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant={slot?.passed === 1 ? "default" : "outline"} className="h-6 text-xs px-2 gap-1"
-              onClick={() => onPatch({ passed: slot?.passed === 1 ? null : 1 })}>
-              Pass
-            </Button>
-            <Button size="sm" variant={slot?.passed === 0 ? "destructive" : "outline"} className="h-6 text-xs px-2 gap-1"
-              onClick={() => onPatch({ passed: slot?.passed === 0 ? null : 0 })}>
-              Fail
-            </Button>
-          </div>
+
+          {/* Primary action */}
+          {!isDone ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => navigate(runStudyUrl)}
+              >
+                <FlaskConical size={13} />
+                Run {studyLabel}
+              </Button>
+              {suggested.length > 0 && (
+                <Button
+                  size="sm" variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => setShowLinkExisting(v => !v)}
+                >
+                  Link Existing Study
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold ${isPassed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {isPassed ? "PASS" : "FAIL"}
+              </span>
+              <button className="text-xs text-muted-foreground underline" onClick={() => onPatch({ passed: null, study_id: null })}>
+                Redo
+              </button>
+            </div>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground">Recommended: {element.samples}</p>
-      </CardHeader>
-      <CardContent className="px-4 pb-4 space-y-3">
-        {/* Link existing study */}
-        {suggested.length > 0 && !slot?.study_id && (
-          <div>
-            <Label className="text-xs mb-1 block text-muted-foreground">Link existing study (suggested matches)</Label>
-            <Select onValueChange={(v) => onPatch({ study_id: parseInt(v) })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select a study to link" /></SelectTrigger>
+
+        {/* Linked study info */}
+        {slot?.testName && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded">
+            <FlaskConical size={12} />
+            <span>Linked: <strong>{slot.testName}</strong></span>
+            <button className="ml-auto underline" onClick={() => onPatch({ study_id: null })}>Unlink</button>
+          </div>
+        )}
+
+        {/* Link existing study dropdown */}
+        {showLinkExisting && !slot?.study_id && (
+          <div className="mt-3">
+            <Select onValueChange={(v) => { onPatch({ study_id: parseInt(v) }); setShowLinkExisting(false); }}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select a completed study to link" /></SelectTrigger>
               <SelectContent>
                 {suggested.map(s => (
                   <SelectItem key={s.id} value={String(s.id)} className="text-xs">
@@ -736,39 +795,6 @@ function ElementCard({ element, slot, suggested, onPatch }: {
               </SelectContent>
             </Select>
           </div>
-        )}
-        {slot?.testName && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded">
-            <FlaskConical size={12} /> Linked: {slot.testName}
-            <button className="ml-auto underline" onClick={() => onPatch({ study_id: null })}>Unlink</button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs mb-1 block">Analyte / Test Name</Label>
-            <Input value={analyte} onChange={e => { setAnalyte(e.target.value); setDirty(true); }} className="h-8 text-xs" placeholder="e.g. Hemoglobin" />
-          </div>
-          <div>
-            <Label className="text-xs mb-1 block">Samples Run</Label>
-            <Input value={sampleCount} onChange={e => { setSampleCount(e.target.value); setDirty(true); }} type="number" className="h-8 text-xs" placeholder="e.g. 20" />
-          </div>
-        </div>
-
-        <div>
-          <Label className="text-xs mb-1 block">Study Design Rationale</Label>
-          <Textarea
-            value={rationaleEdit}
-            onChange={e => { setRationaleEdit(e.target.value); setDirty(true); }}
-            placeholder={`${element.protocol}: ${element.rationale}`}
-            className="text-xs h-16 resize-none"
-          />
-        </div>
-
-        {dirty && (
-          <Button size="sm" className="h-7 text-xs" onClick={() => { onPatch({ design_rationale: rationaleEdit, sample_count: parseInt(sampleCount) || null, analyte }); setDirty(false); }}>
-            Save
-          </Button>
         )}
       </CardContent>
     </Card>
