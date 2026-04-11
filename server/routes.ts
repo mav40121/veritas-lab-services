@@ -2495,9 +2495,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       }
 
-      // Check if this discount is 100% off - if so, skip card collection requirement
-      const isFullDiscount = couponId !== undefined && discountPct === 100;
-      //
+      // Check if this discount is 100% off - bypass Stripe entirely
+      const isFullDiscount = discountPct === 100;
+      if (isFullDiscount) {
+        // Activate plan directly without Stripe checkout
+        const planMap: Record<string, string> = {
+          annual: "annual", professional: "professional", lab: "lab",
+          complete: "complete", waived: "waived", community: "community",
+          hospital: "hospital", large_hospital: "large_hospital", enterprise: "enterprise",
+          veritacheck_only: "annual",
+        };
+        const newPlan = planMap[priceType] || "annual";
+        storage.updateUserPlan(user.id, newPlan, user.studyCredits ?? 0);
+        if (discountRow) {
+          db.$client.prepare("UPDATE discount_codes SET uses = uses + 1 WHERE id = ?").run(discountRow.id);
+        }
+        return res.json({ url: successUrl + "&free=1" });
+      }
+
+      const isFullDiscountStripe = couponId !== undefined && discountPct >= 100;
       const sessionParams: any = {
         customer: customerId,
         mode: isSubscription ? "subscription" : "payment",
@@ -2510,7 +2526,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sessionParams.discounts = [{ coupon: couponId }];
       }
       // When subscription is fully covered, do not require a payment method upfront
-      if (isSubscription && isFullDiscount) {
+      if (isSubscription && isFullDiscountStripe) {
         sessionParams.payment_method_collection = "if_required";
       }
 
