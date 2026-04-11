@@ -548,6 +548,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(updated);
   });
 
+  // ── ONE-TIME: Notify account owners of new modules ──────────────────────
+  // POST /api/admin/notify-new-modules  { secret }
+  // Safe to call multiple times -- idempotent by design (just sends email, no DB write needed)
+  app.post("/api/admin/notify-new-modules", async (req: any, res) => {
+    const { secret } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!resend) return res.status(500).json({ error: "Resend not configured" });
+
+    // Find all active lab account owners who have at least one active seat
+    const SEAT_PLANS = ["lab", "community", "hospital", "large_hospital", "enterprise", "complete"];
+    const owners = db.$client.prepare(`
+      SELECT DISTINCT u.user_id, u.email, u.name
+      FROM users u
+      INNER JOIN user_seats s ON s.owner_user_id = u.user_id AND s.status = 'active'
+      WHERE u.plan IN (${SEAT_PLANS.map(() => "?").join(",")})
+    `).all(...SEAT_PLANS) as Array<{ user_id: number; email: string; name: string }>;
+
+    let sent = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const owner of owners) {
+      try {
+        await resend.emails.send({
+          from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+          to: owner.email,
+          subject: "Three new modules are now available for your team",
+          html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+  <div style="background: #01696F; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 22px;">New modules available on VeritaAssure\u2122</h1>
+  </div>
+  <div style="padding: 32px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
+    <p style="margin: 0 0 16px;">Hi ${owner.name || "there"},</p>
+    <p style="margin: 0 0 16px;">Three new modules are now included in your VeritaAssure\u2122 subscription:</p>
+    <ul style="margin: 0 0 24px; padding-left: 20px; line-height: 1.8;">
+      <li><strong>VeritaPolicy\u2122</strong> &mdash; Policy and procedure management with version control and staff acknowledgment tracking</li>
+      <li><strong>VeritaLab\u2122</strong> &mdash; Certificate and accreditation document storage for your laboratory</li>
+      <li><strong>VeritaTrack\u2122</strong> &mdash; Regulatory compliance calendar to track and sign off timed lab tasks</li>
+    </ul>
+    <p style="margin: 0 0 24px;">Your team members currently have <strong>View access</strong> to these modules by default. You can update their permissions &mdash; including granting Edit access or removing access &mdash; from your account settings.</p>
+    <a href="https://www.veritaslabservices.com/#/account" style="display: inline-block; background: #01696F; color: white; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">Manage Team Permissions</a>
+    <p style="margin: 24px 0 0; font-size: 13px; color: #666;">Questions? Reply to this email or contact us at info@veritaslabservices.com.</p>
+  </div>
+</div>`,
+        });
+        sent++;
+      } catch (err: any) {
+        failed++;
+        errors.push(`${owner.email}: ${err.message}`);
+      }
+    }
+
+    res.json({ ok: true, total: owners.length, sent, failed, errors });
+  });
+
   // ── DISCOUNT CODE VALIDATION (public) ──────────────────────────────────
   app.post("/api/discount/validate", async (req, res) => {
     const { code, priceType } = req.body;
@@ -5256,6 +5312,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const DEFAULT_PERMISSIONS = JSON.stringify({
       veritacheck: 'view', veritamap: 'view', veritascan: 'view',
       veritacomp: 'view', veritastaff: 'view', veritapt: 'view',
+      veritapolicy: 'view', veritalab: 'view', veritatrack: 'view',
     });
     const permJson = JSON.stringify(req.body.permissions || JSON.parse(DEFAULT_PERMISSIONS));
 

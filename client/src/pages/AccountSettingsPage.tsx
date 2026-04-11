@@ -40,17 +40,21 @@ export default function AccountSettingsPage() {
 
   // Module permission constants
   const MODULE_LIST = [
-    { key: 'veritacheck', label: 'VeritaCheck(TM)' },
-    { key: 'veritamap',   label: 'VeritaMap(TM)' },
-    { key: 'veritascan',  label: 'VeritaScan(TM)' },
-    { key: 'veritacomp',  label: 'VeritaComp(TM)' },
-    { key: 'veritastaff', label: 'VeritaStaff(TM)' },
-    { key: 'veritapt',    label: 'VeritaPT(TM)' },
+    { key: 'veritacheck',  label: 'VeritaCheck™' },
+    { key: 'veritamap',    label: 'VeritaMap™' },
+    { key: 'veritascan',   label: 'VeritaScan™' },
+    { key: 'veritacomp',   label: 'VeritaComp™' },
+    { key: 'veritastaff',  label: 'VeritaStaff™' },
+    { key: 'veritapt',     label: 'VeritaPT™' },
+    { key: 'veritapolicy', label: 'VeritaPolicy™' },
+    { key: 'veritalab',    label: 'VeritaLab™' },
+    { key: 'veritatrack',  label: 'VeritaTrack™' },
   ];
 
   const DEFAULT_PERMISSIONS: Record<string, string> = {
     veritacheck: 'view', veritamap: 'view', veritascan: 'view',
     veritacomp: 'view', veritastaff: 'view', veritapt: 'view',
+    veritapolicy: 'view', veritalab: 'view', veritatrack: 'view',
   };
 
   // Team Members / Seats state
