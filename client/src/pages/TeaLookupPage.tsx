@@ -31,8 +31,9 @@ export default function TeaLookupPage() {
     bySpecialty: specialties.map(s => ({ specialty: s, count: teaData.filter(a => a.specialty === s).length })),
   }), []);
 
-    useSEO({ title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services", description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications." });
-return (
+  useSEO({ title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services", description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications." });
+
+  return (
     <div className="min-h-screen bg-background">
 
       {/* Hero */}

@@ -48,6 +48,11 @@ export function registerVeritaCheckVerificationRoutes(
   requireWriteAccess: any
 ) {
 
+  // GET CLSI guidance for all elements (must be before /:id routes)
+  app.get("/api/veritacheck/verifications/clsi-guidance", authMiddleware, (_req: any, res) => {
+    res.json(CLSI_GUIDANCE);
+  });
+
   // GET all verifications for the user
   app.get("/api/veritacheck/verifications", authMiddleware, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
@@ -241,11 +246,6 @@ export function registerVeritaCheckVerificationRoutes(
       LIMIT 20
     `).all(userId, keyword, keyword);
     res.json(matches);
-  });
-
-  // GET CLSI guidance for all elements
-  app.get("/api/veritacheck/verifications/clsi-guidance", authMiddleware, (req: any, res) => {
-    res.json(CLSI_GUIDANCE);
   });
 
   // POST generate PDF package

@@ -22,8 +22,9 @@ export default function ContactPage() {
     onError: () => toast({ title: "Something went wrong. Please email us directly.", variant: "destructive" }),
   });
 
-    useSEO({ title: "Contact | Veritas Lab Services", description: "Get in touch with Veritas Lab Services. Questions about VeritaAssure, laboratory consulting, or scheduling a demo." });
-return (
+  useSEO({ title: "Contact | Veritas Lab Services", description: "Get in touch with Veritas Lab Services. Questions about VeritaAssure, laboratory consulting, or scheduling a demo." });
+
+  return (
     <div>
       <section className="border-b border-border bg-secondary/20">
         <div className="container-default py-14">

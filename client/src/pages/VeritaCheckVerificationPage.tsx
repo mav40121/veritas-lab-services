@@ -296,7 +296,7 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
       const maps = await mapsR.json();
       const all: MapInstrument[] = [];
       for (const m of maps) {
-        const instrR = await fetch(`${API_BASE}/api/veritamap/${m.id}/instruments`, { headers: authHeaders() });
+        const instrR = await fetch(`${API_BASE}/api/veritamap/maps/${m.id}/instruments`, { headers: authHeaders() });
         if (instrR.ok) {
           const instrs = await instrR.json();
           all.push(...instrs);

@@ -132,9 +132,10 @@ export default function GettingStartedPage() {
     }
   }, [isLoggedIn, status]);
 
+  useSEO({ title: "Getting Started | VeritaAssure Lab Compliance Software", description: "Get started with VeritaAssure. Follow the step-by-step onboarding guide to set up your laboratory compliance platform." });
+
   if (!isLoggedIn) {
-      useSEO({ title: "Getting Started | VeritaAssure Lab Compliance Software", description: "Get started with VeritaAssure. Follow the step-by-step onboarding guide to set up your laboratory compliance platform." });
-return (
+    return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold mb-2">Getting Started with VeritaAssure&#8482;</h1>
