@@ -1019,7 +1019,14 @@ if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
   if (seedEmail && seedPlan) {
     const credits = parseInt(seedCredits || "0");
-    sqlite.prepare("UPDATE users SET plan = ?, study_credits = ? WHERE email = ?").run(seedPlan, credits, seedEmail.toLowerCase());
-    console.log(`[seed] Set ${seedEmail} to plan=${seedPlan} credits=${credits}`);
+    // Never downgrade an existing paid plan on deploy
+    const PAID_PLANS = ["annual","professional","lab","complete","waived","community","hospital","large_hospital","enterprise","veritacheck_only"];
+    const existing = sqlite.prepare("SELECT plan FROM users WHERE email = ?").get(seedEmail.toLowerCase()) as any;
+    if (existing && PAID_PLANS.includes(existing.plan) && !PAID_PLANS.includes(seedPlan)) {
+      console.log(`[seed] Skipped: ${seedEmail} already on paid plan '${existing.plan}', not overwriting with '${seedPlan}'`);
+    } else {
+      sqlite.prepare("UPDATE users SET plan = ?, study_credits = ? WHERE email = ?").run(seedPlan, credits, seedEmail.toLowerCase());
+      console.log(`[seed] Set ${seedEmail} to plan=${seedPlan} credits=${credits}`);
+    }
   }
 }
