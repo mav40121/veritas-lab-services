@@ -94,6 +94,11 @@ const comingSoonItems: RoadmapItem[] = [
     description:
       "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
   },
+  {
+    title: "VeritaStock\u2122 - Laboratory Inventory Management",
+    description:
+      "Reorder point-based inventory tracking built for clinical labs. Track items by department, burn rate, lead time, and standing order status. Auto-calculates reorder points, order-to quantities, and order quantities in both units and order units. Surfaces what needs to be ordered today - no spreadsheet math required.",
+  },
 ];
 
 interface SectionProps {
