@@ -1,5 +1,6 @@
 import { Switch, Route, Router, useLocation } from "wouter";
 import VeritaCheckVerificationPage from "@/pages/VeritaCheckVerificationPage";
+import ArticleInventoryManagementPage from "@/pages/ArticleInventoryManagementPage";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
@@ -272,6 +273,7 @@ function AppContent() {
           <Route path="/resources/how-to-perform-method-comparison-study" component={ArticleMethodComparisonPage} />
           <Route path="/resources/tjc-laboratory-inspection-checklist-preparation" component={ArticleTJCInspectionPage} />
           <Route path="/resources/how-to-validate-veritacheck-clia" component={ArticleValidateVeritaCheckPage} />
+          <Route path="/resources/laboratory-inventory-management" component={ArticleInventoryManagementPage} />
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route path="/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/veritascan-app/:id" component={VeritaScanScanPage} />
