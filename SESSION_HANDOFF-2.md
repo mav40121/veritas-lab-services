@@ -68,13 +68,13 @@ All prior work complete. No active TODO.
 | Railway Project ID | 29c628f1-7860-4fca-8fee-227159bb86e8 |
 | Railway Service ID | 170f5560-8cf0-4341-9c87-294062ebedd1 |
 | Railway Environment ID | cd669f7c-23f3-434c-895d-ca40ac504e91 |
-| Demo account | demo@veritaslabservices.com / VeritaDemo2026! |
+| Demo account | demo@veritaslabservices.com / [REDACTED] |
 | Demo lab | Riverside Regional Medical Center, CLIA 22D0999999 |
-| Personal account | verilabguy@gmail.com / VeritaPersonal2026! |
-| Admin secret | veritas-admin-2026 |
+| Personal account | verilabguy@gmail.com / [REDACTED] |
+| Admin secret | [REDACTED] |
 | Resend API key | re_REDACTED_SEE_RAILWAY_ENV |
 | Stripe live key | sk_live_REDACTED_SEE_RAILWAY_ENV |
-| Stripe webhook secret | whsec_rlBtHbhOiWT7JwkdLWCJeUFJNIA2UU79 |
+| Stripe webhook secret | [REDACTED - ROTATE THIS KEY] |
 
 ### Railway Deploy Command
 ```bash

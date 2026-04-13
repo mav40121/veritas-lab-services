@@ -79,7 +79,7 @@ This file is the canonical source of all copy rules, PDF requirements, regulator
 | GA4 Measurement ID | G-M3TB43ZX4E |
 | GA4 Property ID | 503314560 |
 | Chase Stripe payout account | last four 5726 |
-| Admin secret | veritas-admin-2026 |
+| Admin secret | [REDACTED] |
 
 ### Stripe (Live Keys)
 - Stripe live key is stored in Railway environment as `STRIPE_SECRET_KEY` (not hardcoded).
@@ -196,7 +196,7 @@ This file is the canonical source of all copy rules, PDF requirements, regulator
 
 ### Demo
 - **Route:** /#/demo (public, no auth required)
-- **Demo account:** demo@veritaslabservices.com / VeritaDemo2026!
+- **Demo account:** demo@veritaslabservices.com / [REDACTED]
 - **Demo lab:** Riverside Regional Medical Center, CLIA 22D0999999
 - **Status:** Fully public, no auth walls, all 5 modules shown, real PDFs generated
 
@@ -287,24 +287,24 @@ railway up
 ```bash
 # Set a user's plan
 POST /api/admin/set-plan
-Body: {"secret":"veritas-admin-2026","userId":N,"plan":"lab"}
+Body: {"secret":"[REDACTED]","userId":N,"plan":"lab"}
 # Valid plans: waived, community, hospital, large_hospital, veritacheck_only, per_study, free
 
 # List all users
 POST /api/admin/users
-Body: {"secret":"veritas-admin-2026"}
+Body: {"secret":"[REDACTED]"}
 
 # View newsletter subscribers
-GET /api/admin/newsletter?secret=veritas-admin-2026
+GET /api/admin/newsletter?secret=[REDACTED]
 
 # Manage discount codes
-GET /api/admin/discount-codes?secret=veritas-admin-2026
+GET /api/admin/discount-codes?secret=[REDACTED]
 POST /api/admin/discount-codes
 PATCH /api/admin/discount-codes/:id
 ```
 
 ### Test / Demo Accounts
-- **Demo account:** demo@veritaslabservices.com / VeritaDemo2026!
+- **Demo account:** demo@veritaslabservices.com / [REDACTED]
   - Plan: lab (full access)
   - CLIA: 22D0999999
   - Lab: Riverside Regional Medical Center
@@ -314,8 +314,8 @@ PATCH /api/admin/discount-codes/:id
 - STRIPE_SECRET_KEY -- Stripe live secret key
 - STRIPE_WEBHOOK_SECRET -- Stripe webhook signing secret
 - RESEND_API_KEY -- re_REDACTED_SEE_RAILWAY_ENV
-- ADMIN_SECRET -- veritas-admin-2026
-- JWT_SECRET -- veritas-lab-services-secret-2026
+- ADMIN_SECRET -- [REDACTED]
+- JWT_SECRET -- [REDACTED]
 - FRONTEND_URL -- https://www.veritaslabservices.com
 
 ### Key Technical Notes

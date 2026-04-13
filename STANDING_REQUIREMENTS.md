@@ -134,14 +134,14 @@
 - Company: Veritas Lab Services, LLC, Massachusetts, filed 1/2/2026
 
 ## Infrastructure
-- Railway token: 7a567f5e-0399-4c82-a4d6-e57381b8c85b
+- Railway token: [REDACTED]
 - Service ID: 170f5560-8cf0-4341-9c87-294062ebedd1
 - Environment ID: cd669f7c-23f3-434c-895d-ca40ac504e91
 - GitHub: https://github.com/mav40121/veritas-lab-services
 - GitHub token: ghp_REDACTED_SEE_RAILWAY_ENV
-- Resend: re_iuVZocND_7KCES3ak8QYN4funPUF3oF1z
+- Resend: [REDACTED]
 - Live site: https://www.veritaslabservices.com
-- Admin endpoint: POST /api/admin/set-plan {"secret":"veritas-admin-2026","userId":N,"plan":"lab"}
+- Admin endpoint: POST /api/admin/set-plan {"secret":"[REDACTED]","userId":N,"plan":"lab"}
 - Stripe live key in Railway env as STRIPE_SECRET_KEY
 - GA4 Measurement ID: G-M3TB43ZX4E | Property ID: 503314560
 - Chase Stripe payout account: ••••5726
