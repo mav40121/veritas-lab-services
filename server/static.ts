@@ -19,8 +19,12 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // SPA catch-all: only for routes that are NOT static asset requests
+  // SPA catch-all: only for routes that are NOT API requests or static asset requests
   app.use("/{*path}", (req, res, next) => {
+    // Never intercept API routes - let Express route handlers handle them
+    if (req.path.startsWith("/api")) {
+      return next();
+    }
     // If the request looks like a file (has an extension), return 404 instead of index.html
     if (req.path.match(/\.[a-zA-Z0-9]+$/)) {
       return next();
