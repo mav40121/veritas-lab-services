@@ -116,7 +116,7 @@ function SiteFooter() {
                 <li><a href="/veritacomp" className="hover:text-primary transition-colors">VeritaComp: Competency Management</a></li>
                 <li><a href="/veritastaff" className="hover:text-primary transition-colors">VeritaStaff: Personnel Management</a></li>
                 <li><a href="/veritalab" className="hover:text-primary transition-colors">VeritaLab: Certificate Tracking</a></li>
-                <li><a href="/veritapolicy" className="hover:text-primary transition-colors">VeritaPolicy: TJC Policy Tracker</a></li>
+                <li><a href="/veritapolicy" className="hover:text-primary transition-colors">VeritaPolicy: Standards Compliance Tracker</a></li>
                 <li><a href="/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
                 <li><a href="/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>

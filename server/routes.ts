@@ -6785,15 +6785,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
     const policyMap: Record<number, any> = {};
     for (const p of policies) policyMap[p.id] = p;
-    // Determine which requirement sets to include based on accreditation_body
-    const body = settings?.accreditation_body || 'tjc';
-    const reqSets: any[] = [];
-    if (body === 'tjc' || body === 'both') {
-      reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
-    }
-    if (body === 'cap' || body === 'both') {
-      reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
-    }
+    // Always include both TJC and CAP requirements
+    const reqSets: any[] = [
+      ...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })),
+      ...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })),
+    ];
 
     // Build response
     const result = reqSets.map((req: any) => {
@@ -6966,11 +6962,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
       const statusMap: Record<number, any> = {};
       for (const s of statuses) statusMap[s.requirement_id] = s;
-      // Build full requirement list with status/policy_name overlaid
-      const body = settings?.accreditation_body || 'tjc';
-      const allReqs: any[] = [];
-      if (body === 'tjc' || body === 'both') allReqs.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
-      if (body === 'cap' || body === 'both') allReqs.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+      // Always include both TJC and CAP requirements
+      const allReqs: any[] = [
+        ...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })),
+        ...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })),
+      ];
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
         let autoNa = false;

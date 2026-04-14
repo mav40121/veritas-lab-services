@@ -239,7 +239,7 @@ export default function VeritaPolicyAppPage() {
 
   // ── Filter requirements ────────────────────────────────────────────────────
   const chapters = Array.from(new Set(requirements.map(r => r.chapter))).sort();
-  const showBothSources = settings.accreditation_body === "both";
+  const showBothSources = true;
 
   const filtered = requirements.filter(r => {
     if (filterStatus !== "all" && r.status !== filterStatus) return false;
@@ -260,7 +260,7 @@ export default function VeritaPolicyAppPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">VeritaPolicy&#8482;</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {settings.accreditation_body === "tjc" ? "TJC" : settings.accreditation_body === "cap" ? "CAP" : "TJC + CAP"} Policy Compliance Tracker
+            TJC + CAP Policy Compliance Tracker
             {summary ? ` - ${summary.total} applicable requirements` : ""}
           </p>
         </div>
@@ -282,29 +282,7 @@ export default function VeritaPolicyAppPage() {
         </button>
         {settingsOpen && (
           <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-border bg-card">
-            {/* Accreditation body */}
-            <div className="sm:col-span-2">
-              <p className="text-xs font-semibold text-foreground mb-2">Accreditation Body</p>
-              <div className="flex gap-2">
-                {[
-                  { value: "tjc", label: "TJC" },
-                  { value: "cap", label: "CAP" },
-                  { value: "both", label: "TJC + CAP" },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    disabled={isReadOnly}
-                    onClick={() => updateSetting("accreditation_body", opt.value)}
-                    className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors
-                      ${settings.accreditation_body === opt.value
-                        ? "bg-primary text-white border-primary"
-                        : "bg-background text-foreground border-border hover:border-primary"}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+
             {/* Service line toggles */}
             {[
               { key: "has_blood_bank",    label: "Blood Bank / Transfusion Service" },
