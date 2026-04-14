@@ -86,6 +86,7 @@
 - Null values: show blank cell — never "null" or "undefined"
 
 ## Process Rules
+- **TEMPLATE-FIRST RULE**: The filled-in Mandatory Response Template (TASK/ASSUMPTIONS/CLARIFYING QUESTION/PLAN/SELF-CHECK) must be presented to the user and approved BEFORE any file is modified. No exceptions. The commit-msg hook enforces TASK/PLAN/Self-check in every commit message. This rule was added after three failed deploys on 2026-04-14 caused by skipping the template on a "simple" bug fix.
 - Large tasks: present build breakdown first, get approval, THEN build
 - Multi-step safeguard plans: present the full plan, get explicit user confirmation ("yes", "build it", "go ahead"), THEN build. Never self-approve.
 - Show mock PDF BEFORE building any PDF-generating feature
