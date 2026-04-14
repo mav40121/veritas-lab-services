@@ -951,7 +951,7 @@ export function isPTCoag(r: StudyResults): r is PTCoagResults { return r.type ==
 export function isQCRange(r: StudyResults): r is QCRangeResults { return r.type === "qc_range"; }
 export function isMultiAnalyteCoag(r: StudyResults): r is MultiAnalyteResults { return r.type === "multi_analyte_coag"; }
 
-// ─── Reference Interval Verification ────────────────────────────────────────
+// ─── Reference Range Verification ───────────────────────────────────────────
 export interface RefIntervalDataPoint {
   specimenId: string;
   value: number | null;
@@ -987,13 +987,13 @@ export function calculateRefInterval(
   }));
   const outsideCount = specimens.filter(s => !s.inRange).length;
   const outsidePct = n > 0 ? (outsideCount / n) * 100 : 0;
-  // CLSI EP28-A3c: pass if ≤10% (≤2 of 20) fall outside the reference interval
+  // CLSI EP28-A3c: pass if ≤10% (≤2 of 20) fall outside the reference range
   const overallPass = n >= 20 && outsideCount <= Math.floor(n * 0.1);
   const summary = n < 20
     ? `Insufficient specimens: ${n} provided, minimum 20 required per CLSI EP28-A3c.`
     : overallPass
-      ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}–${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of ≤10% outside.`
-      : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}–${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of ≤10% outside.`;
+      ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference range [${refLow}–${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of ≤10% outside.`
+      : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference range [${refLow}–${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of ≤10% outside.`;
 
   return { type: "ref_interval", analyte, units, refLow, refHigh, n, outsideCount, outsidePct, overallPass, specimens, summary };
 }

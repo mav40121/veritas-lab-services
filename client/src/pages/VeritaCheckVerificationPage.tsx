@@ -110,10 +110,10 @@ const ALL_ELEMENTS = [
   },
   {
     key: "reference_interval",
-    label: "Reference Interval",
+    label: "Reference Range",
     protocol: "CLSI EP28-A3c",
     samples: "20 reference subjects (adoption); 120 subjects (de novo establishment)",
-    rationale: "CLSI EP28-A3c allows adoption of a manufacturer's reference interval with verification using a minimum of 20 reference subjects. De novo establishment requires at least 120 subjects.",
+    rationale: "CLSI EP28-A3c allows adoption of a manufacturer's reference range with verification using a minimum of 20 reference subjects. De novo establishment requires at least 120 subjects.",
   },
 ];
 
@@ -136,14 +136,14 @@ const ELEMENT_STUDY_LABEL: Record<string, string> = {
   accuracy:           "Correlation / Method Comparison",
   precision:          "Precision (EP15)",
   reportable_range:   "Calibration Verification / Linearity",
-  reference_interval: "Reference Interval Verification",
+  reference_interval: "Reference Range Verification",
 };
 
 const ELEMENT_LABELS: Record<string, string> = {
   accuracy: "Accuracy / Bias",
   precision: "Precision",
   reportable_range: "Reportable Range",
-  reference_interval: "Reference Interval",
+  reference_interval: "Reference Range",
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────

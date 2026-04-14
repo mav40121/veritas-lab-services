@@ -36,7 +36,7 @@ const REQUIRED_DEMO_STUDIES = [
   {
     test_name: "Sodium",
     study_type: "ref_interval",
-    description: "Sodium Reference Interval Verification (Ortho VITROS 5600 Primary) -- DIFFERENT from method comparison",
+    description: "Sodium Reference Range Verification (Ortho VITROS 5600 Primary) - DIFFERENT from method comparison",
   },
 ];
 

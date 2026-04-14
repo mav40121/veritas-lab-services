@@ -244,9 +244,9 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4"><a href={REFS.cfr493941.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.941</a></td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
-                  <td className="py-3 px-4 font-medium text-primary">Reference Interval Verification</td>
-                  <td className="py-3 px-4 text-muted-foreground">Can we adopt the manufacturer's reference intervals for our patient population?</td>
-                  <td className="py-3 px-4">When adopting manufacturer reference intervals</td>
+                  <td className="py-3 px-4 font-medium text-primary">Reference Range Verification</td>
+                  <td className="py-3 px-4 text-muted-foreground">Can we adopt the manufacturer's reference ranges for our patient population?</td>
+                  <td className="py-3 px-4">When adopting manufacturer reference ranges</td>
                   <td className="py-3 px-4">CLSI EP28-A3c</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
@@ -356,19 +356,19 @@ export default function StudyGuidePage() {
             icon={<Beaker size={22} className="text-white" />}
             color="bg-[#0d9488]"
             badge="Reference Range Adoption"
-            title="Reference Interval Verification"
-            subtitle="Verify manufacturer reference intervals for your patient population"
-            what="Reference interval verification determines whether a manufacturer's published reference intervals are appropriate for your laboratory's patient population. This is required when your laboratory adopts reference intervals from the manufacturer rather than establishing its own. The CLSI EP28-A3c protocol provides the standard methodology."
-            howIt="You collect specimens from a minimum of 20 healthy individuals representative of your patient population. Each specimen is tested using your method. If 2 or fewer of the 20 results fall outside the manufacturer's stated reference interval, the interval is considered verified for your population. If more than 2 results fall outside, further investigation or a full reference interval study may be required."
+            title="Reference Range Verification"
+            subtitle="Verify manufacturer reference ranges for your patient population"
+            what="Reference range verification determines whether a manufacturer's published reference ranges are appropriate for your laboratory's patient population. This is required when your laboratory adopts reference ranges from the manufacturer rather than establishing its own. The CLSI EP28-A3c protocol provides the standard methodology."
+            howIt="You collect specimens from a minimum of 20 healthy individuals representative of your patient population. Each specimen is tested using your method. If 2 or fewer of the 20 results fall outside the manufacturer's stated reference range, the range is considered verified for your population. If more than 2 results fall outside, further investigation or a full reference range study may be required."
             when={[
-              "When adopting manufacturer reference intervals for a new test or method",
-              "When changing to a new instrument platform with different reference intervals",
+              "When adopting manufacturer reference ranges for a new test or method",
+              "When changing to a new instrument platform with different reference ranges",
               "When your patient population demographics change significantly",
-              "When the manufacturer updates its reference intervals",
+              "When the manufacturer updates its reference ranges",
             ]}
-            frequency="At method introduction or reference interval change"
+            frequency="At method introduction or reference range change"
             regulation="CLSI EP28-A3c"
-            passFail="Pass if 2 or fewer of 20 specimens fall outside the manufacturer's stated reference interval. If more than 2 fall outside, the reference interval may not be appropriate for your population, and a full reference interval study or further investigation is required. Your laboratory director or designee makes the final determination."
+            passFail="Pass if 2 or fewer of 20 specimens fall outside the manufacturer's stated reference range. If more than 2 fall outside, the reference range may not be appropriate for your population, and a full reference range study or further investigation is required. Your laboratory director or designee makes the final determination."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.clsiOverview,

@@ -35,9 +35,9 @@ export const CLSI_GUIDANCE: Record<string, { protocol: string; min_samples: stri
   },
   reference_interval: {
     protocol: "CLSI EP28-A3c",
-    min_samples: "20 reference subjects if adopting manufacturer interval; 120 if establishing de novo",
+    min_samples: "20 reference subjects if adopting manufacturer range; 120 if establishing de novo",
     rationale:
-      "CLSI EP28-A3c allows adoption of a manufacturer's reference interval with verification using a minimum of 20 reference subjects. De novo establishment requires at least 120 subjects.",
+      "CLSI EP28-A3c allows adoption of a manufacturer's reference range with verification using a minimum of 20 reference subjects. De novo establishment requires at least 120 subjects.",
   },
 };
 
@@ -273,7 +273,7 @@ export function registerVeritaCheckVerificationRoutes(
       { key: "accuracy",           label: "Accuracy / Bias",    protocol: "CLSI EP15-A3" },
       { key: "precision",          label: "Precision",          protocol: "CLSI EP15-A3" },
       { key: "reportable_range",   label: "Reportable Range",   protocol: "CLSI EP06" },
-      { key: "reference_interval", label: "Reference Interval", protocol: "CLSI EP28-A3c" },
+      { key: "reference_interval", label: "Reference Range", protocol: "CLSI EP28-A3c" },
     ];
 
     const triggerLabels: Record<string, string> = {

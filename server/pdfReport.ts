@@ -294,7 +294,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     precision: "Precision Verification (EP15)",
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Lot-to-Lot Verification",
-    ref_interval: "Reference Interval Verification",
+    ref_interval: "Reference Range Verification",
     pt_coag: "PT/Coag New Lot Validation",
     qc_range: "QC Range Establishment",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
@@ -324,7 +324,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931";
 
   const specs = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "ref_interval" ? "Reference Interval Verification" : "Correlation / Method Comparison"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     ["CLIA Total Allowable Error", `±${cliaP}%`],
     ["CLIA CFR Reference", `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`],
@@ -1241,8 +1241,8 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   const verdictText = overallPass ? "Meets CLSI EP28-A3c criteria" : "Does not meet CLSI EP28-A3c criteria";
 
   const cliaStatement = overallPass
-    ? `<b>The reference interval verification for ${analyte} meets the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The reference interval verification for ${analyte} does not meet the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The reference range verification for ${analyte} meets the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The reference range verification for ${analyte} does not meet the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const specimens = (results.specimens || []) as { specimenId: string; value: number; inRange: boolean }[];
   const dataRows = specimens.map((s, i) => {
@@ -1274,7 +1274,7 @@ function buildRefIntervalHTML(study: Study, results: any): string {
     <line x1="${highX}" y1="15" x2="${highX}" y2="65" stroke="#01696F" stroke-width="1.5" stroke-dasharray="4,2"/>
     <text x="${lowX}" y="12" text-anchor="middle" font-size="7" fill="#01696F">${refLow}</text>
     <text x="${highX}" y="12" text-anchor="middle" font-size="7" fill="#01696F">${refHigh}</text>
-    <text x="${(lowX + highX) / 2}" y="72" text-anchor="middle" font-size="7" fill="#01696F">Reference Interval</text>
+    <text x="${(lowX + highX) / 2}" y="72" text-anchor="middle" font-size="7" fill="#01696F">Reference Range</text>
     ${dots}
   </svg>`;
 
@@ -1286,17 +1286,17 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   const summaryStats = `
     <div class="key-stats">
       <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
-      <div class="stat-item"><div class="stat-label">Reference Interval</div><div class="stat-value">${refLow} – ${refHigh} ${units}</div></div>
+      <div class="stat-item"><div class="stat-label">Reference Range</div><div class="stat-value">${refLow} – ${refHigh} ${units}</div></div>
       <div class="stat-item"><div class="stat-label">Specimens Tested</div><div class="stat-value">${n}</div></div>
       <div class="stat-item"><div class="stat-label">Outside Range</div><div class="stat-value">${outsideCount} (${outsidePct}%)</div></div>
       <div class="stat-item"><div class="stat-label">CLSI EP28-A3c Criterion</div><div class="stat-value">≤10% outside</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reference Interval Verification - ${study.testName}</title><style>${CSS}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reference Range Verification - ${study.testName}</title><style>${CSS}</style></head><body>
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
-  <div class="section-heading">Reference Interval Verification</div>
+  <div class="section-heading">Reference Range Verification</div>
   <div class="verdict-banner ${passClass}">${overallPass ? "\u2714" : "\u2718"} ${verdictText}</div>
   ${summaryStats}
   <div style="margin:12px 0 6px;font-size:8pt;font-weight:600;color:#01696F;">Distribution Plot</div>
@@ -1307,7 +1307,7 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   <div class="page-break"></div>
   <div class="section-heading">Individual Specimen Results</div>
   <table>
-    <thead><tr><th>Specimen ID</th><th class="text-right">Result (${units})</th><th class="text-right">Ref Interval</th><th class="text-right">In Range?</th></tr></thead>
+    <thead><tr><th>Specimen ID</th><th class="text-right">Result (${units})</th><th class="text-right">Ref Range</th><th class="text-right">In Range?</th></tr></thead>
     <tbody>${dataRows}</tbody>
   </table>
   </body></html>`;
@@ -1435,7 +1435,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   }).join("");
 
   const m1Section = `
-    <div class="section-heading">Module 1: Normal Patient Mean & Reference Interval Verification</div>
+    <div class="section-heading">Module 1: Normal Patient Mean & Reference Range Verification</div>
     <div class="supp-stats">
       <span class="key">N:</span><span>${module1.n}</span>
       <span class="key">Geometric Mean PT:</span><span>${module1.geoMeanPT.toFixed(2)} sec</span>

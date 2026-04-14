@@ -188,7 +188,7 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     }
 
     if (studyType === "ref_interval") {
-      // CLSI EP28-A3c: pass if <=10% (<=2 of 20) fall outside reference interval
+      // CLSI EP28-A3c: pass if <=10% (<=2 of 20) fall outside reference range
       const { specimens, refLow, refHigh } = rawData;
       if (!specimens || !Array.isArray(specimens) || specimens.length === 0) return "fail";
       const n = specimens.length;
@@ -3104,7 +3104,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
 
-      // ── Reference Interval PDF ──
+      // ── Reference Range PDF ──
       if (studyRow.study_type === "ref_interval") {
         const { specimens, refLow, refHigh, analyte, units } = dp as any;
         const validSpecimens = (specimens || []).filter((s: any) => s.value !== null && !isNaN(s.value));
@@ -3120,8 +3120,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const summary = n < 20
           ? `Insufficient specimens: ${n} provided, minimum 20 required per CLSI EP28-A3c.`
           : overallPass
-            ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}-${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of \u226410% outside.`
-            : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference interval [${refLow}-${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of \u226410% outside.`;
+            ? `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference range [${refLow}-${refHigh} ${units}], meeting the CLSI EP28-A3c acceptance criterion of \u226410% outside.`
+            : `${outsideCount} of ${n} specimens (${outsidePct.toFixed(1)}%) fell outside the reference range [${refLow}-${refHigh} ${units}], exceeding the CLSI EP28-A3c acceptance criterion of \u226410% outside.`;
 
         const study = {
           testName: studyRow.test_name, instrument: studyRow.instrument,

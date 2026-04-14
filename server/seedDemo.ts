@@ -134,7 +134,7 @@ export async function seedDemoData() {
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L', data_points = ? WHERE user_id = ? AND test_name = 'Potassium'").run(JSON.stringify(generatePotassiumData()), demoUserId);
   // Troponin I: backfill verified data points + result for existing deployments
   sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%', data_points = ? WHERE user_id = ? AND test_name = 'Troponin I'").run(JSON.stringify(generateTroponinData()), demoUserId);
-  // Sodium Reference Interval Verification -- restore if deleted, backfill if exists
+  // Sodium Reference Range Verification - restore if deleted, backfill if exists
   const existingSodiumRefInterval = sqlite.prepare(
     "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval' LIMIT 1"
   ).get(demoUserId);
@@ -168,7 +168,7 @@ export async function seedDemoData() {
       JSON.stringify(["Ortho VITROS 5600 [Primary]"]),
       now
     );
-    console.log("[seed] Restored Sodium Reference Interval Verification study");
+    console.log("[seed] Restored Sodium Reference Range Verification study");
   } else {
     sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval'").run(demoUserId);
   }
@@ -389,7 +389,7 @@ function seedScanData(sqlite: any, demoUserId: number, now: string) {
   seedScanItems();
 }
 
-// ─── Studies seeding: Sodium MC, Potassium MC, Creatinine Cal Ver, Sodium Ref Interval ─
+// ─── Studies seeding: Sodium MC, Potassium MC, Creatinine Cal Ver, Sodium Ref Range ────
 function seedStudies(sqlite: any, demoUserId: number, now: string) {
   // Study 1: Sodium Method Comparison (absolute TEa: 4 mmol/L)
   const sodiumDataPoints = generateSodiumData();
@@ -453,7 +453,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
   );
 
 
-  // Study 4: Sodium Reference Interval Verification
+  // Study 4: Sodium Reference Range Verification
   const sodiumRefSpecimens = [
     { specimenId: "S001", value: 137 }, { specimenId: "S002", value: 140 },
     { specimenId: "S003", value: 138 }, { specimenId: "S004", value: 142 },

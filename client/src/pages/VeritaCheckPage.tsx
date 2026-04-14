@@ -370,7 +370,7 @@ export default function VeritaCheckPage() {
     Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Abnormal" as const }))
   );
 
-  // Reference Interval state
+  // Reference Range state
   const [refAnalyte, setRefAnalyte] = useState("");
   const [refUnits, setRefUnits] = useState("");
   const [refLow, setRefLow] = useState<number | "">("");
@@ -940,10 +940,10 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "ref_interval") {
-      if (refLow === "" || refHigh === "") { toast({ title: "Please enter reference interval low and high values", variant: "destructive" }); return; }
+      if (refLow === "" || refHigh === "") { toast({ title: "Please enter reference range low and high values", variant: "destructive" }); return; }
       const lo = Number(refLow);
       const hi = Number(refHigh);
-      if (lo >= hi) { toast({ title: "Reference interval low must be less than high", variant: "destructive" }); return; }
+      if (lo >= hi) { toast({ title: "Reference range low must be less than high", variant: "destructive" }); return; }
       const validData = refData.filter(dp => dp.value !== null && !isNaN(dp.value as number));
       if (validData.length < 20) { toast({ title: `Please enter at least 20 specimen values (${validData.length} entered)`, variant: "destructive" }); return; }
       const results = calculateRefInterval(refData, lo, hi, refAnalyte, refUnits);
@@ -1024,7 +1024,7 @@ export default function VeritaCheckPage() {
     saveMutation.mutate(study);
   };
 
-    useSEO({ title: "VeritaCheck | CLIA Method Validation Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference intervals. Generates director-signed, survey-ready verification documentation." });
+    useSEO({ title: "VeritaCheck | CLIA Method Validation Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
 return (
     <div>
       {!isLoggedIn ? (
@@ -1171,7 +1171,7 @@ return (
                           <SelectItem value="pt_coag">PT/Coag New Lot Validation</SelectItem>
                           <SelectItem value="qc_range">QC Range Establishment</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
-                          <SelectItem value="ref_interval">Reference Interval Verification</SelectItem>
+                          <SelectItem value="ref_interval">Reference Range Verification</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -1395,7 +1395,7 @@ return (
                 <div className="space-y-6">
                   {/* Module 1: Normal Patient Mean */}
                   <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">Module 1: Normal Patient Mean & Reference Interval Verification</CardTitle></CardHeader>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">Module 1: Normal Patient Mean & Reference Range Verification</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Instrument</Label><Input value={ptInstrumentName} onChange={e => setPtInstrumentName(e.target.value)} /></div>
@@ -1694,17 +1694,17 @@ return (
                 </div>
               ) : studyType === "ref_interval" ? (
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Reference Interval Verification Data Entry</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Reference Range Verification Data Entry</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
-                      <span>CLSI EP28-A3c: enter at least 20 reference specimen values. The study passes if no more than 2 of 20 (10%) fall outside the stated reference interval.</span>
+                      <span>CLSI EP28-A3c: enter at least 20 reference specimen values. The study passes if no more than 2 of 20 (10%) fall outside the stated reference range.</span>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Sodium" value={refAnalyte} onChange={e => setRefAnalyte(e.target.value)} /></div>
                       <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mmol/L" value={refUnits} onChange={e => setRefUnits(e.target.value)} /></div>
-                      <div className="space-y-1.5"><Label>Reference Interval Low *</Label><Input type="number" step="any" placeholder="e.g. 135" value={refLow} onChange={e => setRefLow(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                      <div className="space-y-1.5"><Label>Reference Interval High *</Label><Input type="number" step="any" placeholder="e.g. 145" value={refHigh} onChange={e => setRefHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Reference Range Low *</Label><Input type="number" step="any" placeholder="e.g. 135" value={refLow} onChange={e => setRefLow(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Reference Range High *</Label><Input type="number" step="any" placeholder="e.g. 145" value={refHigh} onChange={e => setRefHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
                       <div className="space-y-1.5"><Label>Number of Specimens</Label>
                         <Input type="number" min={20} max={200} value={refNumSpecimens} onChange={e => {
                           const n = Math.max(20, Math.min(200, parseInt(e.target.value) || 20));
@@ -1754,7 +1754,7 @@ return (
                         const pct = filled.length > 0 ? ((outside / filled.length) * 100).toFixed(1) : "0.0";
                         return filled.length > 0 ? (
                           <div className={`text-xs mt-2 font-medium ${outside / filled.length <= 0.1 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                            {outside} of {filled.length} ({pct}%) outside reference interval - EP28-A3c limit: 10%
+                            {outside} of {filled.length} ({pct}%) outside reference range - EP28-A3c limit: 10%
                           </div>
                         ) : null;
                       })()}
