@@ -76,6 +76,16 @@ All prior work complete. No active TODO.
 | Stripe live key | sk_live_REDACTED_SEE_RAILWAY_ENV |
 | Stripe webhook secret | [REDACTED - ROTATE THIS KEY] |
 
+### Database Backup Infrastructure
+- **Backup endpoint**: `GET /api/admin/backup-db?secret=[ADMIN_SECRET]` - streams raw SQLite file with WAL checkpoint
+- **Daily automated backup**: Runs at 2:00 AM MST every day via scheduled task (cron ID: d799283d)
+- **Google Drive storage**: All backups uploaded to verilabguy@gmail.com Google Drive - [VeritaAssure Backups folder](https://drive.google.com/file/d/1uGItFrU-iCPeXxjGf2qbXXIzFs3FYBbv/view?usp=drivesdk)
+- **Retention**: All backups kept indefinitely (no automatic deletion). ~3.7 MB per backup.
+- **Process**: Download from live server, verify integrity (file size > 1MB, SQLite format, user/study counts), upload to Google Drive, delete local copy
+- **Failure alerts**: Immediate notification if download fails, file is corrupt, or Google Drive upload fails
+- **CRITICAL**: The old nightly_snapshots table is stored IN the same SQLite DB - it is NOT a real backup. If DB is lost, snapshots are lost too. The Google Drive backups are the real external protection.
+- **Added**: April 14, 2026 after critical outage investigation revealed in-DB snapshots were not real backups
+
 ### Railway Deploy Command
 ```bash
 curl -s -X POST "https://backboard.railway.app/graphql/v2" \
