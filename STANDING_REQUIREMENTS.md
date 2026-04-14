@@ -146,3 +146,17 @@
 - Stripe live key in Railway env as STRIPE_SECRET_KEY
 - GA4 Measurement ID: G-M3TB43ZX4E | Property ID: 503314560
 - Chase Stripe payout account: ••••5726
+
+## DEPLOY RULE (NON-NEGOTIABLE)
+- ALWAYS use `latestCommit: true` when calling `serviceInstanceDeploy`
+- Without this flag, Railway redeploys a CACHED OLD BUILD, not the latest code
+- The correct mutation: `serviceInstanceDeploy(serviceId: "...", environmentId: "...", latestCommit: true)`
+- NEVER use `serviceInstanceDeploy` without `latestCommit: true` -- this caused a critical outage on 2026-04-14
+- NEVER use `serviceInstanceRedeploy` -- it also uses cached builds
+- After deploy, ALWAYS verify the deployment commitHash matches the expected commit
+
+## DATABASE BACKUP
+- Railway volume backups require Pro plan (hobby plan token lacks permission)
+- Real backup endpoint: GET /api/admin/backup-db?secret=[ADMIN_SECRET] -- downloads raw SQLite file
+- The nightly_snapshots table is IN the same DB -- not a real backup. If DB is lost, snapshots are lost too.
+- External backups must be downloaded to a separate location (not stored in the Railway volume)

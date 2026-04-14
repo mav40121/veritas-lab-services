@@ -6805,6 +6805,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
+  app.get("/api/admin/backup-db", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
+    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      // WAL checkpoint to ensure all data is in the main DB file
+      sqlite.pragma('wal_checkpoint(TRUNCATE)');
+      const dbPath = sqlite.name;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      res.setHeader('Content-Type', 'application/x-sqlite3');
+      res.setHeader('Content-Disposition', `attachment; filename="veritas-backup-${timestamp}.db"`);
+      const fileStream = fs.createReadStream(dbPath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      console.error('[backup-db] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── VeritaPolicy Routes ──────────────────────────────────────────────────
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
   const { CAP_REQUIREMENTS } = await import('./capRequirements');
