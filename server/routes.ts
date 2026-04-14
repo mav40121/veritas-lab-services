@@ -662,6 +662,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ status: "ok", service: "veritas-lab-services", timestamp: new Date().toISOString() });
   });
 
+  // ── TEMPORARY: Debug route list + admin recovery ──────────────────────────
+  app.get("/api/debug/routes", (req, res) => {
+    const secret = req.query.secret as string;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const routes: string[] = [];
+    app._router?.stack?.forEach((layer: any) => {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+        routes.push(`${methods} ${layer.route.path}`);
+      } else if (layer.name === 'router' && layer.handle?.stack) {
+        layer.handle.stack.forEach((r: any) => {
+          if (r.route) {
+            const methods = Object.keys(r.route.methods).join(',').toUpperCase();
+            routes.push(`${methods} ${r.route.path}`);
+          }
+        });
+      }
+    });
+    res.json({ totalRoutes: routes.length, routes });
+  });
+
+  // TEMPORARY: Admin account restore via /api/auth path (bypasses routing issue)
+  app.post("/api/auth/admin-restore", async (req, res) => {
+    const { secret, action, userId, plan, credits, email, password, name, stripeCustomerId, stripeSubscriptionId } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      if (action === 'set-plan') {
+        const planCredits = ["annual","starter","professional","lab","complete","waived","community","hospital","large_hospital","enterprise","veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
+        storage.updateUserPlan(Number(userId), plan, planCredits);
+        const user = storage.getUserById(Number(userId));
+        return res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
+      }
+      if (action === 'update-user') {
+        const updates: string[] = [];
+        const params: any[] = [];
+        if (name) { updates.push('name = ?'); params.push(name); }
+        if (password) {
+          const bcrypt = await import('bcryptjs');
+          const hash = await bcrypt.default.hash(password, 10);
+          updates.push('password_hash = ?'); params.push(hash);
+        }
+        if (stripeCustomerId) { updates.push('stripe_customer_id = ?'); params.push(stripeCustomerId); }
+        if (stripeSubscriptionId) { updates.push('stripe_subscription_id = ?'); params.push(stripeSubscriptionId); }
+        if (updates.length > 0) {
+          params.push(Number(userId));
+          (db as any).$client.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+        }
+        const user = storage.getUserById(Number(userId));
+        return res.json({ ok: true, user: { id: user?.id, email: user?.email, name: user?.name, plan: user?.plan } });
+      }
+      if (action === 'create-user') {
+        const bcrypt = await import('bcryptjs');
+        const hash = await bcrypt.default.hash(password, 10);
+        const user = storage.createUser(email.toLowerCase(), hash, name);
+        return res.json({ ok: true, user: { id: user.id, email: user.email, name: user.name } });
+      }
+      if (action === 'list-users') {
+        const rows = (db as any).$client.prepare('SELECT id, email, name, plan, study_credits, stripe_customer_id FROM users').all();
+        return res.json({ ok: true, users: rows });
+      }
+      if (action === 'create-discount-code') {
+        const { code, discountPct, trialDays, partnerName, appliesTo, maxUses } = req.body;
+        (db as any).$client.prepare('INSERT INTO discount_codes (code, discount_pct, trial_days, partner_name, applies_to, max_uses, active) VALUES (?, ?, ?, ?, ?, ?, 1)').run(code, discountPct || 0, trialDays || null, partnerName || null, appliesTo || 'all', maxUses || null);
+        return res.json({ ok: true, code });
+      }
+      return res.status(400).json({ error: 'Unknown action' });
+    } catch (err: any) {
+      console.error('[admin-restore] Error:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── AUTH ──────────────────────────────────────────────────────────────────
   app.post("/api/auth/register", async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
