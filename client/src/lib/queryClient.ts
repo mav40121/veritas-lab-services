@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { authHeaders } from "./auth";
+import { authHeaders, clearAuth } from "./auth";
 import { triggerSubscriptionError } from "@/components/SubscriptionModal";
 
 const RAILWAY_URL = "https://www.veritaslabservices.com";
@@ -52,7 +52,13 @@ export const getQueryFn: <T>(options: {
       headers: authHeaders(),
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+    if (res.status === 401) {
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
+      // Stale or expired token: clear auth and redirect to login
+      clearAuth();
+      window.location.href = "/login";
       return null;
     }
 
