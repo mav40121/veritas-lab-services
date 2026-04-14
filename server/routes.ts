@@ -4300,15 +4300,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           assessment_id, method_number, method_group_id, item_label, item_description,
           evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info,
           element_number, method_group_name,
-          el1_specimen_id, el1_observer_initials,
-          el2_evidence, el2_date,
-          el3_qc_date,
-          el4_date_observed, el4_observer_initials,
-          el5_sample_type, el5_sample_id, el5_acceptable,
-          el6_quiz_id, el6_score, el6_date_taken,
+          el1_specimen_id, el1_observer_initials, el1_na, el1_na_justification,
+          el2_evidence, el2_date, el2_na, el2_na_justification,
+          el3_qc_date, el3_na, el3_na_justification,
+          el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
+          el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
+          el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
           waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
         stmt.run(
@@ -4320,12 +4320,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           item.passed ? 1 : 0, item.specimenInfo ?? null,
           item.elementNumber ?? null, item.methodGroupName ?? null,
           item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+          item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
           item.el2Evidence ?? null, item.el2Date ?? null,
+          item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
           item.el3QcDate ?? null,
+          item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
           item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+          item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
           item.el5SampleType ?? null, item.el5SampleId ?? null,
           item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+          item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
           item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+          item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
           item.waivedInstrument ?? null, item.waivedTest ?? null,
           item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
           item.waivedDate ?? null, item.waivedInitials ?? null,
@@ -4378,15 +4384,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           assessment_id, method_number, method_group_id, item_label, item_description,
           evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info,
           element_number, method_group_name,
-          el1_specimen_id, el1_observer_initials,
-          el2_evidence, el2_date,
-          el3_qc_date,
-          el4_date_observed, el4_observer_initials,
-          el5_sample_type, el5_sample_id, el5_acceptable,
-          el6_quiz_id, el6_score, el6_date_taken,
+          el1_specimen_id, el1_observer_initials, el1_na, el1_na_justification,
+          el2_evidence, el2_date, el2_na, el2_na_justification,
+          el3_qc_date, el3_na, el3_na_justification,
+          el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
+          el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
+          el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
           waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
         stmt.run(
@@ -4398,12 +4404,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           item.passed ? 1 : 0, item.specimenInfo ?? null,
           item.elementNumber ?? null, item.methodGroupName ?? null,
           item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+          item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
           item.el2Evidence ?? null, item.el2Date ?? null,
+          item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
           item.el3QcDate ?? null,
+          item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
           item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+          item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
           item.el5SampleType ?? null, item.el5SampleId ?? null,
           item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+          item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
           item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+          item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
           item.waivedInstrument ?? null, item.waivedTest ?? null,
           item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
           item.waivedDate ?? null, item.waivedInitials ?? null,

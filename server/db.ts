@@ -650,6 +650,19 @@ const newCompItemCols: [string, string][] = [
   ["nt_date_met", "TEXT"],
   ["nt_employee_initials", "TEXT"],
   ["nt_supervisor_initials", "TEXT"],
+  // Per-element N/A toggle + required justification (VeritaComp N/A support)
+  ["el1_na", "INTEGER"],
+  ["el1_na_justification", "TEXT"],
+  ["el2_na", "INTEGER"],
+  ["el2_na_justification", "TEXT"],
+  ["el3_na", "INTEGER"],
+  ["el3_na_justification", "TEXT"],
+  ["el4_na", "INTEGER"],
+  ["el4_na_justification", "TEXT"],
+  ["el5_na", "INTEGER"],
+  ["el5_na_justification", "TEXT"],
+  ["el6_na", "INTEGER"],
+  ["el6_na_justification", "TEXT"],
 ];
 for (const [col, colType] of newCompItemCols) {
   if (!compItemColNames.includes(col)) {
