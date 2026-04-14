@@ -1325,33 +1325,51 @@ interface TechElementData {
   // Element 1
   el1_specimen_id: string;
   el1_observer_initials: string;
+  el1_na: boolean;
+  el1_na_justification: string;
   // Element 2
   el2_evidence: string;
   el2_date: string;
+  el2_na: boolean;
+  el2_na_justification: string;
   // Element 3
   el3_qc_date: string;
+  el3_na: boolean;
+  el3_na_justification: string;
   // Element 4
   el4_date_observed: string;
   el4_observer_initials: string;
+  el4_na: boolean;
+  el4_na_justification: string;
   // Element 5
   el5_sample_type: string;
   el5_sample_id: string;
   el5_acceptable: boolean | null;
+  el5_na: boolean;
+  el5_na_justification: string;
   // Element 6
   el6_quiz_id: string;
   el6_score: number | null;
   el6_date_taken: string;
+  el6_na: boolean;
+  el6_na_justification: string;
 }
 
 function emptyTechElement(): TechElementData {
   return {
     passed: false,
     el1_specimen_id: "", el1_observer_initials: "",
+    el1_na: false, el1_na_justification: "",
     el2_evidence: "", el2_date: "",
+    el2_na: false, el2_na_justification: "",
     el3_qc_date: "",
+    el3_na: false, el3_na_justification: "",
     el4_date_observed: "", el4_observer_initials: "",
+    el4_na: false, el4_na_justification: "",
     el5_sample_type: "", el5_sample_id: "", el5_acceptable: null,
+    el5_na: false, el5_na_justification: "",
     el6_quiz_id: "", el6_score: null, el6_date_taken: "",
+    el6_na: false, el6_na_justification: "",
   };
 }
 
@@ -1517,11 +1535,38 @@ function NewAssessmentDialog({
     }
   }
 
-  // Check if any element fails
-  const anyFails = Object.values(techData).some(d => !d.passed && (d.el1_specimen_id || d.el2_evidence || d.el3_qc_date || d.el4_date_observed || d.el5_sample_id || d.el6_quiz_id));
+  // Check if any element fails (exclude N/A elements)
+  const anyFails = Object.values(techData).some(d => !d.passed && !d.el1_na && !d.el2_na && !d.el3_na && !d.el4_na && !d.el5_na && !d.el6_na && (d.el1_specimen_id || d.el2_evidence || d.el3_qc_date || d.el4_date_observed || d.el5_sample_id || d.el6_quiz_id));
+
+  // Check if any N/A element is missing justification
+  function getMissingNaJustifications(): string[] {
+    const missing: string[] = [];
+    const elNames = ["Direct Observation", "Monitoring/Reporting", "QC Performance", "Instrument Maintenance", "Blind/PT Sample", "Quiz"];
+    for (const key of Object.keys(techData)) {
+      const d = techData[key];
+      for (let el = 1; el <= 6; el++) {
+        const naKey = `el${el}_na` as keyof TechElementData;
+        const justKey = `el${el}_na_justification` as keyof TechElementData;
+        if (d[naKey] && !(d[justKey] as string)?.trim()) {
+          missing.push(`Element ${el} (${elNames[el - 1]}) - ${key}`);
+        }
+      }
+    }
+    return missing;
+  }
 
   async function handleCreate() {
     if (!employeeId) return;
+
+    // Validate N/A justifications before saving
+    if (program.type === "technical") {
+      const missing = getMissingNaJustifications();
+      if (missing.length > 0) {
+        alert("N/A justification is required for all elements marked N/A. Please provide justification for:\n" + missing.map(m => "- " + m).join("\n"));
+        return;
+      }
+    }
+
     setCreating(true);
 
     const items: any[] = [];
@@ -1538,17 +1583,29 @@ function NewAssessmentDialog({
             methodGroupName: mg.name,
             el1SpecimenId: d.el1_specimen_id,
             el1ObserverInitials: d.el1_observer_initials,
+            el1Na: d.el1_na,
+            el1NaJustification: d.el1_na_justification,
             el2Evidence: d.el2_evidence,
             el2Date: d.el2_date,
+            el2Na: d.el2_na,
+            el2NaJustification: d.el2_na_justification,
             el3QcDate: d.el3_qc_date,
+            el3Na: d.el3_na,
+            el3NaJustification: d.el3_na_justification,
             el4DateObserved: d.el4_date_observed,
             el4ObserverInitials: d.el4_observer_initials,
+            el4Na: d.el4_na,
+            el4NaJustification: d.el4_na_justification,
             el5SampleType: d.el5_sample_type,
             el5SampleId: d.el5_sample_id,
             el5Acceptable: d.el5_acceptable,
+            el5Na: d.el5_na,
+            el5NaJustification: d.el5_na_justification,
             el6QuizId: d.el6_quiz_id,
             el6Score: d.el6_score,
             el6DateTaken: d.el6_date_taken,
+            el6Na: d.el6_na,
+            el6NaJustification: d.el6_na_justification,
             passed: d.passed,
           });
         }
@@ -1731,120 +1788,196 @@ function NewAssessmentDialog({
                 <div key={mg.id} className="space-y-4">
                   {/* Element 1 */}
                   <div className="border border-border rounded-lg p-3">
-                    <div className="text-xs font-semibold mb-1">Element 1: Direct Observation of Routine Patient Test Performance</div>
-                    <p className="text-[10px] italic text-muted-foreground mb-2">Observer must be Lab Director, TC, or TS as appropriate. Documents that the observer watched the employee process and test a specimen. Results reporting is covered in Element 2.</p>
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <label className="text-[10px] text-muted-foreground">Specimen ID</label>
-                        <Input className="text-xs h-7" placeholder="Specimen ID observed" value={getTechDataForElement(1, mg.id).el1_specimen_id} onChange={e => setTechField(1, mg.id, "el1_specimen_id", e.target.value)} />
-                      </div>
-                      <div className="w-24">
-                        <label className="text-[10px] text-muted-foreground">Observer Initials</label>
-                        <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(1, mg.id).el1_observer_initials} onChange={e => setTechField(1, mg.id, "el1_observer_initials", e.target.value)} maxLength={10} />
-                      </div>
-                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
-                        <input type="checkbox" checked={getTechDataForElement(1, mg.id).passed} onChange={e => setTechField(1, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
-                        Pass
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 1: Direct Observation of Routine Patient Test Performance</div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(1, mg.id).el1_na} onChange={e => { setTechField(1, mg.id, "el1_na", e.target.checked); if (e.target.checked) setTechField(1, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
                       </label>
                     </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Observer must be Lab Director, TC, or TS as appropriate. Documents that the observer watched the employee process and test a specimen. Results reporting is covered in Element 2.</p>
+                    {getTechDataForElement(1, mg.id).el1_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(1, mg.id).el1_na_justification} onChange={e => setTechField(1, mg.id, "el1_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-muted-foreground">Specimen ID</label>
+                          <Input className="text-xs h-7" placeholder="Specimen ID observed" value={getTechDataForElement(1, mg.id).el1_specimen_id} onChange={e => setTechField(1, mg.id, "el1_specimen_id", e.target.value)} />
+                        </div>
+                        <div className="w-24">
+                          <label className="text-[10px] text-muted-foreground">Observer Initials</label>
+                          <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(1, mg.id).el1_observer_initials} onChange={e => setTechField(1, mg.id, "el1_observer_initials", e.target.value)} maxLength={10} />
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(1, mg.id).passed} onChange={e => setTechField(1, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Element 2 */}
                   <div className="border border-border rounded-lg p-3">
-                    <div className="text-xs font-semibold mb-1">Element 2: Monitoring, Recording and Reporting of Test Results</div>
-                    <p className="text-[10px] italic text-muted-foreground mb-2">Documents the employee's ability to monitor, record, and report results including critical values.</p>
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <label className="text-[10px] text-muted-foreground">Evidence</label>
-                        <Textarea className="text-xs min-h-[32px]" placeholder="Evidence notes..." value={getTechDataForElement(2, mg.id).el2_evidence} onChange={e => setTechField(2, mg.id, "el2_evidence", e.target.value)} rows={2} />
-                      </div>
-                      <div className="w-32">
-                        <label className="text-[10px] text-muted-foreground">Date</label>
-                        <Input type="date" className="text-xs h-7" value={getTechDataForElement(2, mg.id).el2_date} onChange={e => setTechField(2, mg.id, "el2_date", e.target.value)} />
-                      </div>
-                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
-                        <input type="checkbox" checked={getTechDataForElement(2, mg.id).passed} onChange={e => setTechField(2, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
-                        Pass
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 2: Monitoring, Recording and Reporting of Test Results</div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(2, mg.id).el2_na} onChange={e => { setTechField(2, mg.id, "el2_na", e.target.checked); if (e.target.checked) setTechField(2, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
                       </label>
                     </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Documents the employee's ability to monitor, record, and report results including critical values.</p>
+                    {getTechDataForElement(2, mg.id).el2_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(2, mg.id).el2_na_justification} onChange={e => setTechField(2, mg.id, "el2_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-muted-foreground">Evidence</label>
+                          <Textarea className="text-xs min-h-[32px]" placeholder="Evidence notes..." value={getTechDataForElement(2, mg.id).el2_evidence} onChange={e => setTechField(2, mg.id, "el2_evidence", e.target.value)} rows={2} />
+                        </div>
+                        <div className="w-32">
+                          <label className="text-[10px] text-muted-foreground">Date</label>
+                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(2, mg.id).el2_date} onChange={e => setTechField(2, mg.id, "el2_date", e.target.value)} />
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(2, mg.id).passed} onChange={e => setTechField(2, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Element 3 */}
                   <div className="border border-border rounded-lg p-3">
-                    <div className="text-xs font-semibold mb-1">Element 3: QC Performance</div>
-                    <p className="text-[10px] italic text-muted-foreground mb-2">Enter the date the employee personally ran QC on this instrument. The surveyor will pull the QC records for that date to confirm.</p>
-                    <div className="flex gap-2 items-end">
-                      <div className="w-40">
-                        <label className="text-[10px] text-muted-foreground">Date Tech Ran QC</label>
-                        <Input type="date" className="text-xs h-7" value={getTechDataForElement(3, mg.id).el3_qc_date} onChange={e => setTechField(3, mg.id, "el3_qc_date", e.target.value)} />
-                      </div>
-                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
-                        <input type="checkbox" checked={getTechDataForElement(3, mg.id).passed} onChange={e => setTechField(3, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
-                        Pass
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 3: QC Performance</div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(3, mg.id).el3_na} onChange={e => { setTechField(3, mg.id, "el3_na", e.target.checked); if (e.target.checked) setTechField(3, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
                       </label>
                     </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Enter the date the employee personally ran QC on this instrument. The surveyor will pull the QC records for that date to confirm.</p>
+                    {getTechDataForElement(3, mg.id).el3_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(3, mg.id).el3_na_justification} onChange={e => setTechField(3, mg.id, "el3_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <div className="w-40">
+                          <label className="text-[10px] text-muted-foreground">Date Tech Ran QC</label>
+                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(3, mg.id).el3_qc_date} onChange={e => setTechField(3, mg.id, "el3_qc_date", e.target.value)} />
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(3, mg.id).passed} onChange={e => setTechField(3, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Element 4 */}
                   <div className="border border-border rounded-lg p-3">
-                    <div className="text-xs font-semibold mb-1">Element 4: Direct Observation of Instrument Maintenance</div>
-                    <p className="text-[10px] italic text-muted-foreground mb-2">Observer must be Lab Director, TC, or TS as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.</p>
-                    <div className="flex gap-2 items-end">
-                      <div className="w-40">
-                        <label className="text-[10px] text-muted-foreground">Date Observed</label>
-                        <Input type="date" className="text-xs h-7" value={getTechDataForElement(4, mg.id).el4_date_observed} onChange={e => setTechField(4, mg.id, "el4_date_observed", e.target.value)} />
-                      </div>
-                      <div className="w-24">
-                        <label className="text-[10px] text-muted-foreground">Observer Initials</label>
-                        <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(4, mg.id).el4_observer_initials} onChange={e => setTechField(4, mg.id, "el4_observer_initials", e.target.value)} maxLength={10} />
-                      </div>
-                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
-                        <input type="checkbox" checked={getTechDataForElement(4, mg.id).passed} onChange={e => setTechField(4, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
-                        Pass
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 4: Direct Observation of Instrument Maintenance</div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(4, mg.id).el4_na} onChange={e => { setTechField(4, mg.id, "el4_na", e.target.checked); if (e.target.checked) setTechField(4, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
                       </label>
                     </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">Observer must be Lab Director, TC, or TS as appropriate. The lab's signed maintenance records for the date observed serve as the supporting documentation.</p>
+                    {getTechDataForElement(4, mg.id).el4_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(4, mg.id).el4_na_justification} onChange={e => setTechField(4, mg.id, "el4_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <div className="w-40">
+                          <label className="text-[10px] text-muted-foreground">Date Observed</label>
+                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(4, mg.id).el4_date_observed} onChange={e => setTechField(4, mg.id, "el4_date_observed", e.target.value)} />
+                        </div>
+                        <div className="w-24">
+                          <label className="text-[10px] text-muted-foreground">Observer Initials</label>
+                          <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(4, mg.id).el4_observer_initials} onChange={e => setTechField(4, mg.id, "el4_observer_initials", e.target.value)} maxLength={10} />
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(4, mg.id).passed} onChange={e => setTechField(4, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Element 5 */}
                   <div className="border border-border rounded-lg p-3">
-                    <div className="text-xs font-semibold mb-1">Element 5: Blind / PT Sample Performance</div>
-                    <p className="text-[10px] italic text-muted-foreground mb-2">The PT report or blind sample log serves as the supporting record. Do not enter patient specimen data here.</p>
-                    <div className="flex gap-2 items-end flex-wrap">
-                      <div className="w-44">
-                        <label className="text-[10px] text-muted-foreground">Sample Type</label>
-                        <Select value={getTechDataForElement(5, mg.id).el5_sample_type || ""} onValueChange={v => setTechField(5, mg.id, "el5_sample_type", v)}>
-                          <SelectTrigger className="text-xs h-7"><SelectValue placeholder="Select..." /></SelectTrigger>
-                          <SelectContent>
-                            {SAMPLE_TYPES.map(st => <SelectItem key={st} value={st}>{st}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[10px] text-muted-foreground">Sample ID</label>
-                        <Input className="text-xs h-7" placeholder="Sample ID" value={getTechDataForElement(5, mg.id).el5_sample_id} onChange={e => setTechField(5, mg.id, "el5_sample_id", e.target.value)} />
-                      </div>
-                      <div className="w-24">
-                        <label className="text-[10px] text-muted-foreground">Acceptable</label>
-                        <Select value={getTechDataForElement(5, mg.id).el5_acceptable === true ? "yes" : getTechDataForElement(5, mg.id).el5_acceptable === false ? "no" : ""} onValueChange={v => setTechField(5, mg.id, "el5_acceptable", v === "yes")}>
-                          <SelectTrigger className="text-xs h-7"><SelectValue placeholder="..." /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="yes">Yes</SelectItem>
-                            <SelectItem value="no">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
-                        <input type="checkbox" checked={getTechDataForElement(5, mg.id).passed} onChange={e => setTechField(5, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
-                        Pass
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 5: Blind / PT Sample Performance</div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(5, mg.id).el5_na} onChange={e => { setTechField(5, mg.id, "el5_na", e.target.checked); if (e.target.checked) setTechField(5, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
                       </label>
                     </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">The PT report or blind sample log serves as the supporting record. Do not enter patient specimen data here.</p>
+                    {getTechDataForElement(5, mg.id).el5_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(5, mg.id).el5_na_justification} onChange={e => setTechField(5, mg.id, "el5_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end flex-wrap">
+                        <div className="w-44">
+                          <label className="text-[10px] text-muted-foreground">Sample Type</label>
+                          <Select value={getTechDataForElement(5, mg.id).el5_sample_type || ""} onValueChange={v => setTechField(5, mg.id, "el5_sample_type", v)}>
+                            <SelectTrigger className="text-xs h-7"><SelectValue placeholder="Select..." /></SelectTrigger>
+                            <SelectContent>
+                              {SAMPLE_TYPES.map(st => <SelectItem key={st} value={st}>{st}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-muted-foreground">Sample ID</label>
+                          <Input className="text-xs h-7" placeholder="Sample ID" value={getTechDataForElement(5, mg.id).el5_sample_id} onChange={e => setTechField(5, mg.id, "el5_sample_id", e.target.value)} />
+                        </div>
+                        <div className="w-24">
+                          <label className="text-[10px] text-muted-foreground">Acceptable</label>
+                          <Select value={getTechDataForElement(5, mg.id).el5_acceptable === true ? "yes" : getTechDataForElement(5, mg.id).el5_acceptable === false ? "no" : ""} onValueChange={v => setTechField(5, mg.id, "el5_acceptable", v === "yes")}>
+                            <SelectTrigger className="text-xs h-7"><SelectValue placeholder="..." /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="yes">Yes</SelectItem>
+                              <SelectItem value="no">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(5, mg.id).passed} onChange={e => setTechField(5, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Element 6 - Quiz */}
                   <div className="border border-border rounded-lg p-3">
-                    <div className="text-xs font-semibold mb-1">Element 6: Problem-Solving Assessment - Quiz</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 6: Problem-Solving Assessment - Quiz</div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(6, mg.id).el6_na} onChange={e => { setTechField(6, mg.id, "el6_na", e.target.checked); if (e.target.checked) setTechField(6, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
+                      </label>
+                    </div>
                     <p className="text-[10px] italic text-muted-foreground mb-2">A short quiz (1-2 questions per method group) is required. Score must be 100% to pass. The quiz and all answers will be appended to the competency record.</p>
-                    {(() => {
+                    {getTechDataForElement(6, mg.id).el6_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(6, mg.id).el6_na_justification} onChange={e => setTechField(6, mg.id, "el6_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (() => {
                       const quiz = findQuizForMg(mg.id, mg.name);
                       const el6Data = getTechDataForElement(6, mg.id);
 

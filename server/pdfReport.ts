@@ -2291,7 +2291,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     <div class="col">
       <div class="row"><span class="lbl">Employee:</span><span class="val">${esc(assessment.employee_name)}</span></div>
       <div class="row"><span class="lbl">Date of Hire:</span><span class="val">${esc(assessment.employee_hire_date) || "-"}</span></div>
-      <div class="row"><span class="lbl">Type:</span><span class="val">${(assessment.assessment_type || "initial").replace("_", " ").toUpperCase()}</span></div>
+      <div class="row"><span class="lbl">Type:</span><span class="val">${({initial:"Initial",["6month"]:"6-Month",annual:"Annual",reassessment:"Reassessment",orientation:"Orientation",duty_change:"Duty Change"} as Record<string,string>)[(assessment.assessment_type || "initial")] || (assessment.assessment_type || "initial").replace("_", " ").toUpperCase()}</span></div>
       <div class="row"><span class="lbl">Date:</span><span class="val">${dateStr}</span></div>
     </div>
   </div>`;
@@ -2318,12 +2318,16 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     ];
     const summaryRows = summaryElements.map(el => {
       const elItems = items.filter((i: any) => (i.element_number || i.method_number) === el.num);
-      const allPass = elItems.length > 0 && elItems.every((i: any) => i.passed);
-      const statusLabel = elItems.length === 0 ? "N/A" : allPass ? "PASS" : "FAIL";
+      const naKey = `el${el.num}_na` as string;
+      const naJustKey = `el${el.num}_na_justification` as string;
+      const isNa = elItems.length > 0 && elItems.every((i: any) => i[naKey]);
+      const allPass = !isNa && elItems.length > 0 && elItems.every((i: any) => i.passed);
+      const statusLabel = isNa ? "N/A" : elItems.length === 0 ? "N/A" : allPass ? "PASS" : "FAIL";
       const statusColor = statusLabel === "PASS" ? "#437A22" : statusLabel === "FAIL" ? "#A12C7B" : "#888";
+      const justification = isNa ? elItems.map((i: any) => i[naJustKey]).filter(Boolean).join("; ") : "";
       return `<tr>
         <td style="text-align:center;width:5%;font-weight:600;">${el.num}</td>
-        <td style="width:80%;">${el.name}</td>
+        <td style="width:80%;">${el.name}${justification ? `<br><span style="font-size:7pt;color:#666;font-style:italic;">N/A Justification: ${esc(justification)}</span>` : ""}</td>
         <td style="text-align:center;width:15%;font-weight:700;color:${statusColor}">${statusLabel}</td>
       </tr>`;
     }).join("");
@@ -2446,13 +2450,26 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     // Single page break before all elements, then they flow naturally
     html += `<div class="page-break"></div>`;
     for (const elDef of elementDefs) {
+      const naKey = `el${elDef.num}_na` as string;
+      const naJustKey = `el${elDef.num}_na_justification` as string;
       html += `<div class="section" style="margin-bottom:6px;">
         <div class="section-header">${elDef.title}</div>
         <div class="section-note">${elDef.note}</div>
         <table>
           <tr>${elDef.cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
       const elItems = items.filter((i: any) => (i.element_number || i.method_number) === elDef.num);
-      if (elItems.length === 0) {
+      // Check if all items for this element are N/A
+      const allNa = elItems.length > 0 && elItems.every((i: any) => i[naKey]);
+      if (allNa) {
+        const justifications = elItems.map((i: any) => {
+          const mgName = i.method_group_name || methodGroups.find((g: any) => g.id === i.method_group_id)?.name || "";
+          return mgName ? `${mgName}: ${esc(i[naJustKey] || "")}` : esc(i[naJustKey] || "");
+        }).filter(Boolean);
+        html += `<tr><td colspan="${elDef.cols.length}" style="text-align:center;color:#888;font-weight:600;">N/A</td></tr>`;
+        if (justifications.length > 0) {
+          html += `<tr><td colspan="${elDef.cols.length}" style="font-size:7.5pt;color:#666;font-style:italic;">Justification: ${justifications.join("; ")}</td></tr>`;
+        }
+      } else if (elItems.length === 0) {
         // Fallback: show items by method_number for backward compatibility
         const fallbackItems = items.filter((i: any) => i.method_number === elDef.num);
         for (const item of fallbackItems) {
@@ -2460,15 +2477,20 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           const augmented = { ...item, method_group_name: item.method_group_name || mg?.name || "" };
           html += `<tr>${elDef.render(augmented)}</tr>`;
         }
+        if (fallbackItems.length === 0) {
+          html += `<tr><td colspan="${elDef.cols.length}" style="text-align:center;color:#888;font-style:italic">No data recorded</td></tr>`;
+        }
       } else {
         for (const item of elItems) {
           const mg = methodGroups.find((g: any) => g.id === item.method_group_id);
           const augmented = { ...item, method_group_name: item.method_group_name || mg?.name || "" };
-          html += `<tr>${elDef.render(augmented)}</tr>`;
+          if (item[naKey]) {
+            // Individual N/A row within a mixed element
+            html += `<tr><td>${esc(augmented.method_group_name)}</td><td colspan="${elDef.cols.length - 1}" style="color:#888;font-style:italic;">N/A - ${esc(item[naJustKey] || "")}</td></tr>`;
+          } else {
+            html += `<tr>${elDef.render(augmented)}</tr>`;
+          }
         }
-      }
-      if (elItems.length === 0 && items.filter((i: any) => i.method_number === elDef.num).length === 0) {
-        html += `<tr><td colspan="${elDef.cols.length}" style="text-align:center;color:#888;font-style:italic">No data recorded</td></tr>`;
       }
       html += `</table></div>`;
     }
