@@ -518,13 +518,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/admin/discount-codes", (req, res) => {
-    const { secret, code, partnerName, discountPct, appliesTo, maxUses } = req.body;
+    const { secret, code, partnerName, discountPct, appliesTo, maxUses, trialDays } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!code || !partnerName) return res.status(400).json({ error: "code and partnerName required" });
     try {
       db.$client.prepare(
-        "INSERT INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at) VALUES (?, ?, ?, ?, ?, 0, 1, ?)"
-      ).run(code.toUpperCase(), partnerName, discountPct || 10, appliesTo || "annual", maxUses ?? null, new Date().toISOString());
+        "INSERT INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at, trial_days) VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)"
+      ).run(code.toUpperCase(), partnerName, discountPct || 10, appliesTo || "annual", maxUses ?? null, new Date().toISOString(), trialDays ?? null);
       res.json({ ok: true });
     } catch (err: any) {
       res.status(409).json({ error: "Code already exists" });
@@ -532,7 +532,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/admin/discount-codes/:id", (req, res) => {
-    const { secret, active, discountPct, appliesTo, maxUses } = req.body;
+    const { secret, active, discountPct, appliesTo, maxUses, trialDays } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const id = parseInt(req.params.id);
     const sets: string[] = [];
@@ -541,6 +541,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (discountPct !== undefined) { sets.push("discount_pct = ?"); vals.push(discountPct); }
     if (appliesTo !== undefined) { sets.push("applies_to = ?"); vals.push(appliesTo); }
     if (maxUses !== undefined) { sets.push("max_uses = ?"); vals.push(maxUses); }
+    if (trialDays !== undefined) { sets.push("trial_days = ?"); vals.push(trialDays); }
     if (!sets.length) return res.status(400).json({ error: "Nothing to update" });
     vals.push(id);
     db.$client.prepare(`UPDATE discount_codes SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
@@ -616,6 +617,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (row.max_uses !== null && row.uses >= row.max_uses) return res.json({ valid: false, message: "This code has reached its usage limit" });
       if (row.applies_to !== "all" && row.applies_to !== priceType) {
         return res.json({ valid: false, message: `This code applies to ${row.applies_to} plans only` });
+      }
+      if (row.trial_days) {
+        return res.json({ valid: true, discountPct: 0, trialDays: row.trial_days, partnerName: row.partner_name, message: `${row.trial_days}-day free trial` });
       }
       return res.json({ valid: true, discountPct: row.discount_pct, partnerName: row.partner_name, message: `${row.discount_pct}% discount applied` });
     }
@@ -2423,30 +2427,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let couponId: string | undefined;
     let discountRow: any = null;
     let discountPct = 0;
+    let trialDays: number | null = null;
     if (discountCode) {
       // Check internal discount_codes table first
       discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
       if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual")) {
-        discountPct = discountRow.discount_pct;
-        // First try using the code itself as a direct Stripe coupon ID (e.g. TdFkdMWg)
-        try {
-          const existing = await stripe.coupons.retrieve(discountCode.trim());
-          if (existing && existing.valid) {
-            couponId = existing.id;
-          }
-        } catch {}
-        // If not a Stripe coupon ID, create one on the fly
-        if (!couponId) {
+        // Trial code path: use Stripe trial_period_days, skip coupon creation
+        if (discountRow.trial_days) {
+          trialDays = discountRow.trial_days;
+        } else {
+          discountPct = discountRow.discount_pct;
+          // First try using the code itself as a direct Stripe coupon ID (e.g. TdFkdMWg)
           try {
-            const name = `${discountRow.partner_name} - ${discountRow.discount_pct}% off`.slice(0, 40);
-            const coupon = await stripe.coupons.create({
-              percent_off: discountRow.discount_pct,
-              duration: "once",
-              name,
-            });
-            couponId = coupon.id;
-          } catch (err: any) {
-            console.error("Stripe coupon creation error:", err.message);
+            const existing = await stripe.coupons.retrieve(discountCode.trim());
+            if (existing && existing.valid) {
+              couponId = existing.id;
+            }
+          } catch {}
+          // If not a Stripe coupon ID, create one on the fly
+          if (!couponId) {
+            try {
+              const name = `${discountRow.partner_name} - ${discountRow.discount_pct}% off`.slice(0, 40);
+              const coupon = await stripe.coupons.create({
+                percent_off: discountRow.discount_pct,
+                duration: "once",
+                name,
+              });
+              couponId = coupon.id;
+            } catch (err: any) {
+              console.error("Stripe coupon creation error:", err.message);
+            }
           }
         }
       } else if (!discountRow) {
@@ -2495,8 +2505,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       }
 
-      // Check if this discount is 100% off - bypass Stripe entirely
-      const isFullDiscount = discountPct === 100;
+      // Check if this discount is 100% off - bypass Stripe entirely (but not for trial codes)
+      const isFullDiscount = discountPct === 100 && !trialDays;
       if (isFullDiscount) {
         // Activate plan directly without Stripe checkout
         const planMap: Record<string, string> = {
@@ -2522,17 +2532,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cancel_url: cancelUrl,
         metadata: { userId: String(user.id), priceType, totalSeats: String(totalSeats) },
       };
-      if (couponId) {
+      if (trialDays && isSubscription) {
+        // Trial code: set trial period on the subscription, require card upfront
+        sessionParams.subscription_data = { trial_period_days: trialDays };
+        sessionParams.payment_method_collection = "always";
+      } else if (couponId) {
         sessionParams.discounts = [{ coupon: couponId }];
-      }
-      // When subscription is fully covered, do not require a payment method upfront
-      if (isSubscription && isFullDiscountStripe) {
-        sessionParams.payment_method_collection = "if_required";
+        // When subscription is fully covered, do not require a payment method upfront
+        if (isSubscription && isFullDiscountStripe) {
+          sessionParams.payment_method_collection = "if_required";
+        }
       }
 
       const session = await stripe.checkout.sessions.create(sessionParams);
 
-      if (couponId && discountRow) {
+      if (discountRow && (couponId || trialDays)) {
         db.$client.prepare("UPDATE discount_codes SET uses = uses + 1 WHERE id = ?").run(discountRow.id);
       }
 

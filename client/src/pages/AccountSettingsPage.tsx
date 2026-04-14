@@ -135,7 +135,7 @@ export default function AccountSettingsPage() {
   // Discount code state
   const [discountCode, setDiscountCode] = useState("");
   const [discountLoading, setDiscountLoading] = useState(false);
-  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string } | null>(null);
+  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string; trialDays?: number } | null>(null);
   const [discountError, setDiscountError] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
@@ -153,7 +153,7 @@ export default function AccountSettingsPage() {
       if (!res.ok || !data.valid) {
         setDiscountError(data.message || data.error || "Invalid discount code.");
       } else {
-        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName });
+        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName, trialDays: data.trialDays });
         setDiscountError("");
       }
     } catch {
@@ -400,11 +400,13 @@ export default function AccountSettingsPage() {
               <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-green-800">
-                  <strong>{discountApplied.code}</strong>: {discountApplied.pct}% off via {discountApplied.partnerName}
+                  <strong>{discountApplied.code}</strong>: {discountApplied.trialDays ? `${discountApplied.trialDays}-day free trial` : `${discountApplied.pct}% off`} via {discountApplied.partnerName}
                 </p>
-                {discountApplied.pct === 100 && (
+                {discountApplied.trialDays ? (
+                  <p className="text-xs text-green-700 mt-0.5">{discountApplied.trialDays}-day free trial - card required</p>
+                ) : discountApplied.pct === 100 ? (
                   <p className="text-xs text-green-700 mt-0.5">No payment method required.</p>
-                )}
+                ) : null}
               </div>
               <button
                 className="text-xs text-muted-foreground underline"

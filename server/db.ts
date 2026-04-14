@@ -64,7 +64,8 @@ sqlite.exec(`
     max_uses INTEGER,
     uses INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    trial_days INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS veritamap_instruments (
@@ -1032,6 +1033,12 @@ try {
   if (!vcsCols.includes("updated_at"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN updated_at TEXT");
   if (!vcsCols.includes("study_id"))          sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN study_id INTEGER");
 } catch (e) { console.warn("veritacheck_verification_studies migration:", e); }
+
+// Add trial_days column to discount_codes (conference trial codes)
+const dcCols = (sqlite.prepare("PRAGMA table_info(discount_codes)").all() as { name: string }[]).map(c => c.name);
+if (!dcCols.includes("trial_days")) {
+  sqlite.exec("ALTER TABLE discount_codes ADD COLUMN trial_days INTEGER");
+}
 
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {

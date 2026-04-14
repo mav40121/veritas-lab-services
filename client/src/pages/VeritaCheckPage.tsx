@@ -178,7 +178,7 @@ export default function VeritaCheckPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
   const [discountCode, setDiscountCode] = useState("");
-  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string } | null>(null);
+  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string; trialDays?: number } | null>(null);
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountError, setDiscountError] = useState("");
   const [cliaModalOpen, setCliaModalOpen] = useState(false);
@@ -257,7 +257,7 @@ export default function VeritaCheckPage() {
       });
       const data = await res.json();
       if (data.valid) {
-        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName });
+        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName, trialDays: data.trialDays });
         setDiscountError("");
       } else {
         setDiscountError(data.message || "Invalid code");
