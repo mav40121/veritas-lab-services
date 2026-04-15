@@ -67,6 +67,9 @@ import AccountSettingsPage from "@/pages/AccountSettingsPage";
 import VeritaAssurePage from "@/pages/VeritaAssurePage";
 import AdminReportPage from "@/pages/AdminReportPage";
 import JoinPage from "@/pages/JoinPage";
+import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
+import VeritaOpsPage from "@/pages/VeritaOpsPage";
+import VeritaOpsStaffingPage from "@/pages/VeritaOpsStaffingPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -296,6 +299,9 @@ function AppContent() {
           <Route path="/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/veritapolicy" component={VeritaPolicyPage} />
           <Route path="/cumsum" component={CumsumPage} />
+          <Route path="/calculator" component={ProductivityCalculatorPage} />
+          <Route path="/veritaops" component={VeritaOpsPage} />
+          <Route path="/veritaops/staffing" component={VeritaOpsStaffingPage} />
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/getting-started" component={GettingStartedPage} />

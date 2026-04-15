@@ -3,7 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,9 @@ const allMobileLinks = [
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/veritapolicy", label: "VeritaPolicy™" },
   { href: "/veritatrack-app", label: "VeritaTrack™" },
+  { href: "/calculator", label: "Productivity Calculator" },
+  { href: "/veritaops", label: "VeritaOps™ Tracker" },
+  { href: "/veritaops/staffing", label: "VeritaOps™ Staffing" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Resources" },
@@ -189,6 +192,49 @@ export function NavBar() {
                   <div>
                     <div className="text-sm font-medium">FAQ</div>
                     <div className="text-xs text-muted-foreground">Common questions answered</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* VeritaOps dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                ["/veritaops","/veritaops/staffing","/calculator"].includes(location)
+                  ? "text-foreground bg-secondary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}>
+                <BarChart3 size={13} className="text-primary" />
+                VeritaOps&#8482;
+                <ChevronDown size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem asChild>
+                <Link href="/calculator" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Productivity Calculator</div>
+                    <div className="text-xs text-muted-foreground">Free quick benchmarking tool</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/veritaops" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Productivity Tracker</div>
+                    <div className="text-xs text-muted-foreground">Monthly data and trends</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/veritaops/staffing" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Staffing Analyzer</div>
+                    <div className="text-xs text-muted-foreground">By-hour demand analysis</div>
                   </div>
                 </Link>
               </DropdownMenuItem>

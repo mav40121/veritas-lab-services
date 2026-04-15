@@ -122,6 +122,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services",
     description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications.",
   },
+  "/calculator": {
+    title: "Lab Productivity Calculator | VeritaOps Free Benchmarking Tool",
+    description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
+  },
   "/study-guide": {
     title: "Study Guide | VeritaAssure Lab Compliance Software",
     description: "Comprehensive guide to running studies in VeritaAssure. Step-by-step instructions for method validation, calibration verification, and EP studies.",
