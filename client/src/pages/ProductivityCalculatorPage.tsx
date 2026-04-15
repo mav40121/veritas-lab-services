@@ -18,9 +18,11 @@ const BENCHMARKS: Record<string, { label: string; low: number; high: number }> =
 };
 
 function getBand(ratio: number, low: number, high: number): "green" | "yellow" | "red" {
+  // Lower ratio = more efficient. Below range = outperforming. Above range = overstaffed.
   if (ratio >= low && ratio <= high) return "green";
+  if (ratio < low) return "green"; // below range = outperforming benchmark
   const margin = (high - low) * 0.25;
-  if (ratio >= low - margin && ratio <= high + margin) return "yellow";
+  if (ratio <= high + margin) return "yellow";
   return "red";
 }
 
@@ -38,10 +40,8 @@ function GaugeBar({ ratio, low, high }: { ratio: number; low: number; high: numb
     <div className="relative w-full h-10 mt-4 mb-6">
       {/* Bar background */}
       <div className="absolute inset-0 rounded-full bg-muted overflow-hidden">
-        {/* Red zone left */}
-        <div className="absolute inset-y-0 left-0 bg-red-200 dark:bg-red-900/30" style={{ width: `${Math.max(0, pctLow - 5)}%` }} />
-        {/* Yellow zone left */}
-        <div className="absolute inset-y-0 bg-yellow-200 dark:bg-yellow-900/30" style={{ left: `${Math.max(0, pctLow - 5)}%`, width: "5%" }} />
+        {/* Green zone left (below range = outperforming) */}
+        <div className="absolute inset-y-0 left-0 bg-emerald-200 dark:bg-emerald-900/40" style={{ width: `${Math.max(0, pctLow)}%` }} />
         {/* Green zone */}
         <div className="absolute inset-y-0 bg-emerald-200 dark:bg-emerald-900/40" style={{ left: `${pctLow}%`, width: `${pctHigh - pctLow}%` }} />
         {/* Yellow zone right */}
@@ -88,9 +88,12 @@ export default function ProductivityCalculatorPage() {
     const hoursDiff = targetHours ? effectiveHours - targetHours : null;
     const fteDiff = hoursDiff ? hoursDiff / (2080 / 12 * 0.85) : null;
     const rate = parseFloat(hourlyRate) || 35;
-    const annualSavings = hoursDiff && hoursDiff > 0 ? hoursDiff * 12 * rate : null;
+    // hoursDiff > 0 means you use MORE hours than benchmark (overstaffed, savings opportunity)
+    // hoursDiff < 0 means you use FEWER hours than benchmark (outperforming)
+    const annualSavings = hoursDiff ? Math.abs(hoursDiff) * 12 * rate : null;
+    const isOutperforming = hoursDiff != null && hoursDiff < 0;
 
-    return { ratio, band, midpoint, targetHours, hoursDiff, fteDiff, annualSavings };
+    return { ratio, band, midpoint, targetHours, hoursDiff, fteDiff, annualSavings, isOutperforming };
   }, [effectiveHours, tests, facilityType, hourlyRate]);
 
   return (
@@ -207,9 +210,9 @@ export default function ProductivityCalculatorPage() {
                       </div>
                       <GaugeBar ratio={result.ratio} low={BENCHMARKS[facilityType].low} high={BENCHMARKS[facilityType].high} />
                       <div className="flex items-center gap-2 mt-6 text-xs">
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> In Range</span>
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Close</span>
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Needs Review</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Efficient</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Approaching Target</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Overstaffed</span>
                       </div>
                     </div>
                   )}
@@ -229,24 +232,45 @@ export default function ProductivityCalculatorPage() {
                   {/* Projections */}
                   {result.targetHours != null && result.hoursDiff != null && (
                     <div className="space-y-3 pt-3 border-t">
-                      <div className="flex items-start gap-3">
-                        <TrendingDown size={18} className="mt-0.5 shrink-0" style={{ color: "#01696F" }} />
-                        <div className="text-sm">
-                          At a <strong>{result.midpoint?.toFixed(3)}</strong> ratio, you would need approximately{" "}
-                          <strong>{result.targetHours.toFixed(0)}</strong> productive hours/month vs your current{" "}
-                          <strong>{effectiveHours?.toFixed(0)}</strong>, a difference of{" "}
-                          <strong>{Math.abs(result.hoursDiff).toFixed(0)}</strong> hours/month
-                          {result.fteDiff ? <> or roughly <strong>{Math.abs(result.fteDiff).toFixed(1)}</strong> FTEs</> : null}
-                        </div>
-                      </div>
-
-                      {result.annualSavings != null && result.annualSavings > 0 && (
-                        <div className="flex items-start gap-3">
-                          <DollarSign size={18} className="mt-0.5 shrink-0" style={{ color: "#01696F" }} />
-                          <div className="text-sm">
-                            Annual savings potential: <strong className="text-lg">${result.annualSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong>
+                      {result.isOutperforming ? (
+                        <>
+                          <div className="flex items-start gap-3">
+                            <TrendingDown size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+                            <div className="text-sm">
+                              <strong className="text-emerald-600">Outperforming benchmark.</strong> Your lab uses{" "}
+                              <strong>{Math.abs(result.hoursDiff).toFixed(0)}</strong> fewer productive hours/month
+                              than the <strong>{result.midpoint?.toFixed(3)}</strong> midpoint
+                              {result.fteDiff ? <>, equivalent to roughly <strong>{Math.abs(result.fteDiff).toFixed(1)}</strong> FTEs of efficiency</> : null}.
+                            </div>
                           </div>
-                        </div>
+                          {result.annualSavings != null && result.annualSavings > 0 && (
+                            <div className="flex items-start gap-3">
+                              <DollarSign size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+                              <div className="text-sm">
+                                Your efficiency advantage: <strong className="text-lg text-emerald-600">${result.annualSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr</strong> in labor savings vs. benchmark
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-start gap-3">
+                            <TrendingDown size={18} className="mt-0.5 shrink-0" style={{ color: "#01696F" }} />
+                            <div className="text-sm">
+                              At a <strong>{result.midpoint?.toFixed(3)}</strong> ratio, your lab would need{" "}
+                              <strong>{Math.abs(result.hoursDiff).toFixed(0)}</strong> fewer productive hours/month
+                              {result.fteDiff ? <>, roughly <strong>{Math.abs(result.fteDiff).toFixed(1)}</strong> FTEs</> : null}.
+                            </div>
+                          </div>
+                          {result.annualSavings != null && result.annualSavings > 0 && (
+                            <div className="flex items-start gap-3">
+                              <DollarSign size={18} className="mt-0.5 shrink-0" style={{ color: "#01696F" }} />
+                              <div className="text-sm">
+                                Annual savings potential: <strong className="text-lg">${result.annualSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr</strong>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
