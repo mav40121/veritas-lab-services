@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -9,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  Calculator, TrendingDown, TrendingUp, DollarSign, ArrowRight,
+  Calculator, TrendingDown, TrendingUp, DollarSign,
   Users, BarChart3, Grid3X3, Activity, ChevronDown,
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
@@ -932,33 +930,7 @@ export default function DemoPage() {
         </div>
       </section>
 
-      {/* CTA Footer */}
-      <section className="py-16 sm:py-20 px-4 text-center" style={{ backgroundColor: "#01696F" }}>
-        <div className="max-w-2xl mx-auto">
-          <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white mb-4">
-            Ready to optimize your lab?
-          </h2>
-          <p className="text-white/80 mb-3">
-            VeritaOps{"\u2122"} is included in every VeritaAssure{"\u2122"} suite plan. Start tracking your productivity and staffing today.
-          </p>
-          <p className="text-white/90 font-medium mb-8 text-lg">
-            Use code <span className="font-mono bg-white/20 px-2 py-0.5 rounded">COLA2026</span> for a 60-day trial
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-3">
-            <Button asChild size="lg" className="bg-white text-[#01696F] hover:bg-white/90 font-semibold">
-              <Link href="/pricing">
-                View Plans & Pricing
-                <ArrowRight size={16} className="ml-2" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
-              <Link href="/contact">
-                Schedule a Demo
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+
     </div>
   );
 }
