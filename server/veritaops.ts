@@ -250,9 +250,23 @@ export function registerVeritaOpsRoutes(
     const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
     if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
     const rows = sqlite.prepare(
-      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY expiration_date ASC"
+      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
     ).all(demoUser.id);
-    res.json(rows);
+    const items = rows.map((item: any) => {
+      const burnRate = item.burn_rate || 0;
+      const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
+      const orderToQty = burnRate * (item.desired_days_of_stock || 0);
+      const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
+      const needsReorder = item.quantity_on_hand <= reorderPoint;
+      return {
+        ...item,
+        reorder_point: Math.round(reorderPoint),
+        order_to_qty: Math.round(orderToQty),
+        days_remaining: daysRemaining,
+        needs_reorder: needsReorder,
+      };
+    });
+    res.json(items);
   });
 
   // GET /api/demo/staffing-study - returns demo account first staffing study with data
@@ -278,23 +292,37 @@ export function registerVeritaOpsRoutes(
     if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
-      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY expiration_date ASC"
+      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
     ).all(accountId);
-    res.json(rows);
+    const items = rows.map((item: any) => {
+      const burnRate = item.burn_rate || 0;
+      const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
+      const orderToQty = burnRate * (item.desired_days_of_stock || 0);
+      const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
+      const needsReorder = item.quantity_on_hand <= reorderPoint;
+      return {
+        ...item,
+        reorder_point: Math.round(reorderPoint),
+        order_to_qty: Math.round(orderToQty),
+        days_remaining: daysRemaining,
+        needs_reorder: needsReorder,
+      };
+    });
+    res.json(items);
   });
 
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status } = req.body;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date } = req.body;
     if (!item_name) return res.status(400).json({ error: "item_name is required" });
     const now = new Date().toISOString();
     try {
       const result = sqlite.prepare(`
-        INSERT INTO inventory_items (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(accountId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, reorder_point ?? 5, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', now, now);
+        INSERT INTO inventory_items (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(accountId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, now, now);
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(Number(result.lastInsertRowid));
       res.json(row);
     } catch (err: any) {
@@ -309,13 +337,13 @@ export function registerVeritaOpsRoutes(
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
     if (!existing) return res.status(404).json({ error: "Item not found" });
-    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status } = req.body;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date } = req.body;
     const now = new Date().toISOString();
     try {
       sqlite.prepare(`
-        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, reorder_point = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, updated_at = ?
+        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, updated_at = ?
         WHERE id = ? AND account_id = ?
-      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, reorder_point ?? 5, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', now, id, accountId);
+      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, now, id, accountId);
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
       res.json(row);
     } catch (err: any) {

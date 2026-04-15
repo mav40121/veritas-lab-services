@@ -1162,6 +1162,15 @@ sqlite.exec(`
     storage_location TEXT,
     notes TEXT,
     status TEXT DEFAULT 'active',
+    burn_rate REAL DEFAULT 0,
+    order_unit TEXT DEFAULT 'each',
+    usage_unit TEXT DEFAULT 'each',
+    units_per_order_unit INTEGER DEFAULT 1,
+    lead_time_days INTEGER DEFAULT 5,
+    safety_stock_days INTEGER DEFAULT 3,
+    desired_days_of_stock INTEGER DEFAULT 30,
+    standing_order INTEGER DEFAULT 0,
+    standing_order_review_date TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )
@@ -1207,6 +1216,33 @@ sqlite.exec(`
     }
     if (!iiColNames.includes("status")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN status TEXT DEFAULT 'active'"); } catch {}
+    }
+    if (!iiColNames.includes("burn_rate")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN burn_rate REAL DEFAULT 0"); } catch {}
+    }
+    if (!iiColNames.includes("order_unit")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN order_unit TEXT DEFAULT 'each'"); } catch {}
+    }
+    if (!iiColNames.includes("usage_unit")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN usage_unit TEXT DEFAULT 'each'"); } catch {}
+    }
+    if (!iiColNames.includes("units_per_order_unit")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN units_per_order_unit INTEGER DEFAULT 1"); } catch {}
+    }
+    if (!iiColNames.includes("lead_time_days")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN lead_time_days INTEGER DEFAULT 5"); } catch {}
+    }
+    if (!iiColNames.includes("safety_stock_days")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN safety_stock_days INTEGER DEFAULT 3"); } catch {}
+    }
+    if (!iiColNames.includes("desired_days_of_stock")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN desired_days_of_stock INTEGER DEFAULT 30"); } catch {}
+    }
+    if (!iiColNames.includes("standing_order")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN standing_order INTEGER DEFAULT 0"); } catch {}
+    }
+    if (!iiColNames.includes("standing_order_review_date")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN standing_order_review_date TEXT"); } catch {}
     }
   }
 }

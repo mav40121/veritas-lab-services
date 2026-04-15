@@ -807,11 +807,23 @@ interface DemoInventoryItem {
   department: string;
   category: string;
   quantity_on_hand: number;
-  reorder_point: number;
-  unit: string;
   expiration_date: string | null;
   vendor: string | null;
   notes: string | null;
+  burn_rate: number;
+  order_unit: string;
+  usage_unit: string;
+  units_per_order_unit: number;
+  lead_time_days: number;
+  safety_stock_days: number;
+  desired_days_of_stock: number;
+  standing_order: number;
+  standing_order_review_date: string | null;
+  // Calculated from API
+  reorder_point: number;
+  order_to_qty: number;
+  days_remaining: number | null;
+  needs_reorder: boolean;
 }
 
 function getExpirationStatus(expDate: string | null): { label: string; color: string } {
@@ -821,9 +833,9 @@ function getExpirationStatus(expDate: string | null): { label: string; color: st
   const diffMs = exp.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return { label: "Expired", color: "red" };
-  if (diffDays <= 30) return { label: "Expires <30d", color: "darkamber" };
-  if (diffDays <= 60) return { label: "Expires <60d", color: "amber" };
-  if (diffDays <= 90) return { label: "Expires <90d", color: "yellow" };
+  if (diffDays <= 30) return { label: "<30d", color: "darkamber" };
+  if (diffDays <= 60) return { label: "<60d", color: "amber" };
+  if (diffDays <= 90) return { label: "<90d", color: "yellow" };
   return { label: "OK", color: "green" };
 }
 
@@ -844,6 +856,19 @@ function DemoExpirationBadge({ expDate }: { expDate: string | null }) {
   );
 }
 
+function DemoDaysLeft({ item }: { item: DemoInventoryItem }) {
+  if (item.days_remaining === null) return <span className="text-muted-foreground">-</span>;
+  const leadTime = item.lead_time_days || 0;
+  const safetyBuffer = leadTime + (item.safety_stock_days || 0);
+  let colorClass = "text-emerald-600 dark:text-emerald-400";
+  if (item.days_remaining <= leadTime) {
+    colorClass = "text-red-600 dark:text-red-400 font-bold";
+  } else if (item.days_remaining <= safetyBuffer) {
+    colorClass = "text-amber-600 dark:text-amber-400 font-semibold";
+  }
+  return <span className={`font-mono ${colorClass}`}>{item.days_remaining}d</span>;
+}
+
 function InventorySection() {
   const [items, setItems] = useState<DemoInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -857,18 +882,32 @@ function InventorySection() {
   }, []);
 
   const stats = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
     const now = new Date();
-    let expired = 0, expiringSoon = 0, lowStock = 0;
+    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0;
     for (const item of items) {
+      if (item.needs_reorder) reorderNow++;
       if (item.expiration_date) {
         const exp = new Date(item.expiration_date + "T00:00:00");
         const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays < 0) expired++;
-        else if (diffDays <= 30) expiringSoon++;
+        if (diffDays >= 0 && diffDays <= 30) expiringSoon++;
       }
-      if (item.quantity_on_hand <= item.reorder_point) lowStock++;
+      if (item.standing_order === 1 && item.standing_order_review_date && item.standing_order_review_date < today) {
+        standingOrdersDue++;
+      }
     }
-    return { total: items.length, expired, expiringSoon, lowStock };
+    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue };
+  }, [items]);
+
+  // Sort: needs_reorder first, then by days_remaining ascending
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      if (a.needs_reorder && !b.needs_reorder) return -1;
+      if (!a.needs_reorder && b.needs_reorder) return 1;
+      const aDays = a.days_remaining ?? 99999;
+      const bDays = b.days_remaining ?? 99999;
+      return aDays - bDays;
+    });
   }, [items]);
 
   if (loading) {
@@ -886,7 +925,7 @@ function InventorySection() {
         <Package size={18} style={{ color: "#01696F" }} />
         <div>
           <div className="font-semibold text-sm" style={{ color: "#01696F" }}>Riverside Regional Medical Center</div>
-          <div className="text-xs text-muted-foreground">{stats.total} inventory items tracked across all departments</div>
+          <div className="text-xs text-muted-foreground">{stats.total} inventory items with burn-rate tracking across all departments</div>
         </div>
       </div>
 
@@ -896,10 +935,10 @@ function InventorySection() {
           <div className="text-xs text-muted-foreground">Total Items</div>
           <div className="text-xl font-bold font-mono" style={{ color: "#01696F" }}>{stats.total}</div>
         </CardContent></Card>
-        <Card className={stats.expired > 0 ? "border-red-300 dark:border-red-800" : ""}>
+        <Card className={stats.reorderNow > 0 ? "border-red-300 dark:border-red-800" : ""}>
           <CardContent className="pt-4 text-center">
-            <div className="text-xs text-muted-foreground">Expired</div>
-            <div className="text-xl font-bold font-mono text-red-600 dark:text-red-400">{stats.expired}</div>
+            <div className="text-xs text-muted-foreground">Reorder Now</div>
+            <div className="text-xl font-bold font-mono text-red-600 dark:text-red-400">{stats.reorderNow}</div>
           </CardContent>
         </Card>
         <Card className={stats.expiringSoon > 0 ? "border-amber-300 dark:border-amber-800" : ""}>
@@ -908,10 +947,10 @@ function InventorySection() {
             <div className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">{stats.expiringSoon}</div>
           </CardContent>
         </Card>
-        <Card className={stats.lowStock > 0 ? "border-orange-300 dark:border-orange-800" : ""}>
+        <Card className={stats.standingOrdersDue > 0 ? "border-amber-300 dark:border-amber-800" : ""}>
           <CardContent className="pt-4 text-center">
-            <div className="text-xs text-muted-foreground">Low Stock</div>
-            <div className="text-xl font-bold font-mono text-orange-600 dark:text-orange-400">{stats.lowStock}</div>
+            <div className="text-xs text-muted-foreground">Standing Orders Due</div>
+            <div className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">{stats.standingOrdersDue}</div>
           </CardContent>
         </Card>
       </div>
@@ -925,36 +964,50 @@ function InventorySection() {
                 <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
                   <th className="text-left px-3 py-2 font-medium">Item Name</th>
                   <th className="text-left px-3 py-2 font-medium">Category</th>
-                  <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">Lot #</th>
-                  <th className="text-left px-3 py-2 font-medium hidden md:table-cell">Department</th>
-                  <th className="text-center px-3 py-2 font-medium">Qty</th>
+                  <th className="text-left px-3 py-2 font-medium">On Hand</th>
+                  <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">Burn Rate</th>
+                  <th className="text-center px-3 py-2 font-medium hidden sm:table-cell">Reorder Pt</th>
+                  <th className="text-center px-3 py-2 font-medium">Days Left</th>
+                  <th className="text-left px-3 py-2 font-medium">Stock Status</th>
                   <th className="text-left px-3 py-2 font-medium">Expiration</th>
                   <th className="text-left px-3 py-2 font-medium hidden lg:table-cell">Vendor</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, i) => {
-                  const isLowStock = item.quantity_on_hand <= item.reorder_point;
-                  return (
-                    <tr key={item.id} className={`border-b ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
-                      <td className="px-3 py-2 font-medium max-w-[220px]">
-                        <div className="truncate">{item.item_name}</div>
-                      </td>
-                      <td className="px-3 py-2 text-xs">{item.category}</td>
-                      <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell">{item.lot_number ?? "-"}</td>
-                      <td className="px-3 py-2 text-xs hidden md:table-cell">{item.department}</td>
-                      <td className="px-3 py-2 text-center font-mono">
-                        <span className={isLowStock ? "text-orange-600 font-bold" : ""}>{item.quantity_on_hand}</span>
-                        {isLowStock && <span className="text-orange-500 text-xs ml-1">Low</span>}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="text-xs text-muted-foreground">{item.expiration_date ?? ""}</div>
-                        <DemoExpirationBadge expDate={item.expiration_date} />
-                      </td>
-                      <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
-                    </tr>
-                  );
-                })}
+                {sortedItems.map((item, i) => (
+                  <tr key={item.id} className={`border-b ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
+                    <td className="px-3 py-2 font-medium max-w-[220px]">
+                      <div className="truncate">{item.item_name}</div>
+                      <div className="text-xs text-muted-foreground">{item.usage_unit}</div>
+                    </td>
+                    <td className="px-3 py-2 text-xs">{item.category}</td>
+                    <td className="px-3 py-2 font-mono text-sm">
+                      {item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-sm hidden sm:table-cell">
+                      {item.burn_rate > 0 ? `${item.burn_rate}/day` : <span className="text-muted-foreground">-</span>}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-sm text-center hidden sm:table-cell">
+                      {item.reorder_point > 0 ? item.reorder_point.toLocaleString() : <span className="text-muted-foreground">-</span>}
+                    </td>
+                    <td className="px-3 py-2 text-center"><DemoDaysLeft item={item} /></td>
+                    <td className="px-3 py-2">
+                      {item.needs_reorder ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
+                          Reorder Now
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          OK
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <DemoExpirationBadge expDate={item.expiration_date} />
+                    </td>
+                    <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1111,9 +1164,9 @@ export default function DemoPage() {
               <Package size={14} />
               Module 4: Inventory Manager
             </div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Track Reagents and Supplies</h2>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Smart Inventory Management</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Lot tracking, expiration alerts, reorder notifications, and department-level inventory management.
+              Burn-rate tracking, calculated reorder points, days-of-stock remaining, standing orders, and expiration alerts.
             </p>
           </div>
           <InventorySection />

@@ -214,11 +214,9 @@ export async function seedDemoData() {
     seedStaffingData(sqlite, demoUserId, now);
   }
 
-  // ─── VeritaOps: Inventory Items ───────────────────────────────────────────
-  const existingInventory = sqlite.prepare("SELECT id FROM inventory_items WHERE account_id = ?").get(demoUserId);
-  if (!existingInventory) {
-    seedInventoryData(sqlite, demoUserId, now);
-  }
+  // ─── VeritaOps: Inventory Items (always re-seed to pick up schema changes) ──
+  sqlite.prepare("DELETE FROM inventory_items WHERE account_id = ?").run(demoUserId);
+  seedInventoryData(sqlite, demoUserId, now);
 
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
 }
@@ -1002,61 +1000,72 @@ function seedStaffingData(sqlite: any, demoUserId: number, now: string) {
   console.log("[seed] VeritaOps staffing study seeded (Core Lab Q1 Analysis)");
 }
 
-// ─── VeritaOps Inventory seeding ────────────────────────────────────────────
+// ─── VeritaOps Inventory seeding (full burn-rate model) ─────────────────────
 function seedInventoryData(sqlite: any, demoUserId: number, now: string) {
   const stmt = sqlite.prepare(`
-    INSERT OR IGNORE INTO inventory_items
-      (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO inventory_items
+      (account_id, item_name, catalog_number, lot_number, department, category,
+       quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status,
+       burn_rate, order_unit, usage_unit, units_per_order_unit,
+       lead_time_days, safety_stock_days, desired_days_of_stock,
+       standing_order, standing_order_review_date, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, ?, ?, ?)
   `);
 
+  // Realistic items for Riverside Regional Medical Center (community hospital, 200K-500K tests/yr)
+  // Reorder point = burn_rate * (lead_time + safety_stock)
+  // Some items intentionally below reorder point for demo alerts
   const items = [
-    // Reagents
-    { name: "Troponin I Reagent Pack", catalog: "06P1925", lot: "LOT-2026-0412", dept: "Core Lab", cat: "Reagent", qty: 4, reorder: 3, unit: "pack", exp: "2027-01-15", vendor: "Abbott", loc: "Reagent Fridge A", notes: null },
-    { name: "BMP Reagent Pack", catalog: "DF40", lot: "LOT-2026-0398", dept: "Chemistry", cat: "Reagent", qty: 8, reorder: 4, unit: "pack", exp: "2026-11-30", vendor: "Siemens Healthineers", loc: "Reagent Fridge A", notes: null },
-    { name: "CRP Latex Reagent", catalog: "OSR6199", lot: "B26-0398A", dept: "Chemistry", cat: "Reagent", qty: 2, reorder: 2, unit: "kit", exp: "2026-05-10", vendor: "Beckman Coulter", loc: "Reagent Fridge B", notes: "Expiring soon, reorder placed" },
-    { name: "TSH Reagent", catalog: "07K7525", lot: "LOT-2025-1187", dept: "Chemistry", cat: "Reagent", qty: 6, reorder: 3, unit: "pack", exp: "2026-09-20", vendor: "Abbott", loc: "Reagent Fridge A", notes: null },
-    { name: "HbA1c Reagent Kit", catalog: "ST-AIA", lot: "LOT-2026-0221", dept: "Chemistry", cat: "Reagent", qty: 3, reorder: 2, unit: "kit", exp: "2026-12-15", vendor: "Roche Diagnostics", loc: "Reagent Fridge B", notes: null },
-    { name: "Lipid Panel Reagent", catalog: "DF69", lot: "LOT-2026-0355", dept: "Chemistry", cat: "Reagent", qty: 5, reorder: 3, unit: "pack", exp: "2027-03-28", vendor: "Siemens Healthineers", loc: "Reagent Fridge A", notes: null },
-    { name: "Hepatic Function Panel Reagent", catalog: "DF42", lot: "LOT-2026-0410", dept: "Chemistry", cat: "Reagent", qty: 7, reorder: 3, unit: "pack", exp: "2027-02-14", vendor: "Siemens Healthineers", loc: "Reagent Fridge A", notes: null },
-    { name: "PT/INR Reagent", catalog: "0020003800", lot: "LOT-2025-0988", dept: "Core Lab", cat: "Reagent", qty: 1, reorder: 2, unit: "kit", exp: "2026-04-05", vendor: "Stago", loc: "Coag Fridge", notes: "EXPIRED - remove from service" },
-    { name: "PTT Reagent (STA-PTT Automate)", catalog: "0020006500", lot: "LOT-2026-0123", dept: "Core Lab", cat: "Reagent", qty: 4, reorder: 2, unit: "kit", exp: "2026-10-31", vendor: "Stago", loc: "Coag Fridge", notes: null },
-    { name: "D-Dimer Reagent", catalog: "00676", lot: "LOT-2026-0299", dept: "Core Lab", cat: "Reagent", qty: 3, reorder: 2, unit: "kit", exp: "2026-08-22", vendor: "Stago", loc: "Coag Fridge", notes: null },
-    { name: "CBC Diluent", catalog: "XN-L", lot: "LOT-2026-0501", dept: "Hematology", cat: "Reagent", qty: 12, reorder: 6, unit: "liter", exp: "2027-06-15", vendor: "Sysmex", loc: "Heme Supply Room", notes: null },
-    { name: "Reticulocyte Stain Reagent", catalog: "RET-SYS", lot: "LOT-2026-0188", dept: "Hematology", cat: "Reagent", qty: 2, reorder: 2, unit: "pack", exp: "2026-04-20", vendor: "Sysmex", loc: "Heme Supply Room", notes: "Expiring this week" },
-    // Controls
-    { name: "Chemistry Normal Control (Level 1)", catalog: "694", lot: "LOT-2026-0445", dept: "Chemistry", cat: "Control", qty: 10, reorder: 5, unit: "vial", exp: "2026-07-31", vendor: "Bio-Rad", loc: "Control Fridge", notes: null },
-    { name: "Chemistry Abnormal Control (Level 2)", catalog: "695", lot: "LOT-2026-0446", dept: "Chemistry", cat: "Control", qty: 8, reorder: 5, unit: "vial", exp: "2026-07-31", vendor: "Bio-Rad", loc: "Control Fridge", notes: null },
-    { name: "Hematology Tri-Level Control", catalog: "XN-CHECK", lot: "B26-0277C", dept: "Hematology", cat: "Control", qty: 6, reorder: 4, unit: "vial", exp: "2026-06-15", vendor: "Sysmex", loc: "Heme Supply Room", notes: null },
-    { name: "Coagulation Control (Normal)", catalog: "CRY-N", lot: "LOT-2025-0912", dept: "Core Lab", cat: "Control", qty: 3, reorder: 3, unit: "vial", exp: "2026-03-31", vendor: "Stago", loc: "Coag Fridge", notes: "EXPIRED - new lot on order" },
-    { name: "Coagulation Control (Abnormal)", catalog: "CRY-A", lot: "LOT-2026-0156", dept: "Core Lab", cat: "Control", qty: 5, reorder: 3, unit: "vial", exp: "2026-09-30", vendor: "Stago", loc: "Coag Fridge", notes: null },
-    { name: "Blood Bank ABO/Rh Control Cells", catalog: "CTRL-BB1", lot: "LOT-2026-0334", dept: "Blood Bank", cat: "Control", qty: 4, reorder: 3, unit: "set", exp: "2026-05-25", vendor: "Bio-Rad", loc: "Blood Bank Fridge", notes: null },
-    // Calibrators
-    { name: "Chemistry Multi-Analyte Calibrator", catalog: "CAL-6", lot: "LOT-2026-0389", dept: "Chemistry", cat: "Calibrator", qty: 4, reorder: 2, unit: "set", exp: "2026-08-15", vendor: "Siemens Healthineers", loc: "Control Fridge", notes: null },
-    { name: "Ionized Calcium Calibrator", catalog: "iCA-CAL", lot: "LOT-2026-0210", dept: "Chemistry", cat: "Calibrator", qty: 2, reorder: 1, unit: "kit", exp: "2026-11-20", vendor: "Roche Diagnostics", loc: "Control Fridge", notes: null },
-    // Consumables
-    { name: "Sample Cups (1000 ct)", catalog: "SC-1000", lot: "LOT-2026-0515", dept: "Core Lab", cat: "Consumable", qty: 15, reorder: 5, unit: "box", exp: null, vendor: "Siemens Healthineers", loc: "Supply Room A", notes: null },
-    { name: "Cuvettes (2000 ct)", catalog: "CUV-2000", lot: "LOT-2026-0488", dept: "Chemistry", cat: "Consumable", qty: 8, reorder: 4, unit: "box", exp: null, vendor: "Beckman Coulter", loc: "Supply Room A", notes: null },
-    { name: "Thermal Printer Paper (10 rolls)", catalog: "TPP-10", lot: "LOT-2026-0320", dept: "Core Lab", cat: "Consumable", qty: 3, reorder: 3, unit: "pack", exp: null, vendor: "Siemens Healthineers", loc: "Supply Room B", notes: "At reorder point" },
-    { name: "Pipette Tips 200uL (1000 ct)", catalog: "PT-200", lot: "LOT-2026-0401", dept: "Core Lab", cat: "Consumable", qty: 12, reorder: 4, unit: "box", exp: null, vendor: "Roche Diagnostics", loc: "Supply Room A", notes: null },
-    // Supplies
-    { name: "Vacutainer Lavender Top (EDTA)", catalog: "367861", lot: "LOT-2026-0533", dept: "Core Lab", cat: "Supply", qty: 20, reorder: 10, unit: "box", exp: "2027-09-30", vendor: "BD (Becton Dickinson)", loc: "Phlebotomy Supply", notes: null },
-    { name: "Vacutainer Gold Top (SST)", catalog: "367986", lot: "LOT-2026-0534", dept: "Core Lab", cat: "Supply", qty: 18, reorder: 10, unit: "box", exp: "2027-08-15", vendor: "BD (Becton Dickinson)", loc: "Phlebotomy Supply", notes: null },
-    { name: "Vacutainer Light Blue Top (Citrate)", catalog: "369714", lot: "LOT-2026-0535", dept: "Core Lab", cat: "Supply", qty: 2, reorder: 5, unit: "box", exp: "2027-07-20", vendor: "BD (Becton Dickinson)", loc: "Phlebotomy Supply", notes: "LOW STOCK - urgent reorder needed" },
-    { name: "Blood Culture Bottles (Aerobic)", catalog: "442192", lot: "LOT-2026-0201", dept: "Core Lab", cat: "Supply", qty: 14, reorder: 6, unit: "case", exp: "2027-04-10", vendor: "BD (Becton Dickinson)", loc: "Micro Supply Room", notes: null },
-    { name: "Urine Collection Cups (500 ct)", catalog: "UC-500", lot: "LOT-2026-0377", dept: "Core Lab", cat: "Supply", qty: 6, reorder: 3, unit: "case", exp: null, vendor: "BD (Becton Dickinson)", loc: "Supply Room B", notes: null },
-    { name: "Glucose Meter Test Strips", catalog: "GM-TS50", lot: "LOT-2025-0844", dept: "Point of Care", cat: "Supply", qty: 25, reorder: 10, unit: "box", exp: "2026-02-28", vendor: "Abbott", loc: "POC Storage", notes: "EXPIRED - do not use" },
+    // ── High-volume reagents ──
+    { name: "Troponin I Reagent Kit", catalog: "06P1925", lot: "LOT-2026-0412", dept: "Core Lab", cat: "Reagent", qty: 280, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 500, burnRate: 15, leadTime: 5, safetyDays: 5, desiredDays: 30, exp: "2027-01-15", vendor: "Abbott", loc: "Reagent Fridge A", notes: null, standing: 0, reviewDate: null },
+    { name: "BMP Reagent Pack", catalog: "DF40", lot: "LOT-2026-0398", dept: "Chemistry", cat: "Reagent", qty: 1200, orderUnit: "pack", usageUnit: "test", unitsPerOrder: 200, burnRate: 50, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-11-30", vendor: "Siemens Healthineers", loc: "Reagent Fridge A", notes: null, standing: 0, reviewDate: null },
+    { name: "CMP Reagent Pack", catalog: "DF41", lot: "LOT-2026-0399", dept: "Chemistry", cat: "Reagent", qty: 900, orderUnit: "pack", usageUnit: "test", unitsPerOrder: 200, burnRate: 45, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-12-20", vendor: "Siemens Healthineers", loc: "Reagent Fridge A", notes: null, standing: 0, reviewDate: null },
+    { name: "CBC Reagent", catalog: "XN-L-CBC", lot: "LOT-2026-0501", dept: "Hematology", cat: "Reagent", qty: 2400, orderUnit: "case", usageUnit: "test", unitsPerOrder: 1000, burnRate: 90, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2027-06-15", vendor: "Sysmex", loc: "Heme Supply Room", notes: null, standing: 1, reviewDate: "2026-07-01" },
+    { name: "PT/INR Reagent", catalog: "0020003800", lot: "LOT-2026-0988", dept: "Core Lab", cat: "Reagent", qty: 120, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 200, burnRate: 25, leadTime: 5, safetyDays: 5, desiredDays: 30, exp: "2026-04-25", vendor: "Stago", loc: "Coag Fridge", notes: "Expiring soon - replacement lot ordered", standing: 0, reviewDate: null },
+    { name: "TSH Reagent", catalog: "07K7525", lot: "LOT-2026-1187", dept: "Chemistry", cat: "Reagent", qty: 600, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 300, burnRate: 18, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-09-20", vendor: "Abbott", loc: "Reagent Fridge A", notes: null, standing: 0, reviewDate: null },
+    { name: "HbA1c Reagent Kit", catalog: "ST-AIA", lot: "LOT-2026-0221", dept: "Chemistry", cat: "Reagent", qty: 250, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 200, burnRate: 12, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-12-15", vendor: "Roche Diagnostics", loc: "Reagent Fridge B", notes: null, standing: 0, reviewDate: null },
+    { name: "Urinalysis Dipstick Strips", catalog: "UA-100", lot: "LOT-2026-0610", dept: "Urinalysis", cat: "Reagent", qty: 450, orderUnit: "bottle", usageUnit: "strip", unitsPerOrder: 100, burnRate: 30, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: "2027-03-15", vendor: "Siemens Healthineers", loc: "UA Bench", notes: null, standing: 0, reviewDate: null },
+    { name: "CRP Latex Reagent", catalog: "OSR6199", lot: "B26-0398A", dept: "Chemistry", cat: "Reagent", qty: 40, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 100, burnRate: 8, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-05-10", vendor: "Beckman Coulter", loc: "Reagent Fridge B", notes: null, standing: 0, reviewDate: null },
+    { name: "D-Dimer Reagent", catalog: "00676", lot: "LOT-2026-0299", dept: "Core Lab", cat: "Reagent", qty: 350, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 200, burnRate: 10, leadTime: 5, safetyDays: 5, desiredDays: 30, exp: "2026-08-22", vendor: "Stago", loc: "Coag Fridge", notes: null, standing: 0, reviewDate: null },
+    { name: "PTT Reagent (STA-PTT Automate)", catalog: "0020006500", lot: "LOT-2026-0123", dept: "Core Lab", cat: "Reagent", qty: 500, orderUnit: "kit", usageUnit: "test", unitsPerOrder: 200, burnRate: 20, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-10-31", vendor: "Stago", loc: "Coag Fridge", notes: null, standing: 0, reviewDate: null },
+    { name: "Lipid Panel Reagent", catalog: "DF69", lot: "LOT-2026-0355", dept: "Chemistry", cat: "Reagent", qty: 800, orderUnit: "pack", usageUnit: "test", unitsPerOrder: 200, burnRate: 20, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2027-03-28", vendor: "Siemens Healthineers", loc: "Reagent Fridge A", notes: null, standing: 0, reviewDate: null },
+    // ── Below reorder point items (needs_reorder = true) ──
+    { name: "Blood Culture Bottles (Aerobic)", catalog: "442192", lot: "LOT-2026-0201", dept: "Microbiology", cat: "Supply", qty: 30, orderUnit: "case", usageUnit: "bottle", unitsPerOrder: 50, burnRate: 8, leadTime: 5, safetyDays: 5, desiredDays: 30, exp: "2027-04-10", vendor: "BD", loc: "Micro Supply Room", notes: "Below reorder point", standing: 0, reviewDate: null },
+    { name: "Blood Culture Bottles (Anaerobic)", catalog: "442193", lot: "LOT-2026-0202", dept: "Microbiology", cat: "Supply", qty: 20, orderUnit: "case", usageUnit: "bottle", unitsPerOrder: 50, burnRate: 5, leadTime: 5, safetyDays: 5, desiredDays: 30, exp: "2027-04-10", vendor: "BD", loc: "Micro Supply Room", notes: "Below reorder point", standing: 0, reviewDate: null },
+    { name: "Reticulocyte Stain Reagent", catalog: "RET-SYS", lot: "LOT-2026-0188", dept: "Hematology", cat: "Reagent", qty: 15, orderUnit: "pack", usageUnit: "test", unitsPerOrder: 100, burnRate: 3, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-04-20", vendor: "Sysmex", loc: "Heme Supply Room", notes: "Expiring soon and below reorder", standing: 0, reviewDate: null },
+    // ── Controls ──
+    { name: "Chemistry Normal Control (Level 1)", catalog: "694", lot: "LOT-2026-0445", dept: "Chemistry", cat: "Control", qty: 24, orderUnit: "box", usageUnit: "vial", unitsPerOrder: 12, burnRate: 2, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-07-31", vendor: "Bio-Rad", loc: "Control Fridge", notes: null, standing: 0, reviewDate: null },
+    { name: "Chemistry Abnormal Control (Level 2)", catalog: "695", lot: "LOT-2026-0446", dept: "Chemistry", cat: "Control", qty: 20, orderUnit: "box", usageUnit: "vial", unitsPerOrder: 12, burnRate: 2, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-07-31", vendor: "Bio-Rad", loc: "Control Fridge", notes: null, standing: 0, reviewDate: null },
+    { name: "Hematology Tri-Level Control", catalog: "XN-CHECK", lot: "B26-0277C", dept: "Hematology", cat: "Control", qty: 18, orderUnit: "box", usageUnit: "vial", unitsPerOrder: 9, burnRate: 3, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-06-15", vendor: "Sysmex", loc: "Heme Supply Room", notes: null, standing: 0, reviewDate: null },
+    { name: "Coagulation Control (Normal)", catalog: "CRY-N", lot: "LOT-2025-0912", dept: "Core Lab", cat: "Control", qty: 6, orderUnit: "box", usageUnit: "vial", unitsPerOrder: 10, burnRate: 2, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-03-31", vendor: "Stago", loc: "Coag Fridge", notes: "EXPIRED - new lot on order", standing: 0, reviewDate: null },
+    { name: "Coagulation Control (Abnormal)", catalog: "CRY-A", lot: "LOT-2026-0156", dept: "Core Lab", cat: "Control", qty: 14, orderUnit: "box", usageUnit: "vial", unitsPerOrder: 10, burnRate: 2, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-09-30", vendor: "Stago", loc: "Coag Fridge", notes: null, standing: 0, reviewDate: null },
+    { name: "Blood Bank ABO/Rh Control Cells", catalog: "CTRL-BB1", lot: "LOT-2026-0334", dept: "Blood Bank", cat: "Control", qty: 8, orderUnit: "box", usageUnit: "set", unitsPerOrder: 4, burnRate: 1, leadTime: 5, safetyDays: 3, desiredDays: 30, exp: "2026-05-25", vendor: "Bio-Rad", loc: "Blood Bank Fridge", notes: null, standing: 0, reviewDate: null },
+    // ── Consumables and supplies ──
+    { name: "Pipette Tips 200uL", catalog: "PT-200", lot: "LOT-2026-0401", dept: "Core Lab", cat: "Consumable", qty: 4500, orderUnit: "bag", usageUnit: "tip", unitsPerOrder: 1000, burnRate: 150, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: null, vendor: "Fisher Scientific", loc: "Supply Room A", notes: null, standing: 1, reviewDate: "2026-07-01" },
+    { name: "Nitrile Gloves Medium", catalog: "NG-M-1000", lot: "LOT-2026-0520", dept: "Core Lab", cat: "Supply", qty: 5000, orderUnit: "case", usageUnit: "glove", unitsPerOrder: 1000, burnRate: 200, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: null, vendor: "Fisher Scientific", loc: "Supply Room B", notes: null, standing: 1, reviewDate: "2026-03-15" },
+    { name: "Vacutainer Lavender Top (EDTA)", catalog: "367861", lot: "LOT-2026-0533", dept: "Core Lab", cat: "Supply", qty: 2500, orderUnit: "case", usageUnit: "tube", unitsPerOrder: 100, burnRate: 80, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: "2027-09-30", vendor: "BD", loc: "Phlebotomy Supply", notes: null, standing: 1, reviewDate: "2026-07-01" },
+    { name: "Vacutainer Gold Top (SST)", catalog: "367986", lot: "LOT-2026-0534", dept: "Core Lab", cat: "Supply", qty: 2200, orderUnit: "case", usageUnit: "tube", unitsPerOrder: 100, burnRate: 70, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: "2027-08-15", vendor: "BD", loc: "Phlebotomy Supply", notes: null, standing: 1, reviewDate: "2026-07-01" },
+    { name: "Vacutainer Light Blue Top (Citrate)", catalog: "369714", lot: "LOT-2026-0535", dept: "Core Lab", cat: "Supply", qty: 100, orderUnit: "case", usageUnit: "tube", unitsPerOrder: 100, burnRate: 25, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: "2027-07-20", vendor: "BD", loc: "Phlebotomy Supply", notes: "LOW STOCK - urgent reorder needed", standing: 0, reviewDate: null },
+    { name: "Thermal Printer Paper", catalog: "TPP-10", lot: "LOT-2026-0320", dept: "Core Lab", cat: "Consumable", qty: 20, orderUnit: "pack", usageUnit: "roll", unitsPerOrder: 10, burnRate: 0, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: null, vendor: "Fisher Scientific", loc: "Supply Room B", notes: null, standing: 0, reviewDate: null },
+    { name: "Glucose Meter Test Strips", catalog: "GM-TS50", lot: "LOT-2025-0844", dept: "Point of Care", cat: "Supply", qty: 800, orderUnit: "box", usageUnit: "strip", unitsPerOrder: 50, burnRate: 15, leadTime: 3, safetyDays: 3, desiredDays: 30, exp: "2026-02-28", vendor: "Abbott", loc: "POC Storage", notes: "EXPIRED - do not use", standing: 0, reviewDate: null },
   ];
 
   const seedBatch = sqlite.transaction(() => {
     for (const item of items) {
       stmt.run(
         demoUserId, item.name, item.catalog, item.lot, item.dept, item.cat,
-        item.qty, item.reorder, item.unit, item.exp, item.vendor, item.loc,
-        item.notes, "active", now, now
+        item.qty, item.orderUnit, item.exp, item.vendor, item.loc,
+        item.notes, "active",
+        item.burnRate, item.orderUnit, item.usageUnit, item.unitsPerOrder,
+        item.leadTime, item.safetyDays, item.desiredDays,
+        item.standing, item.reviewDate, now, now
       );
     }
   });
   seedBatch();
-  console.log(`[seed] VeritaOps inventory data seeded (${items.length} items)`);
+  console.log(`[seed] VeritaOps inventory data seeded (${items.length} items with burn-rate model)`);
 }
