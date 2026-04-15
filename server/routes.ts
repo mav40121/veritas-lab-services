@@ -7096,5 +7096,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerVeritaCheckVerificationRoutes } = await import('./veritacheck_verification');
   registerVeritaCheckVerificationRoutes(app, authMiddleware, requireWriteAccess);
 
+  // VeritaOps routes (Productivity Tracker + Staffing Analyzer)
+  const { registerVeritaOpsRoutes } = await import('./veritaops');
+  registerVeritaOpsRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
   return httpServer;
 }
