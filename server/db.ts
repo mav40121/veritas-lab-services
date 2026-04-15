@@ -1040,6 +1040,114 @@ if (!dcCols.includes("trial_days")) {
   sqlite.exec("ALTER TABLE discount_codes ADD COLUMN trial_days INTEGER");
 }
 
+// ── VeritaOps: Productivity Months ────────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS productivity_months (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    billable_tests INTEGER,
+    productive_hours REAL,
+    non_productive_hours REAL,
+    overtime_hours REAL,
+    total_ftes REAL,
+    facility_type TEXT DEFAULT 'community',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(account_id, year, month)
+  )
+`);
+
+// ALTER TABLE migration for productivity_months
+{
+  const pmCols = sqlite.prepare("PRAGMA table_info(productivity_months)").all() as { name: string }[];
+  const pmColNames = pmCols.map((c) => c.name);
+  if (pmCols.length > 0) {
+    if (!pmColNames.includes("non_productive_hours")) {
+      try { sqlite.exec("ALTER TABLE productivity_months ADD COLUMN non_productive_hours REAL"); } catch {}
+    }
+    if (!pmColNames.includes("overtime_hours")) {
+      try { sqlite.exec("ALTER TABLE productivity_months ADD COLUMN overtime_hours REAL"); } catch {}
+    }
+    if (!pmColNames.includes("total_ftes")) {
+      try { sqlite.exec("ALTER TABLE productivity_months ADD COLUMN total_ftes REAL"); } catch {}
+    }
+    if (!pmColNames.includes("facility_type")) {
+      try { sqlite.exec("ALTER TABLE productivity_months ADD COLUMN facility_type TEXT DEFAULT 'community'"); } catch {}
+    }
+    if (!pmColNames.includes("notes")) {
+      try { sqlite.exec("ALTER TABLE productivity_months ADD COLUMN notes TEXT"); } catch {}
+    }
+  }
+}
+
+// ── VeritaOps: Staffing Studies ───────────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staffing_studies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    department TEXT DEFAULT 'Core Lab',
+    start_date TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// ALTER TABLE migration for staffing_studies
+{
+  const ssCols = sqlite.prepare("PRAGMA table_info(staffing_studies)").all() as { name: string }[];
+  const ssColNames = ssCols.map((c) => c.name);
+  if (ssCols.length > 0) {
+    if (!ssColNames.includes("department")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN department TEXT DEFAULT 'Core Lab'"); } catch {}
+    }
+    if (!ssColNames.includes("start_date")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN start_date TEXT"); } catch {}
+    }
+    if (!ssColNames.includes("status")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN status TEXT DEFAULT 'active'"); } catch {}
+    }
+  }
+}
+
+// ── VeritaOps: Staffing Hourly Data ──────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staffing_hourly_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    study_id INTEGER NOT NULL,
+    week_number INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL,
+    hour_slot INTEGER NOT NULL,
+    metric_type TEXT NOT NULL,
+    value REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(study_id, week_number, day_of_week, hour_slot, metric_type),
+    FOREIGN KEY (study_id) REFERENCES staffing_studies(id) ON DELETE CASCADE
+  )
+`);
+
+// ALTER TABLE migration for staffing_hourly_data
+{
+  const shdCols = sqlite.prepare("PRAGMA table_info(staffing_hourly_data)").all() as { name: string }[];
+  const shdColNames = shdCols.map((c) => c.name);
+  if (shdCols.length > 0) {
+    if (!shdColNames.includes("metric_type")) {
+      try { sqlite.exec("ALTER TABLE staffing_hourly_data ADD COLUMN metric_type TEXT NOT NULL DEFAULT 'received'"); } catch {}
+    }
+    if (!shdColNames.includes("value")) {
+      try { sqlite.exec("ALTER TABLE staffing_hourly_data ADD COLUMN value REAL DEFAULT 0"); } catch {}
+    }
+  }
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_productivity_months_account ON productivity_months(account_id, year, month)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_studies_account ON staffing_studies(account_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_hourly_study ON staffing_hourly_data(study_id, week_number, day_of_week)`); } catch {}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
