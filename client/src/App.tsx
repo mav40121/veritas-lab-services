@@ -72,6 +72,7 @@ import JoinPage from "@/pages/JoinPage";
 import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
 import VeritaOpsPage from "@/pages/VeritaOpsPage";
 import VeritaOpsStaffingPage from "@/pages/VeritaOpsStaffingPage";
+import VeritaOpsInventoryPage from "@/pages/VeritaOpsInventoryPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -306,6 +307,7 @@ function AppContent() {
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritaops" component={VeritaOpsPage} />
           <Route path="/veritaops/staffing" component={VeritaOpsStaffingPage} />
+          <Route path="/veritaops/inventory" component={VeritaOpsInventoryPage} />
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/getting-started" component={GettingStartedPage} />

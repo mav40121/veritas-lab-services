@@ -245,6 +245,16 @@ export function registerVeritaOpsRoutes(
     res.json(rows);
   });
 
+  // GET /api/demo/inventory - returns demo account inventory items only
+  app.get("/api/demo/inventory", (_req: any, res) => {
+    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
+    if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
+    const rows = sqlite.prepare(
+      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY expiration_date ASC"
+    ).all(demoUser.id);
+    res.json(rows);
+  });
+
   // GET /api/demo/staffing-study - returns demo account first staffing study with data
   app.get("/api/demo/staffing-study", (_req: any, res) => {
     const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
@@ -257,6 +267,71 @@ export function registerVeritaOpsRoutes(
       "SELECT * FROM staffing_hourly_data WHERE study_id = ? ORDER BY week_number, day_of_week, hour_slot"
     ).all(study.id);
     res.json({ study, data });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // INVENTORY MANAGER
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // GET /api/inventory - list all inventory items for account
+  app.get("/api/inventory", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const rows = sqlite.prepare(
+      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY expiration_date ASC"
+    ).all(accountId);
+    res.json(rows);
+  });
+
+  // POST /api/inventory - create new inventory item
+  app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status } = req.body;
+    if (!item_name) return res.status(400).json({ error: "item_name is required" });
+    const now = new Date().toISOString();
+    try {
+      const result = sqlite.prepare(`
+        INSERT INTO inventory_items (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(accountId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, reorder_point ?? 5, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', now, now);
+      const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(Number(result.lastInsertRowid));
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/inventory/:id - update an inventory item
+  app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!existing) return res.status(404).json({ error: "Item not found" });
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, notes, status } = req.body;
+    const now = new Date().toISOString();
+    try {
+      sqlite.prepare(`
+        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, reorder_point = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, updated_at = ?
+        WHERE id = ? AND account_id = ?
+      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, reorder_point ?? 5, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', now, id, accountId);
+      const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/inventory/:id - delete an inventory item
+  app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!row) return res.status(404).json({ error: "Item not found" });
+    sqlite.prepare("DELETE FROM inventory_items WHERE id = ?").run(id);
+    res.json({ success: true });
   });
 
   // GET /api/staffing-studies/:id/export - Excel export of analysis

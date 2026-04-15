@@ -134,6 +134,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "Lab Productivity Calculator | VeritaOps Free Benchmarking Tool",
     description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
   },
+  "/veritaops/inventory": {
+    title: "Inventory Manager | VeritaOps\u2122 | VeritaAssure\u2122",
+    description: "Track reagent and supply inventory with expiration alerts, lot tracking, and reorder notifications for your clinical laboratory.",
+  },
   "/study-guide": {
     title: "Study Guide | VeritaAssure Lab Compliance Software",
     description: "Comprehensive guide to running studies in VeritaAssure. Step-by-step instructions for method validation, calibration verification, and EP studies.",

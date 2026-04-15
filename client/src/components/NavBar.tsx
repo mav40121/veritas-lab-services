@@ -35,6 +35,7 @@ const allMobileLinks = [
   { href: "/calculator", label: "Productivity Calculator" },
   { href: "/veritaops", label: "VeritaOps™ Tracker" },
   { href: "/veritaops/staffing", label: "VeritaOps™ Staffing" },
+  { href: "/veritaops/inventory", label: "VeritaOps™ Inventory" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Resources" },
@@ -203,7 +204,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritaops","/veritaops/staffing","/calculator"].includes(location)
+                ["/veritaops","/veritaops/staffing","/veritaops/inventory","/calculator"].includes(location)
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
@@ -235,6 +236,14 @@ export function NavBar() {
                   <div>
                     <div className="text-sm font-medium">Staffing Analyzer</div>
                     <div className="text-xs text-muted-foreground">By-hour demand analysis</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/veritaops/inventory" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">Inventory Manager</div>
+                    <div className="text-xs text-muted-foreground">Reagent & supply tracking</div>
                   </div>
                 </Link>
               </DropdownMenuItem>

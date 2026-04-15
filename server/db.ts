@@ -1144,6 +1144,76 @@ sqlite.exec(`
   }
 }
 
+// ── VeritaOps: Inventory Items ───────────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL,
+    catalog_number TEXT,
+    lot_number TEXT,
+    department TEXT DEFAULT 'Core Lab',
+    category TEXT DEFAULT 'Reagent',
+    quantity_on_hand INTEGER DEFAULT 0,
+    reorder_point INTEGER DEFAULT 5,
+    unit TEXT DEFAULT 'each',
+    expiration_date TEXT,
+    vendor TEXT,
+    storage_location TEXT,
+    notes TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// ALTER TABLE migration for inventory_items
+{
+  const iiCols = sqlite.prepare("PRAGMA table_info(inventory_items)").all() as { name: string }[];
+  const iiColNames = iiCols.map((c) => c.name);
+  if (iiCols.length > 0) {
+    if (!iiColNames.includes("catalog_number")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN catalog_number TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("lot_number")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN lot_number TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("department")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN department TEXT DEFAULT 'Core Lab'"); } catch {}
+    }
+    if (!iiColNames.includes("category")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN category TEXT DEFAULT 'Reagent'"); } catch {}
+    }
+    if (!iiColNames.includes("quantity_on_hand")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN quantity_on_hand INTEGER DEFAULT 0"); } catch {}
+    }
+    if (!iiColNames.includes("reorder_point")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN reorder_point INTEGER DEFAULT 5"); } catch {}
+    }
+    if (!iiColNames.includes("unit")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN unit TEXT DEFAULT 'each'"); } catch {}
+    }
+    if (!iiColNames.includes("expiration_date")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN expiration_date TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("vendor")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN vendor TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("storage_location")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN storage_location TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("notes")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN notes TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("status")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN status TEXT DEFAULT 'active'"); } catch {}
+    }
+  }
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_account ON inventory_items(account_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON inventory_items(account_id, expiration_date)`); } catch {}
+
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_productivity_months_account ON productivity_months(account_id, year, month)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_studies_account ON staffing_studies(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_hourly_study ON staffing_hourly_data(study_id, week_number, day_of_week)`); } catch {}

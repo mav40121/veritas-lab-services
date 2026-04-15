@@ -8,7 +8,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   Calculator, TrendingDown, TrendingUp, DollarSign,
-  Users, BarChart3, Grid3X3, Activity, ChevronDown,
+  Users, BarChart3, Grid3X3, Activity, ChevronDown, Package,
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import {
@@ -65,6 +65,7 @@ const SECTIONS = [
   { id: "calculator", label: "Calculator" },
   { id: "tracker", label: "Tracker" },
   { id: "staffing", label: "Staffing" },
+  { id: "inventory", label: "Inventory" },
 ];
 
 function SectionNav({ active }: { active: string }) {
@@ -795,6 +796,175 @@ function StaffingSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SECTION 4: Inventory Manager (read-only, Riverside data)
+// ══════════════════════════════════════════════════════════════════════════════
+
+interface DemoInventoryItem {
+  id: number;
+  item_name: string;
+  catalog_number: string | null;
+  lot_number: string | null;
+  department: string;
+  category: string;
+  quantity_on_hand: number;
+  reorder_point: number;
+  unit: string;
+  expiration_date: string | null;
+  vendor: string | null;
+  notes: string | null;
+}
+
+function getExpirationStatus(expDate: string | null): { label: string; color: string } {
+  if (!expDate) return { label: "N/A", color: "gray" };
+  const now = new Date();
+  const exp = new Date(expDate + "T00:00:00");
+  const diffMs = exp.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { label: "Expired", color: "red" };
+  if (diffDays <= 30) return { label: "Expires <30d", color: "darkamber" };
+  if (diffDays <= 60) return { label: "Expires <60d", color: "amber" };
+  if (diffDays <= 90) return { label: "Expires <90d", color: "yellow" };
+  return { label: "OK", color: "green" };
+}
+
+function DemoExpirationBadge({ expDate }: { expDate: string | null }) {
+  const status = getExpirationStatus(expDate);
+  const colorMap: Record<string, string> = {
+    red: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    darkamber: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    amber: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
+    green: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+    gray: "bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400",
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colorMap[status.color] ?? colorMap.gray}`}>
+      {status.label}
+    </span>
+  );
+}
+
+function InventorySection() {
+  const [items, setItems] = useState<DemoInventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/demo/inventory`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setItems)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    let expired = 0, expiringSoon = 0, lowStock = 0;
+    for (const item of items) {
+      if (item.expiration_date) {
+        const exp = new Date(item.expiration_date + "T00:00:00");
+        const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) expired++;
+        else if (diffDays <= 30) expiringSoon++;
+      }
+      if (item.quantity_on_hand <= item.reorder_point) lowStock++;
+    }
+    return { total: items.length, expired, expiringSoon, lowStock };
+  }, [items]);
+
+  if (loading) {
+    return <div className="text-center py-12 text-muted-foreground">Loading inventory data...</div>;
+  }
+
+  if (items.length === 0) {
+    return <div className="text-center py-12 text-muted-foreground">No demo inventory data available.</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Facility banner */}
+      <div className="flex items-center gap-3 px-4 py-3 rounded-lg" style={{ backgroundColor: "#01696F10" }}>
+        <Package size={18} style={{ color: "#01696F" }} />
+        <div>
+          <div className="font-semibold text-sm" style={{ color: "#01696F" }}>Riverside Regional Medical Center</div>
+          <div className="text-xs text-muted-foreground">{stats.total} inventory items tracked across all departments</div>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card><CardContent className="pt-4 text-center">
+          <div className="text-xs text-muted-foreground">Total Items</div>
+          <div className="text-xl font-bold font-mono" style={{ color: "#01696F" }}>{stats.total}</div>
+        </CardContent></Card>
+        <Card className={stats.expired > 0 ? "border-red-300 dark:border-red-800" : ""}>
+          <CardContent className="pt-4 text-center">
+            <div className="text-xs text-muted-foreground">Expired</div>
+            <div className="text-xl font-bold font-mono text-red-600 dark:text-red-400">{stats.expired}</div>
+          </CardContent>
+        </Card>
+        <Card className={stats.expiringSoon > 0 ? "border-amber-300 dark:border-amber-800" : ""}>
+          <CardContent className="pt-4 text-center">
+            <div className="text-xs text-muted-foreground">Expiring &lt;30d</div>
+            <div className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">{stats.expiringSoon}</div>
+          </CardContent>
+        </Card>
+        <Card className={stats.lowStock > 0 ? "border-orange-300 dark:border-orange-800" : ""}>
+          <CardContent className="pt-4 text-center">
+            <div className="text-xs text-muted-foreground">Low Stock</div>
+            <div className="text-xl font-bold font-mono text-orange-600 dark:text-orange-400">{stats.lowStock}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Inventory Table (read-only) */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
+                  <th className="text-left px-3 py-2 font-medium">Item Name</th>
+                  <th className="text-left px-3 py-2 font-medium">Category</th>
+                  <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">Lot #</th>
+                  <th className="text-left px-3 py-2 font-medium hidden md:table-cell">Department</th>
+                  <th className="text-center px-3 py-2 font-medium">Qty</th>
+                  <th className="text-left px-3 py-2 font-medium">Expiration</th>
+                  <th className="text-left px-3 py-2 font-medium hidden lg:table-cell">Vendor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, i) => {
+                  const isLowStock = item.quantity_on_hand <= item.reorder_point;
+                  return (
+                    <tr key={item.id} className={`border-b ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
+                      <td className="px-3 py-2 font-medium max-w-[220px]">
+                        <div className="truncate">{item.item_name}</div>
+                      </td>
+                      <td className="px-3 py-2 text-xs">{item.category}</td>
+                      <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell">{item.lot_number ?? "-"}</td>
+                      <td className="px-3 py-2 text-xs hidden md:table-cell">{item.department}</td>
+                      <td className="px-3 py-2 text-center font-mono">
+                        <span className={isLowStock ? "text-orange-600 font-bold" : ""}>{item.quantity_on_hand}</span>
+                        {isLowStock && <span className="text-orange-500 text-xs ml-1">Low</span>}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="text-xs text-muted-foreground">{item.expiration_date ?? ""}</div>
+                        <DemoExpirationBadge expDate={item.expiration_date} />
+                      </td>
+                      <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MAIN DEMO PAGE
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -850,6 +1020,7 @@ export default function DemoPage() {
                 {s.id === "calculator" && <Calculator size={14} className="inline mr-1.5" />}
                 {s.id === "tracker" && <BarChart3 size={14} className="inline mr-1.5" />}
                 {s.id === "staffing" && <Grid3X3 size={14} className="inline mr-1.5" />}
+                {s.id === "inventory" && <Package size={14} className="inline mr-1.5" />}
                 {s.label}
               </button>
             ))}
@@ -927,6 +1098,25 @@ export default function DemoPage() {
             </p>
           </div>
           <StaffingSection />
+        </div>
+      </section>
+
+      <div className="h-px mx-auto max-w-5xl" style={{ background: "linear-gradient(to right, transparent, #01696F30, transparent)" }} />
+
+      {/* Section 4: Inventory */}
+      <section id="section-inventory" className="py-12 sm:py-16 px-4 bg-muted/30">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
+              <Package size={14} />
+              Module 4: Inventory Manager
+            </div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Track Reagents and Supplies</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Lot tracking, expiration alerts, reorder notifications, and department-level inventory management.
+            </p>
+          </div>
+          <InventorySection />
         </div>
       </section>
 
