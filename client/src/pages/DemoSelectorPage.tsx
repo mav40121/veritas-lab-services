@@ -2,32 +2,6 @@ import { useLocation } from "wouter";
 
 const modules = [
   {
-    key: "operations",
-    label: "Operations Demo",
-    brand: "VeritaOps\u2122",
-    path: "/demo/operations",
-    color: "#01696F",
-    icon: (
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="28" width="8" height="14" rx="2" fill="#01696F" opacity="0.6" />
-        <rect x="15" y="20" width="8" height="22" rx="2" fill="#01696F" opacity="0.75" />
-        <rect x="26" y="14" width="8" height="28" rx="2" fill="#01696F" opacity="0.9" />
-        <rect x="37" y="8" width="8" height="34" rx="2" fill="#01696F" />
-        <path d="M8 26L19 18L30 12L41 6" stroke="#01696F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="41" cy="6" r="3" fill="#01696F" />
-      </svg>
-    ),
-    features: [
-      "Instant Productivity Calculator",
-      "Monthly Productivity Tracking",
-      "By-Hour Staffing Analysis",
-    ],
-    description:
-      "See how your lab's staffing efficiency compares to industry benchmarks, track trends over time, and optimize scheduling by the hour.",
-    cta: "Explore Operations Tools",
-    noAuth: true,
-  },
-  {
     key: "compliance",
     label: "Compliance Demo",
     brand: "VeritaAssure\u2122 Suite",
@@ -50,7 +24,32 @@ const modules = [
     description:
       "Explore the full compliance suite: method validation, inspection readiness scoring, reportable range mapping, and competency management.",
     cta: "Explore Compliance Suite",
-    noAuth: false,
+  },
+  {
+    key: "operations",
+    label: "Operations Demo",
+    brand: "VeritaOps\u2122",
+    path: "/demo/operations",
+    color: "#01696F",
+    icon: (
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="28" width="8" height="14" rx="2" fill="#01696F" opacity="0.6" />
+        <rect x="15" y="20" width="8" height="22" rx="2" fill="#01696F" opacity="0.75" />
+        <rect x="26" y="14" width="8" height="28" rx="2" fill="#01696F" opacity="0.9" />
+        <rect x="37" y="8" width="8" height="34" rx="2" fill="#01696F" />
+        <path d="M8 26L19 18L30 12L41 6" stroke="#01696F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="41" cy="6" r="3" fill="#01696F" />
+      </svg>
+    ),
+    features: [
+      "Instant Productivity Calculator",
+      "Monthly Productivity Tracking",
+      "By-Hour Staffing Analysis",
+      "Inventory Management",
+    ],
+    description:
+      "See how your lab's staffing efficiency compares to industry benchmarks, track trends over time, and optimize scheduling by the hour.",
+    cta: "Explore Operations Tools",
   },
 ];
 
@@ -228,12 +227,6 @@ export default function DemoSelectorPage() {
               {mod.cta} &rarr;
             </div>
 
-            {/* No-auth note for operations */}
-            {mod.noAuth && (
-              <p style={{ fontSize: "12px", color: "#718096", textAlign: "center", margin: "10px 0 0" }}>
-                No login required
-              </p>
-            )}
           </div>
         ))}
       </div>
