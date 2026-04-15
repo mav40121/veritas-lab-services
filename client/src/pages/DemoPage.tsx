@@ -832,7 +832,7 @@ export default function DemoPage() {
         <div className="relative max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-6 bg-white/15 text-white/90">
             <BarChart3 size={14} />
-            COLA 2026 Live Demo
+            Interactive Live Demo
           </div>
           <h1 className="font-serif text-3xl sm:text-5xl font-bold text-white mb-4">
             See VeritaOps{"\u2122"} in Action

@@ -81,7 +81,7 @@ export default function DemoSelectorPage() {
             textTransform: "uppercase",
           }}
         >
-          COLA 2026 Live Demo
+          Interactive Live Demo
         </div>
         <h1
           style={{
@@ -241,7 +241,6 @@ export default function DemoSelectorPage() {
       {/* Bottom note */}
       <div style={{ textAlign: "center", padding: "0 20px 48px" }}>
         <p style={{ fontSize: "14px", color: "#718096", maxWidth: "500px", margin: "0 auto" }}>
-          Use code <strong style={{ color: "#01696F" }}>COLA2026</strong> for a 60-day trial.
           Questions? <a href="mailto:info@veritaslabservices.com" style={{ color: "#01696F" }}>info@veritaslabservices.com</a>
         </p>
       </div>
