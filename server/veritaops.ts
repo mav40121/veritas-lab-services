@@ -231,6 +231,34 @@ export function registerVeritaOpsRoutes(
     res.json({ success: true });
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // PUBLIC DEMO ENDPOINTS (no auth - demo data only)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // GET /api/demo/productivity-months - returns demo account productivity data only
+  app.get("/api/demo/productivity-months", (_req: any, res) => {
+    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
+    if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
+    const rows = sqlite.prepare(
+      "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year ASC, month ASC"
+    ).all(demoUser.id);
+    res.json(rows);
+  });
+
+  // GET /api/demo/staffing-study - returns demo account first staffing study with data
+  app.get("/api/demo/staffing-study", (_req: any, res) => {
+    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
+    if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
+    const study = sqlite.prepare(
+      "SELECT * FROM staffing_studies WHERE account_id = ? ORDER BY created_at ASC LIMIT 1"
+    ).get(demoUser.id) as any;
+    if (!study) return res.status(404).json({ error: "No demo staffing study found" });
+    const data = sqlite.prepare(
+      "SELECT * FROM staffing_hourly_data WHERE study_id = ? ORDER BY week_number, day_of_week, hour_slot"
+    ).all(study.id);
+    res.json({ study, data });
+  });
+
   // GET /api/staffing-studies/:id/export - Excel export of analysis
   app.get("/api/staffing-studies/:id/export", authMiddleware, async (req: any, res) => {
     if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });

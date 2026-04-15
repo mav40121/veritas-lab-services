@@ -31,6 +31,7 @@ import BookPage from "@/pages/BookPage";
 import VeritaScanPage from "@/pages/VeritaScanPage";
 import VeritaMapPage from "@/pages/VeritaMapPage";
 import DemoLabPage from "@/pages/DemoLabPage";
+import DemoPage from "@/pages/DemoPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import FAQPage from "@/pages/FAQPage";
 import PricingPage from "@/pages/PricingPage";
@@ -266,7 +267,8 @@ function AppContent() {
           <Route path="/book" component={BookPage} />
           <Route path="/veritascan" component={VeritaScanPage} />
           <Route path="/veritamap" component={VeritaMapPage} />
-          <Route path="/demo" component={DemoLabPage} />
+          <Route path="/demo" component={DemoPage} />
+          <Route path="/demo-lab" component={DemoLabPage} />
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/faq" component={FAQPage} />
           <Route path="/pricing" component={PricingPage} />

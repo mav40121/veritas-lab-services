@@ -43,6 +43,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure can help your laboratory stay compliant and survey-ready.",
   },
   "/demo": {
+    title: "VeritaOps\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u2122",
+    description: "See VeritaOps\u2122 in action. Interactive productivity calculator, monthly tracking, and by-hour staffing analysis built for clinical laboratories.",
+  },
+  "/demo-lab": {
     title: "Demo | VeritaAssure Lab Compliance Software",
     description: "Try the VeritaAssure demo lab. Explore VeritaCheck method validation, VeritaScan inspection readiness, and the full compliance suite.",
   },
