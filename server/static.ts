@@ -45,6 +45,16 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     `<link rel="canonical" href="${canonicalUrl}"`,
   );
 
+  // Replace Twitter Card tags
+  html = html.replace(
+    /<meta name="twitter:title" content="[^"]*"/,
+    `<meta name="twitter:title" content="${meta.title}"`,
+  );
+  html = html.replace(
+    /<meta name="twitter:description" content="[^"]*"/,
+    `<meta name="twitter:description" content="${meta.description}"`,
+  );
+
   // Inject noscript content inside <div id="root">
   const noscriptBlock = `<noscript><h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure</a> | <a href="/veritacheck">VeritaCheck</a> | <a href="/veritascan">VeritaScan</a> | <a href="/veritamap">VeritaMap</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav></noscript>`;
   html = html.replace('<div id="root"></div>', `<div id="root">${noscriptBlock}</div>`);
