@@ -202,6 +202,18 @@ export async function seedDemoData() {
     seedPolicyData(sqlite, demoUserId, now);
   }
 
+  // ─── VeritaOps: Productivity Months ────────────────────────────────────────
+  const existingProd = sqlite.prepare("SELECT id FROM productivity_months WHERE account_id = ?").get(demoUserId);
+  if (!existingProd) {
+    seedProductivityData(sqlite, demoUserId, now);
+  }
+
+  // ─── VeritaOps: Staffing Study ─────────────────────────────────────────────
+  const existingStaffStudy = sqlite.prepare("SELECT id FROM staffing_studies WHERE account_id = ?").get(demoUserId);
+  if (!existingStaffStudy) {
+    seedStaffingData(sqlite, demoUserId, now);
+  }
+
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
 }
 
@@ -873,4 +885,113 @@ function seedPolicyData(sqlite: any, demoUserId: number, now: string) {
   }
 
   console.log("[seed] VeritaPolicy demo data seeded");
+}
+
+// ─── VeritaOps Productivity seeding ──────────────────────────────────────────
+function seedProductivityData(sqlite: any, demoUserId: number, now: string) {
+  const stmt = sqlite.prepare(`
+    INSERT OR IGNORE INTO productivity_months
+      (account_id, year, month, billable_tests, productive_hours, non_productive_hours, overtime_hours, total_ftes, facility_type, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // 2025 data (prior year): higher ratio ~0.185-0.195, higher OT
+  const data2025 = [
+    { m: 1,  tests: 35200, prodH: 6850, nonProd: 1150, ot: 580, ftes: 15.2, notes: "Q1 2025: 2 vacant positions filled" },
+    { m: 2,  tests: 34800, prodH: 6720, nonProd: 1100, ot: 560, ftes: 15.0, notes: null },
+    { m: 3,  tests: 36100, prodH: 6900, nonProd: 1200, ot: 620, ftes: 15.3, notes: "Spring census increase" },
+    { m: 4,  tests: 35600, prodH: 6780, nonProd: 1180, ot: 590, ftes: 15.1, notes: null },
+    { m: 5,  tests: 36400, prodH: 6950, nonProd: 1220, ot: 610, ftes: 15.4, notes: null },
+    { m: 6,  tests: 35900, prodH: 6820, nonProd: 1160, ot: 570, ftes: 15.2, notes: "Q2 close" },
+    { m: 7,  tests: 34500, prodH: 6680, nonProd: 1140, ot: 540, ftes: 14.9, notes: "Summer vacation coverage" },
+    { m: 8,  tests: 35100, prodH: 6750, nonProd: 1160, ot: 600, ftes: 15.0, notes: null },
+    { m: 9,  tests: 36800, prodH: 7020, nonProd: 1240, ot: 650, ftes: 15.5, notes: "Back-to-school surge" },
+    { m: 10, tests: 36200, prodH: 6880, nonProd: 1200, ot: 630, ftes: 15.3, notes: "Oct 2025: staff loaned to partner facility" },
+    { m: 11, tests: 35500, prodH: 6760, nonProd: 1180, ot: 590, ftes: 15.1, notes: null },
+    { m: 12, tests: 34200, prodH: 6600, nonProd: 1120, ot: 520, ftes: 14.8, notes: "Holiday staffing adjustments" },
+  ];
+
+  // 2026 data (current year, Jan-Mar): improving to ~0.140-0.150, lower OT, fewer FTEs
+  const data2026 = [
+    { m: 1, tests: 36500, prodH: 5280, nonProd: 820, ot: 320, ftes: 13.2, notes: "VeritaOps workflow optimization began" },
+    { m: 2, tests: 35800, prodH: 5150, nonProd: 790, ot: 290, ftes: 13.0, notes: "Continued efficiency gains" },
+    { m: 3, tests: 37200, prodH: 5380, nonProd: 840, ot: 310, ftes: 13.4, notes: "Q1 close, 25% hour reduction vs prior year" },
+  ];
+
+  const seedBatch = sqlite.transaction(() => {
+    for (const d of data2025) {
+      stmt.run(demoUserId, 2025, d.m, d.tests, d.prodH, d.nonProd, d.ot, d.ftes, "community", d.notes, now, now);
+    }
+    for (const d of data2026) {
+      stmt.run(demoUserId, 2026, d.m, d.tests, d.prodH, d.nonProd, d.ot, d.ftes, "community", d.notes, now, now);
+    }
+  });
+  seedBatch();
+  console.log("[seed] VeritaOps productivity data seeded (24 months)");
+}
+
+// ─── VeritaOps Staffing Study seeding ────────────────────────────────────────
+function seedStaffingData(sqlite: any, demoUserId: number, now: string) {
+  const studyResult = sqlite.prepare(
+    "INSERT INTO staffing_studies (account_id, name, department, start_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(demoUserId, "Core Lab Q1 Analysis", "Core Lab", "2026-01-06", "complete", now, now);
+  const studyId = Number(studyResult.lastInsertRowid);
+
+  const insertData = sqlite.prepare(`
+    INSERT OR IGNORE INTO staffing_hourly_data (study_id, week_number, day_of_week, hour_slot, metric_type, value, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Realistic hourly data: weekday pattern with peak 8AM-2PM
+  // Based on typical clinical lab volume patterns
+  const weekdayReceived = [
+    3, 2, 2, 2, 3, 8, 22, 45, 62, 58, 52, 48, 44, 42, 38, 32, 28, 22, 15, 10, 8, 6, 4, 3
+  ];
+  const weekdayVerified = [
+    4, 3, 2, 2, 3, 6, 18, 40, 58, 56, 50, 46, 42, 40, 36, 30, 26, 20, 14, 9, 7, 5, 4, 3
+  ];
+  const weekendMultiplier = 0.6;
+
+  // Staffing pattern (staff on duty per hour)
+  const weekdayStaff = [
+    2, 2, 2, 2, 2, 3, 5, 7, 8, 8, 7, 7, 6, 6, 5, 5, 4, 3, 3, 2, 2, 2, 2, 2
+  ];
+  const weekendStaff = [
+    2, 2, 2, 2, 2, 2, 3, 4, 5, 5, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2
+  ];
+
+  const seedBatch = sqlite.transaction(() => {
+    for (let week = 1; week <= 6; week++) {
+      for (let day = 0; day < 7; day++) {
+        const isWeekend = day >= 5;
+        const mult = isWeekend ? weekendMultiplier : 1.0;
+        // Add small random variation per week (+/- 15%)
+        const weekVariation = 0.85 + (((week * 7 + day * 3 + 13) % 30) / 100);
+
+        for (let hour = 0; hour < 24; hour++) {
+          const recBase = Math.round(weekdayReceived[hour] * mult * weekVariation);
+          const verBase = Math.round(weekdayVerified[hour] * mult * weekVariation);
+          // Small per-cell variation
+          const cellVar = ((hour * 3 + day * 5 + week * 7) % 7) - 3;
+          const received = Math.max(0, recBase + cellVar);
+          const verified = Math.max(0, verBase + cellVar);
+
+          insertData.run(studyId, week, day, hour, "received", received, now);
+          insertData.run(studyId, week, day, hour, "verified", verified, now);
+        }
+      }
+    }
+
+    // Staffing data (week_number = 0 for baseline staffing)
+    for (let day = 0; day < 7; day++) {
+      const isWeekend = day >= 5;
+      const staffPattern = isWeekend ? weekendStaff : weekdayStaff;
+      for (let hour = 0; hour < 24; hour++) {
+        insertData.run(studyId, 0, day, hour, "staffing", staffPattern[hour], now);
+      }
+    }
+  });
+
+  seedBatch();
+  console.log("[seed] VeritaOps staffing study seeded (Core Lab Q1 Analysis)");
 }
