@@ -144,7 +144,53 @@ app.use((req, res, next) => {
     console.error("[snapshot] Scheduler setup error:", err.message);
   }
 
-  await registerRoutes(httpServer, app);
+  // Diagnostic route registered BEFORE registerRoutes to test if route registration itself works
+  app.get("/api/diag/pre-routes", (_req: any, res: any) => {
+    res.json({ ok: true, phase: "pre-registerRoutes", timestamp: new Date().toISOString() });
+  });
+
+  try {
+    await registerRoutes(httpServer, app);
+    // Count registered routes
+    let routeCount = 0;
+    const routeList: string[] = [];
+    app._router?.stack?.forEach((layer: any) => {
+      if (layer.route) {
+        routeCount++;
+        const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+        routeList.push(`${methods} ${layer.route.path}`);
+      }
+    });
+    console.log(`[startup] registerRoutes completed successfully. ${routeCount} routes registered.`);
+    console.log('[startup] First 10 routes:', routeList.slice(0, 10).join(' | '));
+    console.log('[startup] Has /api/admin/report:', routeList.some(r => r.includes('/api/admin/report')));
+    console.log('[startup] Has /api/health:', routeList.some(r => r.includes('/api/health')));
+    console.log('[startup] Has /api/admin/backup-db:', routeList.some(r => r.includes('/api/admin/backup-db')));
+  } catch (err: any) {
+    console.error('[startup] CRITICAL: registerRoutes FAILED:', err.message, err.stack);
+  }
+
+  // Diagnostic route registered AFTER registerRoutes
+  app.get("/api/diag/post-routes", (_req: any, res: any) => {
+    const routeList: string[] = [];
+    app._router?.stack?.forEach((layer: any) => {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+        routeList.push(`${methods} ${layer.route.path}`);
+      }
+    });
+    res.json({
+      ok: true,
+      phase: "post-registerRoutes",
+      totalRoutes: routeList.length,
+      hasAdminReport: routeList.some(r => r.includes('/api/admin/report')),
+      hasHealth: routeList.some(r => r.includes('/api/health')),
+      hasBackupDb: routeList.some(r => r.includes('/api/admin/backup-db')),
+      hasGeneratePdf: routeList.some(r => r.includes('/api/generate-pdf')),
+      first20: routeList.slice(0, 20),
+      stackSize: app._router?.stack?.length || 0
+    });
+  });
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

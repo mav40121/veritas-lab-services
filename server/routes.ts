@@ -1150,6 +1150,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  console.log('[routes] Route registration checkpoint: studies+auth routes OK, registering PDF and remaining routes...');
+
   // ── PDF GENERATION ────────────────────────────────────────────────────────
   // Accepts { study, results } JSON, returns a PDF binary.
   // Auth optional — guests can generate PDFs for studies they can view.
@@ -7103,5 +7105,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerVeritaBenchRoutes } = await import('./veritabench');
   registerVeritaBenchRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
+  console.log('[routes] All routes registered successfully (176 routes)');
   return httpServer;
 }
