@@ -313,6 +313,8 @@ function Heatmap({ data, title }: { data: number[][]; title: string }) {
 
 // ── Analysis View ───────────────────────────────────────────────────────────
 function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: string }) {
+  const [throughputRate, setThroughputRate] = useState<number>(20);
+
   // Compute averages
   const avgReceived = useMemo(() => {
     const grid: number[][] = Array.from({ length: 24 }, () => Array(7).fill(0));
@@ -368,24 +370,11 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
     return { totalWeekly, peakHour, lowHour, peakDay, avgDaily };
   }, [avgReceived]);
 
-  // Recommended staffing
-  const recommended = useMemo(() => {
-    // Find best per-staff ratio from current data
-    let bestRatio = Infinity;
-    for (let h = 0; h < 24; h++) {
-      for (let d = 0; d < 7; d++) {
-        const staff = staffGrid[h][d];
-        const verified = avgVerified[h][d];
-        if (staff > 0 && verified > 0) {
-          const r = verified / staff;
-          if (r > 0 && r < bestRatio) bestRatio = r;
-        }
-      }
-    }
-    // Use best performing ratio as target, or default 15
-    const target = bestRatio < Infinity ? bestRatio : 15;
-    return avgReceived.map(row => row.map(val => val > 0 ? Math.ceil(val / target) : 0));
-  }, [avgReceived, avgVerified, staffGrid]);
+  // FTE staffing recommendation: volume / throughput rate
+  const fteGrid = useMemo(() => {
+    const rate = throughputRate > 0 ? throughputRate : 20;
+    return avgReceived.map(row => row.map(val => val > 0 ? Math.ceil(val / rate) : 0));
+  }, [avgReceived, throughputRate]);
 
   return (
     <div className="space-y-8">
@@ -414,7 +403,6 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
       </div>
 
       {/* Heatmaps */}
-      <Heatmap data={avgReceived} title="Average Samples Received (Heatmap)" />
       <Heatmap data={avgVerified} title="Average Samples Verified (Heatmap)" />
 
       {/* Staffing vs Demand */}
@@ -462,9 +450,26 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
         </div>
       </div>
 
-      {/* Recommended Staffing */}
+      {/* Specimen Demand by Hour */}
+      <Heatmap data={avgReceived} title="Specimen Demand by Hour (Average Volume)" />
+
+      {/* FTE Staffing Recommendation */}
       <div>
-        <h3 className="text-sm font-semibold mb-2">Recommended Staffing Grid</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Recommended Staffing (FTEs)</h3>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground whitespace-nowrap">Throughput rate:</label>
+            <input
+              type="number"
+              className="w-16 px-2 py-1 text-xs border rounded text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              value={throughputRate}
+              onChange={e => { const v = parseFloat(e.target.value); if (v > 0) setThroughputRate(v); }}
+              min={1}
+              max={200}
+            />
+            <span className="text-xs text-muted-foreground whitespace-nowrap">specimens / tech / hour</span>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="text-xs border-collapse">
             <thead>
@@ -478,12 +483,12 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
                 <tr key={h}>
                   <td className="px-2 py-0.5 border text-muted-foreground whitespace-nowrap">{hourLabel(h)}</td>
                   {DAY_NAMES.map((_, d) => {
-                    const rec = recommended[h][d];
+                    const fte = fteGrid[h][d];
                     const curr = staffGrid[h][d];
-                    const diff = rec - curr;
+                    const diff = fte - curr;
                     return (
-                      <td key={d} className={`border text-center px-2 py-0.5 ${diff > 0 ? "bg-red-50 dark:bg-red-900/20" : diff < 0 ? "bg-emerald-50 dark:bg-emerald-900/20" : ""}`}>
-                        {rec > 0 ? rec : ""}
+                      <td key={d} className={`border text-center px-2 py-0.5 ${curr > 0 && diff > 0 ? "bg-red-50 dark:bg-red-900/20" : curr > 0 && diff < 0 ? "bg-emerald-50 dark:bg-emerald-900/20" : ""}`}>
+                        {fte > 0 ? fte : ""}
                       </td>
                     );
                   })}
@@ -492,6 +497,11 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
             </tbody>
           </table>
         </div>
+        <div className="flex gap-4 mt-2 text-xs">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border" /> More staff needed than currently scheduled</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-50 border" /> Fewer staff needed than currently scheduled</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">FTE = specimens per hour / throughput rate, rounded up. Adjust the throughput rate to match your department's processing capacity.</p>
       </div>
     </div>
   );
