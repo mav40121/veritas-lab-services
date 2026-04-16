@@ -283,6 +283,11 @@ export function registerVeritaCheckVerificationRoutes(
       replacement:    "Replacement instrument (same make/model)",
     };
 
+    // Fetch CLIA number and lab name from user record
+    const verifUserRow = sqlite.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+    const verifCliaNumber: string | undefined = verifUserRow?.clia_number || undefined;
+    const verifLabName: string | undefined = verifUserRow?.clia_lab_name || undefined;
+
     const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const teal = "#01696F";
 
@@ -385,6 +390,16 @@ export function registerVeritaCheckVerificationRoutes(
 </head>
 <body>
 <div class="page">
+
+  <!-- Lab identity header -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+    <div>
+      <div style="font-size:14px;font-weight:700;color:${teal};letter-spacing:0.3px">VeritaAssure&trade;</div>
+      <div style="font-size:8px;color:#6b7280">by Veritas Lab Services - veritaslabservices.com</div>
+      ${verifLabName ? `<div style="font-size:9px;font-weight:600;color:#28251D;margin-top:2px">${verifLabName}</div>` : ""}
+      <div style="font-size:8px;color:${verifCliaNumber ? '#555' : '#999'};margin-top:1px">CLIA: ${verifCliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
+    </div>
+  </div>
 
   <!-- COVER PAGE -->
   <!-- Header bar -->

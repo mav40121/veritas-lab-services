@@ -1162,6 +1162,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Fetch CLIA number from user record if authenticated
       // For seat users, look up the owner's CLIA number (seat users inherit owner lab identity)
       let cliaNumber: string | undefined;
+      let cliaLabName: string | undefined;
       let preferredStandards: string[] | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
@@ -1172,14 +1173,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
           ).get(payload.userId) as any;
           const effectiveUserId = seatRow ? seatRow.owner_user_id : payload.userId;
-          const userRow = (db as any).$client.prepare("SELECT clia_number, preferred_standards FROM users WHERE id = ?").get(effectiveUserId) as any;
+          const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(effectiveUserId) as any;
           cliaNumber = userRow?.clia_number || undefined;
+          cliaLabName = userRow?.clia_lab_name || undefined;
           if (userRow?.preferred_standards) {
             try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
           }
         } catch {}
       }
 
+      if (cliaLabName) { (study as any)._labName = cliaLabName; }
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any);
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
@@ -2281,7 +2284,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     // Fetch CLIA number and preferred standards
-    const scanUserRow = (db as any).$client.prepare("SELECT clia_number, preferred_standards FROM users WHERE id = ?").get(req.userId) as any;
+    const scanUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(req.userId) as any;
     let scanPreferredStandards: string[] | undefined;
     if (scanUserRow?.preferred_standards) {
       try { scanPreferredStandards = JSON.parse(scanUserRow.preferred_standards); } catch {}
@@ -2295,6 +2298,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           updatedAt: scan.updated_at,
           items: mergedItems,
           cliaNumber: scanUserRow?.clia_number || undefined,
+          labName: scanUserRow?.clia_lab_name || undefined,
           preferredStandards: scanPreferredStandards as any,
         },
         type as "executive" | "full"
@@ -4687,9 +4691,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE qr.assessment_id = ?`
     ).all(assessment.id);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const labUser = storage.getUserById(dataUserId);
-    const labName = labUser?.name || "Clinical Laboratory";
-    const compUserRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(dataUserId) as any;
+    const compUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(dataUserId) as any;
+    const labName = compUserRow?.clia_lab_name || "Clinical Laboratory";
     try {
       const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: compUserRow?.clia_number || undefined });
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
@@ -4838,9 +4841,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     const { currentSpecimens } = req.body || {};
-    const cumsumUserRow = (db as any).$client.prepare("SELECT clia_number FROM users WHERE id = ?").get(req.userId) as any;
+    const cumsumUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(req.userId) as any;
     try {
-      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumUserRow?.clia_number || undefined);
+      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumUserRow?.clia_number || undefined, cumsumUserRow?.clia_lab_name || undefined);
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `VeritaCheck_CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
       const cumsumToken = storePdfToken(pdfBuffer, filename);
