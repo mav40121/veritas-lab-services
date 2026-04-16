@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2,
+  ChevronDown, ChevronRight, BookOpen, Library,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -26,8 +27,12 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip,
 } from "recharts";
+import {
+  PI_STARTER_LIBRARY, PI_STARTER_DEPARTMENTS, PHASE_LABELS, PHASE_COLORS,
+  type StarterMetric,
+} from "@/lib/piStarterLibrary";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 interface PIDepartment {
   id: number;
@@ -76,7 +81,7 @@ interface DashboardMetric {
   dataPointCount: number;
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+// -- Constants ----------------------------------------------------------------
 
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"];
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -109,7 +114,209 @@ function MiniSparkline({ data }: { data: { month: number; value: number | null }
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+function PhaseBadge({ phase }: { phase: string }) {
+  const color = PHASE_COLORS[phase] || "#6b7280";
+  const label = PHASE_LABELS[phase] || phase;
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-tight"
+      style={{ backgroundColor: `${color}18`, color, border: `1px solid ${color}30` }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// -- Starter Library Picker ---------------------------------------------------
+
+function StarterLibraryPicker({
+  onAddSelected,
+  adding,
+  existingMetricNames,
+}: {
+  onAddSelected: (selected: StarterMetric[]) => void;
+  adding: boolean;
+  existingMetricNames?: Set<string>;
+}) {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
+  const [searchFilter, setSearchFilter] = useState("");
+
+  const metricsByDept = useMemo(() => {
+    const map: Record<string, { metric: StarterMetric; index: number }[]> = {};
+    PI_STARTER_LIBRARY.forEach((m, i) => {
+      if (!map[m.department]) map[m.department] = [];
+      map[m.department].push({ metric: m, index: i });
+    });
+    return map;
+  }, []);
+
+  const filteredByDept = useMemo(() => {
+    if (!searchFilter.trim()) return metricsByDept;
+    const q = searchFilter.toLowerCase();
+    const result: Record<string, { metric: StarterMetric; index: number }[]> = {};
+    for (const [dept, items] of Object.entries(metricsByDept)) {
+      const matched = items.filter(
+        ({ metric }) =>
+          metric.name.toLowerCase().includes(q) ||
+          metric.phase.toLowerCase().includes(q) ||
+          metric.unit.toLowerCase().includes(q) ||
+          dept.toLowerCase().includes(q)
+      );
+      if (matched.length > 0) result[dept] = matched;
+    }
+    return result;
+  }, [metricsByDept, searchFilter]);
+
+  function toggleDept(dept: string) {
+    setExpandedDepts(prev => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept);
+      else next.add(dept);
+      return next;
+    });
+  }
+
+  function toggleMetric(index: number) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function toggleAllInDept(dept: string) {
+    const items = filteredByDept[dept] || [];
+    const selectableItems = items.filter(({ metric }) => !existingMetricNames?.has(metric.name));
+    const allSelected = selectableItems.every(({ index }) => selected.has(index));
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const { index } of selectableItems) {
+        if (allSelected) next.delete(index);
+        else next.add(index);
+      }
+      return next;
+    });
+  }
+
+  const selectedMetrics = Array.from(selected).map(i => PI_STARTER_LIBRARY[i]);
+  const deptOrder = PI_STARTER_DEPARTMENTS.filter(d => d in filteredByDept);
+
+  return (
+    <div className="space-y-4">
+      {/* Search */}
+      <Input
+        placeholder="Filter metrics by name, phase, or department..."
+        value={searchFilter}
+        onChange={e => setSearchFilter(e.target.value)}
+        className="h-9"
+      />
+
+      {/* Department sections */}
+      <div className="border rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
+        {deptOrder.map(dept => {
+          const items = filteredByDept[dept] || [];
+          const isExpanded = expandedDepts.has(dept);
+          const selectableItems = items.filter(({ metric }) => !existingMetricNames?.has(metric.name));
+          const selectedInDept = selectableItems.filter(({ index }) => selected.has(index)).length;
+
+          return (
+            <div key={dept} className="border-b last:border-b-0">
+              {/* Department header */}
+              <button
+                onClick={() => toggleDept(dept)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                style={{ backgroundColor: isExpanded ? "#01696F08" : undefined }}
+              >
+                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span className="font-medium text-sm flex-1">{dept}</span>
+                <span className="text-xs text-muted-foreground">
+                  {items.length} metric{items.length !== 1 ? "s" : ""}
+                </span>
+                {selectedInDept > 0 && (
+                  <span
+                    className="text-xs font-medium px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: "#01696F18", color: "#01696F" }}
+                  >
+                    {selectedInDept} selected
+                  </span>
+                )}
+              </button>
+
+              {/* Metrics list */}
+              {isExpanded && (
+                <div>
+                  {/* Select All row */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 border-t border-b bg-muted/20">
+                    <Checkbox
+                      checked={selectableItems.length > 0 && selectableItems.every(({ index }) => selected.has(index))}
+                      onCheckedChange={() => toggleAllInDept(dept)}
+                      disabled={selectableItems.length === 0}
+                    />
+                    <span className="text-xs font-medium text-muted-foreground">Select all</span>
+                  </div>
+                  {items.map(({ metric, index }) => {
+                    const alreadyAdded = existingMetricNames?.has(metric.name);
+                    return (
+                      <label
+                        key={index}
+                        className={`flex items-start gap-2 px-3 py-2 border-t hover:bg-muted/20 cursor-pointer transition-colors ${
+                          alreadyAdded ? "opacity-50" : ""
+                        }`}
+                      >
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={selected.has(index)}
+                          onCheckedChange={() => toggleMetric(index)}
+                          disabled={alreadyAdded}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{metric.name}</span>
+                            <PhaseBadge phase={metric.phase} />
+                            {alreadyAdded && (
+                              <span className="text-[10px] text-muted-foreground italic">Already added</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {metric.unit} | {metric.direction === "lower_is_better" ? "Lower is better" : "Higher is better"}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Benchmark: {metric.benchmark}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                            Source: {metric.source}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Action bar */}
+      <div className="flex items-center justify-between pt-2">
+        <span className="text-sm text-muted-foreground">
+          {selected.size} metric{selected.size !== 1 ? "s" : ""} selected
+        </span>
+        <Button
+          onClick={() => onAddSelected(selectedMetrics)}
+          disabled={selected.size === 0 || adding}
+          style={{ backgroundColor: "#01696F" }}
+        >
+          {adding ? "Adding..." : `Add Selected Metric${selected.size !== 1 ? "s" : ""}`}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// -- Main Component -----------------------------------------------------------
 
 export default function VeritaBenchPIPage() {
   const { user, isLoggedIn } = useAuth();
@@ -126,7 +333,6 @@ export default function VeritaBenchPIPage() {
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [entryMonth, setEntryMonth] = useState<number>(new Date().getMonth() + 1);
-  const [seeded, setSeeded] = useState(false);
 
   // Entry form state (batch editing)
   const [entryValues, setEntryValues] = useState<Record<number, { value: string; volume: string; notes: string }>>({});
@@ -138,9 +344,16 @@ export default function VeritaBenchPIPage() {
   const [showMetricDialog, setShowMetricDialog] = useState(false);
   const [deleteMetricTarget, setDeleteMetricTarget] = useState<PIMetric | null>(null);
 
+  // Library browser dialog
+  const [showLibraryDialog, setShowLibraryDialog] = useState(false);
+  const [addingFromLibrary, setAddingFromLibrary] = useState(false);
+
   const hasPlanAccess = user && SUITE_PLANS.includes(user.plan);
 
-  // ── Load departments ─────────────────────────────────────────────────────────
+  // Whether user has NO departments yet (first-time UX)
+  const isFirstTime = !loading && departments.length === 0;
+
+  // -- Load departments -------------------------------------------------------
 
   async function loadDepartments() {
     try {
@@ -151,7 +364,6 @@ export default function VeritaBenchPIPage() {
         if (depts.length > 0 && !selectedDeptId) {
           setSelectedDeptId(String(depts[0].id));
         }
-        if (depts.length > 0 && !seeded) setSeeded(true);
       }
     } catch {} finally { setLoading(false); }
   }
@@ -161,7 +373,7 @@ export default function VeritaBenchPIPage() {
     else setLoading(false);
   }, [isLoggedIn, hasPlanAccess]);
 
-  // ── Load metrics + entries when department or year changes ─────────────────
+  // -- Load metrics + entries when department or year changes ------------------
 
   useEffect(() => {
     if (!selectedDeptId || !isLoggedIn || !hasPlanAccess) return;
@@ -194,7 +406,7 @@ export default function VeritaBenchPIPage() {
     } catch {}
   }
 
-  // ── Populate entry form when month/metrics/entries change ────────────────────
+  // -- Populate entry form when month/metrics/entries change ------------------
 
   useEffect(() => {
     const newValues: Record<number, { value: string; volume: string; notes: string }> = {};
@@ -209,7 +421,7 @@ export default function VeritaBenchPIPage() {
     setEntryValues(newValues);
   }, [metrics, entries, entryMonth]);
 
-  // ── Save all entries for selected month ─────────────────────────────────────
+  // -- Save all entries for selected month ------------------------------------
 
   async function handleSaveAll() {
     setSaving(true);
@@ -217,7 +429,6 @@ export default function VeritaBenchPIPage() {
       for (const m of metrics) {
         const vals = entryValues[m.id];
         if (!vals) continue;
-        // Only save if there's a value or volume entered
         if (vals.value === "" && vals.volume === "" && vals.notes === "") continue;
         await fetch(`${API_BASE}/api/pi/entries`, {
           method: "POST",
@@ -240,7 +451,7 @@ export default function VeritaBenchPIPage() {
     } finally { setSaving(false); }
   }
 
-  // ── Metric CRUD ──────────────────────────────────────────────────────────────
+  // -- Metric CRUD ------------------------------------------------------------
 
   function openAddMetric() {
     setEditMetric(null);
@@ -305,7 +516,76 @@ export default function VeritaBenchPIPage() {
     setDeleteMetricTarget(null);
   }
 
-  // ── Computed dashboard values ────────────────────────────────────────────────
+  // -- Add selected metrics from starter library ------------------------------
+
+  async function handleAddFromLibrary(selectedMetrics: StarterMetric[]) {
+    setAddingFromLibrary(true);
+    try {
+      // Group by department
+      const byDept: Record<string, StarterMetric[]> = {};
+      for (const m of selectedMetrics) {
+        if (!byDept[m.department]) byDept[m.department] = [];
+        byDept[m.department].push(m);
+      }
+
+      // Create departments as needed, then metrics
+      const existingDeptNames = new Set(departments.map(d => d.name));
+      const deptIdMap: Record<string, number> = {};
+      for (const d of departments) {
+        deptIdMap[d.name] = d.id;
+      }
+
+      for (const [deptName, deptMetrics] of Object.entries(byDept)) {
+        let deptId = deptIdMap[deptName];
+        if (!existingDeptNames.has(deptName)) {
+          const res = await fetch(`${API_BASE}/api/pi/departments`, {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ name: deptName, sort_order: PI_STARTER_DEPARTMENTS.indexOf(deptName as any) }),
+          });
+          if (res.ok) {
+            const newDept = await res.json();
+            deptId = newDept.id;
+            deptIdMap[deptName] = deptId;
+            existingDeptNames.add(deptName);
+          } else {
+            continue;
+          }
+        }
+
+        for (let i = 0; i < deptMetrics.length; i++) {
+          const m = deptMetrics[i];
+          await fetch(`${API_BASE}/api/pi/metrics`, {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({
+              department_id: deptId,
+              name: m.name,
+              unit: m.unit,
+              direction: m.direction,
+              sort_order: i,
+            }),
+          });
+        }
+      }
+
+      toast({ title: `Added ${selectedMetrics.length} metric${selectedMetrics.length !== 1 ? "s" : ""}` });
+      setShowLibraryDialog(false);
+      // Reload everything
+      await loadDepartments();
+      if (selectedDeptId) {
+        loadMetrics();
+        loadEntries();
+        loadDashboard();
+      }
+    } catch {
+      toast({ title: "Failed to add metrics", variant: "destructive" });
+    } finally {
+      setAddingFromLibrary(false);
+    }
+  }
+
+  // -- Computed dashboard values ----------------------------------------------
 
   const summaryStats = useMemo(() => {
     const total = dashboardData.length;
@@ -330,7 +610,10 @@ export default function VeritaBenchPIPage() {
     }
   }
 
-  // ── Auth gates ────────────────────────────────────────────────────────────────
+  // Set of existing metric names (for duplicate detection in library browser)
+  const existingMetricNames = useMemo(() => new Set(metrics.map(m => m.name)), [metrics]);
+
+  // -- Auth gates -------------------------------------------------------------
 
   if (!isLoggedIn) {
     return (
@@ -353,6 +636,44 @@ export default function VeritaBenchPIPage() {
       </div>
     );
   }
+
+  // -- First-time Setup View --------------------------------------------------
+
+  if (isFirstTime) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="text-center mb-8">
+          <Library size={40} className="mx-auto mb-4" style={{ color: "#01696F" }} />
+          <h1 className="font-serif text-2xl font-bold mb-2" style={{ color: "#01696F" }}>
+            Set Up Your PI Program
+          </h1>
+          <p className="text-muted-foreground max-w-lg mx-auto">
+            Select the metrics that matter to your laboratory. You can customize names, units, and benchmark thresholds after selection.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BookOpen size={16} style={{ color: "#01696F" }} />
+              PI Metric Starter Library
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              161 metrics across 11 departments, drawn from CAP Q-Probes/Q-Tracks, AABB, CLSI, CLIA, TJC, and ISO 15189.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <StarterLibraryPicker
+              onAddSelected={handleAddFromLibrary}
+              adding={addingFromLibrary}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // -- Normal Dashboard/Data View ---------------------------------------------
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -396,7 +717,7 @@ export default function VeritaBenchPIPage() {
         </button>
       </div>
 
-      {/* ── Dashboard Tab ──────────────────────────────────────────────────── */}
+      {/* -- Dashboard Tab -------------------------------------------------- */}
       {tab === "dashboard" && (
         <div className="space-y-6">
           {/* Summary Cards */}
@@ -528,16 +849,9 @@ export default function VeritaBenchPIPage() {
         </div>
       )}
 
-      {/* ── Data Entry Tab ─────────────────────────────────────────────────── */}
+      {/* -- Data Entry Tab ------------------------------------------------- */}
       {tab === "data" && (
         <div className="space-y-6">
-          {/* First-time message */}
-          {seeded && departments.length > 0 && metrics.length > 0 && entries.length === 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
-              First time? Default departments and quality metrics have been created for you. Customize them below or edit benchmark thresholds for each metric.
-            </div>
-          )}
-
           {/* Month selector */}
           <div className="flex items-center gap-3 flex-wrap">
             <Select value={String(entryMonth)} onValueChange={v => setEntryMonth(parseInt(v))}>
@@ -552,6 +866,14 @@ export default function VeritaBenchPIPage() {
             </Select>
             <span className="text-sm text-muted-foreground">{year}</span>
             <div className="ml-auto flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLibraryDialog(true)}
+                disabled={readOnly}
+              >
+                <BookOpen size={14} className="mr-1.5" />Browse Metric Library
+              </Button>
               <Button variant="outline" size="sm" onClick={openAddMetric} disabled={readOnly || !selectedDeptId}>
                 <Plus size={14} className="mr-1.5" />Add Metric
               </Button>
@@ -565,9 +887,18 @@ export default function VeritaBenchPIPage() {
             <div className="text-center py-12">
               <Activity size={40} className="mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">No metrics configured for this department.</p>
-              <Button onClick={openAddMetric} disabled={readOnly || !selectedDeptId} style={{ backgroundColor: "#01696F" }}>
-                <Plus size={14} className="mr-1.5" />Add Metric
-              </Button>
+              <div className="flex gap-2 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowLibraryDialog(true)}
+                  disabled={readOnly}
+                >
+                  <BookOpen size={14} className="mr-1.5" />Browse Metric Library
+                </Button>
+                <Button onClick={openAddMetric} disabled={readOnly || !selectedDeptId} style={{ backgroundColor: "#01696F" }}>
+                  <Plus size={14} className="mr-1.5" />Add Metric
+                </Button>
+              </div>
             </div>
           ) : (
             <>
@@ -655,7 +986,7 @@ export default function VeritaBenchPIPage() {
         </div>
       )}
 
-      {/* ── Metric Add/Edit Dialog ─────────────────────────────────────────── */}
+      {/* -- Metric Add/Edit Dialog ----------------------------------------- */}
       <Dialog open={showMetricDialog} onOpenChange={setShowMetricDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -715,7 +1046,7 @@ export default function VeritaBenchPIPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Metric Confirm ──────────────────────────────────────────── */}
+      {/* -- Delete Metric Confirm ------------------------------------------ */}
       <AlertDialog open={!!deleteMetricTarget} onOpenChange={() => setDeleteMetricTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -730,6 +1061,28 @@ export default function VeritaBenchPIPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* -- Browse Metric Library Dialog ----------------------------------- */}
+      <Dialog open={showLibraryDialog} onOpenChange={setShowLibraryDialog}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen size={18} style={{ color: "#01696F" }} />
+              PI Metric Starter Library
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Select metrics to add to your PI program. Already-added metrics are grayed out.
+            </p>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            <StarterLibraryPicker
+              onAddSelected={handleAddFromLibrary}
+              adding={addingFromLibrary}
+              existingMetricNames={existingMetricNames}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

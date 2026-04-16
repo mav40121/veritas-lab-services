@@ -442,56 +442,10 @@ export function registerVeritaBenchRoutes(
   // PI DASHBOARD - Performance Improvement quality metrics
   // ═══════════════════════════════════════════════════════════════════════
 
-  const PI_DEFAULT_DEPARTMENTS = ["Blood Bank", "Microbiology", "Core Lab"];
-
-  const PI_DEFAULT_METRICS: Record<string, { name: string; unit: string; direction: string }[]> = {
-    "Blood Bank": [
-      { name: "Wasted Product Rate", unit: "%", direction: "lower_is_better" },
-      { name: "Transfusion Reaction Rate", unit: "per 1000 units", direction: "lower_is_better" },
-      { name: "Crossmatch-to-Transfusion Ratio", unit: "ratio", direction: "lower_is_better" },
-    ],
-    "Microbiology": [
-      { name: "C. difficile Rate", unit: "per 10,000 patient days", direction: "lower_is_better" },
-      { name: "MRSA Rate", unit: "per 10,000 patient days", direction: "lower_is_better" },
-      { name: "Blood Culture Contamination Rate", unit: "%", direction: "lower_is_better" },
-      { name: "Urine Contamination Rate", unit: "%", direction: "lower_is_better" },
-    ],
-    "Core Lab": [
-      { name: "Avg TAT - Received to Verified", unit: "min", direction: "lower_is_better" },
-      { name: "Avg TAT - Ordered to Collected", unit: "min", direction: "lower_is_better" },
-      { name: "Avg TAT - Collected to Received", unit: "min", direction: "lower_is_better" },
-      { name: "Avg TAT - Received to Resulted", unit: "min", direction: "lower_is_better" },
-      { name: "Avg TAT - Resulted to Verified", unit: "min", direction: "lower_is_better" },
-      { name: "Avg TAT - Ordered to Verified", unit: "min", direction: "lower_is_better" },
-      { name: "Critical Value Notification Rate", unit: "%", direction: "higher_is_better" },
-    ],
-  };
-
-  function seedPIDepartments(accountId: number) {
-    const existing = sqlite.prepare("SELECT id FROM pi_departments WHERE account_id = ?").all(accountId);
-    if (existing.length > 0) return;
-    const now = new Date().toISOString();
-    for (let i = 0; i < PI_DEFAULT_DEPARTMENTS.length; i++) {
-      const deptName = PI_DEFAULT_DEPARTMENTS[i];
-      const deptResult = sqlite.prepare(
-        "INSERT INTO pi_departments (account_id, name, sort_order, active, created_at) VALUES (?, ?, ?, 1, ?)"
-      ).run(accountId, deptName, i, now);
-      const deptId = Number(deptResult.lastInsertRowid);
-      const metrics = PI_DEFAULT_METRICS[deptName] || [];
-      for (let j = 0; j < metrics.length; j++) {
-        const m = metrics[j];
-        sqlite.prepare(
-          "INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, sort_order, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
-        ).run(deptId, accountId, m.name, m.unit, m.direction, j, now);
-      }
-    }
-  }
-
-  // GET /api/pi/departments - list departments (auto-seed defaults if none exist)
+  // GET /api/pi/departments - list departments (returns empty array if none exist)
   app.get("/api/pi/departments", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    seedPIDepartments(accountId);
     const rows = sqlite.prepare(
       "SELECT * FROM pi_departments WHERE account_id = ? ORDER BY sort_order ASC, id ASC"
     ).all(accountId);
