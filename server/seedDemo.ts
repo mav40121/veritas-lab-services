@@ -218,6 +218,33 @@ export async function seedDemoData() {
   sqlite.prepare("DELETE FROM inventory_items WHERE account_id = ?").run(demoUserId);
   seedInventoryData(sqlite, demoUserId, now);
 
+  // ─── VeritaStaff: Lab + Employees ──────────────────────────────────────────
+  const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(demoUserId);
+  if (!existingStaffLab) {
+    seedVeritaStaffData(sqlite, demoUserId, now);
+  }
+
+  // ─── VeritaLab: Certificates ───────────────────────────────────────────────
+  const existingCerts = sqlite.prepare("SELECT id FROM lab_certificates WHERE user_id = ?").get(demoUserId);
+  if (!existingCerts) {
+    seedLabCertificates(sqlite, demoUserId, now);
+  }
+
+  // ─── PI Dashboard: Departments + Metrics + Entries ─────────────────────────
+  const existingPIDept = sqlite.prepare("SELECT id FROM pi_departments WHERE account_id = ?").get(demoUserId);
+  if (!existingPIDept) {
+    seedPIDashboard(sqlite, demoUserId, now);
+  }
+
+  // ─── Complete remaining competency assessments ─────────────────────────────
+  seedCompetencyCompletions(sqlite, demoUserId, now);
+
+  // ─── Bulk up CUMSUM entries ────────────────────────────────────────────────
+  seedAdditionalCumsumEntries(sqlite, demoUserId, now);
+
+  // ─── Clean up PT v2 test entry ─────────────────────────────────────────────
+  sqlite.prepare("DELETE FROM pt_enrollments_v2 WHERE user_id = ? AND program_name = 'TEST ENTRY'").run(demoUserId);
+
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
 }
 
@@ -1068,4 +1095,259 @@ function seedInventoryData(sqlite: any, demoUserId: number, now: string) {
   });
   seedBatch();
   console.log(`[seed] VeritaBench inventory data seeded (${items.length} items with burn-rate model)`);
+}
+
+// ─── VeritaStaff: Lab + Employees ────────────────────────────────────────────
+function seedVeritaStaffData(sqlite: any, demoUserId: number, now: string) {
+  const labResult = sqlite.prepare(`
+    INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, complexity, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    demoUserId,
+    "Riverside Regional Medical Center - Core Laboratory",
+    "22D0999999",
+    "1200 Medical Center Drive",
+    "Nashville", "TN", "37203",
+    "(615) 555-0100",
+    "compliance",
+    "CAP",
+    "high",
+    now, now
+  );
+  const labId = Number(labResult.lastInsertRowid);
+
+  const empStmt = sqlite.prepare(`
+    INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+  `);
+
+  const employees = [
+    { last: "Veri", first: "Michael", mi: "A", title: "Laboratory Director / Technical Consultant", hire: "2024-01-15", quals: "MLS(ASCP), MS, MBA, CPHQ", complexity: "H" },
+    { last: "Martinez", first: "Jennifer", mi: "L", title: "Medical Laboratory Scientist", hire: "2020-03-15", quals: "MLS(ASCP)", complexity: "H" },
+    { last: "Chen", first: "Robert", mi: null, title: "Medical Technologist", hire: "2018-06-01", quals: "MT(ASCP)", complexity: "H" },
+    { last: "Williams", first: "Sarah", mi: "M", title: "Medical Laboratory Technician", hire: "2022-01-10", quals: "MLT(ASCP)", complexity: "M" },
+    { last: "Nguyen", first: "David", mi: "T", title: "Medical Laboratory Scientist", hire: "2019-09-20", quals: "MLS(ASCP)", complexity: "H" },
+    { last: "Thompson", first: "Lisa", mi: "R", title: "Laboratory Assistant", hire: "2023-05-01", quals: "CLA(ASCP)", complexity: "W" },
+  ];
+
+  for (const emp of employees) {
+    empStmt.run(labId, demoUserId, emp.last, emp.first, emp.mi, emp.title, emp.hire, emp.quals, emp.complexity, 1, now, now);
+  }
+
+  console.log("[seed] VeritaStaff data seeded (1 lab + 6 employees)");
+}
+
+// ─── VeritaLab: Certificates ─────────────────────────────────────────────────
+function seedLabCertificates(sqlite: any, demoUserId: number, now: string) {
+  const certStmt = sqlite.prepare(`
+    INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes, is_auto_populated, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+  `);
+
+  const certs = [
+    { type: "clia", name: "CLIA Certificate of Compliance", number: "22D0999999", body: "Centers for Medicare & Medicaid Services (CMS)", issued: "2024-03-15", expires: "2026-03-14", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Certificate of Compliance — high complexity testing authorized" },
+    { type: "cap", name: "CAP Laboratory Accreditation", number: "CAP-9876543", body: "College of American Pathologists", issued: "2024-06-01", expires: "2026-06-01", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Full accreditation with commendation" },
+    { type: "state", name: "Tennessee State Laboratory License", number: "TN-LAB-2024-00456", body: "Tennessee Department of Health", issued: "2024-01-01", expires: "2025-12-31", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Annual renewal required" },
+  ];
+
+  for (const cert of certs) {
+    certStmt.run(demoUserId, cert.type, cert.name, cert.number, cert.body, cert.issued, cert.expires, cert.director, cert.notes, now, now);
+  }
+
+  console.log("[seed] VeritaLab certificates seeded (3 certificates)");
+}
+
+// ─── PI Dashboard: Departments + Metrics + Entries ───────────────────────────
+function seedPIDashboard(sqlite: any, demoUserId: number, now: string) {
+  // Create departments
+  const dept1Result = sqlite.prepare(
+    "INSERT INTO pi_departments (account_id, name, sort_order, active) VALUES (?, ?, ?, 1)"
+  ).run(demoUserId, "Chemistry", 1);
+  const chemDeptId = Number(dept1Result.lastInsertRowid);
+
+  const dept2Result = sqlite.prepare(
+    "INSERT INTO pi_departments (account_id, name, sort_order, active) VALUES (?, ?, ?, 1)"
+  ).run(demoUserId, "Hematology", 2);
+  const hemeDeptId = Number(dept2Result.lastInsertRowid);
+
+  // Create metrics
+  const metricStmt = sqlite.prepare(`
+    INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+
+  const metrics = [
+    { deptId: chemDeptId, name: "Specimen Rejection Rate", unit: "%", direction: "lower_is_better", green: 1.0, yellow: 2.0, red: 2.0, sort: 1 },
+    { deptId: chemDeptId, name: "Critical Value Notification (≤15 min)", unit: "%", direction: "higher_is_better", green: 95.0, yellow: 90.0, red: 90.0, sort: 2 },
+    { deptId: chemDeptId, name: "Turnaround Time — BMP (≤60 min)", unit: "%", direction: "higher_is_better", green: 90.0, yellow: 85.0, red: 85.0, sort: 3 },
+    { deptId: hemeDeptId, name: "CBC TAT (≤45 min)", unit: "%", direction: "higher_is_better", green: 92.0, yellow: 87.0, red: 87.0, sort: 1 },
+    { deptId: hemeDeptId, name: "QC Recovery Rate", unit: "%", direction: "higher_is_better", green: 98.0, yellow: 95.0, red: 95.0, sort: 2 },
+    { deptId: hemeDeptId, name: "Specimen Hemolysis Rate", unit: "%", direction: "lower_is_better", green: 3.0, yellow: 5.0, red: 5.0, sort: 3 },
+  ];
+
+  const metricIds: number[] = [];
+  for (const m of metrics) {
+    const result = metricStmt.run(m.deptId, demoUserId, m.name, m.unit, m.direction, m.green, m.yellow, m.red, m.sort);
+    metricIds.push(Number(result.lastInsertRowid));
+  }
+
+  // Create entries — 6 months (Oct 2025 through Mar 2026) for each metric
+  const entryStmt = sqlite.prepare(`
+    INSERT INTO pi_entries (metric_id, account_id, year, month, value, volume, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const months = [
+    { year: 2025, month: 10 }, { year: 2025, month: 11 }, { year: 2025, month: 12 },
+    { year: 2026, month: 1 }, { year: 2026, month: 2 }, { year: 2026, month: 3 },
+  ];
+
+  // Values and volumes per metric (index matches metricIds)
+  const metricData: { values: number[]; volumes: (number | null)[] }[] = [
+    // Chemistry - Specimen Rejection Rate
+    { values: [1.8, 1.6, 1.9, 1.4, 1.3, 1.1], volumes: [4200, 4100, 3800, 4300, 4150, 4400] },
+    // Chemistry - Critical Value Notification
+    { values: [92.0, 93.5, 91.0, 94.0, 95.5, 96.0], volumes: [85, 92, 78, 88, 90, 95] },
+    // Chemistry - BMP TAT
+    { values: [87.0, 88.5, 85.0, 89.0, 91.0, 92.5], volumes: [2100, 2050, 1900, 2200, 2150, 2300] },
+    // Hematology - CBC TAT
+    { values: [90.0, 91.5, 88.0, 92.0, 93.5, 94.0], volumes: [3100, 3050, 2800, 3200, 3150, 3300] },
+    // Hematology - QC Recovery
+    { values: [97.0, 97.5, 96.0, 98.0, 98.5, 99.0], volumes: [null, null, null, null, null, null] },
+    // Hematology - Hemolysis Rate
+    { values: [4.2, 3.8, 4.5, 3.5, 3.2, 2.8], volumes: [3100, 3050, 2800, 3200, 3150, 3300] },
+  ];
+
+  for (let mi = 0; mi < metricIds.length; mi++) {
+    for (let mo = 0; mo < months.length; mo++) {
+      entryStmt.run(metricIds[mi], demoUserId, months[mo].year, months[mo].month, metricData[mi].values[mo], metricData[mi].volumes[mo], null);
+    }
+  }
+
+  console.log("[seed] PI Dashboard seeded (2 departments, 6 metrics, 36 entries)");
+}
+
+// ─── Complete remaining competency assessments ───────────────────────────────
+function seedCompetencyCompletions(sqlite: any, demoUserId: number, now: string) {
+  // Find the competency program for this user
+  const program = sqlite.prepare("SELECT id FROM competency_programs WHERE user_id = ?").get(demoUserId) as { id: number } | undefined;
+  if (!program) return;
+
+  // Find the method group for this program
+  const methodGroup = sqlite.prepare("SELECT id FROM competency_method_groups WHERE program_id = ?").get(program.id) as { id: number } | undefined;
+  if (!methodGroup) return;
+
+  // Get all employees for this user
+  const employees = sqlite.prepare("SELECT id, name, lis_initials FROM competency_employees WHERE user_id = ?").all(demoUserId) as { id: number; name: string; lis_initials: string }[];
+
+  // Get employees who already have assessments
+  const assessed = sqlite.prepare("SELECT employee_id FROM competency_assessments WHERE program_id = ?").all(program.id) as { employee_id: number }[];
+  const assessedIds = new Set(assessed.map((a: any) => a.employee_id));
+
+  // Map employee names to assessment dates and initials
+  const employeeConfig: Record<string, { date: string; initials: string }> = {
+    "Robert Chen": { date: "2026-02-10", initials: "RC" },
+    "Sarah Williams": { date: "2026-02-15", initials: "SW" },
+    "David Nguyen": { date: "2026-02-20", initials: "DN" },
+  };
+
+  for (const emp of employees) {
+    if (assessedIds.has(emp.id)) continue;
+    const config = employeeConfig[emp.name];
+    if (!config) continue;
+
+    // Create assessment
+    const assessResult = sqlite.prepare(`
+      INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, employee_acknowledged, supervisor_acknowledged, created_at)
+      VALUES (?, ?, 'annual', ?, 'Michael Veri, MS, MBA, MLS(ASCP), CPHQ', 'Technical Consultant', 'MV', 'technical', 'pass', 1, 1, ?)
+    `).run(program.id, emp.id, config.date, now);
+    const assessmentId = Number(assessResult.lastInsertRowid);
+
+    // Create 6 assessment items (same pattern as existing seed)
+    const itemStmt = sqlite.prepare(`
+      INSERT INTO competency_assessment_items (assessment_id, method_number, element_number, method_group_id, item_label, item_description, evidence, date_met, employee_initials, supervisor_initials, passed,
+        el1_specimen_id, el2_evidence, el2_date, el3_qc_date, el4_date_observed, el5_sample_id, el5_sample_type, el5_acceptable, el6_quiz_id, el6_score, el6_date_taken)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const elements = [
+      { num: 1, label: "Direct Observation of Routine Patient Test Performance", evidence: "Observed processing chemistry panel on VITROS 5600", date: "2026-01-15",
+        el1_specimen_id: "0326:C147", el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      { num: 2, label: "Monitoring, Recording and Reporting of Test Results", evidence: "0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented", date: "2026-01-16",
+        el1_specimen_id: null, el2_evidence: "0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented", el2_date: "2026-01-16", el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      { num: 3, label: "QC Performance", evidence: "QC run documented in LIS on date observed", date: "2026-01-17",
+        el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: "2026-01-10", el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      { num: 4, label: "Direct Observation of Instrument Maintenance", evidence: "Observed daily maintenance on VITROS 5600", date: "2026-01-17",
+        el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: "2026-01-15", el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      { num: 5, label: "Blind/PT Sample Performance", evidence: "CAP PT survey, all analytes acceptable", date: "2026-01-18",
+        el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: "CAP-2026-C-01", el5_sample_type: "CAP PT Survey", el5_acceptable: 1, el6_quiz_id: null, el6_score: null, el6_date_taken: null },
+      { num: 6, label: "Problem-Solving Assessment (Quiz)", evidence: "Quiz Q-AU5800-001, 2/2 correct, 100%", date: "2026-01-18",
+        el1_specimen_id: null, el2_evidence: null, el2_date: null, el3_qc_date: null, el4_date_observed: null, el5_sample_id: null, el5_sample_type: null, el5_acceptable: null, el6_quiz_id: "Q-AU5800-001", el6_score: 100, el6_date_taken: "2026-01-18" },
+    ];
+
+    for (const el of elements) {
+      itemStmt.run(assessmentId, el.num, el.num, methodGroup.id, el.label, el.label, el.evidence, el.date, config.initials, "MV",
+        el.el1_specimen_id, el.el2_evidence, el.el2_date, el.el3_qc_date, el.el4_date_observed, el.el5_sample_id, el.el5_sample_type, el.el5_acceptable, el.el6_quiz_id, el.el6_score, el.el6_date_taken);
+    }
+
+    console.log(`[seed] Competency assessment created for ${emp.name}`);
+  }
+}
+
+// ─── Bulk up CUMSUM entries (entries 4-25) ───────────────────────────────────
+function seedAdditionalCumsumEntries(sqlite: any, demoUserId: number, now: string) {
+  const tracker = sqlite.prepare("SELECT id FROM cumsum_trackers WHERE user_id = ?").get(demoUserId) as { id: number } | undefined;
+  if (!tracker) return;
+
+  const entryCount = sqlite.prepare("SELECT COUNT(*) as cnt FROM cumsum_entries WHERE tracker_id = ?").get(tracker.id) as { cnt: number };
+  if (entryCount.cnt > 3) return; // Already bulked up
+
+  const entryStmt = sqlite.prepare(`
+    INSERT INTO cumsum_entries (tracker_id, year, lot_label, old_lot_number, new_lot_number,
+      old_lot_geomean, new_lot_geomean, difference, cumsum, verdict, specimen_data, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Entries 4-25: continuing from LOT-2026-A (geomean 26.0), cumsum at -2.5
+  const entries = [
+    { num: 4, diff: 0.8, cumsum: -1.7, verdict: "ACCEPT", oldGeo: 26.0, newGeo: 26.8 },
+    { num: 5, diff: 0.5, cumsum: -1.2, verdict: "ACCEPT", oldGeo: 26.8, newGeo: 27.3 },
+    { num: 6, diff: 0.3, cumsum: -0.9, verdict: "ACCEPT", oldGeo: 27.3, newGeo: 27.6 },
+    { num: 7, diff: -0.4, cumsum: -1.3, verdict: "ACCEPT", oldGeo: 27.6, newGeo: 27.2 },
+    { num: 8, diff: 0.7, cumsum: -0.6, verdict: "ACCEPT", oldGeo: 27.2, newGeo: 27.9 },
+    { num: 9, diff: 0.2, cumsum: -0.4, verdict: "ACCEPT", oldGeo: 27.9, newGeo: 28.1 },
+    { num: 10, diff: -0.3, cumsum: -0.7, verdict: "ACCEPT", oldGeo: 28.1, newGeo: 27.8 },
+    { num: 11, diff: 0.6, cumsum: -0.1, verdict: "ACCEPT", oldGeo: 27.8, newGeo: 28.4 },
+    { num: 12, diff: 0.4, cumsum: 0.3, verdict: "ACCEPT", oldGeo: 28.4, newGeo: 28.8 },
+    { num: 13, diff: -0.5, cumsum: -0.2, verdict: "ACCEPT", oldGeo: 28.8, newGeo: 28.3 },
+    { num: 14, diff: 0.3, cumsum: 0.1, verdict: "ACCEPT", oldGeo: 28.3, newGeo: 28.6 },
+    { num: 15, diff: 0.8, cumsum: 0.9, verdict: "ACCEPT", oldGeo: 28.6, newGeo: 29.4 },
+    { num: 16, diff: 0.6, cumsum: 1.5, verdict: "ACCEPT", oldGeo: 29.4, newGeo: 30.0 },
+    { num: 17, diff: 0.9, cumsum: 2.4, verdict: "ACCEPT", oldGeo: 30.0, newGeo: 30.9 },
+    { num: 18, diff: 0.7, cumsum: 3.1, verdict: "REVIEW", oldGeo: 30.9, newGeo: 31.6 },
+    { num: 19, diff: -1.2, cumsum: 1.9, verdict: "ACCEPT", oldGeo: 31.6, newGeo: 30.4 },
+    { num: 20, diff: -0.4, cumsum: 1.5, verdict: "ACCEPT", oldGeo: 30.4, newGeo: 30.0 },
+    { num: 21, diff: -0.6, cumsum: 0.9, verdict: "ACCEPT", oldGeo: 30.0, newGeo: 29.4 },
+    { num: 22, diff: 0.2, cumsum: 1.1, verdict: "ACCEPT", oldGeo: 29.4, newGeo: 29.6 },
+    { num: 23, diff: -0.3, cumsum: 0.8, verdict: "ACCEPT", oldGeo: 29.6, newGeo: 29.3 },
+    { num: 24, diff: 0.1, cumsum: 0.9, verdict: "ACCEPT", oldGeo: 29.3, newGeo: 29.4 },
+    { num: 25, diff: -0.2, cumsum: 0.7, verdict: "ACCEPT", oldGeo: 29.4, newGeo: 29.2 },
+  ];
+
+  // Lot letters: entry 4 = B, entry 5 = C, etc.
+  const lotLetter = (num: number) => String.fromCharCode(64 + num - 2); // 4->B, 5->C, ...
+
+  for (const e of entries) {
+    const oldLot = `LOT-2026-${lotLetter(e.num - 1)}`;
+    const newLot = `LOT-2026-${lotLetter(e.num)}`;
+    entryStmt.run(
+      tracker.id, 2026, `Lot Change #${e.num}`, oldLot, newLot,
+      e.oldGeo, e.newGeo, e.diff, e.cumsum, e.verdict,
+      JSON.stringify(generateSpecimenData(20, e.oldGeo, e.newGeo)),
+      null, now
+    );
+  }
+
+  console.log("[seed] CUMSUM entries bulked up (entries 4-25)");
 }
