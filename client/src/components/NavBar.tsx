@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 // Products dropdown items
 const productLinks = [
-  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Validation", badge: "Live", badgeColor: "emerald" },
+  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Validation & CUMSUM", badge: "Live", badgeColor: "emerald" },
   { href: "/veritascan", label: "VeritaScan\u2122", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
   { href: "/veritamap", label: "VeritaMap\u2122", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
   { href: "/veritatrack-app", label: "VeritaTrack\u2122", desc: "Regulatory Calendar", badge: "New", badgeColor: "emerald" },
@@ -23,7 +23,7 @@ const allMobileLinks = [
   { href: "/veritaassure", label: "VeritaAssure\u2122" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck™" },
-  { href: "/cumsum", label: "CUMSUM Tracker" },
+  { href: "/veritacheck/cumsum", label: "VeritaCheck™ CUMSUM" },
   { href: "/veritascan", label: "VeritaScan™" },
   { href: "/veritamap", label: "VeritaMap™" },
   { href: "/veritacomp", label: "VeritaComp™" },
@@ -97,7 +97,7 @@ export function NavBar() {
               <button
                 className={cn(
                   "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  ["/veritaassure","/veritacheck","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/book","/cumsum"].includes(location)
+                  ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/book"].includes(location)
                     ? "text-foreground bg-secondary"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 )}

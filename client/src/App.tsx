@@ -304,7 +304,7 @@ function AppContent() {
           <Route path="/veritalab-app" component={VeritaLabAppPage} />
           <Route path="/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/veritapolicy" component={VeritaPolicyPage} />
-          <Route path="/cumsum" component={CumsumPage} />
+          <Route path="/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritabench" component={VeritaBenchPage} />
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
