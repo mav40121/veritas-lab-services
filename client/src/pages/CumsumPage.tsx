@@ -80,7 +80,7 @@ export default function CumsumPage() {
 
   const fetchTrackers = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/cumsum/trackers`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers`, { headers: authHeaders() });
       if (res.ok) setTrackers(await res.json());
     } catch { }
     setLoading(false);
@@ -89,7 +89,7 @@ export default function CumsumPage() {
   useEffect(() => { if (isLoggedIn) fetchTrackers(); else setLoading(false); }, [isLoggedIn, fetchTrackers]);
 
   const fetchTracker = async (id: number) => {
-    const res = await fetch(`${API_BASE}/api/cumsum/trackers/${id}`, { headers: authHeaders() });
+    const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers/${id}`, { headers: authHeaders() });
     if (res.ok) {
       const data = await res.json();
       setSelectedTracker(data);
@@ -98,7 +98,7 @@ export default function CumsumPage() {
 
   const createTracker = async () => {
     if (!newInstrument.trim()) { toast({ title: "Enter instrument name", variant: "destructive" }); return; }
-    const res = await fetch(`${API_BASE}/api/cumsum/trackers`, {
+    const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ instrumentName: newInstrument.trim(), analyte: newAnalyte }),
@@ -113,7 +113,7 @@ export default function CumsumPage() {
   };
 
   const deleteTracker = async (id: number) => {
-    await fetch(`${API_BASE}/api/cumsum/trackers/${id}`, { method: "DELETE", headers: authHeaders() });
+    await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers/${id}`, { method: "DELETE", headers: authHeaders() });
     setSelectedTracker(null);
     fetchTrackers();
   };
@@ -172,7 +172,7 @@ export default function CumsumPage() {
         specimenData: filledSpecimens,
         notes: entryNotes,
       };
-      const res = await fetch(`${API_BASE}/api/cumsum/trackers/${selectedTracker.id}/entries`, {
+      const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers/${selectedTracker.id}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(body),
@@ -193,7 +193,7 @@ export default function CumsumPage() {
     if (!selectedTracker) return;
     setExcelLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/cumsum/trackers/${selectedTracker.id}/excel`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers/${selectedTracker.id}/excel`, { headers: authHeaders() });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       saveAs(blob, `CUMSUM_${selectedTracker.instrument_name}.xlsx`);
@@ -207,7 +207,7 @@ export default function CumsumPage() {
     try {
       const lastEntry = selectedTracker.entries?.[selectedTracker.entries.length - 1];
       const specimenData = lastEntry?.specimen_data ? JSON.parse(lastEntry.specimen_data) : [];
-      const res = await fetch(`${API_BASE}/api/cumsum/trackers/${selectedTracker.id}/pdf`, {
+      const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers/${selectedTracker.id}/pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ currentSpecimens: specimenData }),
