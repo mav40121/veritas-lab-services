@@ -437,4 +437,329 @@ export function registerVeritaBenchRoutes(
       res.status(500).json({ error: "Export failed: " + err.message });
     }
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PI DASHBOARD - Performance Improvement quality metrics
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const PI_DEFAULT_DEPARTMENTS = ["Blood Bank", "Microbiology", "Core Lab"];
+
+  const PI_DEFAULT_METRICS: Record<string, { name: string; unit: string; direction: string }[]> = {
+    "Blood Bank": [
+      { name: "Wasted Product Rate", unit: "%", direction: "lower_is_better" },
+      { name: "Transfusion Reaction Rate", unit: "per 1000 units", direction: "lower_is_better" },
+      { name: "Crossmatch-to-Transfusion Ratio", unit: "ratio", direction: "lower_is_better" },
+    ],
+    "Microbiology": [
+      { name: "C. difficile Rate", unit: "per 10,000 patient days", direction: "lower_is_better" },
+      { name: "MRSA Rate", unit: "per 10,000 patient days", direction: "lower_is_better" },
+      { name: "Blood Culture Contamination Rate", unit: "%", direction: "lower_is_better" },
+      { name: "Urine Contamination Rate", unit: "%", direction: "lower_is_better" },
+    ],
+    "Core Lab": [
+      { name: "Avg TAT - Received to Verified", unit: "min", direction: "lower_is_better" },
+      { name: "Avg TAT - Ordered to Collected", unit: "min", direction: "lower_is_better" },
+      { name: "Avg TAT - Collected to Received", unit: "min", direction: "lower_is_better" },
+      { name: "Avg TAT - Received to Resulted", unit: "min", direction: "lower_is_better" },
+      { name: "Avg TAT - Resulted to Verified", unit: "min", direction: "lower_is_better" },
+      { name: "Avg TAT - Ordered to Verified", unit: "min", direction: "lower_is_better" },
+      { name: "Critical Value Notification Rate", unit: "%", direction: "higher_is_better" },
+    ],
+  };
+
+  function seedPIDepartments(accountId: number) {
+    const existing = sqlite.prepare("SELECT id FROM pi_departments WHERE account_id = ?").all(accountId);
+    if (existing.length > 0) return;
+    const now = new Date().toISOString();
+    for (let i = 0; i < PI_DEFAULT_DEPARTMENTS.length; i++) {
+      const deptName = PI_DEFAULT_DEPARTMENTS[i];
+      const deptResult = sqlite.prepare(
+        "INSERT INTO pi_departments (account_id, name, sort_order, active, created_at) VALUES (?, ?, ?, 1, ?)"
+      ).run(accountId, deptName, i, now);
+      const deptId = Number(deptResult.lastInsertRowid);
+      const metrics = PI_DEFAULT_METRICS[deptName] || [];
+      for (let j = 0; j < metrics.length; j++) {
+        const m = metrics[j];
+        sqlite.prepare(
+          "INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, sort_order, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
+        ).run(deptId, accountId, m.name, m.unit, m.direction, j, now);
+      }
+    }
+  }
+
+  // GET /api/pi/departments - list departments (auto-seed defaults if none exist)
+  app.get("/api/pi/departments", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    seedPIDepartments(accountId);
+    const rows = sqlite.prepare(
+      "SELECT * FROM pi_departments WHERE account_id = ? ORDER BY sort_order ASC, id ASC"
+    ).all(accountId);
+    res.json(rows);
+  });
+
+  // POST /api/pi/departments - create department
+  app.post("/api/pi/departments", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { name, sort_order } = req.body;
+    if (!name) return res.status(400).json({ error: "name is required" });
+    const now = new Date().toISOString();
+    try {
+      const result = sqlite.prepare(
+        "INSERT INTO pi_departments (account_id, name, sort_order, active, created_at) VALUES (?, ?, ?, 1, ?)"
+      ).run(accountId, name, sort_order ?? 0, now);
+      const row = sqlite.prepare("SELECT * FROM pi_departments WHERE id = ?").get(Number(result.lastInsertRowid));
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/pi/departments/:id - update department
+  app.put("/api/pi/departments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM pi_departments WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!existing) return res.status(404).json({ error: "Department not found" });
+    const { name, sort_order, active } = req.body;
+    try {
+      sqlite.prepare(
+        "UPDATE pi_departments SET name = ?, sort_order = ?, active = ? WHERE id = ? AND account_id = ?"
+      ).run(name ?? (existing as any).name, sort_order ?? (existing as any).sort_order, active ?? (existing as any).active, id, accountId);
+      const row = sqlite.prepare("SELECT * FROM pi_departments WHERE id = ?").get(id);
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/pi/departments/:id - delete department (cascade metrics + entries)
+  app.delete("/api/pi/departments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM pi_departments WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!existing) return res.status(404).json({ error: "Department not found" });
+    const metricIds = sqlite.prepare("SELECT id FROM pi_metrics WHERE department_id = ?").all(id) as any[];
+    for (const m of metricIds) {
+      sqlite.prepare("DELETE FROM pi_entries WHERE metric_id = ?").run(m.id);
+    }
+    sqlite.prepare("DELETE FROM pi_metrics WHERE department_id = ?").run(id);
+    sqlite.prepare("DELETE FROM pi_departments WHERE id = ?").run(id);
+    res.json({ success: true });
+  });
+
+  // GET /api/pi/metrics - list metrics for a department
+  app.get("/api/pi/metrics", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const departmentId = req.query.department_id;
+    if (!departmentId) return res.status(400).json({ error: "department_id is required" });
+    const rows = sqlite.prepare(
+      "SELECT * FROM pi_metrics WHERE department_id = ? AND account_id = ? ORDER BY sort_order ASC, id ASC"
+    ).all(departmentId, accountId);
+    res.json(rows);
+  });
+
+  // POST /api/pi/metrics - create metric
+  app.post("/api/pi/metrics", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { department_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order } = req.body;
+    if (!department_id || !name) return res.status(400).json({ error: "department_id and name are required" });
+    const now = new Date().toISOString();
+    try {
+      const result = sqlite.prepare(
+        "INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)"
+      ).run(department_id, accountId, name, unit ?? "%", direction ?? "lower_is_better", benchmark_green ?? null, benchmark_yellow ?? null, benchmark_red ?? null, sort_order ?? 0, now);
+      const row = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ?").get(Number(result.lastInsertRowid));
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/pi/metrics/:id - update metric (including benchmark thresholds)
+  app.put("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ? AND account_id = ?").get(id, accountId) as any;
+    if (!existing) return res.status(404).json({ error: "Metric not found" });
+    const { name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active } = req.body;
+    try {
+      sqlite.prepare(
+        "UPDATE pi_metrics SET name = ?, unit = ?, direction = ?, benchmark_green = ?, benchmark_yellow = ?, benchmark_red = ?, sort_order = ?, active = ? WHERE id = ? AND account_id = ?"
+      ).run(
+        name ?? existing.name, unit ?? existing.unit, direction ?? existing.direction,
+        benchmark_green !== undefined ? benchmark_green : existing.benchmark_green,
+        benchmark_yellow !== undefined ? benchmark_yellow : existing.benchmark_yellow,
+        benchmark_red !== undefined ? benchmark_red : existing.benchmark_red,
+        sort_order ?? existing.sort_order, active ?? existing.active, id, accountId
+      );
+      const row = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ?").get(id);
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/pi/metrics/:id - delete metric (cascade entries)
+  app.delete("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!existing) return res.status(404).json({ error: "Metric not found" });
+    sqlite.prepare("DELETE FROM pi_entries WHERE metric_id = ?").run(id);
+    sqlite.prepare("DELETE FROM pi_metrics WHERE id = ?").run(id);
+    res.json({ success: true });
+  });
+
+  // GET /api/pi/entries - get all entries for a year/department
+  app.get("/api/pi/entries", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { year, department_id } = req.query;
+    if (!year || !department_id) return res.status(400).json({ error: "year and department_id are required" });
+    const metricIds = sqlite.prepare("SELECT id FROM pi_metrics WHERE department_id = ? AND account_id = ?").all(department_id, accountId) as any[];
+    if (metricIds.length === 0) return res.json([]);
+    const ids = metricIds.map((m: any) => m.id);
+    const placeholders = ids.map(() => "?").join(",");
+    const rows = sqlite.prepare(
+      `SELECT * FROM pi_entries WHERE metric_id IN (${placeholders}) AND year = ? AND account_id = ? ORDER BY month ASC`
+    ).all(...ids, year, accountId);
+    res.json(rows);
+  });
+
+  // POST /api/pi/entries - upsert entry (metric_id + year + month unique)
+  app.post("/api/pi/entries", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { metric_id, year, month, value, volume, notes } = req.body;
+    if (!metric_id || !year || !month) return res.status(400).json({ error: "metric_id, year, and month are required" });
+    const now = new Date().toISOString();
+    try {
+      sqlite.prepare(`
+        INSERT INTO pi_entries (metric_id, account_id, year, month, value, volume, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(metric_id, year, month) DO UPDATE SET
+          value = excluded.value,
+          volume = excluded.volume,
+          notes = excluded.notes,
+          updated_at = excluded.updated_at
+      `).run(metric_id, accountId, year, month, value ?? null, volume ?? null, notes ?? null, now, now);
+      const row = sqlite.prepare(
+        "SELECT * FROM pi_entries WHERE metric_id = ? AND year = ? AND month = ?"
+      ).get(metric_id, year, month);
+      res.json(row);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/pi/entries/:id - delete entry
+  app.delete("/api/pi/entries/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const row = sqlite.prepare("SELECT * FROM pi_entries WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!row) return res.status(404).json({ error: "Entry not found" });
+    sqlite.prepare("DELETE FROM pi_entries WHERE id = ?").run(id);
+    res.json({ success: true });
+  });
+
+  // GET /api/pi/dashboard - computed dashboard data
+  app.get("/api/pi/dashboard", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { year, department_id } = req.query;
+    if (!year || !department_id) return res.status(400).json({ error: "year and department_id are required" });
+    const yr = parseInt(year as string);
+
+    const metrics = sqlite.prepare(
+      "SELECT * FROM pi_metrics WHERE department_id = ? AND account_id = ? AND active = 1 ORDER BY sort_order ASC, id ASC"
+    ).all(department_id, accountId) as any[];
+
+    if (metrics.length === 0) return res.json({ metrics: [] });
+
+    const metricIds = metrics.map((m: any) => m.id);
+    const placeholders = metricIds.map(() => "?").join(",");
+
+    // Current year entries
+    const currentEntries = sqlite.prepare(
+      `SELECT * FROM pi_entries WHERE metric_id IN (${placeholders}) AND year = ? ORDER BY month ASC`
+    ).all(...metricIds, yr) as any[];
+
+    // Prior year entries
+    const priorEntries = sqlite.prepare(
+      `SELECT * FROM pi_entries WHERE metric_id IN (${placeholders}) AND year = ? ORDER BY month ASC`
+    ).all(...metricIds, yr - 1) as any[];
+
+    function getBenchmarkStatus(value: number | null, metric: any): string | null {
+      if (value == null) return null;
+      if (metric.benchmark_green == null && metric.benchmark_yellow == null) return null;
+      if (metric.direction === "lower_is_better") {
+        if (metric.benchmark_green != null && value <= metric.benchmark_green) return "green";
+        if (metric.benchmark_yellow != null && value <= metric.benchmark_yellow) return "yellow";
+        return "red";
+      } else {
+        if (metric.benchmark_green != null && value >= metric.benchmark_green) return "green";
+        if (metric.benchmark_yellow != null && value >= metric.benchmark_yellow) return "yellow";
+        return "red";
+      }
+    }
+
+    const result = metrics.map((metric: any) => {
+      const entries = currentEntries.filter((e: any) => e.metric_id === metric.id);
+      const priorYearEntries = priorEntries.filter((e: any) => e.metric_id === metric.id);
+
+      const monthlyValues: Record<number, { value: number | null; volume: number | null; status: string | null }> = {};
+      for (let m = 1; m <= 12; m++) {
+        const entry = entries.find((e: any) => e.month === m);
+        const val = entry?.value ?? null;
+        monthlyValues[m] = {
+          value: val,
+          volume: entry?.volume ?? null,
+          status: getBenchmarkStatus(val, metric),
+        };
+      }
+
+      // Quarterly averages
+      const quarters: Record<string, number | null> = {};
+      for (const [qLabel, months] of [["Q1", [1,2,3]], ["Q2", [4,5,6]], ["Q3", [7,8,9]], ["Q4", [10,11,12]]] as [string, number[]][]) {
+        const vals = months.map(m => monthlyValues[m]?.value).filter((v): v is number => v != null);
+        quarters[qLabel] = vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+      }
+
+      // YTD average
+      const allVals = entries.map((e: any) => e.value).filter((v: any): v is number => v != null);
+      const ytdAvg = allVals.length > 0 ? allVals.reduce((s: number, v: number) => s + v, 0) / allVals.length : null;
+
+      // Prior year average
+      const pyVals = priorYearEntries.map((e: any) => e.value).filter((v: any): v is number => v != null);
+      const pyAvg = pyVals.length > 0 ? pyVals.reduce((s: number, v: number) => s + v, 0) / pyVals.length : null;
+
+      // Current month value (latest entry)
+      const latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
+
+      return {
+        metric,
+        monthlyValues,
+        quarters,
+        ytdAvg,
+        ytdStatus: getBenchmarkStatus(ytdAvg, metric),
+        pyAvg,
+        pyStatus: getBenchmarkStatus(pyAvg, metric),
+        currentValue: latestEntry?.value ?? null,
+        currentMonth: latestEntry?.month ?? null,
+        currentStatus: getBenchmarkStatus(latestEntry?.value ?? null, metric),
+        dataPointCount: allVals.length,
+      };
+    });
+
+    res.json({ metrics: result });
+  });
 }

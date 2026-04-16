@@ -35,6 +35,7 @@ const allMobileLinks = [
   { href: "/calculator", label: "Productivity Calculator" },
   { href: "/veritabench", label: "VeritaBench™ Tracker" },
   { href: "/veritabench/staffing", label: "VeritaBench™ Staffing" },
+  { href: "/veritabench/pi", label: "VeritaBench™ PI Dashboard" },
   { href: "/veritastock", label: "VeritaStock™" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
@@ -204,7 +205,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritabench","/veritabench/staffing","/veritastock","/calculator"].includes(location)
+                ["/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/calculator"].includes(location)
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
@@ -236,6 +237,14 @@ export function NavBar() {
                   <div>
                     <div className="text-sm font-medium">Staffing Analyzer</div>
                     <div className="text-xs text-muted-foreground">By-hour demand analysis</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/veritabench/pi" className="flex items-start gap-2 py-2">
+                  <div>
+                    <div className="text-sm font-medium">PI Dashboard</div>
+                    <div className="text-xs text-muted-foreground">Department quality metrics</div>
                   </div>
                 </Link>
               </DropdownMenuItem>

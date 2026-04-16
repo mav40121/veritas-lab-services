@@ -1254,6 +1254,118 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_productivity_months_account ON
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_studies_account ON staffing_studies(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_hourly_study ON staffing_hourly_data(study_id, week_number, day_of_week)`); } catch {}
 
+// -- VeritaBench: PI Dashboard tables ----------------------------------------
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pi_departments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// ALTER TABLE migration for pi_departments
+{
+  const pdCols = sqlite.prepare("PRAGMA table_info(pi_departments)").all() as { name: string }[];
+  const pdColNames = pdCols.map((c) => c.name);
+  if (pdCols.length > 0) {
+    if (!pdColNames.includes("sort_order")) {
+      try { sqlite.exec("ALTER TABLE pi_departments ADD COLUMN sort_order INTEGER DEFAULT 0"); } catch {}
+    }
+    if (!pdColNames.includes("active")) {
+      try { sqlite.exec("ALTER TABLE pi_departments ADD COLUMN active INTEGER DEFAULT 1"); } catch {}
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pi_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    department_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    unit TEXT DEFAULT '%',
+    direction TEXT DEFAULT 'lower_is_better',
+    benchmark_green REAL,
+    benchmark_yellow REAL,
+    benchmark_red REAL,
+    sort_order INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (department_id) REFERENCES pi_departments(id) ON DELETE CASCADE
+  )
+`);
+
+// ALTER TABLE migration for pi_metrics
+{
+  const pmtCols = sqlite.prepare("PRAGMA table_info(pi_metrics)").all() as { name: string }[];
+  const pmtColNames = pmtCols.map((c) => c.name);
+  if (pmtCols.length > 0) {
+    if (!pmtColNames.includes("unit")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN unit TEXT DEFAULT '%'"); } catch {}
+    }
+    if (!pmtColNames.includes("direction")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN direction TEXT DEFAULT 'lower_is_better'"); } catch {}
+    }
+    if (!pmtColNames.includes("benchmark_green")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN benchmark_green REAL"); } catch {}
+    }
+    if (!pmtColNames.includes("benchmark_yellow")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN benchmark_yellow REAL"); } catch {}
+    }
+    if (!pmtColNames.includes("benchmark_red")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN benchmark_red REAL"); } catch {}
+    }
+    if (!pmtColNames.includes("sort_order")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN sort_order INTEGER DEFAULT 0"); } catch {}
+    }
+    if (!pmtColNames.includes("active")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN active INTEGER DEFAULT 1"); } catch {}
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pi_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    metric_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    value REAL,
+    volume INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(metric_id, year, month),
+    FOREIGN KEY (metric_id) REFERENCES pi_metrics(id) ON DELETE CASCADE
+  )
+`);
+
+// ALTER TABLE migration for pi_entries
+{
+  const peCols = sqlite.prepare("PRAGMA table_info(pi_entries)").all() as { name: string }[];
+  const peColNames = peCols.map((c) => c.name);
+  if (peCols.length > 0) {
+    if (!peColNames.includes("volume")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN volume INTEGER"); } catch {}
+    }
+    if (!peColNames.includes("notes")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN notes TEXT"); } catch {}
+    }
+    if (!peColNames.includes("updated_at")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))"); } catch {}
+    }
+  }
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_departments_account ON pi_departments(account_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_metrics_dept ON pi_metrics(department_id, account_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_entries_metric ON pi_entries(metric_id, year, month)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_entries_account ON pi_entries(account_id, year)`); } catch {}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");

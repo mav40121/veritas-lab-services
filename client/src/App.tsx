@@ -73,6 +73,7 @@ import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
 import VeritaBenchPage from "@/pages/VeritaBenchPage";
 import VeritaBenchStaffingPage from "@/pages/VeritaBenchStaffingPage";
 import VeritaStockPage from "@/pages/VeritaStockPage";
+import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -307,6 +308,7 @@ function AppContent() {
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritabench" component={VeritaBenchPage} />
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
+          <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
           <Route path="/veritastock" component={VeritaStockPage} />
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
