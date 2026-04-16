@@ -1,5 +1,5 @@
 /**
- * VeritaOps routes - Productivity Tracker + Staffing Analyzer
+ * VeritaBench routes - Productivity Tracker + Staffing Analyzer
  */
 import type { Express } from "express";
 import { db } from "./db";
@@ -10,7 +10,7 @@ function hasOpsAccess(user: any) {
   return SUITE_PLANS.includes(user?.plan);
 }
 
-export function registerVeritaOpsRoutes(
+export function registerVeritaBenchRoutes(
   app: Express,
   authMiddleware: any,
   requireWriteAccess: any,
@@ -24,7 +24,7 @@ export function registerVeritaOpsRoutes(
 
   // GET /api/productivity - list all months for authenticated user's account
   app.get("/api/productivity", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year DESC, month DESC"
@@ -34,7 +34,7 @@ export function registerVeritaOpsRoutes(
 
   // POST /api/productivity - upsert a month
   app.post("/api/productivity", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { year, month, billable_tests, productive_hours, non_productive_hours, overtime_hours, total_ftes, facility_type, notes } = req.body;
     if (!year || !month) return res.status(400).json({ error: "year and month are required" });
@@ -62,7 +62,7 @@ export function registerVeritaOpsRoutes(
 
   // DELETE /api/productivity/:id - delete a month entry
   app.delete("/api/productivity/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const row = sqlite.prepare("SELECT * FROM productivity_months WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -73,7 +73,7 @@ export function registerVeritaOpsRoutes(
 
   // GET /api/productivity/export - Excel export
   app.get("/api/productivity/export", authMiddleware, async (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year ASC, month ASC"
@@ -135,7 +135,7 @@ export function registerVeritaOpsRoutes(
       }
 
       const buffer = await wb.xlsx.writeBuffer();
-      res.set("Content-Disposition", `attachment; filename="VeritaOps-Productivity_${new Date().toISOString().split("T")[0]}.xlsx"`);
+      res.set("Content-Disposition", `attachment; filename="VeritaBench-Productivity_${new Date().toISOString().split("T")[0]}.xlsx"`);
       res.set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.send(buffer);
     } catch (err: any) {
@@ -149,7 +149,7 @@ export function registerVeritaOpsRoutes(
 
   // GET /api/staffing-studies - list studies for account
   app.get("/api/staffing-studies", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM staffing_studies WHERE account_id = ? ORDER BY created_at DESC"
@@ -159,7 +159,7 @@ export function registerVeritaOpsRoutes(
 
   // POST /api/staffing-studies - create study
   app.post("/api/staffing-studies", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { name, department, start_date } = req.body;
     if (!name) return res.status(400).json({ error: "name is required" });
@@ -177,7 +177,7 @@ export function registerVeritaOpsRoutes(
 
   // GET /api/staffing-studies/:id - get study with all data
   app.get("/api/staffing-studies/:id", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -188,7 +188,7 @@ export function registerVeritaOpsRoutes(
 
   // POST /api/staffing-studies/:id/data - batch upsert hourly data
   app.post("/api/staffing-studies/:id/data", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -221,7 +221,7 @@ export function registerVeritaOpsRoutes(
 
   // DELETE /api/staffing-studies/:id - delete study and cascade data
   app.delete("/api/staffing-studies/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -289,7 +289,7 @@ export function registerVeritaOpsRoutes(
 
   // GET /api/inventory - list all inventory items for account
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
@@ -313,7 +313,7 @@ export function registerVeritaOpsRoutes(
 
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date } = req.body;
     if (!item_name) return res.status(400).json({ error: "item_name is required" });
@@ -332,7 +332,7 @@ export function registerVeritaOpsRoutes(
 
   // PUT /api/inventory/:id - update an inventory item
   app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -353,7 +353,7 @@ export function registerVeritaOpsRoutes(
 
   // DELETE /api/inventory/:id - delete an inventory item
   app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -364,7 +364,7 @@ export function registerVeritaOpsRoutes(
 
   // GET /api/staffing-studies/:id/export - Excel export of analysis
   app.get("/api/staffing-studies/:id/export", authMiddleware, async (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaOps requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;

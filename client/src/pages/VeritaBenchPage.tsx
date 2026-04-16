@@ -77,9 +77,9 @@ function productivePct(pm: ProductivityMonth): number | null {
   return (pm.productive_hours / (pm.productive_hours + pm.non_productive_hours)) * 100;
 }
 
-export default function VeritaOpsPage() {
+export default function VeritaBenchPage() {
   const { user, isLoggedIn } = useAuth();
-  const readOnly = useIsReadOnly("veritaops");
+  const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();
   const [tab, setTab] = useState<"data" | "dashboard">("dashboard");
   const [months, setMonths] = useState<ProductivityMonth[]>([]);
@@ -186,7 +186,7 @@ export default function VeritaOpsPage() {
       const res = await fetch(`${API_BASE}/api/productivity/export`, { headers: authHeaders() });
       if (res.ok) {
         const blob = await res.blob();
-        saveAs(blob, `VeritaOps-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);
+        saveAs(blob, `VeritaBench-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);
       }
     } catch { toast({ title: "Export failed", variant: "destructive" }); }
   }
@@ -235,7 +235,7 @@ export default function VeritaOpsPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaOps{"\u2122"}</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaBench{"\u2122"}</h2>
         <p className="text-muted-foreground mb-6 max-w-md">Track your lab's productivity and staffing data over time.</p>
         <Button asChild><Link href="/login">Sign in</Link></Button>
       </div>
@@ -246,8 +246,8 @@ export default function VeritaOpsPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaOps{"\u2122"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaOps is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
+        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaBench{"\u2122"}</h2>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaBench is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
         <Button asChild style={{ backgroundColor: "#01696F" }}><Link href="/pricing">View Plans</Link></Button>
       </div>
     );

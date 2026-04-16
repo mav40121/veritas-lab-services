@@ -331,9 +331,9 @@ function ItemFormDialog({ open, onClose, onSave, editItem }: {
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 
-export default function VeritaOpsInventoryPage() {
+export default function VeritaStockInventoryPage() {
   const { user, isLoggedIn } = useAuth();
-  const readOnly = useIsReadOnly("veritaops");
+  const readOnly = useIsReadOnly("veritastock");
   const { toast } = useToast();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -499,7 +499,7 @@ export default function VeritaOpsInventoryPage() {
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <Lock size={40} className="mx-auto text-muted-foreground mb-4" />
         <h1 className="font-serif text-2xl font-bold mb-2">Inventory Manager</h1>
-        <p className="text-muted-foreground">Please log in to access the VeritaOps Inventory Manager.</p>
+        <p className="text-muted-foreground">Please log in to access the VeritaStock Inventory Manager.</p>
       </div>
     );
   }
@@ -508,8 +508,8 @@ export default function VeritaOpsInventoryPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <Lock size={40} className="mx-auto text-muted-foreground mb-4" />
-        <h1 className="font-serif text-2xl font-bold mb-2">VeritaOps{"\u2122"} Inventory Manager</h1>
-        <p className="text-muted-foreground">VeritaOps requires a suite subscription. Upgrade your plan to access inventory management.</p>
+        <h1 className="font-serif text-2xl font-bold mb-2">VeritaStock{"\u2122"} Inventory Manager</h1>
+        <p className="text-muted-foreground">VeritaStock requires a suite subscription. Upgrade your plan to access inventory management.</p>
       </div>
     );
   }

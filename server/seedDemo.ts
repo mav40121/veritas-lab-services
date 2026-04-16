@@ -202,19 +202,19 @@ export async function seedDemoData() {
     seedPolicyData(sqlite, demoUserId, now);
   }
 
-  // ─── VeritaOps: Productivity Months ────────────────────────────────────────
+  // ─── VeritaBench: Productivity Months ────────────────────────────────────────
   const existingProd = sqlite.prepare("SELECT id FROM productivity_months WHERE account_id = ?").get(demoUserId);
   if (!existingProd) {
     seedProductivityData(sqlite, demoUserId, now);
   }
 
-  // ─── VeritaOps: Staffing Study ─────────────────────────────────────────────
+  // ─── VeritaBench: Staffing Study ─────────────────────────────────────────────
   const existingStaffStudy = sqlite.prepare("SELECT id FROM staffing_studies WHERE account_id = ?").get(demoUserId);
   if (!existingStaffStudy) {
     seedStaffingData(sqlite, demoUserId, now);
   }
 
-  // ─── VeritaOps: Inventory Items (always re-seed to pick up schema changes) ──
+  // ─── VeritaBench: Inventory Items (always re-seed to pick up schema changes) ──
   sqlite.prepare("DELETE FROM inventory_items WHERE account_id = ?").run(demoUserId);
   seedInventoryData(sqlite, demoUserId, now);
 
@@ -891,7 +891,7 @@ function seedPolicyData(sqlite: any, demoUserId: number, now: string) {
   console.log("[seed] VeritaPolicy demo data seeded");
 }
 
-// ─── VeritaOps Productivity seeding ──────────────────────────────────────────
+// ─── VeritaBench Productivity seeding ──────────────────────────────────────────
 function seedProductivityData(sqlite: any, demoUserId: number, now: string) {
   const stmt = sqlite.prepare(`
     INSERT OR IGNORE INTO productivity_months
@@ -917,7 +917,7 @@ function seedProductivityData(sqlite: any, demoUserId: number, now: string) {
 
   // 2026 data (current year, Jan-Mar): improving to ~0.140-0.150, lower OT, fewer FTEs
   const data2026 = [
-    { m: 1, tests: 36500, prodH: 5280, nonProd: 820, ot: 320, ftes: 13.2, notes: "VeritaOps workflow optimization began" },
+    { m: 1, tests: 36500, prodH: 5280, nonProd: 820, ot: 320, ftes: 13.2, notes: "VeritaBench workflow optimization began" },
     { m: 2, tests: 35800, prodH: 5150, nonProd: 790, ot: 290, ftes: 13.0, notes: "Continued efficiency gains" },
     { m: 3, tests: 37200, prodH: 5380, nonProd: 840, ot: 310, ftes: 13.4, notes: "Q1 close, 25% hour reduction vs prior year" },
   ];
@@ -931,10 +931,10 @@ function seedProductivityData(sqlite: any, demoUserId: number, now: string) {
     }
   });
   seedBatch();
-  console.log("[seed] VeritaOps productivity data seeded (24 months)");
+  console.log("[seed] VeritaBench productivity data seeded (24 months)");
 }
 
-// ─── VeritaOps Staffing Study seeding ────────────────────────────────────────
+// ─── VeritaBench Staffing Study seeding ────────────────────────────────────────
 function seedStaffingData(sqlite: any, demoUserId: number, now: string) {
   const studyResult = sqlite.prepare(
     "INSERT INTO staffing_studies (account_id, name, department, start_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -997,10 +997,10 @@ function seedStaffingData(sqlite: any, demoUserId: number, now: string) {
   });
 
   seedBatch();
-  console.log("[seed] VeritaOps staffing study seeded (Core Lab Q1 Analysis)");
+  console.log("[seed] VeritaBench staffing study seeded (Core Lab Q1 Analysis)");
 }
 
-// ─── VeritaOps Inventory seeding (full burn-rate model) ─────────────────────
+// ─── VeritaBench Inventory seeding (full burn-rate model) ─────────────────────
 function seedInventoryData(sqlite: any, demoUserId: number, now: string) {
   const stmt = sqlite.prepare(`
     INSERT INTO inventory_items
@@ -1067,5 +1067,5 @@ function seedInventoryData(sqlite: any, demoUserId: number, now: string) {
     }
   });
   seedBatch();
-  console.log(`[seed] VeritaOps inventory data seeded (${items.length} items with burn-rate model)`);
+  console.log(`[seed] VeritaBench inventory data seeded (${items.length} items with burn-rate model)`);
 }

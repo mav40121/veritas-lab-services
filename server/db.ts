@@ -1040,7 +1040,7 @@ if (!dcCols.includes("trial_days")) {
   sqlite.exec("ALTER TABLE discount_codes ADD COLUMN trial_days INTEGER");
 }
 
-// ── VeritaOps: Productivity Months ────────────────────────────────────────────
+// ── VeritaBench: Productivity Months ────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS productivity_months (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1083,7 +1083,7 @@ sqlite.exec(`
   }
 }
 
-// ── VeritaOps: Staffing Studies ───────────────────────────────────────────────
+// ── VeritaBench: Staffing Studies ───────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS staffing_studies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1114,7 +1114,7 @@ sqlite.exec(`
   }
 }
 
-// ── VeritaOps: Staffing Hourly Data ──────────────────────────────────────────
+// ── VeritaBench: Staffing Hourly Data ──────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS staffing_hourly_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1144,7 +1144,7 @@ sqlite.exec(`
   }
 }
 
-// ── VeritaOps: Inventory Items ───────────────────────────────────────────────
+// ── VeritaBench: Inventory Items ───────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS inventory_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

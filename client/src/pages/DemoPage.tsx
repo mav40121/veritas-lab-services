@@ -1058,7 +1058,7 @@ export default function DemoPage() {
             Interactive Live Demo
           </div>
           <h1 className="font-serif text-3xl sm:text-5xl font-bold text-white mb-4">
-            See VeritaOps{"\u2122"} in Action
+            See VeritaBench{"\u2122"} in Action
           </h1>
           <p className="text-lg sm:text-xl text-white/80 max-w-2xl mx-auto mb-8">
             Built by a lab operations consultant. Designed for labs like yours.

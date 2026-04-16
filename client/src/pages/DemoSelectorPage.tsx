@@ -28,7 +28,7 @@ const modules = [
   {
     key: "operations",
     label: "Operations Demo",
-    brand: "VeritaOps\u2122",
+    brand: "VeritaBench\u2122",
     path: "/demo/operations",
     color: "#01696F",
     icon: (

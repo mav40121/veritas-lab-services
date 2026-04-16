@@ -47,8 +47,8 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method validation, inspection readiness, competency tracking).",
   },
   "/demo/operations": {
-    title: "VeritaOps\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u2122",
-    description: "See VeritaOps\u2122 in action. Interactive productivity calculator, monthly tracking, and by-hour staffing analysis built for clinical laboratories.",
+    title: "VeritaBench\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u2122",
+    description: "See VeritaBench\u2122 in action. Interactive productivity calculator, monthly tracking, and by-hour staffing analysis built for clinical laboratories.",
   },
   "/demo/compliance": {
     title: "Compliance Suite Demo | VeritaAssure\u2122 Lab Compliance Software",
@@ -131,11 +131,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications.",
   },
   "/calculator": {
-    title: "Lab Productivity Calculator | VeritaOps Free Benchmarking Tool",
+    title: "Lab Productivity Calculator | VeritaBench Free Benchmarking Tool",
     description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
   },
-  "/veritaops/inventory": {
-    title: "Inventory Manager | VeritaOps\u2122 | VeritaAssure\u2122",
+  "/veritastock": {
+    title: "Inventory Manager | VeritaBench\u2122 | VeritaAssure\u2122",
     description: "Track reagent and supply inventory with expiration alerts, lot tracking, and reorder notifications for your clinical laboratory.",
   },
   "/study-guide": {

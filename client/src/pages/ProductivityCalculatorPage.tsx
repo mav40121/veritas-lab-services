@@ -103,7 +103,7 @@ export default function ProductivityCalculatorPage() {
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
             <Calculator size={14} />
-            VeritaOps{"\u2122"} Quick Calculator
+            VeritaBench{"\u2122"} Quick Calculator
           </div>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold mb-3">Lab Productivity Scorecard</h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">

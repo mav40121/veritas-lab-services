@@ -70,9 +70,9 @@ import VeritaAssurePage from "@/pages/VeritaAssurePage";
 import AdminReportPage from "@/pages/AdminReportPage";
 import JoinPage from "@/pages/JoinPage";
 import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
-import VeritaOpsPage from "@/pages/VeritaOpsPage";
-import VeritaOpsStaffingPage from "@/pages/VeritaOpsStaffingPage";
-import VeritaOpsInventoryPage from "@/pages/VeritaOpsInventoryPage";
+import VeritaBenchPage from "@/pages/VeritaBenchPage";
+import VeritaBenchStaffingPage from "@/pages/VeritaBenchStaffingPage";
+import VeritaStockPage from "@/pages/VeritaStockPage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -305,9 +305,9 @@ function AppContent() {
           <Route path="/veritapolicy" component={VeritaPolicyPage} />
           <Route path="/cumsum" component={CumsumPage} />
           <Route path="/calculator" component={ProductivityCalculatorPage} />
-          <Route path="/veritaops" component={VeritaOpsPage} />
-          <Route path="/veritaops/staffing" component={VeritaOpsStaffingPage} />
-          <Route path="/veritaops/inventory" component={VeritaOpsInventoryPage} />
+          <Route path="/veritabench" component={VeritaBenchPage} />
+          <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
+          <Route path="/veritastock" component={VeritaStockPage} />
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/getting-started" component={GettingStartedPage} />
