@@ -134,9 +134,17 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "Lab Productivity Calculator | VeritaBench Free Benchmarking Tool",
     description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
   },
+  "/veritabench": {
+    title: "Productivity Tracker | VeritaBench\u2122 | VeritaAssure\u2122",
+    description: "Track monthly lab productivity, benchmark against industry standards, and identify staffing optimization opportunities.",
+  },
+  "/veritabench/staffing": {
+    title: "Staffing Analyzer | VeritaBench\u2122 | VeritaAssure\u2122",
+    description: "Analyze by-hour staffing demand against actual coverage to identify overstaffed and understaffed periods in your clinical laboratory.",
+  },
   "/veritastock": {
-    title: "Inventory Manager | VeritaBench\u2122 | VeritaAssure\u2122",
-    description: "Track reagent and supply inventory with expiration alerts, lot tracking, and reorder notifications for your clinical laboratory.",
+    title: "Inventory Manager | VeritaStock\u2122 | VeritaAssure\u2122",
+    description: "Track reagent and supply inventory with burn rate calculations, automated reorder points, and expiration alerts for your clinical laboratory.",
   },
   "/study-guide": {
     title: "Study Guide | VeritaAssure Lab Compliance Software",
