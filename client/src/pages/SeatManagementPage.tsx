@@ -1,12 +1,25 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Trash2, LogOut, Mail, CheckCircle, Clock, XCircle, ArrowUpCircle } from "lucide-react";
+import { Users, Plus, Trash2, LogOut, Mail, CheckCircle, Clock, XCircle, ArrowUpCircle, ChevronDown, ChevronUp, RefreshCw, Loader2 } from "lucide-react";
 import { authHeaders } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+
+interface SeatActivity {
+  lastLogin: string | null;
+  sessionCount: number;
+  studyCount: number;
+  recentActions: {
+    module: string;
+    action: string;
+    entityType: string;
+    entityLabel: string;
+    createdAt: string;
+  }[];
+}
 
 interface Seat {
   id: number;
@@ -39,6 +52,9 @@ export default function SeatManagementPage() {
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ limit: number; current: number; plan: string; nextTier: { label: string; price: number; seats: number; plan: string } | null } | null>(null);
+  const [expandedSeatId, setExpandedSeatId] = useState<number | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const activityCache = useRef<Record<number, SeatActivity>>({});
 
   const fetchSeats = useCallback(async () => {
     try {
@@ -52,6 +68,41 @@ export default function SeatManagementPage() {
   }, []);
 
   useEffect(() => { if (isLoggedIn) fetchSeats(); }, [isLoggedIn, fetchSeats]);
+
+  async function fetchActivity(seatId: number, forceRefresh = false) {
+    if (!forceRefresh && activityCache.current[seatId]) return;
+    setActivityLoading(true);
+    try {
+      const res = await fetch(`/api/account/seats/${seatId}/activity`, { headers: authHeaders() });
+      if (res.ok) {
+        const data: SeatActivity = await res.json();
+        activityCache.current[seatId] = data;
+      }
+    } catch {} finally {
+      setActivityLoading(false);
+    }
+  }
+
+  function toggleActivity(seatId: number) {
+    if (expandedSeatId === seatId) {
+      setExpandedSeatId(null);
+    } else {
+      setExpandedSeatId(seatId);
+      fetchActivity(seatId);
+    }
+  }
+
+  function formatRelativeTime(dateStr: string | null): string {
+    if (!dateStr) return "Never";
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
 
   async function handleAddSeat(e: React.FormEvent) {
     e.preventDefault();
@@ -152,11 +203,21 @@ export default function SeatManagementPage() {
       </Card>
 
       {/* Assigned seats */}
-      {seats.map(seat => (
+      {seats.map(seat => {
+        const canExpand = seat.status === "active" && seat.seat_user_id !== null;
+        const isExpanded = expandedSeatId === seat.id;
+        const activity = activityCache.current[seat.id];
+
+        return (
         <Card key={seat.id} className="mb-3">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
+                {canExpand && (
+                  <button onClick={() => toggleActivity(seat.id)} className="text-muted-foreground hover:text-foreground -ml-1">
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                )}
                 {STATUS_ICONS[seat.status] || <Clock size={14} />}
                 <div>
                   <p className="text-sm font-medium">{seat.seat_email}</p>
@@ -186,9 +247,68 @@ export default function SeatManagementPage() {
                 )}
               </div>
             </div>
+
+            {/* Expandable activity panel */}
+            {isExpanded && (
+              <div className="mt-4 pt-3 border-t">
+                {activityLoading && !activity ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 size={14} className="animate-spin" /> Loading activity...
+                  </div>
+                ) : activity ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-6 text-xs">
+                        <div><span className="text-muted-foreground">Last seen:</span> <span className="font-medium">{formatRelativeTime(activity.lastLogin)}</span></div>
+                        <div><span className="text-muted-foreground">Sessions:</span> <span className="font-medium">{activity.sessionCount}</span></div>
+                        <div><span className="text-muted-foreground">Studies run:</span> <span className="font-medium">{activity.studyCount}</span></div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => fetchActivity(seat.id, true)}
+                        title="Refresh activity"
+                        className="h-6 w-6 p-0"
+                      >
+                        <RefreshCw size={12} />
+                      </Button>
+                    </div>
+
+                    {activity.sessionCount === 0 && activity.studyCount === 0 && activity.recentActions.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No activity recorded</p>
+                    ) : activity.recentActions.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-medium mb-1.5">Recent activity</p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-muted-foreground border-b">
+                              <th className="text-left pb-1 font-medium">Date</th>
+                              <th className="text-left pb-1 font-medium">Module</th>
+                              <th className="text-left pb-1 font-medium">Action</th>
+                              <th className="text-left pb-1 font-medium">Item</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activity.recentActions.map((a, i) => (
+                              <tr key={i} className="border-b last:border-0">
+                                <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">{new Date(a.createdAt).toLocaleDateString()}</td>
+                                <td className="py-1 pr-3 capitalize">{a.module}</td>
+                                <td className="py-1 pr-3 capitalize">{a.action}</td>
+                                <td className="py-1 truncate max-w-[180px]">{a.entityLabel || a.entityType}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
           </CardContent>
         </Card>
-      ))}
+        );
+      })}
 
       {/* Upgrade prompt (shown when seat limit is hit) */}
       {upgradePrompt && (

@@ -5618,6 +5618,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // Get activity summary for a specific seat user
+  app.get("/api/account/seats/:seatId/activity", authMiddleware, (req: any, res) => {
+    const seatId = parseInt(req.params.seatId);
+
+    // Verify the requesting user owns this seat
+    const seat = (db as any).$client.prepare(
+      "SELECT seat_user_id FROM user_seats WHERE id = ? AND owner_user_id = ?"
+    ).get(seatId, req.userId) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (!seat.seat_user_id) return res.status(400).json({ error: "Seat user has not registered yet" });
+
+    const seatUserId = seat.seat_user_id;
+
+    // Last login (most recent last_active from user_sessions)
+    const lastSession = (db as any).$client.prepare(
+      "SELECT last_active FROM user_sessions WHERE user_id = ? ORDER BY last_active DESC LIMIT 1"
+    ).get(seatUserId) as any;
+
+    // Total session count
+    const sessionRow = (db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM user_sessions WHERE user_id = ?"
+    ).get(seatUserId) as any;
+
+    // Study count
+    const studyRow = (db as any).$client.prepare(
+      "SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?"
+    ).get(seatUserId) as any;
+
+    // Last 10 audit log entries
+    const recentActions = (db as any).$client.prepare(
+      "SELECT module, action, entity_type, entity_label, created_at FROM audit_log WHERE user_id = ? ORDER BY created_at DESC LIMIT 10"
+    ).all(seatUserId) as any[];
+
+    res.json({
+      lastLogin: lastSession?.last_active || null,
+      sessionCount: sessionRow?.cnt || 0,
+      studyCount: studyRow?.cnt || 0,
+      recentActions: recentActions.map((a: any) => ({
+        module: a.module,
+        action: a.action,
+        entityType: a.entity_type,
+        entityLabel: a.entity_label,
+        createdAt: a.created_at,
+      })),
+    });
+  });
+
   // Logout (mark session inactive)
   app.post("/api/auth/logout", authMiddleware, (req: any, res) => {
     const { session_token } = req.body || {};
