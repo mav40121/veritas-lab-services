@@ -115,3 +115,18 @@
     @apply max-w-6xl mx-auto px-4 sm:px-6;
   }
 }
+
+/* Force visible scrollbar on admin table */
+.admin-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.admin-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-table-scroll::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+.admin-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}

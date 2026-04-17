@@ -386,7 +386,7 @@ export default function AdminReportPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
         <div>
@@ -459,7 +459,10 @@ export default function AdminReportPage() {
         </div>
 
         {/* Data table */}
-        <div className="bg-card rounded-lg shadow-sm border border-border overflow-x-auto">
+        <div
+          className="bg-card rounded-lg shadow-sm border border-border overflow-x-scroll admin-table-scroll"
+          style={{ maxWidth: '100%', scrollbarWidth: 'thin', scrollbarColor: '#555 transparent' }}
+        >
           <table className="w-max min-w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
