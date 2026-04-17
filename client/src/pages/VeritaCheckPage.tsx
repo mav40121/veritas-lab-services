@@ -17,7 +17,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, calculateINR } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, calculateINR } from "@/lib/calculations";
+import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import type { InsertStudy } from "@shared/schema";
@@ -341,6 +342,48 @@ export default function VeritaCheckPage() {
   const [customClia, setCustomClia] = useState(0.075);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
+
+  // Qualitative / Semi-Quantitative assay type state
+  type AssayType = "quantitative" | "qualitative" | "semi_quantitative";
+  const [assayType, setAssayType] = useState<AssayType>("quantitative");
+  const GRADE_PRESETS: Record<string, string[]> = {
+    plus: ["Negative", "1+", "2+", "3+", "4+"],
+    urinalysis: ["Negative", "Trace", "Small", "Moderate", "Large"],
+  };
+  const [gradePreset, setGradePreset] = useState<"plus" | "urinalysis" | "custom">("plus");
+  const [customGrades, setCustomGrades] = useState<string[]>(["Negative", "1+", "2+", "3+", "4+"]);
+  const [qualCategories, setQualCategories] = useState<string[]>(["Positive", "Negative"]);
+  const [qualPassThreshold, setQualPassThreshold] = useState(0.90);
+  const [semiQuantPassThreshold, setSemiQuantPassThreshold] = useState(0.80);
+
+  const activeGradeScale = gradePreset === "custom" ? customGrades : GRADE_PRESETS[gradePreset];
+  const activeCategories = assayType === "qualitative" ? qualCategories : activeGradeScale;
+
+  // Auto-detect qualitative mode from CLIA TEa selection
+  useEffect(() => {
+    if (studyType !== "method_comparison") return;
+    const preset = CLIA_PRESETS[cliaPreset];
+    if (!preset || preset.value === 0) return;
+    // Match against teaData qualitative flag
+    const matchedAnalyte = teaData.find(a =>
+      preset.label.toLowerCase().includes(a.analyte.toLowerCase().split(" ")[0].toLowerCase()) ||
+      a.analyte.toLowerCase().includes(preset.label.split(" (")[0].toLowerCase())
+    );
+    if (matchedAnalyte?.qualitative) {
+      const criteria = matchedAnalyte.criteria.toLowerCase();
+      if (criteria.includes("graduation") || criteria.includes("semi-quantitative") || criteria.includes("grade")) {
+        setAssayType("semi_quantitative");
+      } else {
+        setAssayType("qualitative");
+      }
+      // Set pass threshold based on specialty
+      if (matchedAnalyte.specialty === "Immunohematology" || criteria.includes("100%")) {
+        setQualPassThreshold(1.0);
+      } else {
+        setQualPassThreshold(0.90);
+      }
+    }
+  }, [cliaPreset, studyType]);
 
   // Precision study state
   const [precisionMode, setPrecisionMode] = useState<"simple" | "advanced">("simple");
@@ -786,6 +829,14 @@ export default function VeritaCheckPage() {
     }));
   };
 
+  const updateCategoricalDataPoint = (levelIdx: number, field: string, value: string) => {
+    setDataPoints(prev => prev.map((dp, i) => {
+      if (i !== levelIdx) return dp;
+      if (field === "expectedCategory") return { ...dp, expectedCategory: value || null };
+      return { ...dp, instrumentCategories: { ...(dp.instrumentCategories || {}), [field]: value || null } };
+    }));
+  };
+
   const filledLevels = studyType === "precision"
     ? (precisionMode === "simple"
       ? precisionValues.slice(0, precisionLevels).filter(arr => (arr || []).filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length
@@ -800,6 +851,8 @@ export default function VeritaCheckPage() {
     ? maSpecimens.filter(s => (s.ptNew && s.ptOld) || (s.apttNew && s.apttOld) || (s.fibNew && s.fibOld)).length
     : studyType === "ref_interval"
     ? refData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
+    : studyType === "method_comparison" && assayType !== "quantitative"
+    ? dataPoints.filter(dp => dp.expectedCategory && instrumentNames.slice(1).some(n => dp.instrumentCategories?.[n])).length
     : studyType === "method_comparison"
     ? dataPoints.filter(dp => instrumentNames.filter(n => dp.instrumentValues[n] !== null).length >= 2).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
@@ -990,8 +1043,47 @@ export default function VeritaCheckPage() {
     if (filledLevels < MIN_LEVELS) { toast({ title: "Please enter at least 3 data points", variant: "destructive" }); return; }
 
     if (studyType === "method_comparison") {
-      // For method_comparison, the primary instrument's values become expectedValue
-      // and comparison instruments remain in instrumentValues (minus the primary key)
+      if (assayType === "qualitative") {
+        // Qualitative method comparison: categorical data
+        const comparisonNames = instrumentNames.slice(1);
+        const mappedPoints: DataPoint[] = dataPoints.map(dp => ({
+          level: dp.level, expectedValue: null, instrumentValues: {},
+          expectedCategory: dp.expectedCategory ?? null,
+          instrumentCategories: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentCategories?.[n] ?? null])),
+        }));
+        const results = calculateQualitative(mappedPoints, comparisonNames, qualCategories, qualPassThreshold);
+        const study: InsertStudy = {
+          testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
+          date, studyType: "method_comparison", cliaAllowableError: cliaValue,
+          teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+          dataPoints: JSON.stringify({ assayType: "qualitative", categories: qualCategories, passThreshold: qualPassThreshold, points: dataPoints }),
+          instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
+          createdAt: new Date().toISOString(),
+        };
+        saveMutation.mutate(study);
+        return;
+      }
+      if (assayType === "semi_quantitative") {
+        // Semi-quantitative method comparison: ordinal grades
+        const comparisonNames = instrumentNames.slice(1);
+        const mappedPoints: DataPoint[] = dataPoints.map(dp => ({
+          level: dp.level, expectedValue: null, instrumentValues: {},
+          expectedCategory: dp.expectedCategory ?? null,
+          instrumentCategories: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentCategories?.[n] ?? null])),
+        }));
+        const results = calculateSemiQuant(mappedPoints, comparisonNames, activeGradeScale, semiQuantPassThreshold);
+        const study: InsertStudy = {
+          testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
+          date, studyType: "method_comparison", cliaAllowableError: cliaValue,
+          teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+          dataPoints: JSON.stringify({ assayType: "semi_quantitative", gradeScale: activeGradeScale, passThreshold: semiQuantPassThreshold, points: dataPoints }),
+          instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
+          createdAt: new Date().toISOString(),
+        };
+        saveMutation.mutate(study);
+        return;
+      }
+      // Quantitative method comparison (existing behavior)
       const primaryName = instrumentNames[0];
       const comparisonNames = instrumentNames.slice(1);
       const mappedPoints: DataPoint[] = dataPoints.map(dp => ({
@@ -1237,6 +1329,103 @@ return (
                   )}
                 </CardContent>
               </Card>
+
+              {/* Assay Type selector - only for method_comparison */}
+              {studyType === "method_comparison" && (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Assay Type</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <Select value={assayType} onValueChange={v => setAssayType(v as AssayType)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="quantitative">Quantitative (numeric values)</SelectItem>
+                        <SelectItem value="qualitative">Qualitative (Pos/Neg, Reactive/Nonreactive)</SelectItem>
+                        <SelectItem value="semi_quantitative">Semi-Quantitative (ordinal grades)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {assayType === "qualitative" && (
+                      <div className="space-y-2">
+                        <Label className="text-xs">Categories</Label>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {qualCategories.map((cat, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">{cat}</Badge>
+                          ))}
+                        </div>
+                        <Select value={qualCategories.join(",")} onValueChange={v => setQualCategories(v.split(","))}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Positive,Negative">Positive / Negative</SelectItem>
+                            <SelectItem value="Reactive,Nonreactive">Reactive / Nonreactive</SelectItem>
+                            <SelectItem value="Detected,Not Detected">Detected / Not Detected</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Label className="text-xs">Pass threshold:</Label>
+                          <Select value={String(qualPassThreshold)} onValueChange={v => setQualPassThreshold(parseFloat(v))}>
+                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0.90">90%</SelectItem>
+                              <SelectItem value="0.95">95%</SelectItem>
+                              <SelectItem value="1.00">100% (Blood Bank)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                    {assayType === "semi_quantitative" && (
+                      <div className="space-y-2">
+                        <Label className="text-xs">Grade Scale Preset</Label>
+                        <Select value={gradePreset} onValueChange={v => setGradePreset(v as "plus" | "urinalysis" | "custom")}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="plus">Plus grades (Neg / 1+ / 2+ / 3+ / 4+)</SelectItem>
+                            <SelectItem value="urinalysis">Urinalysis (Neg / Trace / Small / Moderate / Large)</SelectItem>
+                            <SelectItem value="custom">Custom</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {activeGradeScale.map((g, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">{g}</Badge>
+                          ))}
+                        </div>
+                        {gradePreset === "custom" && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Custom grades (comma-separated, lowest to highest)</Label>
+                            <Input
+                              value={customGrades.join(", ")}
+                              onChange={e => setCustomGrades(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
+                              placeholder="Negative, 1+, 2+, 3+, 4+"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <Label className="text-xs">Pass threshold (+/-1 grade):</Label>
+                          <Select value={String(semiQuantPassThreshold)} onValueChange={v => setSemiQuantPassThreshold(parseFloat(v))}>
+                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0.80">80%</SelectItem>
+                              <SelectItem value="0.90">90%</SelectItem>
+                              <SelectItem value="0.95">95%</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                    {assayType !== "quantitative" && (
+                      <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                        <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                        <span>
+                          {assayType === "qualitative"
+                            ? "Qualitative mode uses concordance analysis (percent agreement, Cohen's kappa, sensitivity/specificity). Regression and Bland-Altman are not applicable."
+                            : "Semi-quantitative mode uses ordinal +/-1 grade acceptance, weighted kappa, and concordance matrix. Regression and Bland-Altman are not applicable."
+                          }
+                        </span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error"}</CardTitle></CardHeader>
@@ -1911,7 +2100,44 @@ return (
                 </CardTitle></CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
-                    {studyType === "method_comparison" ? (
+                    {studyType === "method_comparison" && assayType !== "quantitative" ? (
+                      /* Categorical data entry for qualitative / semi-quantitative */
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-border">
+                          <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">Sample</th>
+                          <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">
+                            <div>{instrumentNames[0]}</div>
+                            <div className="text-[10px] text-primary font-normal">(Reference)</div>
+                          </th>
+                          {instrumentNames.slice(1).map((n) => <th key={n} className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{n}</th>)}
+                        </tr></thead>
+                        <tbody>
+                          {dataPoints.map((dp, idx) => (
+                            <tr key={idx} className="border-b border-border/50">
+                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">S{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Select value={dp.expectedCategory || ""} onValueChange={v => updateCategoricalDataPoint(idx, "expectedCategory", v)}>
+                                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                  <SelectContent>
+                                    {activeCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              {instrumentNames.slice(1).map((n) => (
+                                <td key={n} className="py-1.5 pr-4">
+                                  <Select value={dp.instrumentCategories?.[n] || ""} onValueChange={v => updateCategoricalDataPoint(idx, n, v)}>
+                                    <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                    <SelectContent>
+                                      {activeCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : studyType === "method_comparison" ? (
                       <table className="w-full text-sm">
                         <thead><tr className="border-b border-border">
                           <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">Sample</th>

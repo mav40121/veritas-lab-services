@@ -58,7 +58,44 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     }
 
     if (studyType === "method_comparison") {
-      // Data may be in new format (all values in instrumentValues) or old format (expectedValue + instrumentValues)
+      // Check for qualitative or semi-quantitative assay types
+      if (rawData.assayType === "qualitative") {
+        const { categories, passThreshold, points } = rawData;
+        const comparisonNames = instrumentNames.slice(1);
+        const compName = comparisonNames[0];
+        if (!points || !compName) return "fail";
+        let agree = 0, total = 0;
+        for (const dp of points) {
+          const ref = dp.expectedCategory;
+          const comp = dp.instrumentCategories?.[compName];
+          if (ref && comp) {
+            total++;
+            if (ref === comp) agree++;
+          }
+        }
+        const pctAgreement = total > 0 ? agree / total : 0;
+        return pctAgreement >= (passThreshold || 0.90) ? "pass" : "fail";
+      }
+      if (rawData.assayType === "semi_quantitative") {
+        const { gradeScale, passThreshold, points } = rawData;
+        const comparisonNames = instrumentNames.slice(1);
+        const compName = comparisonNames[0];
+        if (!points || !compName || !gradeScale) return "fail";
+        const gradeIndex: Record<string, number> = {};
+        (gradeScale as string[]).forEach((g: string, i: number) => { gradeIndex[g] = i; });
+        let withinOne = 0, total = 0;
+        for (const dp of points) {
+          const ref = dp.expectedCategory;
+          const comp = dp.instrumentCategories?.[compName];
+          if (ref && comp && gradeIndex[ref] !== undefined && gradeIndex[comp] !== undefined) {
+            total++;
+            if (Math.abs(gradeIndex[ref] - gradeIndex[comp]) <= 1) withinOne++;
+          }
+        }
+        const pctWithinOne = total > 0 ? withinOne / total : 0;
+        return pctWithinOne >= (passThreshold || 0.80) ? "pass" : "fail";
+      }
+      // Standard quantitative method comparison
       const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
       const primaryName = instrumentNames[0];
       const hasAllInValues = dataPoints.length > 0 && instrumentNames.every(n => n in (dataPoints[0].instrumentValues || {}));

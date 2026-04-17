@@ -17,6 +17,8 @@ import {
   calculatePTCoag,
   calculateQCRange,
   calculateMultiAnalyteCoag,
+  calculateQualitative,
+  calculateSemiQuant,
   isCalVer,
   isMethodComp,
   isPrecision,
@@ -24,9 +26,13 @@ import {
   isPTCoag,
   isQCRange,
   isMultiAnalyteCoag,
+  isQualitative,
+  isSemiQuant,
   type StudyResults,
   type CalVerResults,
   type MethodCompResults,
+  type QualitativeResults,
+  type SemiQuantResults,
   type PrecisionResults,
   type LotToLotResults,
   type PTCoagResults,
@@ -161,6 +167,31 @@ function generateNarrative(results: StudyResults, study: Study): string {
     } else {
       const failCount = cv.totalCount - cv.passCount;
       narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). Do not report patient results until the cause has been identified, corrective action has been taken, and the study is repeated with passing results. The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
+    }
+  } else if (isQualitative(results)) {
+    const qr = results as QualitativeResults;
+    const kappaInterp = qr.cohensKappa < 0.20 ? "Poor" : qr.cohensKappa <= 0.40 ? "Fair" : qr.cohensKappa <= 0.60 ? "Moderate" : qr.cohensKappa <= 0.80 ? "Substantial" : "Almost Perfect";
+    if (qr.overallPass) {
+      narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement (${qr.totalSamples} samples). ` +
+        `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). ` +
+        (qr.sensitivity > 0 ? `Sensitivity = ${qr.sensitivity.toFixed(1)}%, Specificity = ${qr.specificity.toFixed(1)}%. ` : "") +
+        `The acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement was met. The comparison method may be used for patient reporting.`;
+    } else {
+      narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement, which does not meet the acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement. ` +
+        `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). Review discordant specimens and investigate potential causes.`;
+    }
+  } else if (isSemiQuant(results)) {
+    const sq = results as SemiQuantResults;
+    const kappaInterp = sq.weightedKappa < 0.20 ? "Poor" : sq.weightedKappa <= 0.40 ? "Fair" : sq.weightedKappa <= 0.60 ? "Moderate" : sq.weightedKappa <= 0.80 ? "Substantial" : "Almost Perfect";
+    if (sq.overallPass) {
+      narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade (${sq.totalSamples} samples). ` +
+        `Exact agreement: ${sq.percentExactAgreement.toFixed(1)}%. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
+        `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. ` +
+        `The acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}% within +/-1 grade was met. The comparison method may be used for patient reporting.`;
+    } else {
+      narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade, which does not meet the acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}%. ` +
+        `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
+        `Review discrepant samples and investigate potential causes.`;
     }
   } else if (isMethodComp(results)) {
     const mc = results as MethodCompResults;
@@ -598,6 +629,221 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
                 ))}
               </tbody>
             </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+// ─── METHOD COMPARISON results ────────────────────────────────────────────────
+// ─── QUALITATIVE CONCORDANCE results ─────────────────────────────────────────
+function QualitativeReport({ study, results }: { study: Study; results: QualitativeResults }) {
+  const { concordanceMatrix, categories, totalSamples, percentAgreement, sensitivity, specificity, cohensKappa, passThreshold } = results;
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const primaryName = instrumentNames[0];
+  const compName = instrumentNames[1] || "Comparison";
+  const kappaInterp = cohensKappa < 0.20 ? "Poor" : cohensKappa <= 0.40 ? "Fair" : cohensKappa <= 0.60 ? "Moderate" : cohensKappa <= 0.80 ? "Substantial" : "Almost Perfect";
+
+  return (
+    <>
+      <div className="mb-4 p-3 bg-muted/50 rounded-lg text-sm">
+        <span className="font-medium">Reference Method:</span> {primaryName} | <span className="font-medium">Comparison Method:</span> {compName}
+        <Badge variant="outline" className="ml-2 text-xs">Qualitative</Badge>
+      </div>
+
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Total Samples", value: totalSamples },
+          { label: "Agreement", value: `${percentAgreement.toFixed(1)}%` },
+          { label: "Cohen's Kappa", value: `${cohensKappa.toFixed(3)} (${kappaInterp})` },
+          { label: "Pass Threshold", value: `>=${(passThreshold * 100).toFixed(0)}%` },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      {/* Concordance Matrix */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Concordance Matrix</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">{primaryName} \\ {compName}</th>
+                  {categories.map(c => <th key={c} className="text-center py-2 px-3 text-muted-foreground font-medium">{c}</th>)}
+                  <th className="text-center py-2 px-3 text-muted-foreground font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map(refCat => {
+                  const rowTotal = categories.reduce((s, cc) => s + (concordanceMatrix[refCat]?.[cc] || 0), 0);
+                  return (
+                    <tr key={refCat} className="border-b border-border/40">
+                      <td className="py-2 pr-3 font-medium">{refCat}</td>
+                      {categories.map(compCat => {
+                        const count = concordanceMatrix[refCat]?.[compCat] || 0;
+                        const isAgree = refCat === compCat;
+                        return (
+                          <td key={compCat} className={`text-center py-2 px-3 font-mono ${isAgree ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold" : count > 0 ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" : ""}`}>
+                            {count}
+                          </td>
+                        );
+                      })}
+                      <td className="text-center py-2 px-3 font-mono text-muted-foreground">{rowTotal}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sensitivity / Specificity (binary only) */}
+      {categories.length === 2 && (
+        <Card className="mb-6">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Diagnostic Performance</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-muted-foreground">Sensitivity:</span> <span className="font-mono font-bold">{sensitivity.toFixed(1)}%</span></div>
+              <div><span className="text-muted-foreground">Specificity:</span> <span className="font-mono font-bold">{specificity.toFixed(1)}%</span></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ─── SEMI-QUANTITATIVE CONCORDANCE results ──────────────────────────────────
+function SemiQuantReport({ study, results }: { study: Study; results: SemiQuantResults }) {
+  const { concordanceMatrix, gradeScale, totalSamples, percentExactAgreement, percentWithinOneGrade, weightedKappa, maxDiscrepancy, sampleDetails, passThreshold } = results;
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  const primaryName = instrumentNames[0];
+  const compName = instrumentNames[1] || "Comparison";
+  const kappaInterp = weightedKappa < 0.20 ? "Poor" : weightedKappa <= 0.40 ? "Fair" : weightedKappa <= 0.60 ? "Moderate" : weightedKappa <= 0.80 ? "Substantial" : "Almost Perfect";
+
+  // Build grade index for color coding
+  const gradeIndex: Record<string, number> = {};
+  gradeScale.forEach((g, i) => { gradeIndex[g] = i; });
+
+  return (
+    <>
+      <div className="mb-4 p-3 bg-muted/50 rounded-lg text-sm">
+        <span className="font-medium">Reference Method:</span> {primaryName} | <span className="font-medium">Comparison Method:</span> {compName}
+        <Badge variant="outline" className="ml-2 text-xs">Semi-Quantitative</Badge>
+      </div>
+
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Total Samples", value: totalSamples },
+          { label: "Exact Agreement", value: `${percentExactAgreement.toFixed(1)}%` },
+          { label: "Within +/-1 Grade", value: `${percentWithinOneGrade.toFixed(1)}%` },
+          { label: "Weighted Kappa", value: `${weightedKappa.toFixed(3)} (${kappaInterp})` },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      {/* Concordance Matrix */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Concordance Matrix</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">{primaryName} \\ {compName}</th>
+                  {gradeScale.map(g => <th key={g} className="text-center py-2 px-3 text-muted-foreground font-medium">{g}</th>)}
+                  <th className="text-center py-2 px-3 text-muted-foreground font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gradeScale.map((refGrade, ri) => {
+                  const rowTotal = gradeScale.reduce((s, cg) => s + (concordanceMatrix[refGrade]?.[cg] || 0), 0);
+                  return (
+                    <tr key={refGrade} className="border-b border-border/40">
+                      <td className="py-2 pr-3 font-medium">{refGrade}</td>
+                      {gradeScale.map((compGrade, ci) => {
+                        const count = concordanceMatrix[refGrade]?.[compGrade] || 0;
+                        const diff = Math.abs(ri - ci);
+                        const bg = diff === 0 ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold"
+                          : diff === 1 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                          : count > 0 ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" : "";
+                        return (
+                          <td key={compGrade} className={`text-center py-2 px-3 font-mono ${bg}`}>
+                            {count}
+                          </td>
+                        );
+                      })}
+                      <td className="text-center py-2 px-3 font-mono text-muted-foreground">{rowTotal}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 dark:bg-green-800 inline-block" /> Exact match</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-200 dark:bg-yellow-800 inline-block" /> +/-1 grade</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 dark:bg-red-800 inline-block" /> {">"}+/-1 grade</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sample-by-Sample Detail */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Sample-by-Sample Results</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Sample</th>
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">{primaryName} (Reference)</th>
+                  <th className="text-left py-2 pr-3 text-muted-foreground font-medium">{compName}</th>
+                  <th className="text-center py-2 pr-3 text-muted-foreground font-medium">Grade Diff</th>
+                  <th className="text-center py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sampleDetails.map((sd) => (
+                  <tr key={sd.sample} className="border-b border-border/40">
+                    <td className="py-2 pr-3 font-mono">S{sd.sample}</td>
+                    <td className="py-2 pr-3">{sd.reference}</td>
+                    <td className="py-2 pr-3">{sd.comparison}</td>
+                    <td className={`text-center py-2 pr-3 font-mono ${sd.gradeDiff === 0 ? "text-green-600" : sd.gradeDiff === 1 ? "text-yellow-600" : "text-red-600"}`}>
+                      {sd.gradeDiff}
+                    </td>
+                    <td className="text-center py-2 pr-3">
+                      <span className={sd.pass ? "pass-badge" : "fail-badge"}>{sd.pass ? "Pass" : "Fail"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Additional stats */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Summary Statistics</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+            <div><span className="text-muted-foreground">Max Discrepancy:</span> <span className="font-mono font-bold">{maxDiscrepancy} grade{maxDiscrepancy !== 1 ? "s" : ""}</span></div>
+            <div><span className="text-muted-foreground">Pass Threshold:</span> <span className="font-mono">{`≥${(passThreshold * 100).toFixed(0)}% within ±1`}</span></div>
+            <div><span className="text-muted-foreground">Grade Scale:</span> <span className="font-mono">{gradeScale.join(" / ")}</span></div>
           </div>
         </CardContent>
       </Card>
@@ -1430,26 +1676,44 @@ export default function StudyResults() {
     const { specimens, refLow, refHigh, analyte, units } = rawDataPoints;
     results = calculateRefInterval(specimens, refLow, refHigh, analyte || study.testName, units || "");
   } else if (study.studyType === "method_comparison") {
-    // Handle both old and new data formats for method comparison
-    const dp = rawDataPoints as DataPoint[];
-    const primaryName = instrumentNames[0];
-    // Check if this is new format: primary instrument values are in instrumentValues
-    const hasAllInstrumentsInValues = dp.length > 0 && instrumentNames.every(n => n in (dp[0].instrumentValues || {}));
-    if (hasAllInstrumentsInValues && instrumentNames.length >= 2) {
-      // New format: map primary instrument values to expectedValue, comparison instruments stay in instrumentValues
+    // Check if this is qualitative or semi-quantitative data
+    if (rawDataPoints.assayType === "qualitative") {
+      const { categories, passThreshold, points } = rawDataPoints;
       const comparisonNames = instrumentNames.slice(1);
-      const mappedPoints: DataPoint[] = dp.map(d => ({
-        level: d.level,
-        expectedValue: d.instrumentValues[primaryName] ?? null,
-        instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
+      const mappedPoints: DataPoint[] = (points as DataPoint[]).map(dp => ({
+        level: dp.level, expectedValue: null, instrumentValues: {},
+        expectedCategory: dp.expectedCategory ?? null,
+        instrumentCategories: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentCategories?.[n] ?? null])),
       }));
-      const isPercentage = (study as any).teaIsPercentage !== 0;
-      results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage);
+      results = calculateQualitative(mappedPoints, comparisonNames, categories, passThreshold);
+    } else if (rawDataPoints.assayType === "semi_quantitative") {
+      const { gradeScale, passThreshold, points } = rawDataPoints;
+      const comparisonNames = instrumentNames.slice(1);
+      const mappedPoints: DataPoint[] = (points as DataPoint[]).map(dp => ({
+        level: dp.level, expectedValue: null, instrumentValues: {},
+        expectedCategory: dp.expectedCategory ?? null,
+        instrumentCategories: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentCategories?.[n] ?? null])),
+      }));
+      results = calculateSemiQuant(mappedPoints, comparisonNames, gradeScale, passThreshold);
     } else {
-      // Old format: expectedValue is already the reference, instrumentValues has test instruments
-      const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
-      const isPercentage = (study as any).teaIsPercentage !== 0;
-      results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage);
+      // Standard quantitative method comparison
+      const dp = rawDataPoints as DataPoint[];
+      const primaryName = instrumentNames[0];
+      const hasAllInstrumentsInValues = dp.length > 0 && instrumentNames.every(n => n in (dp[0].instrumentValues || {}));
+      if (hasAllInstrumentsInValues && instrumentNames.length >= 2) {
+        const comparisonNames = instrumentNames.slice(1);
+        const mappedPoints: DataPoint[] = dp.map(d => ({
+          level: d.level,
+          expectedValue: d.instrumentValues[primaryName] ?? null,
+          instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
+        }));
+        const isPercentage = (study as any).teaIsPercentage !== 0;
+        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage);
+      } else {
+        const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
+        const isPercentage = (study as any).teaIsPercentage !== 0;
+        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage);
+      }
     }
   } else {
     const isPercentage = (study as any).teaIsPercentage !== 0;
@@ -1475,6 +1739,8 @@ export default function StudyResults() {
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
       {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
+      {isQualitative(results) && <QualitativeReport study={study} results={results} />}
+      {isSemiQuant(results) && <SemiQuantReport study={study} results={results} />}
       {isPrecision(results) && <PrecisionReport study={study} results={results} />}
       {isLotToLot(results) && <LotToLotReport study={study} results={results} />}
       {isPTCoag(results) && <PTCoagReport study={study} results={results} />}

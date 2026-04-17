@@ -818,6 +818,206 @@ interface MethodCompData {
   summary: string;
 }
 
+// ─── Kappa interpretation (mirrors client) ──────────────────────────────────
+function interpretKappa(k: number): string {
+  if (k < 0.20) return "Poor";
+  if (k <= 0.40) return "Fair";
+  if (k <= 0.60) return "Moderate";
+  if (k <= 0.80) return "Substantial";
+  return "Almost Perfect";
+}
+
+// ─── QUALITATIVE METHOD COMPARISON HTML ─────────────────────────────────────
+function buildQualitativeHTML(study: Study, results: any): string {
+  const allInstrumentNames: string[] = safeJsonParse(study.instruments) || [];
+  const primaryName = allInstrumentNames[0] || "Reference";
+  const compName = allInstrumentNames[1] || "Comparison";
+
+  const categories: string[] = results.categories || [];
+  const matrix: { [ref: string]: { [comp: string]: number } } = results.concordanceMatrix || {};
+  const totalSamples: number = results.totalSamples || 0;
+  const pctAgreement: number = results.percentAgreement || 0;
+  const kappa: number = results.cohensKappa || 0;
+  const kappaInterp = interpretKappa(kappa);
+  const sensitivity: number = results.sensitivity || 0;
+  const specificity: number = results.specificity || 0;
+  const passThreshold: number = results.passThreshold || 90;
+  const overallPass: boolean = results.overallPass ?? (pctAgreement >= passThreshold);
+
+  // Build concordance matrix table
+  const matrixHeaders = categories.map(c => `<th class="text-center">${c}</th>`).join("");
+  const matrixRows = categories.map((ref, ri) => {
+    const cells = categories.map(comp => {
+      const count = (matrix[ref] && matrix[ref][comp]) || 0;
+      const isAgreement = ref === comp;
+      const bgColor = isAgreement ? "#dcfce7" : (count > 0 ? "#fee2e2" : "transparent");
+      return `<td class="text-center" style="background:${bgColor};font-weight:${count > 0 ? '600' : '400'}">${count}</td>`;
+    }).join("");
+    return `<tr class="${ri % 2 === 1 ? 'stripe' : ''}"><td style="font-weight:600">${ref}</td>${cells}</tr>`;
+  }).join("");
+
+  const verdictText = overallPass
+    ? `Qualitative method comparison meets acceptance criteria — ${sf(pctAgreement, 1)}% agreement (threshold: ≥${passThreshold}%)`
+    : `Qualitative method comparison does not meet acceptance criteria — ${sf(pctAgreement, 1)}% agreement (threshold: ≥${passThreshold}%)`;
+
+  const narrative = overallPass
+    ? `The qualitative method comparison for ${study.testName} demonstrated ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
+    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Investigation and corrective action are recommended. Final determination must be made by the laboratory director or designee.</b>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Qualitative Method Comparison - ${study.testName}</title><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+
+  <div class="section-heading">Qualitative Method Comparison Study</div>
+  <div class="report-title-sub">Reference Method: ${primaryName} | Comparison Method: ${compName}</div>
+
+  <hr class="divider">
+  <div class="section-label">Concordance Matrix</div>
+  <table>
+    <thead><tr><th>${primaryName} \\ ${compName}</th>${matrixHeaders}</tr></thead>
+    <tbody>${matrixRows}</tbody>
+  </table>
+  <div style="font-size:6.5pt;color:${MUTED};margin-top:3px"><span style="background:#dcfce7;padding:1px 4px;border-radius:2px">Green</span> = agreement &nbsp; <span style="background:#fee2e2;padding:1px 4px;border-radius:2px">Red</span> = discordant</div>
+
+  <hr class="divider" style="margin-top:8px">
+  <div class="section-label">Key Statistics</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Total Samples</td><td style="width:25%">${totalSamples}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">% Agreement</td><td style="width:25%" class="${overallPass ? 'pass' : 'fail'}">${sf(pctAgreement, 1)}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Cohen's Kappa (\u03BA)</td><td>${sf(kappa, 3)} (${kappaInterp})</td>
+          <td style="color:${MUTED};font-weight:700">Acceptance Threshold</td><td>\u2265${passThreshold}%</td></tr>
+      ${categories.length === 2 ? `<tr><td style="color:${MUTED};font-weight:700">Sensitivity</td><td>${sf(sensitivity * 100, 1)}%</td>
+          <td style="color:${MUTED};font-weight:700">Specificity</td><td>${sf(specificity * 100, 1)}%</td></tr>` : ''}
+      <tr><td style="color:${MUTED};font-weight:700">Overall</td><td class="${overallPass ? 'pass' : 'fail'}">${overallPass ? 'PASS' : 'FAIL'}</td>
+          <td></td><td></td></tr>
+    </tbody>
+  </table>
+
+  <div class="eval-section">
+    <hr class="divider">
+    <div class="eval-title">Evaluation of Results</div>
+    <div class="eval-text">${narrative}</div>
+    <div class="verdict ${overallPass ? 'pass-bg' : 'fail-bg'}">${verdictText}</div>
+  </div>
+
+  ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  ${supportingPageHTML(study, allInstrumentNames)}
+  </body></html>`;
+}
+
+// ─── SEMI-QUANTITATIVE METHOD COMPARISON HTML ───────────────────────────────
+function buildSemiQuantHTML(study: Study, results: any): string {
+  const allInstrumentNames: string[] = safeJsonParse(study.instruments) || [];
+  const primaryName = allInstrumentNames[0] || "Reference";
+  const compName = allInstrumentNames[1] || "Comparison";
+
+  const gradeScale: string[] = results.gradeScale || [];
+  const matrix: { [ref: string]: { [comp: string]: number } } = results.concordanceMatrix || {};
+  const totalSamples: number = results.totalSamples || 0;
+  const pctExact: number = results.percentExactAgreement || 0;
+  const pctWithinOne: number = results.percentWithinOneGrade || 0;
+  const wKappa: number = results.weightedKappa || 0;
+  const wKappaInterp = interpretKappa(wKappa);
+  const maxDiscrep: number = results.maxDiscrepancy || 0;
+  const passThreshold: number = results.passThreshold || 80;
+  const overallPass: boolean = results.overallPass ?? (pctWithinOne >= passThreshold);
+  const sampleDetails: any[] = results.sampleDetails || [];
+
+  // Build concordance matrix with color coding
+  const matrixHeaders = gradeScale.map(g => `<th class="text-center">${g}</th>`).join("");
+  const matrixRows = gradeScale.map((ref, ri) => {
+    const refIdx = gradeScale.indexOf(ref);
+    const cells = gradeScale.map(comp => {
+      const compIdx = gradeScale.indexOf(comp);
+      const count = (matrix[ref] && matrix[ref][comp]) || 0;
+      const diff = Math.abs(refIdx - compIdx);
+      const bgColor = diff === 0 ? "#dcfce7" : diff === 1 ? "#fef9c3" : (count > 0 ? "#fee2e2" : "transparent");
+      return `<td class="text-center" style="background:${bgColor};font-weight:${count > 0 ? '600' : '400'}">${count}</td>`;
+    }).join("");
+    return `<tr class="${ri % 2 === 1 ? 'stripe' : ''}"><td style="font-weight:600">${ref}</td>${cells}</tr>`;
+  }).join("");
+
+  // Sample-by-sample detail table
+  const detailRows = sampleDetails.map((s: any, i: number) => {
+    const diff = Math.abs(s.refIndex - s.compIndex);
+    const statusClass = diff === 0 ? "pass" : diff === 1 ? "warn" : "fail";
+    const statusText = diff === 0 ? "Exact" : diff === 1 ? "\u00B11" : `\u00B1${diff}`;
+    return `<tr class="${i % 2 === 1 ? 'stripe' : ''}">
+      <td>S${s.sampleNum || i + 1}</td>
+      <td class="text-center">${s.refGrade}</td>
+      <td class="text-center">${s.compGrade}</td>
+      <td class="text-center ${statusClass}">${statusText}</td>
+    </tr>`;
+  }).join("");
+
+  const verdictText = overallPass
+    ? `Semi-quantitative method comparison meets acceptance criteria — ${sf(pctWithinOne, 1)}% within \u00B11 grade (threshold: \u2265${passThreshold}%)`
+    : `Semi-quantitative method comparison does not meet acceptance criteria — ${sf(pctWithinOne, 1)}% within \u00B11 grade (threshold: \u2265${passThreshold}%)`;
+
+  const narrative = overallPass
+    ? `The semi-quantitative method comparison for ${study.testName} demonstrated ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy observed was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
+    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Investigation and corrective action are recommended. Final determination must be made by the laboratory director or designee.</b>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Semi-Quantitative Method Comparison - ${study.testName}</title><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+
+  <div class="section-heading">Semi-Quantitative Method Comparison Study</div>
+  <div class="report-title-sub">Reference Method: ${primaryName} | Comparison Method: ${compName} | Scale: ${gradeScale.join(" \u2192 ")}</div>
+
+  <hr class="divider">
+  <div class="section-label">Concordance Matrix</div>
+  <table>
+    <thead><tr><th>${primaryName} \\ ${compName}</th>${matrixHeaders}</tr></thead>
+    <tbody>${matrixRows}</tbody>
+  </table>
+  <div style="font-size:6.5pt;color:${MUTED};margin-top:3px"><span style="background:#dcfce7;padding:1px 4px;border-radius:2px">Green</span> = exact &nbsp; <span style="background:#fef9c3;padding:1px 4px;border-radius:2px">Yellow</span> = \u00B11 grade &nbsp; <span style="background:#fee2e2;padding:1px 4px;border-radius:2px">Red</span> = >\u00B11 grade</div>
+
+  <hr class="divider" style="margin-top:8px">
+  <div class="section-label">Key Statistics</div>
+  <table style="font-size:8pt;margin-bottom:6px">
+    <tbody>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Total Samples</td><td style="width:25%">${totalSamples}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">Exact Agreement</td><td style="width:25%">${sf(pctExact, 1)}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Within \u00B11 Grade</td><td class="${overallPass ? 'pass' : 'fail'}">${sf(pctWithinOne, 1)}%</td>
+          <td style="color:${MUTED};font-weight:700">Acceptance Threshold</td><td>\u2265${passThreshold}%</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Weighted Kappa (\u03BA<sub>w</sub>)</td><td>${sf(wKappa, 3)} (${wKappaInterp})</td>
+          <td style="color:${MUTED};font-weight:700">Max Discrepancy</td><td>${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Overall</td><td class="${overallPass ? 'pass' : 'fail'}">${overallPass ? 'PASS' : 'FAIL'}</td>
+          <td></td><td></td></tr>
+    </tbody>
+  </table>
+
+  <div class="eval-section">
+    <hr class="divider">
+    <div class="eval-title">Evaluation of Results</div>
+    <div class="eval-text">${narrative}</div>
+    <div class="verdict ${overallPass ? 'pass-bg' : 'fail-bg'}">${verdictText}</div>
+  </div>
+
+  ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+
+  <div class="stats-section">
+    <div class="section-label">Sample-by-Sample Detail</div>
+    <table>
+      <thead><tr>
+        <th>Sample</th><th class="text-center">${primaryName} (Ref)</th><th class="text-center">${compName}</th><th class="text-center">Status</th>
+      </tr></thead>
+      <tbody>${detailRows}</tbody>
+    </table>
+  </div>
+
+  ${supportingPageHTML(study, allInstrumentNames)}
+  </body></html>`;
+}
+
 function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   const allInstrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const primaryName = allInstrumentNames[0] || "Primary";
@@ -1865,6 +2065,10 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
   // Attach cliaNumber and preferredStandards to study object for internal builder use
   (study as any)._cliaNumber = cliaNumber || null;
   (study as any)._preferredStandards = preferredStandards || null;
+  // For method_comparison, check if results indicate qualitative or semi-quantitative type
+  const isQualResult = study.studyType === "method_comparison" && results?.type === "qualitative";
+  const isSemiQuantResult = study.studyType === "method_comparison" && results?.type === "semi_quantitative";
+
   const html = study.studyType === "cal_ver"
     ? buildCalVerHTML(study, results)
     : study.studyType === "precision"
@@ -1879,6 +2083,10 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildMultiAnalyteCoagHTML(study, results)
     : study.studyType === "ref_interval"
     ? buildRefIntervalHTML(study, results)
+    : isQualResult
+    ? buildQualitativeHTML(study, results)
+    : isSemiQuantResult
+    ? buildSemiQuantHTML(study, results)
     : buildMethodCompHTML(study, results);
 
   const browser = await getBrowser();

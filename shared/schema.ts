@@ -72,4 +72,7 @@ export interface DataPoint {
   level: number;
   expectedValue: number | null;
   instrumentValues: { [key: string]: number | null };
+  // Qualitative / semi-quantitative categorical fields (used INSTEAD of numeric fields)
+  expectedCategory?: string | null;
+  instrumentCategories?: { [key: string]: string | null };
 }

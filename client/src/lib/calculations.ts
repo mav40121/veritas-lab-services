@@ -4,6 +4,9 @@ export interface DataPoint {
   level: number;
   expectedValue: number | null;       // Cal Ver: assigned value | Method Comp: reference method value
   instrumentValues: { [key: string]: number | null };
+  // Qualitative / semi-quantitative categorical fields (used INSTEAD of numeric fields)
+  expectedCategory?: string | null;
+  instrumentCategories?: { [key: string]: string | null };
 }
 
 // ─── Math helpers ────────────────────────────────────────────────────────────
@@ -360,6 +363,217 @@ export function calculateMethodComparison(
     `The method comparison ${overallPass ? "PASSED" : "FAILED"} CLIA acceptability criteria.`;
 
   return { type: "method_comparison", levelResults, regression, blandAltman, overallPass, passCount, totalCount, xRange, yRange, summary };
+}
+
+// ─── QUALITATIVE METHOD COMPARISON ───────────────────────────────────────────
+// Binary concordance: Pos/Neg, Reactive/Nonreactive, Detected/Not Detected
+
+export interface QualitativeResults {
+  type: "qualitative";
+  concordanceMatrix: { [refCat: string]: { [compCat: string]: number } };
+  totalSamples: number;
+  percentAgreement: number;
+  sensitivity: number;
+  specificity: number;
+  cohensKappa: number;
+  overallPass: boolean;
+  summary: string;
+  categories: string[];
+  passThreshold: number;
+}
+
+function interpretKappa(k: number): string {
+  if (k < 0.20) return "Poor";
+  if (k <= 0.40) return "Fair";
+  if (k <= 0.60) return "Moderate";
+  if (k <= 0.80) return "Substantial";
+  return "Almost Perfect";
+}
+
+export function calculateQualitative(
+  dataPoints: DataPoint[],
+  instrumentNames: string[],
+  categories: string[],
+  passThreshold: number = 0.90
+): QualitativeResults {
+  // Use expectedCategory as reference, instrumentCategories for comparison
+  const compName = instrumentNames[0];
+  const valid = dataPoints.filter(
+    (dp) => dp.expectedCategory && dp.instrumentCategories?.[compName]
+  );
+  const n = valid.length;
+
+  // Build concordance matrix
+  const matrix: { [ref: string]: { [comp: string]: number } } = {};
+  categories.forEach((r) => {
+    matrix[r] = {};
+    categories.forEach((c) => { matrix[r][c] = 0; });
+  });
+  valid.forEach((dp) => {
+    const ref = dp.expectedCategory!;
+    const comp = dp.instrumentCategories![compName]!;
+    if (matrix[ref] && matrix[ref][comp] !== undefined) {
+      matrix[ref][comp]++;
+    }
+  });
+
+  // Percent agreement (diagonal sum / total)
+  let agree = 0;
+  categories.forEach((c) => { agree += matrix[c]?.[c] || 0; });
+  const percentAgreement = n > 0 ? (agree / n) * 100 : 0;
+
+  // Cohen's kappa: k = (Po - Pe) / (1 - Pe)
+  const Po = n > 0 ? agree / n : 0;
+  let Pe = 0;
+  categories.forEach((c) => {
+    const rowTotal = categories.reduce((s, cc) => s + (matrix[c]?.[cc] || 0), 0);
+    const colTotal = categories.reduce((s, rc) => s + (matrix[rc]?.[c] || 0), 0);
+    Pe += (rowTotal * colTotal);
+  });
+  Pe = n > 0 ? Pe / (n * n) : 0;
+  const cohensKappa = Pe < 1 ? (Po - Pe) / (1 - Pe) : 1;
+
+  // Sensitivity and specificity (for binary: first category = positive)
+  let sensitivity = 0, specificity = 0;
+  if (categories.length === 2) {
+    const pos = categories[0], neg = categories[1];
+    const tp = matrix[pos]?.[pos] || 0;
+    const fn = matrix[pos]?.[neg] || 0;
+    const fp = matrix[neg]?.[pos] || 0;
+    const tn = matrix[neg]?.[neg] || 0;
+    sensitivity = (tp + fn) > 0 ? (tp / (tp + fn)) * 100 : 0;
+    specificity = (tn + fp) > 0 ? (tn / (tn + fp)) * 100 : 0;
+  }
+
+  const overallPass = percentAgreement >= passThreshold * 100;
+
+  const summary =
+    `Qualitative method comparison was performed using ${n} patient samples. ` +
+    `Overall agreement was ${percentAgreement.toFixed(1)}% (${agree}/${n}). ` +
+    `Cohen's kappa = ${cohensKappa.toFixed(3)} (${interpretKappa(cohensKappa)}). ` +
+    (categories.length === 2 ? `Sensitivity = ${sensitivity.toFixed(1)}%, Specificity = ${specificity.toFixed(1)}%. ` : "") +
+    `Acceptance criterion: >=${(passThreshold * 100).toFixed(0)}% agreement. ` +
+    `The qualitative method comparison ${overallPass ? "PASSED" : "FAILED"} acceptability criteria.`;
+
+  return {
+    type: "qualitative", concordanceMatrix: matrix, totalSamples: n,
+    percentAgreement, sensitivity, specificity, cohensKappa,
+    overallPass, summary, categories, passThreshold,
+  };
+}
+
+// ─── SEMI-QUANTITATIVE METHOD COMPARISON ────────────────────────────────────
+// Ordinal grades with +/-1 grade acceptance
+
+export interface SemiQuantSampleDetail {
+  sample: number;
+  reference: string;
+  comparison: string;
+  gradeDiff: number;
+  pass: boolean;
+}
+
+export interface SemiQuantResults {
+  type: "semi_quantitative";
+  concordanceMatrix: { [refGrade: string]: { [compGrade: string]: number } };
+  totalSamples: number;
+  percentExactAgreement: number;
+  percentWithinOneGrade: number;
+  weightedKappa: number;
+  maxDiscrepancy: number;
+  overallPass: boolean;
+  summary: string;
+  gradeScale: string[];
+  sampleDetails: SemiQuantSampleDetail[];
+  passThreshold: number;
+}
+
+export function calculateSemiQuant(
+  dataPoints: DataPoint[],
+  instrumentNames: string[],
+  gradeScale: string[],
+  passThreshold: number = 0.80
+): SemiQuantResults {
+  const compName = instrumentNames[0];
+  const valid = dataPoints.filter(
+    (dp) => dp.expectedCategory && dp.instrumentCategories?.[compName]
+  );
+  const n = valid.length;
+  const k = gradeScale.length;
+
+  // Build grade index map for ordinal distance
+  const gradeIndex: { [g: string]: number } = {};
+  gradeScale.forEach((g, i) => { gradeIndex[g] = i; });
+
+  // Concordance matrix
+  const matrix: { [ref: string]: { [comp: string]: number } } = {};
+  gradeScale.forEach((r) => {
+    matrix[r] = {};
+    gradeScale.forEach((c) => { matrix[r][c] = 0; });
+  });
+
+  const sampleDetails: SemiQuantSampleDetail[] = [];
+  let exactCount = 0, withinOneCount = 0, maxDisc = 0;
+
+  valid.forEach((dp) => {
+    const ref = dp.expectedCategory!;
+    const comp = dp.instrumentCategories![compName]!;
+    if (matrix[ref] && matrix[ref][comp] !== undefined) {
+      matrix[ref][comp]++;
+    }
+    const refIdx = gradeIndex[ref] ?? 0;
+    const compIdx = gradeIndex[comp] ?? 0;
+    const diff = Math.abs(refIdx - compIdx);
+    if (diff === 0) exactCount++;
+    if (diff <= 1) withinOneCount++;
+    if (diff > maxDisc) maxDisc = diff;
+    sampleDetails.push({
+      sample: dp.level, reference: ref, comparison: comp,
+      gradeDiff: diff, pass: diff <= 1,
+    });
+  });
+
+  const percentExactAgreement = n > 0 ? (exactCount / n) * 100 : 0;
+  const percentWithinOneGrade = n > 0 ? (withinOneCount / n) * 100 : 0;
+
+  // Weighted kappa with linear weights: w_ij = 1 - |i-j| / (k-1)
+  let weightedPo = 0, weightedPe = 0;
+  if (n > 0 && k > 1) {
+    gradeScale.forEach((r, i) => {
+      gradeScale.forEach((c, j) => {
+        const w = 1 - Math.abs(i - j) / (k - 1);
+        weightedPo += w * ((matrix[r]?.[c] || 0) / n);
+      });
+    });
+    gradeScale.forEach((r, i) => {
+      const rowTotal = gradeScale.reduce((s, cc) => s + (matrix[r]?.[cc] || 0), 0);
+      gradeScale.forEach((c, j) => {
+        const colTotal = gradeScale.reduce((s, rc) => s + (matrix[rc]?.[c] || 0), 0);
+        const w = 1 - Math.abs(i - j) / (k - 1);
+        weightedPe += w * (rowTotal / n) * (colTotal / n);
+      });
+    });
+  }
+  const weightedKappa = weightedPe < 1 ? (weightedPo - weightedPe) / (1 - weightedPe) : 1;
+
+  const overallPass = percentWithinOneGrade >= passThreshold * 100;
+
+  const summary =
+    `Semi-quantitative method comparison was performed using ${n} patient samples ` +
+    `with a ${k}-grade ordinal scale (${gradeScale.join(", ")}). ` +
+    `Exact agreement: ${percentExactAgreement.toFixed(1)}% (${exactCount}/${n}). ` +
+    `Agreement within +/-1 grade: ${percentWithinOneGrade.toFixed(1)}% (${withinOneCount}/${n}). ` +
+    `Weighted kappa = ${weightedKappa.toFixed(3)} (${interpretKappa(weightedKappa)}). ` +
+    `Maximum discrepancy: ${maxDisc} grade${maxDisc !== 1 ? "s" : ""}. ` +
+    `Acceptance criterion: >=${(passThreshold * 100).toFixed(0)}% within +/-1 grade. ` +
+    `The semi-quantitative method comparison ${overallPass ? "PASSED" : "FAILED"} acceptability criteria.`;
+
+  return {
+    type: "semi_quantitative", concordanceMatrix: matrix, totalSamples: n,
+    percentExactAgreement, percentWithinOneGrade, weightedKappa,
+    maxDiscrepancy: maxDisc, overallPass, summary, gradeScale,
+    sampleDetails, passThreshold,
+  };
 }
 
 // ─── PRECISION / IMPRECISION ──────────────────────────────────────────────────
@@ -924,7 +1138,7 @@ export function calculateMultiAnalyteCoag(
 }
 
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults;
+export type StudyResults = CalVerResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -950,6 +1164,8 @@ export function isLotToLot(r: StudyResults): r is LotToLotResults { return r.typ
 export function isPTCoag(r: StudyResults): r is PTCoagResults { return r.type === "pt_coag"; }
 export function isQCRange(r: StudyResults): r is QCRangeResults { return r.type === "qc_range"; }
 export function isMultiAnalyteCoag(r: StudyResults): r is MultiAnalyteResults { return r.type === "multi_analyte_coag"; }
+export function isQualitative(r: StudyResults): r is QualitativeResults { return r.type === "qualitative"; }
+export function isSemiQuant(r: StudyResults): r is SemiQuantResults { return r.type === "semi_quantitative"; }
 
 // ─── Reference Range Verification ───────────────────────────────────────────
 export interface RefIntervalDataPoint {

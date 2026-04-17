@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import type { Study } from "@shared/schema";
-import type { StudyResults, CalVerResults, MethodCompResults } from "./calculations";
+import type { StudyResults, CalVerResults, MethodCompResults, QualitativeResults, SemiQuantResults } from "./calculations";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const TEAL        = [14, 165, 150]  as const;
@@ -662,16 +662,203 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
 }
 
+// ─── PDF: QUALITATIVE METHOD COMPARISON ──────────────────────────────────────
+function generateQualitativePDF(doc: jsPDF, study: Study, results: QualitativeResults) {
+  const pw = 215.9, margin = 15, contentW = pw - 2*margin;
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  let y = pdfHeader(doc, study, pw, margin);
+
+  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text("Qualitative Correlation / Method Comparison", margin, y); y += 6;
+
+  // Concordance Matrix
+  hLine(doc, y); y += 4;
+  sectionTitle(doc, "Concordance Matrix", y, pw); y += 5;
+  const cats = results.categories;
+  const matColW = Math.min(30, (contentW - 40) / (cats.length + 1));
+  const matX0 = margin + 40;
+  // Header
+  setFillRgb(doc, LIGHT_GRAY);
+  doc.rect(margin, y-3, contentW, 6, "F");
+  doc.setFontSize(7.5); doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+  doc.text(`${instrumentNames[0]} \\ ${instrumentNames[1] || "Comp"}`, margin+2, y);
+  cats.forEach((c, i) => doc.text(c, matX0 + i*matColW + matColW/2, y, { align: "center" }));
+  doc.text("Total", matX0 + cats.length*matColW + matColW/2, y, { align: "center" });
+  y += 7;
+  doc.setFont("helvetica","normal");
+  cats.forEach((refCat) => {
+    const rowTotal = cats.reduce((s, cc) => s + (results.concordanceMatrix[refCat]?.[cc] || 0), 0);
+    doc.setFontSize(7.5); setRgb(doc, DARK);
+    doc.text(refCat, margin+2, y);
+    cats.forEach((compCat, j) => {
+      const count = results.concordanceMatrix[refCat]?.[compCat] || 0;
+      const isAgree = refCat === compCat;
+      if (isAgree && count > 0) {
+        setFillRgb(doc, [220, 255, 220]);
+        doc.rect(matX0 + j*matColW, y-3, matColW, 5, "F");
+      } else if (!isAgree && count > 0) {
+        setFillRgb(doc, [255, 220, 220]);
+        doc.rect(matX0 + j*matColW, y-3, matColW, 5, "F");
+      }
+      setRgb(doc, DARK);
+      doc.text(String(count), matX0 + j*matColW + matColW/2, y, { align: "center" });
+    });
+    setRgb(doc, MUTED);
+    doc.text(String(rowTotal), matX0 + cats.length*matColW + matColW/2, y, { align: "center" });
+    y += 5;
+  });
+
+  // Key Statistics
+  y += 4; hLine(doc, y); y += 4;
+  sectionTitle(doc, "Key Statistics", y, pw); y += 5;
+  doc.setFontSize(8); doc.setFont("helvetica","normal");
+  const kappaInterp = results.cohensKappa < 0.20 ? "Poor" : results.cohensKappa <= 0.40 ? "Fair" : results.cohensKappa <= 0.60 ? "Moderate" : results.cohensKappa <= 0.80 ? "Substantial" : "Almost Perfect";
+  const stats = [
+    ["Total Samples:", String(results.totalSamples)],
+    ["Percent Agreement:", `${results.percentAgreement.toFixed(1)}%`],
+    ["Cohen's Kappa:", `${results.cohensKappa.toFixed(3)} (${kappaInterp})`],
+    ["Pass Threshold:", `>=${(results.passThreshold * 100).toFixed(0)}%`],
+  ];
+  if (results.sensitivity > 0) {
+    stats.push(["Sensitivity:", `${results.sensitivity.toFixed(1)}%`]);
+    stats.push(["Specificity:", `${results.specificity.toFixed(1)}%`]);
+  }
+  stats.forEach(([label, value]) => {
+    doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+    doc.text(label, margin, y);
+    doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+    doc.text(value, margin+50, y);
+    y += 5;
+  });
+
+  y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
+  pdfPageFooter(doc, pw, margin);
+  pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
+}
+
+// ─── PDF: SEMI-QUANTITATIVE METHOD COMPARISON ───────────────────────────────
+function generateSemiQuantPDF(doc: jsPDF, study: Study, results: SemiQuantResults) {
+  const pw = 215.9, margin = 15, contentW = pw - 2*margin;
+  const instrumentNames: string[] = JSON.parse(study.instruments);
+  let y = pdfHeader(doc, study, pw, margin);
+
+  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
+  doc.text("Semi-Quantitative Correlation / Method Comparison", margin, y); y += 6;
+
+  // Concordance Matrix
+  hLine(doc, y); y += 4;
+  sectionTitle(doc, "Concordance Matrix", y, pw); y += 5;
+  const grades = results.gradeScale;
+  const matColW = Math.min(28, (contentW - 40) / (grades.length + 1));
+  const matX0 = margin + 40;
+  setFillRgb(doc, LIGHT_GRAY);
+  doc.rect(margin, y-3, contentW, 6, "F");
+  doc.setFontSize(7); doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+  doc.text(`${instrumentNames[0]} \\ ${instrumentNames[1] || "Comp"}`, margin+2, y);
+  grades.forEach((g, i) => doc.text(g, matX0 + i*matColW + matColW/2, y, { align: "center" }));
+  doc.text("Total", matX0 + grades.length*matColW + matColW/2, y, { align: "center" });
+  y += 7;
+  doc.setFont("helvetica","normal");
+  grades.forEach((refGrade, ri) => {
+    const rowTotal = grades.reduce((s, cg) => s + (results.concordanceMatrix[refGrade]?.[cg] || 0), 0);
+    doc.setFontSize(7); setRgb(doc, DARK);
+    doc.text(refGrade, margin+2, y);
+    grades.forEach((compGrade, ci) => {
+      const count = results.concordanceMatrix[refGrade]?.[compGrade] || 0;
+      const diff = Math.abs(ri - ci);
+      if (diff === 0 && count > 0) {
+        setFillRgb(doc, [220, 255, 220]);
+        doc.rect(matX0 + ci*matColW, y-3, matColW, 5, "F");
+      } else if (diff === 1 && count > 0) {
+        setFillRgb(doc, [255, 255, 210]);
+        doc.rect(matX0 + ci*matColW, y-3, matColW, 5, "F");
+      } else if (count > 0) {
+        setFillRgb(doc, [255, 220, 220]);
+        doc.rect(matX0 + ci*matColW, y-3, matColW, 5, "F");
+      }
+      setRgb(doc, DARK);
+      doc.text(String(count), matX0 + ci*matColW + matColW/2, y, { align: "center" });
+    });
+    setRgb(doc, MUTED);
+    doc.text(String(rowTotal), matX0 + grades.length*matColW + matColW/2, y, { align: "center" });
+    y += 5;
+  });
+
+  // Key Statistics
+  y += 4; hLine(doc, y); y += 4;
+  sectionTitle(doc, "Key Statistics", y, pw); y += 5;
+  doc.setFontSize(8); doc.setFont("helvetica","normal");
+  const kappaInterp = results.weightedKappa < 0.20 ? "Poor" : results.weightedKappa <= 0.40 ? "Fair" : results.weightedKappa <= 0.60 ? "Moderate" : results.weightedKappa <= 0.80 ? "Substantial" : "Almost Perfect";
+  const stats = [
+    ["Total Samples:", String(results.totalSamples)],
+    ["Exact Agreement:", `${results.percentExactAgreement.toFixed(1)}%`],
+    ["Within +/-1 Grade:", `${results.percentWithinOneGrade.toFixed(1)}%`],
+    ["Weighted Kappa:", `${results.weightedKappa.toFixed(3)} (${kappaInterp})`],
+    ["Max Discrepancy:", `${results.maxDiscrepancy} grade${results.maxDiscrepancy !== 1 ? "s" : ""}`],
+    ["Pass Threshold:", `>=${(results.passThreshold * 100).toFixed(0)}% within +/-1`],
+    ["Grade Scale:", results.gradeScale.join(" / ")],
+  ];
+  stats.forEach(([label, value]) => {
+    doc.setFont("helvetica","bold"); setRgb(doc, MUTED);
+    doc.text(label, margin, y);
+    doc.setFont("helvetica","normal"); setRgb(doc, DARK);
+    doc.text(value, margin+50, y);
+    y += 5;
+  });
+
+  // Sample-by-sample detail
+  const pageH = doc.internal.pageSize.height;
+  const footerH = 68;
+  y += 4; hLine(doc, y); y += 4;
+  sectionTitle(doc, "Sample-by-Sample Results", y, pw); y += 5;
+  const detCols = ["Sample", `${instrumentNames[0]} (Ref)`, instrumentNames[1] || "Comparison", "Grade Diff", "Pass?"];
+  const detColX = [margin, margin+20, margin+65, margin+120, margin+155];
+  tableHeader(doc, detCols, detColX, y, contentW, margin, 3);
+  y += 7;
+  doc.setFont("helvetica","normal");
+  results.sampleDetails.forEach((sd, i) => {
+    if (y > pageH - footerH) {
+      doc.addPage(); y = 20;
+      tableHeader(doc, detCols, detColX, y, contentW, margin, 3);
+      y += 7; doc.setFont("helvetica","normal");
+    }
+    if (i%2===0) { setFillRgb(doc, [250,251,253]); doc.rect(margin, y-3, contentW, 5, "F"); }
+    setRgb(doc, DARK);
+    doc.text(`S${sd.sample}`, detColX[0], y);
+    doc.text(sd.reference, detColX[1], y);
+    doc.text(sd.comparison, detColX[2], y);
+    const diffColor = sd.gradeDiff === 0 ? PASS_GREEN : sd.gradeDiff <= 1 ? [180, 140, 20] as readonly [number,number,number] : FAIL_RED;
+    setRgb(doc, diffColor);
+    doc.text(String(sd.gradeDiff), detColX[3], y, { align: "right" });
+    setRgb(doc, sd.pass ? PASS_GREEN : FAIL_RED);
+    doc.text(sd.pass ? "Pass" : "Fail", detColX[4], y, { align: "right" });
+    y += 4.2;
+  });
+
+  y = pdfEvalSection(doc, results, study, y+4, pw, margin, contentW);
+  y = pdfSignatureBlock(doc, study, y, pw, margin, contentW);
+  pdfPageFooter(doc, pw, margin);
+  pdfSupportingPage(doc, study, instrumentNames, pw, margin, contentW);
+}
+
 // ─── Public entry point ───────────────────────────────────────────────────────
 export async function generatePDF(study: Study, results: StudyResults) {
   const doc = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
 
   if (results.type === "cal_ver") {
     generateCalVerPDF(doc, study, results as CalVerResults);
+  } else if (results.type === "qualitative") {
+    generateQualitativePDF(doc, study, results as QualitativeResults);
+  } else if (results.type === "semi_quantitative") {
+    generateSemiQuantPDF(doc, study, results as SemiQuantResults);
   } else if (results.type === "method_comparison") {
     generateMethodCompPDF(doc, study, results as MethodCompResults);
   }
 
-  const filename = `VeritaCheck_${study.studyType === "cal_ver" ? "CalVer" : "MethodComp"}_${study.testName.replace(/\s+/g,"_")}_${study.date}.pdf`;
+  const typeLabel = results.type === "qualitative" ? "QualComp"
+    : results.type === "semi_quantitative" ? "SemiQuantComp"
+    : study.studyType === "cal_ver" ? "CalVer" : "MethodComp";
+  const filename = `VeritaCheck_${typeLabel}_${study.testName.replace(/\s+/g,"_")}_${study.date}.pdf`;
   doc.save(filename);
 }
