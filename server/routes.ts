@@ -2600,6 +2600,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
+    // Default 14-day free trial for all subscriptions without a discount code trial
+    if (isSubscription && !trialDays) {
+      trialDays = 14;
+    }
+
     try {
       // Reuse or create Stripe customer
       // Verify existing customer ID is valid in current mode (live vs test)

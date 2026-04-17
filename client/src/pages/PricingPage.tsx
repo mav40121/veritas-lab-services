@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Minus, Check, ArrowRight } from "lucide-react";
 
 const PLANS = [
   {
@@ -225,6 +225,15 @@ return (
           ))}
         </div>
 
+        {/* Money-Back Guarantee */}
+        <div className="border border-primary/20 bg-primary/5 rounded-lg p-6 text-center">
+          <ShieldCheck size={28} className="text-primary mx-auto mb-3" />
+          <h3 className="font-serif text-lg font-bold mb-2">30-Day Money-Back Guarantee</h3>
+          <p className="text-sm text-muted-foreground max-w-lg mx-auto leading-relaxed">
+            Try any plan risk-free. If you're not satisfied within 30 days, we'll refund your payment in full. No questions asked.
+          </p>
+        </div>
+
         {/* Enterprise+ */}
         <div className="rounded-lg border border-border bg-muted/30 p-6 sm:p-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
@@ -239,6 +248,16 @@ return (
               Contact Us <ChevronRight size={14} className="ml-1" />
             </Link>
           </Button>
+        </div>
+
+        {/* Guest Study CTA */}
+        <div className="bg-muted/30 border border-border rounded-lg p-5 text-center">
+          <p className="text-sm text-muted-foreground">
+            Not ready to commit? Run a single VeritaCheck&#8482; study for $25, no account required.{" "}
+            <Link href="/veritacheck" className="text-primary font-medium hover:underline inline-flex items-center gap-1">
+              Try it now <ArrowRight size={13} />
+            </Link>
+          </p>
         </div>
 
         {/* Per-Seat Pricing */}
@@ -265,6 +284,63 @@ return (
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* Compare Plans */}
+        <section>
+          <div className="text-center mb-6">
+            <h2 className="font-serif text-2xl font-bold">Compare Plans</h2>
+            <p className="text-sm text-muted-foreground mt-1">See what's included in each tier.</p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/50 text-left">
+                  <th className="sticky left-0 bg-muted/50 px-4 py-3 font-semibold min-w-[200px]">Feature</th>
+                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Per Study</th>
+                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">VC Unlimited</th>
+                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Clinic</th>
+                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Community</th>
+                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Hospital</th>
+                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Enterprise</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {[
+                  { feature: "VeritaCheck\u2122 method validation studies", values: ["1 study", true, true, true, true, true] },
+                  { feature: "Full PDF reports with CLIA number", values: [true, true, true, true, true, true] },
+                  { feature: "CUMSUM monitoring", values: [false, true, true, true, true, true] },
+                  { feature: "VeritaScan\u2122 inspection readiness", values: [false, false, true, true, true, true] },
+                  { feature: "VeritaMap\u2122 test menu mapping", values: [false, false, true, true, true, true] },
+                  { feature: "VeritaComp\u2122 competency tracking", values: [false, false, true, true, true, true] },
+                  { feature: "VeritaStaff\u2122 personnel management", values: [false, false, false, true, true, true] },
+                  { feature: "VeritaTrack\u2122 regulatory calendar", values: [false, false, true, true, true, true] },
+                  { feature: "VeritaLab\u2122 certificate management", values: [false, false, true, true, true, true] },
+                  { feature: "PI Dashboard", values: [false, false, true, true, true, true] },
+                  { feature: "VeritaStock\u2122 inventory management", values: [false, false, true, true, true, true] },
+                  { feature: "Seats included", values: ["1", "1", "2", "5", "15", "25"] },
+                  { feature: "Onboarding session", values: [false, false, "1 hour", false, "1 hour", false] },
+                  { feature: "Priority support", values: [false, false, false, true, false, true] },
+                  { feature: "Consulting access", values: [false, false, false, false, false, true] },
+                ].map((row) => (
+                  <tr key={row.feature} className="hover:bg-muted/20">
+                    <td className="sticky left-0 bg-background px-4 py-2.5 font-medium">{row.feature}</td>
+                    {row.values.map((val, i) => (
+                      <td key={i} className="px-4 py-2.5 text-center">
+                        {val === true ? (
+                          <Check size={16} className="text-primary mx-auto" />
+                        ) : val === false ? (
+                          <Minus size={16} className="text-muted-foreground/40 mx-auto" />
+                        ) : (
+                          <span className="text-sm">{val}</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 
