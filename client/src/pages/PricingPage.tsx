@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Minus, Check, ArrowRight } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight } from "lucide-react";
 
 const PLANS = [
   {
@@ -26,7 +26,7 @@ const PLANS = [
     name: "VeritaCheck\u2122 Unlimited",
     price: "$299",
     period: "/yr",
-    description: "Single user. Method validation suite only. CLIA number required at checkout.",
+    description: "Single user. Method validation suite only. 14-day free trial included.",
     features: [
       "Unlimited studies",
       "All VeritaCheck\u2122 study types",
@@ -127,12 +127,12 @@ return (
             Simple annual pricing based on your lab type. No hidden fees. No long-term contracts.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
-            Choose the plan that fits your lab's size and complexity. Certificate of Waiver labs start at the Clinic tier.
+            Choose the plan that fits your lab's size and complexity. All subscription plans include a 14-day free trial.
           </p>
         </div>
       </section>
 
-      {/* Payment Methods */}
+      {/* Payment Methods + Stripe Trust */}
       <section className="border-y border-teal-800/40 bg-teal-950/50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 text-center">
           <div className="flex items-center justify-center gap-10 sm:gap-14 mb-4">
@@ -159,6 +159,34 @@ return (
             </a>{" "}
             to get started.
           </p>
+          <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-muted-foreground">
+            <Lock size={12} />
+            <span>Payments secured by Stripe</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="border-b border-border bg-muted/20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="text-center px-4">
+              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
+              <p className="text-base italic leading-relaxed mb-4">
+                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure showed me what I was missing before a surveyor found it first."
+              </p>
+              <p className="text-sm font-semibold">John Hall</p>
+              <p className="text-xs text-muted-foreground">Laboratory Director, San Carlos Apache Healthcare Corporation</p>
+            </div>
+            <div className="text-center px-4">
+              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
+              <p className="text-base italic leading-relaxed mb-4">
+                "VeritaAssure is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
+              </p>
+              <p className="text-sm font-semibold">Lisa Veri</p>
+              <p className="text-xs text-muted-foreground">Administrative Lab Director, Milford Regional Medical Center</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -220,6 +248,11 @@ return (
                     {plan.buttonLabel} <ChevronRight size={14} className="ml-1" />
                   </Link>
                 </Button>
+                {plan.period === "/yr" && (
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    14-day free trial &middot; 30-day money-back guarantee
+                  </p>
+                )}
               </CardContent>
             </Card>
           ))}
