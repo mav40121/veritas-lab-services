@@ -966,7 +966,7 @@ function InventorySection() {
                   <th className="text-left px-3 py-2 font-medium">Category</th>
                   <th className="text-left px-3 py-2 font-medium">On Hand</th>
                   <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">Burn Rate</th>
-                  <th className="text-center px-3 py-2 font-medium hidden sm:table-cell">Reorder Pt</th>
+                  <th className="text-center px-3 py-2 font-medium hidden sm:table-cell">Par Level</th>
                   <th className="text-center px-3 py-2 font-medium">Days Left</th>
                   <th className="text-left px-3 py-2 font-medium">Stock Status</th>
                   <th className="text-left px-3 py-2 font-medium">Expiration</th>
@@ -1166,7 +1166,7 @@ export default function DemoPage() {
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Smart Inventory Management</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Burn-rate tracking, calculated reorder points, days-of-stock remaining, standing orders, and expiration alerts.
+              Burn-rate tracking, calculated par levels, days-of-stock remaining, standing orders, and expiration alerts.
             </p>
           </div>
           <InventorySection />

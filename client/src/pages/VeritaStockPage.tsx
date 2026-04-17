@@ -270,7 +270,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem }: {
             {/* Calculated preview */}
             {burnRate > 0 && (
               <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm space-y-1">
-                <div>Reorder Point: <strong>{calcReorderPoint} {usageUnit}s</strong></div>
+                <div>Par Level: <strong>{calcReorderPoint} {usageUnit}s</strong></div>
                 <div>Order-to Quantity: <strong>{calcOrderToQty} {usageUnit}s</strong></div>
               </div>
             )}
@@ -520,7 +520,7 @@ export default function VeritaStockInventoryPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>Inventory Manager</h1>
-          <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated reorder points, and standing order management</p>
+          <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated par levels, and standing order management</p>
         </div>
         <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
           <Plus size={14} className="mr-1.5" />Add Item
@@ -633,7 +633,7 @@ export default function VeritaStockInventoryPage() {
                 <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>
                 <SortHeader field="quantity_on_hand">On Hand</SortHeader>
                 <SortHeader field="burn_rate">Burn Rate</SortHeader>
-                <SortHeader field="reorder_point">Reorder Pt</SortHeader>
+                <SortHeader field="reorder_point">Par Level</SortHeader>
                 <SortHeader field="days_remaining">Days Left</SortHeader>
                 <th className="text-left px-3 py-2 font-medium">Stock Status</th>
                 <SortHeader field="expiration_date">Expiration</SortHeader>

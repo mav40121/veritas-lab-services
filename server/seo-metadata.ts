@@ -144,7 +144,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritastock": {
     title: "Inventory Manager | VeritaStock\u2122 | VeritaAssure\u2122",
-    description: "Track reagent and supply inventory with burn rate calculations, automated reorder points, and expiration alerts for your clinical laboratory.",
+    description: "Track reagent and supply inventory with burn rate calculations, automated par levels, and expiration alerts for your clinical laboratory.",
   },
   "/study-guide": {
     title: "Study Guide | VeritaAssure Lab Compliance Software",

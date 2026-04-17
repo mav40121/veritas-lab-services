@@ -97,7 +97,7 @@ const comingSoonItems: RoadmapItem[] = [
   {
     title: "VeritaStock\u2122 - Laboratory Inventory Management",
     description:
-      "Reorder point-based inventory tracking built for clinical labs. Track items by department, burn rate, lead time, and standing order status. Auto-calculates reorder points, order-to quantities, and order quantities in both units and order units. Surfaces what needs to be ordered today - no spreadsheet math required.",
+      "Par level-based inventory tracking built for clinical labs. Track items by department, burn rate, lead time, and standing order status. Auto-calculates par levels, order-to quantities, and order quantities in both units and order units. Surfaces what needs to be ordered today - no spreadsheet math required.",
   },
 ];
 

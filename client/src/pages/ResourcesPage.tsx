@@ -92,7 +92,7 @@ const articles = [
     readTime: "10 min read",
     author: "Michael Veri",
     date: "April 2026",
-    tags: ["Inventory Management", "Lab Operations", "Reorder Point", "Supply Chain"],
+    tags: ["Inventory Management", "Lab Operations", "Par Level", "Supply Chain"],
     featured: false,
   },
 ];
