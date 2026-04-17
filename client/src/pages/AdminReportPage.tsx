@@ -32,6 +32,10 @@ interface UserRecord {
   seat_owner_email: string | null;
   seat_owner_lab_name: string | null;
   seat_owner_clia_number: string | null;
+  // Activity fields
+  last_login: string | null;
+  session_count: number;
+  study_count: number;
 }
 
 interface ReportData {
@@ -53,6 +57,9 @@ type SortKey =
   | "expires"
   | "clia_certificate_type"
   | "hipaa_acknowledged"
+  | "last_login"
+  | "session_count"
+  | "study_count"
   | "created_at";
 
 function formatDate(val: string | null): string {
@@ -60,6 +67,23 @@ function formatDate(val: string | null): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return "";
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function formatRelative(val: string | null): string {
+  if (!val) return "Never";
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return "";
+  const now = Date.now();
+  const diff = now - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
 }
 
 function getExpires(u: UserRecord): string {
@@ -283,6 +307,9 @@ export default function AdminReportPage() {
       "Expires",
       "CLIA Cert Type",
       "HIPAA Ack",
+      "Last Login",
+      "Sessions",
+      "Studies",
       "Joined",
     ];
 
@@ -312,6 +339,9 @@ export default function AdminReportPage() {
         getExpires(u),
         u.clia_certificate_type || "",
         u.hipaa_acknowledged ? "Yes" : "No",
+        u.last_login ? formatRelative(u.last_login) : "Never",
+        u.session_count || 0,
+        u.study_count || 0,
         formatDate(u.created_at),
       ]);
     }
@@ -382,6 +412,9 @@ export default function AdminReportPage() {
     { label: "Expires", key: "expires" },
     { label: "CLIA Cert Type", key: "clia_certificate_type" },
     { label: "HIPAA Ack", key: "hipaa_acknowledged" },
+    { label: "Last Login", key: "last_login" },
+    { label: "Sessions", key: "session_count" },
+    { label: "Studies", key: "study_count" },
     { label: "Joined", key: "created_at" },
   ];
 
@@ -556,6 +589,11 @@ export default function AdminReportPage() {
                   <td className="px-3 py-2 text-center">
                     {u.hipaa_acknowledged ? "Yes" : "No"}
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">
+                    {u.last_login ? formatRelative(u.last_login) : <span className="text-muted-foreground">Never</span>}
+                  </td>
+                  <td className="px-3 py-2 text-center">{u.session_count || 0}</td>
+                  <td className="px-3 py-2 text-center">{u.study_count || 0}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatDate(u.created_at)}
                   </td>
@@ -563,7 +601,7 @@ export default function AdminReportPage() {
               ))}
               {grouped.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={16} className="px-3 py-8 text-center text-muted-foreground">
                     No users found
                   </td>
                 </tr>
