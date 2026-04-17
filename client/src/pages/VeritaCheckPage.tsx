@@ -2213,42 +2213,48 @@ return (
         </div>
       </section>
 
-      {/* Pricing CTA */}
-      <section className="section-padding bg-secondary/20" id="pricing">
-        <div className="container-default max-w-2xl text-center">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <DollarSign size={18} className="text-primary" />
-            <h2 className="font-serif text-2xl font-bold">Ready to Run Unlimited Studies?</h2>
+      {/* Pricing CTA — only show for free/per-study users */}
+      {(!user?.plan || user.plan === "free" || user.plan === "per_study") && (
+        <section className="section-padding bg-secondary/20" id="pricing">
+          <div className="container-default max-w-2xl text-center">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <DollarSign size={18} className="text-primary" />
+              <h2 className="font-serif text-2xl font-bold">Ready to Run Unlimited Studies?</h2>
+            </div>
+            <p className="text-muted-foreground mb-6">
+              View our full pricing to find the right plan for your lab.
+            </p>
+
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+              <Link href="/pricing">
+                View Pricing <ChevronRight size={15} className="ml-1" />
+              </Link>
+            </Button>
           </div>
-          <p className="text-muted-foreground mb-6">
-            View our full pricing to find the right plan for your lab.
-          </p>
+        </section>
+      )}
 
-          {/* Payment result banners */}
-          {paymentStatus === "success" && (
-            <Alert className="mb-6 max-w-2xl mx-auto border-green-500/30 bg-green-500/10">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-700 dark:text-green-400 font-medium">
-                Payment successful. Your account has been updated. Thank you!
-              </AlertDescription>
-            </Alert>
-          )}
-          {paymentStatus === "cancelled" && (
-            <Alert className="mb-6 max-w-2xl mx-auto border-yellow-500/30 bg-yellow-500/10">
-              <XCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                Payment cancelled. No charge was made.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-            <Link href="/pricing">
-              View Pricing <ChevronRight size={15} className="ml-1" />
-            </Link>
-          </Button>
-        </div>
-      </section>
+      {/* Payment result banners — always visible so users see confirmation after checkout */}
+      {paymentStatus === "success" && (
+        <section className="section-padding">
+          <Alert className="max-w-2xl mx-auto border-green-500/30 bg-green-500/10">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-700 dark:text-green-400 font-medium">
+              Payment successful. Your account has been updated. Thank you!
+            </AlertDescription>
+          </Alert>
+        </section>
+      )}
+      {paymentStatus === "cancelled" && (
+        <section className="section-padding">
+          <Alert className="max-w-2xl mx-auto border-yellow-500/30 bg-yellow-500/10">
+            <XCircle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+              Payment cancelled. No charge was made.
+            </AlertDescription>
+          </Alert>
+        </section>
+      )}
       {/* CSV Import Modal */}
       <Dialog open={csvModalOpen} onOpenChange={(open) => { if (!open) { setCsvModalOpen(false); resetCsvState(); } }}>
         <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
