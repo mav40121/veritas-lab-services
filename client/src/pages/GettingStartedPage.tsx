@@ -33,7 +33,8 @@ const STEPS = [
     key: "clia_entered" as const,
     number: 1,
     title: "Enter your CLIA Number",
-    description: "Ties your account to your lab and puts your CLIA number on every compliance report you generate.",
+    description: "Add your CLIA number to put it on every compliance report. You can skip this step and add it later from Account Settings.",
+    skippable: true,
     time: "2 minutes",
     buttonLabel: "Go to Account Settings",
     route: "/account/settings",
@@ -206,6 +207,21 @@ export default function GettingStartedPage() {
         </div>
       </div>
 
+      {/* CLIA Prompt Banner */}
+      {status && !status.steps.clia_entered && (
+        <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex items-start gap-3">
+          <Shield size={18} className="text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm text-amber-200">
+              Add your CLIA number to unlock official reports and seat management.
+            </p>
+            <Link href="/account/settings" className="text-xs text-amber-400 hover:underline mt-1 inline-block">
+              Go to Account Settings
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Step Cards */}
       <div className="space-y-4">
         {STEPS.map((step) => {
@@ -237,7 +253,7 @@ export default function GettingStartedPage() {
                 </div>
 
                 {/* Action button */}
-                <div className="shrink-0 self-center">
+                <div className="shrink-0 self-center text-center">
                   {complete ? (
                     <Button asChild variant="outline" size="sm" className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10">
                       <Link href={step.route}>
@@ -246,13 +262,18 @@ export default function GettingStartedPage() {
                       </Link>
                     </Button>
                   ) : (
-                    <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                      <Link href={step.route}>
-                        <Icon size={13} className="mr-1.5" />
-                        {step.buttonLabel}
-                        <ArrowRight size={13} className="ml-1" />
-                      </Link>
-                    </Button>
+                    <>
+                      <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <Link href={step.route}>
+                          <Icon size={13} className="mr-1.5" />
+                          {step.buttonLabel}
+                          <ArrowRight size={13} className="ml-1" />
+                        </Link>
+                      </Button>
+                      {"skippable" in step && step.skippable && (
+                        <p className="text-xs text-muted-foreground mt-1.5 cursor-default">Skip for now</p>
+                      )}
+                    </>
                   )}
                 </div>
               </CardContent>
