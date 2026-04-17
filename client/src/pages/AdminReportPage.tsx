@@ -460,7 +460,7 @@ export default function AdminReportPage() {
 
         {/* Data table */}
         <div className="bg-card rounded-lg shadow-sm border border-border overflow-x-auto">
-          <table className="min-w-[1200px] w-full text-sm">
+          <table className="w-max min-w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
                 {columns.map((col) => (
