@@ -460,12 +460,12 @@ export default function AdminReportPage() {
 
         {/* Data table */}
         <div
-          className="bg-card rounded-lg shadow-sm border border-border overflow-x-scroll admin-table-scroll"
-          style={{ maxWidth: '100%', scrollbarWidth: 'thin', scrollbarColor: '#555 transparent' }}
+          className="bg-card rounded-lg shadow-sm border border-border overflow-scroll admin-table-scroll"
+          style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 280px)', scrollbarWidth: 'thin', scrollbarColor: '#555 transparent' }}
         >
           <table className="w-max min-w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b bg-muted">
                 {columns.map((col) => (
                   <th
                     key={col.key}
