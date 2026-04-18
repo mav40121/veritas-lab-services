@@ -57,6 +57,7 @@
 - "Calibration Verification / Linearity" — never "Cal Ver" or "Linearity" alone
 - "Correlation / Method Comparison" — never "Method Comparison" alone
 - ADLM goal cited alongside CLIA TEa in narratives
+- CUMSUM is a STUDY TYPE within VeritaCheck™ — NOT a standalone module. Never list it as its own feature, row, or module. It belongs under VeritaCheck™ in all contexts (pricing tables, feature lists, marketing copy, comparison charts).
 
 ## VeritaMap Rules
 - Critical values: "Critical Low (Mayo Clinic Laboratories)" and "Critical High (Mayo Clinic Laboratories)"
