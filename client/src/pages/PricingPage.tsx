@@ -341,9 +341,8 @@ return (
               </thead>
               <tbody className="divide-y divide-border">
                 {[
-                  { feature: "VeritaCheck\u2122 method validation studies", values: ["1 study", true, true, true, true, true] },
+                  { feature: "VeritaCheck\u2122 studies (including CUMSUM)", values: ["1 study", true, true, true, true, true] },
                   { feature: "Full PDF reports with CLIA number", values: [true, true, true, true, true, true] },
-                  { feature: "CUMSUM monitoring", values: [false, true, true, true, true, true] },
                   { feature: "VeritaScan\u2122 inspection readiness", values: [false, false, true, true, true, true] },
                   { feature: "VeritaMap\u2122 test menu mapping", values: [false, false, true, true, true, true] },
                   { feature: "VeritaComp\u2122 competency tracking", values: [false, false, true, true, true, true] },
