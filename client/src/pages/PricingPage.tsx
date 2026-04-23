@@ -263,7 +263,8 @@ return (
           <ShieldCheck size={28} className="text-primary mx-auto mb-3" />
           <h3 className="font-serif text-lg font-bold mb-2">30-Day Money-Back Guarantee</h3>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto leading-relaxed">
-            Try any plan risk-free. If you're not satisfied within 30 days, we'll refund your payment in full. No questions asked.
+            Subscription plans only. We'll refund your first subscription charge in full if you request a refund within 30 days of that charge. One refund per customer. Applies to the initial charge only, not renewals, seat add-ons, or per-study purchases. See our{" "}
+            <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link> for full details.
           </p>
         </div>
 

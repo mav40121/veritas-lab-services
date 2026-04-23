@@ -2,7 +2,7 @@ export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
       <h1 className="font-serif text-3xl font-bold mb-2">Terms of Service</h1>
-      <p className="text-sm text-muted-foreground mb-8">Effective Date: March 27, 2026 · Veritas Lab Services, LLC</p>
+      <p className="text-sm text-muted-foreground mb-8">Effective Date: April 23, 2026 · Veritas Lab Services, LLC</p>
 
       <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
 
@@ -38,8 +38,9 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="font-semibold text-base mb-2">7. Payment and Subscriptions</h2>
-          <p>Paid features require a valid payment method. Subscription fees are billed in advance. Per-study purchases are one-time charges. All fees are non-refundable except as required by law. We reserve the right to modify pricing with 30 days' notice.</p>
+          <h2 className="font-semibold text-base mb-2">7. Payment, Subscriptions, and Refunds</h2>
+          <p>Paid features require a valid payment method. Subscription fees are billed in advance. Per-study purchases are one-time charges. We reserve the right to modify pricing with 30 days' notice.</p>
+          <p className="mt-2"><strong>30-Day Money-Back Guarantee.</strong> For subscription plans only, we will refund your first subscription charge in full if you request a refund within 30 days of that first charge. The guarantee is limited to one refund per customer and applies to the initial subscription charge only, not to subsequent renewals. Per-study purchases, seat add-on charges, and any charges beyond the first subscription charge are non-refundable. To request a refund, contact <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> from the email address on the account. All other fees are non-refundable except as required by law.</p>
         </section>
 
         <section>
