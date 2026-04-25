@@ -522,6 +522,19 @@ sqlite.exec(`
   VALUES ('TdFkdMWg', 'Community Hospital 1yr Free (10 users)', 100, 'all', NULL, 0, 1, '${new Date().toISOString()}');
 `);
 
+// Migrate discount_codes schema BEFORE seeding conference codes (which reference these columns).
+// On production volumes the table already exists from a prior boot without these columns,
+// so the create-if-not-exists statement above becomes a no-op and we must ALTER first.
+const dcCols = (sqlite.prepare("PRAGMA table_info(discount_codes)").all() as { name: string }[]).map(c => c.name);
+if (!dcCols.includes("expires_at")) {
+  sqlite.exec("ALTER TABLE discount_codes ADD COLUMN expires_at TEXT");
+  // Backfill existing conference codes (year embedded in code) with end-of-year expiry
+  sqlite.exec(`UPDATE discount_codes SET expires_at = '2026-12-31T23:59:59Z' WHERE expires_at IS NULL AND (code LIKE '%2026' OR code LIKE 'COLA%' OR code LIKE 'SUMMIT%' OR code LIKE 'MAYO%' OR code LIKE 'NELC%')`);
+}
+if (!dcCols.includes("trial_days")) {
+  sqlite.exec("ALTER TABLE discount_codes ADD COLUMN trial_days INTEGER");
+}
+
 // Seed conference codes (10% off + 60-day trial; expire at end of conference year)
 // All four follow the same shape per standing handoff: COLA2026 is the template.
 sqlite.exec(`
@@ -1094,17 +1107,6 @@ try {
   if (!vcsCols.includes("updated_at"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN updated_at TEXT");
   if (!vcsCols.includes("study_id"))          sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN study_id INTEGER");
 } catch (e) { console.warn("veritacheck_verification_studies migration:", e); }
-
-// Add trial_days column to discount_codes (conference trial codes)
-const dcCols = (sqlite.prepare("PRAGMA table_info(discount_codes)").all() as { name: string }[]).map(c => c.name);
-if (!dcCols.includes("expires_at")) {
-  sqlite.exec("ALTER TABLE discount_codes ADD COLUMN expires_at TEXT");
-  // Backfill existing conference codes (year embedded in code) with end-of-year expiry
-  sqlite.exec(`UPDATE discount_codes SET expires_at = '2026-12-31T23:59:59Z' WHERE expires_at IS NULL AND (code LIKE '%2026' OR code LIKE 'COLA%' OR code LIKE 'SUMMIT%' OR code LIKE 'MAYO%' OR code LIKE 'NELC%')`);
-}
-if (!dcCols.includes("trial_days")) {
-  sqlite.exec("ALTER TABLE discount_codes ADD COLUMN trial_days INTEGER");
-}
 
 // ── VeritaBench: Productivity Months ────────────────────────────────────────────
 sqlite.exec(`
