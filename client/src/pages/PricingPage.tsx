@@ -280,42 +280,7 @@ return (
                   ))}
                 </ul>
 
-                <Button
-                  asChild
-                  className={`w-full font-semibold ${
-                    plan.highlight
-                      ? "bg-primary hover:bg-primary/90 text-primary-foreground"
-                      : ""
-                  }`}
-                  variant={plan.highlight ? "default" : "outline"}
-                >
-                  <Link
-                    href={plan.buttonHref}
-                    onClick={() => {
-                      if (plan.period === "/yr") {
-                        const numericPrice = parseFloat(plan.price.replace(/[$,]/g, ''));
-                        trackEvent('begin_checkout', {
-                          currency: 'USD',
-                          value: numericPrice,
-                          items: [{
-                            item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
-                            item_name: plan.name,
-                            price: numericPrice,
-                            quantity: 1,
-                          }],
-                        });
-                      }
-                    }}
-                  >
-                    {plan.buttonLabel} <ChevronRight size={14} className="ml-1" />
-                  </Link>
-                </Button>
-                {plan.period === "/yr" && (
-                  <p className="text-xs text-center text-muted-foreground mt-2">
-                    14-day free trial &middot; 30-day money-back guarantee
-                  </p>
-                )}
-                {plan.period === "/yr" && plan.name !== "Per Study" && (() => {
+                {plan.period === "/yr" && plan.name !== "Per Study" ? (() => {
                   const tierSlug: Record<string, string> = {
                     "VeritaCheck\u2122 Unlimited": "veritacheck",
                     "Clinic": "clinic",
@@ -325,33 +290,61 @@ return (
                   };
                   const slug = tierSlug[plan.name] || "";
                   return (
-                    <p className="text-xs text-center mt-1">
-                      <Link
-                        href={`/request-invoice?tier=${slug}`}
-                        className="text-[#01696F] hover:underline"
-                        onClick={() => trackEvent('invoice_request_card_link_click', { tier: slug })}
+                    <div className="space-y-2.5">
+                      <Button
+                        asChild
+                        className="w-full font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
                       >
-                        or request an invoice
-                      </Link>
-                    </p>
+                        <Link
+                          href={`/request-invoice?tier=${slug}`}
+                          onClick={() => trackEvent('invoice_request_card_link_click', { tier: slug })}
+                        >
+                          Request an invoice <ChevronRight size={14} className="ml-1" />
+                        </Link>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="w-full font-semibold border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground"
+                      >
+                        <Link
+                          href={plan.buttonHref}
+                          onClick={() => {
+                            const numericPrice = parseFloat(plan.price.replace(/[$,]/g, ''));
+                            trackEvent('begin_checkout', {
+                              currency: 'USD',
+                              value: numericPrice,
+                              items: [{
+                                item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
+                                item_name: plan.name,
+                                price: numericPrice,
+                                quantity: 1,
+                              }],
+                            });
+                          }}
+                        >
+                          Subscribe <ChevronRight size={14} className="ml-1" />
+                        </Link>
+                      </Button>
+                      <p className="text-xs text-center text-muted-foreground">
+                        14-day free trial &middot; 30-day money-back guarantee
+                      </p>
+                    </div>
                   );
-                })()}
+                })() : (
+                  <Button
+                    asChild
+                    className="w-full font-semibold"
+                    variant="outline"
+                  >
+                    <Link href={plan.buttonHref}>
+                      {plan.buttonLabel} <ChevronRight size={14} className="ml-1" />
+                    </Link>
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}
-        </div>
-
-        {/* Invoice CTA */}
-        <div className="text-center py-6">
-          <h3 className="font-serif text-xl font-medium mb-2">Need to pay by invoice?</h3>
-          <Link
-            href="/request-invoice"
-            className="text-lg text-[#01696F] hover:underline"
-            onClick={() => trackEvent('invoice_request_cta_click')}
-          >
-            Request an invoice
-          </Link>
-          <p className="text-sm text-gray-600 mt-1">For AP department processing.</p>
         </div>
 
         {/* Money-Back Guarantee */}
