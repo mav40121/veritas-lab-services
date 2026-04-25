@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
+  ChevronRight, CalendarClock, BellRing,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -494,12 +497,86 @@ export default function VeritaStockInventoryPage() {
     </th>
   );
 
+  useSEO({ title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
+
   if (!isLoggedIn) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <Lock size={40} className="mx-auto text-muted-foreground mb-4" />
-        <h1 className="font-serif text-2xl font-bold mb-2">Inventory Manager</h1>
-        <p className="text-muted-foreground">Please log in to access the VeritaStock™ Inventory Manager.</p>
+      <div>
+        {/* Landing Hero for unauthenticated visitors */}
+        <section className="border-b border-border bg-primary/5">
+          <div className="container-default py-16">
+            <div className="grid lg:grid-cols-2 gap-12 items-center max-w-5xl mx-auto">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Package size={20} className="text-primary" />
+                  <Badge className="bg-primary/10 text-primary border-0">Suite Module</Badge>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Included</Badge>
+                </div>
+                <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaStock{"\u2122"}</h1>
+                <p className="text-xl text-muted-foreground font-medium mb-5">
+                  Laboratory Inventory & Reagent Management
+                </p>
+                <div className="border-l-4 border-primary pl-4 mb-6">
+                  <p className="text-base leading-relaxed italic text-foreground/90">
+                    "Stop running out of reagents at the worst possible moment."
+                  </p>
+                </div>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  VeritaStock{"\u2122"} replaces the spreadsheet your lead tech maintains by hand. Track reagents, controls, calibrators, consumables, and supplies across every department with calculated burn rates, lead-time-aware reorder points, and expiration alerts that fire before you have a problem.
+                </p>
+                <ul className="space-y-2 mb-6 text-sm">
+                  <li className="flex items-start gap-2"><BellRing size={16} className="text-primary mt-0.5 shrink-0" /><span>Color-coded status: Reorder Now, Expiring Soon, OK, Standing Order</span></li>
+                  <li className="flex items-start gap-2"><CalendarClock size={16} className="text-primary mt-0.5 shrink-0" /><span>Burn-rate calculated days-on-hand and reorder points based on real lead times</span></li>
+                  <li className="flex items-start gap-2"><AlertCircle size={16} className="text-primary mt-0.5 shrink-0" /><span>Expiration tracking with configurable warning windows per item</span></li>
+                  <li className="flex items-start gap-2"><RefreshCw size={16} className="text-primary mt-0.5 shrink-0" /><span>Standing order management with quarterly review reminders</span></li>
+                </ul>
+
+                {/* Pricing */}
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">From $499/yr</div>
+                    <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">All Plans</div>
+                    <div className="text-xs text-muted-foreground">Clinic, Community, Hospital, Enterprise</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                    <Link href="/login">Launch VeritaStock{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link href="/login">Sign In / Create Account</Link>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right: teal product card */}
+              <div className="flex justify-center lg:justify-end">
+                <div className="relative">
+                  <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
+                    <Package size={40} className="text-white/80 mb-4" />
+                    <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
+                      VeritaStock{"\u2122"}
+                    </div>
+                    <div className="text-xs text-white/70 text-center space-y-1 mb-4">
+                      <div>Reagent & Supply Tracking</div>
+                      <div>Burn-Rate Par Levels</div>
+                      <div>Expiration Alerts</div>
+                      <div>Standing Orders</div>
+                      <div>Multi-Department</div>
+                    </div>
+                    <div className="w-12 h-0.5 bg-white/40 mb-4" />
+                    <div className="text-xs text-white/60 text-center">VeritaAssure{"\u2122"} Suite Module</div>
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }

@@ -17,8 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lock, Plus, FileDown, Edit2, Trash2, TrendingUp, TrendingDown,
-  BarChart3, Users, Activity,
+  BarChart3, Users, Activity, ChevronRight, Clock, Award,
 } from "lucide-react";
+import { useSEO } from "@/hooks/useSEO";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -230,14 +231,90 @@ export default function VeritaBenchPage() {
 
   const facilityBenchmark = currentMonth ? BENCHMARKS[currentMonth.facility_type] : BENCHMARKS.community;
 
-  // Unauthenticated gate
+  useSEO({ title: "VeritaBench\u2122 | Lab Productivity & Staffing Analytics", description: "Monthly productivity tracking, billable-tests-per-paid-hour benchmarking, FTE and overtime analysis, and by-hour staffing analytics for clinical laboratories. Included with VeritaAssure\u2122 Suite plans." });
+
+  // Unauthenticated gate - marketing landing
   if (!isLoggedIn) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
-        <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaBench{"\u2122"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">Track your lab's productivity and staffing data over time.</p>
-        <Button asChild><Link href="/login">Sign in</Link></Button>
+      <div>
+        {/* Landing Hero for unauthenticated visitors */}
+        <section className="border-b border-border bg-primary/5">
+          <div className="container-default py-16">
+            <div className="grid lg:grid-cols-2 gap-12 items-center max-w-5xl mx-auto">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart3 size={20} className="text-primary" />
+                  <Badge className="bg-primary/10 text-primary border-0">Suite Module</Badge>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Included</Badge>
+                </div>
+                <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaBench{"\u2122"}</h1>
+                <p className="text-xl text-muted-foreground font-medium mb-5">
+                  Lab Productivity & Staffing Analytics
+                </p>
+                <div className="border-l-4 border-primary pl-4 mb-6">
+                  <p className="text-base leading-relaxed italic text-foreground/90">
+                    "Know exactly when you're overstaffed, understaffed, and how you compare to peer labs."
+                  </p>
+                </div>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  VeritaBench{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups.
+                </p>
+                <ul className="space-y-2 mb-6 text-sm">
+                  <li className="flex items-start gap-2"><TrendingUp size={16} className="text-primary mt-0.5 shrink-0" /><span>Monthly productivity tracking with year-over-year trend analysis</span></li>
+                  <li className="flex items-start gap-2"><Award size={16} className="text-primary mt-0.5 shrink-0" /><span>Billable tests per paid hour vs facility-type benchmarks</span></li>
+                  <li className="flex items-start gap-2"><Users size={16} className="text-primary mt-0.5 shrink-0" /><span>FTE counts and overtime ratio calculations from payroll data</span></li>
+                  <li className="flex items-start gap-2"><Clock size={16} className="text-primary mt-0.5 shrink-0" /><span>By-hour staffing analyzer to identify overstaffed and understaffed periods</span></li>
+                </ul>
+
+                {/* Pricing */}
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">From $499/yr</div>
+                    <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">Free</div>
+                    <div className="text-xs text-muted-foreground">Productivity Calculator (no signup)</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                    <Link href="/login">Launch VeritaBench{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link href="/calculator">Try Free Calculator</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link href="/login">Sign In / Create Account</Link>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right: teal product card */}
+              <div className="flex justify-center lg:justify-end">
+                <div className="relative">
+                  <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
+                    <BarChart3 size={40} className="text-white/80 mb-4" />
+                    <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
+                      VeritaBench{"\u2122"}
+                    </div>
+                    <div className="text-xs text-white/70 text-center space-y-1 mb-4">
+                      <div>Productivity Tracker</div>
+                      <div>Tests per Paid Hour</div>
+                      <div>FTE & Overtime</div>
+                      <div>By-Hour Staffing</div>
+                      <div>Peer Benchmarking</div>
+                    </div>
+                    <div className="w-12 h-0.5 bg-white/40 mb-4" />
+                    <div className="text-xs text-white/60 text-center">VeritaAssure{"\u2122"} Suite Module</div>
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }

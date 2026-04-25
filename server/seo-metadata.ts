@@ -135,16 +135,24 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
   },
   "/veritabench": {
-    title: "Productivity Tracker | VeritaBench\u2122 | VeritaAssure\u2122",
-    description: "Track monthly lab productivity, benchmark against industry standards, and identify staffing optimization opportunities.",
+    title: "VeritaBench\u2122 | Lab Productivity & Staffing Analytics | VeritaAssure\u2122",
+    description: "Track monthly lab productivity, benchmark billable tests per paid hour against peer labs, and analyze FTE and overtime trends. Included with VeritaAssure\u2122 Suite plans.",
   },
   "/veritabench/staffing": {
     title: "Staffing Analyzer | VeritaBench\u2122 | VeritaAssure\u2122",
     description: "Analyze by-hour staffing demand against actual coverage to identify overstaffed and understaffed periods in your clinical laboratory.",
   },
   "/veritastock": {
-    title: "Inventory Manager | VeritaStock\u2122 | VeritaAssure\u2122",
-    description: "Track reagent and supply inventory with burn rate calculations, automated par levels, and expiration alerts for your clinical laboratory.",
+    title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management | VeritaAssure\u2122",
+    description: "Track reagent and supply inventory with burn rate calculations, automated par levels, and expiration alerts for your clinical laboratory. Included with VeritaAssure\u2122 Suite plans.",
+  },
+  "/veritatrack": {
+    title: "VeritaTrack\u2122 | Laboratory QC Task Tracking & Sign-off | VeritaAssure\u2122",
+    description: "Track recurring QC tasks, daily checks, maintenance, and quality sign-offs across your lab. Due-date alerts, full sign-off history, and Excel export. Included with VeritaAssure\u2122 Suite plans.",
+  },
+  "/veritatrack-app": {
+    title: "VeritaTrack\u2122 App | QC Task Sign-off | VeritaAssure\u2122",
+    description: "Recurring QC task tracking with sign-off, due-date alerts, and Excel export for your clinical laboratory.",
   },
   "/study-guide": {
     title: "Study Guide | VeritaAssure\u2122 Lab Compliance Software",
