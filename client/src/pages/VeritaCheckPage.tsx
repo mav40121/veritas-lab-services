@@ -21,6 +21,7 @@ import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag,
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
+import { trackEvent } from "@/lib/analytics";
 import type { InsertStudy } from "@shared/schema";
 
 const API_BASE = "https://www.veritaslabservices.com";
@@ -193,6 +194,33 @@ export default function VeritaCheckPage() {
       setPaymentStatus("success");
       // Refresh user data to pick up new plan/credits
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+
+      // Fire GA4 purchase event
+      const type = params.get("type") || "unknown";
+      const priceMap: Record<string, number> = {
+        per_study: 25,
+        unlimited: 299,
+        clinic: 499,
+        community: 999,
+        hospital: 1999,
+        enterprise: 2999,
+      };
+      trackEvent("purchase", {
+        currency: "USD",
+        value: priceMap[type] ?? 0,
+        transaction_id: `vc_${Date.now()}`,
+        items: [
+          {
+            item_id: type,
+            item_name: type.replace(/_/g, " "),
+            price: priceMap[type] ?? 0,
+            quantity: 1,
+          },
+        ],
+      });
+
+      // Strip query string so reloads don't double-count
+      window.history.replaceState({}, "", "/veritacheck");
     } else if (payment === "cancelled") {
       setPaymentStatus("cancelled");
     }

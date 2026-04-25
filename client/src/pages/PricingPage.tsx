@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 const PLANS = [
   {
@@ -244,7 +245,24 @@ return (
                   }`}
                   variant={plan.highlight ? "default" : "outline"}
                 >
-                  <Link href={plan.buttonHref}>
+                  <Link
+                    href={plan.buttonHref}
+                    onClick={() => {
+                      if (plan.period === "/yr") {
+                        const numericPrice = parseFloat(plan.price.replace(/[$,]/g, ''));
+                        trackEvent('begin_checkout', {
+                          currency: 'USD',
+                          value: numericPrice,
+                          items: [{
+                            item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
+                            item_name: plan.name,
+                            price: numericPrice,
+                            quantity: 1,
+                          }],
+                        });
+                      }
+                    }}
+                  >
                     {plan.buttonLabel} <ChevronRight size={14} className="ml-1" />
                   </Link>
                 </Button>

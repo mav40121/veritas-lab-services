@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, AlertTriangle } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 interface InviteInfo {
   valid: boolean;
@@ -82,6 +83,7 @@ export default function JoinPage() {
       if (data.session_token) {
         localStorage.setItem("veritas_session_token", data.session_token);
       }
+      trackEvent('sign_up', { method: 'email' });
       login(data.token, data.user);
       navigate("/dashboard");
     } catch {
