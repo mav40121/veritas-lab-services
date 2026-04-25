@@ -103,6 +103,7 @@ const PLANS = [
     features: [
       "Everything in Clinic",
       "Up to 5 seats",
+      "Complimentary 1-hour onboarding session",
       "VeritaStaff\u2122 personnel management",
       "Named seat support",
       "Priority support",
@@ -121,7 +122,7 @@ const PLANS = [
       "Everything in Community",
       "Up to 15 seats",
       "Higher seat capacity",
-      "Complimentary 1-hour onboarding session",
+      "Complimentary 2-hour onboarding session",
     ],
     buttonLabel: "Subscribe",
     buttonHref: "/login",
@@ -137,6 +138,7 @@ const PLANS = [
       "Everything in Hospital",
       "Up to 25 seats",
       "Maximum seat capacity",
+      "Custom onboarding included",
       "Priority support",
       "Consulting access",
     ],
@@ -447,7 +449,7 @@ return (
                   { feature: "PI Dashboard", values: [false, false, true, true, true, true] },
                   { feature: "VeritaStock\u2122 inventory management", values: [false, false, true, true, true, true] },
                   { feature: "Seats included", values: ["1", "1", "2", "5", "15", "25"] },
-                  { feature: "Onboarding session", values: [false, false, "1 hour", false, "1 hour", false] },
+                  { feature: "Onboarding session", values: [false, false, "1 hour", "1 hour", "2 hours", "Custom"] },
                   { feature: "Priority support", values: [false, false, false, true, false, true] },
                   { feature: "Consulting access", values: [false, false, false, false, false, true] },
                 ].map((row) => (
