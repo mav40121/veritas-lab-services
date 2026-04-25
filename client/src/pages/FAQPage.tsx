@@ -13,7 +13,7 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What is VeritaAssure\u2122?",
-        a: "VeritaAssure\u2122 is a SaaS compliance platform built specifically for clinical laboratories. It covers method validation studies, inspection readiness, test menu regulatory mapping, staff competency documentation, personnel tracking, certificate monitoring, and proficiency testing guidance - all in one platform. Every report includes regulatory citations and a laboratory director or designee review block.",
+        a: "VeritaAssure\u2122 is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes VeritaCheck\u2122 for method validation, calibration verification, and EP15 precision studies; VeritaTrack\u2122 for QC task tracking and sign-off; VeritaStock\u2122 for reagent and inventory management; VeritaBench\u2122 for productivity and staffing analytics; plus inspection readiness, test menu regulatory mapping, staff competency documentation, personnel tracking, certificate monitoring, and proficiency testing guidance. Every report includes regulatory citations and a laboratory director or designee review block.",
       },
       {
         q: "Who built VeritaAssure\u2122?",
@@ -63,7 +63,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Do you back up my data?",
-        a: "Yes. Your data is automatically snapshotted nightly and retained for 30 days. In addition, all destructive actions - deleting a study, removing an instrument, clearing a scan - are logged with a before-state record that can be used to restore data if needed. Contact info@veritaslabservices.com if you need to recover data.",
+        a: "Yes. Your data is backed up nightly to off-site cold storage independent of the application server. Contact info@veritaslabservices.com if you need to recover data.",
       },
       {
         q: "What happens to my data if VeritaAssure\u2122 experiences an outage?",
@@ -80,11 +80,11 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "How is my plan tier determined?",
-        a: "At signup, we look up your facility against CMS Provider of Services data and suggest a plan based on your CLIA certificate type. You can always select a different tier. Certificate of Waiver labs are automatically placed in the Clinic tier.",
+        a: "During checkout you can enter your CLIA number and we will look it up against CMS data to suggest a plan based on your certificate type and facility size. You can always select a different tier. Certificate of Waiver labs are placed in the Clinic tier.",
       },
       {
         q: "Can I try VeritaAssure\u2122 before subscribing?",
-        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. You can also run individual VeritaCheck\u2122 studies on a per-study basis before committing to a subscription.",
+        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. All subscription plans include a 14-day free trial, so you can use the full platform before being billed. You can also run individual VeritaCheck\u2122 studies on a per-study basis without a subscription.",
       },
       {
         q: "What payment methods do you accept?",

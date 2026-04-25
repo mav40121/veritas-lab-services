@@ -53,7 +53,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">7. Data Retention</h2>
-          <p>We retain your account and study data for as long as your account is active. If you delete your account, we will delete your data within 30 days, except where retention is required by law. You may request deletion at any time by emailing us.</p>
+          <p>We retain your account and study data for as long as your account is active. After cancellation, your data is retained for 2 years to align with common laboratory record retention requirements. During this period you can reactivate your account and regain full access to your historical records. After the 2-year period your account and associated data are permanently deleted, and we will notify you by email before this occurs. You may request earlier deletion at any time by emailing us; we will confirm deletion within 30 days, except where retention is required by law.</p>
         </section>
 
         <section>
