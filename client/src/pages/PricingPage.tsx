@@ -90,7 +90,7 @@ const PLANS = [
     description: "Certificate of Waiver labs and small clinics.",
     features: [
       "Full VeritaAssure\u2122 suite including all future modules",
-      "Up to 2 seats",
+      "2 seats included",
       "CLIA number on all reports",
       "Complimentary 1-hour onboarding session",
     ],
@@ -106,7 +106,7 @@ const PLANS = [
     description: "Community hospitals and independent labs.",
     features: [
       "Everything in Clinic",
-      "Up to 5 seats",
+      "5 seats included",
       "Complimentary 1-hour onboarding session",
       "Named seat support",
       "Priority support",
@@ -123,8 +123,7 @@ const PLANS = [
     description: "Regional and acute care hospital labs.",
     features: [
       "Everything in Community",
-      "Up to 15 seats",
-      "Higher seat capacity",
+      "15 seats included",
       "Complimentary 2-hour onboarding session",
     ],
     buttonLabel: "Subscribe",
@@ -139,8 +138,7 @@ const PLANS = [
     description: "Large hospitals, health systems, and reference labs.",
     features: [
       "Everything in Hospital",
-      "Up to 25 seats",
-      "Maximum seat capacity",
+      "25 seats included",
       "Custom onboarding included",
       "Priority support",
       "Consulting access",
