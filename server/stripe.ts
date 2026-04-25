@@ -33,9 +33,9 @@ export const PLAN_LIMITS = {
   free:             { label: "Free",                 studyCredits: 0,     maxAnalysts: 1,   price: "$0" },
   per_study:        { label: "Per Study",            studyCredits: 1,     maxAnalysts: 1,   price: "$25/study" },
   waived:           { label: "Waived",               studyCredits: 99999, maxAnalysts: 1,   price: "$499/yr" },
-  community:        { label: "Community",            studyCredits: 99999, maxAnalysts: 10,  price: "$799/yr" },
-  hospital:         { label: "Hospital",             studyCredits: 99999, maxAnalysts: 25,  price: "$1,299/yr" },
-  large_hospital:   { label: "Large Hospital",       studyCredits: 99999, maxAnalysts: 50,  price: "$1,999/yr" },
+  community:        { label: "Community",            studyCredits: 99999, maxAnalysts: 10,  price: "$999/yr" },
+  hospital:         { label: "Hospital",             studyCredits: 99999, maxAnalysts: 25,  price: "$1,999/yr" },
+  large_hospital:   { label: "Large Hospital",       studyCredits: 99999, maxAnalysts: 50,  price: "$2,999/yr" },
   veritacheck_only: { label: "VeritaCheck\u2122 Unlimited", studyCredits: 99999, maxAnalysts: 1,   price: "$299/yr" },
 } as const;
 

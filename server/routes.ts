@@ -636,12 +636,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     <p style="margin: 0 0 16px;">Hi ${owner.name || "there"},</p>
     <p style="margin: 0 0 16px;">Three new modules are now included in your VeritaAssure\u2122 subscription:</p>
     <ul style="margin: 0 0 24px; padding-left: 20px; line-height: 1.8;">
-      <li><strong>VeritaPolicy\u2122</strong> &mdash; Policy and procedure management with version control and staff acknowledgment tracking</li>
-      <li><strong>VeritaLab\u2122</strong> &mdash; Certificate and accreditation document storage for your laboratory</li>
-      <li><strong>VeritaTrack\u2122</strong> &mdash; Regulatory compliance calendar to track and sign off timed lab tasks</li>
+      <li><strong>VeritaPolicy\u2122</strong>: Policy and procedure management with version control and staff acknowledgment tracking</li>
+      <li><strong>VeritaLab\u2122</strong>: Certificate and accreditation document storage for your laboratory</li>
+      <li><strong>VeritaTrack\u2122</strong>: Regulatory compliance calendar to track and sign off timed lab tasks</li>
     </ul>
-    <p style="margin: 0 0 24px;">Your team members currently have <strong>View access</strong> to these modules by default. You can update their permissions &mdash; including granting Edit access or removing access &mdash; from your account settings.</p>
-    <a href="https://www.veritaslabservices.com/#/account" style="display: inline-block; background: #01696F; color: white; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">Manage Team Permissions</a>
+    <p style="margin: 0 0 24px;">Your team members currently have <strong>View access</strong> to these modules by default. You can update their permissions, including granting Edit access or removing access, from your account settings.</p>
+    <a href="https://www.veritaslabservices.com/account" style="display: inline-block; background: #01696F; color: white; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">Manage Team Permissions</a>
     <p style="margin: 24px 0 0; font-size: 13px; color: #666;">Questions? Reply to this email or contact us at info@veritaslabservices.com.</p>
   </div>
 </div>`,

@@ -138,7 +138,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Is training available?",
-        a: "Community, Hospital, and Enterprise plans include a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u2122 specialist. Additional training sessions can be arranged on request.",
+        a: "Clinic and Community plans include a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u2122 specialist. Hospital plans include a 2-hour session. Enterprise plans include custom onboarding tailored to your organization. Additional training sessions can be arranged on request.",
       },
     ],
   },

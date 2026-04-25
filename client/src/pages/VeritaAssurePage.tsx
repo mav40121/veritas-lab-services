@@ -25,7 +25,7 @@ const MODULES = [
     label: "VeritaMap™",
     desc: "Test Menu Regulatory Mapping",
     detail:
-      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. 189 instruments across 18 departments. Feeds VeritaCheck instrument selection and VeritaComp competency programs.",
+      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 200 instruments across 18 departments. Feeds VeritaCheck instrument selection and VeritaComp competency programs.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Map,
