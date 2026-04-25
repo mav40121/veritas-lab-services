@@ -807,7 +807,7 @@ export const PLAN_SEATS: Record<string, number> = {
   per_study: 1,
   waived: 1,
   veritacheck_only: 1,
-  large_hospital: 50,
+  large_hospital: 25,
   lab: 25,
 };
 

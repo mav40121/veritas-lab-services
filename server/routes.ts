@@ -5724,11 +5724,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerRow = (db as any).$client.prepare("SELECT clia_lab_name, hospital_name FROM users WHERE id = ?").get(req.userId) as any;
     const labName = ownerRow?.clia_lab_name || ownerRow?.hospital_name || owner?.name || "your lab";
     const inviterName = owner?.name || "Your lab administrator";
+    let emailSent = false;
+    if (!process.env.RESEND_API_KEY) {
+      console.error("[seats] RESEND_API_KEY is not set; seat invite email skipped (seat row was still created)");
+    } else {
     try {
       await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.RESEND_API_KEY || "re_iuVZocND_7KCES3ak8QYN4funPUF3oF1z"}`,
+          "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -5748,11 +5752,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           `,
         }),
       });
+      emailSent = true;
     } catch (emailErr) {
       console.error("[seats] Invite email failed:", emailErr);
     }
+    }
 
-    res.json({ ok: true, status: seatUserId ? "active" : "pending" });
+    res.json({ ok: true, status: seatUserId ? "active" : "pending", emailSent });
   });
 
   // Look up a seat invitation by token (no auth required - user is not yet logged in)
