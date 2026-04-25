@@ -3,6 +3,7 @@
  */
 import type { Express } from "express";
 import { db } from "./db";
+import { DEMO_USER_EMAIL } from "./constants";
 
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"];
 
@@ -237,7 +238,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/demo/productivity-months - returns demo account productivity data only
   app.get("/api/demo/productivity-months", (_req: any, res) => {
-    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
+    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL) as any;
     if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
     const rows = sqlite.prepare(
       "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year ASC, month ASC"
@@ -247,7 +248,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/demo/inventory - returns demo account inventory items only
   app.get("/api/demo/inventory", (_req: any, res) => {
-    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
+    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL) as any;
     if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
     const rows = sqlite.prepare(
       "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
@@ -271,7 +272,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/demo/staffing-study - returns demo account first staffing study with data
   app.get("/api/demo/staffing-study", (_req: any, res) => {
-    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
+    const demoUser = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL) as any;
     if (!demoUser) return res.status(404).json({ error: "Demo data not available" });
     const study = sqlite.prepare(
       "SELECT * FROM staffing_studies WHERE account_id = ? ORDER BY created_at ASC LIMIT 1"

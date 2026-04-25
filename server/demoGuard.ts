@@ -9,6 +9,7 @@
  */
 
 import { db } from "./db";
+import { DEMO_USER_EMAIL } from "./constants";
 
 // The canonical list of demo studies that must always exist.
 // If any are missing at startup, they are restored automatically.
@@ -45,8 +46,8 @@ export async function verifyDemoIntegrity() {
 
   // Find the demo user
   const demoUser = sqlite.prepare(
-    "SELECT id FROM users WHERE email = 'demo@veritaslabservices.com' LIMIT 1"
-  ).get();
+    "SELECT id FROM users WHERE email = ? LIMIT 1"
+  ).get(DEMO_USER_EMAIL);
 
   if (!demoUser) {
     console.log("[demoGuard] Demo user not found -- skipping integrity check (seedDemo will handle)");

@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@shared/schema";
+import { OWNER_EMAIL } from "./constants";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
 const DB_PATH = process.env.DB_PATH || (require('fs').existsSync('/data') ? '/data/veritas.db' : 'veritas.db');
@@ -635,15 +636,16 @@ sqlite.exec(`
   );
 `);
 
-// Owner account - permanent free access (never downgrade from a higher plan)
-const ownerRow = sqlite.prepare("SELECT plan FROM users WHERE email = 'verilabguy@gmail.com'").get() as any;
+// Owner account - permanent free access (never downgrade from a higher plan).
+// Email sourced from OWNER_EMAIL env (default preserves prior hardcoded value).
+const ownerRow = sqlite.prepare("SELECT plan FROM users WHERE email = ?").get(OWNER_EMAIL) as any;
 const PLAN_RANK: Record<string, number> = { free: 0, per_study: 1, veritacheck_only: 2, community: 3, lab: 4, hospital: 5, large_hospital: 6, enterprise: 7, waived: 7 };
 const ownerCurrentRank = PLAN_RANK[ownerRow?.plan] ?? 0;
 const ownerTargetRank = PLAN_RANK["enterprise"] ?? 7;
 if (!ownerRow || ownerCurrentRank <= ownerTargetRank) {
   sqlite.prepare(
-    "UPDATE users SET plan = 'enterprise', study_credits = 99999, subscription_status = 'active', subscription_expires_at = '2099-12-31T00:00:00.000Z', plan_expires_at = '2099-12-31T00:00:00.000Z' WHERE email = 'verilabguy@gmail.com'"
-  ).run();
+    "UPDATE users SET plan = 'enterprise', study_credits = 99999, subscription_status = 'active', subscription_expires_at = '2099-12-31T00:00:00.000Z', plan_expires_at = '2099-12-31T00:00:00.000Z' WHERE email = ?"
+  ).run(OWNER_EMAIL);
 }
 
 // Set test accounts (userId 1-11) to active with subscription_expires_at = 2 years from now

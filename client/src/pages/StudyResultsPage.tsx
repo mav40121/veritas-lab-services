@@ -1753,7 +1753,7 @@ export default function StudyResults() {
         <Card className="mt-6">
           <CardHeader className="pb-3"><CardTitle className="text-base">Related Tools</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Button asChild variant="outline" size="sm"><Link href="/cumsum">Run CUMSUM Tracker →</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href="/veritacheck/cumsum">Run CUMSUM Tracker →</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/veritacheck">Establish QC Ranges →</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/veritacheck">Run Multi-Analyte Comparison →</Link></Button>
           </CardContent>

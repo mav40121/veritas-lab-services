@@ -4,12 +4,13 @@
  */
 import { db } from "./db";
 import bcrypt from "bcryptjs";
+import { DEMO_USER_EMAIL } from "./constants";
 
 export async function seedDemoData() {
   const sqlite = (db as any).$client;
 
   // ─── 1. Demo User ──────────────────────────────────────────────────────
-  const existing = sqlite.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get();
+  const existing = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL);
   let demoUserId: number;
 
   if (existing) {
@@ -20,7 +21,7 @@ export async function seedDemoData() {
     const now = new Date().toISOString();
     const result = sqlite.prepare(
       "INSERT INTO users (email, password_hash, name, plan, study_credits, has_completed_onboarding, clia_number, clia_lab_name, created_at) VALUES (?, ?, ?, 'lab', 99999, 1, '22D0999999', 'Riverside Regional Medical Center', ?)"
-    ).run("demo@veritaslabservices.com", hash, "Demo User", now);
+    ).run(DEMO_USER_EMAIL, hash, "Demo User", now);
     demoUserId = Number(result.lastInsertRowid);
   }
 

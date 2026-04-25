@@ -14,6 +14,7 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { logAudit } from "./audit";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
+import { DEMO_USER_EMAIL } from "./constants";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -930,7 +931,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── TEMPORARY: Debug route list + admin recovery ──────────────────────────
+  // Dev-only: returns 404 in production so the surface is not reachable
+  // on the live site even if ADMIN_SECRET leaks.
   app.get("/api/debug/routes", (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).json({ error: "Not Found" });
     const secret = req.query.secret as string;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const routes: string[] = [];
@@ -951,7 +955,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // TEMPORARY: Admin account restore via /api/auth path (bypasses routing issue)
+  // Dev-only: returns 404 in production. Replaces the prior "TEMPORARY"
+  // routing workaround so this admin surface is not reachable on the
+  // live site even if ADMIN_SECRET leaks.
   app.post("/api/auth/admin-restore", async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).json({ error: "Not Found" });
     const { secret, action, userId, plan, credits, email, password, name, stripeCustomerId, stripeSubscriptionId } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     try {
@@ -3200,7 +3208,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── DEMO DATA APIs (all public, NO auth middleware) ─────────────────────
 
   function getDemoUserId(): number | null {
-    const demoUser = (db as any).$client.prepare("SELECT id FROM users WHERE email = 'demo@veritaslabservices.com'").get();
+    const demoUser = (db as any).$client.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL);
     return demoUser ? demoUser.id : null;
   }
 
