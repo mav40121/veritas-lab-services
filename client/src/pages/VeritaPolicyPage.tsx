@@ -23,6 +23,7 @@ const FEATURE_CARDS = [
     title: "Policy Library",
     desc: "Build your lab's policy library. One policy can satisfy multiple TJC requirements. Track owner, status, review dates, and upload the actual policy document.",
     color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
+    comingSoon: true,
   },
   {
     icon: BarChart2,
@@ -144,7 +145,12 @@ return (
                   <div className={`w-10 h-10 rounded-lg border flex items-center justify-center mb-4 ${card.color}`}>
                     <card.icon size={20} />
                   </div>
-                  <h3 className="font-semibold text-foreground mb-2">{card.title}</h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-foreground">{card.title}</h3>
+                    {card.comingSoon && (
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-amber-500/40 text-amber-600 bg-amber-500/10">Coming Soon</Badge>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">{card.desc}</p>
                 </CardContent>
               </Card>

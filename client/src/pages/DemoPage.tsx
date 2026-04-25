@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSEO } from "@/hooks/useSEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1022,6 +1023,10 @@ function InventorySection() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function DemoPage() {
+  useSEO({
+    title: "Demo | VeritaAssure\u2122 Lab Compliance & Operations Software",
+    description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method validation, inspection readiness, competency tracking).",
+  });
   const [activeSection, setActiveSection] = useState("calculator");
 
   useEffect(() => {

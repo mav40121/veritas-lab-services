@@ -1,7 +1,7 @@
-type GA4EventName = 'begin_checkout' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click' | 'invoice_request_card_link_click';
+type GA4EventName = 'begin_checkout' | 'select_item' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click' | 'invoice_request_card_link_click';
 
 interface GA4EventParams {
-  // begin_checkout / purchase
+  // begin_checkout / purchase / select_item
   currency?: string;
   value?: number;
   transaction_id?: string;
@@ -11,6 +11,9 @@ interface GA4EventParams {
     price?: number;
     quantity?: number;
   }>;
+  // select_item
+  item_list_id?: string;
+  item_list_name?: string;
   // sign_up
   method?: string;
   // invoice_request_submitted

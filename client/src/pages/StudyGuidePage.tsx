@@ -178,7 +178,7 @@ function StudyCard({
         <div className="pt-1">
           <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
             <FlaskConical size={14} />
-            Run a {title} in VeritaCheck
+            Run a {title} in VeritaCheck{"\u2122"}
             <ChevronRight size={13} />
           </Link>
         </div>
@@ -453,7 +453,7 @@ export default function StudyGuidePage() {
           <p className="text-muted-foreground mb-6">VeritaCheck™ automates all six study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
-            Open VeritaCheck
+            Open VeritaCheck{"\u2122"}
           </Link>
         </div>
       </section>

@@ -1169,10 +1169,10 @@ return (
                     </p>
                   </div>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    VeritaCheck automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC standards, and CAP checklists.
+                    VeritaCheck{"\u2122"} automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC standards, and CAP checklists.
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-6">
-                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
+                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck{"\u2122"} produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
                   </p>
 
                   {/* Pricing */}
@@ -1193,7 +1193,7 @@ return (
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                      <Link href="/login">Launch VeritaCheck <ChevronRight size={15} className="ml-1" /></Link>
+                      <Link href="/login">Launch VeritaCheck{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
                     </Button>
                     <Button asChild variant="outline" size="lg">
                       <Link href="/login">Sign In / Create Account</Link>
@@ -1233,7 +1233,7 @@ return (
             <div className="container-default py-14">
               <div className="flex items-center gap-2 mb-4">
                 <FlaskConical size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">VeritaCheck</Badge>
+                <Badge className="bg-primary/10 text-primary border-0">VeritaCheck{"\u2122"}</Badge>
               </div>
               <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run, finally done right.</h1>
               <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">

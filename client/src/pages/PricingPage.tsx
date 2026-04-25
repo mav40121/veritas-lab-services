@@ -309,14 +309,18 @@ return (
                         <Link
                           href={plan.buttonHref}
                           onClick={() => {
-                            const numericPrice = parseFloat(plan.price.replace(/[$,]/g, ''));
-                            trackEvent('begin_checkout', {
-                              currency: 'USD',
-                              value: numericPrice,
+                            // Funnel signal: user selected a plan and is heading to login/account
+                            // to start checkout. The actual GA4 begin_checkout event is fired
+                            // later, at the moment the Stripe session is created in
+                            // AccountSettingsPage.goToCheckout(), so the value matches the
+                            // priceType actually charged.
+                            trackEvent('select_item', {
+                              item_list_id: 'pricing_page',
+                              item_list_name: 'Pricing Page Plans',
                               items: [{
                                 item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
                                 item_name: plan.name,
-                                price: numericPrice,
+                                price: parseFloat(plan.price.replace(/[$,]/g, '')),
                                 quantity: 1,
                               }],
                             });

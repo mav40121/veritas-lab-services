@@ -410,7 +410,7 @@ function IntelligenceBanner({
                 className="inline-flex items-center text-[11px] font-semibold text-primary hover:underline"
               >
                 <FlaskConical size={10} className="mr-1" />
-                Run a Study in VeritaCheck
+                Run a Study in VeritaCheck{"\u2122"}
                 <ChevronRight size={10} className="ml-0.5" />
               </Link>
             )}
@@ -1501,7 +1501,7 @@ export default function VeritaMapMapPage() {
           >
             <Link href="/veritacheck">
               <FlaskConical size={11} className="mr-1.5" />
-              Run a Study in VeritaCheck
+              Run a Study in VeritaCheck{"\u2122"}
             </Link>
           </Button>
         </div>

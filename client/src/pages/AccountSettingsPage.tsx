@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,17 @@ function planToPriceType(plan: string | undefined | null): string | null {
   };
   return map[plan] || null;
 }
+
+// GA4 begin_checkout metadata keyed by the actual Stripe priceType the user is
+// charged. Used by goToCheckout() to fire the analytics event with the correct
+// item_name and value at the moment the Stripe session is created.
+const PRICE_TYPE_GA4: Record<string, { item_name: string; price: number }> = {
+  waived:           { item_name: "Clinic",        price: 499 },
+  community:        { item_name: "Community",     price: 999 },
+  hospital:         { item_name: "Hospital",      price: 1999 },
+  large_hospital:   { item_name: "Enterprise",    price: 2999 },
+  veritacheck_only: { item_name: "VeritaCheck Unlimited", price: 299 },
+};
 
 export default function AccountSettingsPage() {
   const { isLoggedIn, user } = useAuth();
@@ -197,6 +209,23 @@ export default function AccountSettingsPage() {
       });
       const data = await res.json();
       if (data.url) {
+        // Fire GA4 begin_checkout at the moment the Stripe session is actually
+        // created, with the real priceType the user is being charged for. This
+        // replaces the earlier Subscribe-click event on PricingPage which fired
+        // before any checkout existed and could mismatch the actual tier.
+        const meta = PRICE_TYPE_GA4[userPriceType];
+        if (meta) {
+          trackEvent("begin_checkout", {
+            currency: "USD",
+            value: meta.price,
+            items: [{
+              item_id: userPriceType,
+              item_name: meta.item_name,
+              price: meta.price,
+              quantity: 1,
+            }],
+          });
+        }
         window.location.href = data.url;
       } else {
         toast({ title: "Checkout error", description: data.error || "Could not start checkout.", variant: "destructive" });
