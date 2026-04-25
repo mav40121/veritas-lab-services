@@ -402,10 +402,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const PLAN_DISPLAY_NAMES: Record<string, string> = {
     free: "Free",
     per_study: "Per Study",
-    waived: "Waived",
+    waived: "Clinic",
     community: "Community",
     hospital: "Hospital",
-    large_hospital: "Large Hospital",
+    large_hospital: "Enterprise",
     veritacheck_only: "VeritaCheck\u2122 Unlimited",
     annual: "Annual (Legacy)",
     starter: "Starter (Legacy)",

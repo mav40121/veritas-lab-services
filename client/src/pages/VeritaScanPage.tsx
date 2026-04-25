@@ -68,7 +68,7 @@ return (
               <div className="flex flex-wrap gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in Waived ($499/yr) and above</div>
+                  <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
                 </div>
               </div>
 

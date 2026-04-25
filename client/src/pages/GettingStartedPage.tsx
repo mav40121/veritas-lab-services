@@ -118,7 +118,24 @@ function StepStatusBadge({ complete }: { complete: boolean }) {
 }
 
 export default function GettingStartedPage() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
+
+  // Onboarding duration depends on plan: Clinic/Community 1hr, Hospital 2hrs, Enterprise custom
+  // Plan keys: clinic|waived (1hr), community (1hr), hospital (2hr), enterprise|large_hospital (custom)
+  const onboardingCopy = (() => {
+    const plan = (user?.plan || "").toLowerCase();
+    if (plan === "hospital") {
+      return "Your plan includes a complimentary 2-hour onboarding session via Zoom or Teams with a VeritaAssure\u2122 specialist.";
+    }
+    if (plan === "enterprise" || plan === "large_hospital") {
+      return "Your plan includes custom onboarding tailored to your facility. Contact us to schedule.";
+    }
+    if (plan === "clinic" || plan === "waived" || plan === "community") {
+      return "Your plan includes a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u2122 specialist.";
+    }
+    // Fallback for free / per_study / veritacheck_only / unknown: keep generic, no duration claim
+    return "Need help getting started? Reach out and a VeritaAssure\u2122 specialist will follow up to walk you through the platform.";
+  })();
 
   const { data: status, isLoading } = useQuery<OnboardingStatus>({
     queryKey: ["/api/onboarding/status"],
@@ -327,8 +344,7 @@ export default function GettingStartedPage() {
       {/* Bottom CTA */}
       <div className="mt-8 rounded-xl bg-primary/10 border border-primary/20 p-6 text-center">
         <p className="text-sm leading-relaxed mb-4">
-          Need help getting started? Your plan includes a complimentary 1-hour onboarding session
-          via Zoom or Teams with a VeritaAssure&#8482; specialist.
+          {onboardingCopy}
         </p>
         <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
           <a href="mailto:info@veritaslabservices.com?subject=Onboarding Session Request">
