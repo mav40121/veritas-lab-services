@@ -275,6 +275,119 @@ def check_live_seats():
             WARNINGS.append(f"[live-seats] Could not verify seat record for {desc} (admin/seats endpoint unavailable)")
 
 
+# ── COMPARE PLANS TABLE TRUTH CHECKS ─────────────────────────────────────────
+# These two checks encode invariants the user has confirmed:
+#   1. The Compare Plans table must not claim a paid plan lacks a module the
+#      backend permits. Backend gating (server/routes.ts requireModuleEdit and
+#      server/stripe.ts PLAN_LIMITS) does NOT plan-gate modules; only seats and
+#      study credits are plan-gated. So every paid plan (Clinic, Community,
+#      Hospital, Enterprise) must show every module as included.
+#   2. Tier monotonicity: a higher tier must not have FEWER features than a
+#      lower tier. Per Study and VC Unlimited are vertical SKUs and may legally
+#      omit modules; the four full plans (Clinic -> Community -> Hospital ->
+#      Enterprise) must be monotonically non-decreasing.
+
+# Column order in the Compare Plans table values array.
+COMPARE_PLANS_COLUMNS = ["Per Study", "VC Unlimited", "Clinic", "Community", "Hospital", "Enterprise"]
+# Indexes 2..5 are the four full subscription tiers; these must include every module.
+FULL_PLAN_INDEXES = [2, 3, 4, 5]
+
+# Rows that represent a module/feature gate (boolean). Other rows like
+# "Seats included" or "Onboarding session" carry strings and are excluded.
+# A row is treated as a module row if it contains the substring "\u2122"
+# (TM, indicating a product) or matches one of these explicit non-TM modules.
+NON_TM_MODULE_ROWS = {"PI Dashboard"}
+
+def _parse_compare_plans_table():
+    """Parse the Compare Plans table out of client/src/pages/PricingPage.tsx.
+    Returns list of (line_number, feature_name, values_list) tuples.
+    values_list entries are 'true', 'false', or a quoted string literal.
+    """
+    pricing_path = os.path.join(ROOT, "client", "src", "pages", "PricingPage.tsx")
+    if not os.path.exists(pricing_path):
+        return None
+    with open(pricing_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    rows = []
+    row_pattern = re.compile(
+        r'\{\s*feature:\s*"([^"]+)"\s*,\s*values:\s*\[([^\]]+)\]\s*\}'
+    )
+    for i, line in enumerate(lines, 1):
+        m = row_pattern.search(line)
+        if not m:
+            continue
+        feature_raw = m.group(1)
+        feature = feature_raw.replace("\\u2122", "\u2122")
+        values_raw = m.group(2).strip()
+        # Split on commas at the top level (no nested arrays in this table).
+        values = [v.strip() for v in values_raw.split(",")]
+        rows.append((i, feature, values))
+    return rows
+
+def check_pricing_truth():
+    """Every paid plan column (Clinic, Community, Hospital, Enterprise) must
+    show 'true' for every module/feature row in Compare Plans. Backend has no
+    plan-level module gating, so claiming otherwise is misleading marketing."""
+    rows = _parse_compare_plans_table()
+    if rows is None:
+        WARNINGS.append("[pricing-truth] Could not locate PricingPage.tsx; skipping")
+        return
+    if not rows:
+        WARNINGS.append("[pricing-truth] No Compare Plans rows parsed; format may have changed")
+        return
+    for line_no, feature, values in rows:
+        is_module_row = ("\u2122" in feature) or (feature in NON_TM_MODULE_ROWS)
+        if not is_module_row:
+            continue
+        if len(values) != len(COMPARE_PLANS_COLUMNS):
+            ERRORS.append(
+                f"[client/src/pages/PricingPage.tsx:{line_no}] Compare Plans row "
+                f"'{feature}' has {len(values)} values, expected {len(COMPARE_PLANS_COLUMNS)}"
+            )
+            continue
+        for idx in FULL_PLAN_INDEXES:
+            v = values[idx]
+            if v != "true":
+                col = COMPARE_PLANS_COLUMNS[idx]
+                ERRORS.append(
+                    f"[client/src/pages/PricingPage.tsx:{line_no}] Compare Plans row "
+                    f"'{feature}' shows {col}={v} but backend permits this module "
+                    f"on {col}. Set to true or document the gate in code."
+                )
+
+def check_tier_monotonicity():
+    """Across the four full subscription tiers (Clinic -> Community -> Hospital
+    -> Enterprise), each row's value must be monotonically non-decreasing.
+    A higher tier must not advertise fewer features than a lower tier.
+    Boolean rows: true >= false. String rows: skipped (string-valued rows like
+    'Onboarding session' or 'Seats included' have their own semantics and are
+    enforced elsewhere if needed)."""
+    rows = _parse_compare_plans_table()
+    if rows is None:
+        return
+    bool_rank = {"false": 0, "true": 1}
+    for line_no, feature, values in rows:
+        if len(values) != len(COMPARE_PLANS_COLUMNS):
+            continue  # already flagged by check_pricing_truth
+        # Only enforce monotonicity for boolean-only rows in the four full tiers.
+        full_tier_values = [values[i] for i in FULL_PLAN_INDEXES]
+        if not all(v in bool_rank for v in full_tier_values):
+            continue
+        prev_rank = -1
+        prev_col = None
+        for idx in FULL_PLAN_INDEXES:
+            rank = bool_rank[values[idx]]
+            col = COMPARE_PLANS_COLUMNS[idx]
+            if prev_rank != -1 and rank < prev_rank:
+                ERRORS.append(
+                    f"[client/src/pages/PricingPage.tsx:{line_no}] Compare Plans row "
+                    f"'{feature}' breaks tier monotonicity: {prev_col}={values[FULL_PLAN_INDEXES[FULL_PLAN_INDEXES.index(idx)-1]]} "
+                    f"but {col}={values[idx]}. Higher tier must not have fewer features."
+                )
+            prev_rank = rank
+            prev_col = col
+
+
 def main():
     files = collect_files()
     print(f"Scanning {len(files)} files from {ROOT}\n")
@@ -286,6 +399,11 @@ def main():
     print("Checking live seat relationships...")
     check_db_migrations()
     check_live_seats()
+
+    # Compare Plans table invariants
+    print("Checking Compare Plans table truth + tier monotonicity...")
+    check_pricing_truth()
+    check_tier_monotonicity()
 
     print("=" * 60)
 
