@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, X } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 
 // COLA Nashville banner: auto-hides on May 9, 2026 onward
@@ -378,7 +378,7 @@ return (
           <ShieldCheck size={28} className="text-primary mx-auto mb-3" />
           <h3 className="font-serif text-lg font-bold mb-2">30-Day Money-Back Guarantee</h3>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto leading-relaxed">
-            Subscription plans only. We'll refund your first subscription charge in full if you request a refund within 30 days of that charge. One refund per customer. Applies to the initial charge only, not renewals, seat add-ons, or per-study purchases. See our{" "}
+            Subscription plans only. We'll refund your first subscription charge in full if you request a refund within 30 days of that charge. One refund per customer. Applies to the initial charge only, not renewals or per-study purchases. See our{" "}
             <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link> for full details.
           </p>
         </div>
@@ -408,33 +408,6 @@ return (
             </Link>
           </p>
         </div>
-
-        {/* Per-Seat Pricing */}
-        <section>
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-            Additional Seats
-          </div>
-          <div className="rounded-lg border border-border bg-card p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <Users size={18} className="text-primary mt-0.5 shrink-0" />
-              <h3 className="font-semibold text-base">Per-Seat Pricing</h3>
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { range: "2-5 total seats", price: "$199/seat", detail: "Additional seats 2-5" },
-                { range: "6-10 total seats", price: "$179/seat", detail: "Additional seats 6-10" },
-                { range: "11-25 total seats", price: "$159/seat", detail: "Additional seats 11-25" },
-                { range: "26+ total seats", price: "$139/seat", detail: "Additional seats 26+" },
-              ].map(({ range, price, detail }) => (
-                <div key={range} className="rounded-md border border-border bg-muted/20 p-4 text-center">
-                  <div className="font-semibold text-primary text-lg">{price}</div>
-                  <div className="text-sm text-foreground font-medium mt-1">{range}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{detail}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* Compare Plans */}
         <section>
