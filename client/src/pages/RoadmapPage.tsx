@@ -14,6 +14,16 @@ const completedItems: RoadmapItem[] = [
       "Runs EP studies required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, QC range establishment, and multi-analyte comparison. Generates compliant PDF reports with statistical tables.",
   },
   {
+    title: "VeritaCheck™ - Reference Range Verification Workflow",
+    description:
+      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap™, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
+  },
+  {
+    title: "VeritaStock™ - Laboratory Inventory Management",
+    description:
+      "Par level-based inventory tracking built for clinical labs. Track items by department, burn rate, lead time, and standing order status. Auto-calculates par levels, order-to quantities, and order quantities in both units and order units. Surfaces what needs to be ordered today, with no spreadsheet math required.",
+  },
+  {
     title: "VeritaMap™ - Laboratory Test Menu Mapping",
     description:
       "Builds a complete instrument and test menu inventory for your lab. Maps 190+ instruments across all specialties, pulls Mayo Clinic Laboratories reference ranges, critical values, and AMR. Exports a formatted Excel workbook with compliance tracking. Free tier available.",
@@ -88,16 +98,6 @@ const comingSoonItems: RoadmapItem[] = [
     title: "Enterprise API Access",
     description:
       "REST API for health systems and reference labs that need to integrate VeritaAssure™ data into existing LIS, LIMS, or compliance platforms.",
-  },
-  {
-    title: "VeritaCheck™ - Reference Range Verification Workflow",
-    description:
-      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap™, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
-  },
-  {
-    title: "VeritaStock\u2122 - Laboratory Inventory Management",
-    description:
-      "Par level-based inventory tracking built for clinical labs. Track items by department, burn rate, lead time, and standing order status. Auto-calculates par levels, order-to quantities, and order quantities in both units and order units. Surfaces what needs to be ordered today - no spreadsheet math required.",
   },
 ];
 

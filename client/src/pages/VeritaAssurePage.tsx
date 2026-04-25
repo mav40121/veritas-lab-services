@@ -305,8 +305,7 @@ return (
             Ready to see VeritaAssure&#8482; in action?
           </h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-6">
-            The live demo runs all five modules with real data and generates actual PDF reports.
-            No login required.
+            The live demo runs the core compliance suite (VeritaCheck™, VeritaScan™, VeritaMap™, and VeritaComp™) with real data and generates actual PDF reports. No login required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
