@@ -691,6 +691,217 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return res.json({ valid: false, message: "Invalid discount code" });
   });
 
+  // ── INVOICE REQUEST (public) ──────────────────────────────────────────────
+  const invoiceRateMap = new Map<string, number[]>();
+
+  app.post("/api/invoice/request", async (req: any, res) => {
+    try {
+      const {
+        lab_name, clia_number, billing_contact_name, billing_contact_email,
+        billing_address, ap_email, tax_id, tier, seats, promo_code,
+        po_number, notes, company_website, authorization
+      } = req.body;
+
+      // Honeypot - bots fill hidden field, humans don't
+      if (company_website) {
+        return res.status(200).json({ success: true, message: "Thank you for your submission." });
+      }
+
+      // Rate limit: 3 per hour per IP
+      const ip = req.ip || "unknown";
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000;
+      const hits = invoiceRateMap.get(ip) || [];
+      const recentHits = hits.filter((t: number) => now - t < oneHour);
+      if (recentHits.length >= 3) {
+        return res.status(429).json({ error: "Too many requests. Please try again in an hour or email info@veritaslabservices.com." });
+      }
+      recentHits.push(now);
+      invoiceRateMap.set(ip, recentHits);
+
+      // Validation
+      if (!lab_name || !billing_contact_name || !billing_contact_email || !billing_address || !tier || !seats || !authorization) {
+        return res.status(400).json({ error: "Missing required fields: lab_name, billing_contact_name, billing_contact_email, billing_address, tier, seats, and authorization are required." });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(billing_contact_email)) {
+        return res.status(400).json({ error: "Invalid billing contact email address." });
+      }
+      if (ap_email && !emailRegex.test(ap_email)) {
+        return res.status(400).json({ error: "Invalid AP email address." });
+      }
+
+      const validTiers = ["clinic", "community", "hospital", "enterprise"];
+      if (!validTiers.includes(tier)) {
+        return res.status(400).json({ error: "Invalid tier. Must be one of: clinic, community, hospital, enterprise." });
+      }
+
+      const seatCount = parseInt(seats, 10);
+      if (isNaN(seatCount) || seatCount < 1 || seatCount > 100) {
+        return res.status(400).json({ error: "Seats must be an integer between 1 and 100." });
+      }
+
+      // Promo code lookup
+      let discount_pct = 0;
+      let trial_days = 0;
+      let promo_applied = false;
+      if (promo_code) {
+        try {
+          const discountRow = db.$client.prepare(
+            "SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?) AND active = 1"
+          ).get(promo_code.trim()) as any;
+          if (discountRow) {
+            if (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) {
+              discount_pct = discountRow.discount_pct || 0;
+              trial_days = discountRow.trial_days || 0;
+              promo_applied = true;
+            }
+          }
+        } catch (e) {
+          console.error("[invoice-request] Promo code lookup error:", e);
+        }
+      }
+
+      // User auto-create or find existing
+      const normalizedEmail = billing_contact_email.toLowerCase().trim();
+      let existingUser = storage.getUserByEmail(normalizedEmail);
+      let userId: number;
+
+      if (existingUser) {
+        userId = existingUser.id;
+        // Only set pending_invoice if they are on free/null plan
+        if (!existingUser.plan || existingUser.plan === "free") {
+          db.$client.prepare("UPDATE users SET plan = 'pending_invoice' WHERE id = ?").run(userId);
+        }
+      } else {
+        // Create user with placeholder password
+        const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+        const newUser = storage.createUser(normalizedEmail, placeholderHash, billing_contact_name);
+        userId = newUser.id;
+        db.$client.prepare(
+          "UPDATE users SET plan = 'pending_invoice', hipaa_acknowledged = 1, hipaa_acknowledged_at = ? WHERE id = ?"
+        ).run(new Date().toISOString(), userId);
+      }
+
+      // Generate password reset token (1 hour expiry)
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      db.$client.prepare(
+        "INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)"
+      ).run(userId, resetToken, resetExpiresAt);
+      const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+      // Insert invoice request
+      const insertResult = db.$client.prepare(`
+        INSERT INTO invoice_requests (
+          user_id, lab_name, clia_number, billing_contact_name, billing_contact_email,
+          billing_address, ap_email, tax_id, tier, seats, promo_code,
+          discount_pct, trial_days, po_number, notes, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      `).run(
+        userId, lab_name, clia_number || null, billing_contact_name, normalizedEmail,
+        billing_address, ap_email || null, tax_id || null, tier, seatCount, promo_code || null,
+        discount_pct, trial_days, po_number || null, notes || null, new Date().toISOString()
+      );
+      const requestId = insertResult.lastInsertRowid;
+
+      // Send emails
+      let emailWarning = false;
+      if (resend) {
+        // Email 1: Requester confirmation
+        try {
+          const tierLabels: Record<string, string> = {
+            clinic: "Clinic ($499/yr)", community: "Community ($999/yr)",
+            hospital: "Hospital ($1,999/yr)", enterprise: "Enterprise ($2,999/yr)"
+          };
+          const promoLine = promo_applied
+            ? `<p style="margin: 0 0 12px;"><strong>Promo code:</strong> ${promo_code} (${discount_pct}% off${trial_days ? `, ${trial_days}-day trial` : ""})</p>`
+            : "";
+          await resend.emails.send({
+            from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+            to: normalizedEmail,
+            subject: "Your VeritaAssure\u2122 invoice request - next steps",
+            html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+  <div style="background: #01696F; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 22px;">Invoice Request Received</h1>
+  </div>
+  <div style="padding: 32px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
+    <p style="margin: 0 0 16px;">Hi ${billing_contact_name},</p>
+    <p style="margin: 0 0 16px;">Thank you for requesting an invoice for VeritaAssure\u2122. Here is a summary of what you submitted:</p>
+    <div style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px; margin: 0 0 16px;">
+      <p style="margin: 0 0 8px;"><strong>Lab:</strong> ${lab_name}</p>
+      <p style="margin: 0 0 8px;"><strong>Plan:</strong> ${tierLabels[tier] || tier}</p>
+      <p style="margin: 0 0 8px;"><strong>Seats:</strong> ${seatCount}</p>
+      ${promoLine}
+    </div>
+    <p style="margin: 0 0 16px;"><strong>What happens next:</strong></p>
+    <ul style="margin: 0 0 16px; padding-left: 20px; line-height: 1.8;">
+      <li>We will send your invoice within 1 business day via Stripe.</li>
+      <li>Your VeritaAssure\u2122 account will activate once the invoice is paid.</li>
+    </ul>
+    <p style="margin: 0 0 16px;">In the meantime, set your password so you are ready to log in:</p>
+    <a href="${resetUrl}" style="display: inline-block; background: #01696F; color: white; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">Set Your Password</a>
+    <p style="margin: 24px 0 0; font-size: 13px; color: #666;">Questions? Reply to this email or contact us at info@veritaslabservices.com.</p>
+  </div>
+</div>`,
+          });
+        } catch (emailErr: any) {
+          console.error("[invoice-request] Requester email failed:", emailErr?.message);
+          emailWarning = true;
+        }
+
+        // Email 2: Internal notification
+        try {
+          await resend.emails.send({
+            from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+            to: ["info@veritaslabservices.com", "verilabguy@gmail.com"],
+            subject: `New invoice request: ${lab_name} - ${tier} x ${seatCount}`,
+            html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; color: #1a1a1a;">
+  <h2 style="color: #01696F;">New Invoice Request (#${requestId})</h2>
+  <table style="border-collapse: collapse; width: 100%;">
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Lab Name</td><td style="padding: 6px 12px;">${lab_name}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">CLIA Number</td><td style="padding: 6px 12px;">${clia_number || "N/A"}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Billing Contact</td><td style="padding: 6px 12px;">${billing_contact_name} (${normalizedEmail})</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">AP Email</td><td style="padding: 6px 12px;">${ap_email || "Same as billing"}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Billing Address</td><td style="padding: 6px 12px;">${billing_address}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Tax ID / EIN</td><td style="padding: 6px 12px;">${tax_id || "N/A"}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Tier</td><td style="padding: 6px 12px;">${tier}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Seats</td><td style="padding: 6px 12px;">${seatCount}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Promo Code</td><td style="padding: 6px 12px;">${promo_applied ? `${promo_code} (${discount_pct}% off, ${trial_days}-day trial)` : "None"}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">PO Number</td><td style="padding: 6px 12px;">${po_number || "N/A"}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">Notes</td><td style="padding: 6px 12px;">${notes || "None"}</td></tr>
+    <tr><td style="padding: 6px 12px; font-weight: bold;">User ID</td><td style="padding: 6px 12px;">${userId} (${existingUser ? "existing" : "new"})</td></tr>
+  </table>
+  <p style="margin-top: 16px;"><a href="https://dashboard.stripe.com/invoices" style="color: #01696F;">Open Stripe Invoices Dashboard</a></p>
+</div>`,
+          });
+        } catch (emailErr: any) {
+          console.error("[invoice-request] Internal notification email failed:", emailErr?.message);
+          emailWarning = true;
+        }
+      } else {
+        console.log("[invoice-request] Resend not configured, skipping emails for request", requestId);
+        emailWarning = true;
+      }
+
+      return res.status(201).json({
+        success: true,
+        request_id: requestId,
+        promo_applied,
+        discount_pct,
+        trial_days,
+        password_set_url_sent: true,
+        ...(emailWarning ? { email_warning: true } : {}),
+      });
+    } catch (err: any) {
+      console.error("[invoice-request] Unexpected error:", err);
+      return res.status(500).json({ error: "An unexpected error occurred. Please email info@veritaslabservices.com." });
+    }
+  });
+
   // ── DOWNLOADS ─────────────────────────────────────────────────────────────
   app.get("/api/downloads/clsi-compliance-matrix", (_req, res) => {
     const buf = Buffer.from(CLSI_COMPLIANCE_MATRIX_B64, "base64");

@@ -318,6 +318,19 @@ return (
           ))}
         </div>
 
+        {/* Invoice CTA */}
+        <div className="text-center py-6">
+          <h3 className="font-serif text-xl font-medium mb-2">Need to pay by invoice?</h3>
+          <Link
+            href="/request-invoice"
+            className="text-lg text-[#01696F] hover:underline"
+            onClick={() => trackEvent('invoice_request_cta_click')}
+          >
+            Request an invoice
+          </Link>
+          <p className="text-sm text-gray-600 mt-1">For AP department processing.</p>
+        </div>
+
         {/* Money-Back Guarantee */}
         <div className="border border-primary/20 bg-primary/5 rounded-lg p-6 text-center">
           <ShieldCheck size={28} className="text-primary mx-auto mb-3" />

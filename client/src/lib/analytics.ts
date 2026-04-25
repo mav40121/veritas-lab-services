@@ -1,4 +1,4 @@
-type GA4EventName = 'begin_checkout' | 'sign_up' | 'purchase';
+type GA4EventName = 'begin_checkout' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click';
 
 interface GA4EventParams {
   // begin_checkout / purchase
@@ -13,6 +13,10 @@ interface GA4EventParams {
   }>;
   // sign_up
   method?: string;
+  // invoice_request_submitted
+  tier?: string;
+  seats?: number;
+  has_promo?: boolean;
 }
 
 export function trackEvent(name: GA4EventName, params: GA4EventParams = {}) {

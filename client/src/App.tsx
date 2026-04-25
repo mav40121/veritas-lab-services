@@ -74,6 +74,7 @@ import VeritaBenchPage from "@/pages/VeritaBenchPage";
 import VeritaBenchStaffingPage from "@/pages/VeritaBenchStaffingPage";
 import VeritaStockPage from "@/pages/VeritaStockPage";
 import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
+import RequestInvoicePage from "@/pages/RequestInvoicePage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -276,6 +277,7 @@ function AppContent() {
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/faq" component={FAQPage} />
           <Route path="/pricing" component={PricingPage} />
+          <Route path="/request-invoice" component={RequestInvoicePage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
           <Route path="/resources/how-veritaassure-trains-lab-leaders" component={ArticleTrainingPage} />

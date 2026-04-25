@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 
 const app = express();
+app.set("trust proxy", true);
 const httpServer = createServer(app);
 
 // 301-redirect apex domain to www (fixes Google Search Console HTTP 405 on apex)

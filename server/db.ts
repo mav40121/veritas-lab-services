@@ -55,6 +55,30 @@ sqlite.exec(`
     used_at TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS invoice_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id),
+    lab_name TEXT NOT NULL,
+    clia_number TEXT,
+    billing_contact_name TEXT NOT NULL,
+    billing_contact_email TEXT NOT NULL,
+    billing_address TEXT NOT NULL,
+    ap_email TEXT,
+    tax_id TEXT,
+    tier TEXT NOT NULL,
+    seats INTEGER NOT NULL DEFAULT 1,
+    promo_code TEXT,
+    discount_pct INTEGER NOT NULL DEFAULT 0,
+    trial_days INTEGER NOT NULL DEFAULT 0,
+    po_number TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    paid_at TEXT,
+    invoice_sent_at TEXT,
+    stripe_invoice_id TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS discount_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT UNIQUE NOT NULL,
@@ -512,6 +536,29 @@ if (!colNames.includes("subscription_status")) {
   sqlite.exec("ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'free'");
   // Migrate existing paid users: set subscription_status = 'active' for users with an active plan
   sqlite.exec("UPDATE users SET subscription_status = 'active' WHERE plan IN ('starter', 'professional', 'lab', 'complete', 'annual')");
+}
+
+// Invoice requests table — ALTER migrations for upgrades from older schemas
+const invoiceCols = sqlite.prepare("PRAGMA table_info(invoice_requests)").all() as { name: string }[];
+const invoiceColNames = invoiceCols.map((c) => c.name);
+const invoiceMigrations: [string, string][] = [
+  ["user_id", "INTEGER"],
+  ["clia_number", "TEXT"],
+  ["ap_email", "TEXT"],
+  ["tax_id", "TEXT"],
+  ["promo_code", "TEXT"],
+  ["discount_pct", "INTEGER NOT NULL DEFAULT 0"],
+  ["trial_days", "INTEGER NOT NULL DEFAULT 0"],
+  ["po_number", "TEXT"],
+  ["notes", "TEXT"],
+  ["paid_at", "TEXT"],
+  ["invoice_sent_at", "TEXT"],
+  ["stripe_invoice_id", "TEXT"],
+];
+for (const [col, colType] of invoiceMigrations) {
+  if (!invoiceColNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE invoice_requests ADD COLUMN ${col} ${colType}`); } catch {}
+  }
 }
 
 // Add CLIA and seat/session columns to users table
