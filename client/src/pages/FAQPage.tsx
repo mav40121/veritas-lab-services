@@ -30,6 +30,81 @@ const FAQ_CATEGORIES = [
     ],
   },
   {
+    category: "Products and Modules",
+    items: [
+      {
+        q: "What's included in the VeritaAssure\u2122 suite?",
+        a: "The suite includes nine production modules: VeritaCheck\u2122 (method validation, calibration verification, EP15 precision), VeritaTrack\u2122 (QC task tracking and sign-off), VeritaStock\u2122 (reagent and inventory management), VeritaBench\u2122 (productivity and staffing analytics), VeritaScan\u2122 (168-item inspection readiness self-assessment), VeritaPT\u2122 (proficiency testing tracker), VeritaMap\u2122 (test menu regulatory mapping), VeritaLab\u2122 (CLIA certificate and accreditation tracking), and VeritaComp\u2122 (competency assessment). VeritaPolicy\u2122 (TJC policy compliance) and VeritaStaff\u2122 (personnel credentialing) are also available. See the roadmap for what's coming next.",
+      },
+      {
+        q: "What is VeritaCheck\u2122?",
+        a: "VeritaCheck\u2122 is the method validation and calibration verification module. It supports CLIA TEa-based pass/fail with automated lookup, EP15 precision, EP9 method comparison, and reportable range studies. Every report includes regulatory citations, statistics, and a director review block, exported as a signed PDF.",
+      },
+      {
+        q: "What is VeritaScan\u2122?",
+        a: "VeritaScan\u2122 is a 168-item inspection readiness self-assessment across 10 compliance domains, triple-mapped to The Joint Commission standards, CAP checklists, and 42 CFR Part 493. Studies completed in VeritaCheck\u2122 automatically check off corresponding items, so your inspection readiness is always current. Includes 200+ surveys and an executive summary export.",
+      },
+      {
+        q: "What is VeritaTrack\u2122?",
+        a: "VeritaTrack\u2122 is a QC task tracking and sign-off module for daily, weekly, and monthly compliance tasks. Assign tasks to staff, capture electronic sign-offs with timestamps, and produce an audit-ready log for inspections.",
+      },
+      {
+        q: "What is VeritaStock\u2122?",
+        a: "VeritaStock\u2122 manages reagent and supply inventory: lot tracking, expiration alerts, par levels, FIFO rotation prompts, and burn-rate-based reorder calculations. Designed to eliminate the spreadsheets most labs use today.",
+      },
+      {
+        q: "What is VeritaBench\u2122?",
+        a: "VeritaBench\u2122 provides productivity and staffing analytics for laboratory operations: workload by section, performance indicators (PI dashboards), and staffing planning data. Built for hospital and enterprise labs that need to defend headcount and budget decisions.",
+      },
+      {
+        q: "Do modules work together, or are they separate?",
+        a: "They're integrated. Studies in VeritaCheck\u2122 automatically check off VeritaScan\u2122 items. Instruments registered in VeritaMap\u2122 feed VeritaCheck\u2122 instrument selection and VeritaComp\u2122 competency programs. Personnel in VeritaStaff\u2122 tie into VeritaComp\u2122 assessments. One subscription, one login, shared data.",
+      },
+    ],
+  },
+  {
+    category: "Teams and Seats",
+    items: [
+      {
+        q: "Can my team share an account?",
+        a: "Yes. Every paid plan includes seats for additional staff members. The owner invites teammates by email; each gets their own login and customizable permissions. Studies, instruments, and inspection records are shared across the team.",
+      },
+      {
+        q: "How are seat permissions configured?",
+        a: "The account owner sets permissions per seat: read-only, study-author, instrument-admin, billing-admin, and others. You can scope a seat to specific modules - for example, an inventory manager who only sees VeritaStock\u2122.",
+      },
+      {
+        q: "How many seats are included in each plan?",
+        a: "Seat counts scale with plan tier. Hospital and Enterprise plans include the most seats; Clinic and Community include enough for typical small-lab teams. See the pricing page or contact info@veritaslabservices.com for specifics on your situation.",
+      },
+      {
+        q: "Can I add more seats later?",
+        a: "Yes. You can add seats from your Account, Seats page at any time. Seat additions are prorated against your current billing period.",
+      },
+    ],
+  },
+  {
+    category: "Compliance and Standards",
+    items: [
+      {
+        q: "Which accreditation programs does VeritaAssure\u2122 support?",
+        a: "VeritaAssure\u2122 aligns with The Joint Commission (TJC), CAP (College of American Pathologists), COLA, and CMS/CLIA requirements. VeritaScan\u2122 items are triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Reports cite the specific regulation each finding addresses.",
+      },
+      {
+        q: "How does VeritaAssure\u2122 handle the CLIA TEa standard?",
+        a: "VeritaCheck\u2122 uses CLIA TEa values from federal law (42 CFR \u00a7493.1253) as the default pass/fail threshold for calibration verification. The TEa lookup tool is available at /resources/clia-tea-lookup. You can override TEa with manufacturer or CAP values if your lab's policy requires it.",
+      },
+      {
+        q: "Does VeritaAssure\u2122 work for waived-only labs?",
+        a: "Yes. Certificate of Waiver labs are placed in the Clinic tier automatically. Even waived-only labs benefit from VeritaScan\u2122's inspection readiness self-assessment, VeritaStock\u2122 inventory management, and personnel and certificate tracking.",
+      },
+      {
+        q: "Can a non-laboratorian use VeritaAssure\u2122?",
+        a: "Yes, but every report still requires a laboratory director or designee review block. VeritaAssure\u2122 is built so a quality manager, lab supervisor, or technologist can complete the work, while the director retains final approval responsibility.",
+      },
+    ],
+  },
+  {
     category: "HIPAA and Data Privacy",
     items: [
       {
@@ -62,6 +137,10 @@ const FAQ_CATEGORIES = [
         a: "All data is transmitted over encrypted HTTPS connections and stored in an isolated database on a secured cloud server. Access requires authentication with your credentials. Passwords are hashed before storage and never stored in plaintext.",
       },
       {
+        q: "Where is my data hosted?",
+        a: "Data is hosted on US-based cloud infrastructure with industry-standard physical and network security controls. The application server runs on Railway (US-East region); backups go to off-site cold storage. Contact info@veritaslabservices.com for a security questionnaire if your IT team requires one.",
+      },
+      {
         q: "Do you back up my data?",
         a: "Yes. Your data is backed up nightly to off-site cold storage independent of the application server. Contact info@veritaslabservices.com if you need to recover data.",
       },
@@ -79,16 +158,40 @@ const FAQ_CATEGORIES = [
         a: "VeritaAssure\u2122 offers plans for labs of all sizes, from a single per-study purchase to enterprise subscriptions for large health systems. Plans include seats for your team and the full VeritaAssure\u2122 module suite. Certificate of Waiver labs are always placed in the lowest tier. For current pricing, visit the pricing page.",
       },
       {
+        q: "How does pricing scale with lab size?",
+        a: "Plans are tiered by lab type, not by per-instrument or per-test volume. Clinic ($499/yr) is for single-CLIA practices. Community ($999/yr) for community hospitals and reference networks. Hospital ($1,999/yr) for full-service hospital labs. Enterprise ($2,999/yr) for health systems with multiple sites. All plans include the full module suite.",
+      },
+      {
         q: "How is my plan tier determined?",
         a: "During checkout you can enter your CLIA number and we will look it up against CMS data to suggest a plan based on your certificate type and facility size. You can always select a different tier. Certificate of Waiver labs are placed in the Clinic tier.",
+      },
+      {
+        q: "Do you offer a free trial?",
+        a: "Yes. All subscription plans include a 14-day free trial. You can use the full platform during the trial; you're only charged when the trial ends. No commitment.",
       },
       {
         q: "Can I try VeritaAssure\u2122 before subscribing?",
         a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. All subscription plans include a 14-day free trial, so you can use the full platform before being billed. You can also run individual VeritaCheck\u2122 studies on a per-study basis without a subscription.",
       },
       {
+        q: "What's the difference between the per-study price and the unlimited subscription?",
+        a: "Per Study is $25 per validation study, paid one-time, no subscription. It's ideal for labs that run only a handful of studies a year. VeritaCheck\u2122 Unlimited at $299 per year breaks even after just 12 studies and includes all VeritaCheck\u2122 functionality. For full-suite access (VeritaTrack\u2122, VeritaStock\u2122, VeritaBench\u2122, and others), choose Clinic, Community, Hospital, or Enterprise.",
+      },
+      {
+        q: "Do you offer a money-back guarantee?",
+        a: "Yes. Subscription plans include a 30-day money-back guarantee on your first charge. We'll refund the first subscription charge in full within 30 days of that charge. One refund per customer; applies to the initial charge only, not renewals, seat add-ons, or per-study purchases.",
+      },
+      {
         q: "What payment methods do you accept?",
         a: "Self-service subscriptions are processed by credit or debit card through Stripe. Hospitals and health systems requiring purchase order-based invoicing should contact info@veritaslabservices.com to arrange billing. Payment card information is processed and stored by Stripe and is never stored on our servers.",
+      },
+      {
+        q: "Do you accept purchase orders or invoicing?",
+        a: "Yes. Hospitals and health systems can request PO-based invoicing instead of credit card billing. Visit /request-invoice or email info@veritaslabservices.com to set up.",
+      },
+      {
+        q: "Are there discounts available?",
+        a: "We offer discount codes for COLA members, conference attendees, and multi-site groups. Email info@veritaslabservices.com if your situation may qualify.",
       },
       {
         q: "Can I cancel at any time?",
@@ -131,6 +234,18 @@ const FAQ_CATEGORIES = [
       {
         q: "Is software validation documentation available?",
         a: "Yes. A software validation template is available for download on the Resources page. Laboratories that require formal software validation documentation as part of their quality system can use this template to document their validation process.",
+      },
+      {
+        q: "Is there a public roadmap?",
+        a: "Yes. The product roadmap at /roadmap shows what's shipped, what's in active development, and what's planned next. Customer requests routinely bump items up the priority list.",
+      },
+      {
+        q: "Do you offer consulting services beyond software?",
+        a: "Yes. Veritas Lab Services offers laboratory consulting at /services, including mock inspections, method validation strategy, quality management system buildouts, and CLIA application support. Consulting and software are sold separately.",
+      },
+      {
+        q: "How do I schedule a live walkthrough?",
+        a: "Visit /book to schedule a 30-minute call with Michael Veri. We'll walk through your specific accreditation situation and the modules most relevant to your lab.",
       },
       {
         q: "How do I get support?",
