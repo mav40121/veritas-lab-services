@@ -12,7 +12,7 @@ const FEATURES = [
   "Competency timeline engine: Initial, 6-month, 1st Annual, Annual milestones",
   "TJC, CAP, COLA, CLIA-only, and NYS timeline rule sets built in",
   "TC/TS specialty mapping with all 17 CMS specialty categories",
-  "VeritaMap integration: import departments and suggest TC/TS specialties",
+  "VeritaMap\u2122 integration: import departments and suggest TC/TS specialties",
   "High and moderate complexity role logic with proper separation",
   "Early completion recalculates due dates from actual completion date",
   "Written by a former TJC laboratory surveyor with 200+ facility inspections",
@@ -40,7 +40,7 @@ const FEATURE_CARDS = [
 ];
 
 export default function VeritaStaffPage() {
-    useSEO({ title: "VeritaStaff | Laboratory Staff Roster and HR Compliance Software", description: "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys." });
+    useSEO({ title: "VeritaStaff\u2122 | Laboratory Staff Roster and HR Compliance Software", description: "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys." });
 return (
     <div>
       {/* Hero */}
@@ -194,9 +194,9 @@ return (
             <h2 className="font-serif text-3xl font-bold text-center mb-10">How It Works</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { step: "1", title: "Set Up Your Lab", desc: "Enter your CLIA number, accreditation body, and testing complexity. Optionally import departments from VeritaMap." },
+                { step: "1", title: "Set Up Your Lab", desc: "Enter your CLIA number, accreditation body, and testing complexity. Optionally import departments from VeritaMap\u2122." },
                 { step: "2", title: "Add Staff", desc: "Enter each employee with credentials, qualifications, and hire date. Assign CLIA roles and specialties." },
-                { step: "3", title: "Track Competency", desc: "VeritaStaff calculates due dates based on your accreditor's rules. Mark completions and the timeline auto-updates." },
+                { step: "3", title: "Track Competency", desc: "VeritaStaff\u2122 calculates due dates based on your accreditor's rules. Mark completions and the timeline auto-updates." },
                 { step: "4", title: "Generate CMS 209", desc: "Click one button to produce a pre-filled CMS 209 PDF, ready for the laboratory director's signature." },
               ].map((s) => (
                 <div key={s.step} className="text-center">

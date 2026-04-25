@@ -19,7 +19,7 @@ const credentials = [
   { icon: Star, text: "200+ healthcare facility inspections" },
   { icon: BookOpen, text: "Author, Lab Management 101 (forthcoming)" },
   { icon: BookOpen, text: "30-episode free webinar series on lab management" },
-  { icon: Star, text: "Founder, VeritaAssure compliance software suite" },
+  { icon: Star, text: "Founder, VeritaAssure™ compliance software suite" },
 ];
 
 export default function TeamPage() {
@@ -54,13 +54,13 @@ return (
 
             <div className="sm:col-span-2 space-y-5">
               <p className="text-foreground leading-relaxed">
-                I became a laboratory director without ever being taught how. That experience, the gap between clinical training and compliance responsibility, is why I built VeritaAssure.
+                I became a laboratory director without ever being taught how. That experience, the gap between clinical training and compliance responsibility, is why I built VeritaAssure™.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 Michael is a distinguished US Army veteran with 22 years of service and over a decade of director-level leadership in the civilian healthcare sector. Leveraging four years as a Joint Commission (TJC) Surveyor, he has conducted regulatory and compliance inspections at more than 200 healthcare facilities across the country.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                In 2026, Michael founded VeritaAssure, a clinical laboratory compliance software suite built directly from his inspection experience. VeritaCheck, VeritaMap, VeritaScan, and VeritaComp are live and available at veritaslabservices.com, giving laboratory directors the documentation infrastructure that most labs have never had.
+                In 2026, Michael founded VeritaAssure™, a clinical laboratory compliance software suite built directly from his inspection experience. VeritaCheck™, VeritaMap™, VeritaScan™, and VeritaComp™ are live and available at veritaslabservices.com, giving laboratory directors the documentation infrastructure that most labs have never had.
               </p>
 
               {/* Credentials */}

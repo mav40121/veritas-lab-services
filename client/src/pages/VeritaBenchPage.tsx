@@ -247,7 +247,7 @@ export default function VeritaBenchPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaBench{"\u2122"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaBench is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaBench{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
         <Button asChild style={{ backgroundColor: "#01696F" }}><Link href="/pricing">View Plans</Link></Button>
       </div>
     );

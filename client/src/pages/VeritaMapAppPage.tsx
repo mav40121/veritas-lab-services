@@ -171,7 +171,7 @@ export default function VeritaMapAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaMap</h1>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaMap™</h1>
           <p className="text-muted-foreground text-sm mb-6">
             VeritaMap™ requires an account. Sign in to continue.
           </p>
@@ -290,7 +290,7 @@ export default function VeritaMapAppPage() {
           />
           <h3 className="font-semibold mb-1">No maps yet</h3>
           <p className="text-sm text-muted-foreground mb-5 max-w-xs mx-auto">
-            Create your first VeritaMap to start tracking regulatory compliance
+            Create your first VeritaMap™ to start tracking regulatory compliance
             for your test menu.
           </p>
           <Button

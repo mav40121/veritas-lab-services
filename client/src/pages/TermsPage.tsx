@@ -14,7 +14,7 @@ export default function TermsPage() {
         <section>
           <h2 className="font-semibold text-base mb-2">2. Description of Service</h2>
           <p><strong>VeritaCheck™</strong> is a web-based statistical analysis tool designed to assist qualified laboratory professionals in performing calibration verification, linearity, method comparison, and precision studies in accordance with CLIA, CAP, and CLSI guidelines. It generates statistical calculations and PDF reports based on data entered by the user.</p>
-          <p className="mt-2"><strong>VeritaScan™</strong> is a self-inspection and compliance audit tool that enables laboratory professionals to assess laboratory compliance against TJC, CAP, and federal CLIA requirements. VeritaScan citations reference TJC standards (copyright © The Joint Commission) and CAP checklist numbers (copyright © College of American Pathologists) for educational and navigational purposes only. VeritaScan does not reproduce the text of those standards and is not affiliated with, endorsed by, or sponsored by The Joint Commission or the College of American Pathologists.</p>
+          <p className="mt-2"><strong>VeritaScan™</strong> is a self-inspection and compliance audit tool that enables laboratory professionals to assess laboratory compliance against TJC, CAP, and federal CLIA requirements. VeritaScan™ citations reference TJC standards (copyright © The Joint Commission) and CAP checklist numbers (copyright © College of American Pathologists) for educational and navigational purposes only. VeritaScan™ does not reproduce the text of those standards and is not affiliated with, endorsed by, or sponsored by The Joint Commission or the College of American Pathologists.</p>
         </section>
 
         <section>

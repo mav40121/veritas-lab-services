@@ -135,10 +135,10 @@ return (
       {/* Header */}
       <section className="border-b border-border bg-secondary/20">
         <div className="container-default py-14">
-          <Badge variant="outline" className="mb-4 text-primary border-primary/30">VeritaAssure Suite</Badge>
+          <Badge variant="outline" className="mb-4 text-primary border-primary/30">VeritaAssure™ Suite</Badge>
           <h1 className="font-serif text-4xl font-bold mb-3">Laboratory Consulting Services</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-            Compliance is not a once-a-year event. It is the daily discipline of running a laboratory that can withstand scrutiny at any moment. VeritaAssure consulting services exist because the gap between clinical training and compliance responsibility is real, and most lab professionals navigate it alone.
+            Compliance is not a once-a-year event. It is the daily discipline of running a laboratory that can withstand scrutiny at any moment. VeritaAssure™ consulting services exist because the gap between clinical training and compliance responsibility is real, and most lab professionals navigate it alone.
           </p>
         </div>
       </section>
@@ -150,7 +150,7 @@ return (
             <div key={heading} className="space-y-6">
               <div className="mb-2">
                 <h2 className="font-serif text-2xl font-bold mb-1">{heading}</h2>
-                <p className="text-xs text-primary font-semibold uppercase tracking-wide mb-2">Part of the VeritaAssure suite</p>
+                <p className="text-xs text-primary font-semibold uppercase tracking-wide mb-2">Part of the VeritaAssure™ suite</p>
                 <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{leadIn}</p>
               </div>
               {groupServices.map(({ icon: Icon, category, title, duration, pricing, description, details, cta }) => (
@@ -206,7 +206,7 @@ return (
                     <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary shrink-0">
                       <FlaskConical size={16} />
                     </div>
-                    <Badge className="text-xs bg-primary text-primary-foreground">VeritaAssure Tool</Badge>
+                    <Badge className="text-xs bg-primary text-primary-foreground">VeritaAssure™ Tool</Badge>
                   </div>
                   <h3 className="font-serif text-xl font-bold mb-2">VeritaCheck™ - Lab Study Platform</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4">Automated calibration verification and method comparison studies with CLIA-compliant PDF reports. Scatter plots, percent recovery charts, pass/fail evaluation, all in under 60 seconds.</p>
@@ -235,9 +235,9 @@ return (
       {/* Why VeritaAssure */}
       <section className="section-padding border-t border-border bg-secondary/20">
         <div className="container-default text-center max-w-3xl">
-          <h2 className="font-serif text-3xl font-bold mb-4">Why VeritaAssure</h2>
+          <h2 className="font-serif text-3xl font-bold mb-4">Why VeritaAssure™</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Laboratory compliance isn't a one-time event. VeritaAssure is built on the belief that inspection readiness should be a permanent state, not a sprint. Whether you engage us for a single mock survey or an ongoing partnership, every service we deliver is designed to leave your lab more prepared, more documented, and more confident than when we arrived.
+            Laboratory compliance isn't a one-time event. VeritaAssure™ is built on the belief that inspection readiness should be a permanent state, not a sprint. Whether you engage us for a single mock survey or an ongoing partnership, every service we deliver is designed to leave your lab more prepared, more documented, and more confident than when we arrived.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-8">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">

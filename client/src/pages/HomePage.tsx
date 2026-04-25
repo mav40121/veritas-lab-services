@@ -23,7 +23,7 @@ const stats = [
 ];
 
 export default function HomePage() {
-    useSEO({ title: "Veritas Lab Services | Clinical Laboratory Compliance Software", description: "VeritaAssure is the all-in-one compliance platform for clinical laboratories. Method validation, inspection readiness, PT gap analysis, competency tracking, and more." });
+    useSEO({ title: "Veritas Lab Services | Clinical Laboratory Compliance Software", description: "VeritaAssure™ is the all-in-one compliance platform for clinical laboratories. Method validation, inspection readiness, PT gap analysis, competency tracking, and more." });
 return (
     <div>
       {/* Hero */}
@@ -43,7 +43,7 @@ return (
               You spent years mastering the science. Nobody taught you the compliance.
             </h1>
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
-              VeritaAssure gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
+              VeritaAssure™ gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               {/* Mobile: VeritaCheck primary, Explore secondary */}
@@ -51,11 +51,11 @@ return (
                 <Link href="/veritacheck">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="sm:hidden">
-                <Link href="/demo">Explore VeritaAssure</Link>
+                <Link href="/demo">Explore VeritaAssure™</Link>
               </Button>
               {/* Desktop: Explore primary, VeritaCheck secondary */}
               <Button asChild size="lg" className="hidden sm:inline-flex bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                <Link href="/demo">Explore VeritaAssure <ChevronRight size={16} className="ml-1" /></Link>
+                <Link href="/demo">Explore VeritaAssure™ <ChevronRight size={16} className="ml-1" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="hidden sm:inline-flex">
                 <Link href="/veritacheck">Try VeritaCheck™ Free</Link>
@@ -73,10 +73,10 @@ return (
         <div className="max-w-[700px] mx-auto px-4 sm:px-6 py-10">
           <blockquote className="border-l-4 border-[#01696F] bg-[#F0FAFA] rounded-lg px-6 py-5">
             <p className="italic leading-relaxed mb-2" style={{ color: '#1B4B4E' }}>
-              "I became a laboratory director without ever being taught how. That experience is why I built VeritaAssure."
+              "I became a laboratory director without ever being taught how. That experience is why I built VeritaAssure™."
             </p>
             <footer className="text-sm" style={{ color: '#1B4B4E' }}>
-              Michael Veri, MS, MBA, MLS(ASCP), CPHQ | Founder, VeritaAssure
+              Michael Veri, MS, MBA, MLS(ASCP), CPHQ | Founder, VeritaAssure™
             </footer>
           </blockquote>
         </div>
@@ -120,7 +120,7 @@ return (
       <section className="border-b border-border">
         <div className="max-w-[650px] mx-auto px-4 sm:px-6 py-10 text-center">
           <p className="text-sm text-[#7A7974] leading-relaxed">
-            Most labs manage compliance with a folder of spreadsheets, a binder of outdated SOPs, and the hope that nothing has slipped through the cracks. VeritaAssure replaces all of that with purpose-built tools designed around what surveyors actually look for.
+            Most labs manage compliance with a folder of spreadsheets, a binder of outdated SOPs, and the hope that nothing has slipped through the cracks. VeritaAssure™ replaces all of that with purpose-built tools designed around what surveyors actually look for.
           </p>
         </div>
       </section>
@@ -129,7 +129,7 @@ return (
       <section className="section-padding border-b border-border">
         <div className="container-default">
           <div className="text-center mb-10">
-            <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure</h2>
+            <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure™</h2>
             <p className="text-lg text-foreground leading-relaxed max-w-[750px] mx-auto mb-6">
               VeritaAssure™ is a suite of six purpose-built compliance tools covering every regulatory requirement a clinical laboratory faces - from EP method validation studies and inspection readiness to competency management, test menu mapping, personnel credentialing, and certificate tracking.
             </p>
@@ -143,9 +143,9 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Wrench size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure Tools</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Tools</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™ are the 6 software products of the VeritaAssure suite, built for lab directors who want data-driven compliance without waiting on a consultant.
+                  VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™ are the 6 software products of the VeritaAssure™ suite, built for lab directors who want data-driven compliance without waiting on a consultant.
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/veritacheck">Explore the Tools →</Link>
@@ -157,7 +157,7 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Briefcase size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure Consulting</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Consulting</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                   Structured mock surveys, regulatory gap analysis, productivity and workflow assessments, leadership coaching, and CLIA Laboratory Director services. On-site expertise aligned with CLIA, CAP, COLA, TJC, and FDA expectations.
                 </p>
@@ -171,7 +171,7 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Handshake size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure Together</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Together</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                   For labs that want both: consulting engagements that use the same tools your team works in every day, so the findings don't disappear when the engagement ends.
                 </p>

@@ -342,7 +342,7 @@ export default function VeritaLabAppPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaLab{"™"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaLab is included in all VeritaAssure plans. Subscribe to get started.</p>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaLab™ is included in all VeritaAssure™ plans. Subscribe to get started.</p>
         <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
           <Link href="/veritacheck">View Plans</Link>
         </Button>

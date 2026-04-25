@@ -368,8 +368,8 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
       if (res.ok) {
         const data = await res.json();
         setSuggestions(data);
-        if (data.length > 0) toast({ title: "VeritaMap departments found", description: `${data.length} department(s) can be mapped to CMS specialties.` });
-        else toast({ title: "No VeritaMap departments", description: "No maps found. You can still set up specialties manually." });
+        if (data.length > 0) toast({ title: "VeritaMap™ departments found", description: `${data.length} department(s) can be mapped to CMS specialties.` });
+        else toast({ title: "No VeritaMap™ departments", description: "No maps found. You can still set up specialties manually." });
       }
     } catch {}
   }
@@ -471,7 +471,7 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
           </Button>
           {suggestions.length > 0 && (
             <div className="bg-muted/50 rounded-lg p-3 text-sm">
-              <p className="font-medium mb-2">Suggested CMS Specialties from VeritaMap:</p>
+              <p className="font-medium mb-2">Suggested CMS Specialties from VeritaMap™:</p>
               {suggestions.map((s: any) => (
                 <div key={s.department} className="flex gap-2 text-xs mb-1">
                   <span className="font-medium">{s.department}:</span>

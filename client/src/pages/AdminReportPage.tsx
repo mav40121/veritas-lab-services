@@ -112,7 +112,7 @@ const PLAN_OPTIONS = [
   { value: "enterprise",      label: "Enterprise ($2,999/yr - 25 seats)" },
   { value: "waived",          label: "Waived" },
   { value: "large_hospital",  label: "Large Hospital" },
-  { value: "veritacheck_only",label: "VeritaCheck Only" },
+  { value: "veritacheck_only",label: "VeritaCheck™ Only" },
   { value: "lab",             label: "Lab" },
 ];
 
@@ -289,7 +289,7 @@ export default function AdminReportPage() {
     // Title row
     ws.mergeCells("A1:M1");
     const titleCell = ws.getCell("A1");
-    titleCell.value = `VeritaAssure(TM) Customer Report - Generated: ${new Date().toLocaleString()}`;
+    titleCell.value = `VeritaAssure™ Customer Report - Generated: ${new Date().toLocaleString()}`;
     titleCell.font = { bold: true, size: 13 };
     titleCell.alignment = { horizontal: "left" };
 
@@ -372,7 +372,7 @@ export default function AdminReportPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="bg-card rounded-lg shadow-md p-8 max-w-sm w-full border border-border">
-          <h1 className="text-xl font-bold mb-1">VeritaAssure(TM) Admin Report</h1>
+          <h1 className="text-xl font-bold mb-1">VeritaAssure™ Admin Report</h1>
           <p className="text-muted-foreground text-sm mb-6">Enter admin secret to continue</p>
           {error && (
             <div className="bg-red-50 text-red-700 text-sm rounded px-3 py-2 mb-4">
@@ -423,7 +423,7 @@ export default function AdminReportPage() {
       {/* Header */}
       <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">VeritaAssure(TM) Admin Report</h1>
+          <h1 className="text-xl font-bold">VeritaAssure™ Admin Report</h1>
           <p className="text-muted-foreground text-sm">Customer account overview</p>
         </div>
         <button
@@ -456,7 +456,7 @@ export default function AdminReportPage() {
             <option value="community">Community</option>
             <option value="hospital">Hospital</option>
             <option value="large_hospital">Large Hospital</option>
-            <option value="veritacheck_only">VeritaCheck Unlimited</option>
+            <option value="veritacheck_only">VeritaCheck™ Unlimited</option>
           </select>
           <select
             className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground"
@@ -674,12 +674,12 @@ function AuditLogPanel({ secret }: { secret: string }) {
               <label className="text-xs text-muted-foreground block mb-1">Module (optional)</label>
               <select value={module} onChange={e => setModule(e.target.value)} className="border rounded px-2 py-1 text-sm">
                 <option value="">All</option>
-                <option value="veritamap">VeritaMap</option>
-                <option value="veritascan">VeritaScan</option>
-                <option value="veritacomp">VeritaComp</option>
-                <option value="veritastaff">VeritaStaff</option>
-                <option value="veritalab">VeritaLab</option>
-                <option value="veritacheck">VeritaCheck</option>
+                <option value="veritamap">VeritaMap™</option>
+                <option value="veritascan">VeritaScan™</option>
+                <option value="veritacomp">VeritaComp™</option>
+                <option value="veritastaff">VeritaStaff™</option>
+                <option value="veritalab">VeritaLab™</option>
+                <option value="veritacheck">VeritaCheck™</option>
               </select>
             </div>
             <button onClick={fetchAuditLog} disabled={loading} className="bg-primary text-white text-sm px-3 py-1.5 rounded hover:bg-primary/90">

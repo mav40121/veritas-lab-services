@@ -65,7 +65,7 @@ return (
                 "Calibration verification must be performed at least every six months for all non-waived quantitative tests",
                 "Several events trigger out-of-cycle verification beyond the standard schedule",
                 "Documentation completeness is the most common inspection finding, not whether the verification was performed",
-                "VeritaCheck(TM) automates calculations, applies acceptance criteria, and generates inspector-ready PDF reports",
+                "VeritaCheck™ automates calculations, applies acceptance criteria, and generates inspector-ready PDF reports",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -117,7 +117,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">A More Efficient Approach</h2>
           <p>
-            Tools like VeritaCheck(TM) perform the recovery calculations automatically, apply your acceptance criteria, and generate an inspector-ready PDF report that includes your CLIA number, analyst identification, all input values, and a clear pass or fail determination. The report is stored in your account and retrievable at any time. For a laboratory running multiple analytes across multiple instruments, this eliminates the spreadsheet management problem entirely.
+            Tools like VeritaCheck™ perform the recovery calculations automatically, apply your acceptance criteria, and generate an inspector-ready PDF report that includes your CLIA number, analyst identification, all input values, and a clear pass or fail determination. The report is stored in your account and retrievable at any time. For a laboratory running multiple analytes across multiple instruments, this eliminates the spreadsheet management problem entirely.
           </p>
 
           {/* VeritaCheck CTA */}
@@ -125,9 +125,9 @@ return (
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">VeritaCheck(TM) automates calibration verification</div>
+                <div className="font-semibold text-sm mb-1">VeritaCheck™ automates calibration verification</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Enter your data and VeritaCheck(TM) handles every calculation: recovery percentages, pass/fail against CLIA TEa, and a signed PDF report with your CLIA number. Your first study is free.
+                  Enter your data and VeritaCheck™ handles every calculation: recovery percentages, pass/fail against CLIA TEa, and a signed PDF report with your CLIA number. Your first study is free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -137,7 +137,7 @@ return (
           </div>
 
           <p>
-            Final approval and clinical determination must be made by the laboratory director or designee. Learn more about VeritaCheck(TM) at veritaslabservices.com.
+            Final approval and clinical determination must be made by the laboratory director or designee. Learn more about VeritaCheck™ at veritaslabservices.com.
           </p>
 
           {/* Newsletter */}
@@ -148,7 +148,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to run your next study?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck(TM) handles calibration verification with automated CLIA TEa lookup, all statistics calculated, and a signed PDF report generated in minutes.
+              VeritaCheck™ handles calibration verification with automated CLIA TEa lookup, all statistics calculated, and a signed PDF report generated in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

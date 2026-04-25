@@ -896,7 +896,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
       {/* Legacy data notice */}
       {isLegacyFormat && (
         <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-400">
-          This study was created with an earlier version of VeritaCheck. Data has been migrated for display.
+          This study was created with an earlier version of VeritaCheck™. Data has been migrated for display.
         </div>
       )}
 
@@ -1112,7 +1112,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                 ))}
               </tbody>
             </table>
-            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only). VeritaCheck uses OLS regression for calibration verification (where calibrator assigned values are treated as exact) and Deming regression for method comparison (where both methods carry measurement error). Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation against CLIA TEa.</p>
+            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only). VeritaCheck™ uses OLS regression for calibration verification (where calibrator assigned values are treated as exact) and Deming regression for method comparison (where both methods carry measurement error). Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation against CLIA TEa.</p>
           </div>
         </CardContent>
       </Card>

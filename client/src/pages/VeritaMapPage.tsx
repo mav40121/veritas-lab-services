@@ -34,7 +34,7 @@ const FEATURES = [
 ];
 
 export default function VeritaMapPage() {
-    useSEO({ title: "VeritaMap | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
+    useSEO({ title: "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
 return (
     <div>
       {/* Hero */}
@@ -57,10 +57,10 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                VeritaMap is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standards that require it.
+                VeritaMap™ is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap™ documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standards that require it.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Most laboratories discover regulatory gaps during inspections. VeritaMap finds them first.
+                Most laboratories discover regulatory gaps during inspections. VeritaMap™ finds them first.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-8">
@@ -76,7 +76,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link href="/veritamap-app" className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
-                  Launch VeritaMap →
+                  Launch VeritaMap™ →
                 </Link>
                 <Link href="/login" className="inline-flex items-center justify-center gap-2 border border-border hover:bg-secondary text-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
                   Sign In / Create Account
@@ -116,15 +116,15 @@ return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-5">
-              <h2 className="font-serif text-3xl font-bold">What is VeritaMap?</h2>
+              <h2 className="font-serif text-3xl font-bold">What is VeritaMap™?</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Every clinical laboratory has a test menu. Every test on that menu carries a specific set of regulatory obligations: a CLIA complexity designation, a proficiency testing requirement, a competency assessment obligation, a linearity or correlation study requirement, a quality control standard, a reference range verification requirement, and a written procedure. Most laboratories track these obligations inconsistently, if at all.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standards that mandate it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
+                VeritaMap™ is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standards that mandate it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap can answer any regulatory question about any test in seconds, because the documentation is already there.
+                VeritaMap™ is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap™ is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap™ can answer any regulatory question about any test in seconds, because the documentation is already there.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 When VeritaMap™ identifies that a test requires linearity verification, one click opens VeritaCheck™ to run the study. When it flags a competency gap, it links directly to the corresponding VeritaScan™ finding for the corrective action workflow. The three tools are designed to work together.
@@ -221,7 +221,7 @@ return (
                   ))}
                 </ul>
                 <Link href="/veritamap-app" className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
-                  Launch VeritaMap
+                  Launch VeritaMap™
                 </Link>
               </CardContent>
             </Card>
@@ -284,7 +284,7 @@ return (
 
           <p className="text-xs text-muted-foreground mt-5">
             Questions?{" "}
-            <a href="mailto:info@veritaslabservices.com?subject=VeritaMap Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=VeritaMap™ Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>
           </p>
@@ -299,11 +299,11 @@ return (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { title: "Laboratory Directors", desc: "You're responsible for every test on that menu. Know what each one requires and where your documentation lives." },
-              { title: "Quality Managers", desc: "Your QA program can't monitor what it can't see. VeritaMap makes every obligation visible and trackable." },
-              { title: "New Lab Administrators", desc: "Inherited a test menu with unknown compliance status? VeritaMap tells you where you stand for every test, fast." },
-              { title: "Lab Compliance Consultants", desc: "Deploy VeritaMap at every client engagement. Consistent, defensible, citation-mapped. The same tool every time." },
-              { title: "Survey-Prep Teams", desc: "Surveyors ask about specific tests. VeritaMap means you can answer, with documentation, for any test in seconds." },
-              { title: "Growing Laboratories", desc: "Adding tests? VeritaMap ensures every new test is mapped to its regulatory obligations before the first patient result." },
+              { title: "Quality Managers", desc: "Your QA program can't monitor what it can't see. VeritaMap™ makes every obligation visible and trackable." },
+              { title: "New Lab Administrators", desc: "Inherited a test menu with unknown compliance status? VeritaMap™ tells you where you stand for every test, fast." },
+              { title: "Lab Compliance Consultants", desc: "Deploy VeritaMap™ at every client engagement. Consistent, defensible, citation-mapped. The same tool every time." },
+              { title: "Survey-Prep Teams", desc: "Surveyors ask about specific tests. VeritaMap™ means you can answer, with documentation, for any test in seconds." },
+              { title: "Growing Laboratories", desc: "Adding tests? VeritaMap™ ensures every new test is mapped to its regulatory obligations before the first patient result." },
             ].map((item, i) => (
               <div key={i} className="bg-card border border-border rounded-xl p-4">
                 <div className="font-semibold text-sm mb-1.5">{item.title}</div>
@@ -319,11 +319,11 @@ return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to map your test menu?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaMap is live. Select your instruments, pull the FDA-cleared test menu, and have a compliance map for your lab in minutes.
+            VeritaMap™ is live. Select your instruments, pull the FDA-cleared test menu, and have a compliance map for your lab in minutes.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritamap-app">Launch VeritaMap <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href="/veritamap-app">Launch VeritaMap™ <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

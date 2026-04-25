@@ -273,7 +273,7 @@ export default function AccountSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Select up to 2 accreditation bodies. Their standard references will appear on all VeritaCheck and VeritaScan reports. CLSI guidelines and CLIA/CFR citations are always included.
+            Select up to 2 accreditation bodies. Their standard references will appear on all VeritaCheck™ and VeritaScan™ reports. CLSI guidelines and CLIA/CFR citations are always included.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ACCREDITATION_OPTIONS.map((opt) => {
@@ -438,7 +438,7 @@ export default function AccountSettingsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Team Members</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Invite staff to access your VeritaAssure(TM) account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
+              Invite staff to access your VeritaAssure™ account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

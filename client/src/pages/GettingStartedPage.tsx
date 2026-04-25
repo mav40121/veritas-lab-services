@@ -44,7 +44,7 @@ const STEPS = [
     key: "map_created" as const,
     number: 2,
     title: "Build your VeritaMap™",
-    description: "Map your instruments and test menu. VeritaMap feeds your competency programs, study instrument selection, and inspection checklist.",
+    description: "Map your instruments and test menu. VeritaMap™ feeds your competency programs, study instrument selection, and inspection checklist.",
     time: "15 minutes",
     buttonLabel: "Open VeritaMap™",
     route: "/veritamap-app",
@@ -74,7 +74,7 @@ const STEPS = [
     key: "comp_created" as const,
     number: 5,
     title: "Set up VeritaComp™",
-    description: "Create a competency program using your VeritaMap instruments. All three CLIA competency types in one place.",
+    description: "Create a competency program using your VeritaMap™ instruments. All three CLIA competency types in one place.",
     time: "15 minutes",
     buttonLabel: "Open VeritaComp™",
     route: "/veritacomp-app",
@@ -133,7 +133,7 @@ export default function GettingStartedPage() {
     }
   }, [isLoggedIn, status]);
 
-  useSEO({ title: "Getting Started | VeritaAssure Lab Compliance Software", description: "Get started with VeritaAssure. Follow the step-by-step onboarding guide to set up your laboratory compliance platform." });
+  useSEO({ title: "Getting Started | VeritaAssure™ Lab Compliance Software", description: "Get started with VeritaAssure™. Follow the step-by-step onboarding guide to set up your laboratory compliance platform." });
 
   if (!isLoggedIn) {
     return (

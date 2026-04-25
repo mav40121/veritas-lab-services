@@ -97,7 +97,7 @@ const PULL_QUOTES = [
 ];
 
 export default function BookPage() {
-    useSEO({ title: "Book a Consultation | Veritas Lab Services", description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure can help your laboratory stay compliant and survey-ready." });
+    useSEO({ title: "Book a Consultation | Veritas Lab Services", description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure™ can help your laboratory stay compliant and survey-ready." });
 return (
     <div>
       {/* Hero */}
@@ -210,7 +210,7 @@ return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-6 text-center">The Book and the Software: A Complete Curriculum</h2>
           <p className="text-muted-foreground leading-relaxed text-center max-w-3xl mx-auto mb-10">
-            Lab Management 101 explains the why behind laboratory leadership. VeritaAssure builds the habit of doing it correctly. Together they form a practical curriculum for clinical lab leadership: the regulatory landscape, the C-suite relationships, the documentation infrastructure, and the career development framework, all in one place.
+            Lab Management 101 explains the why behind laboratory leadership. VeritaAssure™ builds the habit of doing it correctly. Together they form a practical curriculum for clinical lab leadership: the regulatory landscape, the C-suite relationships, the documentation infrastructure, and the career development framework, all in one place.
           </p>
           <div className="grid lg:grid-cols-2 gap-8 items-start">
             {/* Left: Book cover card */}
@@ -230,7 +230,7 @@ return (
             {/* Right: VeritaAssure suite */}
             <Card className="border-primary/20">
               <CardContent className="p-6">
-                <div className="font-semibold text-lg mb-3">VeritaAssure Suite</div>
+                <div className="font-semibold text-lg mb-3">VeritaAssure™ Suite</div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                   Every concept in the book has a corresponding workflow in the software. A new director who reads the book learns the regulatory landscape. A new director who uses the software builds the documentation habits that make that knowledge durable.
                 </p>

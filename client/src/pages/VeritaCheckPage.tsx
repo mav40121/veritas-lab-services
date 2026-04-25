@@ -149,8 +149,8 @@ const featureTooltips: Record<string, string> = {
   "Study history dashboard": "View, search, and re-download all past studies from your personal dashboard.",
   // Professional
   "Everything in Starter": "Includes all features from the Starter plan.",
-  "VeritaMap regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
-  "VeritaScan self-inspection audit": "168-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck automatically check off corresponding items.",
+  "VeritaMap™ regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
+  "VeritaScan™ self-inspection audit": "168-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck automatically check off corresponding items.",
   "Priority support": "Dedicated email support with same-day responses during business hours.",
   // Lab
   "Everything in Professional": "Includes all features from the Professional plan.",
@@ -1144,7 +1144,7 @@ export default function VeritaCheckPage() {
     saveMutation.mutate(study);
   };
 
-    useSEO({ title: "VeritaCheck | CLIA Method Validation Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
+    useSEO({ title: "VeritaCheck™ | CLIA Method Validation Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
 return (
     <div>
       {!isLoggedIn ? (
@@ -1329,7 +1329,7 @@ return (
                             {veritaMapInstruments.length > 0 ? (
                               <div className="flex-1 space-y-1.5">
                                 <Select value={veritaMapInstruments.some(i => i.name === name) ? name : "__manual__"} onValueChange={v => { if (v !== "__manual__") updateInstrumentName(idx, v); }}>
-                                  <SelectTrigger className="h-9"><SelectValue placeholder="Select from VeritaMap..." /></SelectTrigger>
+                                  <SelectTrigger className="h-9"><SelectValue placeholder="Select from VeritaMap™..." /></SelectTrigger>
                                   <SelectContent>
                                     {veritaMapInstruments.map(inst => (
                                       <SelectItem key={inst.name} value={inst.name}>

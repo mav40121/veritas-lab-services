@@ -65,7 +65,7 @@ return (
                 "Method comparison is required when placing a new analyzer into service, adding a new reagent system, or comparing two instruments",
                 "Use a minimum of 40 patient specimens spanning the full analytical measurement range",
                 "Define your acceptance criteria before running the study, not after",
-                "VeritaCheck(TM) handles regression calculations and generates an inspector-ready report automatically",
+                "VeritaCheck™ handles regression calculations and generates an inspector-ready report automatically",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -126,9 +126,9 @@ return (
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">VeritaCheck(TM) automates method comparison</div>
+                <div className="font-semibold text-sm mb-1">VeritaCheck™ automates method comparison</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  VeritaCheck(TM) handles the regression calculations automatically and generates an inspector-ready Correlation / Method Comparison report with your CLIA number and a complete statistical summary. Your first study is free.
+                  VeritaCheck™ handles the regression calculations automatically and generates an inspector-ready Correlation / Method Comparison report with your CLIA number and a complete statistical summary. Your first study is free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -149,7 +149,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to run your next study?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck(TM) handles method comparison with Deming regression, Bland-Altman analysis, CLIA TEa evaluation, and a signed PDF report generated in minutes.
+              VeritaCheck™ handles method comparison with Deming regression, Bland-Altman analysis, CLIA TEa evaluation, and a signed PDF report generated in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

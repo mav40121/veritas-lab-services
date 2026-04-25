@@ -56,7 +56,7 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
   );
 
   // Inject noscript content inside <div id="root">
-  const noscriptBlock = `<noscript><h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure</a> | <a href="/veritacheck">VeritaCheck</a> | <a href="/veritascan">VeritaScan</a> | <a href="/veritamap">VeritaMap</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav></noscript>`;
+  const noscriptBlock = `<noscript><h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure&#8482;</a> | <a href="/veritacheck">VeritaCheck&#8482;</a> | <a href="/veritascan">VeritaScan&#8482;</a> | <a href="/veritamap">VeritaMap&#8482;</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav></noscript>`;
   html = html.replace('<div id="root"></div>', `<div id="root">${noscriptBlock}</div>`);
 
   return html;

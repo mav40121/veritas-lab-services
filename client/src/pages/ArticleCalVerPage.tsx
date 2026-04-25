@@ -183,7 +183,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">VeritaCheck™ automates all of this</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Enter your data and VeritaCheck handles every calculation: % error, Pearson r, slope, intercept, PASS/FAIL against CLIA TEa. It generates a signed, CLIA-compliant PDF report. No Excel, no manual math, no formatting. Your first study is free.
+                  Enter your data and VeritaCheck™ handles every calculation: % error, Pearson r, slope, intercept, PASS/FAIL against CLIA TEa. It generates a signed, CLIA-compliant PDF report. No Excel, no manual math, no formatting. Your first study is free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>

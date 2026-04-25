@@ -8,7 +8,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">1. Overview</h2>
-          <p>Veritas Lab Services, LLC ("Company," "we," "us") operates VeritaCheck at veritaslabservices.com. This Privacy Policy describes how we collect, use, and protect information you provide when using the Service.</p>
+          <p>Veritas Lab Services, LLC ("Company," "we," "us") operates VeritaCheck™ at veritaslabservices.com. This Privacy Policy describes how we collect, use, and protect information you provide when using the Service.</p>
         </section>
 
         <section>
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">3. What We Do Not Collect</h2>
-          <p>VeritaCheck is designed for laboratory quality assurance, not patient care. We do not collect, store, or process Protected Health Information (PHI) as defined by HIPAA. Specimen concentration values entered into the Service should not include patient names, dates of birth, medical record numbers, or any other patient identifiers. Do not enter PHI into this Service.</p>
+          <p>VeritaCheck™ is designed for laboratory quality assurance, not patient care. We do not collect, store, or process Protected Health Information (PHI) as defined by HIPAA. Specimen concentration values entered into the Service should not include patient names, dates of birth, medical record numbers, or any other patient identifiers. Do not enter PHI into this Service.</p>
         </section>
 
         <section>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">9. Cookies</h2>
-          <p>VeritaCheck does not use tracking cookies. We use browser localStorage solely to maintain your login session. We do not use advertising cookies or third-party analytics trackers.</p>
+          <p>VeritaCheck™ does not use tracking cookies. We use browser localStorage solely to maintain your login session. We do not use advertising cookies or third-party analytics trackers.</p>
         </section>
 
         <section>

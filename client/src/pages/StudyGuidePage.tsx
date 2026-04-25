@@ -200,7 +200,7 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains all six study types supported by VeritaCheck(TM), what they are, when CLIA requires them, and how VeritaCheck(TM) automates each one.
+            This guide explains all six study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
@@ -278,7 +278,7 @@ export default function StudyGuidePage() {
             title="Calibration Verification / Linearity"
             subtitle="Verify your instrument reads accurately from low to high"
             what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range, from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values."
-            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck™ calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Every 6 months (required by CLIA for all non-waived tests)",
               "Whenever calibration is performed",
@@ -305,7 +305,7 @@ export default function StudyGuidePage() {
             title="Correlation / Method Comparison"
             subtitle="Confirm two methods or instruments agree before reporting patient results"
             what="A method comparison study determines whether two measurement procedures (or two instruments running the same assay) produce equivalent results on the same patient samples. It is required any time a laboratory introduces a new test method, adds an instrument, or begins reporting results from a second analyzer."
-            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table. Deming regression is used because both methods carry measurement error. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck™ performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table. Deming regression is used because both methods carry measurement error. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Before putting a new instrument or analyzer into service",
               "When introducing a new test method or reagent system",
@@ -332,7 +332,7 @@ export default function StudyGuidePage() {
             title="Precision"
             subtitle="Confirm your instrument is producing reproducible, consistent results"
             what="Precision verification measures how consistently an instrument produces the same result when the same sample is tested multiple times. Imprecision (variability) is expressed as a standard deviation (SD) or coefficient of variation (CV%). CLIA requires laboratories to verify that their instruments meet the manufacturer's stated precision claims before reporting patient results."
-            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to your CLIA allowable imprecision (CV%) for each analyte."
+            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck™ calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to your CLIA allowable imprecision (CV%) for each analyte."
             when={[
               "Before introducing any new test method into service (CLIA required)",
               "After a major instrument repair or component replacement",
@@ -342,7 +342,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; after major maintenance"
             regulation="42 CFR §493.941"
-            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa. VeritaCheck uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
+            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck™ reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa. VeritaCheck™ uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493941,
@@ -383,7 +383,7 @@ export default function StudyGuidePage() {
             title="Lot-to-Lot Verification"
             subtitle="Confirm new reagent lot performs equivalently to the current lot"
             what="Lot-to-lot verification compares the performance of a new reagent lot against the current lot to confirm analytical equivalence before the new lot is placed into routine use. This is required for select analytes where reagent lot changes can affect calibration, measurement bias, or reportable range."
-            howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck(TM) calculates the bias between lots and evaluates it against CLIA TEa for each analyte."
+            howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck™ calculates the bias between lots and evaluates it against CLIA TEa for each analyte."
             when={[
               "When changing to a new reagent lot for select analytes (manufacturer-specified)",
               "When the manufacturer recommends lot-to-lot verification in its instructions for use",
@@ -392,7 +392,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At each qualifying reagent lot change"
             regulation="42 CFR §493.1255"
-            passFail="The bias between lots must fall within your CLIA allowable error (TEa) for each analyte. VeritaCheck(TM) evaluates measured bias against TEa and reports pass or fail per analyte. Your laboratory director or designee reviews and approves results before the new lot enters service."
+            passFail="The bias between lots must fall within your CLIA allowable error (TEa) for each analyte. VeritaCheck™ evaluates measured bias against TEa and reports pass or fail per analyte. Your laboratory director or designee reviews and approves results before the new lot enters service."
             refs={[
               REFS.cliaCalVerBrochure,
               REFS.cfr493931,
@@ -407,7 +407,7 @@ export default function StudyGuidePage() {
             title="Multi-Analyte Coagulation Verification"
             subtitle="Verify all coagulation analytes on a single analyzer in one study"
             what="Multi-analyte coagulation verification is designed for coagulation analyzers that run multiple assays (PT/INR, aPTT, fibrinogen, D-dimer, and others). Each analyte is assessed individually within a single verification study, allowing the laboratory to document performance across the full coagulation test menu in one organized report."
-            howIt="You test verification materials at multiple levels for each coagulation analyte on the instrument. VeritaCheck(TM) evaluates each analyte independently, calculating recovery, bias, and pass or fail against CLIA TEa. The report groups all analytes together but maintains individual pass or fail determinations for each, producing a single document that covers the entire coagulation panel."
+            howIt="You test verification materials at multiple levels for each coagulation analyte on the instrument. VeritaCheck™ evaluates each analyte independently, calculating recovery, bias, and pass or fail against CLIA TEa. The report groups all analytes together but maintains individual pass or fail determinations for each, producing a single document that covers the entire coagulation panel."
             when={[
               "At calibration verification intervals (every 6 months) for coagulation analyzers",
               "When adding a new coagulation analyzer to service",
@@ -450,7 +450,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck(TM) automates all six study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all six study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck

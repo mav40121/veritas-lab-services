@@ -421,7 +421,7 @@ function ProgramListView() {
                       {p.map_id && (
                         <span className="flex items-center gap-1 text-primary">
                           <FlaskConical size={12} />
-                          Linked to VeritaMap
+                          Linked to VeritaMap™
                         </span>
                       )}
                     </div>
@@ -642,7 +642,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Define method groups. Each group represents instruments/analytes that share the same operator workflow.
-              {mapId ? " Groups have been auto-suggested from your VeritaMap." : " Add groups manually."}
+              {mapId ? " Groups have been auto-suggested from your VeritaMap™." : " Add groups manually."}
             </p>
             {methodGroups.map((g, i) => (
               <div key={i} className="border border-border rounded-lg p-3">
@@ -779,7 +779,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
                 <div><strong>Type:</strong> {typeLabel(type)} Competency</div>
                 {type === "technical" && <div><strong>Method Groups:</strong> {methodGroups.length}</div>}
                 {type === "nontechnical" && <div><strong>Checklist Items:</strong> {checklistItems.length}</div>}
-                {mapId && <div><strong>Linked VeritaMap:</strong> ID {mapId}</div>}
+                {mapId && <div><strong>Linked VeritaMap™:</strong> ID {mapId}</div>}
               </div>
             </div>
             <div className="flex justify-between pt-2">
@@ -939,7 +939,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
           )}
           {program.map_id && (
             <div>
-              <span className="text-xs text-muted-foreground block">Linked VeritaMap</span>
+              <span className="text-xs text-muted-foreground block">Linked VeritaMap™</span>
               <Link href={`/veritamap-app/${program.map_id}`} className="text-primary hover:underline">Map #{program.map_id}</Link>
             </div>
           )}

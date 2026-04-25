@@ -320,7 +320,7 @@ function IntelligenceBanner({
       <div className="px-4 pt-3 pb-2 flex items-center gap-2 border-b border-red-200/60 dark:border-red-900/40">
         <GitMerge size={15} className="text-red-600 dark:text-red-400 shrink-0" />
         <span className="text-sm font-bold text-red-800 dark:text-red-200">
-          VeritaMap Intelligence
+          VeritaMap™ Intelligence
         </span>
         <span className="text-xs text-red-600/70 dark:text-red-400/70 ml-1">
           - Cross-instrument correlation & compliance engine

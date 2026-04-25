@@ -15,7 +15,7 @@ const FEATURE_CARDS = [
   {
     icon: ToggleLeft,
     title: "Applicability by Service Line",
-    desc: "Not all policies apply to every lab. Answer 6 questions about your services and VeritaPolicy automatically marks non-applicable requirements as N/A.",
+    desc: "Not all policies apply to every lab. Answer 6 questions about your services and VeritaPolicy™ automatically marks non-applicable requirements as N/A.",
     color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
   },
   {
@@ -48,7 +48,7 @@ const FEATURES = [
 ];
 
 export default function VeritaPolicyPage() {
-    useSEO({ title: "VeritaPolicy | Laboratory Policy and Procedure Management Software", description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready." });
+    useSEO({ title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software", description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready." });
 return (
     <div>
       {/* Hero */}

@@ -406,15 +406,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     community: "Community",
     hospital: "Hospital",
     large_hospital: "Large Hospital",
-    veritacheck_only: "VeritaCheck Unlimited",
+    veritacheck_only: "VeritaCheck\u2122 Unlimited",
     annual: "Annual (Legacy)",
     starter: "Starter (Legacy)",
     professional: "Professional (Legacy)",
     lab: "Lab",
     complete: "Complete (Legacy)",
-    veritamap: "VeritaMap Add-on",
-    veritascan: "VeritaScan Add-on",
-    veritacomp: "VeritaComp Add-on",
+    veritamap: "VeritaMap\u2122 Add-on",
+    veritascan: "VeritaScan\u2122 Add-on",
+    veritacomp: "VeritaComp\u2122 Add-on",
   };
 
   app.get("/api/admin/report", (req, res) => {
@@ -1902,7 +1902,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
 
     // Fetch tests (same as map detail endpoint)
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id);
@@ -2181,7 +2181,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITAMAP ANALYTE VALUES ─────────────────────────────────────────────
   // GET all analyte values for a map
   app.get("/api/veritamap/maps/:id/analyte-values", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte"
@@ -2191,7 +2191,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT (upsert) analyte values for a specific analyte
   app.put("/api/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const analyte = decodeURIComponent(req.params.analyte);
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
@@ -2215,7 +2215,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET all AMR values for a map
   app.get("/api/veritamap/maps/:id/amr-values", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id"
@@ -2225,7 +2225,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT (upsert) AMR values for a specific instrument + analyte
   app.put("/api/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
-    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap subscription required" });
+    if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = decodeURIComponent(req.params.analyte);
@@ -2254,7 +2254,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List scans for current user
   app.get("/api/veritascan/scans", authMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scans = (db as any).$client.prepare(
       "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE user_id = ? ORDER BY updated_at DESC"
@@ -2275,7 +2275,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create new scan
   app.post("/api/veritascan/scans", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
     const now = new Date().toISOString();
@@ -2288,7 +2288,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete scan
   app.delete("/api/veritascan/scans/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -2302,7 +2302,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get all items for a scan
   app.get("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -2314,7 +2314,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Upsert item status/notes/owner/due_date
   app.put("/api/veritascan/scans/:id/items/:itemId", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -2337,7 +2337,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Bulk update items (for efficient auto-save)
   app.put("/api/veritascan/scans/:id/items", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -2367,7 +2367,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VERITASCAN EXCEL EXPORT ──────────────────────────────────────────────
   app.post("/api/veritascan/excel/:scanId", authMiddleware, async (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const scanId = req.params.scanId;
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE id = ? AND user_id = ?").get(scanId, dataUserId);
@@ -2505,7 +2505,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VERITASCAN PDF EXPORT ─────────────────────────────────────────────────
   app.post("/api/veritascan/pdf/:scanId/:type", authMiddleware, async (req: any, res) => {
-    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan subscription required" });
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const { scanId, type } = req.params;
     if (type !== "executive" && type !== "full") return res.status(400).json({ error: "type must be 'executive' or 'full'" });
 
@@ -2709,12 +2709,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     if (resend) {
       await resend.emails.send({
-        from: "VeritaCheck <noreply@veritaslabservices.com>",
+        from: "VeritaCheck\u2122 <noreply@veritaslabservices.com>",
         to: user.email,
-        subject: "Reset your VeritaCheck password",
+        subject: "Reset your VeritaCheck\u2122 password",
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-            <h2 style="color:#0e8a82">VeritaCheck Password Reset</h2>
+            <h2 style="color:#0e8a82">VeritaCheck\u2122 Password Reset</h2>
             <p>Hi ${user.name},</p>
             <p>We received a request to reset your password. Click the button below to set a new password. This link expires in 1 hour.</p>
             <a href="${resetUrl}" style="display:inline-block;background:#0e8a82;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Reset Password</a>
@@ -4393,7 +4393,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List programs
   app.get("/api/competency/programs", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const programs = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE user_id = ? ORDER BY updated_at DESC"
@@ -4419,7 +4419,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Create program
   app.post("/api/competency/programs", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     try {
-      if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+      if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
       const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
       if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
       if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
@@ -4460,7 +4460,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Alias: /api/veritacomp/programs -> /api/competency/programs
   app.post("/api/veritacomp/programs", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     try {
-      if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+      if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
       const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
       if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
       if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
@@ -4498,7 +4498,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get single program with full data
   app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE id = ? AND user_id = ?"
@@ -4532,7 +4532,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete program
   app.delete("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -4550,7 +4550,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update program settings (method groups, checklist items, name)
   app.put("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -4585,7 +4585,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── EMPLOYEES ─────────────────────────────────────────────────────────────
 
   app.get("/api/competency/employees", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const employees = (db as any).$client.prepare(
       "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
@@ -4594,7 +4594,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/competency/employees", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const { name, title, hireDate, lisInitials } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Employee name required" });
     const now = new Date().toISOString();
@@ -4606,7 +4606,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/competency/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
@@ -4626,7 +4626,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/competency/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
@@ -4637,7 +4637,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
 
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
     // Verify program and employee belong to user
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -4713,7 +4713,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update assessment
   app.put("/api/competency/assessments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
       `SELECT a.id, p.user_id FROM competency_assessments a
@@ -4788,7 +4788,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete assessment
   app.delete("/api/competency/assessments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
       `SELECT a.id, p.user_id FROM competency_assessments a
@@ -4808,7 +4808,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritacomp/assessments/:id
   app.get("/api/veritacomp/assessments/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
@@ -4826,7 +4826,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritacomp/programs/:id/assessments
   app.get("/api/veritacomp/programs/:id/assessments", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -4844,7 +4844,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritacomp/programs/:id/quizzes
   app.get("/api/veritacomp/programs/:id/quizzes", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -4857,7 +4857,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/veritacomp/programs/:id/quizzes
   app.post("/api/veritacomp/programs/:id/quizzes", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!program) return res.status(404).json({ error: "Program not found" });
@@ -4872,7 +4872,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritacomp/quizzes/:id (without revealing correct answers)
   app.get("/api/veritacomp/quizzes/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
     // Strip correct_answer and explanation from questions
@@ -4887,7 +4887,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/veritacomp/quiz-results - submit quiz, auto-score
   app.post("/api/veritacomp/quiz-results", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const { quizId, assessmentId, employeeId, answers } = req.body;
     if (!quizId || !employeeId || !Array.isArray(answers)) return res.status(400).json({ error: "quizId, employeeId, and answers array required" });
     const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(quizId) as any;
@@ -4927,7 +4927,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritacomp/assessments/:id/quiz-results
   app.get("/api/veritacomp/assessments/:id/quiz-results", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const results = (db as any).$client.prepare(
       `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
        FROM competency_quiz_results qr
@@ -4940,7 +4940,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritacomp/assessments/:id/pdf
   app.get("/api/veritacomp/assessments/:id/pdf", authMiddleware, async (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
@@ -4978,7 +4978,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // VeritaMap integration — get instruments from a map for method group suggestions
   app.get("/api/competency/map-instruments/:mapId", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.mapId, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
@@ -4996,7 +4996,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PDF generation for competency assessments
   app.post("/api/competency/pdf/:assessmentId", authMiddleware, async (req: any, res) => {
-    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp subscription required" });
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
@@ -5148,14 +5148,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get or create staff lab
   app.get("/api/staff/lab", authMiddleware, (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId);
     res.json(lab || null);
   });
 
   app.post("/api/staff/lab", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const { labName, cliaNumber, street, city, state, zip, phone, certificateType, accreditationBody, accreditationBodyOther, includesNys, complexity } = req.body;
     if (!labName?.trim() || !cliaNumber?.trim()) return res.status(400).json({ error: "Lab name and CLIA number required" });
     const now = new Date().toISOString();
@@ -5179,7 +5179,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get VeritaMap department suggestions
   app.get("/api/staff/veritamap-suggestions", authMiddleware, (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const maps = (db as any).$client.prepare("SELECT id, name FROM veritamap_maps WHERE user_id = ?").all(dataUserId) as any[];
     const suggestions: { department: string; specialties: { number: number; name: string }[] }[] = [];
@@ -5205,7 +5205,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List employees for a lab
   app.get("/api/staff/employees", authMiddleware, (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.json([]);
@@ -5224,7 +5224,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get single employee
   app.get("/api/staff/employees/:id", authMiddleware, (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
@@ -5239,7 +5239,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create employee
   app.post("/api/staff/employees", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
@@ -5308,7 +5308,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update employee
   app.put("/api/staff/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
@@ -5349,7 +5349,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete employee (hard delete)
   app.delete("/api/staff/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
@@ -5366,7 +5366,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update competency schedule
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
@@ -5460,7 +5460,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Generate CMS 209 PDF
   app.post("/api/staff/cms209", authMiddleware, async (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff subscription required" });
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not set up" });
@@ -5732,7 +5732,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "VeritaAssure <noreply@veritaslabservices.com>",
+          from: "VeritaAssure\u2122 <noreply@veritaslabservices.com>",
           to: email.toLowerCase(),
           subject: `You've been invited to join ${labName} on VeritaAssure\u2122`,
           html: `
@@ -5952,7 +5952,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritalab/certificates - list all certificates for user
   app.get("/api/veritalab/certificates", authMiddleware, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     // Auto-populate CLIA certificate if user has clia_number but no CLIA cert yet
     const userRow = (db as any).$client.prepare("SELECT * FROM users WHERE id = ?").get(req.userId) as any;
@@ -5985,7 +5985,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/veritalab/certificates - create a new certificate
   app.post("/api/veritalab/certificates", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
     if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
 
@@ -6005,7 +6005,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT /api/veritalab/certificates/:id - update a certificate
   app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     const existing = (db as any).$client.prepare(
       "SELECT * FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
@@ -6042,7 +6042,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // DELETE /api/veritalab/certificates/:id - soft delete
   app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const existing = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
     ).get(req.params.id, req.userId);
@@ -6062,7 +6062,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
 
   app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, upload.single("file"), (req: any, res: any) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const cert = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
     ).get(req.params.id, req.userId);
@@ -6089,7 +6089,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritalab/certificates/:id/documents - list documents
   app.get("/api/veritalab/certificates/:id/documents", authMiddleware, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const cert = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
     ).get(req.params.id, req.userId);
@@ -6103,7 +6103,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/veritalab/certificates/:id/documents/:docId - download document
   app.get("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const doc = (db as any).$client.prepare(
       "SELECT * FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
     ).get(req.params.docId, req.params.id, req.userId) as any;
@@ -6117,7 +6117,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // DELETE /api/veritalab/certificates/:id/documents/:docId - delete document
   app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const doc = (db as any).$client.prepare(
       "SELECT id FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
     ).get(req.params.docId, req.params.id, req.userId);
@@ -6167,7 +6167,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             <tr><td style="padding:6px 0;color:#666">Expiration:</td><td style="padding:6px 0;font-weight:600;color:#c53030">${expDate}</td></tr>
             <tr><td style="padding:6px 0;color:#666">Lab:</td><td style="padding:6px 0">${user.clia_lab_name || "Your laboratory"}</td></tr>
           </table>
-          <p style="margin-bottom:20px">Log in to VeritaAssure to view your certificate details and upload renewal documentation.</p>
+          <p style="margin-bottom:20px">Log in to VeritaAssure\u2122 to view your certificate details and upload renewal documentation.</p>
           <a href="https://www.veritaslabservices.com/veritalab-app" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open VeritaLab\u2122</a>
           <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
           <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC</p>
@@ -6177,7 +6177,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       try {
         if (resend) {
           resend.emails.send({
-            from: "VeritaAssure <info@veritaslabservices.com>",
+            from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
             to: user.email,
             subject,
             html: htmlBody,
@@ -6198,7 +6198,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/veritalab/certificates/excel - export certificates to Excel
   app.post("/api/veritalab/certificates/excel", authMiddleware, async (req: any, res) => {
-    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab subscription required" });
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     const certs = (db as any).$client.prepare(
       "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY expiration_date ASC"

@@ -40,7 +40,7 @@ return (
           </div>
           <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">Software Validation</Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 leading-tight">
-            How to Validate VeritaCheck(TM) for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors
+            How to Validate VeritaCheck™ for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
             Most labs can complete the full IQ/OQ/PQ validation process in under two hours. Here is the step-by-step process.
@@ -80,7 +80,7 @@ return (
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-[15px] leading-relaxed">
 
           <p>
-            If you are preparing to use VeritaCheck(TM) in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck(TM) is straightforward, and most labs can complete it in under two hours.
+            If you are preparing to use VeritaCheck™ in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck™ is straightforward, and most labs can complete it in under two hours.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Why Software Validation Is Required</h2>
@@ -88,16 +88,16 @@ return (
             CLIA regulations under 42 CFR 493.1251 require laboratories to establish and verify the performance of all methods and procedures used in the testing process, including software involved in reporting. CAP checklist item COM.01300 addresses software validation directly. These requirements exist because software errors in a regulated environment carry the same risk as method errors. Documenting your validation demonstrates that the tool performs as intended in your specific setting.
           </p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Validating VeritaCheck(TM) Actually Means</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Validating VeritaCheck™ Actually Means</h2>
           <p>
-            This is not a full 21 CFR Part 11 pharmaceutical validation exercise. VeritaCheck(TM) is a cloud-based method validation tool, and the appropriate framework is an IQ/OQ/PQ process: Installation Qualification, Operational Qualification, and Performance Qualification. Each step is brief and practical. You are not rewriting software, you are confirming it works correctly in your lab's hands.
+            This is not a full 21 CFR Part 11 pharmaceutical validation exercise. VeritaCheck™ is a cloud-based method validation tool, and the appropriate framework is an IQ/OQ/PQ process: Installation Qualification, Operational Qualification, and Performance Qualification. Each step is brief and practical. You are not rewriting software, you are confirming it works correctly in your lab's hands.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Step-by-Step Validation Process</h2>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">IQ - Installation Qualification</h3>
           <p>
-            Open VeritaCheck(TM) in a supported browser (Chrome or Edge recommended). Log in with your lab credentials. Confirm that your lab name and CLIA number appear correctly in the report header. That is your IQ complete. No software installation is required because VeritaCheck(TM) is browser-based.
+            Open VeritaCheck™ in a supported browser (Chrome or Edge recommended). Log in with your lab credentials. Confirm that your lab name and CLIA number appear correctly in the report header. That is your IQ complete. No software installation is required because VeritaCheck™ is browser-based.
           </p>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">OQ - Operational Qualification</h3>
@@ -106,17 +106,17 @@ return (
           </p>
 
           <Callout type="tip">
-            <strong>OQ shortcut:</strong> The demo lab in VeritaCheck(TM) includes pre-loaded studies with known outcomes. Use these to verify pass and fail logic without entering data from scratch.
+            <strong>OQ shortcut:</strong> The demo lab in VeritaCheck™ includes pre-loaded studies with known outcomes. Use these to verify pass and fail logic without entering data from scratch.
           </Callout>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">PQ - Performance Qualification</h3>
           <p>
-            Run one real study from your lab through VeritaCheck(TM). Review the generated report for completeness, accuracy, and correct identification of your laboratory. Have the medical director or designee review the output and confirm it is clinically appropriate for your setting. Their signature on this step closes the PQ.
+            Run one real study from your lab through VeritaCheck™. Review the generated report for completeness, accuracy, and correct identification of your laboratory. Have the medical director or designee review the output and confirm it is clinically appropriate for your setting. Their signature on this step closes the PQ.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The Software Validation Template</h2>
           <p>
-            Veritas Lab Services, LLC provides a free Software Validation Record template designed specifically for VeritaCheck(TM). The template walks through each IQ, OQ, and PQ step with fillable fields for actual results, observations, and a signature block for the medical director or designee. You do not need to build a form from scratch. The template is available at veritaslabservices.com.
+            Veritas Lab Services, LLC provides a free Software Validation Record template designed specifically for VeritaCheck™. The template walks through each IQ, OQ, and PQ step with fillable fields for actual results, observations, and a signature block for the medical director or designee. You do not need to build a form from scratch. The template is available at veritaslabservices.com.
           </p>
 
           <Callout type="info">
@@ -140,10 +140,10 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">Ready to get started?</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  VeritaCheck(TM) is part of the VeritaAssure(TM) suite of compliance tools available at veritaslabservices.com. Download the free Software Validation Record template, complete your IQ/OQ/PQ, and have your documentation in place before your next study cycle.
+                  VeritaCheck™ is part of the VeritaAssure™ suite of compliance tools available at veritaslabservices.com. Download the free Software Validation Record template, complete your IQ/OQ/PQ, and have your documentation in place before your next study cycle.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
-                  <Link href="/veritacheck">Open VeritaCheck(TM) <ChevronRight size={13} className="ml-1" /></Link>
+                  <Link href="/veritacheck">Open VeritaCheck™ <ChevronRight size={13} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>

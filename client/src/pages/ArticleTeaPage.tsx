@@ -203,7 +203,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">VeritaCheck™ does all of this automatically</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Select your analyte, enter your calibration levels, and VeritaCheck applies the correct 2025 CLIA TEa automatically, handling the dual-criterion logic, calculating % error and absolute error at each level, and generating a CLIA-compliant PDF report with the CFR citation included. Your first study is free.
+                  Select your analyte, enter your calibration levels, and VeritaCheck™ applies the correct 2025 CLIA TEa automatically, handling the dual-criterion logic, calculating % error and absolute error at each level, and generating a CLIA-compliant PDF report with the CFR citation included. Your first study is free.
                 </p>
                 <div className="flex gap-2 flex-wrap">
                   <Button asChild size="sm" className="bg-primary text-primary-foreground text-xs">
@@ -270,7 +270,7 @@ return (
                 <Link href="/resources/clia-tea-lookup">Open TEa Lookup Tool <Search size={15} className="ml-1" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
-                <Link href="/veritacheck">Run a Free Study in VeritaCheck <ExternalLink size={13} className="ml-1" /></Link>
+                <Link href="/veritacheck">Run a Free Study in VeritaCheck™ <ExternalLink size={13} className="ml-1" /></Link>
               </Button>
             </div>
           </div>

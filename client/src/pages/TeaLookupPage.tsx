@@ -122,7 +122,7 @@ export default function TeaLookupPage() {
                 <div>
                   <div className="font-semibold text-sm mb-1">VeritaCheck™ applies these automatically</div>
                   <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                    Every CLIA TEa value in this table is built into VeritaCheck. Select your analyte, enter your data, and the pass/fail evaluation is done for you, with the CFR citation in the report.
+                    Every CLIA TEa value in this table is built into VeritaCheck™. Select your analyte, enter your data, and the pass/fail evaluation is done for you, with the CFR citation in the report.
                   </p>
                   <Button asChild size="sm" className="w-full bg-primary text-primary-foreground text-xs">
                     <Link href="/veritacheck">Run a Free Study <ChevronRight size={11} className="ml-1" /></Link>
@@ -217,7 +217,7 @@ export default function TeaLookupPage() {
                             </Button>
                             <Button asChild size="sm" className="text-xs h-7 bg-primary text-primary-foreground gap-1">
                               <Link href="/veritacheck">
-                                Run Study in VeritaCheck <ChevronRight size={10} />
+                                Run Study in VeritaCheck™ <ChevronRight size={10} />
                               </Link>
                             </Button>
                           </div>
@@ -264,7 +264,7 @@ export default function TeaLookupPage() {
               <Link href="/resources/clia-tea-what-lab-directors-dont-know">Read the Article <ChevronRight size={13} className="ml-1" /></Link>
             </Button>
             <Button asChild size="sm" variant="outline" className="border-white/40 text-white hover:bg-white/10">
-              <Link href="/veritacheck">Run a Free Study in VeritaCheck <FlaskConical size={13} className="ml-1" /></Link>
+              <Link href="/veritacheck">Run a Free Study in VeritaCheck™ <FlaskConical size={13} className="ml-1" /></Link>
             </Button>
           </div>
         </div>

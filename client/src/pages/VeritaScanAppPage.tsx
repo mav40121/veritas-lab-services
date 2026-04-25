@@ -195,7 +195,7 @@ export default function VeritaScanAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaScan</h1>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaScan™</h1>
           <p className="text-muted-foreground text-sm mb-6">
             VeritaScan™ requires an account. Sign in to continue.
           </p>
@@ -215,7 +215,7 @@ export default function VeritaScanAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 mb-4">
             <ClipboardList className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">VeritaScan Access Required</h1>
+          <h1 className="text-2xl font-bold mb-2">VeritaScan™ Access Required</h1>
           <p className="text-muted-foreground text-sm mb-6">
             Your current plan doesn't include VeritaScan™. Upgrade to access the
             168-item inspection readiness self-assessment.

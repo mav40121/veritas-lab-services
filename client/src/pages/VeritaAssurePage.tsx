@@ -25,7 +25,7 @@ const MODULES = [
     label: "VeritaMap™",
     desc: "Test Menu Regulatory Mapping",
     detail:
-      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 200 instruments across 18 departments. Feeds VeritaCheck instrument selection and VeritaComp competency programs.",
+      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 200 instruments across 18 departments. Feeds VeritaCheck™ instrument selection and VeritaComp™ competency programs.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Map,
@@ -91,7 +91,7 @@ const MODULES = [
     label: "VeritaTrack™",
     desc: "Regulatory Compliance Calendar",
     detail:
-      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. Auto-imports schedules from VeritaMap. Sign-off logging with initials and dates. Excel export matches your existing regulatory calendar format.",
+      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. Auto-imports schedules from VeritaMap™. Sign-off logging with initials and dates. Excel export matches your existing regulatory calendar format.",
     badge: "New",
     badgeColor: "emerald",
     icon: CalendarDays,
@@ -142,7 +142,7 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 }
 
 export default function VeritaAssurePage() {
-    useSEO({ title: "VeritaAssure | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck, VeritaMap, VeritaScan, VeritaTrack, VeritaPolicy, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure™ | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 

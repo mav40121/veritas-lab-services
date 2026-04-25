@@ -38,7 +38,7 @@ const FEATURES = [
 
 
 export default function VeritaScanPage() {
-    useSEO({ title: "VeritaScan | Laboratory Inspection Readiness Checklist Software", description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared." });
+    useSEO({ title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software", description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared." });
 return (
     <div>
       {/* Hero */}
@@ -74,7 +74,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritascan-app">Launch VeritaScan <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href="/veritascan-app">Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -107,12 +107,12 @@ return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-5">
-              <h2 className="font-serif text-3xl font-bold">What is VeritaScan?</h2>
+              <h2 className="font-serif text-3xl font-bold">What is VeritaScan™?</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Every non-waived laboratory in the United States operates under the same fundamental anxiety: the survey is coming. Whether it arrives from The Joint Commission, the College of American Pathologists, or CMS directly, the inspector will walk through your laboratory domain by domain, standard by standard, and they will find what you haven't looked for.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaScan gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
+                VeritaScan™ gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan™ more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director or designee, your CNO, or your accreditation body as evidence of proactive self-assessment.
@@ -134,7 +134,7 @@ return (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mt-2">
                 <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">⚠️ Disclaimer</div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  VeritaScan is an internal self-inspection aid. It does not substitute for official accreditation review, regulatory inspection, or legal counsel. TJC standards are copyright © The Joint Commission. CAP checklist content is copyright © College of American Pathologists.
+                  VeritaScan™ is an internal self-inspection aid. It does not substitute for official accreditation review, regulatory inspection, or legal counsel. TJC standards are copyright © The Joint Commission. CAP checklist content is copyright © College of American Pathologists.
                 </p>
               </div>
             </div>
@@ -241,7 +241,7 @@ return (
                   ))}
                 </ul>
                 <Link href="/veritascan-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
-                  Launch VeritaScan →
+                  Launch VeritaScan™ →
                 </Link>
               </CardContent>
             </Card>
@@ -268,7 +268,7 @@ return (
 
           <p className="text-xs text-muted-foreground mt-5">
             Questions?{" "}
-            <a href="mailto:info@veritaslabservices.com?subject=VeritaScan Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=VeritaScan™ Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>{" "}
             - we're happy to help.
@@ -285,8 +285,8 @@ return (
             {[
               { title: "Laboratory Directors", desc: "You own the CLIA certificate and the regulatory exposure. Know what the surveyor will find before they arrive." },
               { title: "Quality Managers", desc: "Run a structured mock survey on your own schedule. Document findings, assign owners, and track corrective actions to closure." },
-              { title: "Lab Compliance Consultants", desc: "Use VeritaScan as your structured assessment framework with clients. Consistent, defensible, citation-mapped." },
-              { title: "New Lab Administrators", desc: "You inherited a lab with an unknown compliance posture. VeritaScan tells you where you stand within hours." },
+              { title: "Lab Compliance Consultants", desc: "Use VeritaScan™ as your structured assessment framework with clients. Consistent, defensible, citation-mapped." },
+              { title: "New Lab Administrators", desc: "You inherited a lab with an unknown compliance posture. VeritaScan™ tells you where you stand within hours." },
               { title: "Survey-Prep Teams", desc: "In the 90-day survey window? Work through each domain systematically and document your readiness." },
               { title: "Multi-Site Lab Systems", desc: "Apply the same structured assessment across all facilities for consistent compliance monitoring." },
             ].map((item, i) => (
@@ -304,11 +304,11 @@ return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to assess your lab?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaScan is live. Sign in and run your first self-inspection today.
+            VeritaScan™ is live. Sign in and run your first self-inspection today.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritascan-app">Launch VeritaScan <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href="/veritascan-app">Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

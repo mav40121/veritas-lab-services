@@ -87,12 +87,12 @@ const comingSoonItems: RoadmapItem[] = [
   {
     title: "Enterprise API Access",
     description:
-      "REST API for health systems and reference labs that need to integrate VeritaAssure data into existing LIS, LIMS, or compliance platforms.",
+      "REST API for health systems and reference labs that need to integrate VeritaAssure™ data into existing LIS, LIMS, or compliance platforms.",
   },
   {
     title: "VeritaCheck™ - Reference Range Verification Workflow",
     description:
-      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
+      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap™, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
   },
   {
     title: "VeritaStock\u2122 - Laboratory Inventory Management",
@@ -140,7 +140,7 @@ function RoadmapSection({ label, icon, accentColor, borderColor, items }: Sectio
 }
 
 export default function RoadmapPage() {
-    useSEO({ title: "Product Roadmap | VeritaAssure Lab Compliance Software", description: "See what is coming next for VeritaAssure. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness." });
+    useSEO({ title: "Product Roadmap | VeritaAssure™ Lab Compliance Software", description: "See what is coming next for VeritaAssure™. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness." });
 return (
     <div>
       {/* Header */}
@@ -149,7 +149,7 @@ return (
           <div className="max-w-3xl">
             <h1 className="font-serif text-4xl sm:text-5xl font-bold mb-4">Product Roadmap</h1>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              What we have built, what we are actively working on, and what is coming next. No hype, no dates - just an honest picture of where VeritaAssure is headed.
+              What we have built, what we are actively working on, and what is coming next. No hype, no dates - just an honest picture of where VeritaAssure™ is headed.
             </p>
           </div>
         </div>

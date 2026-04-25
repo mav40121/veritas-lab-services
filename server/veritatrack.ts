@@ -44,7 +44,7 @@ export function registerVeritaTrackRoutes(
 
   // GET all tasks with latest sign-off and computed status
   app.get("/api/veritatrack/tasks", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const tasks = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE user_id = ? AND active = 1 ORDER BY category, name"
@@ -62,7 +62,7 @@ export function registerVeritaTrackRoutes(
 
   // GET single task with all sign-offs
   app.get("/api/veritatrack/tasks/:id", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const task = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE id = ? AND user_id = ?"
@@ -78,7 +78,7 @@ export function registerVeritaTrackRoutes(
 
   // POST create task
   app.post("/api/veritatrack/tasks", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
     if (!name) return res.status(400).json({ error: "name required" });
@@ -92,7 +92,7 @@ export function registerVeritaTrackRoutes(
 
   // PUT update task
   app.put("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes, active } = req.body;
     const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
@@ -104,7 +104,7 @@ export function registerVeritaTrackRoutes(
 
   // DELETE (soft) task
   app.delete("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     sqlite.prepare("UPDATE veritatrack_tasks SET active=0 WHERE id=? AND user_id=?").run(Number(req.params.id), userId);
     res.json({ ok: true });
@@ -112,7 +112,7 @@ export function registerVeritaTrackRoutes(
 
   // POST sign off a task
   app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const task = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE id = ? AND user_id = ?"
@@ -144,7 +144,7 @@ export function registerVeritaTrackRoutes(
 
   // DELETE a sign-off
   app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     sqlite.prepare("DELETE FROM veritatrack_signoffs WHERE id = ? AND user_id = ?").run(Number(req.params.id), userId);
     res.json({ ok: true });
@@ -152,12 +152,12 @@ export function registerVeritaTrackRoutes(
 
   // POST import tasks from VeritaMap
   app.post("/api/veritatrack/import-from-map", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const map = sqlite.prepare(
       "SELECT * FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
     ).get(userId) as any;
-    if (!map) return res.status(404).json({ error: "No VeritaMap found. Build your test menu first." });
+    if (!map) return res.status(404).json({ error: "No VeritaMap\u2122 found. Build your test menu first." });
     const tests = sqlite.prepare(
       "SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1"
     ).all(map.id) as any[];
@@ -188,7 +188,7 @@ export function registerVeritaTrackRoutes(
           if (newTask) {
             sqlite.prepare(
               "INSERT INTO veritatrack_signoffs (task_id,user_id,completed_date,notes) VALUES (?,?,?,?)"
-            ).run(newTask.id, userId, test[fd.field], "Imported from VeritaMap");
+            ).run(newTask.id, userId, test[fd.field], "Imported from VeritaMap\u2122");
           }
         }
         created++;
@@ -199,7 +199,7 @@ export function registerVeritaTrackRoutes(
 
   // GET dashboard summary
   app.get("/api/veritatrack/dashboard", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const tasks = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE user_id = ? AND active = 1"
@@ -227,7 +227,7 @@ export function registerVeritaTrackRoutes(
 
   // POST seed default tasks (idempotent)
   app.post("/api/veritatrack/seed-defaults", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { categories } = req.body as { categories: string[] };
     if (!Array.isArray(categories) || categories.length === 0) {
@@ -298,7 +298,7 @@ export function registerVeritaTrackRoutes(
 
   // POST Excel export
   app.post("/api/veritatrack/export/excel", authMiddleware, async (req: any, res) => {
-    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack subscription required" });
+    if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const tasks = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE user_id = ? AND active = 1 ORDER BY category, name"

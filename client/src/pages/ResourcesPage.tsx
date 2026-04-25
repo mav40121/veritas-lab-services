@@ -9,8 +9,8 @@ import { NewsletterSignup } from "@/components/NewsletterSignup";
 const articles = [
   {
     slug: "how-veritaassure-trains-lab-leaders",
-    title: "How VeritaAssure Trains the Next Generation of Lab Leaders",
-    summary: "Most lab directors learn compliance the hard way. VeritaAssure changes that. Here is how the modules work as a leadership development curriculum.",
+    title: "How VeritaAssure™ Trains the Next Generation of Lab Leaders",
+    summary: "Most lab directors learn compliance the hard way. VeritaAssure™ changes that. Here is how the modules work as a leadership development curriculum.",
     category: "Leadership Development",
     readTime: "14 min read",
     author: "Michael Veri",
@@ -286,7 +286,7 @@ return (
           <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
           <h2 className="font-serif text-xl font-bold mb-2">Put the knowledge to work.</h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-            VeritaCheck runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
+            VeritaCheck™ runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
           </p>
           <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
             <Link href="/veritacheck">Run a Free Study <ChevronRight size={15} className="ml-1" /></Link>

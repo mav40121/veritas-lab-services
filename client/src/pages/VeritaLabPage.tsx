@@ -40,7 +40,7 @@ const FEATURES = [
 ];
 
 export default function VeritaLabPage() {
-    useSEO({ title: "VeritaLab | Laboratory Certificate and Document Storage Software", description: "Centralized storage for laboratory accreditation certificates, licenses, and compliance documents. Never scramble for paperwork during a survey again." });
+    useSEO({ title: "VeritaLab\u2122 | Laboratory Certificate and Document Storage Software", description: "Centralized storage for laboratory accreditation certificates, licenses, and compliance documents. Never scramble for paperwork during a survey again." });
 return (
     <div>
       {/* Hero */}
@@ -69,7 +69,7 @@ return (
               <div className="flex flex-wrap gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in all VeritaAssure plans</div>
+                  <div className="text-xs text-muted-foreground">in all VeritaAssure™ plans</div>
                 </div>
               </div>
 

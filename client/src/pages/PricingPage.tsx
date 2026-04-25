@@ -150,7 +150,7 @@ const PLANS = [
 ];
 
 export default function PricingPage() {
-    useSEO({ title: "Pricing | VeritaAssure Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
+    useSEO({ title: "Pricing | VeritaAssure™ Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -218,7 +218,7 @@ return (
             <div className="text-center px-4">
               <Quote size={24} className="text-primary/40 mx-auto mb-3" />
               <p className="text-base italic leading-relaxed mb-4">
-                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure showed me what I was missing before a surveyor found it first."
+                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure™ showed me what I was missing before a surveyor found it first."
               </p>
               <p className="text-sm font-semibold">John Hall</p>
               <p className="text-xs text-muted-foreground">Laboratory Director, San Carlos Apache Healthcare Corporation</p>
@@ -226,7 +226,7 @@ return (
             <div className="text-center px-4">
               <Quote size={24} className="text-primary/40 mx-auto mb-3" />
               <p className="text-base italic leading-relaxed mb-4">
-                "VeritaAssure is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
+                "VeritaAssure™ is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
               </p>
               <p className="text-sm font-semibold">Lisa Veri</p>
               <p className="text-xs text-muted-foreground">Administrative Lab Director, Milford Regional Medical Center</p>

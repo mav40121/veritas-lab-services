@@ -13,7 +13,7 @@ const COMPETENCY_TYPES = [
     cap: "CAP GEN.55500",
     icon: FlaskConical,
     color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
-    desc: "Non-waived testing staff. 6 CLIA-required assessment methods \u00D7 method groups (instruments from your VeritaMap). Semiannual in year 1, annual thereafter.",
+    desc: "Non-waived testing staff. 6 CLIA-required assessment methods \u00D7 method groups (instruments from your VeritaMap\u2122). Semiannual in year 1, annual thereafter.",
     methods: [
       "Direct observation of routine patient test performance",
       "Monitoring recording and reporting of test results",
@@ -53,18 +53,18 @@ const COMPETENCY_TYPES = [
 const FEATURES = [
   "Three competency types in one system: technical, waived, and non-technical",
   "6-method \u00D7 method-group matrix for technical competency (EP 18)",
-  "VeritaMap integration: auto-import instruments and suggest method groups",
+  "VeritaMap\u2122 integration: auto-import instruments and suggest method groups",
   "Employee roster with hire date, LIS initials, and status tracking",
   "Pre-populated department checklists (Chemistry, Phlebotomy, Hematology, Microbiology)",
   "Assessment history per employee with due-date tracking",
   "PDF reports with signature on page 1, matrix/checklist at end, Pass/Fail verdict",
-  "VeritaScan integration: completed assessments auto-check Domain IX items",
+  "VeritaScan\u2122 integration: completed assessments auto-check Domain IX items",
   "Remediation tracking with action plans and timelines",
   "Written by a former TJC laboratory surveyor with 200+ facility inspections",
 ];
 
 export default function VeritaCompPage() {
-    useSEO({ title: "VeritaComp | Laboratory Competency Assessment Software", description: "Manage the six CLIA competency elements for every lab employee. Track assessments, generate PDF documentation, and stay survey-ready year-round." });
+    useSEO({ title: "VeritaComp\u2122 | Laboratory Competency Assessment Software", description: "Manage the six CLIA competency elements for every lab employee. Track assessments, generate PDF documentation, and stay survey-ready year-round." });
 return (
     <div>
       {/* Hero */}
@@ -178,9 +178,9 @@ return (
       {/* Training Angle */}
       <section className="section-padding border-b border-border bg-primary/5">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <h2 className="font-serif text-3xl font-bold mb-4">VeritaComp Teaches the Six CLIA Elements</h2>
+          <h2 className="font-serif text-3xl font-bold mb-4">VeritaComp{"™"} Teaches the Six CLIA Elements</h2>
           <p className="text-muted-foreground leading-relaxed max-w-3xl">
-            Most staff who complete competency assessments have never read 42 CFR 493.1451. They fill out the form because their supervisor told them to. VeritaComp shows them why each element exists. A supervisor building their first competency program in VeritaComp learns the regulatory basis for each field they complete. That understanding is what distinguishes a compliant lab from an inspection-ready one.
+            Most staff who complete competency assessments have never read 42 CFR 493.1451. They fill out the form because their supervisor told them to. VeritaComp{"™"} shows them why each element exists. A supervisor building their first competency program in VeritaComp{"™"} learns the regulatory basis for each field they complete. That understanding is what distinguishes a compliant lab from an inspection-ready one.
           </p>
         </div>
       </section>
@@ -221,10 +221,10 @@ return (
           <p className="text-muted-foreground mb-8">Four steps from setup to signed assessment.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { step: "1", title: "Create Program", desc: "Name your program, choose the department, select the competency type, and optionally link to a VeritaMap." },
+              { step: "1", title: "Create Program", desc: "Name your program, choose the department, select the competency type, and optionally link to a VeritaMap\u2122." },
               { step: "2", title: "Define Groups", desc: "For technical: define method groups from your instruments. For non-technical: customize the departmental checklist." },
               { step: "3", title: "Add Employees", desc: "Build your employee roster with name, title, hire date, and LIS initials. Reuse across programs." },
-              { step: "4", title: "Assess & Sign", desc: "Complete the assessment form, mark Pass/Fail, generate a signed PDF, and auto-update VeritaScan." },
+              { step: "4", title: "Assess & Sign", desc: "Complete the assessment form, mark Pass/Fail, generate a signed PDF, and auto-update VeritaScan\u2122." },
             ].map((s, i) => (
               <div key={i} className="border border-border rounded-xl p-4 bg-card">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -254,15 +254,15 @@ return (
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#8482; plans (starting at $499/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan integration.
+                  Included in all VeritaAssure&#8482; plans (starting at $499/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan&#8482; integration.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
                     "Technical, Waived, and Non-Technical competency types",
-                    "VeritaMap integration for method group auto-setup",
+                    "VeritaMap\u2122 integration for method group auto-setup",
                     "Employee roster management across programs",
                     "PDF reports with signatures and compliance data",
-                    "VeritaScan Domain IX auto-completion",
+                    "VeritaScan\u2122 Domain IX auto-completion",
                     "Pre-populated department checklists",
                     "Remediation tracking with action plans",
                   ].map(f => (
@@ -307,7 +307,7 @@ return (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { title: "Laboratory Directors", desc: "You own the CLIA certificate and the competency requirement. Know exactly who is current and who is overdue." },
-              { title: "Technical Consultants / Supervisors", desc: "Delegated to assess technical competency? VeritaComp gives you the structured form and documentation trail." },
+              { title: "Technical Consultants / Supervisors", desc: "Delegated to assess technical competency? VeritaComp\u2122 gives you the structured form and documentation trail." },
               { title: "Quality Managers", desc: "Track competency across the lab. Generate reports for accreditation surveys. No filing cabinet required." },
               { title: "Education Coordinators", desc: "Manage orientation competency checklists for new hires across every department." },
               { title: "POCT Coordinators", desc: "Waived testing competency for every nurse, RT, and CNA performing point-of-care tests." },

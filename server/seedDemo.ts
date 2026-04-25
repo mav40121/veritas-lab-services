@@ -944,7 +944,7 @@ function seedProductivityData(sqlite: any, demoUserId: number, now: string) {
 
   // 2026 data (current year, Jan-Mar): improving to ~0.140-0.150, lower OT, fewer FTEs
   const data2026 = [
-    { m: 1, tests: 36500, prodH: 5280, nonProd: 820, ot: 320, ftes: 13.2, notes: "VeritaBench workflow optimization began" },
+    { m: 1, tests: 36500, prodH: 5280, nonProd: 820, ot: 320, ftes: 13.2, notes: "VeritaBench\u2122 workflow optimization began" },
     { m: 2, tests: 35800, prodH: 5150, nonProd: 790, ot: 290, ftes: 13.0, notes: "Continued efficiency gains" },
     { m: 3, tests: 37200, prodH: 5380, nonProd: 840, ot: 310, ftes: 13.4, notes: "Q1 close, 25% hour reduction vs prior year" },
   ];
