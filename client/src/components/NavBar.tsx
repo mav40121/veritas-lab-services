@@ -12,7 +12,7 @@ const productLinks = [
   { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Validation & CUMSUM", badge: "Live", badgeColor: "emerald" },
   { href: "/veritascan", label: "VeritaScan\u2122", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
   { href: "/veritamap", label: "VeritaMap\u2122", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritatrack-app", label: "VeritaTrack\u2122", desc: "Regulatory Calendar", badge: "New", badgeColor: "emerald" },
+  { href: "/veritatrack", label: "VeritaTrack\u2122", desc: "QC Task Tracking & Sign-off", badge: "Live", badgeColor: "emerald" },
   { href: "/veritaassure", label: "All modules", desc: "View the full suite", highlight: false, badge: null, badgeColor: null },
 ];
 
@@ -31,7 +31,7 @@ const allMobileLinks = [
   { href: "/veritapt", label: "VeritaPT™" },
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/veritapolicy", label: "VeritaPolicy™" },
-  { href: "/veritatrack-app", label: "VeritaTrack™" },
+  { href: "/veritatrack", label: "VeritaTrack™" },
   { href: "/calculator", label: "Productivity Calculator" },
   { href: "/veritabench", label: "VeritaBench™ Tracker" },
   { href: "/veritabench/staffing", label: "VeritaBench™ Staffing" },
@@ -97,7 +97,7 @@ export function NavBar() {
               <button
                 className={cn(
                   "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/book"].includes(location)
+                  ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/book"].includes(location)
                     ? "text-foreground bg-secondary"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 )}
