@@ -499,11 +499,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/admin/users", (req, res) => {
-    const { secret } = req.body;
+    const { secret, maxId } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const allStudies = storage.getAllStudies();
     const userList = [];
-    for (let i = 1; i <= 20; i++) {
+    const upperBound = Math.min(Number.isInteger(Number(maxId)) && Number(maxId) > 0 ? Number(maxId) : 20, 1000);
+    for (let i = 1; i <= upperBound; i++) {
       const u = storage.getUserById(i);
       if (u) userList.push({ id: u.id, email: u.email, name: u.name, plan: u.plan, studyCount: allStudies.filter(s => s.userId === i).length });
     }
