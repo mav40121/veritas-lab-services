@@ -6,11 +6,11 @@ import { createServer } from "http";
 const app = express();
 const httpServer = createServer(app);
 
-// Force non-www → www with 301 permanent redirect (fixes Google Search Console "Page with redirect")
+// 301-redirect apex domain to www (fixes Google Search Console HTTP 405 on apex)
 app.use((req, res, next) => {
-  const host = req.headers.host;
-  if (host && !host.startsWith('www.') && !host.includes('localhost') && !host.includes('railway')) {
-    return res.redirect(301, `https://www.${host}${req.url}`);
+  const host = req.hostname;
+  if (host === 'veritaslabservices.com') {
+    return res.redirect(301, `https://www.veritaslabservices.com${req.originalUrl}`);
   }
   next();
 });
@@ -164,10 +164,12 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // 301 redirects for old URLs found in Google Search Console
-  app.get('/m/create-account', (_req, res) => res.redirect(301, '/'));
-  app.get('/meet-our-team', (_req, res) => res.redirect(301, '/'));
-  app.get('/m/reset', (_req, res) => res.redirect(301, '/'));
+  // Old /m/* URLs from a previous site version -- tell Google they're permanently gone
+  app.get('/m', (_req, res) => res.status(410).send('Gone'));
+  app.use('/m/{*path}', (_req, res) => res.status(410).send('Gone'));
+
+  // /meet-our-team -> /team (sitemap canonical); was redirecting to / which is a soft-404 risk
+  app.get('/meet-our-team', (_req, res) => res.redirect(301, '/team'));
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
