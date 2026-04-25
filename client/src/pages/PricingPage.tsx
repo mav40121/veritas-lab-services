@@ -75,6 +75,10 @@ const PLANS = [
       "Study history dashboard",
     ],
     buttonLabel: "Subscribe",
+    // Intentional: VeritaCheck Unlimited surfaces its own login/account flow on
+    // /veritacheck (Sign In / Create Account buttons in the hero), so we route
+    // there instead of /login. All other plans go through /login because their
+    // checkout is initiated from AccountSettingsPage.
     buttonHref: "/veritacheck",
     highlight: false,
     badge: null,
@@ -340,7 +344,26 @@ return (
                     className="w-full font-semibold"
                     variant="outline"
                   >
-                    <Link href={plan.buttonHref}>
+                    <Link
+                      href={plan.buttonHref}
+                      onClick={() => {
+                        // GA4 funnel parity with paid tier cards (M-009 / N-001).
+                        // Per Study is one-time, not a subscription, so this is a
+                        // select_item signal only. The actual purchase event is
+                        // fired when Stripe webhook confirms the per-study charge.
+                        const numericPrice = parseFloat(plan.price.replace(/[$,]/g, '')) || 0;
+                        trackEvent('select_item', {
+                          item_list_id: 'pricing_page',
+                          item_list_name: 'Pricing Page Plans',
+                          items: [{
+                            item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
+                            item_name: plan.name,
+                            price: numericPrice,
+                            quantity: 1,
+                          }],
+                        });
+                      }}
+                    >
                       {plan.buttonLabel} <ChevronRight size={14} className="ml-1" />
                     </Link>
                   </Button>
@@ -398,10 +421,10 @@ return (
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { range: "2-5 total seats", price: "$199/seat", detail: "Seats 2-5" },
-                { range: "6-10 total seats", price: "$179/seat", detail: "Seats 2-10" },
-                { range: "11-25 total seats", price: "$159/seat", detail: "Seats 2-25" },
-                { range: "26+ total seats", price: "$139/seat", detail: "Seats 2+" },
+                { range: "2-5 total seats", price: "$199/seat", detail: "Additional seats 2-5" },
+                { range: "6-10 total seats", price: "$179/seat", detail: "Additional seats 6-10" },
+                { range: "11-25 total seats", price: "$159/seat", detail: "Additional seats 11-25" },
+                { range: "26+ total seats", price: "$139/seat", detail: "Additional seats 26+" },
               ].map(({ range, price, detail }) => (
                 <div key={range} className="rounded-md border border-border bg-muted/20 p-4 text-center">
                   <div className="font-semibold text-primary text-lg">{price}</div>

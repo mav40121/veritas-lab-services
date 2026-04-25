@@ -2773,7 +2773,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const priceId = PRICES[priceType as keyof typeof PRICES];
     const isSubscription = priceType !== "perStudy";
-    const successUrl = `${FRONTEND_URL}/veritacheck?payment=success&type=${priceType}`;
+
+    // N-005: Tier-aware post-checkout redirect.
+    //   - Per Study and VeritaCheck Unlimited buyers land on /veritacheck (the
+    //     surface they actually purchased).
+    //   - Suite plans (Clinic / Community / Hospital / Enterprise) land on
+    //     /getting-started so the new tenant sees the onboarding flow.
+    const SUITE_PLANS = new Set(["waived", "community", "hospital", "large_hospital"]);
+    const successPath = SUITE_PLANS.has(priceType) ? "/getting-started" : "/veritacheck";
+    const successUrl = `${FRONTEND_URL}${successPath}?payment=success&type=${priceType}`;
     const cancelUrl = `${FRONTEND_URL}/veritacheck?payment=cancelled`;
 
     // Validate discount code if provided

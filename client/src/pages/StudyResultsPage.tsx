@@ -1632,19 +1632,8 @@ export default function StudyResults() {
     );
   }
 
-  // PT/Coag is now unlocked
-  if (false && study?.studyType === "pt_coag") {
-    return (
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 px-3 py-1 text-sm font-semibold mb-4">Coming Soon</Badge>
-        <h1 className="text-xl font-bold mt-2">PT/Coag New Lot Validation</h1>
-        <p className="text-muted-foreground mt-2">This study type is not yet available. Join the newsletter to be notified when it launches.</p>
-        <Button asChild variant="outline" className="mt-6">
-          <Link href="/dashboard">Back to Dashboard</Link>
-        </Button>
-      </div>
-    );
-  }
+  // PT/Coag is now unlocked — Coming Soon gate removed (was previously behind
+  // `if (false && ...)` after launch and has been verified live).
 
   const instrumentNames: string[] = JSON.parse(study.instruments);
   const rawDataPoints = JSON.parse(study.dataPoints);
