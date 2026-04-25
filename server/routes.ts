@@ -558,6 +558,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, seat });
   });
 
+  // Admin: delete a user by id (destructive, requires confirm=true)
+  app.delete("/api/admin/users/:id", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+
+    const confirm = req.query.confirm as string | undefined;
+    if (confirm !== "true") return res.status(400).json({ error: "Missing confirm=true. This is a destructive action." });
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Invalid user id. Must be a positive integer." });
+
+    const user = storage.getUserById(id);
+    if (!user) return res.status(404).json({ error: "User not found", id });
+
+    storage.deleteUser(id);
+    console.log(`[ADMIN] User deleted: id=${id} email=${user.email} at=${new Date().toISOString()}`);
+    res.json({ deleted: true, id, email: user.email });
+  });
+
   // ── DISCOUNT CODES (admin) ───────────────────────────────────────────────
   app.get("/api/admin/discount-codes", (req, res) => {
     const { secret } = req.query as any;
