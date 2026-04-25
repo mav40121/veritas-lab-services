@@ -269,7 +269,7 @@ import {
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
 } from "./veritamapData";
 
-const JWT_SECRET = process.env.JWT_SECRET || "veritas-lab-services-secret-2026";
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 function signToken(userId: number) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "30d" });
@@ -396,7 +396,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   // ── ADMIN ────────────────────────────────────────────────────────────────
-  const ADMIN_SECRET = process.env.ADMIN_SECRET || "veritas-admin-2026";
+  const ADMIN_SECRET = process.env.ADMIN_SECRET!;
 
   // Plan display name mapping
   const PLAN_DISPLAY_NAMES: Record<string, string> = {
@@ -2678,7 +2678,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin — view subscribers
   app.get("/api/admin/newsletter", (req, res) => {
     const { secret } = req.query;
-    if (secret !== process.env.ADMIN_SECRET && secret !== "veritas-admin-2026") {
+    if (secret !== ADMIN_SECRET) {
       return res.status(403).json({ error: "Forbidden" });
     }
     try {
@@ -6130,7 +6130,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // POST /api/veritalab/check-reminders - check and send due reminders
   app.post("/api/veritalab/check-reminders", (req: any, res) => {
     const adminSecret = req.headers["x-admin-secret"];
-    if (adminSecret !== (process.env.ADMIN_SECRET || "veritas-admin-2026")) {
+    if (adminSecret !== ADMIN_SECRET) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -6999,8 +6999,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ADMIN SET PLAN (PATCH) ──────────────────────────────────────────────
   app.patch("/api/admin/set-plan", (req, res) => {
     const secret = req.headers["x-admin-secret"] as string;
-    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
-    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
 
     const { userId, plan } = req.body;
     if (!userId || !plan) return res.status(400).json({ error: "userId and plan required" });
@@ -7022,8 +7021,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ADMIN: Audit log viewer ────────────────────────────────────────────────────────
   app.get("/api/admin/audit-log", (req, res) => {
     const secret = (req.query.secret || req.headers["x-admin-secret"]) as string;
-    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
-    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
 
     const { userId, module, limit = 200 } = req.query;
     let query = `SELECT * FROM audit_log WHERE 1=1`;
@@ -7041,8 +7039,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ADMIN: Snapshots viewer ────────────────────────────────────────────────────
   app.get("/api/admin/snapshots", (req, res) => {
     const secret = (req.query.secret || req.headers["x-admin-secret"]) as string;
-    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
-    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     const { userId } = req.query;
     // Query directly from db to avoid any module caching issues
     if (!userId) {
@@ -7060,8 +7057,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/admin/snapshots/:id", (req, res) => {
     const secret = (req.query.secret || req.headers["x-admin-secret"]) as string;
-    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
-    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     const { getSnapshot } = require("./audit");
     const snap = getSnapshot(Number(req.params.id));
     if (!snap) return res.status(404).json({ error: "Snapshot not found" });
@@ -7071,8 +7067,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ADMIN: Trigger nightly snapshot manually ─────────────────────────────────────
   app.post("/api/admin/run-snapshot", (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
-    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
-    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     try {
       const sqlite = (db as any).$client;
       const targetUserId = req.body?.userId || req.query?.userId;
@@ -7127,8 +7122,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
   app.get("/api/admin/backup-db", (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
-    const ADMIN_SECRET_VAL = process.env.ADMIN_SECRET || "veritas-admin-2026";
-    if (secret !== ADMIN_SECRET_VAL) return res.status(403).json({ error: "forbidden" });
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     try {
       const sqlite = (db as any).$client;
       // WAL checkpoint to ensure all data is in the main DB file

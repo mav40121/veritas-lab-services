@@ -3,6 +3,14 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 
+// Fail loud if required secrets are missing - catches Railway env var misconfigurations at deploy time
+const REQUIRED_SECRETS = ["JWT_SECRET", "ADMIN_SECRET", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] as const;
+const missingSecrets = REQUIRED_SECRETS.filter((key) => !process.env[key]);
+if (missingSecrets.length > 0) {
+  console.error(`[startup] FATAL: missing required environment variables: ${missingSecrets.join(", ")}`);
+  process.exit(1);
+}
+
 const app = express();
 app.set("trust proxy", true);
 const httpServer = createServer(app);
@@ -16,20 +24,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS — allow requests from the deployed frontend and localhost
+// CORS - allow requests from the deployed frontend and localhost
 app.use((req, res, next) => {
-  const allowedOrigins = [
+  const allowedOrigins = new Set([
     "https://www.perplexity.ai",
     "https://sites.pplx.app",
     "http://localhost:5000",
     "http://127.0.0.1:5000",
     "https://veritaslabservices.com",
     "https://www.veritaslabservices.com",
-    "https://www.veritaslabservices.com",
-    process.env.FRONTEND_URL || "",
-  ].filter(Boolean);
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+  ]);
   const origin = req.headers.origin || "";
-  if (allowedOrigins.some(o => origin.startsWith(o))) {
+  if (allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
