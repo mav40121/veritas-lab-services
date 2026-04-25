@@ -1145,7 +1145,7 @@ function seedLabCertificates(sqlite: any, demoUserId: number, now: string) {
   `);
 
   const certs = [
-    { type: "clia", name: "CLIA Certificate of Compliance", number: "22D0999999", body: "Centers for Medicare & Medicaid Services (CMS)", issued: "2024-03-15", expires: "2026-03-14", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Certificate of Compliance — high complexity testing authorized" },
+    { type: "clia", name: "CLIA Certificate of Compliance", number: "22D0999999", body: "Centers for Medicare & Medicaid Services (CMS)", issued: "2024-03-15", expires: "2026-03-14", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Certificate of Compliance: high complexity testing authorized" },
     { type: "cap", name: "CAP Laboratory Accreditation", number: "CAP-9876543", body: "College of American Pathologists", issued: "2024-06-01", expires: "2026-06-01", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Full accreditation with commendation" },
     { type: "state", name: "Tennessee State Laboratory License", number: "TN-LAB-2024-00456", body: "Tennessee Department of Health", issued: "2024-01-01", expires: "2025-12-31", director: "Michael Veri, MLS(ASCP), MS, MBA", notes: "Annual renewal required" },
   ];
@@ -1179,7 +1179,7 @@ function seedPIDashboard(sqlite: any, demoUserId: number, now: string) {
   const metrics = [
     { deptId: chemDeptId, name: "Specimen Rejection Rate", unit: "%", direction: "lower_is_better", green: 1.0, yellow: 2.0, red: 2.0, sort: 1 },
     { deptId: chemDeptId, name: "Critical Value Notification (≤15 min)", unit: "%", direction: "higher_is_better", green: 95.0, yellow: 90.0, red: 90.0, sort: 2 },
-    { deptId: chemDeptId, name: "Turnaround Time — BMP (≤60 min)", unit: "%", direction: "higher_is_better", green: 90.0, yellow: 85.0, red: 85.0, sort: 3 },
+    { deptId: chemDeptId, name: "Turnaround Time: BMP (≤60 min)", unit: "%", direction: "higher_is_better", green: 90.0, yellow: 85.0, red: 85.0, sort: 3 },
     { deptId: hemeDeptId, name: "CBC TAT (≤45 min)", unit: "%", direction: "higher_is_better", green: 92.0, yellow: 87.0, red: 87.0, sort: 1 },
     { deptId: hemeDeptId, name: "QC Recovery Rate", unit: "%", direction: "higher_is_better", green: 98.0, yellow: 95.0, red: 95.0, sort: 2 },
     { deptId: hemeDeptId, name: "Specimen Hemolysis Rate", unit: "%", direction: "lower_is_better", green: 3.0, yellow: 5.0, red: 5.0, sort: 3 },

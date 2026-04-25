@@ -103,12 +103,12 @@ function SiteFooter() {
         <div className="grid sm:grid-cols-3 gap-8 mb-8">
           <div>
             <div className="font-serif font-bold text-base mb-2">Veritas Lab Services, LLC</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting: leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck study analysis.</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting: leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck™ study analysis.</p>
           </div>
           <div>
             <div className="font-semibold text-sm mb-3">Services</div>
             <ul className="space-y-1.5 text-sm text-muted-foreground">
-              {["Leadership Coaching","Inspection Readiness","Productivity Analysis","Regulatory Preparedness","VeritaCheck Study Analysis"].map(s => <li key={s}>{s}</li>)}
+              {["Leadership Coaching","Inspection Readiness","Productivity Analysis","Regulatory Preparedness","VeritaCheck™ Study Analysis"].map(s => <li key={s}>{s}</li>)}
             </ul>
           </div>
           <div>
@@ -137,9 +137,9 @@ function SiteFooter() {
         {/* Disclaimer */}
         <div className="border-t border-border pt-4 mb-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            <strong>Disclaimer:</strong> VeritaCheck is a statistical analysis tool intended for use by qualified laboratory professionals.
+            <strong>Disclaimer:</strong> VeritaCheck™ is a statistical analysis tool intended for use by qualified laboratory professionals.
             Results require interpretation by a licensed medical director or designee and do not constitute medical advice, diagnosis, or treatment.
-            Veritas Lab Services, LLC assumes no liability for clinical decisions made based on VeritaCheck output.
+            Veritas Lab Services, LLC assumes no liability for clinical decisions made based on VeritaCheck™ output.
             By using this tool you agree to our{" "}
             <a href="/terms" className="text-primary hover:underline">Terms of Service</a>{" "}and{" "}
             <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>.

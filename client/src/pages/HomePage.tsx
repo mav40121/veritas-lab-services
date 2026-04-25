@@ -257,7 +257,7 @@ return (
         <div className="container-default text-center">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <FlaskConical size={14} />
-            New Tool - VeritaCheck
+            New Tool - VeritaCheck™
           </div>
           <h2 className="font-serif text-3xl font-bold mb-3">The studies your lab has always run, finally done right.</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6 leading-relaxed">
@@ -265,7 +265,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritacheck">Try VeritaCheck Free <ChevronRight size={16} className="ml-1" /></Link>
+              <Link href="/veritacheck">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/pricing">See Pricing</Link>
@@ -344,9 +344,9 @@ return (
                 </p>
                 <div className="space-y-2 mb-6">
                   {[
-                    { icon: MapPin, text: "VeritaMap surfaces 2 compliance gaps across 5 analytes" },
-                    { icon: FlaskConical, text: "VeritaCheck runs the EP studies and generates signed PDF reports" },
-                    { icon: Shield, text: "VeritaScan scores inspection readiness across CLIA, TJC & CAP" },
+                    { icon: MapPin, text: "VeritaMap™ surfaces 2 compliance gaps across 5 analytes" },
+                    { icon: FlaskConical, text: "VeritaCheck™ runs the EP studies and generates signed PDF reports" },
+                    { icon: Shield, text: "VeritaScan™ scores inspection readiness across CLIA, TJC & CAP" },
                   ].map(({ icon: Icon, text }) => (
                     <div key={text} className="flex items-center gap-2.5 text-sm">
                       <Icon size={14} className="text-primary shrink-0" />

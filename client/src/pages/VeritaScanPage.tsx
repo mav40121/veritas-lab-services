@@ -233,7 +233,7 @@ return (
                     "PDF reports (executive summary + full detail)",
                     "Excel export included: download your full scan at any time",
                     "Always current standards",
-                    "Integrates with VeritaCheck",
+                    "Integrates with VeritaCheck™",
                   ].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
@@ -317,7 +317,7 @@ return (
           <div className="mt-6">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <FlaskConical size={14} />
-              Also try VeritaCheck - EP studies
+              Also try VeritaCheck™ - EP studies
               <ChevronRight size={13} />
             </Link>
           </div>

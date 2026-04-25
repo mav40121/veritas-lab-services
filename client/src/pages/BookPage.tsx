@@ -128,7 +128,7 @@ return (
                 Every laboratory director knows the feeling: degrees earned, certifications passed, years logged, and still unprepared for the actual job. The regulations read like a foreign language. The C-suite speaks finance, not science. Accreditors are coming. There is no manual.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure and VeritaCheck, VeritaMap, VeritaScan, and VeritaComp compliance software suite. The same knowledge that built the software is in this book.
+                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure™ and VeritaCheck™, VeritaMap™, VeritaScan™, and VeritaComp™ compliance software suite. The same knowledge that built the software is in this book.
               </p>
 
               <div className="flex items-center gap-3 mb-8">
@@ -236,10 +236,10 @@ return (
                 </p>
                 <div className="space-y-3 mb-5">
                   {[
-                    { name: "VeritaMap", desc: "Build your test menu map and learn every regulatory obligation your lab carries." },
-                    { name: "VeritaCheck", desc: "Run EP studies with guided methodology that teaches the science behind each calculation." },
-                    { name: "VeritaScan", desc: "Walk 168 compliance items and learn how a surveyor thinks." },
-                    { name: "VeritaComp", desc: "Build competency programs that teach the six CLIA elements by doing them." },
+                    { name: "VeritaMap™", desc: "Build your test menu map and learn every regulatory obligation your lab carries." },
+                    { name: "VeritaCheck™", desc: "Run EP studies with guided methodology that teaches the science behind each calculation." },
+                    { name: "VeritaScan™", desc: "Walk 168 compliance items and learn how a surveyor thinks." },
+                    { name: "VeritaComp™", desc: "Build competency programs that teach the six CLIA elements by doing them." },
                   ].map(({ name, desc }) => (
                     <div key={name} className="flex items-start gap-2.5 text-sm">
                       <CheckCircle2 size={15} className="text-primary mt-0.5 shrink-0" />
@@ -371,12 +371,11 @@ return (
                 <p className="text-sm text-muted-foreground mb-6 flex-1">
                   Digital copy of Lab Management 101. Available when the book launches.
                 </p>
-                <a
-                  href="#notify"
-                  className="w-full border-2 border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center block hover:bg-primary/5 transition-colors"
+                <span
+                  className="w-full border-2 border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center block cursor-default opacity-60"
                 >
-                  Notify Me
-                </a>
+                  Coming Soon
+                </span>
               </CardContent>
             </Card>
 
@@ -420,12 +419,12 @@ return (
                 Chapter 9 walks through calibration verification, method comparison, and precision studies: what CLIA actually mandates, how the math works, and what surveyors look for in your documentation.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaCheck automates every calculation in that chapter. The book explains the why. The software handles the how.
+                VeritaCheck™ automates every calculation in that chapter. The book explains the why. The software handles the how.
               </p>
             </div>
             <Card className="border-primary/20 bg-primary/5">
               <CardContent className="p-6 space-y-3">
-                <div className="font-semibold">VeritaCheck handles it all</div>
+                <div className="font-semibold">VeritaCheck™ handles it all</div>
                 {[
                   ["Calibration Verification / Linearity", "42 CFR §493.931"],
                   ["Correlation / Method Comparison", "42 CFR §493.933"],
@@ -446,7 +445,7 @@ return (
                 <div className="pt-2">
                   <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                     <FlaskConical size={14} />
-                    Try VeritaCheck now
+                    Try VeritaCheck™ now
                   </Link>
                 </div>
               </CardContent>
