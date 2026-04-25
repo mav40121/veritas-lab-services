@@ -313,6 +313,27 @@ return (
                     14-day free trial &middot; 30-day money-back guarantee
                   </p>
                 )}
+                {plan.period === "/yr" && plan.name !== "Per Study" && (() => {
+                  const tierSlug: Record<string, string> = {
+                    "VeritaCheck\u2122 Unlimited": "veritacheck",
+                    "Clinic": "clinic",
+                    "Community": "community",
+                    "Hospital": "hospital",
+                    "Enterprise": "enterprise",
+                  };
+                  const slug = tierSlug[plan.name] || "";
+                  return (
+                    <p className="text-xs text-center mt-1">
+                      <Link
+                        href={`/request-invoice?tier=${slug}`}
+                        className="text-[#01696F] hover:underline"
+                        onClick={() => trackEvent('invoice_request_card_link_click', { tier: slug })}
+                      >
+                        or request an invoice
+                      </Link>
+                    </p>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}

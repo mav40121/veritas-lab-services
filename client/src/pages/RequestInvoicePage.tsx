@@ -11,6 +11,7 @@ import { CheckCircle2, FileText, ShieldCheck, CreditCard } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 
 const TIER_OPTIONS = [
+  { value: "veritacheck", label: "VeritaCheck\u2122 Unlimited ($299/yr)" },
   { value: "clinic", label: "Clinic - $499/yr" },
   { value: "community", label: "Community - $999/yr" },
   { value: "hospital", label: "Hospital - $1,999/yr" },
