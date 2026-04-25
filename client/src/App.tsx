@@ -63,7 +63,6 @@ import VeritaLabAppPage from "@/pages/VeritaLabAppPage";
 import VeritaPolicyAppPage from "@/pages/VeritaPolicyAppPage";
 import VeritaPolicyPage from "@/pages/VeritaPolicyPage";
 import CumsumPage from "@/pages/CumsumPage";
-import SeatManagementPage from "@/pages/SeatManagementPage";
 import RoadmapPage from "@/pages/RoadmapPage";
 import GettingStartedPage from "@/pages/GettingStartedPage";
 import AccountSettingsPage from "@/pages/AccountSettingsPage";
@@ -318,7 +317,7 @@ function AppContent() {
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/getting-started" component={GettingStartedPage} />
           <Route path="/account/settings" component={AccountSettingsPage} />
-          <Route path="/account/seats" component={SeatManagementPage} />
+          <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route component={NotFound} />
         </Switch>

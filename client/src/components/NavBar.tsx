@@ -289,9 +289,6 @@ export function NavBar() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild><Link href="/dashboard">My Studies</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/account/settings">Account</Link></DropdownMenuItem>
-                {!user?.ownerUserId && user?.plan !== 'free' && user?.plan !== 'per_study' && (
-                  <DropdownMenuItem asChild><Link href="/account/seats">Seat Management</Link></DropdownMenuItem>
-                )}
                 <DropdownMenuItem onClick={logout} className="text-destructive">
                   <LogOut size={13} className="mr-2" /> Sign out
                 </DropdownMenuItem>
