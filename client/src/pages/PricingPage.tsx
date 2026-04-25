@@ -1,10 +1,50 @@
 import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, Users, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, X } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+
+// COLA Nashville banner: auto-hides on May 9, 2026 onward
+function ColaBanner() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const today = new Date();
+    const hideOn = new Date("2026-05-09T00:00:00");
+    const dismissed = sessionStorage.getItem("colaBanner_dismissed") === "true";
+    if (today < hideOn && !dismissed) {
+      setVisible(true);
+    }
+  }, []);
+
+  const dismiss = () => {
+    sessionStorage.setItem("colaBanner_dismissed", "true");
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div className="bg-primary text-primary-foreground">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
+        <p className="text-sm sm:text-base text-center sm:text-left flex-1 leading-snug">
+          We will be at COLA Lab Enrichment Forum in Nashville, May 6-8. Use code{" "}
+          <span className="font-bold">COLA2026</span> for 60-day trial plus 10% off.
+        </p>
+        <button
+          onClick={dismiss}
+          aria-label="Dismiss COLA banner"
+          className="shrink-0 p-1 hover:bg-white/10 rounded transition-colors"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const PLANS = [
   {
@@ -111,6 +151,8 @@ export default function PricingPage() {
     useSEO({ title: "Pricing | VeritaAssure Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
 return (
     <div className="min-h-screen bg-background">
+
+      <ColaBanner />
 
       {/* Hero */}
       <section className="border-b border-border bg-gradient-to-br from-primary/10 via-primary/4 to-transparent">
