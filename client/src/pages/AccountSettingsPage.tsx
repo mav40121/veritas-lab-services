@@ -30,8 +30,25 @@ interface AccountSettings {
   preferred_pt_vendor: PtVendorPref;
 }
 
+// Map a user's stored plan key to the priceType expected by /api/stripe/checkout
+// and /api/discount/validate. Returns null if the user has not selected a paid
+// plan that can be activated through this surface.
+function planToPriceType(plan: string | undefined | null): string | null {
+  if (!plan) return null;
+  const map: Record<string, string> = {
+    clinic: "waived",
+    waived: "waived",
+    community: "community",
+    hospital: "hospital",
+    enterprise: "large_hospital",
+    large_hospital: "large_hospital",
+    veritacheck_only: "veritacheck_only",
+  };
+  return map[plan] || null;
+}
+
 export default function AccountSettingsPage() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const { toast } = useToast();
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
@@ -139,6 +156,12 @@ export default function AccountSettingsPage() {
   const [discountError, setDiscountError] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
+  // Resolve the user's current plan to the Stripe priceType. Used for both
+  // discount validation and checkout. If the user is on free/per_study, the
+  // Activate Subscription flow falls back to community so the discount panel
+  // still works for legacy demo accounts; this should be rare in practice.
+  const userPriceType = planToPriceType(user?.plan) || "community";
+
   async function applyDiscount() {
     if (!discountCode.trim()) return;
     setDiscountLoading(true);
@@ -147,7 +170,7 @@ export default function AccountSettingsPage() {
       const res = await fetch(`${API_BASE}/api/discount/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ code: discountCode.trim(), priceType: "community" }),
+        body: JSON.stringify({ code: discountCode.trim(), priceType: userPriceType }),
       });
       const data = await res.json();
       if (!res.ok || !data.valid) {
@@ -170,7 +193,7 @@ export default function AccountSettingsPage() {
       const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ priceType: "community", discountCode: discountApplied.code }),
+        body: JSON.stringify({ priceType: userPriceType, discountCode: discountApplied.code }),
       });
       const data = await res.json();
       if (data.url) {

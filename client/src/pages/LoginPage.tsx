@@ -59,12 +59,23 @@ export default function LoginPage() {
   const [hipaaAcknowledged, setHipaaAcknowledged] = useState(false);
   const [hipaaError, setHipaaError] = useState("");
 
-  // Redirect to /join page if there's an invite token in the URL
+  // Redirect to /join page if there's an invite token in the URL.
+  // Also pre-populate the selected tier from a ?tier= URL param so users
+  // arriving from the pricing page Subscribe buttons keep the tier they chose.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const inviteToken = params.get("token");
     if (inviteToken) {
       navigate(`/join?token=${inviteToken}`);
+      return;
+    }
+    const tierParam = params.get("tier");
+    const validTiers = TIER_OPTIONS.map(t => t.id);
+    if (tierParam && validTiers.includes(tierParam)) {
+      setSelectedTier(tierParam);
+      // Skip lab-type and search steps; go straight to the registration form.
+      setLabType("independent");
+      setRegStep("form");
     }
   }, [navigate]);
 
