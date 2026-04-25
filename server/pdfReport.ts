@@ -857,8 +857,8 @@ function buildQualitativeHTML(study: Study, results: any): string {
   }).join("");
 
   const verdictText = overallPass
-    ? `Qualitative method comparison meets acceptance criteria — ${sf(pctAgreement, 1)}% agreement (threshold: ≥${passThreshold}%)`
-    : `Qualitative method comparison does not meet acceptance criteria — ${sf(pctAgreement, 1)}% agreement (threshold: ≥${passThreshold}%)`;
+    ? `Qualitative method comparison meets acceptance criteria: ${sf(pctAgreement, 1)}% agreement (threshold: ≥${passThreshold}%)`
+    : `Qualitative method comparison does not meet acceptance criteria: ${sf(pctAgreement, 1)}% agreement (threshold: ≥${passThreshold}%)`;
 
   const narrative = overallPass
     ? `The qualitative method comparison for ${study.testName} demonstrated ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
@@ -955,8 +955,8 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   }).join("");
 
   const verdictText = overallPass
-    ? `Semi-quantitative method comparison meets acceptance criteria — ${sf(pctWithinOne, 1)}% within \u00B11 grade (threshold: \u2265${passThreshold}%)`
-    : `Semi-quantitative method comparison does not meet acceptance criteria — ${sf(pctWithinOne, 1)}% within \u00B11 grade (threshold: \u2265${passThreshold}%)`;
+    ? `Semi-quantitative method comparison meets acceptance criteria: ${sf(pctWithinOne, 1)}% within \u00B11 grade (threshold: \u2265${passThreshold}%)`
+    : `Semi-quantitative method comparison does not meet acceptance criteria: ${sf(pctWithinOne, 1)}% within \u00B11 grade (threshold: \u2265${passThreshold}%)`;
 
   const narrative = overallPass
     ? `The semi-quantitative method comparison for ${study.testName} demonstrated ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy observed was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`

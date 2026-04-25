@@ -24,7 +24,7 @@ const HOW_IT_WORKS = [
 export default function VeritaPTPage() {
   const { isLoggedIn } = useAuth();
 
-    useSEO({ title: "VeritaPT | Proficiency Testing Gap Analyzer for Clinical Labs", description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements." });
+    useSEO({ title: "VeritaPT™ | Proficiency Testing Gap Analyzer for Clinical Labs", description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements." });
 return (
     <div>
       {/* Hero */}

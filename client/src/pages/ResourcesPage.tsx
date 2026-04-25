@@ -15,7 +15,7 @@ const articles = [
     readTime: "14 min read",
     author: "Michael Veri",
     date: "March 2026",
-    tags: ["Leadership Development", "Lab Director", "CLIA", "VeritaAssure"],
+    tags: ["Leadership Development", "Lab Director", "CLIA", "VeritaAssure™"],
     featured: true,
   },
   {

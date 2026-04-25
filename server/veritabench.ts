@@ -24,7 +24,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/productivity - list all months for authenticated user's account
   app.get("/api/productivity", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year DESC, month DESC"
@@ -34,7 +34,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/productivity - upsert a month
   app.post("/api/productivity", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { year, month, billable_tests, productive_hours, non_productive_hours, overtime_hours, total_ftes, facility_type, notes } = req.body;
     if (!year || !month) return res.status(400).json({ error: "year and month are required" });
@@ -62,7 +62,7 @@ export function registerVeritaBenchRoutes(
 
   // DELETE /api/productivity/:id - delete a month entry
   app.delete("/api/productivity/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const row = sqlite.prepare("SELECT * FROM productivity_months WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -73,7 +73,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/productivity/export - Excel export
   app.get("/api/productivity/export", authMiddleware, async (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year ASC, month ASC"
@@ -149,7 +149,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/staffing-studies - list studies for account
   app.get("/api/staffing-studies", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM staffing_studies WHERE account_id = ? ORDER BY created_at DESC"
@@ -159,7 +159,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/staffing-studies - create study
   app.post("/api/staffing-studies", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { name, department, start_date } = req.body;
     if (!name) return res.status(400).json({ error: "name is required" });
@@ -177,7 +177,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/staffing-studies/:id - get study with all data
   app.get("/api/staffing-studies/:id", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -188,7 +188,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/staffing-studies/:id/data - batch upsert hourly data
   app.post("/api/staffing-studies/:id/data", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -221,7 +221,7 @@ export function registerVeritaBenchRoutes(
 
   // DELETE /api/staffing-studies/:id - delete study and cascade data
   app.delete("/api/staffing-studies/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -289,7 +289,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/inventory - list all inventory items for account
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
@@ -313,7 +313,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date } = req.body;
     if (!item_name) return res.status(400).json({ error: "item_name is required" });
@@ -332,7 +332,7 @@ export function registerVeritaBenchRoutes(
 
   // PUT /api/inventory/:id - update an inventory item
   app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -353,7 +353,7 @@ export function registerVeritaBenchRoutes(
 
   // DELETE /api/inventory/:id - delete an inventory item
   app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -364,7 +364,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/staffing-studies/:id/export - Excel export of analysis
   app.get("/api/staffing-studies/:id/export", authMiddleware, async (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
@@ -444,7 +444,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/pi/departments - list departments (returns empty array if none exist)
   app.get("/api/pi/departments", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
       "SELECT * FROM pi_departments WHERE account_id = ? ORDER BY sort_order ASC, id ASC"
@@ -454,7 +454,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/pi/departments - create department
   app.post("/api/pi/departments", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { name, sort_order } = req.body;
     if (!name) return res.status(400).json({ error: "name is required" });
@@ -472,7 +472,7 @@ export function registerVeritaBenchRoutes(
 
   // PUT /api/pi/departments/:id - update department
   app.put("/api/pi/departments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM pi_departments WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -491,7 +491,7 @@ export function registerVeritaBenchRoutes(
 
   // DELETE /api/pi/departments/:id - delete department (cascade metrics + entries)
   app.delete("/api/pi/departments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM pi_departments WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -507,7 +507,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/pi/metrics - list metrics for a department
   app.get("/api/pi/metrics", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const departmentId = req.query.department_id;
     if (!departmentId) return res.status(400).json({ error: "department_id is required" });
@@ -519,7 +519,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/pi/metrics - create metric
   app.post("/api/pi/metrics", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { department_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order } = req.body;
     if (!department_id || !name) return res.status(400).json({ error: "department_id and name are required" });
@@ -537,7 +537,7 @@ export function registerVeritaBenchRoutes(
 
   // PUT /api/pi/metrics/:id - update metric (including benchmark thresholds)
   app.put("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ? AND account_id = ?").get(id, accountId) as any;
@@ -562,7 +562,7 @@ export function registerVeritaBenchRoutes(
 
   // DELETE /api/pi/metrics/:id - delete metric (cascade entries)
   app.delete("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -574,7 +574,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/pi/entries - get all entries for a year/department
   app.get("/api/pi/entries", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { year, department_id } = req.query;
     if (!year || !department_id) return res.status(400).json({ error: "year and department_id are required" });
@@ -590,7 +590,7 @@ export function registerVeritaBenchRoutes(
 
   // POST /api/pi/entries - upsert entry (metric_id + year + month unique)
   app.post("/api/pi/entries", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { metric_id, year, month, value, volume, notes } = req.body;
     if (!metric_id || !year || !month) return res.status(400).json({ error: "metric_id, year, and month are required" });
@@ -616,7 +616,7 @@ export function registerVeritaBenchRoutes(
 
   // DELETE /api/pi/entries/:id - delete entry
   app.delete("/api/pi/entries/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const row = sqlite.prepare("SELECT * FROM pi_entries WHERE id = ? AND account_id = ?").get(id, accountId);
@@ -627,7 +627,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/pi/dashboard - computed dashboard data
   app.get("/api/pi/dashboard", authMiddleware, (req: any, res) => {
-    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench requires a suite subscription" });
+    if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { year, department_id } = req.query;
     if (!year || !department_id) return res.status(400).json({ error: "year and department_id are required" });

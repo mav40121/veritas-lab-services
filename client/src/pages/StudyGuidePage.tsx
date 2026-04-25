@@ -288,7 +288,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="Every 6 months minimum"
             regulation="42 CFR §493.931"
-            passFail="All measured results must fall within the CLIA Total Allowable Error (TEa) for that analyte. VeritaCheck evaluates each level individually and reports the percentage of results passing. A PASS requires 100% of results within TEa."
+            passFail="All measured results must fall within the CLIA Total Allowable Error (TEa) for that analyte. VeritaCheck™ evaluates each level individually and reports the percentage of results passing. A PASS requires 100% of results within TEa."
             refs={[
               REFS.cliaCalVerBrochure,
               REFS.cfr493931,
@@ -315,7 +315,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; annually recommended"
             regulation="42 CFR §493.933"
-            passFail="Each paired result is evaluated against the CLIA TEa for that analyte. VeritaCheck also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within TEa and mean bias within acceptable limits. Your laboratory director or designee makes the final acceptability determination."
+            passFail="Each paired result is evaluated against the CLIA TEa for that analyte. VeritaCheck™ also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within TEa and mean bias within acceptable limits. Your laboratory director or designee makes the final acceptability determination."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493933,

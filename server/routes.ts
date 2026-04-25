@@ -817,7 +817,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         try {
           const tierLabels: Record<string, string> = {
             clinic: "Clinic ($499/yr)", community: "Community ($999/yr)",
-            hospital: "Hospital ($1,999/yr)", enterprise: "Enterprise ($2,999/yr)"
+            hospital: "Hospital ($1,999/yr)", enterprise: "Enterprise ($2,999/yr)",
+            veritacheck: "VeritaCheck\u2122 Unlimited ($299/yr)"
           };
           const promoLine = promo_applied
             ? `<p style="margin: 0 0 12px;"><strong>Promo code:</strong> ${promo_code} (${discount_pct}% off${trial_days ? `, ${trial_days}-day trial` : ""})</p>`
@@ -6404,7 +6405,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List enrollments for user
   app.get("/api/veritapt/enrollments", authMiddleware, (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const rows = (db as any).$client.prepare(
       "SELECT * FROM pt_enrollments WHERE user_id = ? ORDER BY enrollment_year DESC, analyte"
@@ -6414,7 +6415,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create enrollment
   app.post("/api/veritapt/enrollments", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
     if (!analyte?.trim() || !specialty?.trim() || !pt_provider?.trim() || !enrollment_year || !enrollment_date) {
       return res.status(400).json({ error: "Analyte, specialty, PT provider, enrollment year, and enrollment date are required" });
@@ -6430,7 +6431,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update enrollment
   app.put("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
@@ -6450,7 +6451,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete enrollment (cascade: events + their corrective actions)
   app.delete("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = (db as any).$client.prepare("SELECT id FROM pt_enrollments WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
@@ -6466,7 +6467,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List events for user (optional enrollmentId filter)
   app.get("/api/veritapt/events", authMiddleware, (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const enrollmentId = req.query.enrollmentId;
     let rows;
@@ -6484,7 +6485,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create event (auto-calculate SDI if peer_mean and peer_sd provided)
   app.post("/api/veritapt/events", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes } = req.body;
     if (!enrollment_id || !event_date || !analyte?.trim()) {
       return res.status(400).json({ error: "Enrollment, event date, and analyte are required" });
@@ -6505,7 +6506,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update event (recalculate SDI if needed)
   app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!existing) return res.status(404).json({ error: "Event not found" });
@@ -6535,7 +6536,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Delete event (cascade: corrective actions)
   app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = (db as any).$client.prepare("SELECT id FROM pt_events WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!existing) return res.status(404).json({ error: "Event not found" });
@@ -6546,7 +6547,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List corrective actions for user
   app.get("/api/veritapt/corrective-actions", authMiddleware, (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const rows = (db as any).$client.prepare(
       "SELECT * FROM pt_corrective_actions WHERE user_id = ? ORDER BY date_initiated DESC"
@@ -6556,7 +6557,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get corrective action for specific event
   app.get("/api/veritapt/corrective-actions/event/:eventId", authMiddleware, (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const row = (db as any).$client.prepare(
       "SELECT * FROM pt_corrective_actions WHERE event_id = ? AND user_id = ?"
@@ -6566,7 +6567,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Create corrective action
   app.post("/api/veritapt/corrective-actions", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const { event_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
     if (!event_id || !corrective_action?.trim() || !date_initiated) {
       return res.status(400).json({ error: "Event ID, corrective action, and date initiated are required" });
@@ -6582,7 +6583,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update corrective action
   app.put("/api/veritapt/corrective-actions/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!existing) return res.status(404).json({ error: "Corrective action not found" });
@@ -6608,7 +6609,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Summary stats
   app.get("/api/veritapt/summary", authMiddleware, (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const totalEnrollments = ((db as any).$client.prepare(
       "SELECT COUNT(*) as cnt FROM pt_enrollments WHERE user_id = ? AND status = 'active'"
@@ -6637,7 +6638,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PDF placeholder
   app.post("/api/veritapt/pdf", authMiddleware, async (req: any, res) => {
-    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT subscription required" });
+    if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     try {
       const userId = req.ownerUserId ?? req.user.userId;
       const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;

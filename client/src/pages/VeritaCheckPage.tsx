@@ -144,13 +144,13 @@ const featureTooltips: Record<string, string> = {
   "CLIA pass/fail evaluation": "Each study is automatically evaluated against CLIA allowable total error (TEa) and returns a clear Pass or Fail result.",
   // Starter
   "Unlimited studies": "Run as many EP studies as your lab needs - no per-study charges.",
-  "All VeritaCheck study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
+  "All VeritaCheck™ study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
   "Full PDF reports": "Every study generates a signed, audit-ready PDF report suitable for surveyor review.",
   "Study history dashboard": "View, search, and re-download all past studies from your personal dashboard.",
   // Professional
   "Everything in Starter": "Includes all features from the Starter plan.",
   "VeritaMap™ regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
-  "VeritaScan™ self-inspection audit": "168-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck automatically check off corresponding items.",
+  "VeritaScan™ self-inspection audit": "168-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck™ automatically check off corresponding items.",
   "Priority support": "Dedicated email support with same-day responses during business hours.",
   // Lab
   "Everything in Professional": "Includes all features from the Professional plan.",

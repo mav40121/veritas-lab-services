@@ -42,7 +42,7 @@ export function autoCompleteVeritaScanItems(study: {
   if (scans.length === 0) return;
 
   const now = new Date().toISOString();
-  const completionNote = `Auto-completed by VeritaCheck: ${analyte} on ${now.split("T")[0]}`;
+  const completionNote = `Auto-completed by VeritaCheck\u2122: ${analyte} on ${now.split("T")[0]}`;
   const completionLink = `/study/${study.id}/results`;
 
   // For each scan, find matching items using the veritaScanData items

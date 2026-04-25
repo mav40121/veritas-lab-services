@@ -79,7 +79,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys.",
   },
   "/veritapt": {
-    title: "VeritaPT | Proficiency Testing Gap Analyzer for Clinical Labs",
+    title: "VeritaPT\u2122 | Proficiency Testing Gap Analyzer for Clinical Labs",
     description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements.",
   },
   "/veritalab": {

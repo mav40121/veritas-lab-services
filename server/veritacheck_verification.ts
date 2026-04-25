@@ -55,7 +55,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // GET all verifications for the user
   app.get("/api/veritacheck/verifications", authMiddleware, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const verifications = sqlite.prepare(`
       SELECT v.*,
@@ -71,7 +71,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // GET single verification with full detail
   app.get("/api/veritacheck/verifications/:id", authMiddleware, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!v) return res.status(404).json({ error: "Not found" });
@@ -88,7 +88,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // POST create new verification
   app.post("/api/veritacheck/verifications", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const {
       instrument_name, manufacturer, trigger_type,
@@ -128,7 +128,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // PATCH update verification header (director info, status, remediation, etc.)
   app.patch("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const existing = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!existing) return res.status(404).json({ error: "Not found" });
@@ -151,7 +151,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // DELETE verification
   app.delete("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const existing = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!existing) return res.status(404).json({ error: "Not found" });
@@ -165,7 +165,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // POST add serial number unit
   app.post("/api/veritacheck/verifications/:id/instruments", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!parent) return res.status(404).json({ error: "Not found" });
@@ -181,7 +181,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // PATCH update instrument unit
   app.patch("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!parent) return res.status(404).json({ error: "Not found" });
@@ -199,7 +199,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // DELETE instrument unit
   app.delete("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!parent) return res.status(404).json({ error: "Not found" });
@@ -211,7 +211,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // PATCH update an element study slot (link study, set rationale, mark pass/fail)
   app.patch("/api/veritacheck/verifications/:id/studies/:studySlotId", authMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
     if (!parent) return res.status(404).json({ error: "Not found" });
@@ -234,7 +234,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // GET suggested existing studies for a verification (match by instrument name)
   app.get("/api/veritacheck/verifications/:id/suggest-studies", authMiddleware, (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
     if (!v) return res.status(404).json({ error: "Not found" });
@@ -251,7 +251,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // POST generate PDF package
   app.post("/api/veritacheck/verifications/:id/pdf", authMiddleware, async (req: any, res) => {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck subscription required" });
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
 
     const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;

@@ -280,7 +280,7 @@ return (
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-4">Built to Teach. Built to Lead.</h2>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Most lab directors learn compliance the hard way. VeritaAssure changes that. Every module is built around the regulatory requirements it satisfies, so using the software teaches you why each requirement exists, not just how to document it. New directors build institutional knowledge. Supervisors develop inspection readiness. Health systems create a shared compliance foundation across every lab they run.
+              Most lab directors learn compliance the hard way. VeritaAssure™ changes that. Every module is built around the regulatory requirements it satisfies, so using the software teaches you why each requirement exists, not just how to document it. New directors build institutional knowledge. Supervisors develop inspection readiness. Health systems create a shared compliance foundation across every lab they run.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -320,7 +320,7 @@ return (
           </div>
           <div className="text-center mt-8">
             <Button asChild variant="outline">
-              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1" /></Link>
+              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure™ Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1" /></Link>
             </Button>
           </div>
         </div>
