@@ -665,6 +665,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const row = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(code.trim()) as any;
     if (row) {
       if (!row.active) return res.json({ valid: false, message: "This code is no longer active" });
+      if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+        return res.json({ valid: false, message: "This code has expired" });
+      }
       if (row.max_uses !== null && row.uses >= row.max_uses) return res.json({ valid: false, message: "This code has reached its usage limit" });
       if (row.applies_to !== "all" && row.applies_to !== priceType) {
         return res.json({ valid: false, message: `This code applies to ${row.applies_to} plans only` });
@@ -751,7 +754,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const discountRow = db.$client.prepare(
             "SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?) AND active = 1"
           ).get(promo_code.trim()) as any;
-          if (discountRow) {
+          const isExpired = discountRow?.expires_at && new Date(discountRow.expires_at).getTime() < Date.now();
+          if (discountRow && !isExpired) {
             if (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) {
               discount_pct = discountRow.discount_pct || 0;
               trial_days = discountRow.trial_days || 0;
@@ -2771,7 +2775,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (discountCode) {
       // Check internal discount_codes table first
       discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
-      if (discountRow && discountRow.active && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual")) {
+      const checkoutCodeExpired = discountRow?.expires_at && new Date(discountRow.expires_at).getTime() < Date.now();
+      if (discountRow && discountRow.active && !checkoutCodeExpired && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual")) {
         // Trial code path: use Stripe trial_period_days, skip coupon creation
         if (discountRow.trial_days) {
           trialDays = discountRow.trial_days;

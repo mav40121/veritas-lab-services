@@ -89,7 +89,8 @@ sqlite.exec(`
     uses INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
-    trial_days INTEGER
+    trial_days INTEGER,
+    expires_at TEXT
   );
 
   CREATE TABLE IF NOT EXISTS veritamap_instruments (
@@ -519,6 +520,19 @@ sqlite.exec(`
   VALUES ('DEMO2026', 'VeritaAssure Demo', 100, 'all', NULL, 0, 1, '${new Date().toISOString()}');
   INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at)
   VALUES ('TdFkdMWg', 'Community Hospital 1yr Free (10 users)', 100, 'all', NULL, 0, 1, '${new Date().toISOString()}');
+`);
+
+// Seed conference codes (10% off + 60-day trial; expire at end of conference year)
+// All four follow the same shape per standing handoff: COLA2026 is the template.
+sqlite.exec(`
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at, trial_days, expires_at)
+  VALUES ('COLA2026',   'COLA Lab Enrichment Forum 2026',                  10, 'annual', NULL, 0, 1, '${new Date().toISOString()}', 60, '2026-12-31T23:59:59Z');
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at, trial_days, expires_at)
+  VALUES ('SUMMIT2026', 'ACLA Annual Summit 2026',                          10, 'annual', NULL, 0, 1, '${new Date().toISOString()}', 60, '2026-12-31T23:59:59Z');
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at, trial_days, expires_at)
+  VALUES ('MAYO2026',   'Mayo Clinic Laboratory Symposium 2026',            10, 'annual', NULL, 0, 1, '${new Date().toISOString()}', 60, '2026-12-31T23:59:59Z');
+  INSERT OR IGNORE INTO discount_codes (code, partner_name, discount_pct, applies_to, max_uses, uses, active, created_at, trial_days, expires_at)
+  VALUES ('NELC2026',   'Northeast Laboratory Conference 2026',             10, 'annual', NULL, 0, 1, '${new Date().toISOString()}', 60, '2026-12-31T23:59:59Z');
 `);
 
 // Step 2: Add columns if upgrading from older schema (safe migration)
@@ -1083,6 +1097,11 @@ try {
 
 // Add trial_days column to discount_codes (conference trial codes)
 const dcCols = (sqlite.prepare("PRAGMA table_info(discount_codes)").all() as { name: string }[]).map(c => c.name);
+if (!dcCols.includes("expires_at")) {
+  sqlite.exec("ALTER TABLE discount_codes ADD COLUMN expires_at TEXT");
+  // Backfill existing conference codes (year embedded in code) with end-of-year expiry
+  sqlite.exec(`UPDATE discount_codes SET expires_at = '2026-12-31T23:59:59Z' WHERE expires_at IS NULL AND (code LIKE '%2026' OR code LIKE 'COLA%' OR code LIKE 'SUMMIT%' OR code LIKE 'MAYO%' OR code LIKE 'NELC%')`);
+}
 if (!dcCols.includes("trial_days")) {
   sqlite.exec("ALTER TABLE discount_codes ADD COLUMN trial_days INTEGER");
 }
