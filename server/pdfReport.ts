@@ -194,14 +194,20 @@ const FAIL   = "#c8323c";
 const MUTED  = "#646e78";
 const DARK   = "#14141e";
 
-// ─── TEa display helper (absolute vs percentage) ─────────────────────────────
+// ─── TEa display helper (absolute vs percentage, with dual-criterion support) ─
 function teaDisplayStr(study: Study): string {
   const isAbsolute = (study as any).teaIsPercentage === 0 || (study as any).tea_is_percentage === 0;
-  if (isAbsolute) {
+  const absFloor = (study as any).cliaAbsoluteFloor ?? (study as any).clia_absolute_floor ?? null;
+  const absUnit = (study as any).cliaAbsoluteUnit ?? (study as any).clia_absolute_unit ?? '';
+  if (isAbsolute && absFloor == null) {
     const unit = (study as any).teaUnit || (study as any).tea_unit || '';
     return `\u00B1${study.cliaAllowableError} ${unit}`.trim();
   }
-  return `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
+  const pctStr = `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
+  if (absFloor != null && !isAbsolute) {
+    return `${pctStr} or \u00B1${absFloor} ${absUnit} (greater)`.trim();
+  }
+  return pctStr;
 }
 function isAbsoluteTea(study: Study): boolean {
   return (study as any).teaIsPercentage === 0 || (study as any).tea_is_percentage === 0;
@@ -209,10 +215,11 @@ function isAbsoluteTea(study: Study): boolean {
 
 // ─── CFR URL map ──────────────────────────────────────────────────────────────
 const CFR_URLS: Record<string, string> = {
-  "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
-  "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.933",
-  "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.935",
-  "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.941",
+  "42 CFR §493.927": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.927",
+  "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931",
+  "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.933",
+  "42 CFR §493.937": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
+  "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
 };
 
 // ─── Shared CSS ───────────────────────────────────────────────────────────────
