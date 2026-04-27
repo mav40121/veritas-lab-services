@@ -1184,23 +1184,74 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
     `;
   }
 
+  // ── TEa criterion extraction for per-sample detail columns ──
+  const _isAbsTea = isAbsoluteTea(study);
+  const _absFloor = (study as any).cliaAbsoluteFloor ?? (study as any).clia_absolute_floor ?? null;
+  const _absUnit  = (study as any).cliaAbsoluteUnit ?? (study as any).clia_absolute_unit ?? '';
+  // Determine which criteria apply:
+  //   pure-absolute (teaIsPercentage=0, no absFloor): only absolute, no %
+  //   pure-percentage (teaIsPercentage=1, no absFloor): only %, no absolute
+  //   dual-criterion (teaIsPercentage=1, absFloor set): both % and absolute ("greater of")
+  const hasPctCriterion = !_isAbsTea;
+  const hasAbsCriterion = _isAbsTea || (_absFloor != null);
+  const teaPctDisplay = hasPctCriterion ? `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%` : '\u2014';
+  const teaAbsDisplay = hasAbsCriterion
+    ? (_isAbsTea
+        ? `\u00B1${study.cliaAllowableError} ${((study as any).teaUnit || (study as any).tea_unit || '').trim()}`
+        : `\u00B1${_absFloor} ${_absUnit}`.trim())
+    : '\u2014';
+  // Numeric thresholds for per-row evaluation
+  const teaPctThreshold = hasPctCriterion ? study.cliaAllowableError * 100 : null;   // e.g. 15.0
+  const teaAbsThreshold = hasAbsCriterion
+    ? (_isAbsTea ? study.cliaAllowableError : _absFloor as number)
+    : null;
+
+  // Styling constants for sub-criterion indicator cells
+  const SUB_PASS_COLOR  = '#437A22';
+  const SUB_PASS_BG     = '#E8F0E1';
+  const SUB_NA_COLOR    = '#7A7974';
+
   // Level-by-level table
   const instrHeaders = comparisonNames.flatMap(n => [
-    `<th class="text-right">${n}</th>`,
+    `<th class="text-right" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n}</th>`,
     `<th class="text-right">Bias</th>`,
     `<th class="text-right">% Diff</th>`,
+    `<th class="text-center">TEa %</th>`,
+    `<th class="text-center">TEa abs</th>`,
+    `<th class="text-center">% Met</th>`,
+    `<th class="text-center">Abs Met</th>`,
     `<th class="text-right">Pass?</th>`,
   ]).join("");
 
   const levelRows = levelResults.map((r, ri) => {
     const instrCells = comparisonNames.flatMap(n => {
       const v = r.instruments[n];
-      if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td>---</td>`];
+      if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td class="text-center">\u2014</td>`, `<td class="text-center">\u2014</td>`, `<td class="text-center">\u2014</td>`, `<td class="text-center">\u2014</td>`, `<td>---</td>`];
       const pfClass = v.passFail === "Pass" ? "pass" : "fail";
+
+      // Per-row sub-criterion evaluation
+      const pctMet = teaPctThreshold != null ? Math.abs(v.pctDifference) <= teaPctThreshold : null;
+      const absMet = teaAbsThreshold != null ? Math.abs(v.difference) <= teaAbsThreshold : null;
+
+      const pctMetCell = pctMet === null
+        ? `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2014</td>`
+        : pctMet
+          ? `<td class="text-center" style="color:${SUB_PASS_COLOR};background:${SUB_PASS_BG};font-weight:600">\u2713</td>`
+          : `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2717</td>`;
+      const absMetCell = absMet === null
+        ? `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2014</td>`
+        : absMet
+          ? `<td class="text-center" style="color:${SUB_PASS_COLOR};background:${SUB_PASS_BG};font-weight:600">\u2713</td>`
+          : `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2717</td>`;
+
       return [
         `<td class="text-right">${sf(v.value, 3)}</td>`,
         `<td class="text-right">${sf(v.difference, 3)}</td>`,
         `<td class="text-right">${sf(v.pctDifference, 2)}%</td>`,
+        `<td class="text-center" style="color:${SUB_NA_COLOR};font-size:7pt">${teaPctDisplay}</td>`,
+        `<td class="text-center" style="color:${SUB_NA_COLOR};font-size:7pt">${teaAbsDisplay}</td>`,
+        pctMetCell,
+        absMetCell,
         `<td class="text-right ${pfClass}">${v.passFail}</td>`,
       ];
     }).join("");
@@ -1269,9 +1320,9 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
     <hr class="divider" style="margin-top:8px">
     <div class="section-label">Sample-by-Sample Comparison Results</div>
-    <table>
+    <table style="font-size:7pt">
       <thead><tr>
-        <th>Sample</th><th class="text-right">${primaryName} (Primary)</th>${instrHeaders}
+        <th>Sample</th><th class="text-right" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${primaryName} (Primary)</th>${instrHeaders}
       </tr></thead>
       <tbody>${levelRows}</tbody>
     </table>
