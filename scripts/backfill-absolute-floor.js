@@ -100,15 +100,15 @@ const teaData = [
 function parseAbsoluteFloor(criteria) {
   // Dual-criterion pattern: "±X% or ±Y unit (greater)"
   const dualMatch = criteria.match(
-    /±[\d.]+%\s+or\s+±([\d.]+)\s+[^(]+\(greater\)/i
+    /±[\d.]+%\s+or\s+±([\d.]+)\s+([^(]+?)\s*\(greater\)/i
   );
   if (dualMatch) {
-    return parseFloat(dualMatch[1]);
+    return { value: parseFloat(dualMatch[1]), unit: dualMatch[2].trim() };
   }
   return null;
 }
 
-// Build lookup: canonical analyte name -> absolute floor
+// Build lookup: canonical analyte name -> { value, unit }
 const floorByAnalyte = new Map();
 for (const entry of teaData) {
   const floor = parseAbsoluteFloor(entry.criteria);
@@ -157,6 +157,7 @@ const nameMap = {
 
 // Also try direct match by canonical name (for studies created via the UI
 // where test_name IS the canonical name from cliaTeaData.ts)
+// Returns { value, unit } or null
 function resolveFloor(testName) {
   // 1. Try nameMap (case-insensitive)
   for (const [key, canonical] of Object.entries(nameMap)) {
@@ -189,16 +190,12 @@ console.log(`Mode: ${dryRun ? "DRY RUN" : "LIVE"}`);
 
 const db = new Database(dbPath);
 
-// Ensure column exists
-try {
-  db.exec("ALTER TABLE studies ADD COLUMN clia_absolute_floor REAL");
-  console.log("Added clia_absolute_floor column.");
-} catch {
-  // Column already exists
-}
+// Ensure columns exist
+try { db.exec("ALTER TABLE studies ADD COLUMN clia_absolute_floor REAL"); } catch {}
+try { db.exec("ALTER TABLE studies ADD COLUMN clia_absolute_unit TEXT"); } catch {}
 
 const studies = db.prepare("SELECT id, test_name, tea_is_percentage FROM studies").all();
-const update = db.prepare("UPDATE studies SET clia_absolute_floor = ? WHERE id = ?");
+const update = db.prepare("UPDATE studies SET clia_absolute_floor = ?, clia_absolute_unit = ? WHERE id = ?");
 
 let updated = 0;
 let skipped = 0;
@@ -214,9 +211,9 @@ for (const study of studies) {
   const floor = resolveFloor(study.test_name);
   if (floor !== null) {
     if (dryRun) {
-      console.log(`  [dry-run] study #${study.id} "${study.test_name}" -> clia_absolute_floor = ${floor}`);
+      console.log(`  [dry-run] study #${study.id} "${study.test_name}" -> clia_absolute_floor = ${floor.value} ${floor.unit}`);
     } else {
-      update.run(floor, study.id);
+      update.run(floor.value, floor.unit, study.id);
     }
     updated++;
   } else {
@@ -228,10 +225,10 @@ console.log(`\nDone. Updated: ${updated}, Skipped (no floor or absolute-typed): 
 
 if (!dryRun) {
   // Verify the 4 key SCA studies
-  const verify = db.prepare("SELECT id, test_name, clia_absolute_floor FROM studies WHERE id IN (330, 331, 339, 351)").all();
+  const verify = db.prepare("SELECT id, test_name, clia_absolute_floor, clia_absolute_unit FROM studies WHERE id IN (330, 331, 339, 351)").all();
   console.log("\nVerification (key SCA studies):");
   for (const row of verify) {
-    console.log(`  #${row.id} ${row.test_name}: clia_absolute_floor = ${row.clia_absolute_floor}`);
+    console.log(`  #${row.id} ${row.test_name}: clia_absolute_floor = ${row.clia_absolute_floor} ${row.clia_absolute_unit}`);
   }
 }
 

@@ -826,8 +826,9 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN result TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN tea_is_percentage INTEGER DEFAULT 1"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN tea_unit TEXT DEFAULT '%'"); } catch {}
 
-// Add clia_absolute_floor column for §493 dual-criterion TEa rule
+// Add clia_absolute_floor and clia_absolute_unit columns for §493 dual-criterion TEa rule
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_floor REAL"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_unit TEXT"); } catch {}
 
 // Plan/tier definitions: seat limits, pricing, bed ranges
 export const PLAN_SEATS: Record<string, number> = {

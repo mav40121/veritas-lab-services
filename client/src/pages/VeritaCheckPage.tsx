@@ -29,74 +29,74 @@ const API_BASE = "https://www.veritaslabservices.com";
 // CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart K)
 const CLIA_PRESETS = [
   // ── Routine Chemistry §493.931 ──────────────────────────────────────────
-  { label: "ALT/SGPT (±15% or ±6 U/L)",              value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "ALT/SGPT (±15% or ±6 U/L)",              value: 0.15,  absoluteFloor: 6, absoluteUnit: "U/L", cfr: "42 CFR §493.931" },
   { label: "Albumin (±8%)",                            value: 0.08,  cfr: "42 CFR §493.931" },
   { label: "Alkaline Phosphatase (±20%)",              value: 0.20,  cfr: "42 CFR §493.931" },
   { label: "Amylase (±20%)",                           value: 0.20,  cfr: "42 CFR §493.931" },
-  { label: "AST (±15% or ±6 U/L)",                    value: 0.15,  cfr: "42 CFR §493.931" },
-  { label: "Bilirubin, Total (±20% or ±0.4 mg/dL)",   value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "AST (±15% or ±6 U/L)",                    value: 0.15,  absoluteFloor: 6, absoluteUnit: "U/L", cfr: "42 CFR §493.931" },
+  { label: "Bilirubin, Total (±20% or ±0.4 mg/dL)",   value: 0.20,  absoluteFloor: 0.4, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "BNP (±30%)",                               value: 0.30,  cfr: "42 CFR §493.931" },
   { label: "proBNP (±30%)",                            value: 0.30,  cfr: "42 CFR §493.931" },
-  { label: "Blood Gas pCO2 (±8%)",                     value: 0.08,  cfr: "42 CFR §493.931" },
-  { label: "Blood Gas pO2 (±15%)",                     value: 0.15,  cfr: "42 CFR §493.931" },
+  { label: "Blood Gas pCO2 (±8% or ±5 mm Hg)",         value: 0.08,  absoluteFloor: 5, absoluteUnit: "mm Hg", cfr: "42 CFR §493.931" },
+  { label: "Blood Gas pO2 (±15% or ±15 mmHg)",         value: 0.15,  absoluteFloor: 15, absoluteUnit: "mmHg", cfr: "42 CFR §493.931" },
   { label: "Blood Gas pH (±0.04)",                     value: 0.04,  isPercentage: false, unit: "pH units", cfr: "42 CFR §493.931" },
   { label: "Calcium, Total (±1.0 mg/dL)",              value: 1.0,   isPercentage: false, unit: "mg/dL",    cfr: "42 CFR §493.931" },
   { label: "Carbon Dioxide (±20%)",                    value: 0.20,  cfr: "42 CFR §493.931" },
   { label: "Chloride (±5%)",                           value: 0.05,  cfr: "42 CFR §493.931" },
   { label: "Cholesterol, Total (±10%)",                value: 0.10,  cfr: "42 CFR §493.931" },
-  { label: "Cholesterol, HDL (±20% or ±6 mg/dL)",     value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "Cholesterol, HDL (±20% or ±6 mg/dL)",     value: 0.20,  absoluteFloor: 6, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "Cholesterol, LDL Direct (±20%)",           value: 0.20,  cfr: "42 CFR §493.931" },
   { label: "CK (±20%)",                                value: 0.20,  cfr: "42 CFR §493.931" },
-  { label: "CK-MB (±25% or ±3 ng/mL)",                value: 0.25,  cfr: "42 CFR §493.931" },
-  { label: "Creatinine (±10% or ±0.2 mg/dL)",         value: 0.10,  cfr: "42 CFR §493.931" },
+  { label: "CK-MB (±25% or ±3 ng/mL)",                value: 0.25,  absoluteFloor: 3, absoluteUnit: "ng/mL", cfr: "42 CFR §493.931" },
+  { label: "Creatinine (±10% or ±0.2 mg/dL)",         value: 0.10,  absoluteFloor: 0.2, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "Ferritin (±20%)",                          value: 0.20,  cfr: "42 CFR §493.931" },
-  { label: "GGT (±15% or ±5 U/L)",                    value: 0.15,  cfr: "42 CFR §493.931" },
-  { label: "Glucose (±8% or ±6 mg/dL)",               value: 0.08,  cfr: "42 CFR §493.931" },
+  { label: "GGT (±15% or ±5 U/L)",                    value: 0.15,  absoluteFloor: 5, absoluteUnit: "U/L", cfr: "42 CFR §493.931" },
+  { label: "Glucose (±8% or ±6 mg/dL)",               value: 0.08,  absoluteFloor: 6, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "Hemoglobin A1c (±8%)",                     value: 0.08,  cfr: "42 CFR §493.931" },
   { label: "Iron, Total (±15%)",                       value: 0.15,  cfr: "42 CFR §493.931" },
   { label: "LDH (±15%)",                               value: 0.15,  cfr: "42 CFR §493.931" },
   { label: "Magnesium (±15%)",                         value: 0.15,  cfr: "42 CFR §493.931" },
-  { label: "Phosphorus (±10% or ±0.3 mg/dL)",         value: 0.10,  cfr: "42 CFR §493.931" },
+  { label: "Phosphorus (±10% or ±0.3 mg/dL)",         value: 0.10,  absoluteFloor: 0.3, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "Potassium (±0.3 mmol/L)",                  value: 0.3,   isPercentage: false, unit: "mmol/L",   cfr: "42 CFR §493.931" },
-  { label: "PSA, Total (±20% or ±0.2 ng/mL)",         value: 0.20,  cfr: "42 CFR §493.931" },
+  { label: "PSA, Total (±20% or ±0.2 ng/mL)",         value: 0.20,  absoluteFloor: 0.2, absoluteUnit: "ng/mL", cfr: "42 CFR §493.931" },
   { label: "Sodium (±4 mmol/L)",                       value: 4,     isPercentage: false, unit: "mmol/L",   cfr: "42 CFR §493.931" },
   { label: "TIBC Direct (±20%)",                       value: 0.20,  cfr: "42 CFR §493.931" },
   { label: "Total Protein (±8%)",                      value: 0.08,  cfr: "42 CFR §493.931" },
   { label: "Triglycerides (±15%)",                     value: 0.15,  cfr: "42 CFR §493.931" },
-  { label: "Troponin I (±30% or ±0.9 ng/mL)",         value: 0.30,  cfr: "42 CFR §493.931" },
-  { label: "Troponin T (±30% or ±0.2 ng/mL)",         value: 0.30,  cfr: "42 CFR §493.931" },
-  { label: "Urea Nitrogen/BUN (±9% or ±2 mg/dL)",     value: 0.09,  cfr: "42 CFR §493.931" },
+  { label: "Troponin I (±30% or ±0.9 ng/mL)",         value: 0.30,  absoluteFloor: 0.9, absoluteUnit: "ng/mL", cfr: "42 CFR §493.931" },
+  { label: "Troponin T (±30% or ±0.2 ng/mL)",         value: 0.30,  absoluteFloor: 0.2, absoluteUnit: "ng/mL", cfr: "42 CFR §493.931" },
+  { label: "Urea Nitrogen/BUN (±9% or ±2 mg/dL)",     value: 0.09,  absoluteFloor: 2, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "Uric Acid (±10%)",                         value: 0.10,  cfr: "42 CFR §493.931" },
   // ── Endocrinology §493.933 ───────────────────────────────────────────────
   { label: "CA-125 (±20%)",                            value: 0.20,  cfr: "42 CFR §493.933" },
-  { label: "CEA (±15% or ±1 ng/dL)",                  value: 0.15,  cfr: "42 CFR §493.933" },
+  { label: "CEA (±15% or ±1 ng/dL)",                  value: 0.15,  absoluteFloor: 1, absoluteUnit: "ng/dL", cfr: "42 CFR §493.933" },
   { label: "Cortisol (±20%)",                          value: 0.20,  cfr: "42 CFR §493.933" },
   { label: "Estradiol (±30%)",                         value: 0.30,  cfr: "42 CFR §493.933" },
-  { label: "Folate, Serum (±30% or ±1 ng/mL)",        value: 0.30,  cfr: "42 CFR §493.933" },
-  { label: "FSH (±18% or ±2 IU/L)",                   value: 0.18,  cfr: "42 CFR §493.933" },
-  { label: "Free T4 (±15% or ±0.3 ng/dL)",            value: 0.15,  cfr: "42 CFR §493.933" },
-  { label: "hCG (±18% or ±3 mIU/mL)",                 value: 0.18,  cfr: "42 CFR §493.933" },
+  { label: "Folate, Serum (±30% or ±1 ng/mL)",        value: 0.30,  absoluteFloor: 1, absoluteUnit: "ng/mL", cfr: "42 CFR §493.933" },
+  { label: "FSH (±18% or ±2 IU/L)",                   value: 0.18,  absoluteFloor: 2, absoluteUnit: "IU/L", cfr: "42 CFR §493.933" },
+  { label: "Free T4 (±15% or ±0.3 ng/dL)",            value: 0.15,  absoluteFloor: 0.3, absoluteUnit: "ng/dL", cfr: "42 CFR §493.933" },
+  { label: "hCG (±18% or ±3 mIU/mL)",                 value: 0.18,  absoluteFloor: 3, absoluteUnit: "mIU/mL", cfr: "42 CFR §493.933" },
   { label: "LH (±20%)",                                value: 0.20,  cfr: "42 CFR §493.933" },
   { label: "Parathyroid Hormone (±30%)",               value: 0.30,  cfr: "42 CFR §493.933" },
   { label: "Progesterone (±25%)",                      value: 0.25,  cfr: "42 CFR §493.933" },
   { label: "Prolactin (±20%)",                         value: 0.20,  cfr: "42 CFR §493.933" },
-  { label: "Testosterone (±30% or ±20 ng/dL)",        value: 0.30,  cfr: "42 CFR §493.933" },
+  { label: "Testosterone (±30% or ±20 ng/dL)",        value: 0.30,  absoluteFloor: 20, absoluteUnit: "ng/dL", cfr: "42 CFR §493.933" },
   { label: "T3 Uptake (±18%)",                         value: 0.18,  cfr: "42 CFR §493.933" },
   { label: "T3, Total (±30%)",                         value: 0.30,  cfr: "42 CFR §493.933" },
-  { label: "TSH (±20% or ±0.2 mIU/L)",                value: 0.20,  cfr: "42 CFR §493.933" },
-  { label: "T4, Thyroxine (±20% or ±1.0 mcg/dL)",    value: 0.20,  cfr: "42 CFR §493.933" },
-  { label: "Vitamin B12 (±25% or ±30 pg/mL)",         value: 0.25,  cfr: "42 CFR §493.933" },
+  { label: "TSH (±20% or ±0.2 mIU/L)",                value: 0.20,  absoluteFloor: 0.2, absoluteUnit: "mIU/L", cfr: "42 CFR §493.933" },
+  { label: "T4, Thyroxine (±20% or ±1.0 mcg/dL)",    value: 0.20,  absoluteFloor: 1.0, absoluteUnit: "mcg/dL", cfr: "42 CFR §493.933" },
+  { label: "Vitamin B12 (±25% or ±30 pg/mL)",         value: 0.25,  absoluteFloor: 30, absoluteUnit: "pg/mL", cfr: "42 CFR §493.933" },
   // ── Toxicology §493.935 ──────────────────────────────────────────────────
-  { label: "Acetaminophen (±15% or ±3 mcg/mL)",       value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Acetaminophen (±15% or ±3 mcg/mL)",       value: 0.15,  absoluteFloor: 3, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
   { label: "Alcohol, Blood (±20%)",                    value: 0.20,  cfr: "42 CFR §493.935" },
-  { label: "Blood Lead (±10% or ±2 mcg/dL)",          value: 0.10,  cfr: "42 CFR §493.935" },
-  { label: "Carbamazepine (±20% or ±1.0 mcg/mL)",     value: 0.20,  cfr: "42 CFR §493.935" },
-  { label: "Digoxin (±15% or ±0.2 ng/mL)",            value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Blood Lead (±10% or ±2 mcg/dL)",          value: 0.10,  absoluteFloor: 2, absoluteUnit: "mcg/dL", cfr: "42 CFR §493.935" },
+  { label: "Carbamazepine (±20% or ±1.0 mcg/mL)",     value: 0.20,  absoluteFloor: 1.0, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
+  { label: "Digoxin (±15% or ±0.2 ng/mL)",            value: 0.15,  absoluteFloor: 0.2, absoluteUnit: "ng/mL", cfr: "42 CFR §493.935" },
   { label: "Gentamicin (±25%)",                        value: 0.25,  cfr: "42 CFR §493.935" },
-  { label: "Lithium (±15% or ±0.3 mmol/L)",           value: 0.15,  cfr: "42 CFR §493.935" },
-  { label: "Phenobarbital (±15% or ±2 mcg/mL)",       value: 0.15,  cfr: "42 CFR §493.935" },
-  { label: "Phenytoin (±15% or ±2 mcg/mL)",           value: 0.15,  cfr: "42 CFR §493.935" },
-  { label: "Salicylate (±15% or ±2 mcg/mL)",          value: 0.15,  cfr: "42 CFR §493.935" },
+  { label: "Lithium (±15% or ±0.3 mmol/L)",           value: 0.15,  absoluteFloor: 0.3, absoluteUnit: "mmol/L", cfr: "42 CFR §493.935" },
+  { label: "Phenobarbital (±15% or ±2 mcg/mL)",       value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
+  { label: "Phenytoin (±15% or ±2 mcg/mL)",           value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
+  { label: "Salicylate (±15% or ±2 mcg/mL)",          value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
   { label: "Theophylline (±20%)",                      value: 0.20,  cfr: "42 CFR §493.935" },
   // ── Hematology §493.941 ──────────────────────────────────────────────────
   { label: "Erythrocyte Count / RBC (±4%)",            value: 0.04,  cfr: "42 CFR §493.941" },
@@ -789,6 +789,8 @@ export default function VeritaCheckPage() {
   const cliaValue = CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
   const teaIsPercentage = (CLIA_PRESETS[cliaPreset] as any).isPercentage !== false;
   const teaUnit = (CLIA_PRESETS[cliaPreset] as any).unit || '%';
+  const cliaAbsoluteFloor: number | null = (CLIA_PRESETS[cliaPreset] as any).absoluteFloor ?? null;
+  const cliaAbsoluteUnit: string | null = (CLIA_PRESETS[cliaPreset] as any).absoluteUnit ?? null;
 
   const handleGridKeyDown = (e: React.KeyboardEvent, row: number, col: number) => {
     if (e.key !== "Tab") return;
@@ -916,7 +918,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "lot_to_lot", cliaAllowableError: cliaValue,
-        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit,
         dataPoints: JSON.stringify({ data: allData, sampleType: lotSampleType, currentLot: lotCurrentLotNum, newLot: lotNewLotNum, analyte: lotAnalyte, units: lotUnits }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
@@ -947,7 +949,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "-",
         date, studyType: "pt_coag", cliaAllowableError: ptModule2TEa,
-        teaIsPercentage: 1, teaUnit: '%',
+        teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
         dataPoints: JSON.stringify({
           module1: { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
           module2: { data: m2Valid, tea: ptModule2TEa, inst1: ptInstrumentName, inst2: ptInstrument2Name },
@@ -980,7 +982,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "-",
         date, studyType: "qc_range", cliaAllowableError: 0.10,
-        teaIsPercentage: 1, teaUnit: '%',
+        teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
         dataPoints: JSON.stringify({ dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels, dateRange: { start: qcDateStart, end: qcDateEnd }, oldLotData: qcOldLotData }),
         instruments: JSON.stringify(qcAnalyzers),
         status: results.overallShiftCount === 0 ? "pass" : "fail",
@@ -1005,7 +1007,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: maInstrument, analyst: analyst.trim() || "-",
         date, studyType: "multi_analyte_coag", cliaAllowableError: maTeaPT,
-        teaIsPercentage: 1, teaUnit: '%',
+        teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
         dataPoints: JSON.stringify({
           specimens: rawSpecimens, isi: maISI, normalMeanPT: maNormalMeanPT,
           teas: { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib },
@@ -1031,7 +1033,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "ref_interval", cliaAllowableError: 0.1,
-        teaIsPercentage: 1, teaUnit: '%',
+        teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
         dataPoints: JSON.stringify({ specimens: refData.map(d => ({ specimenId: d.specimenId, value: d.value })), refLow: lo, refHigh: hi, analyte: refAnalyte, units: refUnits }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
@@ -1059,7 +1061,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "precision", cliaAllowableError: cliaValue,
-        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit,
         dataPoints: JSON.stringify(precDataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
@@ -1083,7 +1085,7 @@ export default function VeritaCheckPage() {
         const study: InsertStudy = {
           testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
           date, studyType: "method_comparison", cliaAllowableError: cliaValue,
-          teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+          teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit,
           dataPoints: JSON.stringify({ assayType: "qualitative", categories: qualCategories, passThreshold: qualPassThreshold, points: dataPoints }),
           instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
           createdAt: new Date().toISOString(),
@@ -1103,7 +1105,7 @@ export default function VeritaCheckPage() {
         const study: InsertStudy = {
           testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
           date, studyType: "method_comparison", cliaAllowableError: cliaValue,
-          teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+          teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit,
           dataPoints: JSON.stringify({ assayType: "semi_quantitative", gradeScale: activeGradeScale, passThreshold: semiQuantPassThreshold, points: dataPoints }),
           instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
           createdAt: new Date().toISOString(),
@@ -1123,7 +1125,7 @@ export default function VeritaCheckPage() {
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
         date, studyType: "method_comparison", cliaAllowableError: cliaValue,
-        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+        teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit,
         dataPoints: JSON.stringify(dataPoints),
         instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1136,7 +1138,7 @@ export default function VeritaCheckPage() {
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
       date, studyType, cliaAllowableError: cliaValue,
-      teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit,
+      teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit,
       dataPoints: JSON.stringify(dataPoints),
       instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
       createdAt: new Date().toISOString(),
@@ -1489,7 +1491,7 @@ return (
                   )}
                   {CLIA_PRESETS[cliaPreset].cfr && <p className="text-xs text-muted-foreground">Reference: {CLIA_PRESETS[cliaPreset].cfr}</p>}
                   <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
-                    <p className="text-xs text-primary font-medium">Active TEa: ±{(cliaValue * 100).toFixed(1)}% ({cliaValue.toFixed(4)})</p>
+                    <p className="text-xs text-primary font-medium">Active TEa: {teaIsPercentage ? `\u00B1${(cliaValue * 100).toFixed(1)}%` : `\u00B1${cliaValue} ${teaUnit}`}{cliaAbsoluteFloor != null ? ` or \u00B1${cliaAbsoluteFloor} ${cliaAbsoluteUnit} (greater)` : ''}</p>
                   </div>
                 </CardContent>
               </Card>

@@ -40,6 +40,7 @@ export const studies = sqliteTable("studies", {
   teaIsPercentage: integer("tea_is_percentage").default(1),
   teaUnit: text("tea_unit").default("%"),
   cliaAbsoluteFloor: real("clia_absolute_floor"),
+  cliaAbsoluteUnit: text("clia_absolute_unit"),
   createdAt: text("created_at").notNull(),
 });
 
