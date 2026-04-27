@@ -1697,16 +1697,19 @@ export default function StudyResults() {
           instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
         }));
         const isPercentage = (study as any).teaIsPercentage !== 0;
-        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage);
+        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage, absFloor);
       } else {
         const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
         const isPercentage = (study as any).teaIsPercentage !== 0;
-        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage);
+        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
       }
     }
   } else {
     const isPercentage = (study as any).teaIsPercentage !== 0;
-    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage);
+    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage, absFloor);
   }
 
   const verifReturnId = new URLSearchParams(search).get("verificationId");
