@@ -215,11 +215,23 @@ function isAbsoluteTea(study: Study): boolean {
 
 // ─── CFR URL map ──────────────────────────────────────────────────────────────
 const CFR_URLS: Record<string, string> = {
+  // Subpart I (PT-analyte sections)
   "42 CFR §493.927": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.927",
   "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931",
   "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.933",
   "42 CFR §493.937": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
   "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
+  // Subpart K (quality-system regs -- page-1 references block)
+  "42 CFR §493.1213":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
+  "42 CFR §493.1213(b)(2)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
+  "42 CFR §493.1253(b)(2)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1255":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1255(b)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1255(b)(3)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1256":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1256",
+  "42 CFR §493.1271":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1271(a)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1271(b)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
 };
 
 // ─── Shared CSS ───────────────────────────────────────────────────────────────
@@ -522,7 +534,7 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
   cols.push({ label: "CLSI Guideline", content: cell(refs.clsi) });
   cols.push({
     label: "CLIA / CFR",
-    content: `<div style="font-size:6.8pt;color:#444;line-height:1.6;">${refs.cfr.join("<br>")}</div>`,
+    content: `<div style="font-size:6.8pt;color:#444;line-height:1.6;">${refs.cfr.map(c => `<a href="${CFR_URLS[c] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K"}" class="teal-link">${c}</a>`).join("<br>")}</div>`,
   });
 
   const gridCols = `repeat(${cols.length}, 1fr)`;
