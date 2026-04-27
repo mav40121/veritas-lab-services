@@ -371,6 +371,11 @@ return (
           ))}
         </div>
 
+        {/* Seat note */}
+        <p className="text-xs text-center text-muted-foreground -mt-4">
+          Seat counts include the account owner.
+        </p>
+
         {/* Money-Back Guarantee */}
         <div className="border border-primary/20 bg-primary/5 rounded-lg p-6 text-center">
           <ShieldCheck size={28} className="text-primary mx-auto mb-3" />

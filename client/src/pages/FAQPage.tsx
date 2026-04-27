@@ -75,11 +75,11 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "How many seats are included in each plan?",
-        a: "Seat counts scale with plan tier. Hospital and Enterprise plans include the most seats; Clinic and Community include enough for typical small-lab teams. See the pricing page or contact info@veritaslabservices.com for specifics on your situation.",
+        a: "Seat counts scale with plan tier. Clinic includes 2 seats, Community 5, Hospital 15, and Enterprise 25. Seat counts include the account owner, so a 5-seat Community plan is the owner plus 4 invited teammates. See the pricing page or contact info@veritaslabservices.com for specifics on your situation.",
       },
       {
         q: "Can I add more seats later?",
-        a: "Yes. You can add seats from your Account, Seats page at any time. Seat additions are prorated against your current billing period.",
+        a: "Each plan tier includes a fixed number of seats. To get more seats, upgrade to the next tier (Clinic to Community, Community to Hospital, or Hospital to Enterprise) from your Account Settings. Tier upgrades are prorated against your current billing period.",
       },
     ],
   },
@@ -179,7 +179,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Do you offer a money-back guarantee?",
-        a: "Yes. Subscription plans include a 30-day money-back guarantee on your first charge. We'll refund the first subscription charge in full within 30 days of that charge. One refund per customer; applies to the initial charge only, not renewals, seat add-ons, or per-study purchases.",
+        a: "Yes. Subscription plans include a 30-day money-back guarantee on your first charge. We'll refund the first subscription charge in full within 30 days of that charge. One refund per customer; applies to the initial charge only, not renewals or per-study purchases.",
       },
       {
         q: "What payment methods do you accept?",
