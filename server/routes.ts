@@ -5715,7 +5715,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
     ).get(req.userId) as any;
 
-    if ((currentSeats?.cnt || 0) >= maxSeats) {
+    // Owner consumes one of the seats. Block when adding a new invitee
+    // would push total occupants (existing invitees + owner + 1 new)
+    // beyond the plan limit. Example: Enterprise (25) allows up to 24
+    // invitees because 24 invitees + 1 owner = 25 total.
+    const currentInvitees = currentSeats?.cnt || 0;
+    const seatsAfterInvite = currentInvitees + 1 /* owner */ + 1 /* new invitee */;
+    if (seatsAfterInvite > maxSeats) {
       const nextTier = userPlan === "clinic" ? { label: "Community", price: 999, seats: 5, plan: "community" }
         : userPlan === "community" ? { label: "Hospital", price: 1999, seats: 15, plan: "hospital" }
         : userPlan === "hospital" ? { label: "Enterprise", price: 2999, seats: 25, plan: "enterprise" }
@@ -5723,7 +5729,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(402).json({
         error: "seat_limit_reached",
         limit: maxSeats,
-        current: currentSeats?.cnt || 0,
+        current: currentInvitees + 1,  // includes owner
         plan: userPlan,
         nextTier,
       });
