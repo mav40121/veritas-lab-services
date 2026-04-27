@@ -560,6 +560,7 @@ function narrativeHTML(
 ): string {
   const isAbsolute = study ? isAbsoluteTea(study) : false;
   const teaStr = study ? teaDisplayStr(study) : `\u00B1${(cliaError * 100).toFixed(1)}%`;
+  const cfrSection = (study as any)?.cfr || "42 CFR \u00A7493.931";
   const cliaPct = (cliaError * 100).toFixed(1);
   const adlmPct = (cliaError * 50).toFixed(1); // ADLM = half of CLIA TEa
   let narrative = "";
@@ -590,12 +591,12 @@ function narrativeHTML(
         narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
       narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range. `;
-      narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each calibration level was individually evaluated against the CLIA total allowable error of ${teaStr} per ${cfrSection}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       const failCount = results.totalCount - results.passCount;
-      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the CLIA total allowable error of ±${cliaPct}% (${cfrSection}). `;
       narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. `;
-      narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each calibration level was individually evaluated against the CLIA total allowable error of ${teaStr} per ${cfrSection}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -631,13 +632,13 @@ function narrativeHTML(
     if (results.overallPass) {
       narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
       narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
-      narrative += `The mean bias of ${biasDescr} is ${biasInterp}. `;
+      narrative += `The mean bias is ${biasDescr} (supporting statistic; not the verdict criterion). `;
       narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting. `;
-      narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each paired specimen was individually evaluated against the CLIA total allowable error of ${teaStr} per ${cfrSection}. All paired specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet acceptance criteria. `;
       narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${biasDescr} (CLIA limit: ${teaStr}) indicate unacceptable agreement between methods. `;
-      narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each paired specimen was individually evaluated against the CLIA total allowable error of ${teaStr} per ${cfrSection}. One or more paired specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -660,10 +661,10 @@ function narrativeHTML(
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
-      narrative += `<b>The results for ${analyteName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each precision level was individually evaluated against the CLIA total allowable error of ${teaStr} per ${cfrSection}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The precision study for ${analyteName} did not meet acceptance criteria. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. `;
-      narrative += `<b>The results for ${analyteName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each precision level was individually evaluated against the CLIA total allowable error of ${teaStr} per ${cfrSection}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -1566,9 +1567,11 @@ function buildLotToLotHTML(study: Study, results: any): string {
   const l2lMaxAbsPctDiff = firstCohort ? sf(firstCohort.maxAbsPctDiff, 2) + "%" : "---";
   const l2lPassCount = `${results.passCount}/${results.totalCount}`;
 
+  const l2lTeaStr = teaDisplayStr(study);
+  const l2lCfr = (study as any).cfr || "42 CFR \u00A7493.931";
   const cliaStatement = results.overallPass
-    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each specimen was individually evaluated against the CLIA total allowable error of ${l2lTeaStr} per ${l2lCfr}. All specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each specimen was individually evaluated against the CLIA total allowable error of ${l2lTeaStr} per ${l2lCfr}. One or more specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
@@ -1755,9 +1758,11 @@ function buildPTCoagHTML(study: Study, results: any): string {
   // Narrative
   const overallVerdict = results.overallPass ? "Meets CLIA criteria" : "Does not meet CLIA criteria";
   const narrativeText = results.summary;
+  const ptCoagTeaStr = teaDisplayStr(study);
+  const ptCoagCfr = (study as any).cfr || "42 CFR \u00A7493.941";
   const ptCoagCliaStatement = results.overallPass
-    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each module was individually evaluated against the CLIA total allowable error of ${ptCoagTeaStr} per ${ptCoagCfr}. All modules satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each module was individually evaluated against the CLIA total allowable error of ${ptCoagTeaStr} per ${ptCoagCfr}. One or more modules did not satisfy this criterion; see the module results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText} ${ptCoagCliaStatement}</p>
@@ -1870,9 +1875,10 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <td style="text-align:right;${lr.flagShift ? 'color:#dc2626;font-weight:600;' : ''}">${lr.pctDiffFromOld != null ? lr.pctDiffFromOld.toFixed(1) + '%' : '-'}${lr.flagShift ? ' ⚠' : ''}</td>
     </tr>`).join("");
 
+  const qcCfr = (study as any).cfr || "42 CFR \u00A7493.931";
   const qcCliaStatement = r.overallPass
-    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each analyte-level combination was individually evaluated per ${qcCfr}. All combinations satisfied the acceptance criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each analyte-level combination was individually evaluated per ${qcCfr}. One or more combinations did not satisfy the acceptance criterion; see the results table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `New QC ranges have been established for ${analytes.join(", ")}. ` +
     `Runs were performed across ${r.dateRange?.start || ''} to ${r.dateRange?.end || ''} on ${study.instrument}. ` +
     (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`) +
@@ -1937,9 +1943,10 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
 
   const sampleLabel = rawDP.sampleType === "normal" ? "normal" : "random";
   const validAnalytes = (r.analyteResults || []).filter((ar: any) => ar.n > 0);
+  const maCfr = (study as any).cfr || "42 CFR \u00A7493.941";
   const maCoagCliaStatement = r.overallPass
-    ? `<b>The results for ${study.testName} meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The results for ${study.testName} do not meet the CLIA minimum total allowable error criteria per 42 CFR \u00A7493.931.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each analyte was individually evaluated against its CLIA total allowable error per ${maCfr}. All analytes satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each analyte was individually evaluated against its CLIA total allowable error per ${maCfr}. One or more analytes did not satisfy this criterion; see the per-analyte results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `${(r.specimens || []).length} ${sampleLabel} specimens were compared between old lot and new lot on ${study.instrument}. ` +
     validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${(ar.tea * 100).toFixed(0)}% TEa).`).join(" ") +
     ` ${maCoagCliaStatement}`;
