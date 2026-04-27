@@ -532,34 +532,17 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
   }
   // CLSI and CFR always shown
   cols.push({ label: "CLSI Guideline", content: cell(refs.clsi) });
-  // Static two-column sub-grid for CLIA / CFR -- all entries shown on every report
+  // Static 2x2 sub-grid for CLIA / CFR -- Subpart I acceptable-performance sections only
   const cfrLink = (c: string) => `<a href="${CFR_URLS[c]}" class="teal-link">${c}</a>`;
-  const subpartI = [
-    "42 CFR \u00A7493.927",
-    "42 CFR \u00A7493.931",
-    "42 CFR \u00A7493.937",
-    "42 CFR \u00A7493.941",
-  ];
-  const subpartK = [
-    "42 CFR \u00A7493.1213",
-    "42 CFR \u00A7493.1253(b)(2)",
-    "42 CFR \u00A7493.1255",
-    "42 CFR \u00A7493.1255(b)",
-    "42 CFR \u00A7493.1255(b)(3)",
-    "42 CFR \u00A7493.1256",
-    "42 CFR \u00A7493.1271(a)",
-    "42 CFR \u00A7493.1271(b)",
-  ];
   cols.push({
     label: "CLIA / CFR",
-    content: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;font-size:6.8pt;color:#444;line-height:1.6;">
-      <div>
-        <div style="font-size:5.5pt;font-weight:400;color:#999;margin-bottom:2px;">PT criteria</div>
-        ${subpartI.map(cfrLink).join("<br>")}
-      </div>
-      <div>
-        <div style="font-size:5.5pt;font-weight:400;color:#999;margin-bottom:2px;">Quality system</div>
-        ${subpartK.map(cfrLink).join("<br>")}
+    content: `<div>
+      <div style="font-size:5.5pt;font-weight:400;color:#999;margin-bottom:2px;">Acceptable performance</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 10px;font-size:6.8pt;color:#444;line-height:1.6;">
+        <div>${cfrLink("42 CFR \u00A7493.927")}</div>
+        <div>${cfrLink("42 CFR \u00A7493.937")}</div>
+        <div>${cfrLink("42 CFR \u00A7493.931")}</div>
+        <div>${cfrLink("42 CFR \u00A7493.941")}</div>
       </div>
     </div>`,
   });
