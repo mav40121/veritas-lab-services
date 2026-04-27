@@ -423,10 +423,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { plan, status } = req.query as { plan?: string; status?: string };
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
+    // Owner counts as one of the seats. For any user who owns a multi-seat
+    // plan (seat_count > 1) we add 1 to active_seats so the report reads
+    // "4 of 25 used" instead of "3 of 25 used" for an owner with 3 invitees.
     let sql = `
       SELECT
         u.*,
-        COALESCE(s.active_seats, 0) as active_seats,
+        COALESCE(s.active_seats, 0) + (CASE WHEN u.seat_count > 1 THEN 1 ELSE 0 END) as active_seats,
         COALESCE(s.pending_seats, 0) as pending_seats,
         seat_link.owner_user_id as seat_owner_id,
         owner.name as seat_owner_name,
