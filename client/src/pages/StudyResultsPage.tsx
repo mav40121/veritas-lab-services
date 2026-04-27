@@ -207,9 +207,10 @@ function generateNarrative(results: StudyResults, study: Study): string {
       : slopeVal > 1
         ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
         : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
+    const teaLabel = formatTeaDisplay(study);
     const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
-      ? `within the CLIA total allowable error of \u00B1${cliaPct}%`
-      : `exceeds the CLIA total allowable error of \u00B1${cliaPct}% and requires investigation`;
+      ? `within the CLIA total allowable error of ${teaLabel}`
+      : `exceeds the CLIA total allowable error of ${teaLabel} and requires investigation`;
     if (mc.overallPass) {
       narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
     } else {
@@ -234,6 +235,11 @@ function generateNarrative(results: StudyResults, study: Study): string {
     } else {
       narrative = `The precision study for ${study.testName} did not meet acceptance criteria. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. Do not rely on this instrument for patient reporting until the cause of imprecision has been identified, corrective action has been taken, and the study is repeated with passing results. Review reagent lot, instrument maintenance, and QC trends for contributing factors.`;
     }
+  }
+  // Append dual-criterion methodology note when applicable
+  const absFloor = (study as any).cliaAbsoluteFloor;
+  if (absFloor != null && narrative) {
+    narrative += " TEa pass/fail uses the 42 CFR S493 dual-criterion rule: pass when the absolute difference is within the greater of the percent or absolute term.";
   }
   return narrative;
 }
@@ -435,11 +441,22 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
   );
 }
 
-function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
+function formatTeaDisplay(study: Study): string {
   const isAbsolute = (study as any).teaIsPercentage === 0;
-  const teaDisplay = isAbsolute
-    ? `\u00B1${study.cliaAllowableError} ${(study as any).teaUnit || ''}`
-    : `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
+  const absFloor = (study as any).cliaAbsoluteFloor;
+  const absUnit = (study as any).cliaAbsoluteUnit || '';
+  if (isAbsolute) {
+    return `\u00B1${study.cliaAllowableError} ${(study as any).teaUnit || ''}`;
+  }
+  const pctStr = `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
+  if (absFloor != null) {
+    return `${pctStr} or \u00B1${absFloor} ${absUnit} (greater)`;
+  }
+  return pctStr;
+}
+
+function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
+  const teaDisplay = formatTeaDisplay(study);
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -491,7 +508,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
         {[
           { label: "Data Levels", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "CLIA TEa", value: `±${cliaPercent}%` },
+          { label: "CLIA TEa", value: formatTeaDisplay(study) },
           { label: "Max % Recovery", value: `${results.maxPctRecovery.toFixed(1)}%` },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -910,7 +927,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
         {[
           { label: "Patient Samples", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "CLIA TEa", value: `\u00B1${cliaPercent}%` },
+          { label: "CLIA TEa", value: formatTeaDisplay(study) },
           { label: "Instruments", value: allInstrumentNames.length },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -1697,16 +1714,19 @@ export default function StudyResults() {
           instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
         }));
         const isPercentage = (study as any).teaIsPercentage !== 0;
-        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage);
+        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage, absFloor);
       } else {
         const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
         const isPercentage = (study as any).teaIsPercentage !== 0;
-        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage);
+        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
       }
     }
   } else {
     const isPercentage = (study as any).teaIsPercentage !== 0;
-    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage);
+    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage, absFloor);
   }
 
   const verifReturnId = new URLSearchParams(search).get("verificationId");

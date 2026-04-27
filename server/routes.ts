@@ -33,7 +33,7 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // ── Server-side pass/fail recomputation ─────────────────────────────────────
 // Mirrors the client calculation logic so the stored status is always correct.
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
-function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true): "pass" | "fail" {
+function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null): "pass" | "fail" {
   try {
     const rawData = safeJsonParse(dataPointsJson, null);
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
@@ -115,6 +115,8 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         mappedPoints = dataPoints;
       }
       const valid = mappedPoints.filter(dp => dp.expectedValue !== null && comparisonNames.some(n => dp.instrumentValues[n] !== null));
+      // Floating-point tolerance to absorb binary float noise
+      const FP_EPS = 1e-9;
       let passCount = 0, totalCount = 0;
       const biasVals: number[] = [];
       for (const dp of valid) {
@@ -123,29 +125,48 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
           const v = dp.instrumentValues[n];
           if (v !== null && v !== undefined) {
             totalCount++;
+            const diff = v - ref;
+            // Dual-criterion S493 rule: pass when |diff| <= max(percent_allowance, absolute_floor)
+            const pctAllowance = teaIsPercentage ? Math.abs(ref) * cliaAllowableError : 0;
+            const absAllowance = teaIsPercentage
+              ? (cliaAbsoluteFloor ?? 0)
+              : cliaAllowableError;
+            const allowance = Math.max(pctAllowance, absAllowance);
             if (teaIsPercentage) {
-              // Percentage TEa: cliaAllowableError stored as decimal fraction (e.g., 0.30 for 30%)
               const pctDiff = ref !== 0 ? (v - ref) / ref : 0;
               biasVals.push(pctDiff);
-              if (Math.abs(pctDiff) <= cliaAllowableError) passCount++;
             } else {
-              // Absolute TEa: cliaAllowableError stored as actual value (e.g., 4 for 4 mmol/L)
-              const absDiff = v - ref;
-              biasVals.push(absDiff);
-              if (Math.abs(absDiff) <= cliaAllowableError) passCount++;
+              biasVals.push(diff);
             }
+            if (Math.abs(diff) <= allowance + FP_EPS) passCount++;
           }
         }
       }
 
       // Validation guard: verify pass/fail matches computed mean bias
+      // Use the dual-criterion allowance at the mean reference level
       let computedResult: "pass" | "fail" = (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
       if (biasVals.length > 0) {
         const meanAbsBias = biasVals.reduce((a, b) => a + Math.abs(b), 0) / biasVals.length;
-        if (meanAbsBias > cliaAllowableError && computedResult === "pass") {
+        // For the mean-bias guard, compute allowance in the same units as biasVals
+        let meanAllowance: number;
+        if (teaIsPercentage) {
+          // biasVals are fractional (e.g. 0.09 for 9%), so compare against cliaAllowableError
+          // but also consider the absolute floor converted to fraction at mean reference
+          const refs = valid.flatMap(dp => {
+            const ref = dp.expectedValue!;
+            return comparisonNames.filter(n => dp.instrumentValues[n] !== null && dp.instrumentValues[n] !== undefined).map(() => ref);
+          });
+          const meanRef = refs.length > 0 ? refs.reduce((a, b) => a + Math.abs(b), 0) / refs.length : 0;
+          const absFloorAsFraction = (cliaAbsoluteFloor ?? 0) / (meanRef || 1);
+          meanAllowance = Math.max(cliaAllowableError, absFloorAsFraction);
+        } else {
+          meanAllowance = cliaAllowableError;
+        }
+        if (meanAbsBias > meanAllowance + FP_EPS && computedResult === "pass") {
           const biasLabel = teaIsPercentage
-            ? `${(meanAbsBias * 100).toFixed(2)}% exceeds TEa ${(cliaAllowableError * 100).toFixed(1)}%`
-            : `${meanAbsBias.toFixed(3)} exceeds TEa ${cliaAllowableError}`;
+            ? `${(meanAbsBias * 100).toFixed(2)}% exceeds TEa ${(meanAllowance * 100).toFixed(1)}%`
+            : `${meanAbsBias.toFixed(3)} exceeds TEa ${meanAllowance}`;
           console.error(`[VALIDATION] Method comparison computed as pass but mean |bias| ${biasLabel} - overriding to FAIL`);
           computedResult = "fail";
         }
@@ -249,7 +270,7 @@ export function recomputeAllStudyStatuses(): void {
   let fixed = 0;
   const sqlite = (db as any).$client;
   for (const study of allStudies) {
-    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0);
+    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null);
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
       // Also update the result column (not in drizzle schema, added via ALTER TABLE)
@@ -1421,7 +1442,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed.data.dataPoints,
       parsed.data.instruments,
       parsed.data.cliaAllowableError,
-      (parsed.data as any).teaIsPercentage !== 0
+      (parsed.data as any).teaIsPercentage !== 0,
+      (parsed.data as any).cliaAbsoluteFloor ?? null
     );
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId });
 

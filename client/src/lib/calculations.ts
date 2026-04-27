@@ -270,11 +270,15 @@ export function calculateMethodComparison(
   dataPoints: DataPoint[],
   instrumentNames: string[],
   cliaError: number,
-  teaIsPercentage: boolean = true
+  teaIsPercentage: boolean = true,
+  cliaAbsoluteFloor: number | null = null
 ): MethodCompResults {
   const valid = dataPoints.filter(
     (dp) => dp.expectedValue !== null && instrumentNames.some((n) => dp.instrumentValues[n] !== null)
   );
+
+  // Floating-point tolerance to absorb binary float noise (e.g. 0.3 mmol/L boundary)
+  const FP_EPS = 1e-9;
 
   const levelResults: MethodCompLevelResult[] = valid.map((dp) => {
     const ref = dp.expectedValue!;
@@ -284,9 +288,13 @@ export function calculateMethodComparison(
       if (v !== null && v !== undefined) {
         const diff = v - ref;
         const pctDiff = ref !== 0 ? (diff / ref) * 100 : 0;
-        const passed = teaIsPercentage
-          ? Math.abs(pctDiff / 100) <= cliaError
-          : Math.abs(diff) <= cliaError;
+        // Dual-criterion S493 rule: pass when |diff| <= max(percent_allowance, absolute_floor)
+        const pctAllowance = teaIsPercentage ? Math.abs(ref) * cliaError : 0;
+        const absAllowance = teaIsPercentage
+          ? (cliaAbsoluteFloor ?? 0)
+          : cliaError;
+        const allowance = Math.max(pctAllowance, absAllowance);
+        const passed = Math.abs(diff) <= allowance + FP_EPS;
         instruments[n] = { value: v, difference: diff, pctDifference: pctDiff, passFail: passed ? "Pass" : "Fail" };
       }
     });
@@ -1145,10 +1153,11 @@ export function calculateStudy(
   instrumentNames: string[],
   cliaError: number,
   studyType: "cal_ver" | "method_comparison" = "cal_ver",
-  teaIsPercentage: boolean = true
+  teaIsPercentage: boolean = true,
+  cliaAbsoluteFloor: number | null = null
 ): CalVerResults | MethodCompResults {
   if (studyType === "method_comparison") {
-    return calculateMethodComparison(dataPoints, instrumentNames, cliaError, teaIsPercentage);
+    return calculateMethodComparison(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
   }
   return calculateCalVer(dataPoints, instrumentNames, cliaError);
 }
