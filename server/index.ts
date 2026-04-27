@@ -119,6 +119,14 @@ app.use((req, res, next) => {
     console.error("[demoGuard] Integrity check error:", err.message);
   }
 
+  // Backfill clia_absolute_floor for studies missing it (must run before recompute)
+  try {
+    const { backfillAbsoluteFloorOnStartup } = await import("./backfillAbsoluteFloor");
+    backfillAbsoluteFloorOnStartup();
+  } catch (err: any) {
+    console.error("[backfill] Startup backfill import error:", err.message);
+  }
+
   // Recompute pass/fail status for all existing studies to fix any stale values
   try {
     const { recomputeAllStudyStatuses } = await import("./routes");
