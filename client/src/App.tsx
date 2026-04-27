@@ -5,7 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
@@ -147,9 +146,6 @@ function SiteFooter() {
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
           <p className="text-xs text-muted-foreground">© 2026 Veritas Lab Services, LLC. All Rights Reserved</p>
-          <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-            Created with Perplexity Computer
-          </a>
         </div>
       </div>
     </footer>
@@ -326,7 +322,6 @@ function AppContent() {
       <BackToTop />
       <Toaster />
       <SubscriptionModal />
-      <PerplexityAttribution />
     </div>
   );
 }
