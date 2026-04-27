@@ -453,9 +453,9 @@ return (
                     {row.values.map((val, i) => (
                       <td key={i} className="px-4 py-2.5 text-center">
                         {val === true ? (
-                          <Check size={16} className="text-primary mx-auto" />
+                          <Check size={16} className="text-primary mx-auto" role="img" aria-label="Included" />
                         ) : val === false ? (
-                          <Minus size={16} className="text-muted-foreground/40 mx-auto" />
+                          <Minus size={16} className="text-muted-foreground/40 mx-auto" role="img" aria-label="Not included" />
                         ) : (
                           <span className="text-sm">{val}</span>
                         )}
