@@ -136,7 +136,7 @@
 - Company: Veritas Lab Services, LLC, Massachusetts, filed 1/2/2026
 
 ## Infrastructure
-- Railway token: [REDACTED]
+- Railway token: 94a28a21-159b-4a0a-af34-e3d449a256a4 (Veritas Deploy, project-scoped, created 2026-04-27)
 - Service ID: 170f5560-8cf0-4341-9c87-294062ebedd1
 - Environment ID: cd669f7c-23f3-434c-895d-ca40ac504e91
 - GitHub: https://github.com/mav40121/veritas-lab-services
