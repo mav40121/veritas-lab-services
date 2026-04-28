@@ -17,7 +17,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Who built VeritaAssure\u2122?",
-        a: "VeritaAssure\u2122 was designed and built by Michael Veri, MS, MBA, MLS(ASCP), CPHQ - a laboratory professional with over 25 years in clinical laboratory science. Michael spent 4 years as a Joint Commission surveyor, conducting more than 200 laboratory surveys across the country. He built VeritaAssure\u2122 as someone who lived the compliance burden from both sides of the inspection table.",
+        a: "VeritaAssure\u2122 was designed and built by Michael Veri, MS, MBA, MLS(ASCP), CPHQ - a laboratory professional with over 23 years in clinical laboratory science. Michael spent 4 years as a Joint Commission surveyor, conducting more than 200 laboratory surveys across the country. He built VeritaAssure\u2122 as someone who lived the compliance burden from both sides of the inspection table.",
       },
       {
         q: "Is VeritaAssure\u2122 a CLIA-approved or accreditation-approved software?",
