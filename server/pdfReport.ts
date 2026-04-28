@@ -269,9 +269,9 @@ const CSS = `
   .teal-link { color: ${TEAL}; font-weight: 700; text-decoration: underline; }
 
   /* Eval + verdict */
-  .eval-section { margin-top: 10px; }
-  .eval-title { font-size: 10pt; font-weight: 700; text-align: center; margin-bottom: 4px; }
-  .eval-text { font-size: 7.5pt; line-height: 1.5; margin-bottom: 8px; }
+  .eval-section { margin-top: 4px; }
+  .eval-title { font-size: 10pt; font-weight: 700; text-align: center; margin-bottom: 3px; }
+  .eval-text { font-size: 7.5pt; line-height: 1.4; margin-bottom: 6px; }
   .verdict { border-radius: 4px; padding: 7px 12px; text-align: center; font-size: 9pt; font-weight: 700; color: white; }
   .verdict.pass-bg { background: ${PASS}; }
   .verdict.fail-bg { background: ${FAIL}; }
@@ -286,7 +286,7 @@ const CSS = `
   .sig-date { flex: 0 0 30%; }
 
   /* Supporting data page - flow naturally onto stats page if room, else fresh page as a whole unit */
-  .supporting-page { page-break-before: auto; page-break-inside: avoid; break-inside: avoid; margin-top: 14px; }
+  .supporting-page { page-break-before: auto; page-break-inside: avoid; break-inside: avoid; margin-top: 8px; }
   .supporting-title { font-size: 11pt; font-weight: 700; text-align: center; margin-bottom: 8px; }
   .supporting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
   .spec-section-label { font-size: 8pt; font-weight: 700; margin-bottom: 6px; color: ${DARK}; }
