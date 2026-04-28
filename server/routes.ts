@@ -40,18 +40,22 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     if (!rawData) return "fail";
 
     if (studyType === "cal_ver") {
-      // Each data point: |obsError| < cliaError for every instrument value
+      // Dual-criterion S493 rule: |observed - assigned| <= max(percent_allowance, absolute_floor)
       const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
       const valid = dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null));
+      const FP_EPS = 1e-9;
       let passCount = 0, totalCount = 0;
       for (const dp of valid) {
         const assigned = dp.expectedValue!;
+        const pctAllowance = teaIsPercentage ? Math.abs(assigned) * cliaAllowableError : 0;
+        const absAllowance = teaIsPercentage ? (cliaAbsoluteFloor ?? 0) : cliaAllowableError;
+        const allowance = Math.max(pctAllowance, absAllowance);
         for (const n of instrumentNames) {
           const v = dp.instrumentValues[n];
           if (v !== null && v !== undefined) {
             totalCount++;
-            const obsError = assigned !== 0 ? (v - assigned) / assigned : 0;
-            if (Math.abs(obsError) <= cliaAllowableError) passCount++;
+            const diff = v - assigned;
+            if (Math.abs(diff) <= allowance + FP_EPS) passCount++;
           }
         }
       }

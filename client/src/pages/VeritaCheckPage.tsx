@@ -2213,7 +2213,9 @@ return (
               <div className="mt-4 flex items-center gap-3">
                 <Button variant="outline" size="sm" onClick={() => {
                   setTestName("GC1 CREAT"); setAnalyst("SED"); setDate("2025-02-06");
-                  const names = ["ATELLICA 2 Run 1", "ATELLICA 2 Run 2"]; setInstrumentNames(names); setCliaPreset(0);
+                  // Creatinine preset (index 19): ±10% or ±0.2 mg/dL, dual-criterion (greater).
+                  // Was previously setCliaPreset(0) which loaded ALT/SGPT (±15%) by mistake.
+                  const names = ["ATELLICA 2 Run 1", "ATELLICA 2 Run 2"]; setInstrumentNames(names); setCliaPreset(19);
                 const demoData = [
                     { level: 1, expectedValue: 0.3, instrumentValues: { "ATELLICA 2 Run 1": 0.31, "ATELLICA 2 Run 2": 0.29 } },
                     { level: 2, expectedValue: 7.0, instrumentValues: { "ATELLICA 2 Run 1": 7.37, "ATELLICA 2 Run 2": 7.37 } },

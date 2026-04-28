@@ -149,11 +149,29 @@ export interface CalVerResults {
 export function calculateCalVer(
   dataPoints: DataPoint[],
   instrumentNames: string[],
-  cliaError: number
+  cliaError: number,
+  teaIsPercentage: boolean = true,
+  cliaAbsoluteFloor: number | null = null
 ): CalVerResults {
   const valid = dataPoints.filter(
     (dp) => dp.expectedValue !== null && instrumentNames.some((n) => dp.instrumentValues[n] !== null)
   );
+
+  // Floating-point tolerance to absorb binary float noise (e.g. boundary at 0.2 mg/dL)
+  const FP_EPS = 1e-9;
+
+  // Dual-criterion S493 rule: pass when |observed - assigned| <= max(percent_allowance, absolute_floor)
+  // For percent-mode TEa, the percent allowance scales with the assigned value; the absolute
+  // floor is the regulatory minimum below which percent allowance is too tight to be meaningful.
+  // For absolute-only TEa (e.g. Sodium ±4 mmol/L), there is no percent component.
+  const allowanceFor = (assigned: number): number => {
+    if (teaIsPercentage) {
+      const pctAllowance = Math.abs(assigned) * cliaError;
+      const absAllowance = cliaAbsoluteFloor ?? 0;
+      return Math.max(pctAllowance, absAllowance);
+    }
+    return cliaError;
+  };
 
   const levelResults: CalVerLevelResult[] = valid.map((dp) => {
     const assigned = dp.expectedValue!;
@@ -162,12 +180,16 @@ export function calculateCalVer(
     const pctRecovery = assigned !== 0 ? (meanVal / assigned) * 100 : 100;
     const obsError = assigned !== 0 ? (meanVal - assigned) / assigned : 0;
 
+    const allowance = allowanceFor(assigned);
+    const meanDiff = meanVal - assigned;
+
     const instruments: CalVerLevelResult["instruments"] = {};
     instrumentNames.forEach((n) => {
       const v = dp.instrumentValues[n];
       if (v !== null && v !== undefined) {
         const e = assigned !== 0 ? (v - assigned) / assigned : 0;
-        instruments[n] = { value: v, obsError: e, passFail: Math.abs(e) <= cliaError ? "Pass" : "Fail" };
+        const diff = v - assigned;
+        instruments[n] = { value: v, obsError: e, passFail: Math.abs(diff) <= allowance + FP_EPS ? "Pass" : "Fail" };
       }
     });
 
@@ -177,7 +199,7 @@ export function calculateCalVer(
       mean: meanVal,
       pctRecovery,
       obsError,
-      passFailMean: Math.abs(obsError) <= cliaError ? "Pass" : "Fail",
+      passFailMean: Math.abs(meanDiff) <= allowance + FP_EPS ? "Pass" : "Fail",
       instruments,
     };
   });
@@ -216,11 +238,15 @@ export function calculateCalVer(
   const range = levelResults.length
     ? `${levelResults[0].assignedValue.toFixed(3)} to ${levelResults[levelResults.length - 1].assignedValue.toFixed(3)}`
     : "-";
-  const cliaPercent = (cliaError * 100).toFixed(1);
+  const teaLabel = teaIsPercentage
+    ? (cliaAbsoluteFloor != null
+      ? `±${(cliaError * 100).toFixed(1)}% or ±${cliaAbsoluteFloor} (greater)`
+      : `±${(cliaError * 100).toFixed(1)}%`)
+    : `±${cliaError}`;
   const maxDev = levelResults.length ? Math.max(...levelResults.map((r) => Math.abs(r.pctRecovery - 100))) : 0;
   const summary =
     `Calibration Verification was performed over an assigned value range of ${range}. ` +
-    `CLIA Total Allowable Error (TEa) was ±${cliaPercent}%. ` +
+    `CLIA Total Allowable Error (TEa) was ${teaLabel}. ` +
     `${passCount} of ${totalCount} measured results were within TEa. ` +
     `Maximum deviation from 100% recovery was ${maxDev.toFixed(1)}%. ` +
     `The calibration verification ${overallPass ? "PASSED" : "FAILED"} CLIA accuracy requirements.`;
@@ -1159,7 +1185,7 @@ export function calculateStudy(
   if (studyType === "method_comparison") {
     return calculateMethodComparison(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
   }
-  return calculateCalVer(dataPoints, instrumentNames, cliaError);
+  return calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
 }
 
 // ─── Export Deming for reuse ──────────────────────────────────────────────────
