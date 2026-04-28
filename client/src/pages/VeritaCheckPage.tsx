@@ -1163,7 +1163,7 @@ return (
                   </div>
                   <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"™"}</h1>
                   <p className="text-xl text-muted-foreground font-medium mb-5">
-                    EP Evaluation and Study Management Platform
+                    CLIA Method Validation and EP Study Platform
                   </p>
                   <div className="border-l-4 border-primary pl-4 mb-6">
                     <p className="text-base leading-relaxed italic text-foreground/90">
