@@ -285,8 +285,8 @@ const CSS = `
   .sig-line .label { font-size: 7.5pt; color: ${MUTED}; }
   .sig-date { flex: 0 0 30%; }
 
-  /* Supporting data page */
-  .supporting-page { page-break-before: always; }
+  /* Supporting data page - flow naturally onto stats page if room, else fresh page as a whole unit */
+  .supporting-page { page-break-before: auto; page-break-inside: avoid; break-inside: avoid; margin-top: 14px; }
   .supporting-title { font-size: 11pt; font-weight: 700; text-align: center; margin-bottom: 8px; }
   .supporting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
   .spec-section-label { font-size: 8pt; font-weight: 700; margin-bottom: 6px; color: ${DARK}; }
