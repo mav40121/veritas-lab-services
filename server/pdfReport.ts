@@ -339,16 +339,16 @@ function headerHTML(study: Study, cliaNumber?: string): string {
 
 // ─── Supporting data page HTML ────────────────────────────────────────────────
 function supportingPageHTML(study: Study, instrumentNames: string[]): string {
-  const cliaP = (study.cliaAllowableError * 100).toFixed(1);
+  const teaStr = teaDisplayStr(study);
   const cfr = (study as any).cfr || "42 CFR §493.931";
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931";
 
   const specs = [
     ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
-    ["Adopted Acceptance Criterion (TEa)", `±${cliaP}%`],
+    ["Adopted Acceptance Criterion (TEa)", teaStr],
     ["CFR Reference (PT TEa, adopted)", `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`],
-    ["Allowable Systematic Error", `±${cliaP}%`],
+    ["Allowable Systematic Error", teaStr],
   ];
   const supporting = [
     ["Analyst", study.analyst],
@@ -395,7 +395,7 @@ function footerHTML(): string {
 // ─── Laboratory Director Review block HTML ───────────────────────────────────
 function directorReviewHTML(): string {
   return `
-  <div style="margin-top:18px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:12px 14px;background:#FAFAF8;">
+  <div style="margin-top:18px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:12px 14px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
     <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
     <p style="font-size:7.5pt;color:#28251D;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
     <div style="font-size:8pt;color:#28251D;margin-bottom:4px;">
