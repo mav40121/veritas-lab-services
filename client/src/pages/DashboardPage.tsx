@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
-import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical } from "lucide-react";
+import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useState } from "react";
+import { getToken } from "@/lib/auth";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -31,6 +33,45 @@ export default function Dashboard() {
   const passCount = studies?.filter((s) => s.status === "pass").length ?? 0;
   const failCount = studies?.filter((s) => s.status === "fail").length ?? 0;
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const token = getToken();
+      if (!token) {
+        toast({ title: "Please sign in to export", variant: "destructive" });
+        return;
+      }
+      const res = await fetch("/api/my-studies/export", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let msg = "Export failed";
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+        toast({ title: msg, variant: "destructive" });
+        return;
+      }
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = /filename="([^"]+)"/.exec(cd);
+      const filename = m ? m[1] : `VeritaCheck_Studies_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast({ title: "Studies workbook downloaded" });
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e?.message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -41,6 +82,20 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {!!studies?.length && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={handleExport}
+              disabled={exporting}
+              data-testid="button-export-studies-xlsx"
+              title="Download all studies as an Excel workbook"
+            >
+              <Download size={13} />
+              {exporting ? "Exporting..." : "Export to Excel"}
+            </Button>
+          )}
           <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
             <Link href="/dashboard/verifications">
               <FileText size={13} />

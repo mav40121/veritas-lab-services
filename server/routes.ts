@@ -1371,6 +1371,231 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(storage.getAllStudies().filter(s => !s.userId));
   });
 
+  // ── My Studies XLSX export ──
+  // Account-scoped (seat users see owner's studies). Plan allowlist: per_study, unlimited, clinic, community, hospital, enterprise.
+  // Excluded: free, demo. Returns an XLSX workbook with a single Studies sheet styled per Excel Standard.
+  app.get("/api/my-studies/export", async (req, res) => {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    let payload: { userId: number };
+    try {
+      payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+    } catch {
+      return res.status(401).json({ error: "Invalid or expired session" });
+    }
+
+    // Resolve seat user to owner for data scoping
+    const seatRow = (db as any).$client.prepare(
+      "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+    ).get(payload.userId) as any;
+    const dataUserId = seatRow ? seatRow.owner_user_id : payload.userId;
+
+    // Plan allowlist (EXPLICIT, never blocklist)
+    const ownerUser = storage.getUserById(dataUserId);
+    if (!ownerUser) return res.status(404).json({ error: "Account not found" });
+    const ALLOWED_EXPORT_PLANS = ["per_study", "unlimited", "clinic", "community", "hospital", "enterprise", "annual", "starter", "professional", "lab", "complete"];
+    if (!ALLOWED_EXPORT_PLANS.includes(ownerUser.plan)) {
+      return res.status(403).json({ error: "Studies export is not included in your current plan. Upgrade to enable." });
+    }
+
+    // Pull all studies for the account
+    const userStudies = storage.getStudiesByUser(dataUserId);
+    userStudies.sort((a, b) => b.id - a.id);
+
+    // Lab name and CLIA from owner user record
+    const labName = (ownerUser as any).cliaLabName || (ownerUser as any).clia_lab_name || ownerUser.name || "Laboratory";
+    const cliaNumber = (ownerUser as any).cliaNumber || (ownerUser as any).clia_number || "Not on file";
+
+    // Helpers
+    const studyTypeLabel = (st: string): string => {
+      switch (st) {
+        case "cal_ver": return "Calibration Verification / Linearity";
+        case "method_comparison":
+        case "correlation": return "Correlation / Method Comparison";
+        case "precision": return "Precision (EP15)";
+        case "ref_interval": return "Reference Interval Verification";
+        case "pt_coag": return "PT/Coag New Lot Validation";
+        case "lot_to_lot": return "Lot-to-Lot Verification";
+        case "qc_range": return "QC Range";
+        case "multi_analyte_coag": return "Multi-Analyte Lot Comparison";
+        case "cumsum": return "CUMSUM";
+        default: return st;
+      }
+    };
+
+    const teaApplied = (s: any): string => {
+      const isPercent = s.teaIsPercentage !== 0;
+      const tea = s.cliaAllowableError;
+      if (isPercent) {
+        const pct = (tea * 100).toFixed(1);
+        if (s.cliaAbsoluteFloor != null && s.cliaAbsoluteUnit) {
+          return `\u00B1${pct}% or ${s.cliaAbsoluteFloor} ${s.cliaAbsoluteUnit} (greater)`;
+        }
+        return `\u00B1${pct}%`;
+      }
+      const unit = s.teaUnit || "";
+      return `\u00B1${tea} ${unit}`.trim();
+    };
+
+    const sampleCount = (s: any): number | string => {
+      try {
+        const dp = JSON.parse(s.dataPoints || "[]");
+        if (Array.isArray(dp)) return dp.length;
+        return "";
+      } catch { return ""; }
+    };
+
+    const verdictLabel = (s: any): string => {
+      const st = (s.status || "").toLowerCase();
+      if (st === "pass") return "Pass";
+      if (st === "fail") return "Fail";
+      if (st === "completed") return "Completed";
+      return s.status || "";
+    };
+
+    const reportLink = (s: any) => `https://www.veritaslabservices.com/study/${s.id}/results`;
+
+    try {
+      const { default: ExcelJS } = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      const ws = wb.addWorksheet("Studies");
+
+      // Title block (rows 1-3)
+      ws.mergeCells("A1:I1");
+      ws.getCell("A1").value = `VeritaCheck\u2122 Studies Summary: ${labName}`;
+      ws.getCell("A1").font = { name: "Calibri", bold: true, size: 14, color: { argb: "FF01696F" } };
+      ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
+      ws.getRow(1).height = 22;
+
+      ws.mergeCells("A2:I2");
+      const exportDate = new Date().toISOString().split("T")[0];
+      ws.getCell("A2").value = `CLIA: ${cliaNumber}    \u2022    Exported: ${exportDate}    \u2022    ${userStudies.length} stud${userStudies.length === 1 ? "y" : "ies"}`;
+      ws.getCell("A2").font = { name: "Calibri", italic: true, size: 10, color: { argb: "FF7A7974" } };
+      ws.getCell("A2").alignment = { vertical: "middle", horizontal: "left" };
+
+      ws.mergeCells("A3:I3");
+      ws.getCell("A3").value = "Operational summary, not for regulatory submission. See per-study PDFs for audit-grade documentation.";
+      ws.getCell("A3").font = { name: "Calibri", italic: true, size: 9, color: { argb: "FF7A7974" } };
+      ws.getCell("A3").alignment = { vertical: "middle", horizontal: "left" };
+
+      // Header row (row 4)
+      const headers = ["Study #", "Date", "Analyte", "Study Type", "Instrument(s)", "N", "TEa Applied", "Verdict", "Report Link"];
+      const colWidths = [10, 12, 28, 32, 36, 6, 28, 12, 56];
+      const headerRow = ws.getRow(4);
+      headers.forEach((h, i) => { headerRow.getCell(i + 1).value = h; });
+      ws.columns = headers.map((_, i) => ({ width: colWidths[i] }));
+      headerRow.height = 20;
+
+      const thinBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+
+      headerRow.eachCell((cell) => {
+        cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = thinBorder;
+      });
+
+      // Data rows (row 5+)
+      userStudies.forEach((s: any, idx: number) => {
+        const r = 5 + idx;
+        const row = ws.getRow(r);
+        row.getCell(1).value = s.id;
+        row.getCell(2).value = s.date || "";
+        row.getCell(3).value = s.testName || "";
+        row.getCell(4).value = studyTypeLabel(s.studyType);
+        row.getCell(5).value = s.instrument || "";
+        row.getCell(6).value = sampleCount(s);
+        row.getCell(7).value = teaApplied(s);
+        row.getCell(8).value = verdictLabel(s);
+        const link = reportLink(s);
+        row.getCell(9).value = { text: "View Report", hyperlink: link };
+
+        const isEvenRow = (r % 2) === 0;
+        const bgColor = isEvenRow ? "FFEBF3F8" : "FFFFFFFF";
+
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = cell.font || { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
+          if (!cell.font.name) cell.font = { ...cell.font, name: "Calibri", size: 10 };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
+
+          // Verdict color coding (col 8)
+          if (colNumber === 8) {
+            const v = String(cell.value || "");
+            if (v === "Pass") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+            } else if (v === "Fail") {
+              cell.font = { name: "Calibri", bold: true, color: { argb: "FFA12C7B" }, size: 10 };
+            } else {
+              cell.font = { name: "Calibri", color: { argb: "FF7A7974" }, size: 10 };
+            }
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          }
+
+          // Hyperlink styling (col 9)
+          if (colNumber === 9) {
+            cell.font = { name: "Calibri", color: { argb: "FF01696F" }, underline: true, size: 10 };
+          }
+
+          // Right-align N column (col 6)
+          if (colNumber === 6) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          }
+
+          // Center the Study # and Date columns
+          if (colNumber === 1 || colNumber === 2) {
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+          }
+        });
+      });
+
+      // Freeze header rows + first column (Study #)
+      ws.views = [{ state: "frozen" as const, xSplit: 1, ySplit: 4, topLeftCell: "B5" }];
+
+      // Auto-filter on header row
+      ws.autoFilter = { from: "A4", to: "I4" };
+
+      // Empty-state: if no studies, show a friendly note in row 5
+      if (userStudies.length === 0) {
+        ws.mergeCells("A5:I5");
+        ws.getCell("A5").value = "No studies on file for this account. Run a study from the Dashboard to populate this report.";
+        ws.getCell("A5").font = { name: "Calibri", italic: true, size: 10, color: { argb: "FF7A7974" } };
+        ws.getCell("A5").alignment = { vertical: "middle", horizontal: "left" };
+      }
+
+      // Footer row
+      const footerRowNum = 5 + Math.max(userStudies.length, 1) + 1;
+      ws.mergeCells(`A${footerRowNum}:I${footerRowNum}`);
+      ws.getCell(`A${footerRowNum}`).value = "VeritaAssure\u2122 | VeritaCheck\u2122 | Confidential, For Internal Lab Use Only";
+      ws.getCell(`A${footerRowNum}`).font = { name: "Calibri", italic: true, size: 8, color: { argb: "FF7A7974" } };
+      ws.getCell(`A${footerRowNum}`).alignment = { vertical: "middle", horizontal: "center" };
+
+      // Filename: VeritaCheck_Studies_<labname>_<YYYY-MM-DD>.xlsx
+      const safeLabName = String(labName).replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "Laboratory";
+      const filename = `VeritaCheck_Studies_${safeLabName}_${exportDate}.xlsx`;
+
+      const buffer = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Cache-Control", "no-store");
+      res.send(Buffer.from(buffer as ArrayBuffer));
+    } catch (err: any) {
+      console.error("My Studies export failed:", err);
+      res.status(500).json({ error: "Export failed. Please try again." });
+    }
+  });
+
   app.get("/api/studies/:id", (req, res) => {
     const study = storage.getStudy(parseInt(req.params.id));
     if (!study) return res.status(404).json({ error: "Study not found" });
