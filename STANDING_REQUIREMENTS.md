@@ -31,6 +31,32 @@
 - NO LabVine Learning references — removed permanently
 - Governing law = Massachusetts in all legal text
 
+## Procedural Gates (NON-NEGOTIABLE)
+
+These are written as gates between specific tool calls, not as principles. A principle is something the agent can rationalize past in the moment. A gate is binary: either the prior tool call satisfies the precondition or the next call is a violation.
+
+### Gate 1: Recommendation lockout
+
+After the agent gives the user a recommendation in plain text (any sentence beginning with "I recommend", "My recommendation", "I'd suggest doing X", "Doing it" referring to the agent's own proposal, or any equivalent), the very next tool call in the same turn must be one of:
+
+- `confirm_action` proposing the recommended change
+- `ask_user_question` clarifying the recommendation
+- A read-only tool (`read`, `grep`, `glob`, `bash` with `cat`/`grep`/`ls`/`pdfinfo`/`curl -s` GET only)
+
+The next tool call must NOT be:
+
+- `edit`, `write`, `bash` running `npm`/`git add`/`git commit`/`git push`, deploy mutations, or any tool that modifies files or remote state
+
+This holds even when the recommendation seems obvious, low-risk, or follows from prior approved work. Momentum is not consent.
+
+### Gate 2: Deploy confirmation
+
+Every `git push` to `main` and every Railway `serviceInstanceDeploy` mutation must be preceded by an explicit user instruction in the conversation that names the change being deployed, OR by a `confirm_action` in the same turn that the agent called and the user approved.
+
+A user message saying "fix it" or "do it" earlier in the conversation does NOT cover later changes the agent introduced on its own initiative. Each deploy needs its own authorization tied to the specific commit being shipped.
+
+Both gates are phrased so that violations are detectable in the conversation log. If the user finds the agent shipped without an authorizing message or confirm_action, that is a discrete, demonstrable breach, not a matter of interpretation.
+
 ## PDF Requirements (NON-NEGOTIABLE)
 - Signature MUST appear on PAGE 1 of COMPLIANCE documents (VeritaCheck studies, VeritaComp competency records, CMS 209). No exceptions. The director's approval (Accepted / Not accepted checkboxes plus Signature/Date/Print Name/Title) is the verdict, and it MUST be visible on the same page as the study results, narrative, and CFR citations. Never propose putting it on its own page, even with whitespace framed as 'professional'.
 - VeritaScan PDFs are INTERNAL USE documents — NO director signature required. Add internal use disclaimer instead.
