@@ -32,7 +32,7 @@
 - Governing law = Massachusetts in all legal text
 
 ## PDF Requirements (NON-NEGOTIABLE)
-- Signature MUST appear on PAGE 1 of COMPLIANCE documents (VeritaCheck studies, VeritaComp competency records, CMS 209). No exceptions.
+- Signature MUST appear on PAGE 1 of COMPLIANCE documents (VeritaCheck studies, VeritaComp competency records, CMS 209). No exceptions. The director's approval (Accepted / Not accepted checkboxes plus Signature/Date/Print Name/Title) is the verdict, and it MUST be visible on the same page as the study results, narrative, and CFR citations. Never propose putting it on its own page, even with whitespace framed as 'professional'.
 - VeritaScan PDFs are INTERNAL USE documents — NO director signature required. Add internal use disclaimer instead.
 - VeritaLab certificate reports — NO director signature required.
 - Statistics tables go on page 2+ if needed, never push signature off page 1

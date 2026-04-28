@@ -395,27 +395,27 @@ function footerHTML(): string {
 // ─── Laboratory Director Review block HTML ───────────────────────────────────
 function directorReviewHTML(): string {
   return `
-  <div style="margin-top:18px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:12px 14px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
-    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
-    <p style="font-size:7.5pt;color:#28251D;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
-    <div style="font-size:8pt;color:#28251D;margin-bottom:4px;">
+  <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:8px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
+    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:5px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
+    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 6px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
+    <div style="font-size:8pt;color:#28251D;margin-bottom:2px;">
       <span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
       <span>\u25CB Not accepted</span>
     </div>
-    <div style="display:flex;gap:16px;margin-top:14px;">
+    <div style="display:flex;gap:16px;margin-top:8px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:22px;">Signature</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Signature</div>
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:22px;">Date</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Date</div>
       </div>
     </div>
-    <div style="display:flex;gap:16px;margin-top:10px;">
+    <div style="display:flex;gap:16px;margin-top:6px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Print Name</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:10px;">Print Name</div>
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Title</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:10px;">Title</div>
       </div>
     </div>
   </div>`;
@@ -558,8 +558,8 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
       </div>`).join("");
 
   return `
-  <div style="margin-top:14px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:10px 14px;background:#FAFAF8;">
-    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase;">Regulatory Compliance References</div>
+  <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:8px 12px;background:#FAFAF8;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:6px;letter-spacing:0.04em;text-transform:uppercase;">Regulatory Compliance References</div>
     <div style="display:grid;grid-template-columns:${gridCols};gap:6px 12px;">
       ${colsHTML}
     </div>
