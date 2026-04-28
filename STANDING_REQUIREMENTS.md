@@ -35,8 +35,8 @@
 - Signature MUST appear on PAGE 1 of COMPLIANCE documents (VeritaCheck studies, VeritaComp competency records, CMS 209). No exceptions.
 - VeritaScan PDFs are INTERNAL USE documents — NO director signature required. Add internal use disclaimer instead.
 - VeritaLab certificate reports — NO director signature required.
-- Statistics tables go on page 2+ if needed — never push signature off page 1
-- Label: "Detailed results continued on page 2" when stats overflow
+- Statistics tables go on page 2+ if needed, never push signature off page 1
+- Do NOT add a 'Detailed results continued on page X' label. Page footer (Page X of Y) and the 'Continued from page 1' section heading already convey this. The orphan label caused a dead-page bug on 2026-04-28.
 - "Medical director or designee" everywhere — never just "medical director" or "laboratory director" alone
 - CLIA number on every report header — show "CLIA: Not on file — enter in account settings" if missing
 - Footer every page: "VeritaAssure™ | [Module]™ | Confidential — For Internal Lab Use Only | Page X of Y"

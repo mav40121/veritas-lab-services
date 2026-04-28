@@ -805,8 +805,6 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
 
   ${directorReviewHTML()}
 
-  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
-
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
 
@@ -1297,8 +1295,6 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
   ${directorReviewHTML()}
 
-  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
-
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
 
@@ -1411,8 +1407,6 @@ function buildPrecisionHTML(study: Study, results: any): string {
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
   ${directorReviewHTML()}
-
-  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -1685,8 +1679,6 @@ function buildLotToLotHTML(study: Study, results: any): string {
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
   ${directorReviewHTML()}
 
-  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
-
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
     ${cohortDataSections}
@@ -1890,8 +1882,6 @@ function buildPTCoagHTML(study: Study, results: any): string {
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
   ${directorReviewHTML()}
 
-  <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
-
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
 
@@ -1978,7 +1968,6 @@ function buildQCRangeHTML(study: Study, results: any): string {
     </div>
     ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
     ${directorReviewHTML()}
-    <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -2048,7 +2037,6 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
     ${isiNote}
     ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
     ${directorReviewHTML()}
-    <div style="font-size:7pt;color:${MUTED};text-align:center;margin-top:8px;font-style:italic;">Detailed results continued on page 2.</div>
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -2442,8 +2430,6 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     </div>
 
     <div style="margin-top:14px;font-size:7.5pt;color:${MUTED};font-style:italic;line-height:1.5;">This report is for internal use only. It is designed to assist the laboratory in identifying compliance gaps before an inspection. It does not constitute an accreditation submission or regulatory filing.</div>
-
-    <div style="text-align:center;font-size:7.5pt;color:${MUTED};margin-top:10px;font-style:italic;">Detailed results continued on page 2.</div>
 
     <!-- Page 2+: domain detail sections, natural flow -->
     <div style="page-break-before:always"></div>
