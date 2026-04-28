@@ -1,5 +1,5 @@
 // CLIA Allowable Error (TEa) Database
-// Source: 42 CFR Part 493, Subpart H - effective July 11, 2024 (2025 CLIA Final Rule)
+// Source: 42 CFR Part 493, Subpart I - effective July 11, 2024 (2025 CLIA Final Rule)
 // Sections: §493.927 (Immunology), §493.931 (Chemistry), §493.933 (Endocrinology),
 //           §493.937 (Toxicology), §493.941 (Hematology), §493.959 (Coagulation/Immunohematology)
 

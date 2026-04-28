@@ -19,19 +19,44 @@ const REFS = {
     url: "https://www.cms.gov/medicare/quality/clinical-laboratory-improvement-amendments/brochures",
     source: "CMS.gov",
   },
+  cfr493927: {
+    label: "42 CFR §493.927 - PT acceptance criteria, general immunology",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.927",
+    source: "eCFR",
+  },
   cfr493931: {
-    label: "42 CFR §493.931 - Calibration Verification",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
+    label: "42 CFR §493.931 - PT acceptance criteria, routine chemistry",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931",
     source: "eCFR",
   },
   cfr493933: {
-    label: "42 CFR §493.933 - Method Comparison & Bias",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.933",
+    label: "42 CFR §493.933 - PT acceptance criteria, endocrinology",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.933",
+    source: "eCFR",
+  },
+  cfr493937: {
+    label: "42 CFR §493.937 - PT acceptance criteria, toxicology",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
     source: "eCFR",
   },
   cfr493941: {
-    label: "42 CFR §493.941 - Precision & Accuracy",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.941",
+    label: "42 CFR §493.941 - PT acceptance criteria, hematology",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
+    source: "eCFR",
+  },
+  cfr493959: {
+    label: "42 CFR §493.959 - PT acceptance criteria, immunohematology",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.959",
+    source: "eCFR",
+  },
+  cfr4931253: {
+    label: "42 CFR §493.1253 - Establishment and verification of performance specifications",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+    source: "eCFR",
+  },
+  cfr4931255: {
+    label: "42 CFR §493.1255 - Calibration and calibration verification procedures",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
     source: "eCFR",
   },
   clsiEP6: {
@@ -229,19 +254,19 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4 font-medium text-primary">Calibration Verification / Linearity</td>
                   <td className="py-3 px-4 text-muted-foreground">Is my instrument reading accurately across its full reportable range?</td>
                   <td className="py-3 px-4">Every 6 months (minimum)</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr493931.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.931</a></td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931255.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1255(b)(3)</a>; analyte criterion from §493.927, .931, .933, .937, .941, .959</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Correlation / Method Comparison</td>
                   <td className="py-3 px-4 text-muted-foreground">Do my two instruments (or methods) agree with each other?</td>
                   <td className="py-3 px-4">When introducing a new method; annually recommended</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr493933.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.933</a></td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(2)</a>; analyte criterion from §493.927, .931, .933, .937, .941, .959 (lab-adopted)</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Precision</td>
                   <td className="py-3 px-4 text-muted-foreground">Is my instrument producing consistent, reproducible results?</td>
                   <td className="py-3 px-4">When introducing a new method; after major maintenance</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr493941.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.941</a></td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(i)</a>; allowable imprecision adopted from analyte PT criterion</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Reference Range Verification</td>
@@ -278,7 +303,7 @@ export default function StudyGuidePage() {
             title="Calibration Verification / Linearity"
             subtitle="Verify your instrument reads accurately from low to high"
             what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range, from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values."
-            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck™ calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against your CLIA Total Allowable Error (TEa). The report shows a scatter plot, percent recovery chart, linearity summary, and a CLIA pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck™ calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against the calibration verification acceptance criterion your laboratory has adopted (typically the §493 PT TEa for that analyte, approved by the medical director or designee). The report shows a scatter plot, percent recovery chart, linearity summary, and a pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Every 6 months (required by CLIA for all non-waived tests)",
               "Whenever calibration is performed",
@@ -287,8 +312,8 @@ export default function StudyGuidePage() {
               "Any time there is reason to doubt instrument accuracy",
             ]}
             frequency="Every 6 months minimum"
-            regulation="42 CFR §493.931"
-            passFail="All measured results must fall within the CLIA Total Allowable Error (TEa) for that analyte. VeritaCheck™ evaluates each level individually and reports the percentage of results passing. A PASS requires 100% of results within TEa."
+            regulation="42 CFR §493.1255(b)(3)"
+            passFail="All measured results must fall within the calibration verification acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte). VeritaCheck™ evaluates each level individually and reports the percentage of results passing. A PASS requires 100% of results within the adopted criterion."
             refs={[
               REFS.cliaCalVerBrochure,
               REFS.cfr493931,
@@ -314,11 +339,11 @@ export default function StudyGuidePage() {
               "Annually for instruments running the same assay (best practice)",
             ]}
             frequency="At method introduction; annually recommended"
-            regulation="42 CFR §493.933"
-            passFail="Each paired result is evaluated against the CLIA TEa for that analyte. VeritaCheck™ also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within TEa and mean bias within acceptable limits. Your laboratory director or designee makes the final acceptability determination."
+            regulation="42 CFR §493.1253(b)(2)"
+            passFail="Each paired result is evaluated against the method comparison acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte, under §493.1253(b)(2)). VeritaCheck™ also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within the adopted criterion and mean bias within acceptable limits. Your laboratory director or designee makes the final acceptability determination."
             refs={[
               REFS.cliaVerificationBrochure,
-              REFS.cfr493933,
+              REFS.cfr4931253,
               REFS.clsiEP9,
               REFS.clsiOverview,
             ]}
@@ -341,8 +366,8 @@ export default function StudyGuidePage() {
               "Any time imprecision is suspected based on QC patterns",
             ]}
             frequency="At method introduction; after major maintenance"
-            regulation="42 CFR §493.941"
-            passFail="Each control level must have a CV% at or below your CLIA allowable imprecision for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck™ reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than directly against CLIA TEa. VeritaCheck™ uses CLIA TEa directly, which is the more conservative and regulatory-defensible standard."
+            regulation="42 CFR §493.1253(b)(1)(i)"
+            passFail="Each control level must have a CV% at or below the allowable imprecision adopted by your lab for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck™ reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than against the §493 PT TEa for the analyte. VeritaCheck™ uses §493 PT TEa as the precision benchmark when your lab adopts that approach (typical and recommended); this is the more conservative and easier-to-defend choice. Your medical director or designee approves the criterion in either case."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr493941,
@@ -383,7 +408,7 @@ export default function StudyGuidePage() {
             title="Lot-to-Lot Verification"
             subtitle="Confirm new reagent lot performs equivalently to the current lot"
             what="Lot-to-lot verification compares the performance of a new reagent lot against the current lot to confirm analytical equivalence before the new lot is placed into routine use. This is required for select analytes where reagent lot changes can affect calibration, measurement bias, or reportable range."
-            howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck™ calculates the bias between lots and evaluates it against CLIA TEa for each analyte."
+            howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck™ calculates the bias between lots and evaluates it against the lot-to-lot acceptance criterion adopted by your lab for each analyte (typically the §493 PT TEa, with medical director or designee approval)."
             when={[
               "When changing to a new reagent lot for select analytes (manufacturer-specified)",
               "When the manufacturer recommends lot-to-lot verification in its instructions for use",
@@ -407,7 +432,7 @@ export default function StudyGuidePage() {
             title="Multi-Analyte Coagulation Verification"
             subtitle="Verify all coagulation analytes on a single analyzer in one study"
             what="Multi-analyte coagulation verification is designed for coagulation analyzers that run multiple assays (PT/INR, aPTT, fibrinogen, D-dimer, and others). Each analyte is assessed individually within a single verification study, allowing the laboratory to document performance across the full coagulation test menu in one organized report."
-            howIt="You test verification materials at multiple levels for each coagulation analyte on the instrument. VeritaCheck™ evaluates each analyte independently, calculating recovery, bias, and pass or fail against CLIA TEa. The report groups all analytes together but maintains individual pass or fail determinations for each, producing a single document that covers the entire coagulation panel."
+            howIt="You test verification materials at multiple levels for each coagulation analyte on the instrument. VeritaCheck™ evaluates each analyte independently, calculating recovery, bias, and pass or fail against the analyte's adopted acceptance criterion (typically the §493 PT TEa). The report groups all analytes together but maintains individual pass or fail determinations for each, producing a single document that covers the entire coagulation panel."
             when={[
               "At calibration verification intervals (every 6 months) for coagulation analyzers",
               "When adding a new coagulation analyzer to service",
@@ -416,7 +441,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="Every 6 months minimum; at qualifying events"
             regulation="42 CFR §493.1255"
-            passFail="Each analyte is evaluated independently against its CLIA TEa. All analytes must pass for the overall verification to be acceptable. If any single analyte fails, that analyte requires investigation and corrective action before the instrument continues reporting results for that test. Your laboratory director or designee reviews the complete panel results."
+            passFail="Each analyte is evaluated independently against its adopted acceptance criterion (typically the §493 PT TEa). All analytes must pass for the overall verification to be acceptable. If any single analyte fails, that analyte requires investigation and corrective action before the instrument continues reporting results for that test. Your laboratory director or designee reviews the complete panel results."
             refs={[
               REFS.cliaCalVerBrochure,
               REFS.cfr493931,

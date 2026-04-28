@@ -558,7 +558,7 @@ export default function DemoLabPage() {
                             {!(stats as any).allPass && (
                               <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20 p-4 mt-2">
                                 <p className="text-xs leading-relaxed text-foreground">
-                                  <strong>One or more paired specimens did not satisfy the CLIA total allowable error criterion. See the PDF report for details.</strong>{" "}
+                                  <strong>One or more paired specimens did not satisfy the adopted acceptance criterion (TEa). See the PDF report for details.</strong>{" "}
                                   Final approval and clinical determination must be made by the laboratory director or designee.
                                 </p>
                               </div>

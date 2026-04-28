@@ -159,14 +159,14 @@ function generateNarrative(results: StudyResults, study: Study): string {
         ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
         : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
     if (cv.overallPass) {
-      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(3) and §493.1253(b)(2)). `;
       narrative += meetsAdlm
-        ? `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `
-        : `The maximum observed error of ${maxErr.toFixed(1)}% meets CLIA requirements; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
-      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within required limits across its reportable range.`;
+        ? `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
+        : `The maximum observed error of ${maxErr.toFixed(1)}% meets the adopted acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the adopted limits across its reportable range.`;
     } else {
       const failCount = cv.totalCount - cv.passCount;
-      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). Do not report patient results until the cause has been identified, corrective action has been taken, and the study is repeated with passing results. The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records.`;
+      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(3) and §493.1253(b)(2)). The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   } else if (isQualitative(results)) {
     const qr = results as QualitativeResults;
@@ -209,12 +209,12 @@ function generateNarrative(results: StudyResults, study: Study): string {
         : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
     const teaLabel = formatTeaDisplay(study);
     const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
-      ? `within the CLIA total allowable error of ${teaLabel}`
-      : `exceeds the CLIA total allowable error of ${teaLabel} and requires investigation`;
+      ? `within the adopted method comparison acceptance criterion of ${teaLabel}`
+      : `exceeds the adopted method comparison acceptance criterion of ${teaLabel} and requires investigation`;
     if (mc.overallPass) {
       narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
     } else {
-      narrative = `The method comparison for ${study.testName} did not meet acceptance criteria. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (CLIA limit: \u00B1${cliaPct}%) indicate unacceptable agreement between methods. Do not report patient results from the comparison method until bias has been investigated, corrective action taken, and the study repeated with passing results.`;
+      narrative = `The method comparison for ${study.testName} did not meet the adopted acceptance criterion. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (adopted limit: \u00B1${cliaPct}%; §493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)) indicate unacceptable agreement between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   } else if (isPrecision(results)) {
     const pr = results as PrecisionResults;
@@ -222,9 +222,9 @@ function generateNarrative(results: StudyResults, study: Study): string {
     const meetsAdlm = maxCV <= study.cliaAllowableError * 50;
     const isAdvanced = (pr as any).mode === "advanced";
     if (pr.overallPass) {
-      narrative = `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the CLIA total allowable error of ±${cliaPct}% (42 CFR §493). `;
+      narrative = `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)). `;
       narrative += meetsAdlm
-        ? `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the regulatory minimum. `
+        ? `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
         : `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
       if (isAdvanced && (pr.levelResults[0] as any)?.withinRunCV !== undefined) {
         const wrCV = ((pr.levelResults[0] as any).withinRunCV ?? 0).toFixed(2);
@@ -233,7 +233,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
     } else {
-      narrative = `The precision study for ${study.testName} did not meet acceptance criteria. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the CLIA total allowable error of ±${cliaPct}%. Do not rely on this instrument for patient reporting until the cause of imprecision has been identified, corrective action has been taken, and the study is repeated with passing results. Review reagent lot, instrument maintenance, and QC trends for contributing factors.`;
+      narrative = `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
   // Append dual-criterion methodology note when applicable
@@ -466,7 +466,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
             ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag New Lot Validation" : study.studyType === "qc_range" ? "QC Range Establishment" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
-            [study.studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error", teaDisplay],
+            [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplay],
             ["Analyst", study.analyst],
             ["Date", study.date],
             ["Instruments / Methods", instrumentNames.join(", ")],
@@ -1129,7 +1129,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                 ))}
               </tbody>
             </table>
-            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only). VeritaCheck™ uses OLS regression for calibration verification (where calibrator assigned values are treated as exact) and Deming regression for method comparison (where both methods carry measurement error). Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation against CLIA TEa.</p>
+            <p className="text-xs text-muted-foreground mt-2">95% Confidence Intervals shown in parentheses (OLS only). VeritaCheck™ uses OLS regression for calibration verification (where calibrator assigned values are treated as exact) and Deming regression for method comparison (where both methods carry measurement error). Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation against the adopted acceptance criterion (TEa).</p>
           </div>
         </CardContent>
       </Card>

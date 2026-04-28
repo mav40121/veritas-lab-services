@@ -3752,8 +3752,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           passCount,
           totalCount,
           summary: overallPass
-            ? `All ${totalCount} measurements passed within CLIA TEa of +/-${teaPct}%. Calibration verification acceptable.`
-            : `${totalCount - passCount} of ${totalCount} measurements exceeded CLIA TEa of +/-${teaPct}%. Corrective action required.`,
+            ? `All ${totalCount} measurements passed within the adopted acceptance criterion (TEa) of +/-${teaPct}%. Calibration verification acceptable.`
+            : `${totalCount - passCount} of ${totalCount} measurements exceeded the adopted acceptance criterion (TEa) of +/-${teaPct}%.`,
         };
 
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
@@ -3945,8 +3945,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         xRange: { min: Math.min(...xs), max: Math.max(...xs) },
         yRange: { [comparisonName]: { min: Math.min(...ys), max: Math.max(...ys) } },
         summary: overallPass
-          ? `All ${n} samples passed within CLIA TEa of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
-          : `${n - passCount} of ${n} samples exceeded CLIA TEa of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Corrective action required.`,
+          ? `All ${n} samples passed within the adopted acceptance criterion (TEa) of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
+          : `${n - passCount} of ${n} samples exceeded the adopted acceptance criterion (TEa) of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}.`,
       };
 
       const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");

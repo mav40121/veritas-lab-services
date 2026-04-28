@@ -246,10 +246,10 @@ export function calculateCalVer(
   const maxDev = levelResults.length ? Math.max(...levelResults.map((r) => Math.abs(r.pctRecovery - 100))) : 0;
   const summary =
     `Calibration Verification was performed over an assigned value range of ${range}. ` +
-    `CLIA Total Allowable Error (TEa) was ${teaLabel}. ` +
+    `Adopted Acceptance Criterion (TEa) was ${teaLabel}. ` +
     `${passCount} of ${totalCount} measured results were within TEa. ` +
     `Maximum deviation from 100% recovery was ${maxDev.toFixed(1)}%. ` +
-    `The calibration verification ${overallPass ? "PASSED" : "FAILED"} CLIA accuracy requirements.`;
+    `The calibration verification ${overallPass ? "PASSED" : "FAILED"} the adopted acceptance criterion.`;
 
   return { type: "cal_ver", levelResults, regression, overallPass, passCount, totalCount, maxPctRecovery, minPctRecovery, avgObsError, summary };
 }
@@ -390,11 +390,11 @@ export function calculateMethodComparison(
     .join("; ");
   const n = levelResults.length;
   const summary =
-    `Correlation / Method Comparison was performed using ${n} patient samples with CLIA TEa of ±${cliaPercent}%. ` +
+    `Correlation / Method Comparison was performed using ${n} patient samples with adopted acceptance criterion (TEa) of ±${cliaPercent}%. ` +
     `Regression analysis: ${regLines}. ` +
     `Bland-Altman analysis: ${baLines}. ` +
     `${passCount} of ${totalCount} paired results were within TEa. ` +
-    `The method comparison ${overallPass ? "PASSED" : "FAILED"} CLIA acceptability criteria.`;
+    `The method comparison ${overallPass ? "PASSED" : "FAILED"} the adopted acceptance criterion.`;
 
   return { type: "method_comparison", levelResults, regression, blandAltman, overallPass, passCount, totalCount, xRange, yRange, summary };
 }
@@ -741,9 +741,9 @@ export function calculatePrecision(
   const overallPass = passCount === totalCount && totalCount > 0;
   const cliaStr = allowableCV.toFixed(1);
   const summary = `Precision Verification was performed on ${totalCount} control level${totalCount !== 1 ? "s" : ""}. ` +
-    `CLIA Allowable Imprecision (CV) was ±${cliaStr}%. ` +
-    `${passCount} of ${totalCount} levels met the allowable imprecision criteria. ` +
-    `The precision study ${overallPass ? "PASSED" : "FAILED"} CLIA requirements.`;
+    `Adopted Precision Acceptance Criterion (CV) was ±${cliaStr}%. ` +
+    `${passCount} of ${totalCount} levels met the adopted precision criterion. ` +
+    `The precision study ${overallPass ? "PASSED" : "FAILED"} the adopted acceptance criterion.`;
 
   return { type: "precision", mode, levelResults, overallPass, passCount, totalCount, summary };
 }

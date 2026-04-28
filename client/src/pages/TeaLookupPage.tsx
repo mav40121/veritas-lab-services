@@ -67,7 +67,7 @@ export default function TeaLookupPage() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4 mb-6 flex gap-3 text-sm">
           <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-amber-800 dark:text-amber-300">
-            <strong>Important:</strong> CLIA TEa values govern proficiency testing (PT) acceptable performance and calibration verification pass/fail evaluation. These values are the <em>regulatory floor</em>. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA TEa for enhanced quality). Always verify against the current{" "}
+            <strong>Important:</strong> CLIA TEa values are federally published as the PT acceptable performance criterion. Most labs (with medical director or designee approval under §493.1253(b)(2) and §493.1255(b)(3)) adopt the same value as the calibration verification acceptance criterion. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA PT TEa for enhanced quality). Always verify against the current{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">eCFR</a> before use in compliance decisions.
           </div>
         </div>
@@ -236,13 +236,13 @@ export default function TeaLookupPage() {
           <div>
             <div className="font-semibold mb-2">What is CLIA TEa?</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              CLIA Total Allowable Error (TEa) is the maximum permissible difference between a laboratory's result and the target value for each analyte, as defined in 42 CFR Part 493. It governs proficiency testing grading and is the appropriate benchmark for calibration verification pass/fail evaluation.
+              CLIA Total Allowable Error (TEa) is the maximum permissible difference between a laboratory's result and the target value for each analyte, as defined for proficiency testing acceptable performance in 42 CFR Part 493, Subpart I. It directly governs PT grading. We recommend it as the calibration verification acceptance criterion because it is federally published and well documented; under §493.1253(b)(2) and §493.1255(b)(3) the lab adopts this through medical director or designee approval.
             </p>
           </div>
           <div>
             <div className="font-semibold mb-2">Why use CLIA TEa for cal ver?</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              Many labs use manufacturer-stated allowable error for calibration verification instead of CLIA TEa. CLIA TEa is the regulatory floor. Using it ensures your acceptance criteria are defensible to any accreditation surveyor. Manufacturer claims may be more or less stringent depending on the analyte.
+              Many labs use manufacturer-stated allowable error for calibration verification instead of CLIA PT TEa. CLIA PT TEa is the federally published value for PT acceptable performance; adopting the same value (with medical director or designee approval) gives your cal ver acceptance criterion a published, defensible anchor. Manufacturer claims may be more or less stringent depending on the analyte.
             </p>
           </div>
           <div>
@@ -271,7 +271,7 @@ export default function TeaLookupPage() {
 
         {/* Source attribution */}
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart H</a>. U.S. Government publication, public domain. Last updated per the 2025 CLIA Final Rule (effective July 11, 2024). Always verify against the current eCFR before use in compliance decisions.
+          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart I</a>. U.S. Government publication, public domain. Last updated per the 2025 CLIA Final Rule (effective July 11, 2024). Always verify against the current eCFR before use in compliance decisions.
         </p>
       </div>
     </div>

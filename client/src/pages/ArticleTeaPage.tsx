@@ -54,7 +54,7 @@ return (
             CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-            In four years and more than 200 inspections as a Joint Commission laboratory surveyor, I regularly encountered a pattern: labs evaluating calibration verification against manufacturer-stated allowable error, unaware that the regulatory standard, defined in federal law, already exists for every analyte they test. This article explains what CLIA TEa is, where it lives in the Code of Federal Regulations, and why your lab should be using it.
+            In four years and more than 200 inspections as a Joint Commission laboratory surveyor, I regularly encountered a pattern: labs evaluating calibration verification against manufacturer-stated allowable error, unaware that CLIA already publishes a federally defined PT acceptance criterion for every regulated analyte, which most labs are free to adopt as their cal ver acceptance threshold. This article explains what CLIA TEa is, where it lives in the Code of Federal Regulations, and why your lab should be using it.
           </p>
           <div className="flex items-center gap-5 text-xs text-muted-foreground border-t border-border pt-4">
             <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span>
@@ -72,10 +72,10 @@ return (
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
             <ul className="space-y-2">
               {[
-                "CLIA TEa (Total Allowable Error) is the federally mandated acceptable performance standard for every regulated analyte",
-                "It lives in 42 CFR Part 493, Subpart H: a publicly accessible, free government document",
+                "CLIA TEa (Total Allowable Error) is the federally defined PT acceptable performance criterion for every regulated analyte",
+                "It lives in 42 CFR Part 493, Subpart I: a publicly accessible, free government document",
                 "Most labs use manufacturer-stated allowable error instead, which may be more lenient than federal law requires",
-                "Using CLIA TEa for calibration verification makes your pass/fail evaluation defensible to any accreditation surveyor",
+                "Adopting CLIA PT TEa as your calibration verification acceptance criterion (with medical director or designee approval) gives you a federally published, defensible threshold",
                 "The 2025 CLIA Final Rule updated TEa values for many analytes, effective July 11, 2024. Your lab may be using outdated criteria",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
@@ -94,7 +94,7 @@ return (
             During my time as a Joint Commission laboratory surveyor, I encountered a consistent pattern across facilities of every size and complexity level. When I asked lab directors what criteria they used to evaluate calibration verification pass/fail, the most common answer was "the manufacturer's allowable error." Some said "our internal lab policy." A smaller number said "CLIA TEa."
           </p>
           <p>
-            The ones who said CLIA TEa were right. The others weren't wrong exactly, CLIA doesn't prohibit using manufacturer criteria, but they were often using a standard less rigorous than what federal law already defines, sometimes without knowing the federal standard existed.
+            None of those answers are wrong on its face. CLIA does not specify numeric acceptance criteria for calibration verification: §493.1253(b)(2) and §493.1255(b)(3) require the lab to establish and document criteria, but the choice belongs to the medical director or designee. The reason directors who said "CLIA TEa" were on stronger ground is simple: CLIA already publishes federally defined PT acceptance criteria for every regulated analyte, and adopting those values as your cal ver criterion gives you a published, defensible threshold rather than relying on a manufacturer claim that may or may not match.
           </p>
           <p>
             This is not a criticism of those directors. CLIA is a complex regulatory framework, and the TEa tables are buried in a subsection of a subsection of the Code of Federal Regulations. Nobody hands you a copy when you become lab director. You're expected to find it yourself.
@@ -117,15 +117,15 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where to Find It in the CFR</h2>
           <p>
-            CLIA TEa values are published in <strong>42 CFR Part 493, Subpart H</strong>: "Participation in Proficiency Testing for Laboratories Performing Nonwaived Testing." The relevant sections:
+            CLIA TEa values are published in <strong>42 CFR Part 493, Subpart I</strong> ("Proficiency Testing Programs by Specialty and Subspecialty"). The relevant sections:
           </p>
           <div className="bg-muted/40 rounded-lg border border-border p-4 space-y-2 text-sm font-mono my-4">
-            <div><span className="text-primary font-semibold">§493.927</span> - General Immunology (alpha-1 antitrypsin, AFP, ANA, complement, hepatitis markers, immunoglobulins...)</div>
-            <div><span className="text-primary font-semibold">§493.931</span> - Routine Chemistry (glucose, sodium, creatinine, troponin, lipids, liver enzymes, BNP...)</div>
-            <div><span className="text-primary font-semibold">§493.933</span> - Endocrinology (TSH, T4, T3, cortisol, FSH, LH, estradiol, testosterone...)</div>
-            <div><span className="text-primary font-semibold">§493.937</span> - Toxicology (digoxin, phenytoin, lithium, carbamazepine, acetaminophen...)</div>
-            <div><span className="text-primary font-semibold">§493.941</span> - Hematology (CBC, differential, fibrinogen, PT, INR, aPTT...)</div>
-            <div><span className="text-primary font-semibold">§493.959</span> - Immunohematology (ABO, Rh, antibody detection, compatibility...)</div>
+            <div><span className="text-primary font-semibold">§493.927</span> - PT acceptance criteria, general immunology (alpha-1 antitrypsin, AFP, ANA, complement, hepatitis markers, immunoglobulins...)</div>
+            <div><span className="text-primary font-semibold">§493.931</span> - PT acceptance criteria, routine chemistry (glucose, sodium, creatinine, troponin, lipids, liver enzymes, BNP...)</div>
+            <div><span className="text-primary font-semibold">§493.933</span> - PT acceptance criteria, endocrinology (TSH, T4, T3, cortisol, FSH, LH, estradiol, testosterone...)</div>
+            <div><span className="text-primary font-semibold">§493.937</span> - PT acceptance criteria, toxicology (digoxin, phenytoin, lithium, carbamazepine, acetaminophen...)</div>
+            <div><span className="text-primary font-semibold">§493.941</span> - PT acceptance criteria, hematology (CBC, differential, fibrinogen, PT, INR, aPTT...)</div>
+            <div><span className="text-primary font-semibold">§493.959</span> - PT acceptance criteria, immunohematology (ABO, Rh, antibody detection, compatibility...)</div>
           </div>
           <p>
             Every section is publicly available at <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a> at no cost. The CFR is a US government publication and is in the public domain. You can read, reproduce, and share it freely. There is no paywalled version.
@@ -168,7 +168,7 @@ return (
             Manufacturer-stated allowable error is the performance claim made in the package insert or instrument specification sheet. It is based on what the manufacturer's testing showed their system can achieve, not on what regulators determined is acceptable for patient safety.
           </p>
           <p>
-            In some cases, manufacturer claims are more stringent than CLIA TEa. In others, they are more lenient. The critical point: <strong>only CLIA TEa is the regulatory standard.</strong> If a surveyor asks how you determined your calibration verification was acceptable, "the manufacturer said so" is a defensible answer, but "42 CFR §493.931 establishes ±8% or ±6 mg/dL for glucose, and all five of our calibration levels fell within that range" is a better one.
+            In some cases, manufacturer claims are more stringent than CLIA PT TEa. In others, they are more lenient. The critical point: CLIA PT TEa is a federally published value, while a manufacturer claim is a vendor specification. Adopting the federally published value as your cal ver acceptance criterion (with medical director or designee approval) gives you a more defensible answer to a surveyor. "The manufacturer said so" works, but "42 CFR §493.931 establishes ±8% or ±6 mg/dL for glucose as the PT acceptance criterion, and our laboratory has adopted that as our cal ver criterion under §493.1255(b)(3); all five calibration levels fell within that range" is a stronger answer.
           </p>
 
           <Callout type="warning">
@@ -183,7 +183,7 @@ return (
             For glucose, that means an internal goal of ±4% or ±3 mg/dL (half of the CLIA TEa of ±8% or ±6 mg/dL). Using half TEa as an internal standard doesn't change what you report to regulators. It simply gives your quality program a tighter target that reduces the risk of marginal results.
           </p>
           <p>
-            Whether to adopt ADLM recommendations is a laboratory director or designee decision. The regulatory floor is CLIA TEa. The quality ceiling is whatever your director or designee determines is appropriate for your patient population and clinical context.
+            Whether to adopt ADLM recommendations is a laboratory director or designee decision. The published federal anchor is CLIA PT TEa, adopted by your medical director or designee as the cal ver criterion. The quality ceiling is whatever your director or designee determines is appropriate for your patient population and clinical context.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">How to Apply TEa to Calibration Verification</h2>
@@ -222,7 +222,7 @@ return (
           {[
             {
               q: "Does CLIA require labs to use CLIA TEa for calibration verification, or can we use manufacturer criteria?",
-              a: "CLIA does not explicitly mandate that labs use TEa for calibration verification pass/fail evaluation. It mandates that calibration verification be performed and documented. However, CLIA TEa is the regulatory acceptable performance standard for the same analytes, and using it makes your criteria directly defensible to surveyors. Using manufacturer criteria that are more lenient than CLIA TEa creates a risk: you could pass your own internal study while exceeding the federal regulatory standard."
+              a: "No. CLIA requires (42 CFR §493.1253 and §493.1255) that calibration verification be performed and documented and that the lab establish acceptance criteria, but it does not specify numeric criteria. Many labs adopt the §493 PT acceptable performance criterion for the same analyte as their cal ver acceptance criterion, with medical director or designee approval. This is a recommendation, not a CLIA requirement. We recommend it because the value is federally published, well documented, and simpler to defend than a manufacturer claim or an unwritten internal policy."
             },
             {
               q: "What's the difference between TEa used for proficiency testing and TEa used for calibration verification?",
@@ -279,7 +279,7 @@ return (
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>Code of Federal Regulations. (2024). Title 42, Part 493, Subpart H. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
+              <li>Code of Federal Regulations. (2024). Title 42, Part 493, Subpart I. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
               <li>Centers for Medicare & Medicaid Services. (2024). CLIA Proficiency Testing: Analytes and Acceptable Performance Final Rule (CMS-3355-F). <a href="https://www.cms.gov" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">cms.gov</a></li>
               <li>Westgard JO. (2024). 2025 CLIA Acceptance Limits for Proficiency Testing. <a href="https://www.westgard.com/clia-a-quality/quality-requirements/2024-clia-requirements.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">westgard.com</a></li>
               <li>Association for Diagnostics & Laboratory Medicine. (2024). Quality Management Guidelines. <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">adlm.org</a></li>

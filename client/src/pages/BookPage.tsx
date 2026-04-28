@@ -426,14 +426,15 @@ return (
               <CardContent className="p-6 space-y-3">
                 <div className="font-semibold">VeritaCheck™ handles it all</div>
                 {[
-                  ["Calibration Verification / Linearity", "42 CFR §493.931"],
-                  ["Correlation / Method Comparison", "42 CFR §493.933"],
-                  ["Precision Verification (EP15)", "42 CFR §493.941"],
+                  ["Calibration Verification / Linearity", "42 CFR §493.1255(b)(3)"],
+                  ["Correlation / Method Comparison", "42 CFR §493.1253(b)(2)"],
+                  ["Precision Verification (EP15)", "42 CFR §493.1253(b)(1)(i)"],
                 ].map(([study, cfr]) => (
+
                   <div key={study} className="flex items-center justify-between text-sm border-b border-border/40 pb-2 last:border-0 last:pb-0">
                     <span className="font-medium">{study}</span>
                     <a
-                      href={`https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493`}
+                      href={`https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-primary hover:underline"

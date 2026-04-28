@@ -1461,7 +1461,7 @@ return (
               )}
 
               <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "CLIA Allowable Imprecision (CV%)" : "CLIA Total Allowable Error"}</CardTitle></CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <Select value={String(cliaPreset)} onValueChange={v => setCliaPreset(parseInt(v))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>

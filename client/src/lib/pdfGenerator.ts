@@ -300,13 +300,16 @@ function pdfSupportingPage(doc: jsPDF, study: Study, instrumentNames: string[], 
   // The cfr field is stored on the study from the preset selection
   const storedCfr: string = (study as any).cfr || "";
   let cfrCitation = storedCfr || "42 CFR §493.931";
+  // §493 Subpart I PT acceptance-criterion sections
   const cfrSectionMap: { [key: string]: string } = {
-    "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931",
-    "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.933",
-    "42 CFR §493.935": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.935",
-    "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.941",
+    "42 CFR §493.927": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.927",
+    "42 CFR §493.931": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931",
+    "42 CFR §493.933": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.933",
+    "42 CFR §493.937": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
+    "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
+    "42 CFR §493.959": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.959",
   };
-  const cfrUrl = cfrSectionMap[cfrCitation] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.931";
+  const cfrUrl = cfrSectionMap[cfrCitation] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931";
 
   // Two-column layout: specs left, supporting right
   doc.setFontSize(8); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
@@ -317,8 +320,8 @@ function pdfSupportingPage(doc: jsPDF, study: Study, instrumentNames: string[], 
   const specs = [
     ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
-    ["CLIA Total Allowable Error", `±${cliaP}%`],
-    ["CLIA CFR Reference", cfrCitation],
+    ["Adopted Acceptance Criterion (TEa)", `±${cliaP}%`],
+    ["CFR Reference (PT TEa, adopted)", cfrCitation],
     ["Allowable Systematic Error", `±${cliaP}%`],
   ];
   const supporting = [
