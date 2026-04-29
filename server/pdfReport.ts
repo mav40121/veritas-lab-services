@@ -752,7 +752,7 @@ function narrativeHTML(
       narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
       narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
       narrative += `The mean bias is ${biasDescr} (supporting statistic; not the verdict criterion). `;
-      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting. `;
+      narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. `;
       narrative += `${equivalenceSentence} ${decisionRuleSentence} `;
       narrative += `<b>Each paired specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). All paired specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {

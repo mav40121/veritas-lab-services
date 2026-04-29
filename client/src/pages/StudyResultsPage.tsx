@@ -175,7 +175,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
       narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement (${qr.totalSamples} samples). ` +
         `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). ` +
         (qr.sensitivity > 0 ? `Sensitivity = ${qr.sensitivity.toFixed(1)}%, Specificity = ${qr.specificity.toFixed(1)}%. ` : "") +
-        `The acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement was met. The comparison method may be used for patient reporting.`;
+        `The acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement was met. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement, which does not meet the acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement. ` +
         `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). Review discordant specimens and investigate potential causes.`;
@@ -187,7 +187,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
       narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade (${sq.totalSamples} samples). ` +
         `Exact agreement: ${sq.percentExactAgreement.toFixed(1)}%. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
         `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. ` +
-        `The acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}% within +/-1 grade was met. The comparison method may be used for patient reporting.`;
+        `The acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}% within +/-1 grade was met. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade, which does not meet the acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}%. ` +
         `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
@@ -212,7 +212,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
       ? `within the adopted method comparison acceptance criterion of ${teaLabel}`
       : `exceeds the adopted method comparison acceptance criterion of ${teaLabel} and requires investigation`;
     if (mc.overallPass) {
-      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. This method/instrument may be used for patient reporting.`;
+      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The method comparison for ${study.testName} did not meet the adopted acceptance criterion. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (adopted limit: \u00B1${cliaPct}%; §493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)) indicate unacceptable agreement between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
