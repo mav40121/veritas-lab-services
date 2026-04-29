@@ -1595,7 +1595,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         row.getCell(2).value = s.date || "";
         row.getCell(3).value = s.testName || "";
         row.getCell(4).value = studyTypeLabel(s.studyType);
-        row.getCell(5).value = s.instrument || "";
+        // Resolve VeritaMap-linked instrument display for Excel
+        let excelInstrument = s.instrument || "";
+        if (s.instrumentMeta) {
+          try {
+            const meta = typeof s.instrumentMeta === "string" ? JSON.parse(s.instrumentMeta) : s.instrumentMeta;
+            const entry = meta["0"];
+            if (entry?.instrument_id) {
+              const row2 = (db as any).$client.prepare("SELECT instrument_name, nickname, serial_number FROM veritamap_instruments WHERE id = ?").get(entry.instrument_id) as any;
+              const d = row2 || entry;
+              const parts: string[] = [];
+              if (d.nickname) { parts.push(`${d.instrument_name || d.model} (${d.nickname})`); } else { parts.push(d.instrument_name || d.model); }
+              if (d.serial_number) parts.push(`S/N ${d.serial_number}`);
+              excelInstrument = parts.join(", ");
+            }
+          } catch {}
+        }
+        row.getCell(5).value = excelInstrument;
         row.getCell(6).value = sampleCount(s);
         row.getCell(7).value = teaApplied(s);
         row.getCell(8).value = verdictLabel(s);
@@ -1826,6 +1842,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       if (cliaLabName) { (study as any)._labName = cliaLabName; }
+
+      // Resolve VeritaMap-linked instrument data for report rendering
+      if (study.instrumentMeta) {
+        try {
+          const meta = typeof study.instrumentMeta === "string" ? JSON.parse(study.instrumentMeta) : study.instrumentMeta;
+          const resolved: Record<string, { model: string; nickname: string | null; serial_number: string | null }> = {};
+          for (const [idx, entry] of Object.entries(meta) as [string, any][]) {
+            if (entry?.instrument_id) {
+              const row = (db as any).$client.prepare("SELECT instrument_name, nickname, serial_number FROM veritamap_instruments WHERE id = ?").get(entry.instrument_id) as any;
+              if (row) {
+                resolved[idx] = { model: row.instrument_name, nickname: row.nickname || null, serial_number: row.serial_number || null };
+              } else {
+                resolved[idx] = { model: entry.model, nickname: entry.nickname, serial_number: entry.serial_number };
+              }
+            }
+          }
+          (study as any)._instrumentDisplay = resolved;
+        } catch {}
+      }
+
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any);
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
