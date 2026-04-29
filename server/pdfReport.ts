@@ -3425,6 +3425,7 @@ interface VeritaPolicyPDFInput {
   statusMap: Record<number, any>;
   policyMap: Record<number, any>;
   policies: any[];
+  accreditationBody?: string;
 }
 
 function escHtml(s: string | null | undefined): string {
@@ -3437,12 +3438,22 @@ function escHtml(s: string | null | undefined): string {
 }
 
 function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
-  const { user, settings, requirements, statusMap, policyMap, policies } = input;
+  const { user, settings, requirements, statusMap, policyMap, policies, accreditationBody } = input;
 
   const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
   const cliaRaw = user?.clia_number || user?.cliaNumber || "";
   const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file - enter in account settings";
   const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  // Build dynamic subtitle based on accreditation body and actual requirement count
+  const body = accreditationBody || settings?.accreditation_body || 'tjc';
+  const reqCount = requirements.length;
+  let subtitleText: string;
+  if (body === 'both') {
+    subtitleText = `${reqCount} Required Policies (TJC + CAP)`;
+  } else {
+    subtitleText = `${reqCount} ${body.toUpperCase()} Required Policies`;
+  }
 
   // Compute summary -- requirements come pre-enriched with status and policy_name
   let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
@@ -3649,7 +3660,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 <div class="page1">
   <div class="header-block">
     <h1 class="report-title">VeritaPolicy&#8482; Compliance Report</h1>
-    <h2 class="report-subtitle">TJC Laboratory Policy Tracker - 88 Required Policies</h2>
+    <h2 class="report-subtitle">Laboratory Policy Tracker - ${subtitleText}</h2>
     <div class="meta-row">
       <span><strong>Laboratory:</strong> ${labName}</span>
       <span><strong>CLIA:</strong> ${clia}</span>

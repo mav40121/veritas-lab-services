@@ -7921,11 +7921,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
     const policyMap: Record<number, any> = {};
     for (const p of policies) policyMap[p.id] = p;
-    // Always include both TJC and CAP requirements
-    const reqSets: any[] = [
-      ...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })),
-      ...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })),
-    ];
+    // Filter requirements by lab's accreditation body (default 'tjc' -- most production labs are TJC).
+    // TODO: veritapolicy_settings.accreditation_body should be consolidated to read from
+    // labs.accreditation_tjc / labs.accreditation_cap (see commit 8fed0ec) in a future refactor.
+    const bodyReq = settings?.accreditation_body || 'tjc';
+    const reqSets: any[] = [];
+    if (bodyReq === 'tjc' || bodyReq === 'both') reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+    if (bodyReq === 'cap' || bodyReq === 'both') reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
 
     // Build response
     const result = reqSets.map((req: any) => {
@@ -8098,11 +8100,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
       const statusMap: Record<number, any> = {};
       for (const s of statuses) statusMap[s.requirement_id] = s;
-      // Always include both TJC and CAP requirements
-      const allReqs: any[] = [
-        ...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })),
-        ...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })),
-      ];
+      // Filter requirements by lab's accreditation body (default 'tjc' -- most production labs are TJC).
+      const bodyPdf = settings?.accreditation_body || 'tjc';
+      const allReqs: any[] = [];
+      if (bodyPdf === 'tjc' || bodyPdf === 'both') allReqs.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+      if (bodyPdf === 'cap' || bodyPdf === 'both') allReqs.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
         let autoNa = false;
@@ -8124,7 +8126,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         };
       });
       const { generateVeritaPolicyPDF } = await import('./pdfReport');
-      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [] });
+      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: bodyPdf });
       res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
