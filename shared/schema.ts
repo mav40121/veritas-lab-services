@@ -60,6 +60,38 @@ export const contactMessages = sqliteTable("contact_messages", {
 export const insertContactSchema = createInsertSchema(contactMessages).omit({ id: true, createdAt: true });
 export type InsertContact = z.infer<typeof insertContactSchema>;
 
+// Labs table — normalized lab identity shared across owner + seats
+export const labs = sqliteTable("labs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  cliaNumber: text("clia_number").unique(),
+  labName: text("lab_name"),
+  accreditationCap: integer("accreditation_cap").notNull().default(0),
+  accreditationTjc: integer("accreditation_tjc").notNull().default(0),
+  accreditationCola: integer("accreditation_cola").notNull().default(0),
+  accreditationAabb: integer("accreditation_aabb").notNull().default(0),
+  cliaLocked: integer("clia_locked").notNull().default(0),
+  labNameLocked: integer("lab_name_locked").notNull().default(0),
+  ownerUserId: integer("owner_user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export type Lab = typeof labs.$inferSelect;
+
+// Lab audit log — tracks changes to lab identity fields
+export const labAuditLog = sqliteTable("lab_audit_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  labId: integer("lab_id").notNull(),
+  changedByUserId: integer("changed_by_user_id").notNull(),
+  fieldName: text("field_name").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  changedAt: text("changed_at").notNull(),
+  changeReason: text("change_reason"),
+});
+
+export type LabAuditEntry = typeof labAuditLog.$inferSelect;
+
 // Password reset tokens
 export const resetTokens = sqliteTable("reset_tokens", {
   id: integer("id").primaryKey({ autoIncrement: true }),

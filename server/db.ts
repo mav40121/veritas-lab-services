@@ -903,6 +903,111 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(ow
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_module ON audit_log(module, entity_type, entity_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_user ON nightly_snapshots(user_id, snapshot_date DESC)`); } catch {}
 
+// ─────────────────────────────────────────────────────────────────────────────────
+// Labs table — normalized lab identity (CLIA, name, accreditation flags)
+// Migrated from per-user columns to shared lab entity so seats inherit and
+// fields can be locked once reports are generated.
+// ─────────────────────────────────────────────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS labs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    clia_number TEXT UNIQUE,
+    lab_name TEXT,
+    accreditation_cap INTEGER NOT NULL DEFAULT 0,
+    accreditation_tjc INTEGER NOT NULL DEFAULT 0,
+    accreditation_cola INTEGER NOT NULL DEFAULT 0,
+    accreditation_aabb INTEGER NOT NULL DEFAULT 0,
+    clia_locked INTEGER NOT NULL DEFAULT 0,
+    lab_name_locked INTEGER NOT NULL DEFAULT 0,
+    owner_user_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+  )
+`);
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_labs_clia ON labs(clia_number) WHERE clia_number IS NOT NULL`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_labs_owner ON labs(owner_user_id)`); } catch {}
+
+// Lab audit log — tracks every change to CLIA number, lab name, or accreditation
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    changed_by_user_id INTEGER NOT NULL,
+    field_name TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    change_reason TEXT,
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (changed_by_user_id) REFERENCES users(id)
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_lab_audit_lab ON lab_audit_log(lab_id, changed_at DESC)`); } catch {}
+
+// Add lab_id FK column to users table (nullable — backfilled below)
+if (!colNames.includes("lab_id")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
+}
+
+// ── Backfill: migrate existing user-level lab data into labs rows ──────────────
+// For every user who has a populated clia_number or clia_lab_name on their user
+// row AND does not already have a lab_id, create a labs row and link it.
+// Then, for seat users whose owner now has a lab_id, inherit the same lab_id.
+{
+  const usersWithLabData = sqlite.prepare(
+    "SELECT id, clia_number, clia_lab_name, preferred_standards FROM users WHERE (clia_number IS NOT NULL OR clia_lab_name IS NOT NULL) AND lab_id IS NULL"
+  ).all() as any[];
+
+  let labsMigrated = 0;
+  for (const u of usersWithLabData) {
+    // Parse preferred_standards JSON to set accreditation flags
+    let accCap = 0, accTjc = 0, accCola = 0, accAabb = 0;
+    if (u.preferred_standards) {
+      try {
+        const standards: string[] = JSON.parse(u.preferred_standards);
+        accCap = standards.includes("CAP") ? 1 : 0;
+        accTjc = standards.includes("TJC") ? 1 : 0;
+        accCola = standards.includes("COLA") ? 1 : 0;
+        accAabb = standards.includes("AABB") ? 1 : 0;
+      } catch {}
+    }
+
+    // Check if a lab with this CLIA already exists (avoid unique constraint violation)
+    const existingLab = u.clia_number
+      ? sqlite.prepare("SELECT id FROM labs WHERE clia_number = ?").get(u.clia_number) as any
+      : null;
+
+    let labId: number;
+    if (existingLab) {
+      labId = existingLab.id;
+    } else {
+      const now = new Date().toISOString();
+      const result = sqlite.prepare(
+        "INSERT INTO labs (clia_number, lab_name, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(u.clia_number || null, u.clia_lab_name || null, accCap, accTjc, accCola, accAabb, u.id, now, now);
+      labId = Number(result.lastInsertRowid);
+    }
+
+    sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(labId, u.id);
+    labsMigrated++;
+  }
+
+  // Backfill seat users: inherit owner's lab_id
+  let seatsMigrated = 0;
+  const seatsNeedingLab = sqlite.prepare(
+    "SELECT us.seat_user_id, u_owner.lab_id FROM user_seats us JOIN users u_owner ON us.owner_user_id = u_owner.id WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL AND u_owner.lab_id IS NOT NULL"
+  ).all() as any[];
+  for (const seat of seatsNeedingLab) {
+    sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ? AND lab_id IS NULL").run(seat.lab_id, seat.seat_user_id);
+    seatsMigrated++;
+  }
+
+  if (labsMigrated > 0 || seatsMigrated > 0) {
+    console.log(`[migration] Labs backfill: ${labsMigrated} lab(s) created from user records, ${seatsMigrated} seat user(s) linked`);
+  }
+}
+
 // VeritaPolicy tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritapolicy_settings (
