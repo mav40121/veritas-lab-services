@@ -430,6 +430,63 @@ function storePdfToken(buffer: Buffer, filename: string): string {
   return token;
 }
 
+// ── LAB LOCK + AUDIT HELPERS ─────────────────────────────────────────────────
+
+/**
+ * Mark CLIA number and lab name as locked on a lab once the first report is
+ * generated under that lab. Idempotent -- if already locked, this is a no-op.
+ * Called from every PDF generation success path.
+ */
+function markLabReportingLocks(labId: number): void {
+  try {
+    (db as any).$client.prepare(
+      "UPDATE labs SET clia_locked = 1, lab_name_locked = 1, updated_at = ? WHERE id = ? AND (clia_locked = 0 OR lab_name_locked = 0)"
+    ).run(new Date().toISOString(), labId);
+  } catch (err: any) {
+    console.error("[markLabReportingLocks] Error:", err.message);
+  }
+}
+
+/**
+ * Resolve the lab row for a given user, following the seat -> owner -> lab_id
+ * chain. Returns the full labs row or null.
+ */
+function resolveLabForUser(userId: number): any | null {
+  // First check if user has lab_id directly
+  const userRow = (db as any).$client.prepare(
+    "SELECT lab_id FROM users WHERE id = ?"
+  ).get(userId) as any;
+  if (userRow?.lab_id) {
+    return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(userRow.lab_id);
+  }
+  // If this is a seat user, try the owner's lab
+  const seatRow = (db as any).$client.prepare(
+    "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+  ).get(userId) as any;
+  if (seatRow) {
+    const ownerRow = (db as any).$client.prepare(
+      "SELECT lab_id FROM users WHERE id = ?"
+    ).get(seatRow.owner_user_id) as any;
+    if (ownerRow?.lab_id) {
+      return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(ownerRow.lab_id);
+    }
+  }
+  return null;
+}
+
+/**
+ * Write an audit log entry for a lab field change.
+ */
+function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: string, oldValue: string | null, newValue: string | null, changeReason?: string): void {
+  try {
+    (db as any).$client.prepare(
+      "INSERT INTO lab_audit_log (lab_id, changed_by_user_id, field_name, old_value, new_value, changed_at, change_reason) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(labId, changedByUserId, fieldName, oldValue, newValue, new Date().toISOString(), changeReason || null);
+  } catch (err: any) {
+    console.error("[writeLabAuditEntry] Error:", err.message);
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // ── DEMO COMPETENCY DATA BACKFILL (runs once on startup) ────────────────
   try {
@@ -1134,24 +1191,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).run(user.id, new Date().toISOString(), seatInvite.id);
       isSeatUser = true;
       // Get owner's plan so seat user inherits it
-      const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
+      const ownerRow = (db as any).$client.prepare("SELECT plan, lab_id FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
       // Write owner's plan into seat user's DB record AND in-memory store
+      // Also inherit owner's lab_id so seat user sees the same lab identity
       try {
-        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1 WHERE id = ?").run(ownerPlan, user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ? WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     } else if (activeSeat) {
       // User is already an active seat (e.g. manually attached via admin endpoint)
       isSeatUser = true;
-      const ownerRow = (db as any).$client.prepare("SELECT plan FROM users WHERE id = ?").get(activeSeat.owner_user_id) as any;
+      const ownerRow = (db as any).$client.prepare("SELECT plan, lab_id FROM users WHERE id = ?").get(activeSeat.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
       // Ensure seat_user_id is linked, plan inherited, and onboarding skipped
       (db as any).$client.prepare(
         "UPDATE user_seats SET seat_user_id = ? WHERE id = ?"
       ).run(user.id, activeSeat.id);
       try {
-        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1 WHERE id = ?").run(ownerPlan, user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ? WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     }
@@ -1730,25 +1788,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!study || typeof study !== "object" || !results || typeof results !== "object") {
         return res.status(400).json({ error: "study and results must be JSON objects" });
       }
-      // Fetch CLIA number from user record if authenticated
-      // For seat users, look up the owner's CLIA number (seat users inherit owner lab identity)
+      // Fetch CLIA number from labs table if authenticated, falling back to user record
       let cliaNumber: string | undefined;
       let cliaLabName: string | undefined;
       let preferredStandards: string[] | undefined;
+      let resolvedLabId: number | null = null;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
         try {
           const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-          // Check if this is a seat user — if so, use the owner's CLIA/settings
-          const seatRow = (db as any).$client.prepare(
-            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId) as any;
-          const effectiveUserId = seatRow ? seatRow.owner_user_id : payload.userId;
-          const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(effectiveUserId) as any;
-          cliaNumber = userRow?.clia_number || undefined;
-          cliaLabName = userRow?.clia_lab_name || undefined;
-          if (userRow?.preferred_standards) {
-            try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
+          // Try labs table first (new model)
+          const lab = resolveLabForUser(payload.userId);
+          if (lab) {
+            resolvedLabId = lab.id;
+            cliaNumber = lab.clia_number || undefined;
+            cliaLabName = lab.lab_name || undefined;
+            const standards: string[] = [];
+            if (lab.accreditation_cap) standards.push("CAP");
+            if (lab.accreditation_tjc) standards.push("TJC");
+            if (lab.accreditation_cola) standards.push("COLA");
+            if (lab.accreditation_aabb) standards.push("AABB");
+            if (standards.length > 0) preferredStandards = standards;
+          } else {
+            // Fallback: read from user record (pre-migration data)
+            const seatRow = (db as any).$client.prepare(
+              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+            ).get(payload.userId) as any;
+            const effectiveUserId = seatRow ? seatRow.owner_user_id : payload.userId;
+            const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(effectiveUserId) as any;
+            cliaNumber = userRow?.clia_number || undefined;
+            cliaLabName = userRow?.clia_lab_name || undefined;
+            if (userRow?.preferred_standards) {
+              try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
+            }
           }
         } catch {}
       }
@@ -1759,6 +1831,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
       const pdfToken = storePdfToken(pdfBuffer, filename);
+
+      // Lock CLIA/lab name on first successful report generation
+      if (resolvedLabId) markLabReportingLocks(resolvedLabId);
+
       res.json({ token: pdfToken });
     } catch (err: any) {
       console.error("PDF generation error:", err.message);
@@ -2854,11 +2930,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     });
 
-    // Fetch CLIA number and preferred standards
-    const scanUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(req.userId) as any;
+    // Fetch CLIA number and preferred standards from labs table, fallback to user
+    const scanLab = resolveLabForUser(req.userId);
+    let scanCliaNumber: string | undefined;
+    let scanLabName: string | undefined;
     let scanPreferredStandards: string[] | undefined;
-    if (scanUserRow?.preferred_standards) {
-      try { scanPreferredStandards = JSON.parse(scanUserRow.preferred_standards); } catch {}
+    if (scanLab) {
+      scanCliaNumber = scanLab.clia_number || undefined;
+      scanLabName = scanLab.lab_name || undefined;
+      const stds: string[] = [];
+      if (scanLab.accreditation_cap) stds.push("CAP");
+      if (scanLab.accreditation_tjc) stds.push("TJC");
+      if (scanLab.accreditation_cola) stds.push("COLA");
+      if (scanLab.accreditation_aabb) stds.push("AABB");
+      if (stds.length > 0) scanPreferredStandards = stds;
+    } else {
+      const scanUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(req.userId) as any;
+      scanCliaNumber = scanUserRow?.clia_number || undefined;
+      scanLabName = scanUserRow?.clia_lab_name || undefined;
+      if (scanUserRow?.preferred_standards) {
+        try { scanPreferredStandards = JSON.parse(scanUserRow.preferred_standards); } catch {}
+      }
     }
 
     try {
@@ -2868,8 +2960,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           createdAt: scan.created_at,
           updatedAt: scan.updated_at,
           items: mergedItems,
-          cliaNumber: scanUserRow?.clia_number || undefined,
-          labName: scanUserRow?.clia_lab_name || undefined,
+          cliaNumber: scanCliaNumber,
+          labName: scanLabName,
           preferredStandards: scanPreferredStandards as any,
         },
         type as "executive" | "full"
@@ -2879,6 +2971,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         console.error("VeritaScan PDF generation returned empty buffer");
         return res.status(500).json({ error: "PDF generation failed - empty output" });
       }
+
+      // Lock CLIA/lab name on first successful report generation
+      if (scanLab) markLabReportingLocks(scanLab.id);
 
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -5441,15 +5536,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE qr.assessment_id = ?`
     ).all(assessment.id);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const compUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(dataUserId) as any;
-    const labName = compUserRow?.clia_lab_name || "Clinical Laboratory";
+    const compLab = resolveLabForUser(dataUserId);
+    const compCliaNumber = compLab?.clia_number || undefined;
+    const compLabName = compLab?.lab_name || undefined;
+    // Fallback to user record if no lab row yet
+    let labName = compLabName || "Clinical Laboratory";
+    let cliaForComp = compCliaNumber;
+    if (!compLab) {
+      const compUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(dataUserId) as any;
+      labName = compUserRow?.clia_lab_name || "Clinical Laboratory";
+      cliaForComp = compUserRow?.clia_number || undefined;
+    }
     try {
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: compUserRow?.clia_number || undefined });
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp });
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
       const veritacompToken = storePdfToken(pdfBuffer, filename);
+      if (compLab) markLabReportingLocks(compLab.id);
       res.json({ token: veritacompToken });
     } catch (err: any) {
       console.error("Competency PDF generation error:", err);
@@ -5591,12 +5696,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     const { currentSpecimens } = req.body || {};
-    const cumsumUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(req.userId) as any;
+    const cumsumLab = resolveLabForUser(req.userId);
+    let cumsumClia: string | undefined;
+    let cumsumLabName: string | undefined;
+    if (cumsumLab) {
+      cumsumClia = cumsumLab.clia_number || undefined;
+      cumsumLabName = cumsumLab.lab_name || undefined;
+    } else {
+      const cumsumUserRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(req.userId) as any;
+      cumsumClia = cumsumUserRow?.clia_number || undefined;
+      cumsumLabName = cumsumUserRow?.clia_lab_name || undefined;
+    }
     try {
-      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumUserRow?.clia_number || undefined, cumsumUserRow?.clia_lab_name || undefined);
+      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumClia, cumsumLabName);
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `VeritaCheck_CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
       const cumsumToken = storePdfToken(pdfBuffer, filename);
+      if (cumsumLab) markLabReportingLocks(cumsumLab.id);
       res.json({ token: cumsumToken });
     } catch (e: any) {
       console.error("CUMSUM PDF error:", e);
@@ -6204,6 +6320,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (db as any).$client.prepare(
         "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson, inviteToken);
+    }
+
+    // If the seat user already exists and is active, inherit the owner's lab_id
+    if (seatUserId && newStatus === "active") {
+      const ownerLabRow = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(req.userId) as any;
+      if (ownerLabRow?.lab_id) {
+        (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(ownerLabRow.lab_id, seatUserId);
+      }
     }
 
     // Send invite email via Resend
@@ -7122,7 +7246,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasPTAccess(req.user)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     try {
       const userId = req.ownerUserId ?? req.user.userId;
-      const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+      const ptLab = resolveLabForUser(userId);
+      let ptLabName = "";
+      let ptCliaNum = "";
+      if (ptLab) {
+        ptLabName = ptLab.lab_name || "";
+        ptCliaNum = ptLab.clia_number || "";
+      } else {
+        const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+        ptLabName = userRow?.clia_lab_name || "";
+        ptCliaNum = userRow?.clia_number || "";
+      }
       const enrollments = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE user_id = ? AND status = 'active' ORDER BY enrollment_year DESC, analyte").all(userId);
       const events = (db as any).$client.prepare("SELECT * FROM pt_events WHERE user_id = ? ORDER BY event_date DESC").all(userId);
       const cas = (db as any).$client.prepare("SELECT ca.*, e.analyte, e.event_date FROM pt_corrective_actions ca JOIN pt_events e ON e.id = ca.event_id WHERE ca.user_id = ? ORDER BY ca.date_initiated DESC").all(userId);
@@ -7132,8 +7266,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const passRate = gradedEvents.length > 0 ? (gradedEvents.filter((e: any) => e.pass_fail === 'pass').length / gradedEvents.length) * 100 : 0;
       const openCAs = cas.filter((c: any) => c.status === 'open').length;
       const pdfBuffer = await generateVeritaPTPDF({
-        labName: userRow?.clia_lab_name || "",
-        cliaNumber: userRow?.clia_number || "",
+        labName: ptLabName,
+        cliaNumber: ptCliaNum,
         generatedAt: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
         summary: { totalEnrollments: enrollments.length, eventsThisYear, passRate, openCorrectiveActions: openCAs },
         enrollments,
@@ -7143,6 +7277,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const date = new Date().toISOString().split("T")[0];
       const filename = `VeritaPT_Report_${date}.pdf`;
       const ptPdfToken = storePdfToken(pdfBuffer, filename);
+      if (ptLab) markLabReportingLocks(ptLab.id);
       res.json({ token: ptPdfToken });
     } catch (err: any) {
       console.error("VeritaPT PDF error:", err);
@@ -7359,20 +7494,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── ACCOUNT SETTINGS ────────────────────────────────────────────────────
+  // Reads lab identity from labs table (via user.lab_id), includes seat/owner
+  // role context and lock state for the UI.
   app.get("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
       const userRow = (db as any).$client.prepare(
-        "SELECT clia_number, clia_lab_name, preferred_standards, preferred_pt_vendor FROM users WHERE id = ?"
+        "SELECT lab_id, preferred_pt_vendor FROM users WHERE id = ?"
       ).get(req.userId) as any;
-      let preferredStandards: string[] = [];
-      if (userRow?.preferred_standards) {
-        try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
+
+      const lab = resolveLabForUser(req.userId);
+      const isSeat = !!req.isSeatUser;
+
+      // Derive preferred_standards array from accreditation flags on labs row
+      const preferredStandards: string[] = [];
+      if (lab) {
+        if (lab.accreditation_cap) preferredStandards.push("CAP");
+        if (lab.accreditation_tjc) preferredStandards.push("TJC");
+        if (lab.accreditation_cola) preferredStandards.push("COLA");
+        if (lab.accreditation_aabb) preferredStandards.push("AABB");
       }
+
+      // If seat user, look up owner display name
+      let ownerName: string | null = null;
+      if (isSeat && req.ownerUserId) {
+        const ownerRow = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(req.ownerUserId) as any;
+        ownerName = ownerRow?.name || null;
+      }
+
       res.json({
-        clia_number: userRow?.clia_number || '',
-        clia_lab_name: userRow?.clia_lab_name || '',
+        clia_number: lab?.clia_number || '',
+        clia_lab_name: lab?.lab_name || '',
         preferred_standards: preferredStandards,
         preferred_pt_vendor: userRow?.preferred_pt_vendor || 'none',
+        // Lab role context for UI
+        is_seat: isSeat,
+        owner_name: ownerName,
+        clia_locked: lab?.clia_locked === 1,
+        lab_name_locked: lab?.lab_name_locked === 1,
+        lab_id: lab?.id || null,
       });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to fetch account settings" });
@@ -7381,22 +7540,100 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
+      const isSeat = !!req.isSeatUser;
+
+      // Seat users cannot write lab fields at all
+      if (isSeat) {
+        const ownerRow = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(req.ownerUserId) as any;
+        const ownerDisplayName = ownerRow?.name || "the lab owner";
+        return res.status(403).json({ error: `Lab settings are managed by the lab owner (${ownerDisplayName}).` });
+      }
+
       const { clia_number, clia_lab_name, preferred_standards, preferredPtVendor } = req.body;
+
+      // Resolve or create lab row for this owner
+      let lab = resolveLabForUser(req.userId);
+      if (!lab) {
+        // Owner doesn't have a lab yet -- create one
+        const now = new Date().toISOString();
+        const result = (db as any).$client.prepare(
+          "INSERT INTO labs (clia_number, lab_name, owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+        ).run(clia_number || null, clia_lab_name || null, req.userId, now, now);
+        const newLabId = Number(result.lastInsertRowid);
+        (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(newLabId, req.userId);
+        // Also link existing seat users to this new lab
+        const seatUsers = (db as any).$client.prepare(
+          "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
+        ).all(req.userId) as any[];
+        for (const s of seatUsers) {
+          (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(newLabId, s.seat_user_id);
+        }
+        lab = (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(newLabId);
+      }
+
+      if (!lab) {
+        return res.status(500).json({ error: "Failed to resolve lab record" });
+      }
+
+      // Check lock state for CLIA and lab name
+      if (lab.clia_locked && clia_number !== undefined && (clia_number || null) !== (lab.clia_number || null)) {
+        return res.status(403).json({ error: "CLIA number is locked once reports have been generated. Contact support to change." });
+      }
+      if (lab.lab_name_locked && clia_lab_name !== undefined && (clia_lab_name || null) !== (lab.lab_name || null)) {
+        return res.status(403).json({ error: "Lab name is locked once reports have been generated. Contact support to change." });
+      }
+
       // Validate preferred_standards: must be array of valid accreditation bodies, max 2
       const VALID_BODIES = ["CAP", "TJC", "COLA", "AABB"];
-      let standardsJson: string | null = null;
+      let accCap = lab.accreditation_cap, accTjc = lab.accreditation_tjc;
+      let accCola = lab.accreditation_cola, accAabb = lab.accreditation_aabb;
       if (Array.isArray(preferred_standards)) {
         const filtered = preferred_standards.filter((s: string) => VALID_BODIES.includes(s)).slice(0, 2);
-        standardsJson = JSON.stringify(filtered);
+        accCap = filtered.includes("CAP") ? 1 : 0;
+        accTjc = filtered.includes("TJC") ? 1 : 0;
+        accCola = filtered.includes("COLA") ? 1 : 0;
+        accAabb = filtered.includes("AABB") ? 1 : 0;
       }
+
+      // Audit log: track each changed field
+      const fieldsToAudit: [string, any, any][] = [];
+      if ((clia_number || null) !== (lab.clia_number || null)) fieldsToAudit.push(["clia_number", lab.clia_number, clia_number || null]);
+      if ((clia_lab_name || null) !== (lab.lab_name || null)) fieldsToAudit.push(["lab_name", lab.lab_name, clia_lab_name || null]);
+      if (accCap !== lab.accreditation_cap) fieldsToAudit.push(["accreditation_cap", String(lab.accreditation_cap), String(accCap)]);
+      if (accTjc !== lab.accreditation_tjc) fieldsToAudit.push(["accreditation_tjc", String(lab.accreditation_tjc), String(accTjc)]);
+      if (accCola !== lab.accreditation_cola) fieldsToAudit.push(["accreditation_cola", String(lab.accreditation_cola), String(accCola)]);
+      if (accAabb !== lab.accreditation_aabb) fieldsToAudit.push(["accreditation_aabb", String(lab.accreditation_aabb), String(accAabb)]);
+
+      for (const [field, oldVal, newVal] of fieldsToAudit) {
+        writeLabAuditEntry(lab.id, req.userId, field, oldVal, newVal);
+      }
+
+      // Update labs row
+      const now = new Date().toISOString();
+      (db as any).$client.prepare(
+        `UPDATE labs SET clia_number = ?, lab_name = ?, accreditation_cap = ?, accreditation_tjc = ?,
+         accreditation_cola = ?, accreditation_aabb = ?, updated_at = ? WHERE id = ?`
+      ).run(
+        clia_number || null, clia_lab_name || null,
+        accCap, accTjc, accCola, accAabb, now, lab.id
+      );
+
+      // Also keep user-level columns in sync for backward compatibility with
+      // other code paths that still read from user record (PDF generation, etc.)
+      const standardsJson = JSON.stringify(
+        [accCap && "CAP", accTjc && "TJC", accCola && "COLA", accAabb && "AABB"].filter(Boolean)
+      );
+
       // Validate preferred PT vendor
       const VALID_PT_VENDORS = ["cap", "api", "none"];
       const ptVendor = VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
       (db as any).$client.prepare(
         "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
       ).run(clia_number || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
+
       res.json({ success: true });
     } catch (err: any) {
+      console.error("[account/settings PUT] Error:", err.message);
       res.status(500).json({ error: "Failed to update account settings" });
     }
   });
