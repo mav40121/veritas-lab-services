@@ -20,7 +20,7 @@ const teaData = [
   { analyte: "Cholesterol, HDL", criteria: "±20% or ±6 mg/dL (greater)" },
   { analyte: "Cholesterol, LDL (direct)", criteria: "±20%" },
   { analyte: "Creatine Kinase (CK)", criteria: "±20%" },
-  { analyte: "CK-MB Isoenzymes", criteria: "±25% or ±3 ng/mL (greater) or MB elevated (presence or absence)" },
+  { analyte: "CK-MB Isoenzymes", criteria: "±25% or ±3 ng/mL (greater) or MB elevated (presence or absence)" }, // verbatim per 42 CFR §493.931
   { analyte: "Creatinine", criteria: "±10% or ±0.2 mg/dL (greater)" },
   { analyte: "Ferritin", criteria: "±20%" },
   { analyte: "Gamma Glutamyl Transferase (GGT)", criteria: "±15% or ±5 U/L (greater)" },
@@ -42,11 +42,11 @@ const teaData = [
   { analyte: "Uric Acid", criteria: "±10%" },
   { analyte: "Complement C4", criteria: "±20% or ±5 mg/dL (greater)" },
   { analyte: "C-Reactive Protein (hs-CRP)", criteria: "±30% or ±1 mg/L (greater)" },
-  { analyte: "Carcinoembryonic Antigen (CEA)", criteria: "±15% or ±1 ng/dL (greater)" },
+  { analyte: "Carcinoembryonic Antigen (CEA)", criteria: "±15% or ±1 ng/mL (greater)" }, // 42 CFR §493.933 (was ng/dL; corrected to ng/mL per CFR)
   { analyte: "Folate, Serum", criteria: "±30% or ±1 ng/mL (greater)" },
   { analyte: "Follicle Stimulating Hormone (FSH)", criteria: "±18% or ±2 IU/L (greater)" },
   { analyte: "Free Thyroxine (Free T4)", criteria: "±15% or ±0.3 ng/dL (greater)" },
-  { analyte: "Human Chorionic Gonadotropin (hCG)", criteria: "±18% or ±3 mIU/mL (greater) or positive or negative" },
+  { analyte: "Human Chorionic Gonadotropin (hCG)", criteria: "±18% or ±3 mIU/mL (greater) or positive or negative" }, // verbatim per 42 CFR §493.933
   { analyte: "Testosterone", criteria: "±30% or ±20 ng/dL (greater)" },
   { analyte: "Thyroid Stimulating Hormone (TSH)", criteria: "±20% or ±0.2 mIU/L (greater)" },
   { analyte: "Thyroxine (T4)", criteria: "±20% or ±1.0 mcg/dL (greater)" },
@@ -59,7 +59,10 @@ const teaData = [
   { analyte: "Phenobarbital", criteria: "±15% or ±2 mcg/mL (greater)" },
   { analyte: "Phenytoin (Dilantin)", criteria: "±15% or ±2 mcg/mL (greater)" },
   { analyte: "Salicylate", criteria: "±15% or ±2 mcg/mL (greater)" },
-  { analyte: "CBC - Hemoglobin", criteria: "±7% or ±1.0 g/dL (greater)" },
+  { analyte: "Vancomycin", criteria: "±15% or ±2 mcg/mL (greater)" }, // 42 CFR §493.937 (added under 2022 final rule, 87 FR 41232, effective 2024-07-11)
+  // CBC - Hemoglobin: 2022 final rule (87 FR 41232) changed from "±7% or ±1.0 g/dL (greater)" to percent-only "±4%".
+  // The absolute floor was removed entirely. Effective 2024-07-11.
+  { analyte: "CBC - Hemoglobin", criteria: "±4%" },
 ];
 
 /**
@@ -280,7 +283,10 @@ export function backfillAbsoluteFloorOnStartup(): void {
           newTeaUnit = "%";
           needsUpdate = true;
         }
-        // Apply matching floor if we have one canonical-ly
+        // Apply matching floor if we have one canonical-ly; otherwise CLEAR any stale
+        // floor on file. This handles regulatory transitions like CBC Hemoglobin under the
+        // 2022 final rule (87 FR 41232, eff. 2024-07-11), which moved from dual-criterion
+        // "±7% or ±1.0 g/dL (greater)" to percent-only "±4%" (floor removed).
         const canonicalFloor = resolveFloor(s.test_name);
         if (canonicalFloor) {
           if (s.clia_absolute_floor === null || Math.abs(s.clia_absolute_floor - canonicalFloor.value) > FP_TOL) {
@@ -289,6 +295,16 @@ export function backfillAbsoluteFloorOnStartup(): void {
           }
           if (s.clia_absolute_unit !== canonicalFloor.unit) {
             newFloorUnit = canonicalFloor.unit;
+            needsUpdate = true;
+          }
+        } else {
+          // No canonical floor for this analyte: clear any stale floor on the row.
+          if (s.clia_absolute_floor !== null) {
+            newFloor = null;
+            needsUpdate = true;
+          }
+          if (s.clia_absolute_unit !== null) {
+            newFloorUnit = null;
             needsUpdate = true;
           }
         }
