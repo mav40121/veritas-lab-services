@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useToast } from "@/hooks/use-toast";
@@ -109,6 +109,8 @@ export default function VeritaPolicyAppPage() {
   const [filterSource, setFilterSource] = useState("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [editingPolicyName, setEditingPolicyName] = useState<Record<number, string>>({});
+  const [bulkConfirm, setBulkConfirm] = useState<{ chapter: string; label: string; reqs: Requirement[]; markNa: boolean } | null>(null);
+  const [bulkApplying, setBulkApplying] = useState(false);
 
   // Debounce settings save
   const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -218,6 +220,53 @@ export default function VeritaPolicyAppPage() {
     }
   }
 
+  async function handleBulkNa(chapter: string, chapterLabel: string, reqs: Requirement[], markNa: boolean) {
+    setBulkConfirm({ chapter, label: chapterLabel, reqs, markNa });
+  }
+
+  async function confirmBulkNa() {
+    if (!bulkConfirm) return;
+    setBulkApplying(true);
+    const { reqs, markNa } = bulkConfirm;
+    const target = reqs.filter(r => !r.auto_na && r.is_na !== markNa);
+    let failed = 0;
+    // Optimistic update
+    setRequirements(prev => prev.map(r => {
+      if (target.some(t => t.id === r.id)) {
+        return { ...r, is_na: markNa, status: markNa ? 'na' : 'not_started' };
+      }
+      return r;
+    }));
+    // Send individual PATCH requests (reuses existing endpoint)
+    for (const req of target) {
+      try {
+        await fetch(`${API_BASE}/api/veritapolicy/requirements/${req.id}`, {
+          method: "PATCH",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: markNa ? 'na' : 'not_started',
+            is_na: markNa,
+            na_reason: req.na_reason,
+            policy_name: req.policy_name,
+            notes: req.notes,
+          }),
+        });
+      } catch { failed++; }
+    }
+    // Refresh summary
+    try {
+      const sum = await fetch(`${API_BASE}/api/veritapolicy/summary`, { headers: authHeaders() }).then(r => r.json());
+      setSummary(sum);
+    } catch {}
+    setBulkApplying(false);
+    setBulkConfirm(null);
+    if (failed > 0) {
+      toast({ title: `${target.length - failed} updated, ${failed} failed`, variant: "destructive" });
+    } else {
+      toast({ title: `Marked ${target.length} ${bulkConfirm.chapter} requirements as ${markNa ? 'N/A' : 'Applicable'}` });
+    }
+  }
+
   // ── Auth / plan gates ──────────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
@@ -254,6 +303,17 @@ export default function VeritaPolicyAppPage() {
     }
     return true;
   });
+
+  // Group filtered requirements by chapter (preserving order)
+  const groupedByChapter: { chapter: string; label: string; reqs: Requirement[] }[] = [];
+  const seenChapters = new Set<string>();
+  for (const r of filtered) {
+    if (!seenChapters.has(r.chapter)) {
+      seenChapters.add(r.chapter);
+      groupedByChapter.push({ chapter: r.chapter, label: r.chapter_label, reqs: [] });
+    }
+    groupedByChapter.find(g => g.chapter === r.chapter)!.reqs.push(r);
+  }
 
   return (
     <div className="container-default py-8 space-y-4">
@@ -392,94 +452,131 @@ export default function VeritaPolicyAppPage() {
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">No requirements match your filters.</td></tr>
               )}
-              {!loading && filtered.map((req, i) => {
-                const isExpanded = expandedRows.has(req.id);
-                const isNa = req.is_na;
-                const statusCfg = STATUS_CONFIG[isNa ? "na" : req.status] || STATUS_CONFIG.not_started;
-                const policyVal = editingPolicyName[req.id] ?? req.policy_name ?? "";
-
+              {!loading && groupedByChapter.map(group => {
+                const allNa = group.reqs.filter(r => !r.auto_na).every(r => r.is_na);
+                const manualReqs = group.reqs.filter(r => !r.auto_na);
                 return (
-                  <tr key={req.id}
-                    className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${isNa ? "opacity-50" : ""}`}>
-
-                    {/* Chapter */}
-                    <td className="px-3 py-2 align-top">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-mono text-xs font-bold text-primary">{req.chapter}</span>
-                        {showBothSources && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{req.source?.toUpperCase()}</Badge>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Requirement name */}
-                    <td className="px-3 py-2 align-top">
-                      <button className="text-left w-full"
-                        onClick={() => setExpandedRows(prev => {
-                          const next = new Set(prev);
-                          next.has(req.id) ? next.delete(req.id) : next.add(req.id);
-                          return next;
-                        })}>
-                        <div className="flex items-start gap-1">
-                          <span className={`text-foreground ${isNa ? "line-through text-muted-foreground" : ""}`}>{req.name}</span>
-                          {req.description && (
-                            isExpanded
-                              ? <ChevronUp size={12} className="shrink-0 mt-1 text-muted-foreground" />
-                              : <ChevronRight size={12} className="shrink-0 mt-1 text-muted-foreground" />
+                  <React.Fragment key={`group-${group.chapter}`}>
+                    {/* Category section header */}
+                    <tr className="bg-muted/70 border-b border-border">
+                      <td colSpan={5} className="px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-foreground">
+                            {group.chapter} - {group.label}
+                            <span className="ml-2 font-normal text-muted-foreground">({group.reqs.length})</span>
+                          </span>
+                          {!isReadOnly && manualReqs.length > 0 && (
+                            <div className="flex gap-1.5">
+                              {!allNa && (
+                                <button
+                                  onClick={() => handleBulkNa(group.chapter, group.label, group.reqs, true)}
+                                  className="text-[11px] px-2 py-0.5 rounded border border-border text-muted-foreground hover:border-foreground hover:text-foreground transition-colors">
+                                  Mark all N/A
+                                </button>
+                              )}
+                              {allNa && (
+                                <button
+                                  onClick={() => handleBulkNa(group.chapter, group.label, group.reqs, false)}
+                                  className="text-[11px] px-2 py-0.5 rounded border border-border text-muted-foreground hover:border-foreground hover:text-foreground transition-colors">
+                                  Mark all Applicable
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {req.standard && <div className="text-xs text-muted-foreground mt-0.5">{req.standard}</div>}
-                        {isExpanded && req.description && (
-                          <div className="text-xs text-muted-foreground mt-2 leading-relaxed border-l-2 border-primary/30 pl-2">
-                            {req.description}
-                          </div>
-                        )}
-                      </button>
-                    </td>
+                      </td>
+                    </tr>
+                    {group.reqs.map((req, i) => {
+                      const isExpanded = expandedRows.has(req.id);
+                      const isNa = req.is_na;
+                      const statusCfg = STATUS_CONFIG[isNa ? "na" : req.status] || STATUS_CONFIG.not_started;
+                      const policyVal = editingPolicyName[req.id] ?? req.policy_name ?? "";
 
-                    {/* Policy name */}
-                    <td className="px-3 py-2 align-top">
-                      <Input
-                        value={policyVal}
-                        disabled={isNa || isReadOnly}
-                        placeholder={isNa ? "N/A" : "e.g. QC Policy (POL-003)"}
-                        className="h-7 text-xs"
-                        onChange={e => setEditingPolicyName(prev => ({ ...prev, [req.id]: e.target.value }))}
-                        onBlur={() => {
-                          const val = editingPolicyName[req.id];
-                          if (val !== undefined && val !== req.policy_name) {
-                            updateRequirement(req, { policy_name: val });
-                            setEditingPolicyName(prev => { const n = { ...prev }; delete n[req.id]; return n; });
-                          }
-                        }}
-                        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      />
-                    </td>
+                      return (
+                        <tr key={req.id}
+                          className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${isNa ? "opacity-50" : ""}`}>
 
-                    {/* Status */}
-                    <td className="px-3 py-2 align-top">
-                      <button
-                        disabled={req.auto_na || isReadOnly}
-                        onClick={() => cycleStatus(req)}
-                        title={req.auto_na ? "Auto N/A from lab settings" : "Click to change status"}
-                        className={`px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${statusCfg.color} ${req.auto_na || isReadOnly ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}>
-                        {req.auto_na ? "N/A (Auto)" : statusCfg.label}
-                      </button>
-                    </td>
+                          {/* Chapter */}
+                          <td className="px-3 py-2 align-top">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-mono text-xs font-bold text-primary">{req.chapter}</span>
+                              {showBothSources && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{req.source?.toUpperCase()}</Badge>
+                              )}
+                            </div>
+                          </td>
 
-                    {/* N/A toggle */}
-                    <td className="px-3 py-2 align-top">
-                      {!req.auto_na && (
-                        <button
-                          disabled={isReadOnly}
-                          onClick={() => updateRequirement(req, { is_na: !isNa, status: isNa ? "not_started" : req.status })}
-                          title={isNa ? "Mark as applicable" : "Mark as N/A"}
-                          className={`text-xs px-1.5 py-1 rounded border transition-colors ${isNa ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
-                          N/A
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                          {/* Requirement name */}
+                          <td className="px-3 py-2 align-top">
+                            <button className="text-left w-full"
+                              onClick={() => setExpandedRows(prev => {
+                                const next = new Set(prev);
+                                next.has(req.id) ? next.delete(req.id) : next.add(req.id);
+                                return next;
+                              })}>
+                              <div className="flex items-start gap-1">
+                                <span className={`text-foreground ${isNa ? "line-through text-muted-foreground" : ""}`}>{req.name}</span>
+                                {req.description && (
+                                  isExpanded
+                                    ? <ChevronUp size={12} className="shrink-0 mt-1 text-muted-foreground" />
+                                    : <ChevronRight size={12} className="shrink-0 mt-1 text-muted-foreground" />
+                                )}
+                              </div>
+                              {req.standard && <div className="text-xs text-muted-foreground mt-0.5">{req.standard}</div>}
+                              {isExpanded && req.description && (
+                                <div className="text-xs text-muted-foreground mt-2 leading-relaxed border-l-2 border-primary/30 pl-2">
+                                  {req.description}
+                                </div>
+                              )}
+                            </button>
+                          </td>
+
+                          {/* Policy name */}
+                          <td className="px-3 py-2 align-top">
+                            <Input
+                              value={policyVal}
+                              disabled={isNa || isReadOnly}
+                              placeholder={isNa ? "N/A" : "e.g. QC Policy (POL-003)"}
+                              className="h-7 text-xs"
+                              onChange={e => setEditingPolicyName(prev => ({ ...prev, [req.id]: e.target.value }))}
+                              onBlur={() => {
+                                const val = editingPolicyName[req.id];
+                                if (val !== undefined && val !== req.policy_name) {
+                                  updateRequirement(req, { policy_name: val });
+                                  setEditingPolicyName(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                }
+                              }}
+                              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                            />
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-3 py-2 align-top">
+                            <button
+                              disabled={req.auto_na || isReadOnly}
+                              onClick={() => cycleStatus(req)}
+                              title={req.auto_na ? "Auto N/A from lab settings" : "Click to change status"}
+                              className={`px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${statusCfg.color} ${req.auto_na || isReadOnly ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}>
+                              {req.auto_na ? "N/A (Auto)" : statusCfg.label}
+                            </button>
+                          </td>
+
+                          {/* N/A toggle */}
+                          <td className="px-3 py-2 align-top">
+                            {!req.auto_na && (
+                              <button
+                                disabled={isReadOnly}
+                                onClick={() => updateRequirement(req, { is_na: !isNa, status: isNa ? "not_started" : req.status })}
+                                title={isNa ? "Mark as applicable" : "Mark as N/A"}
+                                className={`text-xs px-1.5 py-1 rounded border transition-colors ${isNa ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
+                                N/A
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -498,6 +595,29 @@ export default function VeritaPolicyAppPage() {
           Policy library management is coming in a future update.
         </p>
       </div>
+
+      {/* Bulk N/A confirmation dialog */}
+      {bulkConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !bulkApplying && setBulkConfirm(null)}>
+          <div className="bg-card border border-border rounded-lg p-6 max-w-md mx-4 shadow-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-foreground mb-2">
+              {bulkConfirm.markNa ? "Mark category as N/A?" : "Mark category as Applicable?"}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {bulkConfirm.markNa
+                ? `Mark all ${bulkConfirm.reqs.filter(r => !r.auto_na && !r.is_na).length} ${bulkConfirm.chapter} requirements as N/A?`
+                : `Mark all ${bulkConfirm.reqs.filter(r => !r.auto_na && r.is_na).length} ${bulkConfirm.chapter} requirements as Applicable?`}
+              {" "}This affects the {bulkConfirm.chapter} ({bulkConfirm.label}) category.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" disabled={bulkApplying} onClick={() => setBulkConfirm(null)}>Cancel</Button>
+              <Button size="sm" disabled={bulkApplying} onClick={confirmBulkNa}>
+                {bulkApplying ? "Applying..." : bulkConfirm.markNa ? "Mark N/A" : "Mark Applicable"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

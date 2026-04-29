@@ -197,6 +197,7 @@ GRANDFATHERED_TABLES = {
     "nightly_snapshots", "veritapolicy_settings", "veritapolicy_lab_policies",
     "veritapolicy_requirement_status", "veritatrack_tasks", "veritatrack_signoffs",
     "veritamap_analyte_values", "veritamap_amr_values",
+    "labs", "lab_audit_log",
 }
 
 def check_db_migrations():
