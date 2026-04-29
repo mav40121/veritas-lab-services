@@ -29,6 +29,12 @@ interface AccountSettings {
   clia_lab_name: string;
   preferred_standards: AccreditationBody[];
   preferred_pt_vendor: PtVendorPref;
+  // Lab role context from server
+  is_seat: boolean;
+  owner_name: string | null;
+  clia_locked: boolean;
+  lab_name_locked: boolean;
+  lab_id: number | null;
 }
 
 // Map a user's stored plan key to the priceType expected by /api/stripe/checkout
@@ -256,18 +262,29 @@ export default function AccountSettingsPage() {
   }, []);
 
   const saveMutation = useMutation({
-    mutationFn: () => apiRequest("PUT", "/api/account/settings", {
-      clia_number: cliaNumber,
-      clia_lab_name: labName,
-      preferred_standards: preferredStandards,
-      preferredPtVendor,
-    }),
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/api/account/settings`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clia_number: cliaNumber,
+          clia_lab_name: labName,
+          preferred_standards: preferredStandards,
+          preferredPtVendor,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save settings");
+      }
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/account/settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/status"] });
       toast({ title: "Settings saved" });
     },
-    onError: () => toast({ title: "Failed to save settings", variant: "destructive" }),
+    onError: (err: Error) => toast({ title: err.message || "Failed to save settings", variant: "destructive" }),
   });
 
   if (!isLoggedIn) {
@@ -285,9 +302,19 @@ export default function AccountSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Lab Information</CardTitle>
+          <CardTitle className="text-base">
+            Lab Information
+            {settings?.clia_locked && settings?.lab_name_locked && !settings?.is_seat && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">Locked for regulatory record integrity</span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {settings?.is_seat && settings?.owner_name && (
+            <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+              Lab settings are managed by {settings.owner_name}.
+            </p>
+          )}
           <div className="space-y-2">
             <Label htmlFor="clia_number">CLIA Number</Label>
             <Input
@@ -295,8 +322,13 @@ export default function AccountSettingsPage() {
               value={cliaNumber}
               onChange={(e) => setCliaNumber(e.target.value)}
               placeholder="e.g. 05D2187634"
-              disabled={isLoading}
+              disabled={isLoading || !!settings?.is_seat || !!settings?.clia_locked}
             />
+            {!settings?.is_seat && settings?.clia_locked && (
+              <p className="text-xs text-muted-foreground" title="Locked once the first report was generated under this lab.">
+                Locked - contact support to change
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="lab_name">Lab Name</Label>
@@ -305,17 +337,24 @@ export default function AccountSettingsPage() {
               value={labName}
               onChange={(e) => setLabName(e.target.value)}
               placeholder="e.g. Riverside Regional Medical Center"
-              disabled={isLoading}
+              disabled={isLoading || !!settings?.is_seat || !!settings?.lab_name_locked}
             />
+            {!settings?.is_seat && settings?.lab_name_locked && (
+              <p className="text-xs text-muted-foreground" title="Locked once the first report was generated under this lab.">
+                Locked - contact support to change
+              </p>
+            )}
           </div>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || isLoading}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <Save size={14} className="mr-1.5" />
-            {saveMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+          {!settings?.is_seat && (
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || isLoading}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Save size={14} className="mr-1.5" />
+              {saveMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -327,16 +366,23 @@ export default function AccountSettingsPage() {
           <p className="text-sm text-muted-foreground">
             Select up to 2 accreditation bodies. Their standard references will appear on all VeritaCheck™ and VeritaScan™ reports. CLSI guidelines and CLIA/CFR citations are always included.
           </p>
+          {settings?.is_seat && settings?.owner_name && (
+            <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+              Accreditation settings are managed by {settings.owner_name}.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ACCREDITATION_OPTIONS.map((opt) => {
               const isSelected = preferredStandards.includes(opt.value);
               const isDisabled = !isSelected && preferredStandards.length >= 2;
+              const isSeatDisabled = !!settings?.is_seat;
               return (
                 <button
                   key={opt.value}
                   type="button"
-                  disabled={isDisabled || isLoading}
+                  disabled={isDisabled || isLoading || isSeatDisabled}
                   onClick={() => {
+                    if (isSeatDisabled) return;
                     if (isSelected) {
                       setPreferredStandards(preferredStandards.filter(s => s !== opt.value));
                     } else if (preferredStandards.length < 2) {
@@ -347,7 +393,7 @@ export default function AccountSettingsPage() {
                     "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
                     isSelected
                       ? "border-primary bg-primary/5"
-                      : isDisabled
+                      : isDisabled || isSeatDisabled
                       ? "border-muted bg-muted/30 opacity-50 cursor-not-allowed"
                       : "border-border hover:border-primary/50 hover:bg-muted/30",
                   ].join(" ")}
@@ -370,17 +416,19 @@ export default function AccountSettingsPage() {
               );
             })}
           </div>
-          {preferredStandards.length === 2 && (
+          {preferredStandards.length === 2 && !settings?.is_seat && (
             <p className="text-xs text-muted-foreground">Maximum of 2 selected. Deselect one to choose another.</p>
           )}
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || isLoading}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <Save size={14} className="mr-1.5" />
-            {saveMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+          {!settings?.is_seat && (
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || isLoading}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Save size={14} className="mr-1.5" />
+              {saveMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -398,10 +446,13 @@ export default function AccountSettingsPage() {
               {(["none", "cap", "api"] as const).map((val) => (
                 <button
                   key={val}
-                  onClick={() => setPreferredPtVendor(val)}
+                  onClick={() => !settings?.is_seat && setPreferredPtVendor(val)}
+                  disabled={!!settings?.is_seat}
                   className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                     preferredPtVendor === val
                       ? "bg-blue-600 text-white border-blue-600"
+                      : settings?.is_seat
+                      ? "bg-muted text-muted-foreground border-muted cursor-not-allowed"
                       : "bg-background text-foreground border-border hover:border-blue-400"
                   }`}
                 >
@@ -410,14 +461,16 @@ export default function AccountSettingsPage() {
               ))}
             </div>
           </div>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || isLoading}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <Save size={14} className="mr-1.5" />
-            {saveMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+          {!settings?.is_seat && (
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || isLoading}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Save size={14} className="mr-1.5" />
+              {saveMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
