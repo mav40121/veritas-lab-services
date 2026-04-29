@@ -1,7 +1,7 @@
 import { db } from "./db";
 
 // --- Canonical CLIA TEa data (from cliaTeaData.ts / backfill-absolute-floor.js) ---
-const teaData = [
+export const teaData: { analyte: string; criteria: string }[] = [
   { analyte: "Alanine Aminotransferase (ALT/SGPT)", criteria: "±15% or ±6 U/L (greater)" },
   { analyte: "Albumin", criteria: "±8%" },
   { analyte: "Alkaline Phosphatase", criteria: "±20%" },
@@ -69,7 +69,7 @@ const teaData = [
  * Parse a CLIA criteria string and extract the absolute floor value.
  * Returns { value, unit } or null if no absolute floor (percent-only or absolute-only).
  */
-function parseAbsoluteFloor(criteria: string): { value: number; unit: string } | null {
+export function parseAbsoluteFloor(criteria: string): { value: number; unit: string } | null {
   const dualMatch = criteria.match(
     /±[\d.]+%\s+or\s+±([\d.]+)\s+([^(]+?)\s*\(greater\)/i
   );
@@ -85,7 +85,7 @@ function parseAbsoluteFloor(criteria: string): { value: number; unit: string } |
  *  - { mode: 'absolute', value: <number>, unit: <string> } e.g. "±4 mmol/L" -> { mode:'absolute', value:4, unit:'mmol/L' }
  *  - null if not parseable.
  */
-function parseCanonicalTea(criteria: string): { mode: "percent"; value: number } | { mode: "absolute"; value: number; unit: string } | null {
+export function parseCanonicalTea(criteria: string): { mode: "percent"; value: number } | { mode: "absolute"; value: number; unit: string } | null {
   // Percent first (handles both percent-only "±10%" and dual "±10% or ±0.2 mg/dL (greater)")
   const pct = criteria.match(/±([\d.]+)%/);
   if (pct) {
@@ -100,7 +100,7 @@ function parseCanonicalTea(criteria: string): { mode: "percent"; value: number }
 }
 
 // Build lookup: canonical analyte name -> { value, unit }
-const floorByAnalyte = new Map<string, { value: number; unit: string }>();
+export const floorByAnalyte = new Map<string, { value: number; unit: string }>();
 for (const entry of teaData) {
   const floor = parseAbsoluteFloor(entry.criteria);
   if (floor !== null) {
@@ -109,7 +109,7 @@ for (const entry of teaData) {
 }
 
 // Map from DB test_name -> canonical analyte name (or null = explicitly unmapped)
-const NAME_MAP: Record<string, string | null> = {
+export const NAME_MAP: Record<string, string | null> = {
   "GC1 CREAT": "Creatinine",
   "FREE T4": "Free Thyroxine (Free T4)",
   "GLUCOSE": "Glucose (excluding home use devices)",
@@ -146,7 +146,7 @@ const NAME_MAP: Record<string, string | null> = {
   "IRON SATURATION (%IRON SAT)": null,
 };
 
-function resolveFloor(testName: string): { value: number; unit: string } | null {
+export function resolveFloor(testName: string): { value: number; unit: string } | null {
   // 1. Try NAME_MAP (case-insensitive)
   for (const [key, canonical] of Object.entries(NAME_MAP)) {
     if (key.toLowerCase() === testName.toLowerCase()) {
@@ -172,13 +172,13 @@ function resolveFloor(testName: string): { value: number; unit: string } | null 
 }
 
 // Build lookup: canonical analyte name -> canonical TEa
-const teaByAnalyte = new Map<string, { mode: "percent"; value: number } | { mode: "absolute"; value: number; unit: string }>();
+export const teaByAnalyte = new Map<string, { mode: "percent"; value: number } | { mode: "absolute"; value: number; unit: string }>();
 for (const entry of teaData) {
   const tea = parseCanonicalTea(entry.criteria);
   if (tea !== null) teaByAnalyte.set(entry.analyte, tea);
 }
 
-function resolveCanonicalAnalyte(testName: string): string | null {
+export function resolveCanonicalAnalyte(testName: string): string | null {
   for (const [key, canonical] of Object.entries(NAME_MAP)) {
     if (key.toLowerCase() === testName.toLowerCase()) return canonical;
   }

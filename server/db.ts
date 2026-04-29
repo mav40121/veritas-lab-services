@@ -2,9 +2,10 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@shared/schema";
 import { OWNER_EMAIL } from "./constants";
+import { existsSync as _dbExistsSync } from "fs";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
-const DB_PATH = process.env.DB_PATH || (require('fs').existsSync('/data') ? '/data/veritas.db' : 'veritas.db');
+const DB_PATH = process.env.DB_PATH || (_dbExistsSync('/data') ? '/data/veritas.db' : 'veritas.db');
 console.log(`[db] Using database at: ${DB_PATH}`);
 const sqlite = new Database(DB_PATH);
 export const db = drizzle(sqlite, { schema });

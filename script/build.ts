@@ -39,6 +39,11 @@ async function buildAll() {
     await import("./auditDualCriterion");
   });
 
+  console.log("running canonical TEa render audit...");
+  await import("./teaCanonicalRenderAudit.js").catch(async () => {
+    await import("./teaCanonicalRenderAudit");
+  });
+
   console.log("building client...");
   await viteBuild();
 

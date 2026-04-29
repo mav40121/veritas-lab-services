@@ -2,6 +2,53 @@ import { db } from "./db";
 import { users, studies, contactMessages } from "@shared/schema";
 import type { User, InsertStudy, Study, InsertContact } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
+import {
+  resolveCanonicalAnalyte,
+  teaByAnalyte,
+  floorByAnalyte,
+} from "./backfillAbsoluteFloor";
+
+/**
+ * Write-side canonical TEa guard.
+ *
+ * Re-resolves test_name -> canonical analyte and overrides clia_allowable_error,
+ * tea_is_percentage, tea_unit, clia_absolute_floor, clia_absolute_unit on every
+ * study insert. Prevents stored TEa from drifting away from the 42 CFR §493
+ * canonical list between server startups (the backfill self-heal also runs at
+ * startup, but a guard at the write boundary closes the window where buggy UI
+ * code or a stale demo button could persist non-canonical values, even briefly).
+ *
+ * If test_name does not resolve to a canonical analyte (e.g. a non-CFR analyte
+ * like Lipase), the input values are preserved unchanged.
+ */
+function enforceCanonicalTea<T extends Partial<InsertStudy> & { testName: string }>(study: T): T {
+  const canonical = resolveCanonicalAnalyte(study.testName);
+  if (!canonical) return study;
+  const tea = teaByAnalyte.get(canonical);
+  if (!tea) return study;
+
+  const out: any = { ...study };
+  if (tea.mode === "percent") {
+    out.cliaAllowableError = tea.value; // fractional
+    out.teaIsPercentage = 1;
+    out.teaUnit = "%";
+    const floor = floorByAnalyte.get(canonical);
+    if (floor) {
+      out.cliaAbsoluteFloor = floor.value;
+      out.cliaAbsoluteUnit = floor.unit;
+    } else {
+      out.cliaAbsoluteFloor = null;
+      out.cliaAbsoluteUnit = null;
+    }
+  } else {
+    out.cliaAllowableError = tea.value;
+    out.teaIsPercentage = 0;
+    out.teaUnit = tea.unit;
+    out.cliaAbsoluteFloor = null;
+    out.cliaAbsoluteUnit = null;
+  }
+  return out as T;
+}
 
 export interface IStorage {
   // Users
@@ -123,7 +170,8 @@ class DatabaseStorage implements IStorage {
     })();
   }
   createStudy(study: InsertStudy): Study {
-    return db.insert(studies).values(study).returning().get();
+    const guarded = enforceCanonicalTea(study);
+    return db.insert(studies).values(guarded).returning().get();
   }
   getStudy(id: number): Study | undefined {
     return db.select().from(studies).where(eq(studies.id, id)).get();

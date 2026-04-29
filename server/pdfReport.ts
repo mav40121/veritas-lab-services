@@ -8,6 +8,8 @@
 
 import puppeteer from "puppeteer";
 import type { Study } from "@shared/schema";
+import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
+import { resolve as _teaResolve } from "path";
 
 // ─── Safe number formatting helper ──────────────────────────────────────────
 function sf(value: any, digits: number): string {
@@ -195,7 +197,7 @@ const MUTED  = "#646e78";
 const DARK   = "#14141e";
 
 // ─── TEa display helper (absolute vs percentage, with dual-criterion support) ─
-function teaDisplayStr(study: Study): string {
+export function teaDisplayStr(study: Study): string {
   const isAbsolute = (study as any).teaIsPercentage === 0 || (study as any).tea_is_percentage === 0;
   const absFloor = (study as any).cliaAbsoluteFloor ?? (study as any).clia_absolute_floor ?? null;
   const absUnit = (study as any).cliaAbsoluteUnit ?? (study as any).clia_absolute_unit ?? '';
@@ -505,6 +507,41 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
 // Default standards shown when no preference is saved
 const DEFAULT_PREFERRED_STANDARDS: AccreditationBody[] = ["CAP", "TJC"];
 
+// ─── TEa audit freshness loader ──────────────────────────────────────────────
+// Reads the artifact written by script/teaCanonicalRenderAudit.ts at build
+// time. Falls back to the bundle build date if the artifact is unavailable.
+let _teaAuditCache: { verifiedAt: string | null; loaded: boolean } = { verifiedAt: null, loaded: false };
+function getTeaAuditVerifiedAt(): string | null {
+  if (_teaAuditCache.loaded) return _teaAuditCache.verifiedAt;
+  _teaAuditCache.loaded = true;
+  const candidates = [
+    _teaResolve(process.cwd(), "dist", "data", "tea_audit.json"),
+    _teaResolve(process.cwd(), "server", "data", "tea_audit.json"),
+  ];
+  for (const p of candidates) {
+    try {
+      if (_teaExistsSync(p)) {
+        const raw = _teaReadFileSync(p, "utf-8");
+        const j = JSON.parse(raw);
+        if (j && j.verifiedAt) {
+          _teaAuditCache.verifiedAt = String(j.verifiedAt);
+          return _teaAuditCache.verifiedAt;
+        }
+      }
+    } catch {
+      /* keep trying */
+    }
+  }
+  return null;
+}
+function teaAuditFreshnessLine(): string {
+  const ts = getTeaAuditVerifiedAt();
+  if (!ts) return "";
+  // Format YYYY-MM-DD from ISO timestamp.
+  const date = ts.slice(0, 10);
+  return `<div style="margin-top:6px;padding-top:4px;border-top:1px dashed #D4D1CA;font-size:6.5pt;color:#888;">Canonical TEa list verified against 42 CFR \u00A7493 on ${date}.</div>`;
+}
+
 function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: AccreditationBody[] | null): string {
   const refs = REGULATORY_REFS[studyType as StudyTypeKey];
   if (!refs) return "";
@@ -563,6 +600,7 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
     <div style="display:grid;grid-template-columns:${gridCols};gap:6px 12px;">
       ${colsHTML}
     </div>
+    ${teaAuditFreshnessLine()}
   </div>`;
 }
 
@@ -1316,7 +1354,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 }
 
 // ─── PRECISION HTML report ───────────────────────────────────────────────────
-function buildPrecisionHTML(study: Study, results: any): string {
+export function buildPrecisionHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const cliaCV = (study.cliaAllowableError * 100).toFixed(1);
   const isAdvanced = results.mode === "advanced";
