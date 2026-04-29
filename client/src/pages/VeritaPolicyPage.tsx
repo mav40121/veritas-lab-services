@@ -14,8 +14,8 @@ const FEATURE_CARDS = [
   },
   {
     icon: ToggleLeft,
-    title: "Applicability by Service Line",
-    desc: "Not all policies apply to every lab. Answer 5 questions about your services and VeritaPolicy™ automatically marks non-applicable requirements as N/A.",
+    title: "Per-Requirement N/A Control",
+    desc: "Not all policies apply to every lab. Mark individual requirements or entire categories as N/A with one click. Bulk actions make it fast to configure your lab's scope.",
     color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
   },
   {
@@ -35,7 +35,7 @@ const FEATURE_CARDS = [
 
 const FEATURES = [
   "All 88 TJC-required laboratory policies pre-loaded and organized by chapter",
-  "Service line wizard: 6 yes/no questions auto-apply N/A to non-applicable chapters",
+  "Bulk N/A actions: mark an entire category as N/A with one click, or mark individual requirements",
   "Status tracking per requirement: Not Started, In Progress, Complete, N/A",
   "Link one policy document to multiple TJC requirements",
   "Policy library with owner, policy number, review dates, and document upload",

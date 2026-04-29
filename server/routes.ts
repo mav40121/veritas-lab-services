@@ -7885,25 +7885,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(settings);
   });
 
-  // PUT settings (service line toggles)
+  // PUT settings (lab type + accreditation body)
+  // Deprecated columns (has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, waived_only)
+  // are retained in the schema but no longer written; they keep their existing or default values.
   app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
-    const { has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, accreditation_body } = req.body;
+    const { is_independent, setup_complete, accreditation_body } = req.body;
     sqlite.prepare(`
-      INSERT INTO veritapolicy_settings (user_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, is_independent, waived_only, setup_complete, accreditation_body, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO veritapolicy_settings (user_id, is_independent, setup_complete, accreditation_body, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
       ON CONFLICT(user_id) DO UPDATE SET
-        has_blood_bank = excluded.has_blood_bank,
-        has_transplant = excluded.has_transplant,
-        has_microbiology = excluded.has_microbiology,
-        has_maternal_serum = excluded.has_maternal_serum,
         is_independent = excluded.is_independent,
-        waived_only = excluded.waived_only,
         setup_complete = excluded.setup_complete,
         accreditation_body = excluded.accreditation_body,
         updated_at = excluded.updated_at
-    `).run(userId, has_blood_bank?1:0, has_transplant?1:0, has_microbiology?1:0, has_maternal_serum?1:0, is_independent?1:0, waived_only?1:0, setup_complete?1:0, accreditation_body || 'tjc');
+    `).run(userId, is_independent?1:0, setup_complete?1:0, accreditation_body || 'tjc');
     res.json({ ok: true });
   });
 
@@ -7933,14 +7930,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = reqSets.map((req: any) => {
       const userStatus = statusMap[req.id];
       // Determine if applicable based on settings
+      // Service-line toggles (blood_bank, transplant, microbiology, maternal_serum) removed;
+      // users now mark those N/A individually. Only structural flag (is_independent) remains.
       let autoNa = false;
       if (settings) {
-        if (req.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
-        if (req.service_line === 'transplant' && !settings.has_transplant) autoNa = true;
-        if (req.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
-        if (req.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
         if (req.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        // WT.* (waived testing) requirements are always applicable by default; users mark N/A manually
       }
       const isNa = autoNa || (userStatus?.is_na ? true : false);
       const status = isNa ? 'na' : (userStatus?.status || 'not_started');
@@ -8068,14 +8062,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (bodySum === 'cap' || bodySum === 'both') summaryReqs.push(...(CAP_REQUIREMENTS as unknown as any[]));
     let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
     for (const req of summaryReqs) {
+      // Service-line toggles (blood_bank, transplant, microbiology, maternal_serum) removed;
+      // users now mark those N/A individually. Only structural flag (is_independent) remains.
       let autoNa = false;
       if (settings) {
-        if (req.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
-        if (req.service_line === 'transplant' && !settings.has_transplant) autoNa = true;
-        if (req.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
-        if (req.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
         if (req.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        // WT.* (waived testing) requirements are always applicable by default; users mark N/A manually
       }
       const userStatus = statusMap[req.id];
       const isNa = autoNa || (userStatus?.is_na ? true : false);
@@ -8107,14 +8098,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (bodyPdf === 'cap' || bodyPdf === 'both') allReqs.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
+        // Service-line toggles (blood_bank, transplant, microbiology, maternal_serum) removed;
+        // users now mark those N/A individually. Only structural flag (is_independent) remains.
         let autoNa = false;
         if (settings) {
-          if (reqItem.service_line === 'blood_bank' && !settings.has_blood_bank) autoNa = true;
-          if (reqItem.service_line === 'transplant' && !settings.has_transplant) autoNa = true;
-          if (reqItem.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
-          if (reqItem.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
           if (reqItem.service_line === 'independent' && !settings.is_independent) autoNa = true;
-          // WT.* (waived testing) requirements are always applicable by default; users mark N/A manually
         }
         const isNa = autoNa || (us?.is_na ? true : false);
         return {

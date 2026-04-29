@@ -13,12 +13,12 @@ import { authHeaders } from "@/lib/auth";
 interface PolicySettings {
   id?: number;
   user_id?: number;
-  has_blood_bank: number;
-  has_transplant: number;
-  has_microbiology: number;
-  has_maternal_serum: number;
+  has_blood_bank: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
+  has_transplant: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
+  has_microbiology: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
+  has_maternal_serum: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
   is_independent: number;
-  waived_only: number;
+  waived_only: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
   accreditation_body: string;
   setup_complete: number;
 }
@@ -286,25 +286,17 @@ export default function VeritaPolicyAppPage() {
         {settingsOpen && (
           <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-border bg-card">
 
-            {/* Service line toggles */}
-            {[
-              { key: "has_blood_bank",    label: "Blood Bank / Transfusion Service" },
-              { key: "has_microbiology",  label: "Microbiology Section" },
-              { key: "has_transplant",    label: "Transplant Testing" },
-              { key: "has_maternal_serum", label: "Maternal Serum Marker Screening" },
-              { key: "is_independent",    label: "Independent Laboratory (not hospital-based)" },
-            ].map(({ key, label }) => (
-              <div key={key} className="flex items-center justify-between gap-3">
-                <span className="text-sm text-foreground">{label}</span>
-                <Toggle
-                  checked={!!(settings as any)[key]}
-                  disabled={isReadOnly}
-                  onChange={v => updateSetting(key as keyof PolicySettings, v ? 1 : 0)}
-                />
-              </div>
-            ))}
+            {/* Lab type toggle */}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-foreground">Independent Laboratory (not hospital-based)</span>
+              <Toggle
+                checked={!!settings.is_independent}
+                disabled={isReadOnly}
+                onChange={v => updateSetting("is_independent", v ? 1 : 0)}
+              />
+            </div>
             <p className="sm:col-span-2 text-xs text-muted-foreground">
-              Turning off a service line automatically marks non-applicable requirements as N/A.
+              Independent labs have additional governance requirements. Use the N/A button on individual requirements for service lines your lab does not offer.
             </p>
           </div>
         )}

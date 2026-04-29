@@ -1013,12 +1013,12 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritapolicy_settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL UNIQUE,
-    has_blood_bank INTEGER NOT NULL DEFAULT 1,
-    has_transplant INTEGER NOT NULL DEFAULT 0,
-    has_microbiology INTEGER NOT NULL DEFAULT 1,
-    has_maternal_serum INTEGER NOT NULL DEFAULT 0,
+    has_blood_bank INTEGER NOT NULL DEFAULT 1, -- deprecated: no longer used in UI or auto-N/A logic; safe to drop in a future migration
+    has_transplant INTEGER NOT NULL DEFAULT 0, -- deprecated: no longer used in UI or auto-N/A logic; safe to drop in a future migration
+    has_microbiology INTEGER NOT NULL DEFAULT 1, -- deprecated: no longer used in UI or auto-N/A logic; safe to drop in a future migration
+    has_maternal_serum INTEGER NOT NULL DEFAULT 0, -- deprecated: no longer used in UI or auto-N/A logic; safe to drop in a future migration
     is_independent INTEGER NOT NULL DEFAULT 0,
-    waived_only INTEGER NOT NULL DEFAULT 0, -- TODO: deprecated, no longer used in UI or applicability logic; safe to drop in a future migration
+    waived_only INTEGER NOT NULL DEFAULT 0, -- deprecated: no longer used in UI or auto-N/A logic; safe to drop in a future migration
     setup_complete INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
