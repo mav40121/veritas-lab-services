@@ -293,7 +293,6 @@ export default function VeritaPolicyAppPage() {
               { key: "has_transplant",    label: "Transplant Testing" },
               { key: "has_maternal_serum", label: "Maternal Serum Marker Screening" },
               { key: "is_independent",    label: "Independent Laboratory (not hospital-based)" },
-              { key: "waived_only",       label: "Waived Testing Only" },
             ].map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between gap-3">
                 <span className="text-sm text-foreground">{label}</span>

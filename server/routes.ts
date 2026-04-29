@@ -7940,7 +7940,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (req.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
         if (req.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
         if (req.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        if (req.service_line === 'waived_only' && !settings.waived_only) autoNa = true;
+        // WT.* (waived testing) requirements are always applicable by default; users mark N/A manually
       }
       const isNa = autoNa || (userStatus?.is_na ? true : false);
       const status = isNa ? 'na' : (userStatus?.status || 'not_started');
@@ -8075,7 +8075,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (req.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
         if (req.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
         if (req.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        if (req.service_line === 'waived_only' && !settings.waived_only) autoNa = true;
+        // WT.* (waived testing) requirements are always applicable by default; users mark N/A manually
       }
       const userStatus = statusMap[req.id];
       const isNa = autoNa || (userStatus?.is_na ? true : false);
@@ -8114,7 +8114,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (reqItem.service_line === 'microbiology' && !settings.has_microbiology) autoNa = true;
           if (reqItem.service_line === 'maternal_serum' && !settings.has_maternal_serum) autoNa = true;
           if (reqItem.service_line === 'independent' && !settings.is_independent) autoNa = true;
-          if (reqItem.service_line === 'waived_only' && !settings.waived_only) autoNa = true;
+          // WT.* (waived testing) requirements are always applicable by default; users mark N/A manually
         }
         const isNa = autoNa || (us?.is_na ? true : false);
         return {

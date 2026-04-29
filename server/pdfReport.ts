@@ -3486,7 +3486,6 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
     { key: "has_microbiology", label: "Microbiology" },
     { key: "has_maternal_serum", label: "Maternal Serum Marker Screening" },
     { key: "is_independent", label: "Independent Laboratory" },
-    { key: "waived_only", label: "Waived Testing Only" },
   ];
 
   function statusColor(s: string) {
