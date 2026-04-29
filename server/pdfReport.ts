@@ -881,7 +881,6 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="section-heading">Calibration Verification / Linearity</div>
   <div class="charts">${scatterSvg}${recoverySvg}</div>
 
   <hr class="divider">
@@ -999,7 +998,6 @@ function buildQualitativeHTML(study: Study, results: any): string {
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="section-heading">Qualitative Method Comparison Study</div>
   <div class="report-title-sub">Reference: ${abbreviateInstrumentName(primaryName)} | Comparison: ${abbreviateInstrumentName(compName)}</div>
 
   <hr class="divider">
@@ -1097,7 +1095,6 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="section-heading">Semi-Quantitative Method Comparison Study</div>
   <div class="report-title-sub">Reference: ${abbreviateInstrumentName(primaryName)} | Comparison: ${abbreviateInstrumentName(compName)} | Scale: ${gradeScale.join(" \u2192 ")}</div>
 
   <hr class="divider">
@@ -1369,7 +1366,6 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="section-heading">Correlation / Method Comparison Study</div>
   <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(abbreviateInstrumentName).join(", ")}</div>
 
   <div class="charts">${p1CorrSvg}${p1BaSvg}</div>
@@ -1495,8 +1491,6 @@ export function buildPrecisionHTML(study: Study, results: any): string {
   </style></head><body>
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
-
-  <div class="section-heading">Precision Verification (EP15)</div>
 
   <hr class="divider">
   <div class="section-label">Key Statistics Summary</div>
@@ -1683,7 +1677,6 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reference Range Verification - ${study.testName}</title><style>${CSS}</style></head><body>
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
-  <div class="section-heading">Reference Range Verification</div>
   <div class="verdict-banner ${passClass}">${overallPass ? "\u2714" : "\u2718"} ${verdictText}</div>
   ${summaryStats}
   <div style="margin:12px 0 6px;font-size:8pt;font-weight:600;color:#01696F;">Distribution Plot</div>
@@ -1769,7 +1762,6 @@ function buildLotToLotHTML(study: Study, results: any): string {
   </style></head><body>
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
-  <div class="section-heading">Lot-to-Lot Verification</div>
   ${lotInfo}
   ${cohortChartSections}
 
@@ -1969,7 +1961,6 @@ function buildPTCoagHTML(study: Study, results: any): string {
   </style></head><body>
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
-  <div class="section-heading">PT/Coag New Lot Validation</div>
   ${reagentInfo}
 
   <div class="charts">${m2Scatter}${m2EI}</div>

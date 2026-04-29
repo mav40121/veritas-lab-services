@@ -404,10 +404,6 @@ function generateCalVerPDF(doc: jsPDF, study: Study, results: CalVerResults) {
   const instrumentNames: string[] = JSON.parse(study.instruments);
   let y = pdfHeader(doc, study, pw, margin);
 
-  // Section title
-  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Calibration Verification / Linearity", margin, y); y += 6;
-
   // Charts
   const chartW = (contentW-6)/2, chartH = 55;
   const assignedVals = results.levelResults.map(r => r.assignedValue);
@@ -522,9 +518,6 @@ function generateMethodCompPDF(doc: jsPDF, study: Study, results: MethodCompResu
   const xRange = (results as any).xRange as { min: number; max: number } | undefined;
   const yRange = (results as any).yRange as { [name: string]: { min: number; max: number } } | undefined;
   let y = pdfHeader(doc, study, pw, margin);
-
-  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Correlation / Method Comparison", margin, y); y += 6;
 
   // Charts: correlation scatter + Bland-Altman
   const chartW = (contentW-6)/2, chartH = 55;
@@ -702,9 +695,6 @@ function generateQualitativePDF(doc: jsPDF, study: Study, results: QualitativeRe
   const instrumentNames: string[] = JSON.parse(study.instruments);
   let y = pdfHeader(doc, study, pw, margin);
 
-  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Qualitative Correlation / Method Comparison", margin, y); y += 6;
-
   // Concordance Matrix
   hLine(doc, y); y += 4;
   sectionTitle(doc, "Concordance Matrix", y, pw); y += 5;
@@ -776,9 +766,6 @@ function generateSemiQuantPDF(doc: jsPDF, study: Study, results: SemiQuantResult
   const pw = 215.9, margin = 15, contentW = pw - 2*margin;
   const instrumentNames: string[] = JSON.parse(study.instruments);
   let y = pdfHeader(doc, study, pw, margin);
-
-  doc.setFontSize(13); doc.setFont("helvetica","bold"); setRgb(doc, DARK);
-  doc.text("Semi-Quantitative Correlation / Method Comparison", margin, y); y += 6;
 
   // Concordance Matrix
   hLine(doc, y); y += 4;
