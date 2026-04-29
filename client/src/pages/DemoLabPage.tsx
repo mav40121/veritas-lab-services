@@ -342,11 +342,24 @@ export default function DemoLabPage() {
           </div>
 
           {/* ═══════════════ TAB 1: VERITACHECK ═══════════════ */}
-          {activeTab === "veritacheck" && (
+          {activeTab === "veritacheck" && (() => {
+            const studyCount = studies.length;
+            const failedCount = studies.filter((s: any) => s.result === 'fail' || s.result === 'FAIL' || s.overallPass === false).length;
+            const passedCount = studyCount - failedCount;
+            const numWord = (n: number) => (["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve"][n] || String(n));
+            const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+            const studiesWord = studyCount === 1 ? "study" : "studies";
+            const passedClause = passedCount === 1 ? `${cap(numWord(passedCount))} study passed` : `${cap(numWord(passedCount))} studies passed`;
+            const failedClause = failedCount === 0
+              ? "with no flagged issues"
+              : failedCount === 1
+                ? "and one identified a systematic bias requiring investigation"
+                : `and ${numWord(failedCount)} identified systematic bias requiring investigation`;
+            return (
             <div className="space-y-6">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional has completed 4 EP studies for their chemistry department. Three studies passed - and one identified a systematic bias requiring investigation. Below you can see how VeritaAssure&#8482; documents both outcomes.
+                  Riverside Regional has completed {numWord(studyCount)} EP {studiesWord} for their chemistry department. {passedClause} {failedClause}. Below you can see how VeritaAssure&#8482; documents both outcomes.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
@@ -643,7 +656,8 @@ export default function DemoLabPage() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* ═══════════════ TAB 2: VERITAMAP ═══════════════ */}
           {activeTab === "veritamap" && (
