@@ -27,6 +27,20 @@ function safeJsonParse(value: any, fallback: any = []): any {
   }
 }
 
+// ─── Inline SVG icon helpers (font-independent) ───────────────────────────────
+// Production Railway containers do not ship Symbola/DejaVu Sans, so the
+// Unicode glyphs U+2713 (check) and U+2717 (ballot-x) render as blank boxes
+// or null bytes. Inline SVG paths render identically everywhere because they
+// rely only on Puppeteer's vector renderer, never on installed fonts.
+// Both icons inherit color via currentColor so existing style="color:#..."
+// or .pass-badge / .fail-badge CSS continues to control the rendered hue.
+function iconCheck(): string {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="0.95em" height="0.95em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>';
+}
+function iconCross(): string {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="0.95em" height="0.95em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+}
+
 // ─── Math helpers (mirrors client/src/lib/calculations.ts) ────────────────────
 function mean(v: number[]) { return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; }
 function slopeFn(x: number[], y: number[]) {
@@ -1222,12 +1236,12 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   //   dual-criterion (teaIsPercentage=1, absFloor set): both % and absolute ("greater of")
   const hasPctCriterion = !_isAbsTea;
   const hasAbsCriterion = _isAbsTea || (_absFloor != null);
-  const teaPctDisplay = hasPctCriterion ? `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%` : '\u2014';
+  const teaPctDisplay = hasPctCriterion ? `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%` : '-';
   const teaAbsDisplay = hasAbsCriterion
     ? (_isAbsTea
         ? `\u00B1${study.cliaAllowableError} ${((study as any).teaUnit || (study as any).tea_unit || '').trim()}`
         : `\u00B1${_absFloor} ${_absUnit}`.trim())
-    : '\u2014';
+    : '-';
   // Numeric thresholds for per-row evaluation
   const teaPctThreshold = hasPctCriterion ? study.cliaAllowableError * 100 : null;   // e.g. 15.0
   const teaAbsThreshold = hasAbsCriterion
@@ -1254,7 +1268,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   const levelRows = levelResults.map((r, ri) => {
     const instrCells = comparisonNames.flatMap(n => {
       const v = r.instruments[n];
-      if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td class="text-center">\u2014</td>`, `<td class="text-center">\u2014</td>`, `<td class="text-center">\u2014</td>`, `<td class="text-center">\u2014</td>`, `<td>---</td>`];
+      if (!v) return [`<td>---</td>`, `<td>---</td>`, `<td>---</td>`, `<td class="text-center">-</td>`, `<td class="text-center">-</td>`, `<td class="text-center">-</td>`, `<td class="text-center">-</td>`, `<td>---</td>`];
       const pfClass = v.passFail === "Pass" ? "pass" : "fail";
 
       // Per-row sub-criterion evaluation
@@ -1262,15 +1276,15 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       const absMet = teaAbsThreshold != null ? Math.abs(v.difference) <= teaAbsThreshold : null;
 
       const pctMetCell = pctMet === null
-        ? `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2014</td>`
+        ? `<td class="text-center" style="color:${SUB_NA_COLOR}">-</td>`
         : pctMet
-          ? `<td class="text-center" style="color:${SUB_PASS_COLOR};background:${SUB_PASS_BG};font-weight:600">\u2713</td>`
-          : `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2717</td>`;
+          ? `<td class="text-center" style="color:${SUB_PASS_COLOR};background:${SUB_PASS_BG};font-weight:600">${iconCheck()}</td>`
+          : `<td class="text-center" style="color:${SUB_NA_COLOR}">${iconCross()}</td>`;
       const absMetCell = absMet === null
-        ? `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2014</td>`
+        ? `<td class="text-center" style="color:${SUB_NA_COLOR}">-</td>`
         : absMet
-          ? `<td class="text-center" style="color:${SUB_PASS_COLOR};background:${SUB_PASS_BG};font-weight:600">\u2713</td>`
-          : `<td class="text-center" style="color:${SUB_NA_COLOR}">\u2717</td>`;
+          ? `<td class="text-center" style="color:${SUB_PASS_COLOR};background:${SUB_PASS_BG};font-weight:600">${iconCheck()}</td>`
+          : `<td class="text-center" style="color:${SUB_NA_COLOR}">${iconCross()}</td>`;
 
       return [
         `<td class="text-right">${sf(v.value, 3)}</td>`,
@@ -2171,7 +2185,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
       <div class="eval-title">Current Status</div>
       <div class="eval-text">Current CumSum: <strong>${currentCumsum} sec</strong> - Verdict: <strong style="${currentVerdict === 'ACTION REQUIRED' ? 'color:#dc2626' : currentVerdict === 'ACCEPT' ? 'color:#059669' : ''}">${currentVerdict}</strong></div>
       <div class="eval-text" style="margin-top:4px">Threshold: |CumSum| ≤ 7.0 seconds → ACCEPT. Exceeds threshold → ACTION REQUIRED (new Heparin Response Curve needed).</div>
-      <div class="verdict" style="background:${currentVerdict === 'ACTION REQUIRED' ? '#fef2f2;border-color:#fca5a5;color:#dc2626' : '#f0fdf4;border-color:#86efac;color:#059669'}">${currentVerdict === 'ACTION REQUIRED' ? '✗ ACTION REQUIRED' : currentVerdict === 'ACCEPT' ? '✓ ACCEPT' : currentVerdict}</div>
+      <div class="verdict" style="background:${currentVerdict === 'ACTION REQUIRED' ? '#fef2f2;border-color:#fca5a5;color:#dc2626' : '#f0fdf4;border-color:#86efac;color:#059669'}">${currentVerdict === 'ACTION REQUIRED' ? iconCross() + ' ACTION REQUIRED' : currentVerdict === 'ACCEPT' ? iconCheck() + ' ACCEPT' : currentVerdict}</div>
     </div>
     <div class="eval-title" style="margin-top:12px">CUMSUM History</div>
     <table class="data-table"><thead><tr>
@@ -2745,7 +2759,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || item.specimen_info || "")}</td>
           <td>${esc(item.el1_specimen_id || item.specimen_info || "")}</td>
           <td>${esc(item.el1_observer_initials || item.supervisor_initials || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
       },
       {
         num: 2,
@@ -2755,7 +2769,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td style="word-break:break-word;white-space:normal;max-width:280px;font-size:7.5pt;line-height:1.4;">${esc(item.el2_evidence || item.evidence || "")}</td>
           <td>${esc(item.el2_date || item.date_met || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
       },
       {
         num: 3,
@@ -2764,7 +2778,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         cols: ["Method Group", "Date Tech Ran QC", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el3_qc_date || item.date_met || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
       },
       {
         num: 4,
@@ -2774,7 +2788,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el4_date_observed || item.date_met || "")}</td>
           <td>${esc(item.el4_observer_initials || item.supervisor_initials || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
       },
       {
         num: 5,
@@ -2785,7 +2799,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(item.el5_sample_type || "")}</td>
           <td>${esc(item.el5_sample_id || item.specimen_info || "")}</td>
           <td>${item.el5_acceptable ? "Yes" : item.el5_acceptable === 0 ? "No" : "-"}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
       },
       {
         num: 6,
@@ -2796,7 +2810,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(item.el6_quiz_id || "")}</td>
           <td>${item.el6_score != null ? item.el6_score + "%" : "-"}</td>
           <td>${esc(item.el6_date_taken || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>`,
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
       },
     ];
 
@@ -2862,7 +2876,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         <td>${esc(item.waived_evidence || item.evidence || "")}</td>
         <td>${esc(item.waived_date || item.date_met || "")}</td>
         <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
-        <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? '\u2713 Pass' : '\u2717 Fail'}</td>
+        <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>
       </tr>`;
     }
     html += `</table></div>`;
@@ -2960,8 +2974,8 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           const bgClass = isSelected && isCorrect ? "quiz-correct" : isSelected && !isCorrect ? "quiz-incorrect" : isCorrect ? "quiz-correct" : "";
           html += `<div class="${bgClass}" style="font-size:7.5pt;padding:2px 6px;margin:1px 0;border-radius:2px;">
             ${isSelected ? "\u25CF" : "\u25CB"} ${esc(opt)}
-            ${isCorrect ? ' <span style="color:#437A22;font-weight:600;">\u2713 Correct</span>' : ""}
-            ${isSelected && !isCorrect ? ' <span style="color:#A12C7B;font-weight:600;">\u2717 Selected</span>' : ""}
+            ${isCorrect ? ' <span style="color:#437A22;font-weight:600;">' + iconCheck() + ' Correct</span>' : ""}
+            ${isSelected && !isCorrect ? ' <span style="color:#A12C7B;font-weight:600;">' + iconCross() + ' Selected</span>' : ""}
           </div>`;
         }
         if (q.explanation) {

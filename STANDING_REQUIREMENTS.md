@@ -30,6 +30,19 @@
 - NO CAMLAB references — use "TJC standard"
 - NO LabVine Learning references — removed permanently
 - Governing law = Massachusetts in all legal text
+- Labs **verify**, manufacturers **validate**. Never write "method validation", "validation suite", or similar in marketing or product copy when describing what the lab is doing. Use "performance verification" or "verification of performance specifications" (per CMS CLIA brochure of the same name).
+
+## URL Canonicalization (Print + Marketing)
+- The canonical demo URL is `veritaslabservices.com/demo`. NEVER `veritaslabservices.com/#/demo`. The hash form was retired and is the type of stale link that survives in printed materials and embarrasses the brand.
+- The canonical compliance demo URL is `veritaslabservices.com/demo/compliance`. Same rule, no hash.
+- Before declaring QC complete on ANY printed asset, brochure, leave-behind, slide deck, ad, social card, or generated PDF that contains URLs, run an explicit grep for these forbidden patterns and report the result:
+  - `/#/` (hash routing)
+  - `localhost`
+  - `127.0.0.1`
+  - `radiant-quietude` (Railway internal hostname)
+  - `staging`, `preview`, `pr-`
+  - any subdomain other than `www`
+- A clean grep is a required step in the QC checklist, not optional. "Visual inspection" is not a substitute. The April 28 2026 leave-behind shipped four `/#/demo` URLs through multiple QC passes because no one ran this grep.
 
 ## Procedural Gates (NON-NEGOTIABLE)
 
