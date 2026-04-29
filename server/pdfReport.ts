@@ -1322,15 +1322,26 @@ function buildPrecisionHTML(study: Study, results: any): string {
   const isAdvanced = results.mode === "advanced";
   const levelResults = results.levelResults || [];
 
+  // Dual-criterion CLIA §493 PT TEa support for precision
+  const _absFloor = (study as any).cliaAbsoluteFloor ?? (study as any).clia_absolute_floor ?? null;
+  const _absUnit  = (study as any).cliaAbsoluteUnit ?? (study as any).clia_absolute_unit ?? '';
+  const hasDual = _absFloor != null && _absUnit;
+  const teaStrFull = teaDisplayStr(study);
+  const allowCVHeader = hasDual ? `Allow CV% / Floor` : `Allow CV%`;
+
   const summaryRows = levelResults.map((r: any, i: number) => {
     const pfClass = r.passFail === "Pass" ? "pass" : "fail";
+    // For dual-criterion analytes, show both the percent rule and the absolute floor as an SD threshold (k=2)
+    const allowCellHTML = hasDual
+      ? `±${cliaCV}%<br><span style="color:${MUTED};font-size:7pt">or SD≤${(((_absFloor as number)/2)).toFixed(3)} ${_absUnit}</span>`
+      : `±${cliaCV}%`;
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
       <td>${r.levelName}</td>
       <td class="text-right">${r.n}</td>
       <td class="text-right">${sf(r.mean, 3)}</td>
       <td class="text-right">${sf(r.sd, 3)}</td>
       <td class="text-right">${sf(r.cv, 2)}%</td>
-      <td class="text-right">±${cliaCV}%</td>
+      <td class="text-right">${allowCellHTML}</td>
       <td class="text-right ${pfClass}">${r.passFail}</td>
     </tr>`;
   }).join("");
@@ -1396,7 +1407,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
       <tr><td style="color:${MUTED};font-weight:700;width:25%">Mean</td><td style="width:25%">${precMean}</td>
           <td style="color:${MUTED};font-weight:700;width:25%">SD</td><td style="width:25%">${precSD}</td></tr>
       <tr><td style="color:${MUTED};font-weight:700">CV%</td><td>${precMaxCV}</td>
-          <td style="color:${MUTED};font-weight:700">Allowable CV%</td><td>±${cliaCV}%</td></tr>
+          <td style="color:${MUTED};font-weight:700">Allowable TEa</td><td>${teaStrFull}</td></tr>
       <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${precPassCount}</td>
           <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
     </tbody>
@@ -1416,7 +1427,7 @@ function buildPrecisionHTML(study: Study, results: any): string {
       <thead><tr>
         <th>Level</th><th class="text-right">N</th><th class="text-right">Mean</th>
         <th class="text-right">SD</th><th class="text-right">CV%</th>
-        <th class="text-right">Allow CV%</th><th class="text-right">Pass?</th>
+        <th class="text-right">${allowCVHeader}</th><th class="text-right">Pass?</th>
       </tr></thead>
       <tbody>${summaryRows}</tbody>
     </table>
@@ -1986,6 +1997,15 @@ function buildQCRangeHTML(study: Study, results: any): string {
 function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   const r = results;
   const rawDP = safeJsonParse(study.dataPoints);
+  // Defensive dual-criterion handling: if a per-analyte floor is provided on the result object
+  // (ar.absFloor / ar.absUnit), include it in the per-analyte narrative; otherwise show only %.
+  const maAnalyteTeaStr = (ar: any): string => {
+    const pct = `\u00B1${(ar.tea * 100).toFixed(0)}%`;
+    if (ar.absFloor != null && ar.absUnit) {
+      return `${pct} or \u00B1${ar.absFloor} ${ar.absUnit} (greater)`;
+    }
+    return pct;
+  };
   const summaryRows = (r.analyteResults || []).filter((ar: any) => ar.n > 0).map((ar: any) => `
     <tr style="${!ar.pass ? 'background:#fef2f2;' : ''}">
       <td>${ar.analyte}</td><td style="text-align:right">${ar.n}</td>
@@ -1994,7 +2014,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
       <td style="text-align:right">${ar.meanPctDiff.toFixed(1)}%</td>
       <td style="text-align:right">${ar.sdPctDiff.toFixed(2)}</td>
       <td style="text-align:right">${ar.r.toFixed(4)}</td>
-      <td style="text-align:right">${(ar.tea * 100).toFixed(0)}%</td>
+      <td style="text-align:right">${maAnalyteTeaStr(ar)}</td>
       <td style="text-align:center;${ar.pass ? 'color:#059669;' : 'color:#dc2626;'}font-weight:600">${ar.pass ? 'PASS' : 'FAIL'}</td>
     </tr>`).join("");
 
@@ -2020,7 +2040,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
     ? `<b>Each analyte was individually evaluated against its adopted acceptance criterion (TEa) per ${maCfr} (§493 PT TEa for each analyte; adopted under 42 CFR §493.1253(b)(2)). All analytes satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
     : `<b>Each analyte was individually evaluated against its adopted acceptance criterion (TEa) per ${maCfr} (§493 PT TEa for each analyte; adopted under 42 CFR §493.1253(b)(2)). One or more analytes did not satisfy this criterion; see the per-analyte results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `${(r.specimens || []).length} ${sampleLabel} specimens were compared between old lot and new lot on ${study.instrument}. ` +
-    validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${(ar.tea * 100).toFixed(0)}% TEa).`).join(" ") +
+    validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${maAnalyteTeaStr(ar)} TEa).`).join(" ") +
     ` ${maCoagCliaStatement}`;
 
   const isiNote = r.ptINRValidation ? `<div class="eval-text" style="margin:8px 0;font-size:7.5px">${r.ptINRValidation.isiCheck}</div>` : '';

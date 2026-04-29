@@ -33,6 +33,12 @@ const allowlist = [
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
 
+  console.log("running dual-criterion audit...");
+  await import("./auditDualCriterion.js").catch(async () => {
+    // tsx import fallback - run via require if needed
+    await import("./auditDualCriterion");
+  });
+
   console.log("building client...");
   await viteBuild();
 

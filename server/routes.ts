@@ -179,9 +179,16 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     }
 
     if (studyType === "precision") {
-      // Each level: CV <= allowableCV (cliaAllowableError * 100)
+      // Dual-criterion S493: pass if CV <= allowableCV OR (2 * SD) <= absolute_floor.
+      // The SD-based interpretation expresses the absolute floor as a +/- 2 SD envelope on
+      // a single measurement at the level mean (k=2 coverage), the standard reading for
+      // EP15 precision when an analyte's PT TEa includes an absolute floor (e.g. Glucose
+      // +/- 8% or +/- 6 mg/dL whichever is greater).
       const dataPoints = rawData as { level: number; levelName: string; values: number[]; days?: number[][] }[];
       const allowableCV = cliaAllowableError * 100;
+      const sdFloor = teaIsPercentage && (cliaAbsoluteFloor ?? 0) > 0
+        ? (cliaAbsoluteFloor as number) / 2
+        : null;
       let passCount = 0, totalCount = 0;
       for (const dp of dataPoints) {
         const allVals = dp.days ? dp.days.flat().filter(v => v !== null && !isNaN(v)) : dp.values.filter(v => v !== null && !isNaN(v));
@@ -190,15 +197,21 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         const n = allVals.length;
         const m = allVals.reduce((a, b) => a + b, 0) / n;
         const variance = allVals.reduce((s, v) => s + (v - m) ** 2, 0) / (n - 1);
-        const cv = m !== 0 ? (Math.sqrt(variance) / m) * 100 : 0;
-        if (cv <= allowableCV) passCount++;
+        const sd = Math.sqrt(variance);
+        const cv = m !== 0 ? (sd / m) * 100 : 0;
+        const passPct = cv <= allowableCV;
+        const passAbs = sdFloor !== null && sd <= sdFloor;
+        if (passPct || passAbs) passCount++;
       }
       return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
     }
 
     if (studyType === "lot_to_lot") {
+      // Dual-criterion S493: per-pair pass if |new - current| <= max(pct_allowance * |current|, absolute_floor).
+      // Cohort pass: mean |%diff| <= tea*100 AND coverage >= 90%, computed against the dual rule.
       const { data, sampleType } = rawData;
       const tea = cliaAllowableError;
+      const absFloor = teaIsPercentage ? (cliaAbsoluteFloor ?? 0) : 0;
       const cohorts: string[] = sampleType === "both" ? ["Normal", "Abnormal"] : [sampleType === "normal" ? "Normal" : "Abnormal"];
       const meanFn = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
       for (const cohort of cohorts) {
@@ -207,10 +220,17 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
           const pctDiff = dp.currentLot !== 0 ? ((dp.newLot - dp.currentLot) / dp.currentLot) * 100 : 0;
           return Math.abs(pctDiff);
         });
+        // Per-pair pass status under dual rule
+        const pairPasses = valid.map((dp: any) => {
+          const diff = Math.abs(dp.newLot - dp.currentLot);
+          const pctAllowance = Math.abs(dp.currentLot) * tea;
+          const allowance = Math.max(pctAllowance, absFloor);
+          return diff <= allowance;
+        });
         const n = absPcts.length;
         if (n === 0) return "fail";
         const meanAbsPct = meanFn(absPcts);
-        const withinTea = absPcts.filter((a: number) => a <= tea * 100).length;
+        const withinTea = pairPasses.filter((p: boolean) => p).length;
         const coverage = (withinTea / n) * 100;
         if (!(meanAbsPct <= tea * 100 && coverage >= 90)) return "fail";
       }
@@ -3800,8 +3820,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // ── Precision PDF ──
       if (studyRow.study_type === "precision") {
-        const teaFraction = teaFractionStored;          // e.g. 0.07 for 7%
-        const teaPctNum = teaFractionStored * 100;      // e.g. 7
+        const teaFraction = teaFractionStored;          // e.g. 0.08 for 8%
+        const teaPctNum = teaFractionStored * 100;      // e.g. 8
+        const _absFloor: number | null = studyRow.clia_absolute_floor ?? null;
+        const _absUnit: string = studyRow.clia_absolute_unit ?? '';
+        const _sdFloor: number | null = (_absFloor !== null && _absFloor > 0) ? _absFloor / 2 : null;
         const _mean = (v: number[]) => v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
         const _sd = (v: number[]) => {
           if (v.length < 2) return 0;
@@ -3817,7 +3840,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const mean = _mean(flat);
           const sd = _sd(flat);
           const cv = mean !== 0 ? (sd / mean) * 100 : 0;
-          const pass = cv <= teaPctNum;
+          // Dual-criterion S493: pass if CV <= allowableCV OR SD <= absolute_floor / 2 (k=2 envelope)
+          const passPct = cv <= teaPctNum;
+          const passAbs = _sdFloor !== null && sd <= _sdFloor;
+          const pass = passPct || passAbs;
           if (pass) passCount++;
 
           // ANOVA: within-run = pooled within-day variance; between-day from MS_between.
@@ -3849,6 +3875,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
         const overallPass = passCount === levelResults.length && levelResults.length > 0;
 
+        // Build the dual-criterion display string for narrative/summary
+        const _teaDisplay = (_absFloor !== null && _absUnit)
+          ? `\u00B1${teaPctNum.toFixed(1)}% or \u00B1${_absFloor} ${_absUnit} (greater)`
+          : `\u00B1${teaPctNum.toFixed(1)}%`;
+
         const study = {
           testName: studyRow.test_name, instrument: studyRow.instrument,
           analyst: studyRow.analyst, date: studyRow.date,
@@ -3858,6 +3889,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           tea_is_percentage: studyRow.tea_is_percentage ?? 1,
           teaUnit: studyRow.tea_unit ?? '%',
           tea_unit: studyRow.tea_unit ?? '%',
+          cliaAbsoluteFloor: _absFloor,
+          clia_absolute_floor: _absFloor,
+          cliaAbsoluteUnit: _absUnit || null,
+          clia_absolute_unit: _absUnit || null,
           dataPoints: dp, instruments: instNames, status: studyRow.status,
           _labName: "Riverside Regional Medical Center",
         };
@@ -3869,8 +3904,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           passCount,
           totalCount: levelResults.length,
           summary: overallPass
-            ? `All ${levelResults.length} precision levels passed within the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%. Manufacturer precision claims verified.`
-            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%.`,
+            ? `All ${levelResults.length} precision levels passed within the adopted acceptance criterion (TEa) of ${_teaDisplay}. Manufacturer precision claims verified.`
+            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the adopted acceptance criterion (TEa) of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
         const filename = `VeritaCheck_Precision_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
@@ -3879,8 +3914,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // ── Lot-to-Lot PDF ──
       if (studyRow.study_type === "lot_to_lot") {
-        const teaFraction = teaFractionStored;          // e.g. 0.06 for 6%
-        const teaPctNum = teaFractionStored * 100;      // e.g. 6
+        const teaFraction = teaFractionStored;          // e.g. 0.08 for 8%
+        const teaPctNum = teaFractionStored * 100;      // e.g. 8
+        const _absFloor: number | null = studyRow.clia_absolute_floor ?? null;
+        const _absUnit: string = studyRow.clia_absolute_unit ?? '';
         const rawLot: any = dp;
         const sampleType: string = rawLot?.sampleType || "both";
         const cohortNames: string[] = sampleType === "both"
@@ -3891,7 +3928,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const cohorts = cohortNames.map((cName: string) => {
           const specs = allPairs.filter((p: any) => (p.cohort || "Normal") === cName).map((p: any) => {
             const pctDiff = p.currentLot !== 0 ? ((p.newLot - p.currentLot) / p.currentLot) * 100 : 0;
-            const pf = Math.abs(pctDiff) <= teaPctNum ? "Pass" : "Fail";
+            // Dual-criterion S493: pass if |diff| <= max(pct_allowance, absolute_floor)
+            const absDiff = Math.abs(p.newLot - p.currentLot);
+            const pctAllowance = Math.abs(p.currentLot) * teaFraction;
+            const allowance = Math.max(pctAllowance, _absFloor ?? 0);
+            const pf = absDiff <= allowance ? "Pass" : "Fail";
             totalCount++;
             if (pf === "Pass") passCount++;
             return { specimenId: p.specimenId, currentLot: p.currentLot, newLot: p.newLot, pctDifference: pctDiff, passFail: pf };
@@ -3902,6 +3943,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
         const overallPass = totalCount > 0 && passCount === totalCount;
 
+        // Build the dual-criterion display string for narrative/summary
+        const _teaDisplay = (_absFloor !== null && _absUnit)
+          ? `\u00B1${teaPctNum.toFixed(1)}% or \u00B1${_absFloor} ${_absUnit} (greater)`
+          : `\u00B1${teaPctNum.toFixed(1)}%`;
+
         const study = {
           testName: studyRow.test_name, instrument: studyRow.instrument,
           analyst: studyRow.analyst, date: studyRow.date,
@@ -3911,6 +3957,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           tea_is_percentage: studyRow.tea_is_percentage ?? 1,
           teaUnit: studyRow.tea_unit ?? '%',
           tea_unit: studyRow.tea_unit ?? '%',
+          cliaAbsoluteFloor: _absFloor,
+          clia_absolute_floor: _absFloor,
+          cliaAbsoluteUnit: _absUnit || null,
+          clia_absolute_unit: _absUnit || null,
           dataPoints: dp, instruments: instNames, status: studyRow.status,
           _labName: "Riverside Regional Medical Center",
         };
@@ -3921,8 +3971,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           passCount,
           totalCount,
           summary: overallPass
-            ? `All ${totalCount} paired specimens passed within the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%. New reagent lot acceptable for clinical use.`
-            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%.`,
+            ? `All ${totalCount} paired specimens passed within the adopted acceptance criterion (TEa) of ${_teaDisplay}. New reagent lot acceptable for clinical use.`
+            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the adopted acceptance criterion (TEa) of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
         const filename = `VeritaCheck_LotToLot_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
