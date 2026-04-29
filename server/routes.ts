@@ -1979,6 +1979,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── INSTRUMENTS ───────────────────────────────────────────────
 
+  // Get all VeritaMap instruments for the current user's lab (used by VeritaCheck picker)
+  app.get("/api/veritacheck/lab-instruments", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const maps = (db as any).$client.prepare(
+      "SELECT id FROM veritamap_maps WHERE user_id = ?"
+    ).all(dataUserId) as { id: number }[];
+    if (maps.length === 0) return res.json([]);
+    const mapIds = maps.map((m) => m.id);
+    const placeholders = mapIds.map(() => "?").join(",");
+    const instruments = (db as any).$client.prepare(
+      `SELECT id, instrument_name, serial_number, nickname, role, category FROM veritamap_instruments WHERE map_id IN (${placeholders}) ORDER BY instrument_name`
+    ).all(...mapIds);
+    res.json(instruments);
+  });
+
   // Get all instruments for a map
   app.get("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;

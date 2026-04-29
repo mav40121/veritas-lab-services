@@ -23,8 +23,10 @@ import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
 import type { InsertStudy } from "@shared/schema";
+import fdaData from "@/lib/fdaInstrumentData.json";
 
 const API_BASE = "https://www.veritaslabservices.com";
+const FDA_MODEL_NAMES = Object.keys(fdaData).sort();
 
 // CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart K)
 const CLIA_PRESETS = [
@@ -113,6 +115,17 @@ const CLIA_PRESETS = [
 const MIN_LEVELS = 3;
 const MAX_LEVELS = 40;
 const DEFAULT_LEVELS = 10;
+
+// Build display label for a VeritaMap lab instrument in the picker
+function labInstrumentLabel(inst: { instrument_name: string; nickname?: string | null; serial_number?: string | null; category?: string | null }): string {
+  const sn = inst.serial_number ? `S/N ${inst.serial_number}` : "";
+  const section = inst.category || "";
+  const suffix = [sn, section].filter(Boolean).join(", ");
+  if (inst.nickname) {
+    return suffix ? `${inst.nickname}, ${inst.instrument_name} (${suffix})` : `${inst.nickname}, ${inst.instrument_name}`;
+  }
+  return suffix ? `${inst.instrument_name} (${suffix})` : inst.instrument_name;
+}
 
 function makeEmptyPoints(instruments: string[], count: number): DataPoint[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -332,35 +345,24 @@ export default function VeritaCheckPage() {
 
   const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
-  const [veritaMapInstruments, setVeritaMapInstruments] = useState<{ name: string; category: string }[]>([]);
+  interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string }
+  const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
   const [veritaMapLoaded, setVeritaMapLoaded] = useState(false);
+  // Track which instrument slots are linked to a VeritaMap instrument (by veritamap instrument id)
+  const [linkedInstruments, setLinkedInstruments] = useState<Record<number, LabInstrument | null>>({});
 
   // Reset PHI banner when study type changes (new study started)
   useEffect(() => { setPhiBannerDismissed(false); }, [studyType]);
 
-  // Fetch VeritaMap instruments for method_comparison smart dropdown
+  // Fetch VeritaMap instruments for instrument picker dropdown
   useEffect(() => {
     if (!isLoggedIn || veritaMapLoaded) return;
     (async () => {
       try {
-        const mapsRes = await fetch(`${API_BASE}/api/veritamap/maps`, { headers: authHeaders() });
-        if (!mapsRes.ok) { setVeritaMapLoaded(true); return; }
-        const maps = await mapsRes.json();
-        const allInstruments: { name: string; category: string }[] = [];
-        for (const map of maps) {
-          try {
-            const instRes = await fetch(`${API_BASE}/api/veritamap/maps/${map.id}/instruments`, { headers: authHeaders() });
-            if (instRes.ok) {
-              const instruments = await instRes.json();
-              for (const inst of instruments) {
-                if (inst.instrument_name && !allInstruments.some(i => i.name === inst.instrument_name)) {
-                  allInstruments.push({ name: inst.instrument_name, category: inst.category || "" });
-                }
-              }
-            }
-          } catch { /* skip this map */ }
-        }
-        setVeritaMapInstruments(allInstruments);
+        const res = await fetch(`${API_BASE}/api/veritacheck/lab-instruments`, { headers: authHeaders() });
+        if (!res.ok) { setVeritaMapLoaded(true); return; }
+        const instruments: LabInstrument[] = await res.json();
+        setVeritaMapInstruments(instruments);
       } catch { /* no VeritaMap data */ }
       setVeritaMapLoaded(true);
     })();
@@ -817,6 +819,14 @@ export default function VeritaCheckPage() {
     const oldName = instrumentNames[idx];
     const newNames = [...instrumentNames]; newNames[idx] = name; setInstrumentNames(newNames);
     setDataPoints(prev => prev.map(dp => { const vals = { ...dp.instrumentValues }; vals[name] = vals[oldName] ?? null; delete vals[oldName]; return { ...dp, instrumentValues: vals }; }));
+    // Clear VeritaMap link when manually typing
+    setLinkedInstruments(prev => { const next = { ...prev }; delete next[idx]; return next; });
+  };
+
+  const selectLabInstrument = (idx: number, inst: LabInstrument) => {
+    const displayName = inst.nickname ? `${inst.nickname}, ${inst.instrument_name}` : inst.instrument_name;
+    updateInstrumentName(idx, displayName);
+    setLinkedInstruments(prev => ({ ...prev, [idx]: inst }));
   };
 
   const addInstrument = () => {
@@ -889,6 +899,17 @@ export default function VeritaCheckPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (study: InsertStudy) => {
+      // Attach linked VeritaMap instrument metadata
+      const hasLinks = Object.values(linkedInstruments).some(v => v != null);
+      if (hasLinks) {
+        const meta: Record<string, { instrument_id: number; model: string; nickname: string | null; serial_number: string | null }> = {};
+        for (const [idx, inst] of Object.entries(linkedInstruments)) {
+          if (inst) {
+            meta[idx] = { instrument_id: inst.id, model: inst.instrument_name, nickname: inst.nickname || null, serial_number: inst.serial_number || null };
+          }
+        }
+        study = { ...study, instrumentMeta: JSON.stringify(meta) };
+      }
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
       return fetch(`${API_BASE}/api/studies`, { method: "POST", headers, body: JSON.stringify(study) });
     },
@@ -1328,24 +1349,53 @@ return (
                           </div>
                           {idx === 0 && <p className="text-xs text-muted-foreground ml-1">This instrument serves as the reference for all comparisons.</p>}
                           <div className="flex items-center gap-2">
-                            {veritaMapInstruments.length > 0 ? (
-                              <div className="flex-1 space-y-1.5">
-                                <Select value={veritaMapInstruments.some(i => i.name === name) ? name : "__manual__"} onValueChange={v => { if (v !== "__manual__") updateInstrumentName(idx, v); }}>
-                                  <SelectTrigger className="h-9"><SelectValue placeholder="Select from VeritaMap™..." /></SelectTrigger>
-                                  <SelectContent>
-                                    {veritaMapInstruments.map(inst => (
-                                      <SelectItem key={inst.name} value={inst.name}>
-                                        {inst.name}{inst.category ? ` - ${inst.category}` : ""}
-                                      </SelectItem>
+                            <div className="flex-1 space-y-1.5">
+                              <Select
+                                value={linkedInstruments[idx] ? `__lab_${linkedInstruments[idx]!.id}` : "__manual__"}
+                                onValueChange={v => {
+                                  if (v === "__manual__") { setLinkedInstruments(prev => { const next = { ...prev }; delete next[idx]; return next; }); return; }
+                                  if (v.startsWith("__lab_")) {
+                                    const instId = parseInt(v.slice(6));
+                                    const inst = veritaMapInstruments.find(i => i.id === instId);
+                                    if (inst) selectLabInstrument(idx, inst);
+                                  } else if (v.startsWith("__fda_")) {
+                                    const modelName = v.slice(6);
+                                    updateInstrumentName(idx, modelName);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-9"><SelectValue placeholder="Select instrument..." /></SelectTrigger>
+                                <SelectContent>
+                                  {veritaMapInstruments.length > 0 && (
+                                    <SelectGroup>
+                                      <SelectLabel>Your Instruments</SelectLabel>
+                                      {veritaMapInstruments.map(inst => (
+                                        <SelectItem key={`lab-${inst.id}`} value={`__lab_${inst.id}`}>
+                                          {labInstrumentLabel(inst)}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  )}
+                                  <SelectGroup>
+                                    <SelectLabel>Other Models</SelectLabel>
+                                    {FDA_MODEL_NAMES.map(model => (
+                                      <SelectItem key={`fda-${model}`} value={`__fda_${model}`}>{model}</SelectItem>
                                     ))}
-                                    <SelectItem value="__manual__">Or enter manually...</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                  </SelectGroup>
+                                  <SelectItem value="__manual__">Or enter manually...</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {linkedInstruments[idx] && (
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
+                                  <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
+                                  <span>Linked to VeritaMap\u2122</span>
+                                  {linkedInstruments[idx]!.serial_number && <span className="font-mono">S/N {linkedInstruments[idx]!.serial_number}</span>}
+                                </div>
+                              )}
+                              {!linkedInstruments[idx] && (
                                 <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder="e.g., Beckman Coulter AU5800" className="text-sm" />
-                              </div>
-                            ) : (
-                              <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder="e.g., Beckman Coulter AU5800" className="flex-1" />
-                            )}
+                              )}
+                            </div>
                             {idx > 0 && instrumentNames.length > 2 && <Button variant="ghost" size="icon" onClick={() => removeInstrument(idx)} className="text-muted-foreground hover:text-destructive shrink-0 w-8 h-8"><Trash2 size={13} /></Button>}
                           </div>
                         </div>
@@ -1353,10 +1403,57 @@ return (
                     </>
                   ) : (
                     instrumentNames.map((name, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <Badge variant="outline" className="w-7 justify-center shrink-0 text-xs">{idx + 1}</Badge>
-                        <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder={`Instrument ${idx + 1}`} />
-                        {instrumentNames.length > 1 && <Button variant="ghost" size="icon" onClick={() => removeInstrument(idx)} className="text-muted-foreground hover:text-destructive shrink-0 w-8 h-8"><Trash2 size={13} /></Button>}
+                      <div key={idx} className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="w-7 justify-center shrink-0 text-xs">{idx + 1}</Badge>
+                          <div className="flex-1 space-y-1.5">
+                            <Select
+                              value={linkedInstruments[idx] ? `__lab_${linkedInstruments[idx]!.id}` : "__manual__"}
+                              onValueChange={v => {
+                                if (v === "__manual__") { setLinkedInstruments(prev => { const next = { ...prev }; delete next[idx]; return next; }); return; }
+                                if (v.startsWith("__lab_")) {
+                                  const instId = parseInt(v.slice(6));
+                                  const inst = veritaMapInstruments.find(i => i.id === instId);
+                                  if (inst) selectLabInstrument(idx, inst);
+                                } else if (v.startsWith("__fda_")) {
+                                  updateInstrumentName(idx, v.slice(6));
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-9"><SelectValue placeholder="Select instrument..." /></SelectTrigger>
+                              <SelectContent>
+                                {veritaMapInstruments.length > 0 && (
+                                  <SelectGroup>
+                                    <SelectLabel>Your Instruments</SelectLabel>
+                                    {veritaMapInstruments.map(inst => (
+                                      <SelectItem key={`lab-${inst.id}`} value={`__lab_${inst.id}`}>
+                                        {labInstrumentLabel(inst)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                )}
+                                <SelectGroup>
+                                  <SelectLabel>Other Models</SelectLabel>
+                                  {FDA_MODEL_NAMES.map(model => (
+                                    <SelectItem key={`fda-${model}`} value={`__fda_${model}`}>{model}</SelectItem>
+                                  ))}
+                                </SelectGroup>
+                                <SelectItem value="__manual__">Or enter manually...</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {linkedInstruments[idx] && (
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
+                                <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
+                                <span>Linked to VeritaMap\u2122</span>
+                                {linkedInstruments[idx]!.serial_number && <span className="font-mono">S/N {linkedInstruments[idx]!.serial_number}</span>}
+                              </div>
+                            )}
+                            {!linkedInstruments[idx] && (
+                              <Input value={name} onChange={e => updateInstrumentName(idx, e.target.value)} placeholder={`Instrument ${idx + 1}`} className="text-sm" />
+                            )}
+                          </div>
+                          {instrumentNames.length > 1 && <Button variant="ghost" size="icon" onClick={() => removeInstrument(idx)} className="text-muted-foreground hover:text-destructive shrink-0 w-8 h-8"><Trash2 size={13} /></Button>}
+                        </div>
                       </div>
                     ))
                   )}

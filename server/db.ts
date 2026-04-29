@@ -834,6 +834,9 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN tea_unit TEXT DEFAULT '%'"); }
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_floor REAL"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_unit TEXT"); } catch {}
 
+// Add instrument_meta column for VeritaMap-linked instrument data (JSON)
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catch {}
+
 // Plan/tier definitions: seat limits, pricing, bed ranges
 export const PLAN_SEATS: Record<string, number> = {
   clinic: 2,
