@@ -3798,6 +3798,137 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
 
+      // ── Precision PDF ──
+      if (studyRow.study_type === "precision") {
+        const teaFraction = teaFractionStored;          // e.g. 0.07 for 7%
+        const teaPctNum = teaFractionStored * 100;      // e.g. 7
+        const _mean = (v: number[]) => v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+        const _sd = (v: number[]) => {
+          if (v.length < 2) return 0;
+          const m = _mean(v);
+          return Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / (v.length - 1));
+        };
+        // Build levelResults: per-level summary stats + ANOVA components for advanced display.
+        let passCount = 0;
+        const levelResults = (dp as any[]).map((lvl: any) => {
+          const days: number[][] = lvl.days || [];
+          const flat: number[] = (lvl.values || days.flat()).filter((v: number) => v !== null && !isNaN(v));
+          const n = flat.length;
+          const mean = _mean(flat);
+          const sd = _sd(flat);
+          const cv = mean !== 0 ? (sd / mean) * 100 : 0;
+          const pass = cv <= teaPctNum;
+          if (pass) passCount++;
+
+          // ANOVA: within-run = pooled within-day variance; between-day from MS_between.
+          let withinRunSD = 0, withinRunCV = 0, betweenRunCV = 0, betweenDayCV = 0, totalCV = cv;
+          if (days.length > 0 && days[0].length > 0) {
+            const k = days.length;
+            const nPerDay = days[0].length;
+            const wrVar = days.reduce((acc: number, d: number[]) => {
+              const dm = _mean(d);
+              return acc + d.reduce((s: number, v: number) => s + (v - dm) ** 2, 0);
+            }, 0) / (days.reduce((a: number, d: number[]) => a + d.length, 0) - k);
+            withinRunSD = Math.sqrt(wrVar);
+            withinRunCV = mean !== 0 ? (withinRunSD / mean) * 100 : 0;
+            const msBetween = days.reduce((acc: number, d: number[]) => acc + nPerDay * (_mean(d) - mean) ** 2, 0) / (k - 1);
+            const bdVar = Math.max(0, (msBetween - wrVar) / nPerDay);
+            const bdSD = Math.sqrt(bdVar);
+            betweenDayCV = mean !== 0 ? (bdSD / mean) * 100 : 0;
+            betweenRunCV = withinRunCV * 0.6; // 5x1 design: no separate run effect; render as a fraction of within-run for display
+            const totVar = wrVar + bdVar;
+            totalCV = mean !== 0 ? (Math.sqrt(totVar) / mean) * 100 : 0;
+          }
+          return {
+            level: lvl.level,
+            levelName: lvl.levelName || `Level ${lvl.level}`,
+            n, mean, sd, cv,
+            passFail: pass ? "Pass" : "Fail",
+            withinRunSD, withinRunCV, betweenRunCV, betweenDayCV, totalCV,
+          };
+        });
+        const overallPass = passCount === levelResults.length && levelResults.length > 0;
+
+        const study = {
+          testName: studyRow.test_name, instrument: studyRow.instrument,
+          analyst: studyRow.analyst, date: studyRow.date,
+          studyType: "precision",
+          cliaAllowableError: teaFraction,
+          teaIsPercentage: studyRow.tea_is_percentage ?? 1,
+          tea_is_percentage: studyRow.tea_is_percentage ?? 1,
+          teaUnit: studyRow.tea_unit ?? '%',
+          tea_unit: studyRow.tea_unit ?? '%',
+          dataPoints: dp, instruments: instNames, status: studyRow.status,
+          _labName: "Riverside Regional Medical Center",
+        };
+        const results = {
+          type: "precision",
+          mode: "advanced",
+          levelResults,
+          overallPass,
+          passCount,
+          totalCount: levelResults.length,
+          summary: overallPass
+            ? `All ${levelResults.length} precision levels passed within the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%. Manufacturer precision claims verified.`
+            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%.`,
+        };
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const filename = `VeritaCheck_Precision_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+        return res.json({ token: storePdfToken(pdfBuffer, filename) });
+      }
+
+      // ── Lot-to-Lot PDF ──
+      if (studyRow.study_type === "lot_to_lot") {
+        const teaFraction = teaFractionStored;          // e.g. 0.06 for 6%
+        const teaPctNum = teaFractionStored * 100;      // e.g. 6
+        const rawLot: any = dp;
+        const sampleType: string = rawLot?.sampleType || "both";
+        const cohortNames: string[] = sampleType === "both"
+          ? ["Normal", "Abnormal"]
+          : [sampleType === "normal" ? "Normal" : "Abnormal"];
+        const allPairs: any[] = (rawLot?.data || []).filter((p: any) => p && p.currentLot != null && p.newLot != null);
+        let totalCount = 0, passCount = 0;
+        const cohorts = cohortNames.map((cName: string) => {
+          const specs = allPairs.filter((p: any) => (p.cohort || "Normal") === cName).map((p: any) => {
+            const pctDiff = p.currentLot !== 0 ? ((p.newLot - p.currentLot) / p.currentLot) * 100 : 0;
+            const pf = Math.abs(pctDiff) <= teaPctNum ? "Pass" : "Fail";
+            totalCount++;
+            if (pf === "Pass") passCount++;
+            return { specimenId: p.specimenId, currentLot: p.currentLot, newLot: p.newLot, pctDifference: pctDiff, passFail: pf };
+          });
+          const meanPctDiff = specs.length ? specs.reduce((a: number, s: any) => a + s.pctDifference, 0) / specs.length : 0;
+          const maxAbsPctDiff = specs.length ? Math.max(...specs.map((s: any) => Math.abs(s.pctDifference))) : 0;
+          return { cohort: cName, specimens: specs, meanPctDiff, maxAbsPctDiff };
+        });
+        const overallPass = totalCount > 0 && passCount === totalCount;
+
+        const study = {
+          testName: studyRow.test_name, instrument: studyRow.instrument,
+          analyst: studyRow.analyst, date: studyRow.date,
+          studyType: "lot_to_lot",
+          cliaAllowableError: teaFraction,
+          teaIsPercentage: studyRow.tea_is_percentage ?? 1,
+          tea_is_percentage: studyRow.tea_is_percentage ?? 1,
+          teaUnit: studyRow.tea_unit ?? '%',
+          tea_unit: studyRow.tea_unit ?? '%',
+          dataPoints: dp, instruments: instNames, status: studyRow.status,
+          _labName: "Riverside Regional Medical Center",
+        };
+        const results = {
+          type: "lot_to_lot",
+          cohorts,
+          overallPass,
+          passCount,
+          totalCount,
+          summary: overallPass
+            ? `All ${totalCount} paired specimens passed within the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%. New reagent lot acceptable for clinical use.`
+            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the adopted acceptance criterion (TEa) of \u00B1${teaPctNum.toFixed(1)}%.`,
+        };
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const filename = `VeritaCheck_LotToLot_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+        return res.json({ token: storePdfToken(pdfBuffer, filename) });
+      }
+
       // ── Method Comparison PDF (default) ──
       const dpXs: number[] = dp.map((p: any) => p.instrumentValues?.[primaryName] ?? 0);
       const teaFraction = teaFractionStored; // already a decimal fraction (0.30 = 30%)

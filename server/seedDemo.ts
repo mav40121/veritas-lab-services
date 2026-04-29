@@ -174,6 +174,98 @@ export async function seedDemoData() {
     sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L' WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval'").run(demoUserId);
   }
 
+  // ─── 4d. Glucose Precision Verification (CLSI EP15-A3, 5x5 design) ──────
+  // Three control levels x 5 days x 5 replicates per day = 75 measurements.
+  // Roche Cobas c503, Bio-Rad Liquichek Chemistry Q (Levels 1, 2, 3).
+  // CLIA TEa = 7.0% (chemistry default for glucose under §493.931).
+  // All three levels pass with comfortable margin (CV ~0.7-1.4%).
+  const existingGlucosePrecision = sqlite.prepare(
+    "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Glucose' AND study_type = 'precision' LIMIT 1"
+  ).get(demoUserId);
+  if (!existingGlucosePrecision) {
+    const glucosePrecisionDataPoints = generateGlucosePrecisionData();
+    sqlite.prepare(`
+      INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, result, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'completed', ?)
+    `).run(
+      demoUserId,
+      "Glucose",
+      "Roche Cobas c503",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-02-21",
+      "precision",
+      0.07, // 7.0% TEa stored as decimal fraction
+      1,    // percentage
+      "%",
+      JSON.stringify(glucosePrecisionDataPoints),
+      JSON.stringify(["Roche Cobas c503"]),
+      now
+    );
+    console.log("[seed] Inserted Glucose Precision study");
+  } else {
+    // Backfill data in case study exists with stale data
+    sqlite.prepare(
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+    ).run(
+      "Roche Cobas c503",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-02-21",
+      0.07,
+      1,
+      "%",
+      JSON.stringify(generateGlucosePrecisionData()),
+      JSON.stringify(["Roche Cobas c503"]),
+      existingGlucosePrecision.id
+    );
+    console.log(`[seed] Backfilled Glucose Precision study id=${existingGlucosePrecision.id}`);
+  }
+
+  // ─── 4e. Hemoglobin A1c Lot-to-Lot Verification (CLSI EP26-A) ───────────
+  // 20 paired patient specimens, Bio-Rad D-100 HPLC, current lot vs new lot.
+  // 10 normal cohort (HbA1c 4.9-6.9%), 10 abnormal cohort (7.1-11.3%).
+  // CLIA TEa = 6.0% relative for HbA1c (per 2024 update to §493.931).
+  // All 20 specimens pass; mean |%diff| ~1.0%, max |%diff| <2%.
+  const existingHbA1cLotToLot = sqlite.prepare(
+    "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Hemoglobin A1c' AND study_type = 'lot_to_lot' LIMIT 1"
+  ).get(demoUserId);
+  if (!existingHbA1cLotToLot) {
+    const hba1cLotToLotDataPoints = generateHbA1cLotToLotData();
+    sqlite.prepare(`
+      INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, result, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'completed', ?)
+    `).run(
+      demoUserId,
+      "Hemoglobin A1c",
+      "Bio-Rad D-100",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-03-12",
+      "lot_to_lot",
+      0.06, // 6.0% relative TEa stored as decimal fraction
+      1,    // percentage
+      "%",
+      JSON.stringify(hba1cLotToLotDataPoints),
+      JSON.stringify(["Bio-Rad D-100"]),
+      now
+    );
+    console.log("[seed] Inserted Hemoglobin A1c Lot-to-Lot study");
+  } else {
+    // Backfill data in case study exists with stale data
+    sqlite.prepare(
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+    ).run(
+      "Bio-Rad D-100",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-03-12",
+      0.06,
+      1,
+      "%",
+      JSON.stringify(generateHbA1cLotToLotData()),
+      JSON.stringify(["Bio-Rad D-100"]),
+      existingHbA1cLotToLot.id
+    );
+    console.log(`[seed] Backfilled Hemoglobin A1c Lot-to-Lot study id=${existingHbA1cLotToLot.id}`);
+  }
+
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
     "SELECT id FROM competency_programs WHERE user_id = ?"
@@ -780,6 +872,106 @@ function generateTroponinData() {
       'Abbott ARCHITECT i2000SR [Backup]': comparison,
     },
   }));
+}
+
+// ─── Glucose Precision (EP15-A3) demo data ────────────────────────────────────
+function generateGlucosePrecisionData() {
+  // CLSI EP15-A3 5x5 design: 3 control levels x 5 days x 5 replicates = 75 values.
+  // Roche Cobas c503 reports glucose QC to whole mg/dL on patient prints (we mirror
+  // that resolution to look like a real Bio-Rad Unity printout).
+  //
+  // Verified statistics (Python-validated):
+  //   Low Control:    N=25, mean=73.24,  SD=0.970, CV=1.32%, total_CV=1.37%
+  //   Normal Control: N=25, mean=123.20, SD=1.080, CV=0.88%, total_CV=0.92%
+  //   High Control:   N=25, mean=268.08, SD=1.956, CV=0.73%, total_CV=0.78%
+  // All three levels pass at TEa=7.0% with comfortable margin.
+  // Day 4 of High shows authentic between-day drift (mean 265 vs ~269 other days).
+  const lowDays = [
+    [72, 74, 73, 73, 74],
+    [74, 75, 73, 74, 73],
+    [73, 73, 72, 73, 74],
+    [72, 71, 73, 72, 73],
+    [74, 73, 74, 75, 74],
+  ];
+  const normalDays = [
+    [122, 124, 123, 123, 122],
+    [125, 124, 124, 123, 125],
+    [123, 122, 124, 123, 123],
+    [121, 122, 123, 122, 122],
+    [124, 124, 123, 125, 124],
+  ];
+  const highDays = [
+    [267, 269, 268, 270, 267],
+    [270, 271, 269, 268, 270],
+    [268, 267, 269, 268, 269],
+    [264, 266, 265, 264, 266],
+    [269, 270, 268, 271, 269],
+  ];
+
+  return [
+    {
+      level: 1,
+      levelName: "Level 1 (Low) - Liquichek Lot 67H100",
+      values: lowDays.flat(),
+      days: lowDays,
+    },
+    {
+      level: 2,
+      levelName: "Level 2 (Normal) - Liquichek Lot 67H101",
+      values: normalDays.flat(),
+      days: normalDays,
+    },
+    {
+      level: 3,
+      levelName: "Level 3 (High) - Liquichek Lot 67H102",
+      values: highDays.flat(),
+      days: highDays,
+    },
+  ];
+}
+
+// ─── HbA1c Lot-to-Lot (EP26-A) demo data ──────────────────────────────────────
+function generateHbA1cLotToLotData() {
+  // 20 paired patient specimens. Bio-Rad D-100 HPLC.
+  // Old (current) lot 79543 vs New lot 79612.
+  // Cohorts split per CLSI EP26-A:
+  //   Normal (n=10):   HbA1c 4.9 - 6.9%
+  //   Abnormal (n=10): HbA1c 7.1 - 11.3%
+  // Verified: mean |%diff| = 0.97%, max |%diff| = 1.96% at TEa = 6.0%.
+  // One specimen (HbA1c-016) shows new lot reading slightly LOWER than old
+  // (-1.10%), reflecting authentic specimen-to-specimen variation rather than
+  // a uniform shift.
+  type Pair = { specimenId: string; cohort: "Normal" | "Abnormal"; currentLot: number; newLot: number };
+  const pairs: Pair[] = [
+    { specimenId: "HbA1c-001", cohort: "Normal",   currentLot: 4.9,  newLot: 4.9 },
+    { specimenId: "HbA1c-002", cohort: "Normal",   currentLot: 5.1,  newLot: 5.2 },
+    { specimenId: "HbA1c-003", cohort: "Normal",   currentLot: 5.3,  newLot: 5.4 },
+    { specimenId: "HbA1c-004", cohort: "Normal",   currentLot: 5.4,  newLot: 5.4 },
+    { specimenId: "HbA1c-005", cohort: "Normal",   currentLot: 5.6,  newLot: 5.7 },
+    { specimenId: "HbA1c-006", cohort: "Normal",   currentLot: 5.8,  newLot: 5.9 },
+    { specimenId: "HbA1c-007", cohort: "Normal",   currentLot: 6.0,  newLot: 6.1 },
+    { specimenId: "HbA1c-008", cohort: "Normal",   currentLot: 6.3,  newLot: 6.3 },
+    { specimenId: "HbA1c-009", cohort: "Normal",   currentLot: 6.5,  newLot: 6.5 },
+    { specimenId: "HbA1c-010", cohort: "Normal",   currentLot: 6.8,  newLot: 6.9 },
+    { specimenId: "HbA1c-011", cohort: "Abnormal", currentLot: 7.1,  newLot: 7.2 },
+    { specimenId: "HbA1c-012", cohort: "Abnormal", currentLot: 7.4,  newLot: 7.4 },
+    { specimenId: "HbA1c-013", cohort: "Abnormal", currentLot: 7.8,  newLot: 7.9 },
+    { specimenId: "HbA1c-014", cohort: "Abnormal", currentLot: 8.2,  newLot: 8.2 },
+    { specimenId: "HbA1c-015", cohort: "Abnormal", currentLot: 8.6,  newLot: 8.7 },
+    { specimenId: "HbA1c-016", cohort: "Abnormal", currentLot: 9.1,  newLot: 9.0 },
+    { specimenId: "HbA1c-017", cohort: "Abnormal", currentLot: 9.5,  newLot: 9.6 },
+    { specimenId: "HbA1c-018", cohort: "Abnormal", currentLot: 10.0, newLot: 10.1 },
+    { specimenId: "HbA1c-019", cohort: "Abnormal", currentLot: 10.6, newLot: 10.7 },
+    { specimenId: "HbA1c-020", cohort: "Abnormal", currentLot: 11.2, newLot: 11.3 },
+  ];
+  return {
+    analyte: "Hemoglobin A1c",
+    units: "%",
+    currentLot: "79543",
+    newLot: "79612",
+    sampleType: "both",
+    data: pairs,
+  };
 }
 
 function generateSpecimenData(n: number, oldMean: number, newMean: number) {

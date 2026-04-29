@@ -39,6 +39,16 @@ const REQUIRED_DEMO_STUDIES = [
     study_type: "ref_interval",
     description: "Sodium Reference Range Verification (Ortho VITROS 5600 Primary) - DIFFERENT from method comparison",
   },
+  {
+    test_name: "Glucose",
+    study_type: "precision",
+    description: "Glucose Precision Verification (Roche Cobas c503, EP15-A3 5x5)",
+  },
+  {
+    test_name: "Hemoglobin A1c",
+    study_type: "lot_to_lot",
+    description: "Hemoglobin A1c Lot-to-Lot Verification (Bio-Rad D-100, EP26-A)",
+  },
 ];
 
 export async function verifyDemoIntegrity() {
