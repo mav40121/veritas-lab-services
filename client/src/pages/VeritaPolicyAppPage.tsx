@@ -125,6 +125,9 @@ export default function VeritaPolicyAppPage() {
       setSettings({ ...DEFAULT_SETTINGS, ...s });
       setSummary(sum);
       setRequirements(r);
+      // Default source filter to match the lab's accreditation body setting
+      const ab = s?.accreditation_body || 'tjc';
+      setFilterSource(ab === 'both' ? 'all' : ab);
       // Show settings panel on first visit (setup not yet complete)
       if (!s.setup_complete) setSettingsOpen(true);
     } catch {
@@ -239,7 +242,7 @@ export default function VeritaPolicyAppPage() {
 
   // ── Filter requirements ────────────────────────────────────────────────────
   const chapters = Array.from(new Set(requirements.map(r => r.chapter))).sort();
-  const showBothSources = true;
+  const showBothSources = settings.accreditation_body === 'both';
 
   const filtered = requirements.filter(r => {
     if (filterStatus !== "all" && r.status !== filterStatus) return false;
