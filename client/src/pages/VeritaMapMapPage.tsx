@@ -42,6 +42,7 @@ interface InstrumentOnTest {
   instrument_name: string;
   role: Role;
   serial_number?: string | null;
+  nickname?: string | null;
 }
 
 interface TestRecord {

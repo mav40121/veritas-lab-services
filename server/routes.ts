@@ -2007,13 +2007,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const count = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(req.params.id).cnt;
       if (count >= 4) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 4 instruments", limitReached: true, limit: 4, type: "instruments" });
     }
-    const { instrument_name, role, category, serial_number } = req.body;
+    const { instrument_name, role, category, serial_number, nickname } = req.body;
     if (!instrument_name?.trim()) return res.status(400).json({ error: "Instrument name required" });
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, serial_number, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(req.params.id, instrument_name.trim(), role || 'Primary', category || 'Chemistry', serial_number?.trim() || null, now);
-    res.json({ id: Number(result.lastInsertRowid), instrument_name: instrument_name.trim(), role: role || 'Primary', category: category || 'Chemistry', serial_number: serial_number?.trim() || null, tests: [] });
+      "INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, serial_number, nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(req.params.id, instrument_name.trim(), role || 'Primary', category || 'Chemistry', serial_number?.trim() || null, nickname?.trim() || null, now);
+    res.json({ id: Number(result.lastInsertRowid), instrument_name: instrument_name.trim(), role: role || 'Primary', category: category || 'Chemistry', serial_number: serial_number?.trim() || null, nickname: nickname?.trim() || null, tests: [] });
   });
 
   // Update instrument role/name
@@ -2021,10 +2021,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const { instrument_name, role, category, serial_number } = req.body;
+    const { instrument_name, role, category, serial_number, nickname } = req.body;
     (db as any).$client.prepare(
-      "UPDATE veritamap_instruments SET instrument_name=?, role=?, category=?, serial_number=? WHERE id=? AND map_id=?"
-    ).run(instrument_name, role, category, serial_number?.trim() || null, req.params.instId, req.params.id);
+      "UPDATE veritamap_instruments SET instrument_name=?, role=?, category=?, serial_number=?, nickname=? WHERE id=? AND map_id=?"
+    ).run(instrument_name, role, category, serial_number?.trim() || null, nickname?.trim() || null, req.params.instId, req.params.id);
     res.json({ ok: true });
   });
 

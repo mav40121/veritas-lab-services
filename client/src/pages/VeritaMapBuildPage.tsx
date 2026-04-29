@@ -68,6 +68,7 @@ interface InstrumentEntry {
   role: Role;
   category: string;
   serial_number?: string | null;
+  nickname?: string | null;
   tests?: { analyte: string; specialty: string; complexity: string; active: boolean }[];
 }
 
@@ -401,6 +402,7 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
   const [role, setRole] = useState<Role>(instrument.role);
   const [category, setCategory] = useState(instrument.category || "");
   const [serial, setSerial] = useState(instrument.serial_number || "");
+  const [nickname, setNickname] = useState(instrument.nickname || "");
 
   const queryClient = useQueryClient();
 
@@ -414,6 +416,7 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
           role,
           category,
           serial_number: serial,
+          nickname,
         }),
       });
       if (!res.ok) throw new Error("Failed to update instrument");
@@ -433,6 +436,7 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
       setRole(instrument.role);
       setCategory(instrument.category || "");
       setSerial(instrument.serial_number || "");
+      setNickname(instrument.nickname || "");
     }
     setOpen(val);
   };
@@ -457,6 +461,16 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Sysmex XN-1000"
             />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-inst-nickname">Nickname (optional)</Label>
+            <Input
+              id="edit-inst-nickname"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="e.g. 'Bonnie'"
+            />
+            <p className="text-[10px] text-muted-foreground">Used to distinguish identical instruments, e.g. "Bonnie" and "Clyde".</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="edit-inst-role">Role</Label>
@@ -852,6 +866,7 @@ export default function VeritaMapBuildPage() {
   const [manualInstrumentName, setManualInstrumentName] = useState("");
   const [role, setRole] = useState<Role>("Primary");
   const [serialNumber, setSerialNumber] = useState("");
+  const [instrumentNickname, setInstrumentNickname] = useState("");
 
   // "Other" write-in state for cascade
   const [customDepartment, setCustomDepartment] = useState("");
@@ -1022,6 +1037,7 @@ export default function VeritaMapBuildPage() {
             role,
             category,
             serial_number: serialNumber.trim() || null,
+            nickname: instrumentNickname.trim() || null,
           }),
         }
       );
@@ -1047,6 +1063,7 @@ export default function VeritaMapBuildPage() {
       setCustomVendor("");
       setCustomInstrument("");
       setSerialNumber("");
+      setInstrumentNickname("");
       // Initialize tests for new instrument
       const fdaInstr = INSTRUMENT_DATA[newInstr.instrument_name];
       if (fdaInstr) {
@@ -1530,6 +1547,18 @@ export default function VeritaMapBuildPage() {
                 onChange={(e) => setSerialNumber(e.target.value)}
               />
               <p className="text-[10px] text-muted-foreground mt-1">Optional. Used for maintenance records and instrument inventory.</p>
+            </div>
+
+            {/* Nickname (optional, always visible) */}
+            <div className="max-w-xs mt-3">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Nickname (optional)</label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="e.g. 'Bonnie'"
+                value={instrumentNickname}
+                onChange={(e) => setInstrumentNickname(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Used to distinguish identical instruments, e.g. "Bonnie" and "Clyde".</p>
             </div>
 
             {/* Helper note for Other instrument */}

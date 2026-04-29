@@ -458,6 +458,9 @@ sqlite.exec(`
   if (!instrColNames.includes("serial_number")) {
     try { sqlite.exec("ALTER TABLE veritamap_instruments ADD COLUMN serial_number TEXT"); } catch {}
   }
+  if (!instrColNames.includes("nickname")) {
+    try { sqlite.exec("ALTER TABLE veritamap_instruments ADD COLUMN nickname TEXT"); } catch {}
+  }
 }
 
 // Seed VeritaStaff demo data for Riverside Regional (user_id = 1)
