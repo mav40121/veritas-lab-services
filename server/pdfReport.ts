@@ -699,15 +699,21 @@ function narrativeHTML(
         ? `within the adopted method comparison acceptance criterion of ${teaStr}`
         : `exceeds the adopted method comparison acceptance criterion of ${teaStr} and requires investigation`);
 
+    const nPairs: number = firstReg?.n ?? 0;
+    const decisionRuleSentence = `Decision rule: with N=${nPairs} paired specimens, every specimen must fall within TEa for the comparison to pass. Any single specimen exceeding TEa fails the comparison and triggers investigation; this all-or-nothing per-specimen criterion is more conservative than a percentage-tolerance rule.`;
+    const equivalenceSentence = `This study evaluates clinical equivalence per the adopted Allowable Total Error, not statistical equivalence: two methods can be statistically different yet clinically equivalent when their bias is well within TEa, and statistically indistinguishable yet clinically unacceptable when bias approaches TEa.`;
+
     if (results.overallPass) {
       narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
       narrative += `The Deming regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) indicates ${slopeInterp}. `;
       narrative += `The mean bias is ${biasDescr} (supporting statistic; not the verdict criterion). `;
       narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. This method/instrument may be used for patient reporting. `;
+      narrative += `${equivalenceSentence} ${decisionRuleSentence} `;
       narrative += `<b>Each paired specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). All paired specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = `The method comparison for ${analyteName} did not meet the adopted acceptance criterion. `;
       narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${biasDescr} (adopted limit: ${teaStr}) indicate unacceptable agreement between methods. `;
+      narrative += `${equivalenceSentence} ${decisionRuleSentence} `;
       narrative += `<b>Each paired specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). One or more paired specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
