@@ -264,7 +264,7 @@ const CSS = `
   .header-right { text-align: right; font-size: 8pt; color: ${MUTED}; }
   .report-title { font-size: 11pt; font-weight: 700; text-align: center; margin: 6px 0 2px; }
   .report-title-sub { font-size: 7pt; text-align: center; color: ${MUTED}; margin-bottom: 8px; }
-  .section-heading { font-size: 13pt; font-weight: 700; color: ${DARK}; margin: 6px 0 8px; }
+  .section-heading { font-size: 13pt; font-weight: 700; color: ${DARK}; margin: 4px 0 6px; }
 
   /* Charts */
   .charts { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -325,21 +325,30 @@ const CSS = `
 
 // ─── Instrument display helpers ──────────────────────────────────────────────
 // Builds the instrument string for reports using VeritaMap-linked data when available.
-// Inline format: "Model (Nickname), S/N serial" or "Model, S/N serial" or just "Model"
+// Compact format for page headers: "Model (Nickname)" -- omits S/N to save vertical space
 function instrumentDisplayInline(study: Study): string {
   const display = (study as any)._instrumentDisplay as Record<string, { model: string; nickname: string | null; serial_number: string | null }> | undefined;
   if (display && display["0"]) {
     const d = display["0"];
-    const parts: string[] = [];
-    if (d.nickname) {
-      parts.push(`${d.model} (${d.nickname})`);
-    } else {
-      parts.push(d.model);
-    }
-    if (d.serial_number) parts.push(`S/N ${d.serial_number}`);
-    return parts.join(", ");
+    return d.nickname ? `${d.model} (${d.nickname})` : d.model;
   }
   return study.instrument;
+}
+
+// Abbreviate an instrument name from study.instruments for compact page-1 display.
+// Input forms: "NICKNAME, Model Name" or "Model Name" -> abbreviated to shorter form
+function abbreviateInstrumentName(name: string): string {
+  // If name contains a comma, the part before is likely a nickname from VeritaMap
+  // e.g. "CLYDE, Ortho VITROS 5600" -> "VITROS 5600 (CLYDE)"
+  const commaIdx = name.indexOf(", ");
+  if (commaIdx > 0 && commaIdx < name.length - 2) {
+    const nickname = name.substring(0, commaIdx).trim();
+    const model = name.substring(commaIdx + 2).trim();
+    // If nickname is short (likely a label), show "Model (Nickname)"
+    if (nickname.length <= 20) return `${model} (${nickname})`;
+    return model;
+  }
+  return name;
 }
 
 // Multi-line format for supporting data: "Model (Nickname)\nS/N: serial" or "Model\nS/N: serial"
@@ -442,27 +451,27 @@ function footerHTML(): string {
 // ─── Laboratory Director Review block HTML ───────────────────────────────────
 function directorReviewHTML(): string {
   return `
-  <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:8px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
-    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:5px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
-    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 6px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
+  <div style="margin-top:4px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:6px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
+    <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
+    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 5px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
     <div style="font-size:8pt;color:#28251D;margin-bottom:2px;">
       <span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
       <span>\u25CB Not accepted</span>
     </div>
-    <div style="display:flex;gap:16px;margin-top:8px;">
-      <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Signature</div>
-      </div>
-      <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:14px;">Date</div>
-      </div>
-    </div>
     <div style="display:flex;gap:16px;margin-top:6px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:10px;">Print Name</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:12px;">Signature</div>
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:10px;">Title</div>
+        <div style="font-size:6.5pt;color:#888;margin-top:12px;">Date</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:4px;">
+      <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Print Name</div>
+      </div>
+      <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Title</div>
       </div>
     </div>
   </div>`;
@@ -640,9 +649,9 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
       </div>`).join("");
 
   return `
-  <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:8px 12px;background:#FAFAF8;">
-    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:6px;letter-spacing:0.04em;text-transform:uppercase;">Regulatory Compliance References</div>
-    <div style="display:grid;grid-template-columns:${gridCols};gap:6px 12px;">
+  <div style="margin-top:4px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:6px 12px;background:#FAFAF8;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Regulatory Compliance References</div>
+    <div style="display:grid;grid-template-columns:${gridCols};gap:4px 12px;">
       ${colsHTML}
     </div>
     ${teaAuditFreshnessLine()}
@@ -790,8 +799,8 @@ function narrativeHTML(
   }
 
   return `
-  <div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
-    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+  <div style="margin-top:6px;padding:8px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:3px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrative}</p>
   </div>`;
 }
@@ -991,7 +1000,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
   ${headerHTML(study, (study as any)._cliaNumber)}
 
   <div class="section-heading">Qualitative Method Comparison Study</div>
-  <div class="report-title-sub">Reference Method: ${primaryName} | Comparison Method: ${compName}</div>
+  <div class="report-title-sub">Reference: ${abbreviateInstrumentName(primaryName)} | Comparison: ${abbreviateInstrumentName(compName)}</div>
 
   <hr class="divider">
   <div class="section-label">Concordance Matrix</div>
@@ -1089,7 +1098,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   ${headerHTML(study, (study as any)._cliaNumber)}
 
   <div class="section-heading">Semi-Quantitative Method Comparison Study</div>
-  <div class="report-title-sub">Reference Method: ${primaryName} | Comparison Method: ${compName} | Scale: ${gradeScale.join(" \u2192 ")}</div>
+  <div class="report-title-sub">Reference: ${abbreviateInstrumentName(primaryName)} | Comparison: ${abbreviateInstrumentName(compName)} | Scale: ${gradeScale.join(" \u2192 ")}</div>
 
   <hr class="divider">
   <div class="section-label">Concordance Matrix</div>
@@ -1349,7 +1358,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   // Build charts for just the first comparison for page 1
   const p1xVals = levelResults.map(r => r.referenceValue);
   const p1yVals = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].value);
-  const p1CorrSvg = scatterSVG(p1xVals, p1yVals.length ? p1yVals : p1xVals, `${primaryName} (Primary)`, firstCompName, `${firstCompName} vs. ${primaryName}`, true);
+  const p1CorrSvg = scatterSVG(p1xVals, p1yVals.length ? p1yVals : p1xVals, `${abbreviateInstrumentName(primaryName)} (Primary)`, abbreviateInstrumentName(firstCompName), `${abbreviateInstrumentName(firstCompName)} vs. ${abbreviateInstrumentName(primaryName)}`, true);
   const p1avgs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => (r.referenceValue + r.instruments[firstCompName].value) / 2);
   const p1pctDiffs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].pctDifference);
   const p1BaSvg = blandAltmanSVG(p1avgs, p1pctDiffs, study.cliaAllowableError, firstBAEntry?.pctMeanDiff ?? 0, firstCompName);
@@ -1361,7 +1370,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   ${headerHTML(study, (study as any)._cliaNumber)}
 
   <div class="section-heading">Correlation / Method Comparison Study</div>
-  <div class="report-title-sub">Primary Method: ${primaryName} | Comparison Method${comparisonNames.length > 1 ? "s" : ""}: ${comparisonNames.join(", ")}</div>
+  <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(abbreviateInstrumentName).join(", ")}</div>
 
   <div class="charts">${p1CorrSvg}${p1BaSvg}</div>
 

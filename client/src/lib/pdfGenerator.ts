@@ -14,20 +14,14 @@ const BORDER_GRAY = [200, 205, 210] as const;
 const WHITE       = [255, 255, 255] as const;
 
 // ─── Instrument display helpers ──────────────────────────────────────────────
+// Compact format for page headers: "Model (Nickname)" -- omits S/N to save vertical space
 function clientInstrumentDisplayInline(study: Study): string {
   try {
     if ((study as any).instrumentMeta) {
       const meta = typeof (study as any).instrumentMeta === "string" ? JSON.parse((study as any).instrumentMeta) : (study as any).instrumentMeta;
       const entry = meta["0"];
       if (entry) {
-        const parts: string[] = [];
-        if (entry.nickname) {
-          parts.push(`${entry.model} (${entry.nickname})`);
-        } else {
-          parts.push(entry.model);
-        }
-        if (entry.serial_number) parts.push(`S/N ${entry.serial_number}`);
-        return parts.join(", ");
+        return entry.nickname ? `${entry.model} (${entry.nickname})` : entry.model;
       }
     }
   } catch {}
