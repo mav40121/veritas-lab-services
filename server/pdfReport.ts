@@ -1699,6 +1699,10 @@ function buildLotToLotHTML(study: Study, results: any): string {
   const teaPct = (study.cliaAllowableError * 100).toFixed(1);
 
   // Split cohort sections: page 1 gets charts + compact summary, page 2 gets full data tables
+  // Compress chart heights when there are 2 cohorts so director sign-off block fits on page 1
+  const cohortCount = (results.cohorts || []).length;
+  const chartW = cohortCount >= 2 ? 280 : 320;
+  const chartH = cohortCount >= 2 ? 150 : 220;
   let cohortChartSections = "";
   let cohortDataSections = "";
   for (const cohort of (results.cohorts || [])) {
@@ -1708,8 +1712,8 @@ function buildLotToLotHTML(study: Study, results: any): string {
     const pctDiffs = specimens.map((s: any) => s.pctDifference);
     const specimenNums = specimens.map((_: any, i: number) => i + 1);
 
-    const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} - Scatter`, true);
-    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError);
+    const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} - Scatter`, true, chartW, chartH);
+    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError, chartW, chartH);
 
     const dataRows = specimens.map((s: any, i: number) => {
       const pfClass = s.passFail === "Pass" ? "pass" : "fail";
