@@ -1,6 +1,20 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile, cp, mkdir } from "fs/promises";
+import { execSync } from "child_process";
+
+// Resolve the git commit so /api/health can return it. Railway sets
+// RAILWAY_GIT_COMMIT_SHA in the build environment; if it's missing (local
+// build, etc.) we fall back to `git rev-parse`.
+function resolveCommitSha(): string {
+  if (process.env.RAILWAY_GIT_COMMIT_SHA) return process.env.RAILWAY_GIT_COMMIT_SHA;
+  if (process.env.GIT_COMMIT_SHA) return process.env.GIT_COMMIT_SHA;
+  try {
+    return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -63,6 +77,7 @@ async function buildAll() {
     outfile: "dist/index.cjs",
     define: {
       "process.env.NODE_ENV": '"production"',
+      "process.env.GIT_COMMIT_SHA": JSON.stringify(resolveCommitSha()),
     },
     minify: true,
     external: externals,

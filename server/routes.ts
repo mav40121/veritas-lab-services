@@ -487,6 +487,10 @@ function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: s
   }
 }
 
+// Captured once when the module loads so /api/health can prove the server
+// has actually restarted on a new deploy.
+const BOOT_TIMESTAMP = new Date().toISOString();
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // ── DEMO COMPETENCY DATA BACKFILL (runs once on startup) ────────────────
   try {
@@ -1070,7 +1074,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── HEALTH CHECK ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "veritas-lab-services", timestamp: new Date().toISOString() });
+    res.json({
+      status: "ok",
+      service: "veritas-lab-services",
+      timestamp: new Date().toISOString(),
+      // Build fingerprint — lets us verify which commit is actually running
+      // without needing access to the Railway dashboard. Set by the build
+      // script via RAILWAY_GIT_COMMIT_SHA / GIT_COMMIT_SHA env var; falls
+      // back to "unknown" if neither is present.
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "unknown",
+      bootedAt: BOOT_TIMESTAMP,
+    });
   });
 
   // ── TEMPORARY: Debug route list + admin recovery ──────────────────────────
@@ -2412,6 +2426,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
+
+    // Reconcile orphans on every export. This is the safety net: even if the
+    // boot-time migration didn't run (e.g. just-deployed instance, or this
+    // map was modified through a path that bypassed rebuildMapTests), the
+    // export itself purges any veritamap_tests row not backed by an active
+    // instrument-test before it queries.
+    rebuildMapTests(req.params.id);
 
     // Fetch tests (same as map detail endpoint)
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id);
