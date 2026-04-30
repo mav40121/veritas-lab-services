@@ -603,6 +603,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Admin: list raw studies for a given user (full payload incl. data_points)
+  // Used for legitimate cross-tenant operations (e.g. demo lab seeding from owner's own data).
+  // Read-only. Auth: x-admin-secret header or ?secret= query param.
+  app.get("/api/admin/studies/by-user/:userId", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const userId = parseInt(req.params.userId);
+    if (!Number.isFinite(userId)) return res.status(400).json({ error: "Invalid userId" });
+    const studies = storage.getStudiesByUser(userId);
+    res.json({ userId, count: studies.length, studies });
+  });
+
   app.post("/api/admin/users", (req, res) => {
     const { secret, maxId } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
