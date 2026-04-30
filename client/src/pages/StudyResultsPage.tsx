@@ -62,6 +62,7 @@ import {
 import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen } from "lucide-react";
 import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 async function downloadPDF(study: Study, results: StudyResults) {
   const res = await fetch(`${API_BASE}/api/generate-pdf`, {
@@ -83,12 +84,13 @@ const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];
 // ─── Shared header / pass-fail ────────────────────────────────────────────────
 function StudyHeader({ study, results }: { study: Study; results: StudyResults }) {
   const [pdfLoading, setPdfLoading] = useState(false);
+  const { toast } = useToast();
   const handlePDF = useCallback(async () => {
     setPdfLoading(true);
     try { await downloadPDF(study, results); }
-    catch (e) { alert("PDF generation failed. Please try again."); }
+    catch (e) { toast({ title: "PDF generation failed", description: "Please try again.", variant: "destructive" }); }
     finally { setPdfLoading(false); }
-  }, [study, results]);
+  }, [study, results, toast]);
 
   return (
     <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
@@ -1552,12 +1554,13 @@ function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults
 // ─── Root page ────────────────────────────────────────────────────────────────
 function BottomPDFButton({ study, results }: { study: Study; results: StudyResults }) {
   const [pdfLoading, setPdfLoading] = useState(false);
+  const { toast } = useToast();
   const handlePDF = useCallback(async () => {
     setPdfLoading(true);
     try { await downloadPDF(study, results); }
-    catch (e) { alert("PDF generation failed. Please try again."); }
+    catch (e) { toast({ title: "PDF generation failed", description: "Please try again.", variant: "destructive" }); }
     finally { setPdfLoading(false); }
-  }, [study, results]);
+  }, [study, results, toast]);
   return (
     <Button onClick={handlePDF} disabled={pdfLoading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
       {pdfLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <FileDown size={14} className="mr-1.5" />}

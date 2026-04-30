@@ -2648,6 +2648,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasMapAccess(req.user)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const analyte = decodeURIComponent(req.params.analyte);
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const map = (db as any).$client.prepare(
+      "SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?"
+    ).get(mapId, dataUserId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
@@ -2683,6 +2688,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = decodeURIComponent(req.params.analyte);
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const map = (db as any).$client.prepare(
+      "SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?"
+    ).get(mapId, dataUserId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`

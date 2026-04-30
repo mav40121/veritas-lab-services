@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import { downloadPdfToken } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -1398,6 +1399,7 @@ function NewAssessmentDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { toast } = useToast();
   const activeEmployees = employees.filter(e => e.status === "active");
   const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
   const [employeeId, setEmployeeId] = useState<number | null>(selectedEmployee?.id || null);
@@ -1562,7 +1564,11 @@ function NewAssessmentDialog({
     if (program.type === "technical") {
       const missing = getMissingNaJustifications();
       if (missing.length > 0) {
-        alert("N/A justification is required for all elements marked N/A. Please provide justification for:\n" + missing.map(m => "- " + m).join("\n"));
+        toast({
+          title: "N/A justification required",
+          description: "Provide justification for: " + missing.join("; "),
+          variant: "destructive",
+        });
         return;
       }
     }
