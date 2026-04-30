@@ -115,7 +115,7 @@ const comingSoon = [
 
 export default function ResourcesPage() {
 
-    useSEO({ title: "Resources | CLIA Compliance Guides for Clinical Laboratories", description: "Free guides and articles on CLIA compliance, method validation, calibration verification, proficiency testing, and laboratory inspection preparation." });
+    useSEO({ title: "Resources | CLIA Compliance Guides for Clinical Laboratories", description: "Free guides and articles on CLIA compliance, method verification, calibration verification, proficiency testing, and laboratory inspection preparation." });
 return (
     <div className="min-h-screen bg-background">
 

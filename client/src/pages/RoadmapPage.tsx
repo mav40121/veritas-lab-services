@@ -9,7 +9,7 @@ interface RoadmapItem {
 
 const completedItems: RoadmapItem[] = [
   {
-    title: "VeritaCheck™ - Method Validation Suite",
+    title: "VeritaCheck™ - Method Verification Suite",
     description:
       "Runs EP studies required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, QC range establishment, and multi-analyte comparison. Generates compliant PDF reports with statistical tables.",
   },

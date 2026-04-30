@@ -260,7 +260,7 @@ const FAQ_CATEGORIES = [
 ];
 
 export default function FAQPage() {
-    useSEO({ title: "FAQ | VeritaAssure™ Lab Compliance Software", description: "Frequently asked questions about VeritaAssure™, CLIA compliance software, method validation, and laboratory inspection readiness tools." });
+    useSEO({ title: "FAQ | VeritaAssure™ Lab Compliance Software", description: "Frequently asked questions about VeritaAssure™, CLIA compliance software, method verification, and laboratory inspection readiness tools." });
 return (
     <div className="min-h-screen bg-background">
       {/* Hero */}

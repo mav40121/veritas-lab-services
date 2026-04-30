@@ -37,7 +37,7 @@ const teaSampleTable = [
 ];
 
 export default function ArticleTeaPage() {
-    useSEO({ title: "CLIA Total Allowable Error: What Lab Directors Don't Know | Veritas Lab Services", description: "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to method validation studies and what surveyors look for in your documentation." });
+    useSEO({ title: "CLIA Total Allowable Error: What Lab Directors Don't Know | Veritas Lab Services", description: "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to method verification studies and what surveyors look for in your documentation." });
 return (
     <div className="min-h-screen bg-background">
 

@@ -129,7 +129,7 @@ const serviceGroups = [
 ];
 
 export default function ServicesPage() {
-    useSEO({ title: "Services | Veritas Lab Services Laboratory Consulting", description: "Laboratory consulting services including compliance assessments, accreditation preparation, method validation support, and staff education by Michael Veri, MLS(ASCP), CPHQ." });
+    useSEO({ title: "Services | Veritas Lab Services Laboratory Consulting", description: "Laboratory consulting services including compliance assessments, accreditation preparation, method verification support, and staff education by Michael Veri, MLS(ASCP), CPHQ." });
 return (
     <div>
       {/* Header */}

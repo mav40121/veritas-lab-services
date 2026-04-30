@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 // Products dropdown items
 const productLinks = [
-  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Validation & CUMSUM", badge: "Live", badgeColor: "emerald" },
+  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Verification & CUMSUM", badge: "Live", badgeColor: "emerald" },
   { href: "/veritascan", label: "VeritaScan\u2122", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
   { href: "/veritamap", label: "VeritaMap\u2122", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
   { href: "/veritatrack", label: "VeritaTrack\u2122", desc: "QC Task Tracking & Sign-off", badge: "Live", badgeColor: "emerald" },

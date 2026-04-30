@@ -16,13 +16,13 @@ const modules = [
       </svg>
     ),
     features: [
-      "VeritaCheck\u2122 Method Validation",
+      "VeritaCheck\u2122 Method Verification",
       "VeritaScan\u2122 Inspection Readiness",
       "VeritaMap\u2122 Reportable Range Mapping",
       "VeritaComp\u2122 Competency Tracking",
     ],
     description:
-      "Explore the full compliance suite: method validation, inspection readiness scoring, reportable range mapping, and competency management.",
+      "Explore the full compliance suite: method verification, inspection readiness scoring, reportable range mapping, and competency management.",
     cta: "Explore Compliance Suite",
   },
   {
