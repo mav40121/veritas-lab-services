@@ -174,16 +174,31 @@ Both gates are phrased so that violations are detectable in the conversation log
 - Email: VeriLabGuy@gmail.com / info@veritaslabservices.com
 - Company: Veritas Lab Services, LLC, Massachusetts, filed 1/2/2026
 
+## CREDENTIAL HANDLING (NON-NEGOTIABLE)
+The agent does NOT ask the user to paste operational secrets in chat. The user does not type `ADMIN_SECRET`, `RESEND_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, the GitHub PAT, or any other Railway-env value into the conversation. Asking the user to do so is a violation of this requirement, even if the agent thinks it would be faster.
+
+**Bootstrap credential.** The only secret the agent may ask the user to provide is the Railway API token, and only when it is not already stored in agent memory or this file. That token is the bootstrap, nothing else.
+
+**Standard retrieval pattern.** Whenever the agent needs an operational secret, it queries Railway's GraphQL `variables(projectId, environmentId, serviceId)` with the Railway API token, reads the value into a shell variable, uses it in the same `bash` call, and lets the variable die with the process. The value never appears in tool output, never gets written to a file, and never gets echoed back to the user. Any temp file used during retrieval is removed in the same call.
+
+**No "give me the X secret" requests.** If the agent finds itself about to ask the user for `ADMIN_SECRET` or any other env-stored value, it stops and pulls it from Railway env instead. The user has stated this protocol explicitly; future sessions do not re-litigate it.
+
+**Do not flag operator-supplied credentials as compromised.** If the user voluntarily pastes a token (because the agent asked, because they pre-empted, or any other reason), the agent does not later tell them to rotate it on the grounds that "it appeared in chat." The user authorized that disclosure for that thread's work. The agent treats it as a normal credential.
+
+**Stale credentials in this file.** Concrete token values do not belong in this file. They drift, they leak, and they cause the agent to hand the user a value that no longer works. Use the placeholders below instead, and read live values from Railway env at use time.
+
 ## Infrastructure
-- Railway token: 94a28a21-159b-4a0a-af34-e3d449a256a4 (Veritas Deploy, project-scoped, created 2026-04-27)
-- Service ID: 170f5560-8cf0-4341-9c87-294062ebedd1
+- Railway API token: [agent reads from memory; if missing, asks user once. Never echoed in chat.]
+- Project ID: 29c628f1-7860-4fca-8fee-227159bb86e8
+- Service ID: 170f5560-8cf0-4341-9c87-294062ebedd1 (`radiant-quietude`)
 - Environment ID: cd669f7c-23f3-434c-895d-ca40ac504e91
-- GitHub: https://github.com/mav40121/veritas-lab-services
-- GitHub token: ghp_REDACTED_SEE_RAILWAY_ENV
-- Resend: [REDACTED]
-- Live site: https://www.veritaslabservices.com
-- Admin endpoint: POST /api/admin/set-plan {"secret":"[REDACTED]","userId":N,"plan":"lab"}
-- Stripe live key in Railway env as STRIPE_SECRET_KEY
+- GitHub repo: https://github.com/mav40121/veritas-lab-services
+- GitHub PAT: stored as `GITHUB_TOKEN` in Railway env; agent uses `gh`/`git` via the `github` credential preset, no manual paste
+- Live site: https://www.veritaslabservices.com (apex 301s to www; print-QC requires the `www.` form)
+- Admin endpoints: `GET /api/admin/backup-db?secret=$ADMIN_SECRET`, `POST /api/admin/set-plan` with `{secret, userId, plan}`. Read `ADMIN_SECRET` from Railway env. Do not write the value into this file.
+- Resend: API key stored as `RESEND_API_KEY` in Railway env. Production transactional email is wired to it.
+- Stripe: live key as `STRIPE_SECRET_KEY`, webhook secret as `STRIPE_WEBHOOK_SECRET`, both in Railway env
+- JWT: `JWT_SECRET` in Railway env
 - GA4 Measurement ID: G-M3TB43ZX4E | Property ID: 503314560
 - Chase Stripe payout account: ••••5726
 
