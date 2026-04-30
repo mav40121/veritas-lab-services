@@ -261,7 +261,7 @@ return (
             },
             {
               q: "Where do I find the CLIA allowable error (TEa) for a specific analyte?",
-              a: "In the Code of Federal Regulations Title 42, Part 493, Subpart I. The relevant sections are §493.927 (general immunology), §493.931 (routine chemistry), §493.933 (endocrinology), §493.937 (toxicology), §493.941 (hematology), and §493.959 (immunohematology). Search for 'acceptable performance' within each section to find the specific criteria."
+              a: "In the Code of Federal Regulations Title 42, Part 493, Subpart I. The four sections cited by VeritaCheck™ are §493.927 (general immunology), §493.931 (routine chemistry), §493.937 (toxicology), and §493.941 (hematology). Search for 'acceptable performance' within each section to find the specific criteria."
             },
           ].map(({ q, a }) => (
             <div key={q} className="border-b border-border py-5 last:border-0">

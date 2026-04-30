@@ -122,10 +122,8 @@ return (
           <div className="bg-muted/40 rounded-lg border border-border p-4 space-y-2 text-sm font-mono my-4">
             <div><span className="text-primary font-semibold">§493.927</span> - PT acceptance criteria, general immunology (alpha-1 antitrypsin, AFP, ANA, complement, hepatitis markers, immunoglobulins...)</div>
             <div><span className="text-primary font-semibold">§493.931</span> - PT acceptance criteria, routine chemistry (glucose, sodium, creatinine, troponin, lipids, liver enzymes, BNP...)</div>
-            <div><span className="text-primary font-semibold">§493.933</span> - PT acceptance criteria, endocrinology (TSH, T4, T3, cortisol, FSH, LH, estradiol, testosterone...)</div>
             <div><span className="text-primary font-semibold">§493.937</span> - PT acceptance criteria, toxicology (digoxin, phenytoin, lithium, carbamazepine, acetaminophen...)</div>
             <div><span className="text-primary font-semibold">§493.941</span> - PT acceptance criteria, hematology (CBC, differential, fibrinogen, PT, INR, aPTT...)</div>
-            <div><span className="text-primary font-semibold">§493.959</span> - PT acceptance criteria, immunohematology (ABO, Rh, antibody detection, compatibility...)</div>
           </div>
           <p>
             Every section is publicly available at <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a> at no cost. The CFR is a US government publication and is in the public domain. You can read, reproduce, and share it freely. There is no paywalled version.
@@ -263,7 +261,7 @@ return (
             <Search size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Look up your analytes now</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              The complete 2025 CLIA TEa table: all 76+ analytes across chemistry, hematology, immunology, endocrinology, toxicology, coagulation, and blood bank. Free, no login required.
+              The complete 2025 CLIA TEa table: all 76+ analytes across chemistry, hematology, immunology, toxicology, and coagulation. Free, no login required.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

@@ -92,7 +92,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "How does VeritaAssure\u2122 handle the CLIA TEa standard?",
-        a: "VeritaCheck\u2122 pre-populates the \u00a7493 proficiency-testing TEa for each analyte (from \u00a7493.927, \u00a7493.931, \u00a7493.933, \u00a7493.937, \u00a7493.941, and \u00a7493.959) as the default calibration verification acceptance criterion. Under \u00a7493.1253(b)(2) and \u00a7493.1255(b)(3), CLIA requires the lab to establish and document acceptance criteria but does not specify the numeric value. Adopting the \u00a7493 PT TEa is a recommendation, made and approved by your medical director or designee. The TEa lookup tool is available at /resources/clia-tea-lookup.",
+        a: "VeritaCheck\u2122 pre-populates the \u00a7493 proficiency-testing TEa for each analyte (from \u00a7493.927, \u00a7493.931, \u00a7493.937, and \u00a7493.941) as the default calibration verification acceptance criterion. Under \u00a7493.1253(b)(2) and \u00a7493.1255(b)(3), CLIA requires the lab to establish and document acceptance criteria but does not specify the numeric value. Adopting the \u00a7493 PT TEa is a recommendation, made and approved by your medical director or designee. The TEa lookup tool is available at /resources/clia-tea-lookup.",
       },
       {
         q: "Does VeritaAssure\u2122 work for waived-only labs?",

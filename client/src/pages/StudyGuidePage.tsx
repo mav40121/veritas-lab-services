@@ -29,11 +29,6 @@ const REFS = {
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931",
     source: "eCFR",
   },
-  cfr493933: {
-    label: "42 CFR §493.933 - PT acceptance criteria, endocrinology",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.933",
-    source: "eCFR",
-  },
   cfr493937: {
     label: "42 CFR §493.937 - PT acceptance criteria, toxicology",
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
@@ -42,11 +37,6 @@ const REFS = {
   cfr493941: {
     label: "42 CFR §493.941 - PT acceptance criteria, hematology",
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
-    source: "eCFR",
-  },
-  cfr493959: {
-    label: "42 CFR §493.959 - PT acceptance criteria, immunohematology",
-    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.959",
     source: "eCFR",
   },
   cfr4931253: {
@@ -254,13 +244,13 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4 font-medium text-primary">Calibration Verification / Linearity</td>
                   <td className="py-3 px-4 text-muted-foreground">Is my instrument reading accurately across its full reportable range?</td>
                   <td className="py-3 px-4">Every 6 months (minimum)</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr4931255.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1255(b)(3)</a>; analyte criterion from §493.927, .931, .933, .937, .941, .959</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931255.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1255(b)(3)</a>; analyte criterion from §493.927, .931, .937, .941 (lab-adopted)</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Correlation / Method Comparison</td>
                   <td className="py-3 px-4 text-muted-foreground">Do my two instruments (or methods) agree with each other?</td>
                   <td className="py-3 px-4">When introducing a new method; annually recommended</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(2)</a>; analyte criterion from §493.927, .931, .933, .937, .941, .959 (lab-adopted)</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(2)</a>; analyte criterion from §493.927, .931, .937, .941 (lab-adopted)</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Precision</td>
@@ -357,7 +347,7 @@ export default function StudyGuidePage() {
             title="Precision"
             subtitle="Confirm your instrument is producing reproducible, consistent results"
             what="Precision verification measures how consistently an instrument produces the same result when the same sample is tested multiple times. Imprecision (variability) is expressed as a standard deviation (SD) or coefficient of variation (CV%). CLIA requires laboratories to verify that their instruments meet the manufacturer's stated precision claims before reporting patient results."
-            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck™ calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to your CLIA allowable imprecision (CV%) for each analyte."
+            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck™ calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to the precision acceptance criterion adopted by your lab for that analyte (typically the §493 PT TEa, approved by the medical director or designee)."
             when={[
               "Before introducing any new test method into service (CLIA required)",
               "After a major instrument repair or component replacement",
@@ -417,7 +407,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At each qualifying reagent lot change"
             regulation="42 CFR §493.1255"
-            passFail="The bias between lots must fall within your CLIA allowable error (TEa) for each analyte. VeritaCheck™ evaluates measured bias against TEa and reports pass or fail per analyte. Your laboratory director or designee reviews and approves results before the new lot enters service."
+            passFail="The bias between lots must fall within the lot-to-lot acceptance criterion adopted by your lab for each analyte (typically the §493 PT TEa). VeritaCheck™ evaluates measured bias against the adopted criterion and reports pass or fail per analyte. Your laboratory director or designee reviews and approves results before the new lot enters service."
             refs={[
               REFS.cliaCalVerBrochure,
               REFS.cfr493931,
