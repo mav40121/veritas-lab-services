@@ -398,13 +398,16 @@ interface EditInstrumentDialogProps {
 
 function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDialogProps) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(instrument.instrument_name);
   const [role, setRole] = useState<Role>(instrument.role);
   const [category, setCategory] = useState(instrument.category || "");
   const [serial, setSerial] = useState(instrument.serial_number || "");
   const [nickname, setNickname] = useState(instrument.nickname || "");
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const fdaInstr = INSTRUMENT_DATA[instrument.instrument_name];
+  const vendor = fdaInstr?.vendor || "";
 
   const editMutation = useMutation({
     mutationFn: async () => {
@@ -412,11 +415,11 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
-          instrument_name: name,
+          instrument_name: instrument.instrument_name,
           role,
           category,
-          serial_number: serial,
-          nickname,
+          serial_number: serial.trim() || null,
+          nickname: nickname.trim() || null,
         }),
       });
       if (!res.ok) throw new Error("Failed to update instrument");
@@ -425,14 +428,17 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+      toast({ title: "Instrument updated" });
       onSaved();
       setOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to update instrument", variant: "destructive" });
     },
   });
 
   const handleOpen = (val: boolean) => {
     if (val) {
-      setName(instrument.instrument_name);
       setRole(instrument.role);
       setCategory(instrument.category || "");
       setSerial(instrument.serial_number || "");
@@ -453,15 +459,30 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
           <DialogTitle>Edit Instrument</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/* Locked: Instrument model */}
           <div className="space-y-1">
-            <Label htmlFor="edit-inst-name">Instrument Name</Label>
+            <Label>Instrument Model</Label>
             <Input
-              id="edit-inst-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Sysmex XN-1000"
+              value={instrument.instrument_name}
+              disabled
+              className="bg-muted cursor-not-allowed"
             />
           </div>
+          {/* Locked: Vendor */}
+          {vendor && (
+            <div className="space-y-1">
+              <Label>Vendor</Label>
+              <Input
+                value={vendor}
+                disabled
+                className="bg-muted cursor-not-allowed"
+              />
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            Model and vendor cannot be changed. Delete and re-add to change instrument type.
+          </p>
+          {/* Editable: Nickname */}
           <div className="space-y-1">
             <Label htmlFor="edit-inst-nickname">Nickname (optional)</Label>
             <Input
@@ -472,6 +493,17 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
             />
             <p className="text-[10px] text-muted-foreground">Used to distinguish identical instruments, e.g. "Bonnie" and "Clyde".</p>
           </div>
+          {/* Editable: Serial Number */}
+          <div className="space-y-1">
+            <Label htmlFor="edit-inst-serial">Serial Number (optional)</Label>
+            <Input
+              id="edit-inst-serial"
+              value={serial}
+              onChange={(e) => setSerial(e.target.value)}
+              placeholder="e.g. SN-2024-00142"
+            />
+          </div>
+          {/* Editable: Role */}
           <div className="space-y-1">
             <Label htmlFor="edit-inst-role">Role</Label>
             <Select value={role} onValueChange={(v) => setRole(v as Role)}>
@@ -479,37 +511,32 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Primary">Primary</SelectItem>
-                <SelectItem value="Backup">Backup</SelectItem>
-                <SelectItem value="Satellite">Satellite</SelectItem>
-                <SelectItem value="POC">POC</SelectItem>
+                {ROLES.map((r) => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
+          {/* Editable: Department/Section */}
           <div className="space-y-1">
-            <Label htmlFor="edit-inst-category">Category</Label>
-            <Input
-              id="edit-inst-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g. Hematology"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="edit-inst-serial">Serial Number</Label>
-            <Input
-              id="edit-inst-serial"
-              value={serial}
-              onChange={(e) => setSerial(e.target.value)}
-              placeholder="Optional"
-            />
+            <Label htmlFor="edit-inst-category">Department / Section</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="edit-inst-category">
+                <SelectValue placeholder="Select department..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {CATEGORY_ORDER.map((dept) => (
+                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button
             onClick={() => editMutation.mutate()}
-            disabled={!name.trim() || editMutation.isPending}
+            disabled={editMutation.isPending}
           >
             {editMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
@@ -1664,26 +1691,28 @@ export default function VeritaMapBuildPage() {
                       {isOther
                         ? "Custom instrument - add tests in Step 2"
                         : `${fdaInstr?.testCount ?? 0} ${instr.category === "Manual Procedures" ? "tests" : "FDA-cleared tests"}`}
+                      {instr.serial_number ? ` · S/N: ${instr.serial_number}` : ""}
+                      {instr.nickname ? ` · ${instr.nickname}` : ""}
                     </span>
-                    {instr.serial_number && (
-                      <span className="text-[10px] text-muted-foreground">S/N: {instr.serial_number}</span>
-                    )}
                   </div>
-                  <ConfirmDialog
-                    title="Remove Instrument?"
-                    message={`Remove ${instr.instrument_name} from this test menu? All test assignments for this instrument will also be removed.`}
-                    confirmLabel="Remove"
-                    onConfirm={() => deleteInstrumentMutation.mutate(instr.id)}
-                  >
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                      disabled={deleteInstrumentMutation.isPending}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <EditInstrumentDialog instrument={instr} mapId={mapId!} onSaved={() => {}} />
+                    <ConfirmDialog
+                      title="Remove Instrument?"
+                      message={`Remove ${instr.instrument_name} from this test menu? All test assignments for this instrument will also be removed.`}
+                      confirmLabel="Remove"
+                      onConfirm={() => deleteInstrumentMutation.mutate(instr.id)}
                     >
-                      <Trash2 size={14} />
-                    </Button>
-                  </ConfirmDialog>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                        disabled={deleteInstrumentMutation.isPending}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </ConfirmDialog>
+                  </div>
                 </div>
               );
             })}
