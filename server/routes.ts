@@ -2113,8 +2113,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delInstr = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id) as any;
     const delInstTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "instrument", entityId: req.params.instId, entityLabel: delInstr?.instrument_name, before: { instrument: delInstr, tests: delInstTests }, ipAddress: req.ip });
+    // Remove any AMR values keyed to this instrument so they cannot resurface
+    // on a re-added instrument with the same id space.
+    (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ?").run(req.params.id, req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE id = ? AND map_id = ?").run(req.params.instId, req.params.id);
+    // Reconcile veritamap_tests against remaining instruments so any analyte
+    // that was only on the deleted instrument is purged from the map and from
+    // the Excel export. Without this, deleted-instrument analytes persist as
+    // orphans (the bug behind cortisol showing in John's lab export and the
+    // 5600 -> MEDTOX cross-contamination).
+    rebuildMapTests(req.params.id);
     res.json({ ok: true });
   });
 
@@ -2317,6 +2326,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Helper: rebuild merged map tests from instrument tests
   function rebuildMapTests(mapId: string | number) {
+    // Source of truth: any analyte that is active on at least one instrument
+    // currently attached to this map. Anything else must not appear in
+    // veritamap_tests, and must not appear in the Excel export.
     const rows = (db as any).$client.prepare(`
       SELECT DISTINCT it.analyte, it.specialty, it.complexity, i.instrument_name
       FROM veritamap_instrument_tests it
@@ -2324,18 +2336,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       WHERE it.map_id = ? AND it.active = 1
     `).all(mapId);
     const now = new Date().toISOString();
-    // Keep existing date/notes data, just ensure all analytes exist
-    const stmt = (db as any).$client.prepare(`
+    const activeAnalytes = new Set(rows.map((r: any) => r.analyte));
+
+    // 1. Insert any newly-active analyte that doesn't have a row yet
+    //    (preserves existing date/notes/active state for analytes that are
+    //     already present and still backed).
+    const insertStmt = (db as any).$client.prepare(`
       INSERT OR IGNORE INTO veritamap_tests
         (map_id, analyte, specialty, complexity, active, instrument_source, updated_at)
       VALUES (?, ?, ?, ?, 1, ?, ?)
     `);
-    const bulk = (db as any).$client.transaction((rows: any[]) => {
-      for (const r of rows) {
-        stmt.run(mapId, r.analyte, r.specialty, r.complexity, r.instrument_name, now);
+
+    // 2. Delete any veritamap_tests row that is no longer backed by an
+    //    active instrument-test on this map. This is the fix for orphan
+    //    analytes that previously persisted after toggle-off, instrument
+    //    delete, or wrong-menu import + delete (e.g. 5600 -> MEDTOX).
+    //    Also clear orphan analyte_values and AMR values so the export
+    //    cannot pull stale lab-entered numbers back in either.
+    const existingRows = (db as any).$client.prepare(
+      "SELECT analyte FROM veritamap_tests WHERE map_id = ?"
+    ).all(mapId) as { analyte: string }[];
+    const orphanAnalytes = existingRows
+      .map((r) => r.analyte)
+      .filter((a) => !activeAnalytes.has(a));
+
+    const deleteTestStmt = (db as any).$client.prepare(
+      "DELETE FROM veritamap_tests WHERE map_id = ? AND analyte = ?"
+    );
+    const deleteAnalyteValStmt = (db as any).$client.prepare(
+      "DELETE FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
+    );
+    const deleteAmrValStmt = (db as any).$client.prepare(
+      "DELETE FROM veritamap_amr_values WHERE map_id = ? AND analyte = ?"
+    );
+
+    const bulk = (db as any).$client.transaction((newRows: any[], orphans: string[]) => {
+      for (const r of newRows) {
+        insertStmt.run(mapId, r.analyte, r.specialty, r.complexity, r.instrument_name, now);
+      }
+      for (const a of orphans) {
+        deleteTestStmt.run(mapId, a);
+        deleteAnalyteValStmt.run(mapId, a);
+        deleteAmrValStmt.run(mapId, a);
       }
     });
-    bulk(rows);
+    bulk(rows, orphanAnalytes);
+
+    if (orphanAnalytes.length > 0) {
+      console.log(`[VeritaMap] rebuildMapTests removed ${orphanAnalytes.length} orphan analyte(s) from map ${mapId}: ${orphanAnalytes.slice(0, 10).join(', ')}${orphanAnalytes.length > 10 ? '…' : ''}`);
+    }
   }
 
   // Update single test

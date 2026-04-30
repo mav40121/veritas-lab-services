@@ -1552,6 +1552,56 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_metrics_dept ON pi_metrics(
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_entries_metric ON pi_entries(metric_id, year, month)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_entries_account ON pi_entries(account_id, year)`); } catch {}
 
+// ── One-shot reconciliation: purge orphan veritamap_tests rows ───────────────
+// Background: prior to the fix in routes.ts, rebuildMapTests used
+// INSERT OR IGNORE only — it never deleted rows when an analyte was toggled
+// off, an instrument was deleted, or a wrong test menu was imported and then
+// the offending instrument was removed. Result: the Excel export pulled stale
+// analytes (e.g. cortisol on a chemistry-only lab) with empty Instruments and
+// Serial Number columns. This block reconciles every existing map on boot
+// once, so labs in the field don't have to wait for a re-toggle to clean up.
+try {
+  const tablesExist = sqlite.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('veritamap_tests','veritamap_instrument_tests','veritamap_analyte_values','veritamap_amr_values')"
+  ).all() as { name: string }[];
+  const have = new Set(tablesExist.map((t) => t.name));
+  if (have.has('veritamap_tests') && have.has('veritamap_instrument_tests')) {
+    const orphans = sqlite.prepare(`
+      SELECT vt.map_id, vt.analyte
+      FROM veritamap_tests vt
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM veritamap_instrument_tests it
+        WHERE it.map_id = vt.map_id
+          AND it.analyte = vt.analyte
+          AND it.active = 1
+      )
+    `).all() as { map_id: number; analyte: string }[];
+
+    if (orphans.length > 0) {
+      const delTest = sqlite.prepare("DELETE FROM veritamap_tests WHERE map_id = ? AND analyte = ?");
+      const delAnalyteVal = have.has('veritamap_analyte_values')
+        ? sqlite.prepare("DELETE FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?")
+        : null;
+      const delAmrVal = have.has('veritamap_amr_values')
+        ? sqlite.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ? AND analyte = ?")
+        : null;
+      const tx = sqlite.transaction((rows: { map_id: number; analyte: string }[]) => {
+        for (const r of rows) {
+          delTest.run(r.map_id, r.analyte);
+          if (delAnalyteVal) delAnalyteVal.run(r.map_id, r.analyte);
+          if (delAmrVal) delAmrVal.run(r.map_id, r.analyte);
+        }
+      });
+      tx(orphans);
+      const affectedMaps = new Set(orphans.map((o) => o.map_id)).size;
+      console.log(`[veritamap-reconcile] Removed ${orphans.length} orphan analyte row(s) across ${affectedMaps} map(s).`);
+    }
+  }
+} catch (err) {
+  console.error('[veritamap-reconcile] Failed:', err);
+}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");
