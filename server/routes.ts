@@ -1799,9 +1799,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
-    const delStudy = (db as any).$client.prepare("SELECT id, test_name, study_type, analyst, date FROM studies WHERE id = ?").get(parseInt(req.params.id)) as any;
-    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "delete", entityType: "study", entityId: req.params.id, entityLabel: delStudy ? `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})` : undefined, before: delStudy, ipAddress: req.ip });
-    storage.deleteStudy(parseInt(req.params.id));
+    const studyId = parseInt(req.params.id);
+    const delStudy = (db as any).$client.prepare("SELECT id, user_id, test_name, study_type, analyst, date FROM studies WHERE id = ?").get(studyId) as any;
+    if (!delStudy) return res.status(404).json({ error: "Study not found" });
+    // Tenant ownership check: caller (or their seat owner) must own this study.
+    // Legacy guest studies (user_id IS NULL) are not deletable via this route.
+    const callerOwnerId = req.ownerUserId ?? req.userId;
+    if (delStudy.user_id == null || delStudy.user_id !== callerOwnerId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    logAudit({ userId: req.userId, ownerUserId: callerOwnerId, module: "veritacheck", action: "delete", entityType: "study", entityId: req.params.id, entityLabel: delStudy ? `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})` : undefined, before: delStudy, ipAddress: req.ip });
+    storage.deleteStudy(studyId);
     res.json({ success: true });
   });
 
