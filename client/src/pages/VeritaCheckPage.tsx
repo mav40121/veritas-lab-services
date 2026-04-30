@@ -26,6 +26,7 @@ import type { InsertStudy } from "@shared/schema";
 import fdaData from "@/lib/fdaInstrumentData.json";
 
 const API_BASE = "https://www.veritaslabservices.com";
+// Retained for potential future use; VeritaCheck picker no longer renders this catalog.
 const FDA_MODEL_NAMES = Object.keys(fdaData).sort();
 
 // CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart K)
@@ -1358,9 +1359,6 @@ return (
                                     const instId = parseInt(v.slice(6));
                                     const inst = veritaMapInstruments.find(i => i.id === instId);
                                     if (inst) selectLabInstrument(idx, inst);
-                                  } else if (v.startsWith("__fda_")) {
-                                    const modelName = v.slice(6);
-                                    updateInstrumentName(idx, modelName);
                                   }
                                 }}
                               >
@@ -1376,12 +1374,6 @@ return (
                                       ))}
                                     </SelectGroup>
                                   )}
-                                  <SelectGroup>
-                                    <SelectLabel>Other Models</SelectLabel>
-                                    {FDA_MODEL_NAMES.map(model => (
-                                      <SelectItem key={`fda-${model}`} value={`__fda_${model}`}>{model}</SelectItem>
-                                    ))}
-                                  </SelectGroup>
                                   <SelectItem value="__manual__">Or enter manually...</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -1415,8 +1407,6 @@ return (
                                   const instId = parseInt(v.slice(6));
                                   const inst = veritaMapInstruments.find(i => i.id === instId);
                                   if (inst) selectLabInstrument(idx, inst);
-                                } else if (v.startsWith("__fda_")) {
-                                  updateInstrumentName(idx, v.slice(6));
                                 }
                               }}
                             >
@@ -1432,12 +1422,6 @@ return (
                                     ))}
                                   </SelectGroup>
                                 )}
-                                <SelectGroup>
-                                  <SelectLabel>Other Models</SelectLabel>
-                                  {FDA_MODEL_NAMES.map(model => (
-                                    <SelectItem key={`fda-${model}`} value={`__fda_${model}`}>{model}</SelectItem>
-                                  ))}
-                                </SelectGroup>
                                 <SelectItem value="__manual__">Or enter manually...</SelectItem>
                               </SelectContent>
                             </Select>
