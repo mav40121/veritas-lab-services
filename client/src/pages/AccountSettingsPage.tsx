@@ -505,10 +505,10 @@ export default function AccountSettingsPage() {
               <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-green-800">
-                  <strong>{discountApplied.code}</strong>: {discountApplied.trialDays ? `${discountApplied.trialDays}-day free trial` : `${discountApplied.pct}% off`} via {discountApplied.partnerName}
+                  <strong>{discountApplied.code}</strong>: {[discountApplied.trialDays ? `${discountApplied.trialDays}-day free trial` : "", discountApplied.pct ? `${discountApplied.pct}% off` : ""].filter(Boolean).join(" + ")} via {discountApplied.partnerName}
                 </p>
                 {discountApplied.trialDays ? (
-                  <p className="text-xs text-green-700 mt-0.5">{discountApplied.trialDays}-day free trial - card required</p>
+                  <p className="text-xs text-green-700 mt-0.5">{discountApplied.trialDays}-day free trial{discountApplied.pct ? ` + ${discountApplied.pct}% off first year` : ""} - card required</p>
                 ) : discountApplied.pct === 100 ? (
                   <p className="text-xs text-green-700 mt-0.5">No payment method required.</p>
                 ) : null}

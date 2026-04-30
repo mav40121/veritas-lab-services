@@ -810,10 +810,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (row.applies_to !== "all" && row.applies_to !== priceType) {
         return res.json({ valid: false, message: `This code applies to ${row.applies_to} plans only` });
       }
-      if (row.trial_days) {
-        return res.json({ valid: true, discountPct: 0, trialDays: row.trial_days, partnerName: row.partner_name, message: `${row.trial_days}-day free trial` });
-      }
-      return res.json({ valid: true, discountPct: row.discount_pct, partnerName: row.partner_name, message: `${row.discount_pct}% discount applied` });
+      const parts: string[] = [];
+      if (row.trial_days) parts.push(`${row.trial_days}-day free trial`);
+      if (row.discount_pct) parts.push(`${row.discount_pct}% off`);
+      return res.json({
+        valid: true,
+        discountPct: row.discount_pct || 0,
+        trialDays: row.trial_days || 0,
+        partnerName: row.partner_name,
+        message: parts.join(" + ") || "Discount applied",
+      });
     }
 
     // Fall back to direct Stripe coupon lookup
@@ -3264,10 +3270,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(discountCode.trim()) as any;
       const checkoutCodeExpired = discountRow?.expires_at && new Date(discountRow.expires_at).getTime() < Date.now();
       if (discountRow && discountRow.active && !checkoutCodeExpired && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual")) {
-        // Trial code path: use Stripe trial_period_days, skip coupon creation
+        // Trial code path
         if (discountRow.trial_days) {
           trialDays = discountRow.trial_days;
-        } else {
+        }
+        // Discount code path (independent of trial)
+        if (discountRow.discount_pct) {
           discountPct = discountRow.discount_pct;
           // First try using the code itself as a direct Stripe coupon ID (e.g. TdFkdMWg)
           try {
@@ -3370,13 +3378,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         metadata: { userId: String(user.id), priceType, totalSeats: String(totalSeats) },
       };
       if (trialDays && isSubscription) {
-        // Trial code: set trial period on the subscription, require card upfront
         sessionParams.subscription_data = { trial_period_days: trialDays };
         sessionParams.payment_method_collection = "always";
-      } else if (couponId) {
+      }
+      if (couponId) {
         sessionParams.discounts = [{ coupon: couponId }];
-        // When subscription is fully covered, do not require a payment method upfront
-        if (isSubscription && isFullDiscountStripe) {
+        // When subscription is fully covered and no trial, relax payment method requirement
+        if (isSubscription && isFullDiscountStripe && !trialDays) {
           sessionParams.payment_method_collection = "if_required";
         }
       }
