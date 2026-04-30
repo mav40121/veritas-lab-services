@@ -441,7 +441,7 @@ return (
                   { feature: "VeritaStaff\u2122 personnel management", values: [false, false, true, true, true, true] },
                   { feature: "VeritaTrack\u2122 regulatory calendar", values: [false, false, true, true, true, true] },
                   { feature: "VeritaLab\u2122 certificate management", values: [false, false, true, true, true, true] },
-                  { feature: "PI Dashboard", values: [false, false, true, true, true, true] },
+                  { feature: "VeritaQA™", values: [false, false, true, true, true, true] },
                   { feature: "VeritaStock\u2122 inventory management", values: [false, false, true, true, true, true] },
                   { feature: "Seats included", values: ["1", "1", "2", "5", "15", "25"] },
                   { feature: "Onboarding session", values: [false, false, "1 hour", "1 hour", "2 hours", "Custom"] },

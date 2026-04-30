@@ -42,7 +42,7 @@ const modules = [
       </svg>
     ),
     features: [
-      "Instant Productivity Calculator",
+      "Instant VeritaBench™ access",
       "Monthly Productivity Tracking",
       "By-Hour Staffing Analysis",
       "Inventory Management",

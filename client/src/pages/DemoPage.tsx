@@ -1110,7 +1110,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <Calculator size={14} />
-              Module 1: Productivity Calculator
+              Module 1: VeritaBench™
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Instant Lab Productivity Scorecard</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -1129,7 +1129,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <BarChart3 size={14} />
-              Module 2: Productivity Tracker
+              Module 2: VeritaPace™
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Track Productivity Over Time</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -1148,7 +1148,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <Grid3X3 size={14} />
-              Module 3: By-Hour Staffing Analyzer
+              Module 3: VeritaShift™
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Optimize Staffing by the Hour</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">

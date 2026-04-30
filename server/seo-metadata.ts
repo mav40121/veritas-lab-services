@@ -131,7 +131,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications.",
   },
   "/calculator": {
-    title: "Lab Productivity Calculator | VeritaBench\u2122 Free Benchmarking Tool",
+    title: "VeritaBench\u2122 | VeritaAssure\u2122",
     description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
   },
   "/veritabench": {
@@ -139,7 +139,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Track monthly lab productivity, benchmark billable tests per paid hour against peer labs, and analyze FTE and overtime trends. Included with VeritaAssure\u2122 Suite plans.",
   },
   "/veritabench/staffing": {
-    title: "Staffing Analyzer | VeritaBench\u2122 | VeritaAssure\u2122",
+    title: "VeritaShift\u2122 | VeritaAssure\u2122",
     description: "Analyze by-hour staffing demand against actual coverage to identify overstaffed and understaffed periods in your clinical laboratory.",
   },
   "/veritastock": {

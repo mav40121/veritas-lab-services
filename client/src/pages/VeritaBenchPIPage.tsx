@@ -680,7 +680,7 @@ export default function VeritaBenchPIPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>PI Dashboard</h1>
+          <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>VeritaQA™</h1>
           <p className="text-sm text-muted-foreground mt-1">Department quality metrics and performance improvement tracking</p>
         </div>
         <div className="flex gap-2 items-center flex-wrap">

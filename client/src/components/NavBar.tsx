@@ -32,10 +32,10 @@ const allMobileLinks = [
   { href: "/veritalab", label: "VeritaLab™" },
   { href: "/veritapolicy", label: "VeritaPolicy™" },
   { href: "/veritatrack", label: "VeritaTrack™" },
-  { href: "/calculator", label: "Productivity Calculator" },
-  { href: "/veritabench", label: "VeritaBench™ Tracker" },
-  { href: "/veritabench/staffing", label: "VeritaBench™ Staffing" },
-  { href: "/veritabench/pi", label: "VeritaBench™ PI Dashboard" },
+  { href: "/calculator", label: "VeritaBench™" },
+  { href: "/veritabench", label: "VeritaPace™" },
+  { href: "/veritabench/staffing", label: "VeritaShift™" },
+  { href: "/veritabench/pi", label: "VeritaQA™" },
   { href: "/veritastock", label: "VeritaStock™" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
@@ -218,7 +218,7 @@ export function NavBar() {
               <DropdownMenuItem asChild>
                 <Link href="/calculator" className="flex items-start gap-2 py-2">
                   <div>
-                    <div className="text-sm font-medium">Productivity Calculator</div>
+                    <div className="text-sm font-medium">VeritaBench™</div>
                     <div className="text-xs text-muted-foreground">Free quick benchmarking tool</div>
                   </div>
                 </Link>
@@ -227,7 +227,7 @@ export function NavBar() {
               <DropdownMenuItem asChild>
                 <Link href="/veritabench" className="flex items-start gap-2 py-2">
                   <div>
-                    <div className="text-sm font-medium">Productivity Tracker</div>
+                    <div className="text-sm font-medium">VeritaPace™</div>
                     <div className="text-xs text-muted-foreground">Monthly data and trends</div>
                   </div>
                 </Link>
@@ -235,7 +235,7 @@ export function NavBar() {
               <DropdownMenuItem asChild>
                 <Link href="/veritabench/staffing" className="flex items-start gap-2 py-2">
                   <div>
-                    <div className="text-sm font-medium">Staffing Analyzer</div>
+                    <div className="text-sm font-medium">VeritaShift™</div>
                     <div className="text-xs text-muted-foreground">By-hour demand analysis</div>
                   </div>
                 </Link>
@@ -243,7 +243,7 @@ export function NavBar() {
               <DropdownMenuItem asChild>
                 <Link href="/veritabench/pi" className="flex items-start gap-2 py-2">
                   <div>
-                    <div className="text-sm font-medium">PI Dashboard</div>
+                    <div className="text-sm font-medium">VeritaQA™</div>
                     <div className="text-xs text-muted-foreground">Department quality metrics</div>
                   </div>
                 </Link>

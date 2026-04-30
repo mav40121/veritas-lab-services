@@ -275,7 +275,7 @@ export default function VeritaBenchPage() {
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">Free</div>
-                    <div className="text-xs text-muted-foreground">Productivity Calculator (no signup)</div>
+                    <div className="text-xs text-muted-foreground">VeritaBench™ (no signup)</div>
                   </div>
                 </div>
 
@@ -301,7 +301,7 @@ export default function VeritaBenchPage() {
                       VeritaBench{"\u2122"}
                     </div>
                     <div className="text-xs text-white/70 text-center space-y-1 mb-4">
-                      <div>Productivity Tracker</div>
+                      <div>VeritaPace™</div>
                       <div>Tests per Paid Hour</div>
                       <div>FTE & Overtime</div>
                       <div>By-Hour Staffing</div>
@@ -336,7 +336,7 @@ export default function VeritaBenchPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>Productivity Tracker</h1>
+          <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>VeritaPace™</h1>
           <p className="text-sm text-muted-foreground mt-1">Monthly productivity data entry and trend analysis</p>
         </div>
         <div className="flex gap-2">
