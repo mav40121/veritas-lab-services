@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Activity } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Activity, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import CLIALookupModal from "@/components/CLIALookupModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -2337,6 +2337,52 @@ return (
             <p className="text-muted-foreground mb-6">
               View our full pricing to find the right plan for your lab.
             </p>
+
+            <div className="max-w-md mx-auto mb-6 text-left">
+              <p className="text-sm text-muted-foreground mb-2">Have a discount code?</p>
+              {!discountApplied ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={discountCode}
+                    onChange={(e) => { setDiscountCode(e.target.value); setDiscountError(""); }}
+                    onKeyDown={(e) => e.key === "Enter" && applyDiscount("veritacheck_only")}
+                    placeholder="Enter code"
+                    className="max-w-xs"
+                  />
+                  <Button
+                    onClick={() => applyDiscount("veritacheck_only")}
+                    disabled={discountLoading || !discountCode.trim()}
+                    variant="outline"
+                  >
+                    {discountLoading ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} className="mr-1.5" />}
+                    {discountLoading ? "Checking..." : "Apply"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex items-start gap-3">
+                  <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-green-800">
+                      <strong>{discountApplied.code}</strong>: {[discountApplied.trialDays ? `${discountApplied.trialDays}-day free trial` : "", discountApplied.pct ? `${discountApplied.pct}% off` : ""].filter(Boolean).join(" + ")} via {discountApplied.partnerName}
+                    </p>
+                    {discountApplied.trialDays ? (
+                      <p className="text-xs text-green-700 mt-0.5">{discountApplied.trialDays}-day free trial{discountApplied.pct ? ` + ${discountApplied.pct}% off first year` : ""} - card required</p>
+                    ) : discountApplied.pct === 100 ? (
+                      <p className="text-xs text-green-700 mt-0.5">No payment method required.</p>
+                    ) : null}
+                  </div>
+                  <button
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => { setDiscountApplied(null); setDiscountCode(""); }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+              {discountError && (
+                <p className="text-sm text-red-500 mt-2">{discountError}</p>
+              )}
+            </div>
 
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
               <Link href="/pricing">
