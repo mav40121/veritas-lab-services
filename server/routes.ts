@@ -2056,17 +2056,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── INSTRUMENTS ───────────────────────────────────────────────
 
   // Get all VeritaMap instruments for the current user's lab (used by VeritaCheck picker)
+  // Returns map_id and map_name so the picker can group by map and disambiguate
+  // duplicate models across maps (large hospitals may keep separate maps for
+  // Chemistry, Hematology, etc.).
   app.get("/api/veritacheck/lab-instruments", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const maps = (db as any).$client.prepare(
-      "SELECT id FROM veritamap_maps WHERE user_id = ?"
-    ).all(dataUserId) as { id: number }[];
-    if (maps.length === 0) return res.json([]);
-    const mapIds = maps.map((m) => m.id);
-    const placeholders = mapIds.map(() => "?").join(",");
     const instruments = (db as any).$client.prepare(
-      `SELECT id, instrument_name, serial_number, nickname, role, category FROM veritamap_instruments WHERE map_id IN (${placeholders}) ORDER BY instrument_name`
-    ).all(...mapIds);
+      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.role, i.category,
+              i.map_id, m.name AS map_name
+       FROM veritamap_instruments i
+       JOIN veritamap_maps m ON m.id = i.map_id
+       WHERE m.user_id = ?
+       ORDER BY m.name, i.instrument_name, i.id`
+    ).all(dataUserId);
     res.json(instruments);
   });
 

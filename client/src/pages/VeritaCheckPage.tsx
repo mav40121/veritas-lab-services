@@ -1,5 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useLocation, useSearch, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -346,7 +346,7 @@ export default function VeritaCheckPage() {
 
   const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
-  interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string }
+  interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
   const [veritaMapLoaded, setVeritaMapLoaded] = useState(false);
   // Track which instrument slots are linked to a VeritaMap instrument (by veritamap instrument id)
@@ -368,6 +368,60 @@ export default function VeritaCheckPage() {
       setVeritaMapLoaded(true);
     })();
   }, [isLoggedIn, veritaMapLoaded]);
+
+  // Group instruments by VeritaMap map for the picker dropdown.
+  // Large hospitals can keep separate maps (Chemistry, Hematology, etc.); the
+  // picker should show those groups distinctly. When a model name appears more
+  // than once across all maps and a row has no nickname, the label includes
+  // the map name so the user can tell rows apart.
+  const groupedInstruments = useMemo(() => {
+    if (veritaMapInstruments.length === 0) return [] as { mapId: number | string; mapName: string; items: LabInstrument[] }[];
+    const modelCounts = new Map<string, number>();
+    veritaMapInstruments.forEach(i => {
+      const k = i.instrument_name || "";
+      modelCounts.set(k, (modelCounts.get(k) || 0) + 1);
+    });
+    const byMap = new Map<string, { mapId: number | string; mapName: string; items: LabInstrument[] }>();
+    veritaMapInstruments.forEach(i => {
+      const key = String(i.map_id ?? "_unknown");
+      if (!byMap.has(key)) {
+        byMap.set(key, { mapId: i.map_id ?? "_unknown", mapName: i.map_name || "My Lab", items: [] });
+      }
+      byMap.get(key)!.items.push(i);
+    });
+    // Stable order: alphabetical by map name
+    return Array.from(byMap.values()).sort((a, b) => a.mapName.localeCompare(b.mapName));
+  }, [veritaMapInstruments]);
+
+  // Detect ambiguous duplicates: same model, same map, no nickname on either row.
+  // When this happens no UI label can distinguish them; surface a hint.
+  const hasAmbiguousDuplicates = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const i of veritaMapInstruments) {
+      if (i.nickname) continue;
+      const k = `${i.map_id}::${i.instrument_name}`;
+      seen.set(k, (seen.get(k) || 0) + 1);
+      if ((seen.get(k) || 0) > 1) return true;
+    }
+    return false;
+  }, [veritaMapInstruments]);
+
+  // Multi-map disambiguation: if same model appears in 2+ different maps and
+  // has no nickname/serial, append the map name to the label so it is unique.
+  const labInstrumentLabelWithContext = (inst: LabInstrument): string => {
+    const base = labInstrumentLabel(inst);
+    if (inst.nickname || inst.serial_number) return base;
+    const sameModelCount = veritaMapInstruments.filter(x => x.instrument_name === inst.instrument_name).length;
+    if (sameModelCount > 1 && inst.map_name) {
+      // Replace trailing "(category)" with "(map_name, category)" or append map_name.
+      const cat = inst.category || "";
+      if (cat && base.endsWith(`(${cat})`)) {
+        return base.replace(`(${cat})`, `(${inst.map_name}, ${cat})`);
+      }
+      return `${base} (${inst.map_name})`;
+    }
+    return base;
+  };
 
   const [cliaPreset, setCliaPreset] = useState(0);
   const [customClia, setCustomClia] = useState(0.075);
@@ -1364,19 +1418,22 @@ return (
                               >
                                 <SelectTrigger className="h-9"><SelectValue placeholder="Select instrument..." /></SelectTrigger>
                                 <SelectContent>
-                                  {veritaMapInstruments.length > 0 && (
-                                    <SelectGroup>
-                                      <SelectLabel>Your Instruments</SelectLabel>
-                                      {veritaMapInstruments.map(inst => (
+                                  {groupedInstruments.map(group => (
+                                    <SelectGroup key={`mc-grp-${group.mapId}`}>
+                                      <SelectLabel>{group.mapName}</SelectLabel>
+                                      {group.items.map(inst => (
                                         <SelectItem key={`lab-${inst.id}`} value={`__lab_${inst.id}`}>
-                                          {labInstrumentLabel(inst)}
+                                          {labInstrumentLabelWithContext(inst)}
                                         </SelectItem>
                                       ))}
                                     </SelectGroup>
-                                  )}
+                                  ))}
                                   <SelectItem value="__manual__">Or enter manually...</SelectItem>
                                 </SelectContent>
                               </Select>
+                              {idx === 0 && hasAmbiguousDuplicates && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap\u2122 to tell them apart.</p>
+                              )}
                               {linkedInstruments[idx] && (
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
                                   <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
@@ -1412,19 +1469,22 @@ return (
                             >
                               <SelectTrigger className="h-9"><SelectValue placeholder="Select instrument..." /></SelectTrigger>
                               <SelectContent>
-                                {veritaMapInstruments.length > 0 && (
-                                  <SelectGroup>
-                                    <SelectLabel>Your Instruments</SelectLabel>
-                                    {veritaMapInstruments.map(inst => (
+                                {groupedInstruments.map(group => (
+                                  <SelectGroup key={`gen-grp-${group.mapId}`}>
+                                    <SelectLabel>{group.mapName}</SelectLabel>
+                                    {group.items.map(inst => (
                                       <SelectItem key={`lab-${inst.id}`} value={`__lab_${inst.id}`}>
-                                        {labInstrumentLabel(inst)}
+                                        {labInstrumentLabelWithContext(inst)}
                                       </SelectItem>
                                     ))}
                                   </SelectGroup>
-                                )}
+                                ))}
                                 <SelectItem value="__manual__">Or enter manually...</SelectItem>
                               </SelectContent>
                             </Select>
+                            {idx === 0 && hasAmbiguousDuplicates && (
+                              <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap\u2122 to tell them apart.</p>
+                            )}
                             {linkedInstruments[idx] && (
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
                                 <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
