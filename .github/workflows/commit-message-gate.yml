@@ -1,0 +1,116 @@
+name: Commit Message Gate
+
+# Enforces the VeritaAssure mandatory response template on every commit
+# pushed to main and on every PR targeting main. Mirrors .husky/commit-msg
+# exactly so client-side bypasses (--no-verify, HUSKY=0) cannot reach main.
+#
+# To make this actually block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass before merging -> select "validate".
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine commit range
+        id: range
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZERO="0000000000000000000000000000000000000000"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            echo "mode=range" >> "$GITHUB_OUTPUT"
+            echo "base=$BASE" >> "$GITHUB_OUTPUT"
+            echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "$ZERO" ]; then
+            # First push to branch (no prior ref). Validate only the new HEAD.
+            echo "mode=single" >> "$GITHUB_OUTPUT"
+            echo "head=$AFTER" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=range" >> "$GITHUB_OUTPUT"
+            echo "base=$BEFORE" >> "$GITHUB_OUTPUT"
+            echo "head=$AFTER" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate commit messages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MODE="${{ steps.range.outputs.mode }}"
+          HEAD="${{ steps.range.outputs.head }}"
+          BASE="${{ steps.range.outputs.base }}"
+
+          if [ "$MODE" = "single" ]; then
+            COMMITS="$HEAD"
+          else
+            # base..head excludes base, includes head. This is what we want.
+            COMMITS=$(git rev-list --no-merges "$BASE".."$HEAD")
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No commits to validate."
+            exit 0
+          fi
+
+          FAIL=0
+          for SHA in $COMMITS; do
+            MSG=$(git log -1 --format=%B "$SHA")
+            FIRST_LINE=$(echo "$MSG" | head -1)
+
+            # Same exemption set as .husky/commit-msg
+            if echo "$FIRST_LINE" | grep -qE "^(chore|ci|bump|merge|revert|wip):"; then
+              echo "[skip] $SHA  $FIRST_LINE  (exempt prefix)"
+              continue
+            fi
+
+            MISSING=""
+            echo "$MSG" | grep -qiE "^TASK:"       || MISSING="$MISSING TASK:"
+            echo "$MSG" | grep -qiE "^PLAN:"       || MISSING="$MISSING PLAN:"
+            echo "$MSG" | grep -qiE "^Self-check:" || MISSING="$MISSING Self-check:"
+
+            if [ -n "$MISSING" ]; then
+              echo ""
+              echo "BLOCKED: $SHA"
+              echo "  First line: $FIRST_LINE"
+              echo "  Missing sections:$MISSING"
+              echo ""
+              echo "  Full message:"
+              echo "$MSG" | sed 's/^/    /'
+              echo ""
+              FAIL=1
+            else
+              echo "[ok]   $SHA  $FIRST_LINE"
+            fi
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "One or more commits are missing required sections (TASK / PLAN / Self-check)."
+            echo "This rule mirrors .husky/commit-msg and cannot be bypassed by --no-verify or HUSKY=0."
+            echo "Amend the commit messages and force-push, or open a fresh PR."
+            exit 1
+          fi
