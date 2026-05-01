@@ -1,5 +1,6 @@
 import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
+import { useAuth } from "@/components/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -142,6 +143,7 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 }
 
 export default function VeritaAssurePage() {
+    const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaAssure™ | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
@@ -167,18 +169,20 @@ return (
             personnel tracking, and certificate monitoring into one platform built by a working lab professional.
             Browser-based. No desktop software. No installation.
           </p>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/demo">
-                <Play size={15} className="mr-1.5" /> View Live Demo
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/login">
-                Get Started <ChevronRight size={14} className="ml-1" />
-              </Link>
-            </Button>
-          </div>
+          {!isLoggedIn && (
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                <Link href="/demo">
+                  <Play size={15} className="mr-1.5" /> View Live Demo
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/login">
+                  Get Started <ChevronRight size={14} className="ml-1" />
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
