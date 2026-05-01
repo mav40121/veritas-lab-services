@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Calculator, TrendingDown, DollarSign, ArrowRight, Users } from "lucide-react";
+import { useSEO } from "@/hooks/useSEO";
 
 const BENCHMARKS: Record<string, { label: string; low: number; high: number }> = {
   community: { label: "Community Hospital (200K-500K billables/yr)", low: 0.15, high: 0.22 },
@@ -62,6 +63,7 @@ function GaugeBar({ ratio, low, high }: { ratio: number; low: number; high: numb
 }
 
 export default function ProductivityCalculatorPage() {
+  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122", description: "Free VeritaBench\u2122 benchmarking tool. Enter monthly billable volume and paid hours to instantly score your lab's productivity against Clinic, Community, and Hospital peer groups." });
   const [productiveHours, setProductiveHours] = useState<string>("");
   const [billableTests, setBillableTests] = useState<string>("");
   const [facilityType, setFacilityType] = useState<string>("community");
@@ -103,9 +105,10 @@ export default function ProductivityCalculatorPage() {
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
             <Calculator size={14} />
-            VeritaBench{"\u2122"} Quick Calculator
+            Free Tool
           </div>
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold mb-3">Lab Productivity Scorecard</h1>
+          <h1 className="font-serif text-3xl sm:text-4xl font-bold mb-3">VeritaBench{"\u2122"}</h1>
+          <p className="text-lg text-primary font-semibold mb-3">Lab Productivity Scorecard</p>
           <p className="text-muted-foreground max-w-2xl mx-auto">
             Enter two numbers to instantly benchmark your lab's productivity against industry standards.
             No account required.

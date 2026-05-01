@@ -619,7 +619,7 @@ export default function VeritaBenchPIPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaBench{"\u2122"}</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaQA{"\u2122"}</h2>
         <p className="text-muted-foreground mb-6 max-w-md">Track department quality metrics and performance improvement data.</p>
         <Button asChild><Link href="/login">Sign in</Link></Button>
       </div>
@@ -630,8 +630,8 @@ export default function VeritaBenchPIPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaBench{"\u2122"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaBench{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
+        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaQA{"\u2122"}</h2>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaQA{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
         <Button asChild style={{ backgroundColor: "#01696F" }}><Link href="/pricing">View Plans</Link></Button>
       </div>
     );

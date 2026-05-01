@@ -188,7 +188,7 @@ export default function VeritaBenchPage() {
       const res = await fetch(`${API_BASE}/api/productivity/export`, { headers: authHeaders() });
       if (res.ok) {
         const blob = await res.blob();
-        saveAs(blob, `VeritaBench-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);
+        saveAs(blob, `VeritaPace-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);
       }
     } catch { toast({ title: "Export failed", variant: "destructive" }); }
   }
@@ -232,7 +232,7 @@ export default function VeritaBenchPage() {
 
   const facilityBenchmark = currentMonth ? BENCHMARKS[currentMonth.facility_type] : BENCHMARKS.community;
 
-  useSEO({ title: "VeritaBench\u2122 | Lab Productivity & Staffing Analytics", description: "Monthly productivity tracking, billable-tests-per-paid-hour benchmarking, FTE and overtime analysis, and by-hour staffing analytics for clinical laboratories. Included with VeritaAssure\u2122 Suite plans." });
+  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122", description: "Track monthly lab productivity with VeritaPace\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\u2122 Suite plans." });
 
   // Unauthenticated gate - marketing landing
   if (!isLoggedIn) {
@@ -248,7 +248,7 @@ export default function VeritaBenchPage() {
                   <Badge className="bg-primary/10 text-primary border-0">Suite Module</Badge>
                   <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Included</Badge>
                 </div>
-                <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaBench{"\u2122"}</h1>
+                <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaPace{"\u2122"}</h1>
                 <p className="text-xl text-muted-foreground font-medium mb-5">
                   Lab Productivity & Staffing Analytics
                 </p>
@@ -258,7 +258,7 @@ export default function VeritaBenchPage() {
                   </p>
                 </div>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  VeritaBench{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups.
+                  VeritaPace{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups.
                 </p>
                 <ul className="space-y-2 mb-6 text-sm">
                   <li className="flex items-start gap-2"><TrendingUp size={16} className="text-primary mt-0.5 shrink-0" /><span>Monthly productivity tracking with year-over-year trend analysis</span></li>
@@ -281,7 +281,7 @@ export default function VeritaBenchPage() {
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                    <Link href="/login">Launch VeritaBench{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                    <Link href="/login">Launch VeritaPace{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
                   </Button>
                   <Button asChild variant="outline" size="lg">
                     <Link href="/calculator">Try Free Calculator</Link>
@@ -298,14 +298,14 @@ export default function VeritaBenchPage() {
                   <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                     <BarChart3 size={40} className="text-white/80 mb-4" />
                     <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                      VeritaBench{"\u2122"}
+                      VeritaPace{"\u2122"}
                     </div>
                     <div className="text-xs text-white/70 text-center space-y-1 mb-4">
-                      <div>VeritaPace™</div>
                       <div>Tests per Paid Hour</div>
                       <div>FTE & Overtime</div>
-                      <div>By-Hour Staffing</div>
+                      <div>Productive vs Non-Productive</div>
                       <div>Peer Benchmarking</div>
+                      <div>Excel Export</div>
                     </div>
                     <div className="w-12 h-0.5 bg-white/40 mb-4" />
                     <div className="text-xs text-white/60 text-center">VeritaAssure{"\u2122"} Suite Module</div>
@@ -324,8 +324,8 @@ export default function VeritaBenchPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaBench{"\u2122"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaBench{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
+        <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaPace{"\u2122"}</h2>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaPace{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
         <Button asChild style={{ backgroundColor: "#01696F" }}><Link href="/pricing">View Plans</Link></Button>
       </div>
     );

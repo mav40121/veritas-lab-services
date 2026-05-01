@@ -131,16 +131,20 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications.",
   },
   "/calculator": {
-    title: "VeritaBench\u2122 | VeritaAssure\u2122",
-    description: "Instantly benchmark your clinical laboratory's productivity ratio against industry standards. Enter two numbers to get a free scorecard with savings projections.",
+    title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122",
+    description: "Free VeritaBench\u2122 benchmarking tool. Enter monthly billable volume and paid hours to instantly score your lab's productivity against Clinic, Community, and Hospital peer groups.",
   },
   "/veritabench": {
-    title: "VeritaBench\u2122 | Lab Productivity & Staffing Analytics | VeritaAssure\u2122",
-    description: "Track monthly lab productivity, benchmark billable tests per paid hour against peer labs, and analyze FTE and overtime trends. Included with VeritaAssure\u2122 Suite plans.",
+    title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122",
+    description: "Track monthly lab productivity with VeritaPace\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\u2122 Suite plans.",
   },
   "/veritabench/staffing": {
-    title: "VeritaShift\u2122 | VeritaAssure\u2122",
-    description: "Analyze by-hour staffing demand against actual coverage to identify overstaffed and understaffed periods in your clinical laboratory.",
+    title: "VeritaShift\u2122 | By-Hour Lab Staffing Analyzer | VeritaAssure\u2122",
+    description: "Analyze by-hour staffing demand against actual coverage with VeritaShift\u2122. Identify overstaffed and understaffed periods in your clinical laboratory. Included with VeritaAssure\u2122 Suite plans.",
+  },
+  "/veritabench/pi": {
+    title: "VeritaQA\u2122 | Lab Quality Metrics Dashboard | VeritaAssure\u2122",
+    description: "Track department-level laboratory quality metrics with VeritaQA\u2122. Performance improvement dashboards aligned to TJC and CAP standards. Included with VeritaAssure\u2122 Suite plans.",
   },
   "/veritastock": {
     title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management | VeritaAssure\u2122",
