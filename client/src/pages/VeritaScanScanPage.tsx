@@ -139,21 +139,55 @@ function rowBorderClass(status: ScanStatus): string {
 }
 
 // ─── Citation badge ───────────────────────────────────────────────────────────
-function CitationRow({ item, expanded }: { item: ScanItem; expanded: boolean }) {
+// Phase 3.5 (2026-05-01): badges are now gated by the lab's accreditation_choice
+// surfaced from /api/account/settings. CFR is always shown (every CLIA lab is
+// bound by it). TJC, CAP, AABB, COLA each render only when the lab's choice
+// includes that accreditor. "CAP+AABB" -> CAP and AABB both render. "CLIA"
+// (no accreditor) -> only CFR renders.
+function choiceIncludes(choice: string, body: "TJC" | "CAP" | "AABB" | "COLA"): boolean {
+  if (!choice) return false;
+  const parts = choice.split("+").map((p) => p.trim().toUpperCase());
+  return parts.includes(body);
+}
+
+function CitationRow({
+  item,
+  expanded,
+  accreditationChoice,
+}: {
+  item: ScanItem;
+  expanded: boolean;
+  accreditationChoice: string;
+}) {
   if (!expanded) return null;
+  const showTjc = choiceIncludes(accreditationChoice, "TJC") && item.tjc && item.tjc !== "N/A";
+  const showCap = choiceIncludes(accreditationChoice, "CAP") && item.cap && item.cap !== "N/A";
+  const showAabb = choiceIncludes(accreditationChoice, "AABB") && item.aabb && item.aabb !== "N/A";
+  const showCola = choiceIncludes(accreditationChoice, "COLA") && item.cola && item.cola !== "N/A";
+  const showCfr = item.cfr && item.cfr !== "N/A";
   return (
     <div className="flex flex-wrap gap-1.5 mt-1.5">
-      {item.tjc !== "N/A" && (
+      {showTjc && (
         <span className="text-[10px] font-mono bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
           TJC {item.tjc}
         </span>
       )}
-      {item.cap && (
+      {showCap && (
         <span className="text-[10px] font-mono bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-1.5 py-0.5">
           CAP {item.cap}
         </span>
       )}
-      {item.cfr !== "N/A" && (
+      {showAabb && (
+        <span className="text-[10px] font-mono bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded px-1.5 py-0.5">
+          {item.aabb}
+        </span>
+      )}
+      {showCola && (
+        <span className="text-[10px] font-mono bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5">
+          {item.cola}
+        </span>
+      )}
+      {showCfr && (
         <span className="text-[10px] font-mono bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5">
           {item.cfr}
         </span>
@@ -167,10 +201,12 @@ function ItemRow({
   item,
   state,
   onChange,
+  accreditationChoice,
 }: {
   item: ScanItem;
   state: ItemState;
   onChange: (patch: Partial<ItemState>) => void;
+  accreditationChoice: string;
 }) {
   const [citExpanded, setCitExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -208,7 +244,7 @@ function ItemRow({
           </div>
 
           {/* Citation badges */}
-          <CitationRow item={item} expanded={citExpanded} />
+          <CitationRow item={item} expanded={citExpanded} accreditationChoice={accreditationChoice} />
 
           {/* VC auto-completion badge */}
           {state.completionSource === "veritacheck_auto" && (
@@ -310,11 +346,13 @@ function DomainSection({
   items,
   onChange,
   sectionRef,
+  accreditationChoice,
 }: {
   domain: ScanDomain;
   items: Record<number, ItemState>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
   sectionRef?: (el: HTMLDivElement | null) => void;
+  accreditationChoice: string;
 }) {
   const domainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
   const stats = domainStats(domain, items);
@@ -366,6 +404,7 @@ function DomainSection({
               dueDate: "",
             }}
             onChange={(patch) => onChange(item.id, patch)}
+            accreditationChoice={accreditationChoice}
           />
         ))}
       </div>
@@ -448,6 +487,12 @@ export default function VeritaScanScanPage() {
     queryKey: [`/api/veritascan/scans/${scanId}`],
     enabled: !isNaN(scanId),
   });
+
+  // ── Phase 3.5: fetch lab accreditation_choice for per-row badge gating ──
+  const { data: accountSettings } = useQuery<{ accreditation_choice?: string }>({
+    queryKey: ["/api/account/settings"],
+  });
+  const accreditationChoice = accountSettings?.accreditation_choice || "CLIA";
 
   // ── Fetch scan items ────────────────────────────────────────────────────
   const { isLoading: itemsLoading } = useQuery<ItemState[]>({
@@ -903,6 +948,7 @@ export default function VeritaScanScanPage() {
             sectionRef={(el) => {
               sectionRefs.current[domain] = el;
             }}
+            accreditationChoice={accreditationChoice}
           />
         ))}
       </div>
