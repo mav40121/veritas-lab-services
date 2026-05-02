@@ -9,7 +9,7 @@ const FEATURE_CARDS = [
   {
     icon: FileText,
     title: "88 TJC Requirements Pre-Loaded",
-    desc: "Every policy required by The Joint Commission for laboratory accreditation, organized by chapter. Updated from the January 2024 Comprehensive Accreditation Manual.",
+    desc: "Every policy required by The Joint Commission for laboratory accreditation, organized by chapter. Mapped to the current TJC standard for laboratory accreditation.",
     color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
   },
   {
@@ -134,8 +134,8 @@ return (
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold text-foreground mb-3">Built for TJC-Accredited Labs</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Every requirement from the January 2024 Comprehensive Accreditation Manual for Laboratory
-              and Point-of-Care Testing, organized and ready to track.
+              Every requirement from the current TJC standard for laboratory and point-of-care testing,
+              organized and ready to track.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">

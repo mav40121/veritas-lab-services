@@ -28,6 +28,7 @@
 - All product names use ™ not ®: VeritaAssure™, VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, VeritaLab™
 - NO reference to EP Evaluator by name — use "other evaluation tools" if needed
 - NO CAMLAB references — use "TJC standard"
+- NO dated accreditor manual references in public-facing copy. Never name a TJC manual by year, month/year, or edition (e.g. "January 2024 Comprehensive Accreditation Manual", "2024 Accreditation Manual", "2024 edition"). Use "the current TJC standard" or "TJC standard for laboratory accreditation". Same rationale as the CAMLAB rule: version-specific accreditor references date the product, raise copyright/licensing optics, and rot the moment a new edition drops. Audit script enforces this (see script/audit.py). The same prohibition applies to CAP, AABB, and COLA manual editions if those references ever appear.
 - NO LabVine Learning references — removed permanently
 - Governing law = Massachusetts in all legal text
 - Labs **verify**, manufacturers **validate**. Never write "method validation", "validation suite", or similar in marketing or product copy when describing what the lab is doing. Use "performance verification" or "verification of performance specifications" (per CMS CLIA brochure of the same name).

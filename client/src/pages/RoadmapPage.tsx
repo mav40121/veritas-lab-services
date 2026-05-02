@@ -61,7 +61,7 @@ const completedItems: RoadmapItem[] = [
   {
     title: "VeritaPolicy™ - TJC Policy Compliance Tracker",
     description:
-      "Tracks all 88 policies required by The Joint Commission for laboratory accreditation. Service line toggles automatically mark non-applicable requirements as N/A. Lab policy library links one document to multiple requirements. Readiness score with inspector-ready PDF report. Covers all 13 TJC chapters from the January 2024 Comprehensive Accreditation Manual.",
+      "Tracks all 88 policies required by The Joint Commission for laboratory accreditation. Service line toggles automatically mark non-applicable requirements as N/A. Lab policy library links one document to multiple requirements. Readiness score with inspector-ready PDF report. Covers all 13 TJC chapters mapped to the current TJC standard.",
   },
 ];
 

@@ -126,6 +126,29 @@ def check_file(rel, fpath):
         if re.search(r'\bCAMLAB\b', line, re.IGNORECASE):
             ERRORS.append(f"[{rel}:{i}] CAMLAB reference -- use 'TJC standard'")
 
+        # Dated TJC manual references (e.g. 'January 2024 Comprehensive Accreditation Manual',
+        # '2024 Comprehensive Accreditation Manual', '2024 CAMLAB edition'). Same class as CAMLAB:
+        # version-specific accreditor references must never appear in public-facing copy.
+        # Two patterns, both narrowly scoped:
+        #   1) optional Month + 4-digit year within ~5 words of 'Manual' or 'Accreditation'
+        #   2) explicit 'edition' phrasing tied to a year
+        dated_manual_a = re.compile(
+            r'\b(?:January|February|March|April|May|June|July|August|September|October|November|December\s+)?'
+            r'(?:19|20)\d{2}'
+            r'(?:\s+\S+){0,5}\s+'
+            r'(?:Comprehensive\s+)?Accreditation\s+Manual\b',
+            re.IGNORECASE
+        )
+        dated_manual_b = re.compile(
+            r'\b(?:Accreditation\s+Manual|TJC\s+Manual|CAMLAB)'
+            r'(?:\s+\S+){0,3}\s+'
+            r'(?:19|20)\d{2}\s+edition\b',
+            re.IGNORECASE
+        )
+        if dated_manual_a.search(line) or dated_manual_b.search(line):
+            ERRORS.append(f"[{rel}:{i}] Dated TJC manual reference -- use 'TJC standard' (no year/edition):")
+            ERRORS.append(f"  >> {stripped[:140]}")
+
         # LabVine
         if re.search(r'\bLabVine\b', line, re.IGNORECASE):
             ERRORS.append(f"[{rel}:{i}] LabVine reference -- remove entirely")
