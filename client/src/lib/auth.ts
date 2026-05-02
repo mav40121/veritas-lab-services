@@ -1,4 +1,5 @@
-// Auth state — token persisted to localStorage so it survives page refreshes
+// Auth state -- token persisted to localStorage so it survives page refreshes
+import type { SeatPermissions } from "@shared/schema";
 
 const TOKEN_KEY = "veritas_token";
 const USER_KEY  = "veritas_user";
@@ -30,7 +31,11 @@ export interface AuthUser {
   seatCount?: number;
   onboardingSeen?: boolean;
   isSeatUser?: boolean;
-  seatPermissions?: Record<string, 'view' | 'edit'> | null;
+  // Two shapes accepted for backward compatibility (see shared/schema.ts):
+  //   * legacy flat map  { veritacheck: 'edit', ... }
+  //   * new mode shape   { mode: 'edit_all'|'view_all'|'custom', overrides?: {...} }
+  // Always read through resolveSeatPermission(), never index this directly.
+  seatPermissions?: SeatPermissions;
   ownerUserId?: number | null;
 }
 

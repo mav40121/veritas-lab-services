@@ -1,5 +1,6 @@
 import { useAuth } from "./AuthContext";
 import { AlertTriangle, Lock, ArrowRight } from "lucide-react";
+import { resolveSeatPermission } from "@shared/schema";
 
 export function useAccessLevel() {
   const { user } = useAuth();
@@ -13,9 +14,13 @@ export function useIsReadOnly(module?: string): boolean {
   const baseReadOnly = level === 'read_only' || level === 'locked';
   if (baseReadOnly) return true;
 
-  // Seat user module check
+  // Seat user module check. Resolver handles both shapes:
+  //   * legacy flat map (auto-upgrades all-edit seats to edit_all)
+  //   * new mode shape (edit_all / view_all / custom)
+  // See shared/schema.ts. If no module key passed, fall through to false --
+  // pages without per-module gating still respect base access level above.
   if (module && user?.isSeatUser && user?.seatPermissions) {
-    const perm = user.seatPermissions[module] || 'view';
+    const perm = resolveSeatPermission(user.seatPermissions, module);
     return perm !== 'edit';
   }
   return false;

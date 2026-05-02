@@ -82,13 +82,17 @@ export default function AccountSettingsPage() {
   const [accreditationChoice, setAccreditationChoice] = useState<AccreditationChoice>("CLIA");
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
-  // Module permission constants
+  // Module permission constants. Keys MUST match SEAT_MODULE_KEYS in
+  // shared/schema.ts (the resolver and server middleware key off that list).
+  // Display order here drives the per-module list when Custom mode is picked.
   const MODULE_LIST = [
     { key: 'veritacheck',  label: 'VeritaCheck™' },
     { key: 'veritamap',    label: 'VeritaMap™' },
     { key: 'veritascan',   label: 'VeritaScan™' },
     { key: 'veritacomp',   label: 'VeritaComp™' },
     { key: 'veritastaff',  label: 'VeritaStaff™' },
+    { key: 'veritabench',  label: 'VeritaQA™ Suite' }, // VeritaPace, VeritaShift, VeritaQA
+    { key: 'veritastock',  label: 'VeritaStock™' },
     { key: 'veritapt',     label: 'VeritaPT™' },
     { key: 'veritapolicy', label: 'VeritaPolicy™' },
     { key: 'veritalab',    label: 'VeritaLab™' },
@@ -97,9 +101,14 @@ export default function AccountSettingsPage() {
 
   const DEFAULT_PERMISSIONS: Record<string, string> = {
     veritacheck: 'view', veritamap: 'view', veritascan: 'view',
-    veritacomp: 'view', veritastaff: 'view', veritapt: 'view',
-    veritapolicy: 'view', veritalab: 'view', veritatrack: 'view',
+    veritacomp: 'view', veritastaff: 'view', veritabench: 'view',
+    veritastock: 'view', veritapt: 'view', veritapolicy: 'view',
+    veritalab: 'view', veritatrack: 'view',
   };
+
+  // Permission mode -- selected before invite is sent or when editing a seat.
+  // null = no mode picked yet (Send Invite is disabled in this state).
+  type PermMode = 'edit_all' | 'view_all' | 'custom';
 
   // Team Members / Seats state
   const [seats, setSeats] = useState<any[]>([]);
@@ -108,10 +117,39 @@ export default function AccountSettingsPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  // No default mode at invite -- owner must explicitly pick edit_all,
+  // view_all, or custom. Send Invite stays disabled until they do.
+  const [inviteMode, setInviteMode] = useState<PermMode | null>(null);
   const [invitePermissions, setInvitePermissions] = useState<Record<string, string>>({ ...DEFAULT_PERMISSIONS });
   const [editingSeatId, setEditingSeatId] = useState<number | null>(null);
+  const [editingMode, setEditingMode] = useState<PermMode>('view_all');
   const [editingPermissions, setEditingPermissions] = useState<Record<string, string>>({});
   const [savingPermissions, setSavingPermissions] = useState(false);
+
+  // Infer the current mode from a seat's stored permissions object so the
+  // edit dialog opens on the right radio. Mirrors resolveSeatPermission()
+  // in shared/schema.ts:
+  //   * new mode shape -- read perms.mode directly
+  //   * legacy flat map with at least one key AND every present key 'edit'
+  //     -> edit_all (auto-upgrade signal; this is what David's seat hits)
+  //   * legacy flat map with at least one key AND every present key 'view'
+  //     (or missing) -> view_all
+  //   * anything mixed -> custom
+  function inferModeFromPerms(perms: any): PermMode {
+    if (perms && typeof perms.mode === 'string') {
+      if (perms.mode === 'edit_all' || perms.mode === 'view_all' || perms.mode === 'custom') {
+        return perms.mode;
+      }
+    }
+    if (!perms || typeof perms !== 'object') return 'view_all';
+    const presentKeys = Object.keys(perms);
+    if (presentKeys.length === 0) return 'view_all';
+    const allEdit = presentKeys.every(k => perms[k] === 'edit');
+    if (allEdit) return 'edit_all';
+    const allView = presentKeys.every(k => perms[k] === 'view');
+    if (allView) return 'view_all';
+    return 'custom';
+  }
 
   const activeSeats = seats.filter(s => s.status !== "deactivated");
   const usedSeats = activeSeats.length + 1; // +1 for owner
@@ -125,8 +163,21 @@ export default function AccountSettingsPage() {
     } catch {}
   }
 
+  // Build the permissions payload from current mode state. New shape:
+  //   { mode: 'edit_all' | 'view_all' }                  -- inherits future modules
+  //   { mode: 'custom', overrides: { key: 'view'|'edit', ... } }
+  // Server resolver handles both this and the legacy flat map.
+  function buildPermPayload(mode: PermMode, custom: Record<string, string>) {
+    if (mode === 'custom') return { mode: 'custom', overrides: custom };
+    return { mode };
+  }
+
   async function handleInviteSeat(e: React.FormEvent) {
     e.preventDefault();
+    if (!inviteMode) {
+      setInviteError("Pick a permission level (Edit all, View all, or Custom).");
+      return;
+    }
     setInviteLoading(true);
     setInviteError("");
     setInviteSuccess(false);
@@ -134,7 +185,10 @@ export default function AccountSettingsPage() {
       const res = await fetch(`${API_BASE}/api/account/seats`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, permissions: invitePermissions }),
+        body: JSON.stringify({
+          email: inviteEmail,
+          permissions: buildPermPayload(inviteMode, invitePermissions),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -142,6 +196,7 @@ export default function AccountSettingsPage() {
       } else {
         setInviteSuccess(true);
         setInviteEmail("");
+        setInviteMode(null);
         setInvitePermissions({ ...DEFAULT_PERMISSIONS });
         await fetchSeats();
       }
@@ -166,7 +221,9 @@ export default function AccountSettingsPage() {
       const res = await fetch(`${API_BASE}/api/account/seats/${seatId}/permissions`, {
         method: "PATCH",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions: editingPermissions }),
+        body: JSON.stringify({
+          permissions: buildPermPayload(editingMode, editingPermissions),
+        }),
       });
       if (res.ok) {
         setEditingSeatId(null);
@@ -562,7 +619,17 @@ export default function AccountSettingsPage() {
                           <button
                             onClick={() => {
                               if (isEditing) { setEditingSeatId(null); }
-                              else { setEditingSeatId(seat.id); setEditingPermissions({ ...DEFAULT_PERMISSIONS, ...seatPerms }); }
+                              else {
+                                setEditingSeatId(seat.id);
+                                // Seed the per-module overrides from the
+                                // legacy flat map (or the new overrides
+                                // object) so flipping into Custom shows
+                                // current values; mode is inferred so the
+                                // chooser opens on the right radio.
+                                const overrides = (seatPerms && seatPerms.overrides) ? seatPerms.overrides : seatPerms;
+                                setEditingPermissions({ ...DEFAULT_PERMISSIONS, ...overrides });
+                                setEditingMode(inferModeFromPerms(seatPerms));
+                              }
                             }}
                             className="text-xs text-blue-600 hover:text-blue-800 underline"
                           >
@@ -580,18 +647,57 @@ export default function AccountSettingsPage() {
                           </ConfirmDialog>
                         </div>
                       </div>
-                      {!isEditing && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {MODULE_LIST.map(mod => (
-                            <span key={mod.key} className={`text-xs px-1.5 py-0.5 rounded ${(seatPerms[mod.key] || 'view') === 'edit' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
-                              {mod.label.replace('(TM)', '')}: {(seatPerms[mod.key] || 'view') === 'edit' ? 'Edit' : 'View'}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      {!isEditing && (() => {
+                        const summaryMode = inferModeFromPerms(seatPerms);
+                        if (summaryMode === 'edit_all') {
+                          return (
+                            <div className="mt-1">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Edit access to all modules</span>
+                            </div>
+                          );
+                        }
+                        if (summaryMode === 'view_all') {
+                          return (
+                            <div className="mt-1">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">View-only access to all modules</span>
+                            </div>
+                          );
+                        }
+                        // Custom -- show per-module chips like before
+                        const overrides = (seatPerms && seatPerms.overrides) ? seatPerms.overrides : seatPerms;
+                        return (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {MODULE_LIST.map(mod => (
+                              <span key={mod.key} className={`text-xs px-1.5 py-0.5 rounded ${(overrides?.[mod.key] || 'view') === 'edit' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
+                                {mod.label.replace('(TM)', '')}: {(overrides?.[mod.key] || 'view') === 'edit' ? 'Edit' : 'View'}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {isEditing && (
                         <div className="mt-2 space-y-2">
-                          {MODULE_LIST.map(mod => (
+                          <div className="flex flex-col gap-1">
+                            <p className="text-xs font-medium text-muted-foreground">Permission level</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {([
+                                { value: 'edit_all', label: 'Edit all', sub: 'Inherits future modules' },
+                                { value: 'view_all', label: 'View all', sub: 'Inherits future modules' },
+                                { value: 'custom',   label: 'Custom',   sub: 'Per module' },
+                              ] as const).map(opt => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setEditingMode(opt.value)}
+                                  className={`text-left p-2 rounded border text-xs transition-colors ${editingMode === opt.value ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/40' : 'border-border bg-background hover:border-foreground'}`}
+                                >
+                                  <div className="font-medium text-foreground">{opt.label}</div>
+                                  <div className="text-muted-foreground">{opt.sub}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {editingMode === 'custom' && MODULE_LIST.map(mod => (
                             <div key={mod.key} className="flex items-center justify-between py-1">
                               <span className="text-sm text-foreground">{mod.label}</span>
                               <div className="flex gap-1">
@@ -629,43 +735,67 @@ export default function AccountSettingsPage() {
                   />
                 </div>
 
-                {/* Per-module permission toggles */}
+                {/* Mode chooser -- owner must pick before Send Invite enables */}
                 <div>
-                  <p className="text-sm font-medium text-foreground mb-2">Module Access</p>
-                  <div className="space-y-2">
-                    {MODULE_LIST.map(mod => (
-                      <div key={mod.key} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                        <span className="text-sm text-foreground">{mod.label}</span>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'view' }))}
-                            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                              invitePermissions[mod.key] === 'view'
-                                ? 'bg-muted text-foreground'
-                                : 'bg-background border border-border text-muted-foreground hover:border-foreground'
-                            }`}
-                          >
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'edit' }))}
-                            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                              invitePermissions[mod.key] === 'edit'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-background border border-border text-muted-foreground hover:border-foreground'
-                            }`}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </div>
+                  <p className="text-sm font-medium text-foreground mb-2">Permission level</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { value: 'edit_all', label: 'Edit all', sub: 'Edit every module, including ones added later.' },
+                      { value: 'view_all', label: 'View all', sub: 'Read-only across every module.' },
+                      { value: 'custom',   label: 'Custom',   sub: 'Choose per module below.' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setInviteMode(opt.value); setInviteError(""); }}
+                        className={`text-left p-3 rounded-lg border text-xs transition-colors ${inviteMode === opt.value ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/40' : 'border-border bg-background hover:border-foreground'}`}
+                      >
+                        <div className="font-medium text-foreground text-sm">{opt.label}</div>
+                        <div className="text-muted-foreground mt-0.5">{opt.sub}</div>
+                      </button>
                     ))}
                   </div>
                 </div>
 
-                <Button type="submit" disabled={inviteLoading} size="sm" className="w-full">
+                {/* Per-module permission toggles -- only when Custom is picked */}
+                {inviteMode === 'custom' && (
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-2">Module Access</p>
+                    <div className="space-y-2">
+                      {MODULE_LIST.map(mod => (
+                        <div key={mod.key} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                          <span className="text-sm text-foreground">{mod.label}</span>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'view' }))}
+                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                invitePermissions[mod.key] === 'view'
+                                  ? 'bg-muted text-foreground'
+                                  : 'bg-background border border-border text-muted-foreground hover:border-foreground'
+                              }`}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setInvitePermissions(p => ({ ...p, [mod.key]: 'edit' }))}
+                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                invitePermissions[mod.key] === 'edit'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-background border border-border text-muted-foreground hover:border-foreground'
+                              }`}
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button type="submit" disabled={inviteLoading || !inviteMode} size="sm" className="w-full">
                   {inviteLoading ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
                   {inviteLoading ? "Sending..." : "Send Invite"}
                 </Button>
