@@ -2311,6 +2311,12 @@ interface VeritaScanPDFItem {
   tjc: string;
   cap: string;
   cfr: string;
+  // Phase 3.5 (2026-05-01): aabb + cola added so the PDF data shape matches
+  // ScanItem in client/src/lib/veritaScanData.ts. Per-row badges are still
+  // rendered as TJC/CAP/CFR columns in the PDF table; aabb/cola pass-through
+  // is wired now so a future PDF-side accreditor gating change has the data.
+  aabb?: string;
+  cola?: string;
   status: string;
   notes?: string;
   owner?: string;

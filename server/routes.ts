@@ -3082,6 +3082,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         tjc: ref.tjc || "",
         cap: ref.cap || "",
         cfr: ref.cfr || "",
+        // Phase 3.5 (2026-05-01): aabb + cola pass-through to match the
+        // ScanItem shape and keep the PDF data complete for future use.
+        aabb: ref.aabb || "",
+        cola: ref.cola || "",
         status: saved.status || "Not Assessed",
         notes: saved.notes || "",
         owner: saved.owner || "",
@@ -4610,6 +4614,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           tjc: ref.tjc || "",
           cap: ref.cap || "",
           cfr: ref.cfr || "",
+          // Phase 3.5 (2026-05-01): pass through aabb + cola so future PDF
+          // accreditor gating has the data. The current PDF table renders
+          // TJC/CAP/CFR columns only.
+          aabb: ref.aabb || "",
+          cola: ref.cola || "",
           status: saved.status || "Not Assessed",
           notes: saved.notes || "",
           owner: saved.owner || "",
