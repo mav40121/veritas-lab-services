@@ -28,7 +28,7 @@ function safeJsonParse(value: any, fallback: any = []): any {
     return [value];
   }
 }
-import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study } from "@shared/schema";
+import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study, resolveSeatPermission, type SeatPermissions } from "@shared/schema";
 
 // ── Server-side pass/fail recomputation ─────────────────────────────────────
 // Mirrors the client calculation logic so the stored status is always correct.
@@ -377,10 +377,14 @@ function authMiddleware(req: any, res: any, next: any) {
     if (seatRow) {
       req.isSeatUser = true;
       req.ownerUserId = seatRow.owner_user_id;
+      // Stored as JSON; tolerate either legacy flat map OR new mode shape.
+      // The resolver in requireModuleEdit handles both. Do NOT normalize on
+      // read, the DB row stays in whatever shape was last written so a stale
+      // tab posting the legacy shape continues to work.
       try {
-        req.seatPermissions = JSON.parse(seatRow.permissions || '{}');
+        req.seatPermissions = JSON.parse(seatRow.permissions || '{}') as SeatPermissions;
       } catch {
-        req.seatPermissions = {};
+        req.seatPermissions = {} as SeatPermissions;
       }
       // Seat users inherit the owner's plan for access checks
       const ownerUser = storage.getUserById(seatRow.owner_user_id);
@@ -401,10 +405,13 @@ function authMiddleware(req: any, res: any, next: any) {
 
 
 // ── Per-module write gate for seat users ─────────────────────────────────────
+// Uses the shared resolver so client useIsReadOnly() and this middleware
+// agree on the answer. Drift between the two = UI says edit while API
+// returns 403, which is exactly the symptom David hit. See shared/schema.ts.
 function requireModuleEdit(module: string) {
   return (req: any, res: any, next: any) => {
     if (req.isSeatUser && req.seatPermissions) {
-      const perm = req.seatPermissions[module] || 'view';
+      const perm = resolveSeatPermission(req.seatPermissions as SeatPermissions, module);
       if (perm !== 'edit') {
         return res.status(403).json({
           error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
@@ -6479,12 +6486,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const seatUserId = existingUser ? existingUser.id : null;
     const newStatus = seatUserId ? "active" : "pending";
 
-    const DEFAULT_PERMISSIONS = JSON.stringify({
-      veritacheck: 'view', veritamap: 'view', veritascan: 'view',
-      veritacomp: 'view', veritastaff: 'view', veritapt: 'view',
-      veritapolicy: 'view', veritalab: 'view', veritatrack: 'view',
-    });
-    const permJson = JSON.stringify(req.body.permissions || JSON.parse(DEFAULT_PERMISSIONS));
+    // Server-side default for invites that arrive without permissions (old
+    // client tab, scripted invite). The new client requires the owner to
+    // pick a mode and sends { mode: 'edit_all'|'view_all'|'custom', ... }.
+    // For old-shape requests we accept whatever they send. If nothing is
+    // sent, fall back to view_all (least-privilege). The shared resolver
+    // handles either shape on read, so this default is safe with both old
+    // and new clients.
+    const DEFAULT_PERMISSIONS_JSON = JSON.stringify({ mode: 'view_all' });
+    const permJson = JSON.stringify(req.body.permissions || JSON.parse(DEFAULT_PERMISSIONS_JSON));
 
     // Generate invite token for the invitation link
     const inviteToken = crypto.randomUUID();

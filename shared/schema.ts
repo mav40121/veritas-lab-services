@@ -111,3 +111,86 @@ export interface DataPoint {
   expectedCategory?: string | null;
   instrumentCategories?: { [key: string]: string | null };
 }
+
+// ── Seat permissions (shared between client + server) ──────────────────────
+// Single source of truth for which module keys participate in seat-level
+// view/edit gating. Used by:
+//   * client useIsReadOnly resolver (SubscriptionBanner.tsx)
+//   * server requireModuleEdit middleware (routes.ts)
+//   * AccountSettingsPage MODULE_LIST (display labels live there)
+// New per-module gated modules MUST be added here AND given a label in
+// AccountSettingsPage.tsx, or seat permissions silently miss them and
+// existing seats with universally-edit access break on the new page.
+export const SEAT_MODULE_KEYS = [
+  'veritacheck',
+  'veritamap',
+  'veritascan',
+  'veritacomp',
+  'veritastaff',
+  'veritapt',
+  'veritapolicy',
+  'veritalab',
+  'veritatrack',
+  'veritabench',  // covers VeritaPace, VeritaShift, VeritaQA (all under /veritabench/*)
+  'veritastock',  // VeritaStock inventory manager
+] as const;
+
+export type SeatModuleKey = typeof SEAT_MODULE_KEYS[number];
+
+// Stored shape on disk (user_seats.permissions JSON column). Two shapes are
+// accepted on read for backward compatibility:
+//   1. Legacy flat map: { veritacheck: 'edit', veritamap: 'view', ... }
+//   2. New mode shape:  { mode: 'edit_all'|'view_all'|'custom', overrides?: { ... } }
+// All new writes use the mode shape. Auto-upgrade: if the legacy flat map has
+// every SEAT_MODULE_KEYS entry set to 'edit', the resolver treats it as mode:
+// 'edit_all' so future modules are inherited (this is what David's seat hits).
+export type SeatPermLevel = 'view' | 'edit';
+export type SeatPermMode = 'edit_all' | 'view_all' | 'custom';
+
+export type SeatPermissionsLegacy = Record<string, SeatPermLevel>;
+export interface SeatPermissionsModeShape {
+  mode: SeatPermMode;
+  overrides?: Record<string, SeatPermLevel>;
+}
+export type SeatPermissions = SeatPermissionsLegacy | SeatPermissionsModeShape | null;
+
+// Resolver: returns the effective view/edit for a given module under any shape.
+//
+// Auto-upgrade rule (this is the David fix): a legacy flat map where every
+// PRESENT key is 'edit' is treated as mode:'edit_all' so the seat inherits
+// modules that didn't exist when the seat was granted. Concretely: David's
+// seat was granted when MODULE_LIST had 9 keys, all set to 'edit'. Now
+// MODULE_LIST has 11 keys (veritabench + veritastock added). Without this
+// rule, the resolver would return 'view' for veritabench (the page he hit)
+// because the key isn't in his stored map. With this rule, since every key
+// HE has is 'edit', we infer the owner intended universal edit and return
+// 'edit' for any module key, including ones added later.
+//
+// Guard: an empty flat map ({}) does NOT auto-upgrade -- it falls through
+// to the literal lookup which returns 'view'. A flat map with mixed
+// view/edit values is read literally; missing keys default to 'view'.
+export function resolveSeatPermission(
+  perms: SeatPermissions,
+  moduleKey: string
+): SeatPermLevel {
+  if (!perms) return 'view';
+  // New shape
+  if (typeof (perms as any).mode === 'string') {
+    const m = perms as SeatPermissionsModeShape;
+    if (m.mode === 'edit_all') return m.overrides?.[moduleKey] ?? 'edit';
+    if (m.mode === 'view_all') return m.overrides?.[moduleKey] ?? 'view';
+    // custom
+    return (m.overrides?.[moduleKey] ?? 'view') as SeatPermLevel;
+  }
+  // Legacy flat map -- check for auto-upgrade signal first.
+  // Auto-upgrade fires iff: at least one key present AND every present key
+  // has value 'edit'. (An empty object would otherwise vacuously satisfy
+  // "every" and incorrectly upgrade.)
+  const flat = perms as SeatPermissionsLegacy;
+  const presentKeys = Object.keys(flat);
+  if (presentKeys.length > 0 && presentKeys.every(k => flat[k] === 'edit')) {
+    return 'edit';
+  }
+  return (flat[moduleKey] === 'edit' ? 'edit' : 'view');
+}
+
