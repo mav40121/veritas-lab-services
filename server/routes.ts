@@ -7667,12 +7667,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const isSeat = !!req.isSeatUser;
 
       // Derive preferred_standards array from accreditation flags on labs row
+      // (kept for backward compatibility with older clients).
       const preferredStandards: string[] = [];
       if (lab) {
         if (lab.accreditation_cap) preferredStandards.push("CAP");
         if (lab.accreditation_tjc) preferredStandards.push("TJC");
         if (lab.accreditation_cola) preferredStandards.push("COLA");
         if (lab.accreditation_aabb) preferredStandards.push("AABB");
+      }
+
+      // Phase 1 (2026-05-01): single accreditation_choice radio. Six options:
+      // TJC, CAP, AABB, COLA, CAP+AABB (reciprocal), CLIA only.
+      // Derived from the four accreditation flags. Any impossible legacy
+      // combination (e.g. CAP+TJC from the old up-to-2 design) collapses to
+      // CLIA so the user is forced to re-pick.
+      const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
+        + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
+      let accreditationChoice = "CLIA";
+      if (accCount === 0) {
+        accreditationChoice = "CLIA";
+      } else if (accCount === 1 && lab?.accreditation_tjc) {
+        accreditationChoice = "TJC";
+      } else if (accCount === 1 && lab?.accreditation_cap) {
+        accreditationChoice = "CAP";
+      } else if (accCount === 1 && lab?.accreditation_aabb) {
+        accreditationChoice = "AABB";
+      } else if (accCount === 1 && lab?.accreditation_cola) {
+        accreditationChoice = "COLA";
+      } else if (accCount === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) {
+        accreditationChoice = "CAP+AABB";
+      } else {
+        // Impossible combination from legacy up-to-2 design.
+        // Log and present as CLIA so the user re-picks.
+        console.warn(`[account/settings] Lab ${lab?.id} has impossible accreditation combination`,
+          { cap: lab?.accreditation_cap, tjc: lab?.accreditation_tjc,
+            cola: lab?.accreditation_cola, aabb: lab?.accreditation_aabb });
+        accreditationChoice = "CLIA";
       }
 
       // If seat user, look up owner display name
@@ -7686,6 +7716,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         clia_number: lab?.clia_number || '',
         clia_lab_name: lab?.lab_name || '',
         preferred_standards: preferredStandards,
+        accreditation_choice: accreditationChoice,
         preferred_pt_vendor: userRow?.preferred_pt_vendor || 'none',
         // Lab role context for UI
         is_seat: isSeat,
@@ -7710,7 +7741,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(403).json({ error: `Lab settings are managed by the lab owner (${ownerDisplayName}).` });
       }
 
-      const { clia_number, clia_lab_name, preferred_standards, preferredPtVendor } = req.body;
+      const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor } = req.body;
 
       // Resolve or create lab row for this owner
       let lab = resolveLabForUser(req.userId);
@@ -7744,16 +7775,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(403).json({ error: "Lab name is locked once reports have been generated. Contact support to change." });
       }
 
-      // Validate preferred_standards: must be array of valid accreditation bodies, max 2
+      // Phase 1 (2026-05-01): single accreditation_choice radio replaces the
+      // up-to-2 array. Six options: TJC, CAP, AABB, COLA, CAP+AABB, CLIA.
+      // Old clients that still send preferred_standards (array) keep working
+      // via fallback below.
+      const VALID_CHOICES = ["TJC", "CAP", "AABB", "COLA", "CAP+AABB", "CLIA"];
       const VALID_BODIES = ["CAP", "TJC", "COLA", "AABB"];
       let accCap = lab.accreditation_cap, accTjc = lab.accreditation_tjc;
       let accCola = lab.accreditation_cola, accAabb = lab.accreditation_aabb;
-      if (Array.isArray(preferred_standards)) {
-        const filtered = preferred_standards.filter((s: string) => VALID_BODIES.includes(s)).slice(0, 2);
-        accCap = filtered.includes("CAP") ? 1 : 0;
-        accTjc = filtered.includes("TJC") ? 1 : 0;
-        accCola = filtered.includes("COLA") ? 1 : 0;
-        accAabb = filtered.includes("AABB") ? 1 : 0;
+
+      if (typeof accreditation_choice === "string" && VALID_CHOICES.includes(accreditation_choice)) {
+        // New shape: single radio choice
+        accCap = 0; accTjc = 0; accCola = 0; accAabb = 0;
+        switch (accreditation_choice) {
+          case "TJC":      accTjc = 1; break;
+          case "CAP":      accCap = 1; break;
+          case "AABB":     accAabb = 1; break;
+          case "COLA":     accCola = 1; break;
+          case "CAP+AABB": accCap = 1; accAabb = 1; break;
+          case "CLIA":     /* all flags zero */ break;
+        }
+      } else if (Array.isArray(preferred_standards)) {
+        // Legacy shape: array of up to 2 bodies. Only valid combination is
+        // CAP+AABB. Any other multi-selection collapses to CLIA so the user
+        // re-picks intentionally.
+        const filtered = preferred_standards.filter((s: string) => VALID_BODIES.includes(s));
+        const set = new Set(filtered);
+        if (set.size === 0) {
+          accCap = 0; accTjc = 0; accCola = 0; accAabb = 0;
+        } else if (set.size === 1) {
+          accCap  = set.has("CAP")  ? 1 : 0;
+          accTjc  = set.has("TJC")  ? 1 : 0;
+          accCola = set.has("COLA") ? 1 : 0;
+          accAabb = set.has("AABB") ? 1 : 0;
+        } else if (set.size === 2 && set.has("CAP") && set.has("AABB")) {
+          accCap = 1; accAabb = 1; accTjc = 0; accCola = 0;
+        } else {
+          // Invalid multi-selection from legacy clients: collapse to CLIA.
+          accCap = 0; accTjc = 0; accCola = 0; accAabb = 0;
+        }
       }
 
       // Audit log: track each changed field
@@ -8033,8 +8093,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VeritaPolicy Routes ──────────────────────────────────────────────────
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
   const { CAP_REQUIREMENTS } = await import('./capRequirements');
+  const { CFR_REQUIREMENTS } = await import('./cfrRequirements');
+
+  // Phase 1 (2026-05-01): build the requirement set for a given lab from the
+  // four accreditation flags. CFR is appended for every lab regardless of
+  // accreditor selection (CLIA binds every lab). AABB and COLA are wired but
+  // their requirement files arrive in Phase 2.
+  function veritapolicyReqSetsForLab(lab: any): any[] {
+    const reqSets: any[] = [];
+    if (lab?.accreditation_tjc)  reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
+    if (lab?.accreditation_cap)  reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+    // AABB and COLA placeholders -- Phase 2 fills these in.
+    // if (lab?.accreditation_aabb) reqSets.push(...(AABB_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'aabb' })));
+    // if (lab?.accreditation_cola) reqSets.push(...(COLA_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cola' })));
+    // CFR appended for every lab.
+    reqSets.push(...(CFR_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cfr' })));
+    return reqSets;
+  }
 
   // GET settings
+  // Phase 1 (2026-05-01): also returns accreditation_choice derived from labs
+  // table flags. The legacy accreditation_body column is left in place but
+  // no longer authoritative. Six choices: TJC, CAP, AABB, COLA, CAP+AABB, CLIA.
   app.get('/api/veritapolicy/settings', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
@@ -8043,7 +8123,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
       settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
     }
-    res.json(settings);
+    const lab = resolveLabForUser(userId);
+    const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
+      + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
+    let accreditationChoice = 'CLIA';
+    if (accCount === 1 && lab?.accreditation_tjc) accreditationChoice = 'TJC';
+    else if (accCount === 1 && lab?.accreditation_cap) accreditationChoice = 'CAP';
+    else if (accCount === 1 && lab?.accreditation_aabb) accreditationChoice = 'AABB';
+    else if (accCount === 1 && lab?.accreditation_cola) accreditationChoice = 'COLA';
+    else if (accCount === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) accreditationChoice = 'CAP+AABB';
+    res.json({ ...settings, accreditation_choice: accreditationChoice });
   });
 
   // PUT settings (lab type + accreditation body)
@@ -8079,13 +8168,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
     const policyMap: Record<number, any> = {};
     for (const p of policies) policyMap[p.id] = p;
-    // Filter requirements by lab's accreditation body (default 'tjc' -- most production labs are TJC).
-    // TODO: veritapolicy_settings.accreditation_body should be consolidated to read from
-    // labs.accreditation_tjc / labs.accreditation_cap (see commit 8fed0ec) in a future refactor.
-    const bodyReq = settings?.accreditation_body || 'tjc';
-    const reqSets: any[] = [];
-    if (bodyReq === 'tjc' || bodyReq === 'both') reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
-    if (bodyReq === 'cap' || bodyReq === 'both') reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+    // Phase 1 (2026-05-01): source of truth for accreditation is the labs
+    // table, not veritapolicy_settings.accreditation_body. The latter is
+    // retained but no longer drives content selection.
+    const lab = resolveLabForUser(userId);
+    const reqSets = veritapolicyReqSetsForLab(lab);
 
     // Build response
     const result = reqSets.map((req: any) => {
@@ -8217,10 +8304,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
     const statusMap: Record<number, any> = {};
     for (const s of statuses) statusMap[s.requirement_id] = s;
-    const bodySum = settings?.accreditation_body || 'tjc';
-    const summaryReqs: any[] = [];
-    if (bodySum === 'tjc' || bodySum === 'both') summaryReqs.push(...(TJC_REQUIREMENTS as unknown as any[]));
-    if (bodySum === 'cap' || bodySum === 'both') summaryReqs.push(...(CAP_REQUIREMENTS as unknown as any[]));
+    // Phase 1 (2026-05-01): source the accreditor set from labs flags via the
+    // shared helper. CFR is included for every lab.
+    const lab = resolveLabForUser(userId);
+    const summaryReqs = veritapolicyReqSetsForLab(lab);
     let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
     for (const req of summaryReqs) {
       // Service-line toggles (blood_bank, transplant, microbiology, maternal_serum) removed;
@@ -8252,11 +8339,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
       const statusMap: Record<number, any> = {};
       for (const s of statuses) statusMap[s.requirement_id] = s;
-      // Filter requirements by lab's accreditation body (default 'tjc' -- most production labs are TJC).
-      const bodyPdf = settings?.accreditation_body || 'tjc';
-      const allReqs: any[] = [];
-      if (bodyPdf === 'tjc' || bodyPdf === 'both') allReqs.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
-      if (bodyPdf === 'cap' || bodyPdf === 'both') allReqs.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
+      // Phase 1 (2026-05-01): source from labs flags via shared helper.
+      // CFR included for every lab regardless of accreditor selection.
+      const lab = resolveLabForUser(userId);
+      const allReqs = veritapolicyReqSetsForLab(lab);
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
         // Service-line toggles (blood_bank, transplant, microbiology, maternal_serum) removed;
@@ -8274,8 +8360,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           policy_name: us?.policy_name || null,
         };
       });
+      // Phase 1 (2026-05-01): derive accreditation choice from labs flags so the
+      // PDF subtitle matches what the user sees in the app. CFR is appended for
+      // every lab regardless of choice.
+      const accCountPdf = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
+        + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
+      let accreditationChoicePdf = 'CLIA';
+      if (accCountPdf === 1 && lab?.accreditation_tjc) accreditationChoicePdf = 'TJC';
+      else if (accCountPdf === 1 && lab?.accreditation_cap) accreditationChoicePdf = 'CAP';
+      else if (accCountPdf === 1 && lab?.accreditation_aabb) accreditationChoicePdf = 'AABB';
+      else if (accCountPdf === 1 && lab?.accreditation_cola) accreditationChoicePdf = 'COLA';
+      else if (accCountPdf === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) accreditationChoicePdf = 'CAP+AABB';
       const { generateVeritaPolicyPDF } = await import('./pdfReport');
-      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: bodyPdf });
+      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: accreditationChoicePdf });
       res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
