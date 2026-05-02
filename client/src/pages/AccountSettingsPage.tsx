@@ -15,11 +15,19 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 const API_BASE = "https://www.veritaslabservices.com";
 
 type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
-const ACCREDITATION_OPTIONS: { value: AccreditationBody; label: string; description: string }[] = [
-  { value: "CAP",  label: "CAP",  description: "College of American Pathologists" },
-  { value: "TJC",  label: "TJC",  description: "The Joint Commission" },
-  { value: "COLA", label: "COLA", description: "Commission on Office Laboratory Accreditation" },
-  { value: "AABB", label: "AABB", description: "AABB (blood banking / transfusion)" },
+type AccreditationChoice = "TJC" | "CAP" | "AABB" | "COLA" | "CAP+AABB" | "CLIA";
+
+// Phase 1 (2026-05-01): single-radio accreditation. Six choices.
+// CAP+AABB is the only valid multi-accreditor combination (reciprocal
+// agreement between CAP and AABB). CLIA is the default for labs with no
+// accreditor; CFR/CLIA citations still appear on every report regardless.
+const ACCREDITATION_CHOICES: { value: AccreditationChoice; label: string; description: string }[] = [
+  { value: "TJC",      label: "TJC",            description: "The Joint Commission" },
+  { value: "CAP",      label: "CAP",            description: "College of American Pathologists" },
+  { value: "AABB",     label: "AABB",           description: "Blood banking and transfusion services" },
+  { value: "COLA",     label: "COLA",           description: "Commission on Office Laboratory Accreditation" },
+  { value: "CAP+AABB", label: "CAP + AABB",     description: "For labs holding both under the CAP/AABB reciprocal agreement" },
+  { value: "CLIA",     label: "CLIA only",      description: "No accreditor; CLIA-certified only. Federal CFR citations only." },
 ];
 
 type PtVendorPref = "none" | "cap" | "api";
@@ -27,7 +35,8 @@ type PtVendorPref = "none" | "cap" | "api";
 interface AccountSettings {
   clia_number: string;
   clia_lab_name: string;
-  preferred_standards: AccreditationBody[];
+  preferred_standards: AccreditationBody[]; // legacy, retained for back-compat
+  accreditation_choice: AccreditationChoice;
   preferred_pt_vendor: PtVendorPref;
   // Lab role context from server
   is_seat: boolean;
@@ -70,7 +79,7 @@ export default function AccountSettingsPage() {
   const { toast } = useToast();
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
-  const [preferredStandards, setPreferredStandards] = useState<AccreditationBody[]>([]);
+  const [accreditationChoice, setAccreditationChoice] = useState<AccreditationChoice>("CLIA");
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
   // Module permission constants
@@ -252,7 +261,7 @@ export default function AccountSettingsPage() {
     if (settings) {
       setCliaNumber(settings.clia_number || "");
       setLabName(settings.clia_lab_name || "");
-      setPreferredStandards(settings.preferred_standards || []);
+      setAccreditationChoice(settings.accreditation_choice || "CLIA");
       setPreferredPtVendor(settings.preferred_pt_vendor || "none");
     }
   }, [settings]);
@@ -269,7 +278,7 @@ export default function AccountSettingsPage() {
         body: JSON.stringify({
           clia_number: cliaNumber,
           clia_lab_name: labName,
-          preferred_standards: preferredStandards,
+          accreditation_choice: accreditationChoice,
           preferredPtVendor,
         }),
       });
@@ -364,7 +373,7 @@ export default function AccountSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Select up to 2 accreditation bodies. Their standard references will appear on all VeritaCheck™ and VeritaScan™ reports. CLSI guidelines and CLIA/CFR citations are always included.
+            Select your laboratory's accreditation. The corresponding standard references will appear on all VeritaCheck™ and VeritaScan™ reports. CLIA/CFR citations are always included regardless of selection.
           </p>
           {settings?.is_seat && settings?.owner_name && (
             <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
@@ -372,40 +381,33 @@ export default function AccountSettingsPage() {
             </p>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {ACCREDITATION_OPTIONS.map((opt) => {
-              const isSelected = preferredStandards.includes(opt.value);
-              const isDisabled = !isSelected && preferredStandards.length >= 2;
+            {ACCREDITATION_CHOICES.map((opt) => {
+              const isSelected = accreditationChoice === opt.value;
               const isSeatDisabled = !!settings?.is_seat;
               return (
                 <button
                   key={opt.value}
                   type="button"
-                  disabled={isDisabled || isLoading || isSeatDisabled}
+                  disabled={isLoading || isSeatDisabled}
                   onClick={() => {
                     if (isSeatDisabled) return;
-                    if (isSelected) {
-                      setPreferredStandards(preferredStandards.filter(s => s !== opt.value));
-                    } else if (preferredStandards.length < 2) {
-                      setPreferredStandards([...preferredStandards, opt.value]);
-                    }
+                    setAccreditationChoice(opt.value);
                   }}
                   className={[
                     "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
                     isSelected
                       ? "border-primary bg-primary/5"
-                      : isDisabled || isSeatDisabled
+                      : isSeatDisabled
                       ? "border-muted bg-muted/30 opacity-50 cursor-not-allowed"
                       : "border-border hover:border-primary/50 hover:bg-muted/30",
                   ].join(" ")}
                 >
                   <div className={[
-                    "mt-0.5 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center",
-                    isSelected ? "border-primary bg-primary" : "border-muted-foreground",
+                    "mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center",
+                    isSelected ? "border-primary" : "border-muted-foreground",
                   ].join(" ")}>
                     {isSelected && (
-                      <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-primary-foreground">
-                        <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                      <div className="h-2 w-2 rounded-full bg-primary" />
                     )}
                   </div>
                   <div>
@@ -416,9 +418,6 @@ export default function AccountSettingsPage() {
               );
             })}
           </div>
-          {preferredStandards.length === 2 && !settings?.is_seat && (
-            <p className="text-xs text-muted-foreground">Maximum of 2 selected. Deselect one to choose another.</p>
-          )}
           {!settings?.is_seat && (
             <Button
               onClick={() => saveMutation.mutate()}

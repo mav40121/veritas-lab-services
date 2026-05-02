@@ -3480,14 +3480,43 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
   const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file - enter in account settings";
   const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-  // Build dynamic subtitle based on accreditation body and actual requirement count
-  const body = accreditationBody || settings?.accreditation_body || 'tjc';
+  // Build dynamic subtitle based on accreditation body and actual requirement count.
+  // Phase 1 (2026-05-01): six-option model. Values: TJC, CAP, AABB, COLA,
+  // CAP+AABB, CLIA. Legacy values ('tjc', 'cap', 'both') still tolerated for
+  // any older caller that might pass them.
+  const body = accreditationBody || settings?.accreditation_body || 'CLIA';
   const reqCount = requirements.length;
   let subtitleText: string;
-  if (body === 'both') {
-    subtitleText = `${reqCount} Required Policies (TJC + CAP)`;
-  } else {
-    subtitleText = `${reqCount} ${body.toUpperCase()} Required Policies`;
+  switch (body) {
+    case 'TJC':
+    case 'tjc':
+      subtitleText = `${reqCount} Required Policies (TJC + CFR)`;
+      break;
+    case 'CAP':
+    case 'cap':
+      subtitleText = `${reqCount} Required Policies (CAP + CFR)`;
+      break;
+    case 'AABB':
+    case 'aabb':
+      subtitleText = `${reqCount} Required Policies (AABB + CFR)`;
+      break;
+    case 'COLA':
+    case 'cola':
+      subtitleText = `${reqCount} Required Policies (COLA + CFR)`;
+      break;
+    case 'CAP+AABB':
+      subtitleText = `${reqCount} Required Policies (CAP + AABB + CFR)`;
+      break;
+    case 'CLIA':
+    case 'clia':
+      subtitleText = `${reqCount} Required Policies (CFR / CLIA)`;
+      break;
+    case 'both':
+      // Legacy compatibility for any old caller
+      subtitleText = `${reqCount} Required Policies (TJC + CAP)`;
+      break;
+    default:
+      subtitleText = `${reqCount} ${body.toUpperCase()} Required Policies`;
   }
 
   // Compute summary -- requirements come pre-enriched with status and policy_name

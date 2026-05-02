@@ -19,9 +19,32 @@ interface PolicySettings {
   has_maternal_serum: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
   is_independent: number;
   waived_only: number;  // deprecated: column retained in schema, no longer used in UI or auto-N/A logic
-  accreditation_body: string;
+  accreditation_body: string;  // deprecated: legacy column. Phase 1 (2026-05-01) authoritative source is labs.accreditation_* flags surfaced as accreditation_choice.
+  accreditation_choice?: string;  // Phase 1: 'TJC' | 'CAP' | 'AABB' | 'COLA' | 'CAP+AABB' | 'CLIA'
   setup_complete: number;
 }
+
+// Phase 1 (2026-05-01): map server's accreditation_choice to the header label
+// shown at the top of VeritaPolicy. CFR is appended for every lab regardless
+// of accreditor selection (CLIA binds every lab) so the label names only the
+// accreditor side.
+const CHOICE_LABEL: Record<string, string> = {
+  TJC: "TJC",
+  CAP: "CAP",
+  AABB: "AABB",
+  COLA: "COLA",
+  "CAP+AABB": "CAP + AABB",
+  CLIA: "CLIA",
+};
+
+// Source code (lowercase, as stored in requirement rows) -> display label
+const SOURCE_LABEL: Record<string, string> = {
+  tjc: "TJC",
+  cap: "CAP",
+  aabb: "AABB",
+  cola: "COLA",
+  cfr: "CFR",
+};
 
 interface Requirement {
   id: number;
@@ -65,7 +88,8 @@ const DEFAULT_SETTINGS: PolicySettings = {
   has_maternal_serum: 0,
   is_independent: 0,
   waived_only: 0,
-  accreditation_body: "tjc",
+  accreditation_body: "clia",  // legacy field, no longer authoritative
+  accreditation_choice: "CLIA",  // Phase 1 default: CLIA only (every lab gets CFR)
   setup_complete: 1,
 };
 
@@ -127,9 +151,11 @@ export default function VeritaPolicyAppPage() {
       setSettings({ ...DEFAULT_SETTINGS, ...s });
       setSummary(sum);
       setRequirements(r);
-      // Default source filter to match the lab's accreditation body setting
-      const ab = s?.accreditation_body || 'tjc';
-      setFilterSource(ab === 'both' ? 'all' : ab);
+      // Phase 1 (2026-05-01): reset source filter on every load. Sources are
+      // derived from the response payload; no hardcoded default. If the user
+      // switches accreditor we don't want a stale filter pointing at a source
+      // that's no longer in the data.
+      setFilterSource('all');
       // Show settings panel on first visit (setup not yet complete)
       if (!s.setup_complete) setSettingsOpen(true);
     } catch {
@@ -291,7 +317,18 @@ export default function VeritaPolicyAppPage() {
 
   // ── Filter requirements ────────────────────────────────────────────────────
   const chapters = Array.from(new Set(requirements.map(r => r.chapter))).sort();
-  const showBothSources = settings.accreditation_body === 'both';
+
+  // Phase 1 (2026-05-01): derive source set from the response data, not from
+  // a settings field. This way CLIA-only labs see only CFR, CAP labs see
+  // CAP + CFR, CAP+AABB labs see CAP + AABB + CFR, etc. The source filter
+  // dropdown only renders when there is more than one source to choose from.
+  const availableSources = Array.from(new Set(requirements.map(r => r.source).filter(Boolean))).sort();
+  const hasMultipleSources = availableSources.length > 1;
+
+  // Header label reflects the lab's accreditation choice. CFR is always
+  // included so we don't name it.
+  const choice = settings.accreditation_choice || 'CLIA';
+  const headerLabel = `${CHOICE_LABEL[choice] || choice} Policy Compliance Tracker`;
 
   const filtered = requirements.filter(r => {
     if (filterStatus !== "all" && r.status !== filterStatus) return false;
@@ -323,7 +360,7 @@ export default function VeritaPolicyAppPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">VeritaPolicy&#8482;</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            TJC + CAP Policy Compliance Tracker
+            {headerLabel}
             {summary ? ` - ${summary.total} applicable requirements` : ""}
           </p>
         </div>
@@ -422,12 +459,13 @@ export default function VeritaPolicyAppPage() {
           <option value="all">All Chapters</option>
           {chapters.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        {showBothSources && (
+        {hasMultipleSources && (
           <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
             className="border border-border rounded px-2 py-1 text-sm bg-background text-foreground h-8">
-            <option value="all">TJC + CAP</option>
-            <option value="tjc">TJC Only</option>
-            <option value="cap">CAP Only</option>
+            <option value="all">All Sources</option>
+            {availableSources.map(src => (
+              <option key={src} value={src}>{(SOURCE_LABEL[src] || src.toUpperCase()) + " Only"}</option>
+            ))}
           </select>
         )}
       </div>
@@ -500,8 +538,8 @@ export default function VeritaPolicyAppPage() {
                           <td className="px-3 py-2 align-top">
                             <div className="flex flex-col gap-1">
                               <span className="font-mono text-xs font-bold text-primary">{req.chapter}</span>
-                              {showBothSources && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{req.source?.toUpperCase()}</Badge>
+                              {hasMultipleSources && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{req.source ? (SOURCE_LABEL[req.source] || req.source.toUpperCase()) : ""}</Badge>
                               )}
                             </div>
                           </td>
