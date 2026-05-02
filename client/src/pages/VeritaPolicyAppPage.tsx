@@ -500,7 +500,7 @@ export default function VeritaPolicyAppPage() {
                       <td colSpan={5} className="px-3 py-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-foreground">
-                            {group.chapter} - {group.label}
+                            {group.label}
                             <span className="ml-2 font-normal text-muted-foreground">({group.reqs.length})</span>
                           </span>
                           {!isReadOnly && manualReqs.length > 0 && (
