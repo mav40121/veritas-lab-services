@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { cliaAnalytes } from "./cliaAnalytes";
 
 // --- Canonical CLIA TEa data (from cliaTeaData.ts / backfill-absolute-floor.js) ---
 export const teaData: { analyte: string; criteria: string }[] = [
@@ -146,7 +147,29 @@ export const NAME_MAP: Record<string, string | null> = {
   "IRON SATURATION (%IRON SAT)": null,
 };
 
+/**
+ * Returns true iff `testName` matches an analyte in cliaAnalytes.ts whose tier is
+ * "unregulated". Used as a short-circuit guard before the substring fallback in
+ * resolveCanonicalAnalyte / resolveFloor: an unregulated analyte must never be
+ * canonicalized onto a regulated analyte's TEa via name overlap. The historic bug
+ * was MICROALBUMIN (MALB) substring-matching to Albumin (8%), overriding the
+ * user's selected 15%.
+ */
+function isUnregulatedAnalyte(testName: string): boolean {
+  const lower = testName.toLowerCase();
+  for (const a of cliaAnalytes) {
+    if (a.tier !== "unregulated") continue;
+    if (a.name.toLowerCase() === lower) return true;
+    for (const alias of a.aliases) {
+      if (alias.toLowerCase() === lower) return true;
+    }
+  }
+  return false;
+}
+
 export function resolveFloor(testName: string): { value: number; unit: string } | null {
+  // Short-circuit: unregulated analytes never inherit a regulated analyte's floor
+  if (isUnregulatedAnalyte(testName)) return null;
   // 1. Try NAME_MAP (case-insensitive)
   for (const [key, canonical] of Object.entries(NAME_MAP)) {
     if (key.toLowerCase() === testName.toLowerCase()) {
@@ -179,6 +202,8 @@ for (const entry of teaData) {
 }
 
 export function resolveCanonicalAnalyte(testName: string): string | null {
+  // Short-circuit: unregulated analytes never canonicalize, even on substring overlap
+  if (isUnregulatedAnalyte(testName)) return null;
   for (const [key, canonical] of Object.entries(NAME_MAP)) {
     if (key.toLowerCase() === testName.toLowerCase()) return canonical;
   }
@@ -351,6 +376,72 @@ export function backfillAbsoluteFloorOnStartup(): void {
       console.log(`[backfill] Corrected canonical TEa on ${corrected} studies`);
     } else {
       console.log("[backfill] All studies already have canonical CLIA TEa");
+    }
+
+    // Pass 3: one-time idempotent correction for study 425 (MICROALBUMIN MALB).
+    // Background: MICROALBUMIN (MALB) is unregulated (no CFR-defined TEa). User
+    // rodrigo selected custom TEa=15%, but the pre-fix substring resolver
+    // collapsed "MICROALBUMIN (MALB)" -> "Albumin" (regulated, 8%) and the write
+    // guard in storage.ts then clobbered TEa to 0.08, flipping the verdict to
+    // fail. The unregulated short-circuit added in this same commit prevents
+    // the substring collapse going forward; this Pass 3 heals the one already-
+    // corrupted row. Guarded by exact prior-state match so it is a no-op on
+    // every subsequent startup AND a no-op on any other DB (test, dev, fork)
+    // that does not have this exact row in this exact state.
+    try {
+      const target = sqlite
+        .prepare(
+          "SELECT id, user_id, clia_allowable_error, status, result FROM studies " +
+          "WHERE id = 425 AND test_name = 'MICROALBUMIN (MALB)' " +
+          "AND clia_allowable_error = 0.08 AND status = 'fail'"
+        )
+        .get() as { id: number; user_id: number; clia_allowable_error: number; status: string; result: string | null } | undefined;
+      if (target) {
+        const before = {
+          clia_allowable_error: 0.08,
+          tea_is_percentage: 1,
+          tea_unit: "%",
+          clia_absolute_floor: null,
+          clia_absolute_unit: null,
+          status: "fail",
+          result: target.result ?? null,
+        };
+        const after = {
+          clia_allowable_error: 0.15,
+          tea_is_percentage: 1,
+          tea_unit: "%",
+          clia_absolute_floor: null,
+          clia_absolute_unit: null,
+          status: "pass",
+          result: "pass",
+        };
+        sqlite
+          .prepare(
+            "UPDATE studies SET clia_allowable_error = 0.15, tea_is_percentage = 1, " +
+            "tea_unit = '%', clia_absolute_floor = NULL, clia_absolute_unit = NULL, " +
+            "status = 'pass', result = 'pass' WHERE id = 425"
+          )
+          .run();
+        console.log("[backfill] Pass 3: corrected study 425 (MICROALBUMIN MALB) TEa 8% -> 15%, fail -> pass");
+        try {
+          sqlite
+            .prepare(
+              "INSERT INTO audit_log (user_id, owner_user_id, module, action, entity_type, entity_id, entity_label, before_json, after_json, created_at) " +
+              "VALUES (?, ?, 'veritacheck', 'admin_correction', 'study', '425', ?, ?, ?, datetime('now'))"
+            )
+            .run(
+              target.user_id,
+              target.user_id,
+              "MICROALBUMIN (MALB): substring-resolver bug correction",
+              JSON.stringify(before),
+              JSON.stringify(after),
+            );
+        } catch (auditErr: any) {
+          console.error("[backfill] Pass 3 audit_log insert failed (correction itself succeeded):", auditErr.message);
+        }
+      }
+    } catch (err: any) {
+      console.error("[backfill] Pass 3 error:", err.message);
     }
   } catch (err: any) {
     console.error("[backfill] Error during canonical TEa backfill:", err.message);
