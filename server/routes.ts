@@ -8094,18 +8094,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
   const { CAP_REQUIREMENTS } = await import('./capRequirements');
   const { CFR_REQUIREMENTS } = await import('./cfrRequirements');
+  const { AABB_REQUIREMENTS } = await import('./aabbRequirements');
+  const { COLA_REQUIREMENTS } = await import('./colaRequirements');
 
-  // Phase 1 (2026-05-01): build the requirement set for a given lab from the
+  // Phase 2 (2026-05-02): build the requirement set for a given lab from the
   // four accreditation flags. CFR is appended for every lab regardless of
-  // accreditor selection (CLIA binds every lab). AABB and COLA are wired but
-  // their requirement files arrive in Phase 2.
+  // accreditor selection (CLIA binds every lab). AABB and COLA now live and
+  // dispatch to their generated requirement files (gen_requirements_from_xlsx.py).
   function veritapolicyReqSetsForLab(lab: any): any[] {
     const reqSets: any[] = [];
     if (lab?.accreditation_tjc)  reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
     if (lab?.accreditation_cap)  reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
-    // AABB and COLA placeholders -- Phase 2 fills these in.
-    // if (lab?.accreditation_aabb) reqSets.push(...(AABB_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'aabb' })));
-    // if (lab?.accreditation_cola) reqSets.push(...(COLA_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cola' })));
+    if (lab?.accreditation_aabb) reqSets.push(...(AABB_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'aabb' })));
+    if (lab?.accreditation_cola) reqSets.push(...(COLA_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cola' })));
     // CFR appended for every lab.
     reqSets.push(...(CFR_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cfr' })));
     return reqSets;
