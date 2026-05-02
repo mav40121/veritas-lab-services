@@ -558,8 +558,12 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
   },
 };
 
-// Default standards shown when no preference is saved
-const DEFAULT_PREFERRED_STANDARDS: AccreditationBody[] = ["CAP", "TJC"];
+// Phase 3 (2026-05-01): empty default = CLIA-only mode. Previously hardcoded to
+// ["CAP", "TJC"], which spuriously rendered TJC and CAP columns on PDFs for
+// CLIA-only, AABB-only, or COLA-only labs. With the empty default, when no
+// accreditor flag is set on the labs row, only CLSI + CLIA/CFR columns render
+// in the regulatory box, which is correct for a CLIA-only lab.
+const DEFAULT_PREFERRED_STANDARDS: AccreditationBody[] = [];
 
 // ─── TEa audit freshness loader ──────────────────────────────────────────────
 // Reads the artifact written by script/teaCanonicalRenderAudit.ts at build
@@ -2332,9 +2336,12 @@ const SCAN_STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
 };
 
 function scanStandardsBadgesHTML(preferredStandards?: AccreditationBody[] | null): string {
+  // Phase 3 (2026-05-01): empty default = CLIA-only mode. Previously hardcoded
+  // to ["CAP", "TJC"], which printed TJC/CAP framework badges on the VeritaScan
+  // PDF cover for labs that selected CLIA only, AABB only, or COLA only.
   const standards = (preferredStandards && preferredStandards.length > 0)
     ? preferredStandards
-    : ["CAP", "TJC"] as AccreditationBody[];
+    : [] as AccreditationBody[];
   const allBodies: AccreditationBody[] = [...standards, "CLSI", "CLIA"] as AccreditationBody[];
   const badges = allBodies.map(s =>
     `<span style="display:inline-block;margin:1px 4px 1px 0;font-size:6.5pt;font-weight:600;color:#01696F;background:#E8F4F4;border:1px solid #B0D8D8;border-radius:3px;padding:1px 5px;">${s}</span>`

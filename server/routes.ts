@@ -4617,6 +4617,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         };
       });
 
+      // Phase 3 (2026-05-01): derive demo accreditor list from the demo lab's
+      // accreditation_* flags rather than hardcoding ["TJC","CAP"]. Keeps the
+      // demo PDF honest if the demo lab's accreditor selection ever changes,
+      // and matches the pattern used by the production VeritaScan PDF endpoint.
+      const demoLab = resolveLabForUser(userId);
+      const demoStandards: string[] = [];
+      if (demoLab?.accreditation_cap) demoStandards.push("CAP");
+      if (demoLab?.accreditation_tjc) demoStandards.push("TJC");
+      if (demoLab?.accreditation_cola) demoStandards.push("COLA");
+      if (demoLab?.accreditation_aabb) demoStandards.push("AABB");
+
       const pdfBuffer = await generateVeritaScanPDF(
         {
           scanName: scan.name || "Riverside Regional - 2026 Inspection Readiness",
@@ -4624,7 +4635,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           updatedAt: scan.updated_at,
           items: mergedItems,
           cliaNumber: "22D0999999",
-          preferredStandards: ["TJC", "CAP"] as any,
+          preferredStandards: demoStandards as any,
         },
         type as "executive" | "full"
       );

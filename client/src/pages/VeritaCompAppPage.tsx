@@ -360,7 +360,7 @@ function ProgramListView() {
             <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">Beta</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            TJC/CLIA/CAP Competency Assessment Management
+            CLIA Competency Assessment Management
           </p>
         </div>
         <Button className="shrink-0" onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
