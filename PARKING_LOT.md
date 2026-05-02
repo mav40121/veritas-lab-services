@@ -166,6 +166,49 @@ accreditor type, reports back what renders.
 
 ---
 
+### 7. Per-module gating on VeritaPT, VeritaPolicy, VeritaLab, VeritaTrack pages
+
+**What:** These four pages call `useIsReadOnly()` with no module key, so
+they only respect the base access level (`read_only` / `locked`) and
+never check seat-level permissions. They appear in MODULE_LIST in the
+seat invite UI, so an owner picking "Custom" and setting them to View
+will see no effect on the seat user. Pages should call
+`useIsReadOnly('veritapt')`, `useIsReadOnly('veritapolicy')`,
+`useIsReadOnly('veritalab')`, `useIsReadOnly('veritatrack')` respectively
+to match the rest of the modules.
+
+**Fix shape:** Code change. Update the relevant page components to
+pass their module key into `useIsReadOnly`. Add the same module key
+to the corresponding write-side mutation routes via `requireModuleEdit`
+middleware (mirroring the pattern in routes.ts for veritacheck etc).
+
+**Source:** 2026-05-01 seat-permissions-mode review (PR #10, commit
+a43fbba). Discovered while auditing MODULE_LIST coverage.
+
+**Status:** Open. Not regression-causing; the four pages just
+currently behave as if every seat user has edit access regardless of
+MODULE_LIST setting for those keys.
+
+---
+
+### 8. FAQ + Roadmap pages still describe VeritaStock as "planned"
+
+**What:** VeritaStock is shipped at /veritastock but the public FAQ
+and Roadmap pages still classify it as planned/upcoming. Audit found
+this when the user pushed back on the agent's initial mis-claim that
+veritastock didn't exist (it did, just unrenamed in some places). The
+public copy follows.
+
+**Fix shape:** Copy edit. Update FAQ and Roadmap to reflect that
+VeritaStock is live. Confirm any other public surface (TeamPage,
+Features, comparison tables) doesn't carry the same staleness.
+
+**Source:** 2026-05-01 David VeritaQA bug session.
+
+**Status:** Open. Public copy bug, not a code bug.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
@@ -174,6 +217,24 @@ accreditor type, reports back what renders.
 23 years" as of 2026-05-01.
 
 **Source:** session 299e9a73 turn 14, ~2026-04-28.
+
+---
+
+### C5. David's VeritaQA grey-button bug (seat permissions mode)
+
+**Closure evidence:** PR #10 squash-merged as commit a43fbba on
+2026-05-01 23:19 MST. Railway deploy succeeded; deployed bundle
+(`/assets/index-CBVwW2mk.js`) confirmed to contain new strings
+('VeritaQA™ Suite', 'VeritaStock™', 'edit_all', 'view_all',
+'Inherits future modules'). Resolver in shared/schema.ts
+(`resolveSeatPermission`) auto-upgrades David's stored permissions
+(9-of-9 keys = edit, veritabench/veritastock absent) to effective
+edit on the new modules without any DB write. Verified locally
+against his exact stored shape (14 of 14 expected outcomes matched).
+
+**Source:** 2026-05-01 David's report; veritabench + veritastock
+weren't in MODULE_LIST so seat permissions silently defaulted to
+view, greying the browse button on /veritabench/pi line 323.
 
 ---
 
