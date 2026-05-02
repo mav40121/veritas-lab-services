@@ -340,6 +340,37 @@ async function main() {
   failures.push(...auditSmokeRender());
   failures.push(...auditDualVerdicts());
 
+  // Unregulated short-circuit regression: analytes whose name or alias contains
+  // a regulated canonical name as a substring must NOT canonicalize. Historical
+  // bug: MICROALBUMIN (MALB) collapsed to Albumin (8%), overriding user TEa 15%.
+  {
+    const { resolveCanonicalAnalyte, resolveFloor } = await import("../server/backfillAbsoluteFloor.js");
+    const cases: { input: string; reason: string }[] = [
+      { input: "MICROALBUMIN (MALB)", reason: "Urine microalbumin is unregulated; must not collapse to Albumin (serum)" },
+      { input: "microalbumin", reason: "Lowercase alias of microalbumin must also short-circuit" },
+      { input: "Calcium, Ionized", reason: "Ionized calcium is unregulated; must not collapse to Calcium, Total" },
+      { input: "Urine Protein, total", reason: "Urine protein is unregulated; must not collapse to Total Protein" },
+    ];
+    for (const c of cases) {
+      const canon = resolveCanonicalAnalyte(c.input);
+      if (canon !== null) {
+        failures.push({
+          analyte: c.input,
+          rule: `Unregulated short-circuit failed - resolved to canonical "${canon}". ${c.reason}`,
+          got: canon,
+        });
+      }
+      const floor = resolveFloor(c.input);
+      if (floor !== null) {
+        failures.push({
+          analyte: c.input,
+          rule: `Unregulated short-circuit failed - resolveFloor returned a floor. ${c.reason}`,
+          got: JSON.stringify(floor),
+        });
+      }
+    }
+  }
+
   if (failures.length > 0) {
     console.error(`\n[teaCanonicalRenderAudit] FAIL — ${failures.length} canonical-render defect(s) detected:\n`);
     for (const f of failures) {

@@ -1242,7 +1242,7 @@ export const cliaAnalytes: CliaAnalyte[] = [
   {
     id: "microalbumin",
     name: "Urine Microalbumin",
-    aliases: ["microalbumin", "urine microalbumin", "albumin/creatinine ratio", "ACR"],
+    aliases: ["microalbumin", "urine microalbumin", "albumin/creatinine ratio", "ACR", "MICROALBUMIN (MALB)", "microalbumin (malb)", "MALB", "malb"],
     specialty: "Chemistry",
     subspecialty: "Urinalysis",
     tier: "unregulated",
