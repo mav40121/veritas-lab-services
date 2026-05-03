@@ -167,9 +167,104 @@ def main() -> int:
     out.append("")
 
     # ----------------------------------------------------------------------
+    # 2b. VeritaTrack common lab tasks (idempotent by name)
+    # ----------------------------------------------------------------------
+    # Categories pulled from the in-app seed-defaults endpoint plus a few extras
+    # that surveyors look for. Inserted only when (user_id, name) not already
+    # present so this is safe to re-run on top of analyte-level tasks already
+    # seeded by expand-michaels-lab.
+    # ----------------------------------------------------------------------
+    # 2a. Repair staff lab_id mismatch
+    # ----------------------------------------------------------------------
+    # The original seed_michaels_lab.py hard-coded lab_id=3, but in production
+    # Michael's staff_labs row was assigned id=5. That stranded his employees,
+    # roles, and competency schedules on a foreign lab. Re-anchor to the real
+    # lab id (looked up dynamically so this is safe to rerun).
+    out.append("-- Repair staff lab_id mismatch for Michael (lab_id was 3, real id is whatever staff_labs.id resolves to for user 17) --")
+    out.append(f"""
+UPDATE staff_employees
+SET lab_id = (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1),
+    updated_at = {lit(NOW_ISO)}
+WHERE user_id = {USER_ID}
+  AND lab_id != (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1);
+""".strip())
+    out.append(f"""
+UPDATE staff_competency_schedules
+SET lab_id = (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1)
+WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = {USER_ID})
+  AND lab_id != (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1);
+""".strip())
+    out.append(f"""
+UPDATE staff_roles
+SET lab_id = (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1)
+WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = {USER_ID})
+  AND lab_id != (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1);
+""".strip())
+    out.append(f"""
+UPDATE users
+SET lab_id = (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1)
+WHERE id IN ({USER_ID}, 19, 22)
+  AND lab_id != (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1);
+""".strip())
+    out.append("")
+
+    out.append("-- VeritaTrack common lab tasks (idempotent by name) --")
+    common_tasks = [
+        # QC Review (Monthly)
+        ("QC Review - Chemistry",        "QC Review",         "Monthly",   1),
+        ("QC Review - Hematology",       "QC Review",         "Monthly",   1),
+        ("QC Review - Coagulation",      "QC Review",         "Monthly",   1),
+        ("QC Review - Urinalysis",       "QC Review",         "Monthly",   1),
+        ("QC Review - Blood Bank",       "QC Review",         "Monthly",   1),
+        ("QC Review - Microbiology",     "QC Review",         "Monthly",   1),
+        # Proficiency Testing review (Quarterly)
+        ("Proficiency Testing Review - Chemistry",     "Quality Assessment", "Quarterly", 3),
+        ("Proficiency Testing Review - Hematology",    "Quality Assessment", "Quarterly", 3),
+        ("Proficiency Testing Review - Coagulation",   "Quality Assessment", "Quarterly", 3),
+        ("Proficiency Testing Review - Microbiology",  "Quality Assessment", "Quarterly", 3),
+        ("Proficiency Testing Review - Blood Bank",    "Quality Assessment", "Quarterly", 3),
+        # Annual training
+        ("HIPAA Training - Annual Review",                "HIPAA",               "Annual", 12),
+        ("Bloodborne Pathogen Training - Annual",         "Bloodborne Pathogen", "Annual", 12),
+        ("Chemical Hygiene / Hazard Communication Training", "Safety",          "Annual", 12),
+        ("Fire and Emergency Preparedness Training",      "Safety",              "Annual", 12),
+        ("Competency Assessment - Annual (all staff)",    "Competency",          "Annual", 12),
+        # Equipment calibration / verification
+        ("Pipette Calibration",                  "Equipment Calibration", "Annual",   12),
+        ("Thermometer Calibration",              "Equipment Calibration", "Annual",   12),
+        ("Centrifuge RPM Verification",          "Equipment Calibration", "Annual",   12),
+        ("Timer Verification",                   "Equipment Calibration", "Annual",   12),
+        ("Eyewash Station Inspection",           "Safety",                "Weekly",   1),
+        # Blood Bank alarm checks (Quarterly)
+        ("Blood Bank Alarm Check - Refrigerator",       "Blood Bank Alarm Checks", "Quarterly", 3),
+        ("Blood Bank Alarm Check - Freezer",            "Blood Bank Alarm Checks", "Quarterly", 3),
+        ("Blood Bank Alarm Check - Platelet Incubator", "Blood Bank Alarm Checks", "Quarterly", 3),
+        # Water testing
+        ("Water Contamination Testing",          "Water Contamination",   "Monthly", 1),
+        # Daily lab checks
+        ("Refrigerator/Freezer Temperature Log Review", "Daily Checks",   "Monthly", 1),
+        ("Critical Value Read-Back Audit",       "Quality Assessment",     "Monthly", 1),
+        ("Levey-Jennings Chart Review",          "QC Review",              "Monthly", 1),
+        # Document control / SOP review
+        ("SOP Biennial Review - Chemistry",      "Policy Review",          "Biennial", 24),
+        ("SOP Biennial Review - Hematology",     "Policy Review",          "Biennial", 24),
+        ("SOP Biennial Review - Blood Bank",     "Policy Review",          "Biennial", 24),
+        # Inventory / vendor
+        ("Reagent Inventory Reconciliation",     "Inventory",              "Monthly", 1),
+        ("Vendor Performance Review",            "Vendor Management",      "Quarterly", 3),
+    ]
+    for name, cat, freq, months in common_tasks:
+        out.append(
+            f"INSERT INTO veritatrack_tasks (user_id, name, category, frequency, frequency_months, active, created_at, updated_at) "
+            f"SELECT {USER_ID}, {lit(name)}, {lit(cat)}, {lit(freq)}, {months}, 1, {lit(NOW_ISO)}, {lit(NOW_ISO)} "
+            f"WHERE NOT EXISTS (SELECT 1 FROM veritatrack_tasks WHERE user_id={USER_ID} AND name={lit(name)});"
+        )
+    out.append("")
+
+    # ----------------------------------------------------------------------
     # 3. VeritaTrack signoffs - one recent + one prior per task
     # ----------------------------------------------------------------------
-    out.append("-- VeritaTrack signoffs (~58: 2 per task) --")
+    out.append("-- VeritaTrack signoffs (~58+: 2 per task, including new common tasks) --")
     out.append(f"DELETE FROM veritatrack_signoffs WHERE user_id={USER_ID};")
     # We can't enumerate task ids in SQL, so we use a SELECT inside INSERT...SELECT
     # For each task, insert two signoffs at predictable offsets.

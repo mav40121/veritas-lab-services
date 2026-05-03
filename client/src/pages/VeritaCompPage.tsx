@@ -238,7 +238,8 @@ return (
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Pricing - public visitors only */}
+      {!isLoggedIn && (
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
@@ -298,6 +299,7 @@ return (
           </div>
         </div>
       </section>
+      )}
 
       {/* Who it's for */}
       <section className="section-padding border-b border-border">

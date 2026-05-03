@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useAuth } from "@/components/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +39,7 @@ const FEATURES = [
 
 
 export default function VeritaScanPage() {
+    const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software", description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared." });
 return (
     <div>
@@ -64,13 +66,15 @@ return (
                 168 compliance questions. Triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
               </p>
 
-              {/* Pricing */}
-              <div className="flex flex-wrap gap-3 mb-8">
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+              {/* Pricing - public visitors only */}
+              {!isLoggedIn && (
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">Included</div>
+                    <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
@@ -207,7 +211,8 @@ return (
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Pricing - public visitors only */}
+      {!isLoggedIn && (
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
@@ -275,6 +280,7 @@ return (
           </p>
         </div>
       </section>
+      )}
 
       {/* Who it's for */}
       <section className="section-padding border-b border-border bg-muted/20">

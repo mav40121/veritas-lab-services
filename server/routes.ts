@@ -3368,11 +3368,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const items = (db as any).$client.prepare(
         "SELECT status FROM veritascan_items WHERE scan_id = ?"
       ).all(s.id);
-      const total = 168;
-      const assessed = items.filter((i: any) => i.status !== 'Not Assessed').length;
+      const total = items.length || 168;
+      const notAssessed = items.filter((i: any) => i.status === 'Not Assessed').length;
+      const assessed = items.length - notAssessed;
       const compliant = items.filter((i: any) => i.status === 'Compliant').length;
-      const issues = items.filter((i: any) => ['Needs Attention','Immediate Action'].includes(i.status)).length;
-      return { ...s, total, assessed, compliant, issues };
+      const needsAttention = items.filter((i: any) => i.status === 'Needs Attention').length;
+      const immediateAction = items.filter((i: any) => i.status === 'Immediate Action').length;
+      const na = items.filter((i: any) => i.status === 'N/A').length;
+      const issues = needsAttention + immediateAction;
+      return {
+        ...s,
+        // camelCase mirrors of created_at/updated_at for the frontend
+        createdAt: s.created_at,
+        updatedAt: s.updated_at,
+        total,
+        totalItems: total,
+        assessed,
+        assessedCount: assessed,
+        compliant,
+        compliantCount: compliant,
+        needsAttention,
+        needsAttentionCount: needsAttention,
+        immediateAction,
+        immediateActionCount: immediateAction,
+        na,
+        naCount: na,
+        notAssessed,
+        notAssessedCount: notAssessed,
+        issues,
+      };
     });
     res.json(result);
   });
