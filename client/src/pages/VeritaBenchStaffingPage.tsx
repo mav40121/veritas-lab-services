@@ -370,10 +370,15 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
     return { totalWeekly, peakHour, lowHour, peakDay, avgDaily };
   }, [avgReceived]);
 
-  // FTE staffing recommendation: volume / throughput rate
+  // FTE staffing recommendation: volume / throughput rate, with a floor of 2.
+  // A clinical lab is never staffed with a single tech: a one-person shift
+  // cannot witness blood-bank issuance, back up critical-result callbacks,
+  // or maintain competency oversight. CLIA-accredited labs operating 24/7
+  // require a minimum of two qualified personnel on site at all times.
+  const MIN_STAFF = 2;
   const fteGrid = useMemo(() => {
     const rate = throughputRate > 0 ? throughputRate : 20;
-    return avgReceived.map(row => row.map(val => val > 0 ? Math.ceil(val / rate) : 0));
+    return avgReceived.map(row => row.map(val => Math.max(MIN_STAFF, Math.ceil(val / rate))));
   }, [avgReceived, throughputRate]);
 
   return (
@@ -501,7 +506,7 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border" /> More staff needed than currently scheduled</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-50 border" /> Fewer staff needed than currently scheduled</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">FTE = specimens per hour / throughput rate, rounded up. Adjust the throughput rate to match your department's processing capacity.</p>
+        <p className="text-xs text-muted-foreground mt-2">FTE = max(2, ceil(specimens per hour / throughput rate)). The minimum of 2 reflects safe-staffing baseline: a 24/7 lab is never staffed with a single tech. Adjust the throughput rate to match your department's processing capacity.</p>
       </div>
     </div>
   );
