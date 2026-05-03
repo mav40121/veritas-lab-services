@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useAuth } from "@/components/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,6 +66,7 @@ const FEATURES = [
 
 export default function VeritaCompPage() {
     useSEO({ title: "VeritaComp\u2122 | Laboratory Competency Assessment Software", description: "Manage the six CLIA competency elements for every lab employee. Track assessments, generate PDF documentation, and stay survey-ready year-round." });
+    const { isLoggedIn } = useAuth();
 return (
     <div>
       {/* Hero */}
@@ -91,13 +93,15 @@ return (
                 Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"™"} for automatic instrument and method group setup.
               </p>
 
-              {/* Pricing */}
-              <div className="flex flex-wrap gap-3 mb-8">
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+              {/* Pricing - public visitors only */}
+              {!isLoggedIn && (
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">Included</div>
+                    <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
