@@ -5,54 +5,121 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ChevronRight, FileText, ToggleLeft, BarChart2, BookOpen } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
+import { useQuery } from "@tanstack/react-query";
 
-const FEATURE_CARDS = [
-  {
-    icon: FileText,
-    title: "88 TJC Requirements Pre-Loaded",
-    desc: "Every policy required by The Joint Commission for laboratory accreditation, organized by chapter. Mapped to the current TJC standard for laboratory accreditation.",
-    color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
-  },
-  {
-    icon: ToggleLeft,
-    title: "Per-Requirement N/A Control",
-    desc: "Not all policies apply to every lab. Mark individual requirements or entire categories as N/A with one click. Bulk actions make it fast to configure your lab's scope.",
-    color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
-  },
-  {
-    icon: BookOpen,
-    title: "Policy Library",
-    desc: "Build your lab's policy library. One policy can satisfy multiple TJC requirements. Track owner, status, review dates, and upload the actual policy document.",
-    color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
-    comingSoon: true,
-  },
-  {
-    icon: BarChart2,
-    title: "Readiness Score",
-    desc: "See your inspection readiness at a glance. Track completion across all 13 TJC chapters. Generate an inspector-ready compliance report with one click.",
-    color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
-  },
-];
+// Accreditor display profiles. Counts and chapters are sourced from the server
+// requirement files which are auto-generated from the master citation index.
+// Logged-out visitors see the TJC default profile (most common accreditor).
+// Logged-in users see the profile that matches their lab's accreditation_choice.
+type AccreditorProfile = {
+  short: string;
+  full: string;
+  count: number;
+  chapters: string;
+  surveyTerm: string;
+};
 
-const FEATURES = [
-  "All 88 TJC-required laboratory policies pre-loaded and organized by chapter",
-  "Bulk N/A actions: mark an entire category as N/A with one click, or mark individual requirements",
-  "Status tracking per requirement: Not Started, In Progress, Complete, N/A",
-  "Link one policy document to multiple TJC requirements",
-  "Policy library with owner, policy number, review dates, and document upload",
-  "Automated review date warnings: 90 days out (amber) and overdue (red)",
-  "Readiness score showing % of applicable requirements complete",
-  "PDF inspection report: summary on page 1, requirements by chapter, policy index",
-  "Laboratory Director or Designee review signature block on all reports",
-  "CLIA number on every report, auto-populated from your account",
-  "Covers all 13 TJC chapters: APR, DC, EC, EM, HR, IC, IM, LD, PI, QSA, SE, TS, WT",
-  "Built by a credentialed MLS(ASCP), CPHQ with direct TJC accreditation experience",
-];
+const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
+  TJC: {
+    short: "TJC",
+    full: "The Joint Commission",
+    count: 88,
+    chapters: "APR, DC, EC, EM, HR, IC, IM, LD, PI, QSA, SE, TS, WT",
+    surveyTerm: "TJC survey",
+  },
+  CAP: {
+    short: "CAP",
+    full: "College of American Pathologists",
+    count: 65,
+    chapters: "GEN, COM, CHM, HEM, MIC, IMM, TRM, MOL",
+    surveyTerm: "CAP inspection",
+  },
+  COLA: {
+    short: "COLA",
+    full: "COLA Inc.",
+    count: 81,
+    chapters: "QC, GLS, PRE, PT, PST, VER, CA",
+    surveyTerm: "COLA survey",
+  },
+  "CAP+AABB": {
+    short: "CAP and AABB",
+    full: "College of American Pathologists and AABB",
+    count: 65,
+    chapters: "GEN, COM, CHM, HEM, MIC, IMM, TRM, MOL",
+    surveyTerm: "CAP and AABB inspection",
+  },
+  CLIA: {
+    short: "CLIA",
+    full: "Clinical Laboratory Improvement Amendments",
+    count: 286,
+    chapters: "42 CFR 493 Subparts H, J, K, M",
+    surveyTerm: "CLIA survey",
+  },
+};
+
+const DEFAULT_PROFILE = ACCREDITOR_PROFILES.TJC;
 
 export default function VeritaPolicyPage() {
-    const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software", description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready." });
-return (
+  const { isLoggedIn } = useAuth();
+  useSEO({
+    title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software",
+    description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready.",
+  });
+
+  // Pull the lab's accreditation_choice when logged in. Endpoint requires auth,
+  // so we only fire it when isLoggedIn is true.
+  const { data: accountSettings } = useQuery<{ accreditation_choice?: string }>({
+    queryKey: ["/api/account/settings"],
+    enabled: isLoggedIn,
+  });
+
+  const choice = accountSettings?.accreditation_choice || "TJC";
+  const profile = ACCREDITOR_PROFILES[choice] || DEFAULT_PROFILE;
+
+  const FEATURE_CARDS = [
+    {
+      icon: FileText,
+      title: `${profile.count} ${profile.short} Requirements Pre-Loaded`,
+      desc: `Every policy required by ${profile.full} for laboratory accreditation, organized by chapter. Mapped to the current ${profile.short} standard for laboratory accreditation.`,
+      color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+    },
+    {
+      icon: ToggleLeft,
+      title: "Per-Requirement N/A Control",
+      desc: "Not all policies apply to every lab. Mark individual requirements or entire categories as N/A with one click. Bulk actions make it fast to configure your lab's scope.",
+      color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
+    },
+    {
+      icon: BookOpen,
+      title: "Policy Library",
+      desc: `Build your lab's policy library. One policy can satisfy multiple ${profile.short} requirements. Track owner, status, review dates, and upload the actual policy document.`,
+      color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
+      comingSoon: true,
+    },
+    {
+      icon: BarChart2,
+      title: "Readiness Score",
+      desc: `See your inspection readiness at a glance. Track completion across all ${profile.short} chapters. Generate an inspector-ready compliance report with one click.`,
+      color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    },
+  ];
+
+  const FEATURES = [
+    `All ${profile.count} ${profile.short}-required laboratory policies pre-loaded and organized by chapter`,
+    "Bulk N/A actions: mark an entire category as N/A with one click, or mark individual requirements",
+    "Status tracking per requirement: Not Started, In Progress, Complete, N/A",
+    `Link one policy document to multiple ${profile.short} requirements`,
+    "Policy library with owner, policy number, review dates, and document upload",
+    "Automated review date warnings: 90 days out (amber) and overdue (red)",
+    "Readiness score showing % of applicable requirements complete",
+    "PDF inspection report: summary on page 1, requirements by chapter, policy index",
+    "Laboratory Director or Designee review signature block on all reports",
+    "CLIA number on every report, auto-populated from your account",
+    `Covers ${profile.short} chapters: ${profile.chapters}`,
+    "Built by a credentialed MLS(ASCP), CPHQ with direct laboratory accreditation experience",
+  ];
+
+  return (
     <div>
       {/* Hero */}
       <section className="border-b border-border bg-primary/5">
@@ -69,10 +136,10 @@ return (
                 VeritaPolicy&#8482;
               </h1>
               <p className="text-xl text-muted-foreground mb-2 font-medium">
-                TJC Policy Compliance Tracker
+                {profile.short} Policy Compliance Tracker
               </p>
               <p className="text-muted-foreground mb-8 leading-relaxed">
-                Track all 88 policies required by The Joint Commission for laboratory accreditation.
+                Track all {profile.count} policies required by {profile.full} for laboratory accreditation.
                 Build your policy library, link documents to requirements, and generate an
                 inspector-ready compliance report with one click.
               </p>
@@ -114,15 +181,15 @@ return (
                 </div>
                 <div className="pt-2 border-t border-border">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">QSA.02.10.01 - Method Validation</span>
+                    <span className="text-muted-foreground">Method Validation</span>
                     <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">Complete</Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm mt-2">
-                    <span className="text-muted-foreground">HR.01.06.01 - Staff Competency</span>
+                    <span className="text-muted-foreground">Staff Competency</span>
                     <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-xs">In Progress</Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm mt-2">
-                    <span className="text-muted-foreground">LD.03.01.01 - Culture of Safety</span>
+                    <span className="text-muted-foreground">Culture of Safety</span>
                     <Badge className="bg-muted text-muted-foreground text-xs">Not Started</Badge>
                   </div>
                 </div>
@@ -136,9 +203,9 @@ return (
       <section className="py-16 border-b border-border">
         <div className="container-default">
           <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold text-foreground mb-3">Built for TJC-Accredited Labs</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-3">Built for {profile.short}-Accredited Labs</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Every requirement from the current TJC standard for laboratory and point-of-care testing,
+              Every requirement from the current {profile.short} standard for laboratory and point-of-care testing,
               organized and ready to track.
             </p>
           </div>
@@ -183,7 +250,7 @@ return (
       {/* CTA */}
       <section className="py-16">
         <div className="container-default text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-4">Ready for your next TJC survey?</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-4">Ready for your next {profile.surveyTerm}?</h2>
           <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
             VeritaPolicy&#8482; is included with all paid VeritaAssure&#8482; plans. No additional cost.
           </p>
