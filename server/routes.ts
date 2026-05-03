@@ -8937,8 +8937,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
   const { CAP_REQUIREMENTS } = await import('./capRequirements');
   const { CFR_REQUIREMENTS } = await import('./cfrRequirements');
-  const { AABB_REQUIREMENTS } = await import('./aabbRequirements');
   const { COLA_REQUIREMENTS } = await import('./colaRequirements');
+  // AABB parked 2026-05-03 -- see parking-lot/aabbRequirements.ts.parked
 
   // Phase 2 (2026-05-02): build the requirement set for a given lab from the
   // four accreditation flags. CFR is appended for every lab regardless of
@@ -8948,8 +8948,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const reqSets: any[] = [];
     if (lab?.accreditation_tjc)  reqSets.push(...(TJC_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'tjc' })));
     if (lab?.accreditation_cap)  reqSets.push(...(CAP_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cap' })));
-    if (lab?.accreditation_aabb) reqSets.push(...(AABB_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'aabb' })));
     if (lab?.accreditation_cola) reqSets.push(...(COLA_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cola' })));
+    // AABB parked 2026-05-03 -- see parking-lot/aabbRequirements.ts.parked
     // CFR appended for every lab.
     reqSets.push(...(CFR_REQUIREMENTS as unknown as any[]).map((r: any) => ({ ...r, source: 'cfr' })));
     return reqSets;
