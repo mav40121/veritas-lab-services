@@ -126,6 +126,18 @@ Both gates are phrased so that violations are detectable in the conversation log
 - Status colors: Pass/Compliant/Active=bold green #437A22, Fail/Overdue/Expired=bold red #A12C7B, Due Soon/Pending=bold amber #964219, N/A/Not Required=muted gray #7A7974
 - Null values: show blank cell — never "null" or "undefined"
 
+### Excel Export Standard — Customer-Facing Workbooks (NON-NEGOTIABLE)
+Applies to every customer-facing Excel deliverable (VeritaPolicy, VeritaScan, VeritaMap, VeritaComp, VeritaCheck export, audit-trail extracts, anything a lab director or surveyor may receive). Established 2026-05-03 after the VeritaPolicy review found that an unbranded xlsx with no provenance could be shared out of context with no way to identify the originating lab.
+
+1. **About sheet is sheet 1.** Every workbook opens to an About sheet that precedes any data sheet. The workbook's active sheet on open is the About sheet, not the data.
+2. **About sheet contents (mandatory order):** product title bar (brand teal), lab identity row ("Prepared for: <Lab Name>    CLIA: <CLIA>"), product disclaimer paragraph, How-to-use section, Source/provenance block, Coverage gaps paragraph with info@veritaslabservices.com email pattern.
+3. **Lab identity is stamped in three independent layers:** (a) visible About-sheet identity row, (b) page-setup oddHeader.right on every sheet carrying "<Lab Name>    CLIA: <CLIA>", (c) page-setup oddFooter.left on every sheet carrying the same. Header and footer survive cell-level copy-paste.
+4. **Sheet protection is on, with password.** About sheet is fully read-only. Data sheets lock all citation/identity columns; only review-input columns (Notes, Keep, comparable per-product) remain unlocked. Password is sourced from server-side env, not committed in code.
+5. **Shared helper required.** Python-side exports use `excel_about_helper.py` (`add_about_sheet` + `apply_lab_identity_to_data_sheet`). TypeScript-side ExcelJS exports must mirror the same pattern via the equivalent shared helper module — no per-feature reimplementation.
+6. **Em-dash ban applies to every cell, header, footer, and About paragraph.** Use periods or semicolons.
+7. **Brand colors only:** teal #01696F headers, tint #E6F2F2 for section bars, alt-row #EBF3F8, text #28251D / #0A3A3D. No off-shades.
+8. **Identity values come from the live lab record at export time** — never hardcoded except in demo-fixture builders (e.g., Riverside Regional Medical Center / 22D0999999 for Michael's demo lab). Production exports must read the lab's own name + CLIA from the database and pass them into the helper.
+
 ## Process Rules
 - **TEMPLATE-FIRST RULE**: The filled-in Mandatory Response Template (TASK/ASSUMPTIONS/CLARIFYING QUESTION/PLAN/SELF-CHECK) must be presented to the user and approved BEFORE any file is modified. No exceptions. The commit-msg hook enforces TASK/PLAN/Self-check in every commit message. This rule was added after three failed deploys on 2026-04-14 caused by skipping the template on a "simple" bug fix.
 - Large tasks: present build breakdown first, get approval, THEN build
