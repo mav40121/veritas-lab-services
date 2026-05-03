@@ -262,23 +262,25 @@ return (
           </div>
         </section>
 
-        {/* Pricing Summary */}
-        <section>
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-            Pricing
-          </div>
-          <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
-            Plans are available for labs of all sizes, from Certificate of Waiver clinics to large hospital systems.
-            Tier is suggested at signup based on your CLIA certificate. No setup fees. Cancel anytime.
-          </p>
-          <div className="mt-2 text-center">
-            <Button asChild variant="default" size="sm">
-              <Link href="/pricing">
-                View full pricing and feature comparison <ChevronRight size={13} className="ml-1" />
-              </Link>
-            </Button>
-          </div>
-        </section>
+        {/* Pricing Summary - hidden for paid users */}
+        {!isLoggedIn && (
+          <section>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+              Pricing
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
+              Plans are available for labs of all sizes, from Certificate of Waiver clinics to large hospital systems.
+              Tier is suggested at signup based on your CLIA certificate. No setup fees. Cancel anytime.
+            </p>
+            <div className="mt-2 text-center">
+              <Button asChild variant="default" size="sm">
+                <Link href="/pricing">
+                  View full pricing and feature comparison <ChevronRight size={13} className="ml-1" />
+                </Link>
+              </Button>
+            </div>
+          </section>
+        )}
 
         {/* Why VeritaAssure */}
         <section className="rounded-2xl border border-border bg-card p-8">

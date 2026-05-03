@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ChevronRight, FileText, ToggleLeft, BarChart2, BookOpen } from "lucide-react";
+import { useAuth } from "@/components/AuthContext";
 
 const FEATURE_CARDS = [
   {
@@ -49,6 +50,7 @@ const FEATURES = [
 ];
 
 export default function VeritaPolicyPage() {
+    const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software", description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready." });
 return (
     <div>
@@ -80,11 +82,13 @@ return (
                     Open VeritaPolicy&#8482; <ChevronRight size={16} />
                   </Button>
                 </Link>
-                <Link href="/pricing">
-                  <Button size="lg" variant="outline">
-                    View Pricing
-                  </Button>
-                </Link>
+                {!isLoggedIn && (
+                  <Link href="/pricing">
+                    <Button size="lg" variant="outline">
+                      View Pricing
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
             <div className="hidden lg:block">
@@ -189,9 +193,11 @@ return (
                 Open VeritaPolicy&#8482; <ChevronRight size={16} />
               </Button>
             </Link>
-            <Link href="/pricing">
-              <Button size="lg" variant="outline">View Plans</Button>
-            </Link>
+            {!isLoggedIn && (
+              <Link href="/pricing">
+                <Button size="lg" variant="outline">View Plans</Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>

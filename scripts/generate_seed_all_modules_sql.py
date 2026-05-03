@@ -306,6 +306,70 @@ FROM veritatrack_tasks t WHERE t.user_id = {USER_ID};
     out.append("")
 
     # ----------------------------------------------------------------------
+    # 4b. VeritaShift staffing study (Core Lab Q1 Analysis)
+    #     6 weeks of received/verified hourly volume + 1 week staffing baseline.
+    # ----------------------------------------------------------------------
+    out.append("-- VeritaShift staffing study + 2184 hourly rows --")
+    out.append(f"""
+DELETE FROM staffing_hourly_data WHERE study_id IN (SELECT id FROM staffing_studies WHERE account_id={ACCOUNT_ID} AND name LIKE '%{SEED_TAG}%');
+DELETE FROM staffing_studies WHERE account_id={ACCOUNT_ID} AND name LIKE '%{SEED_TAG}%';
+-- Clean up legacy empty 'test' study
+DELETE FROM staffing_hourly_data WHERE study_id IN (SELECT id FROM staffing_studies WHERE account_id={ACCOUNT_ID} AND name='test');
+DELETE FROM staffing_studies WHERE account_id={ACCOUNT_ID} AND name='test';
+INSERT INTO staffing_studies (account_id, name, department, start_date, status, created_at, updated_at)
+VALUES ({ACCOUNT_ID}, 'Core Lab Q1 Analysis {SEED_TAG}', 'Core Lab', '2026-01-06', 'complete', {lit(NOW_ISO)}, {lit(NOW_ISO)});
+""".strip())
+
+    weekday_received = [3,2,2,2,3,8,22,45,62,58,52,48,44,42,38,32,28,22,15,10,8,6,4,3]
+    weekday_verified = [4,3,2,2,3,6,18,40,58,56,50,46,42,40,36,30,26,20,14,9,7,5,4,3]
+    weekday_staff    = [2,2,2,2,2,3,5,7,8,8,7,7,6,6,5,5,4,3,3,2,2,2,2,2]
+    weekend_staff    = [2,2,2,2,2,2,3,4,5,5,4,4,4,3,3,3,3,2,2,2,2,2,2,2]
+    weekend_multiplier = 0.6
+
+    # Build 2184 INSERT rows. Use a CTE referencing the just-inserted study by name.
+    study_lookup = (
+        f"(SELECT id FROM staffing_studies WHERE account_id={ACCOUNT_ID} "
+        f"AND name='Core Lab Q1 Analysis {SEED_TAG}' LIMIT 1)"
+    )
+    # Week 0: staffing baseline only (168 rows: 7 days x 24 hours x 1 metric)
+    rows: list[str] = []
+    for day in range(7):
+        is_weekend = day == 0 or day == 6
+        staff_arr = weekend_staff if is_weekend else weekday_staff
+        for hour in range(24):
+            value = staff_arr[hour]
+            rows.append(
+                f"({study_lookup}, 0, {day}, {hour}, 'staffing', {value})"
+            )
+    # Weeks 1-6: received + verified hourly with weekday/weekend variation
+    for week in range(1, 7):
+        for day in range(7):
+            is_weekend = day == 0 or day == 6
+            for hour in range(24):
+                week_var = 0.85 + (((week*7 + day*3 + 13) % 30) / 100.0)
+                cell_var = ((hour*3 + day*5 + week*7) % 7) - 3
+                base_recv = weekday_received[hour]
+                base_ver = weekday_verified[hour]
+                if is_weekend:
+                    base_recv *= weekend_multiplier
+                    base_ver *= weekend_multiplier
+                recv = max(0, int(round(base_recv * week_var + cell_var)))
+                ver = max(0, int(round(base_ver * week_var + cell_var)))
+                rows.append(f"({study_lookup}, {week}, {day}, {hour}, 'received', {recv})")
+                rows.append(f"({study_lookup}, {week}, {day}, {hour}, 'verified', {ver})")
+
+    # Chunk inserts into manageable VALUES groups
+    CHUNK = 200
+    for i in range(0, len(rows), CHUNK):
+        batch = ",\n  ".join(rows[i:i+CHUNK])
+        out.append(
+            "INSERT OR IGNORE INTO staffing_hourly_data "
+            "(study_id, week_number, day_of_week, hour_slot, metric_type, value) VALUES\n  "
+            + batch + ";"
+        )
+    out.append("")
+
+    # ----------------------------------------------------------------------
     # 5. Competency method groups (one per program)
     # ----------------------------------------------------------------------
     out.append("-- Competency method groups (one per program) --")
