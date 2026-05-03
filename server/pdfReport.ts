@@ -2494,17 +2494,33 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     return `<tr><td style="font-weight:600;font-size:7.5pt">${domain}</td><td class="text-center" style="font-size:7.5pt;color:${rateColor};font-weight:700">${dRate}%</td></tr>`;
   }).join("");
 
+  // Phase 3.6 (2026-05-03): dynamic accreditor columns. Column order is
+  // # / Question / CFR / <accreditor(s) by lab selection> / Status / Owner / Due / Notes.
+  // CFR is always rendered (every CLIA lab is bound by it). Accreditor columns
+  // (TJC, CAP, AABB, COLA) render only when the lab's accreditation_choice
+  // includes that body. CLIA-only labs see CFR alone.
+  const selectedAccreditors: Array<{ key: "tjc" | "cap" | "aabb" | "cola"; label: string }> = [];
+  const ps = data.preferredStandards || [];
+  if (ps.includes("TJC" as AccreditationBody)) selectedAccreditors.push({ key: "tjc", label: "TJC" });
+  if (ps.includes("CAP" as AccreditationBody)) selectedAccreditors.push({ key: "cap", label: "CAP" });
+  if (ps.includes("AABB" as AccreditationBody)) selectedAccreditors.push({ key: "aabb", label: "AABB" });
+  if (ps.includes("COLA" as AccreditationBody)) selectedAccreditors.push({ key: "cola", label: "COLA" });
+
   // Domain detail sections - natural flow, no forced page breaks
   let domainSections = "";
   for (const [domain, domItems] of Array.from(domainMap.entries())) {
     const rows = domItems.map((item, idx) => {
       const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
+      const accreditorCells = selectedAccreditors.map((a) => {
+        const v = (item as any)[a.key] as string | undefined;
+        const display = v && v !== "N/A" ? v : "-";
+        return `<td style="font-size:6.5pt">${display}</td>`;
+      }).join("");
       return `<tr class="${idx % 2 === 1 ? "stripe" : ""}" style="page-break-inside:avoid">
         <td>${item.id}</td>
         <td style="max-width:200px;word-wrap:break-word;font-size:7pt">${item.question}</td>
-        <td style="font-size:6.5pt">${item.tjc || "-"}</td>
-        <td style="font-size:6.5pt">${item.cap || "-"}</td>
         <td style="font-size:6.5pt">${item.cfr || "-"}</td>
+        ${accreditorCells}
         <td><span style="background:${sc.bg};color:${sc.fg};padding:1px 5px;border-radius:3px;font-size:6.5pt;font-weight:600;white-space:nowrap">${item.status}</span></td>
         <td style="font-size:7pt">${item.owner || ""}</td>
         <td style="font-size:7pt">${item.due_date || ""}</td>
@@ -2512,12 +2528,13 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
       </tr>`;
     }).join("");
 
+    const accreditorHeaders = selectedAccreditors.map((a) => `<th>${a.label}</th>`).join("");
     domainSections += `
       <div style="border-top:2px solid #B0D8D8;margin-top:14px;padding-top:6px;page-break-after:avoid">
         <div class="section-label" style="font-size:10pt;margin:0 0 6px;color:${TEAL};page-break-after:avoid">${domain}</div>
       </div>
       <table>
-        <thead><tr><th>#</th><th>Compliance Question</th><th>TJC</th><th>CAP</th><th>CFR</th><th>Status</th><th>Owner</th><th>Due</th><th>Notes</th></tr></thead>
+        <thead><tr><th>#</th><th>Compliance Question</th><th>CFR</th>${accreditorHeaders}<th>Status</th><th>Owner</th><th>Due</th><th>Notes</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   }

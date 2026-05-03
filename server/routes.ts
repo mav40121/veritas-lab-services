@@ -2932,35 +2932,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     // Client sends the reference data (questions, citations) so server doesn't need to duplicate it
-    const { referenceItems } = req.body; // Array of { id, domain, question, tjc, cap, cfr }
+    const { referenceItems } = req.body; // Array of { id, domain, question, tjc, cap, cfr, aabb, cola }
     if (!Array.isArray(referenceItems) || referenceItems.length === 0) {
       return res.status(400).json({ error: "referenceItems array required" });
     }
+
+    // Phase 3.6 (2026-05-03): resolve preferred_standards for dynamic accreditor columns
+    let xlsxPreferredStandards: string[] = [];
+    const xlsxLab = resolveLabForUser(req.userId);
+    if (xlsxLab) {
+      if (xlsxLab.accreditation_cap) xlsxPreferredStandards.push("CAP");
+      if (xlsxLab.accreditation_tjc) xlsxPreferredStandards.push("TJC");
+      if (xlsxLab.accreditation_cola) xlsxPreferredStandards.push("COLA");
+      if (xlsxLab.accreditation_aabb) xlsxPreferredStandards.push("AABB");
+    } else {
+      const xlsxUserRow = (db as any).$client.prepare("SELECT preferred_standards FROM users WHERE id = ?").get(req.userId) as any;
+      if (xlsxUserRow?.preferred_standards) {
+        try { xlsxPreferredStandards = JSON.parse(xlsxUserRow.preferred_standards) || []; } catch {}
+      }
+    }
+
+    type AccreditorCol = { key: "tjc" | "cap" | "aabb" | "cola"; label: string };
+    const xlsxSelected: AccreditorCol[] = [];
+    if (xlsxPreferredStandards.includes("TJC")) xlsxSelected.push({ key: "tjc", label: "TJC Standard" });
+    if (xlsxPreferredStandards.includes("CAP")) xlsxSelected.push({ key: "cap", label: "CAP Requirement" });
+    if (xlsxPreferredStandards.includes("AABB")) xlsxSelected.push({ key: "aabb", label: "AABB Standard" });
+    if (xlsxPreferredStandards.includes("COLA")) xlsxSelected.push({ key: "cola", label: "COLA Criterion" });
 
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("VeritaScan");
 
+      // Column order: # / Domain / Question / CFR / <accreditor(s) by selection> / Status / Owner / Due / Notes
+      const accreditorHeaders = xlsxSelected.map(a => a.label);
+      const accreditorWidths = xlsxSelected.map(() => 22);
       const headers = [
-        "Item #", "Domain", "Compliance Question", "TJC Standard",
-        "CAP Requirement", "42 CFR Citation", "Status", "Owner", "Due Date", "Notes"
+        "Item #", "Domain", "Compliance Question", "42 CFR Citation",
+        ...accreditorHeaders,
+        "Status", "Owner", "Due Date", "Notes"
       ];
 
-      // Column widths
-      const colWidths = [10, 28, 80, 22, 18, 24, 18, 20, 16, 40];
+      // Column widths matching the header order
+      const colWidths = [10, 28, 80, 24, ...accreditorWidths, 18, 20, 16, 40];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] }));
 
       // Build data rows
       const dataRows = referenceItems.map((ref: any) => {
         const saved = itemMap[ref.id] || {};
+        const accreditorCells = xlsxSelected.map(a => {
+          const v = ref[a.key];
+          return v && v !== "N/A" ? v : "";
+        });
         return [
           ref.id,
           ref.domain,
           ref.question,
-          ref.tjc || "",
-          ref.cap || "",
           ref.cfr || "",
+          ...accreditorCells,
           saved.status || "Not Assessed",
           saved.owner || "",
           saved.due_date || "",
@@ -2990,8 +3019,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       // ── Data rows (row 2 onward) ──
-      const statusCol = 7; // 1-indexed: Status
-      const dateCol = 9;   // 1-indexed: Due Date
+      // Column indices shift with the dynamic accreditor columns; status/date are
+      // computed off the final headers array so this stays correct for any
+      // accreditation_choice selection.
+      const statusCol = headers.indexOf("Status") + 1; // 1-indexed
+      const dateCol = headers.indexOf("Due Date") + 1; // 1-indexed
       for (let r = 2; r <= dataRows.length + 1; r++) {
         const row = ws.getRow(r);
         const isEvenRow = r % 2 === 0;
