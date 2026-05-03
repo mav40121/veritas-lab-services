@@ -49,17 +49,19 @@ export default function VeritaTrackPage() {
                 <li className="flex items-start gap-2"><FileSpreadsheet size={16} className="text-primary mt-0.5 shrink-0" /><span>Excel export of any date range for inspector documentation</span></li>
               </ul>
 
-              {/* Pricing */}
-              <div className="flex flex-wrap gap-3 mb-8">
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">From $499/yr</div>
-                  <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
+              {/* Pricing - public visitors only */}
+              {!isLoggedIn && (
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">From $499/yr</div>
+                    <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">All Plans</div>
+                    <div className="text-xs text-muted-foreground">Clinic, Community, Hospital, Enterprise</div>
+                  </div>
                 </div>
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">All Plans</div>
-                  <div className="text-xs text-muted-foreground">Clinic, Community, Hospital, Enterprise</div>
-                </div>
-              </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3">
                 {isLoggedIn ? (
@@ -67,13 +69,15 @@ export default function VeritaTrackPage() {
                     <Link href="/veritatrack-app">Open VeritaTrack{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
                   </Button>
                 ) : (
-                  <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                    <Link href="/login">Launch VeritaTrack{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
-                  </Button>
+                  <>
+                    <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                      <Link href="/login">Launch VeritaTrack{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                    </Button>
+                    <Button asChild variant="outline" size="lg">
+                      <Link href="/login">Sign In / Create Account</Link>
+                    </Button>
+                  </>
                 )}
-                <Button asChild variant="outline" size="lg">
-                  <Link href="/login">Sign In / Create Account</Link>
-                </Button>
               </div>
             </div>
 

@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useAuth } from "@/components/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +41,7 @@ const FEATURE_CARDS = [
 ];
 
 export default function VeritaStaffPage() {
+  const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaStaff\u2122 | Laboratory Staff Roster and HR Compliance Software", description: "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys." });
 return (
     <div>
@@ -66,12 +68,14 @@ return (
                 Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"™"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation.
               </p>
 
-              <div className="flex flex-wrap gap-3 mb-8">
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+              {!isLoggedIn && (
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">Included</div>
+                    <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">

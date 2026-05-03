@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useAuth } from "@/components/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +35,7 @@ const FEATURES = [
 ];
 
 export default function VeritaMapPage() {
+  const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
 return (
     <div>
@@ -63,16 +65,18 @@ return (
                 Most laboratories discover regulatory gaps during inspections. VeritaMap™ finds them first.
               </p>
 
-              <div className="flex flex-wrap gap-3 mb-8">
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">Free</div>
-                  <div className="text-xs text-muted-foreground">Up to 4 instruments & 10 analytes</div>
+              {!isLoggedIn && (
+                <div className="flex flex-wrap gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">Free</div>
+                    <div className="text-xs text-muted-foreground">Up to 4 instruments & 10 analytes</div>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
+                    <div className="text-2xl font-bold text-primary">Included</div>
+                    <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+                  </div>
                 </div>
-                <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                  <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
-                </div>
-              </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link href="/veritamap-app" className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
@@ -197,7 +201,8 @@ return (
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Pricing - public visitors only */}
+      {!isLoggedIn && (
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
@@ -290,6 +295,7 @@ return (
           </p>
         </div>
       </section>
+      )}
 
       {/* Who it's for */}
       <section className="section-padding border-b border-border">
