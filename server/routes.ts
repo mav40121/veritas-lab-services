@@ -8861,6 +8861,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Seed all remaining demo modules for Michael's lab ──
+  // POST /api/admin/seed-all-modules?secret=$ADMIN_SECRET
+  // Fills PI entries, productivity, veritatrack signoffs, competency
+  // method groups + assessments + schedules, and a fully-assessed VeritaScan.
+  // Also removes the orphan cumsum tracker (cumsum is a VeritaCheck submodule,
+  // not lab demo data).
+  app.post("/api/admin/seed-all-modules", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const sqlPath = path.join(process.cwd(), "scripts", "seed", "michaels_seed_all_modules_2026_05_03.sql");
+      if (!fs.existsSync(sqlPath)) {
+        return res.status(500).json({ error: "seed_file_missing", path: sqlPath });
+      }
+      const before = {
+        pi_entries: (sqlite.prepare("SELECT COUNT(*) as n FROM pi_entries WHERE account_id=17").get() as { n: number }).n,
+        productivity_months: (sqlite.prepare("SELECT COUNT(*) as n FROM productivity_months WHERE account_id=17").get() as { n: number }).n,
+        veritatrack_signoffs: (sqlite.prepare("SELECT COUNT(*) as n FROM veritatrack_signoffs WHERE user_id=17").get() as { n: number }).n,
+        competency_method_groups: (sqlite.prepare("SELECT COUNT(*) as n FROM competency_method_groups WHERE program_id IN (SELECT id FROM competency_programs WHERE user_id=17)").get() as { n: number }).n,
+        competency_assessments: (sqlite.prepare("SELECT COUNT(*) as n FROM competency_assessments WHERE employee_id IN (SELECT id FROM competency_employees WHERE user_id=17)").get() as { n: number }).n,
+        staff_competency_schedules: (sqlite.prepare("SELECT COUNT(*) as n FROM staff_competency_schedules WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id=17)").get() as { n: number }).n,
+        veritascan_scans: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_scans WHERE user_id=17").get() as { n: number }).n,
+        veritascan_assessed: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_items WHERE scan_id IN (SELECT id FROM veritascan_scans WHERE user_id=17) AND status != 'Not Assessed'").get() as { n: number }).n,
+        cumsum_trackers: (sqlite.prepare("SELECT COUNT(*) as n FROM cumsum_trackers WHERE user_id=17").get() as { n: number }).n,
+      };
+      const sql = fs.readFileSync(sqlPath, "utf-8");
+      sqlite.exec(sql);
+      const after = {
+        pi_entries: (sqlite.prepare("SELECT COUNT(*) as n FROM pi_entries WHERE account_id=17").get() as { n: number }).n,
+        productivity_months: (sqlite.prepare("SELECT COUNT(*) as n FROM productivity_months WHERE account_id=17").get() as { n: number }).n,
+        veritatrack_signoffs: (sqlite.prepare("SELECT COUNT(*) as n FROM veritatrack_signoffs WHERE user_id=17").get() as { n: number }).n,
+        competency_method_groups: (sqlite.prepare("SELECT COUNT(*) as n FROM competency_method_groups WHERE program_id IN (SELECT id FROM competency_programs WHERE user_id=17)").get() as { n: number }).n,
+        competency_assessments: (sqlite.prepare("SELECT COUNT(*) as n FROM competency_assessments WHERE employee_id IN (SELECT id FROM competency_employees WHERE user_id=17)").get() as { n: number }).n,
+        staff_competency_schedules: (sqlite.prepare("SELECT COUNT(*) as n FROM staff_competency_schedules WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id=17)").get() as { n: number }).n,
+        veritascan_scans: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_scans WHERE user_id=17").get() as { n: number }).n,
+        veritascan_items_total: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_items WHERE scan_id IN (SELECT id FROM veritascan_scans WHERE user_id=17)").get() as { n: number }).n,
+        veritascan_assessed: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_items WHERE scan_id IN (SELECT id FROM veritascan_scans WHERE user_id=17) AND status != 'Not Assessed'").get() as { n: number }).n,
+        cumsum_trackers: (sqlite.prepare("SELECT COUNT(*) as n FROM cumsum_trackers WHERE user_id=17").get() as { n: number }).n,
+      };
+      console.log('[seed-all-modules] before:', before, 'after:', after);
+      res.json({ ok: true, before, after, sql_bytes: sql.length });
+    } catch (err: any) {
+      console.error('[seed-all-modules] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── VeritaPolicy Routes ──────────────────────────────────────────────────
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
   const { CAP_REQUIREMENTS } = await import('./capRequirements');
