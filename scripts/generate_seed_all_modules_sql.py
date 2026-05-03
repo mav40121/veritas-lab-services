@@ -200,12 +200,9 @@ SET lab_id = (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LI
 WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = {USER_ID})
   AND lab_id != (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1);
 """.strip())
-    out.append(f"""
-UPDATE users
-SET lab_id = (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1)
-WHERE id IN ({USER_ID}, 19, 22)
-  AND lab_id != (SELECT id FROM staff_labs WHERE user_id = {USER_ID} ORDER BY id LIMIT 1);
-""".strip())
+    # NOTE: do NOT update users.lab_id. That column FKs to labs(id), not
+    # staff_labs(id). Michael's labs.id=3 row IS Michael's Lab; only the
+    # staff_* tables use a separate staff_labs id (which is 5 for him).
     out.append("")
 
     out.append("-- VeritaTrack common lab tasks (idempotent by name) --")
