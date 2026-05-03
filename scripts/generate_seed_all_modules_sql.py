@@ -80,36 +80,60 @@ def main() -> int:
     # ----------------------------------------------------------------------
     # 1. PI entries: 12 months, all 14 metrics
     # ----------------------------------------------------------------------
-    out.append("-- PI entries (12 months x 14 metrics) --")
-    # We'll INSERT OR REPLACE keyed on (metric_id, year, month).
-    # Realistic value ranges per metric name (approximate clinical norms).
-    metric_ranges = {
-        "Wasted Product Rate":               (0.5, 4.5, "%"),
-        "Transfusion Reaction Rate":         (0.1, 1.2, "per 1000 units"),
-        "Crossmatch-to-Transfusion Ratio":   (1.5, 2.8, "ratio"),
-        "C. difficile Rate":                 (1.0, 6.0, "per 10,000 patient days"),
-        "MRSA Rate":                         (0.5, 3.5, "per 10,000 patient days"),
-        "Blood Culture Contamination Rate":  (0.8, 3.5, "%"),
-        "Urine Contamination Rate":          (1.0, 5.0, "%"),
-        "Avg TAT - Received to Verified":    (35, 85, "min"),
-        "Avg TAT - Ordered to Collected":    (10, 30, "min"),
-        "Avg TAT - Collected to Received":   (15, 45, "min"),
-        "Avg TAT - Received to Resulted":    (20, 60, "min"),
-        "Avg TAT - Resulted to Verified":    (5, 20, "min"),
-        "Avg TAT - Ordered to Verified":     (60, 150, "min"),
-        "Critical Value Notification Rate":  (92, 99.5, "%"),
+    out.append("-- PI entries (12 months x 14 metrics, realistic trends) --")
+    # Each metric: (start_value_12mo_ago, end_value_now, direction, monthly_volume_baseline, unit)
+    # Direction:
+    #   'lower_is_better' -> end <= start (improvement is downward)
+    #   'higher_is_better' -> end >= start (improvement is upward)
+    # Trends are mostly monotonic with small monthly noise so the
+    # trend-line tells a coherent improvement story while still
+    # looking like real human data.
+    metric_trends = {
+        # Blood bank
+        "Wasted Product Rate":               (3.8, 1.4, "lower",  900,  0.25),
+        "Transfusion Reaction Rate":         (0.9, 0.3, "lower",  450,  0.10),
+        "Crossmatch-to-Transfusion Ratio":   (2.5, 1.7, "lower",  900,  0.10),
+        # Microbiology / infection control
+        "C. difficile Rate":                 (4.8, 2.1, "lower",  1800, 0.40),
+        "MRSA Rate":                         (2.7, 1.0, "lower",  1800, 0.25),
+        "Blood Culture Contamination Rate":  (3.0, 1.4, "lower",  1500, 0.20),
+        "Urine Contamination Rate":          (4.2, 2.1, "lower",  3200, 0.30),
+        # TAT (minutes; trending down = improvement)
+        "Avg TAT - Received to Verified":    (78, 48, "lower",  4800, 3.5),
+        "Avg TAT - Ordered to Collected":    (26, 16, "lower",  4800, 1.5),
+        "Avg TAT - Collected to Received":   (40, 24, "lower",  4800, 2.0),
+        "Avg TAT - Received to Resulted":    (55, 32, "lower",  4800, 2.5),
+        "Avg TAT - Resulted to Verified":    (18, 9,  "lower",  4800, 1.0),
+        "Avg TAT - Ordered to Verified":     (140, 88, "lower", 4800, 5.0),
+        # Higher-is-better
+        "Critical Value Notification Rate":  (93.5, 98.6, "higher", 380, 0.7),
     }
     today = TODAY
+    # Generate the 12 (year, month) tuples in chronological order (oldest first).
+    months_seq = []
     for months_ago in range(12, 0, -1):
-        y = today.year if today.month - months_ago > 0 else today.year - 1
-        m = ((today.month - months_ago - 1) % 12) + 1
-        if today.month - months_ago <= 0:
-            y = today.year - 1
-        # Pull metric ids by name for account 17.
-        # We use a subselect because metric_ids are not guaranteed across DBs.
-        for metric_name, (lo, hi, _unit) in metric_ranges.items():
-            value = round(random.uniform(lo, hi), 2)
-            volume = random.randint(800, 5500)
+        anchor = today.replace(day=1)
+        # Move back months_ago months from anchor.
+        m = anchor.month - months_ago
+        y = anchor.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        months_seq.append((y, m))
+    n = len(months_seq)
+    for metric_name, (start, end, _dir, vol_base, noise_amp) in metric_trends.items():
+        for i, (y, m) in enumerate(months_seq):
+            # Linear interpolation start -> end across 12 months
+            base = start + (end - start) * (i / (n - 1))
+            # Symmetric noise that doesn't dominate the trend
+            jitter = random.uniform(-noise_amp, noise_amp)
+            raw = base + jitter
+            # Don't let TAT/% go negative
+            raw = max(0.0, raw)
+            # Round sensibly
+            value = round(raw, 1) if raw >= 10 else round(raw, 2)
+            # Volume grows mildly through the year (8% over 12 months)
+            volume = int(vol_base * (1.0 + 0.08 * (i / (n - 1))) * random.uniform(0.93, 1.07))
             out.append(
                 "INSERT OR REPLACE INTO pi_entries "
                 "(metric_id, account_id, year, month, value, volume, notes, created_at, updated_at) VALUES ("
@@ -121,17 +145,18 @@ def main() -> int:
     # ----------------------------------------------------------------------
     # 2. Productivity months
     # ----------------------------------------------------------------------
-    out.append("-- Productivity months (12 months) --")
-    for months_ago in range(12, 0, -1):
-        y = today.year if today.month - months_ago > 0 else today.year - 1
-        m = ((today.month - months_ago - 1) % 12) + 1
-        if today.month - months_ago <= 0:
-            y = today.year - 1
-        billable = random.randint(28000, 45000)
-        productive = round(random.uniform(1100, 1450), 1)
-        nonprod = round(random.uniform(80, 220), 1)
-        ot = round(random.uniform(20, 95), 1)
-        ftes = round(random.uniform(7.0, 9.5), 2)
+    out.append("-- Productivity months (12 months, coherent growth curve) --")
+    # Test volume grows from ~32K -> ~44K over the year. Productive
+    # hours track volume with a flattening efficiency curve (lab
+    # gets more efficient over time => productive hours grow slower
+    # than volume). Overtime declines as efficiency improves.
+    for i, (y, m) in enumerate(months_seq):
+        progress = i / (n - 1)  # 0.0 -> 1.0
+        billable = int(32000 + 12000 * progress + random.uniform(-1200, 1200))
+        productive = round(1180 + 180 * progress + random.uniform(-25, 25), 1)
+        nonprod = round(180 - 60 * progress + random.uniform(-12, 12), 1)
+        ot = round(85 - 50 * progress + random.uniform(-6, 6), 1)
+        ftes = round(7.4 + 1.6 * progress + random.uniform(-0.15, 0.15), 2)
         out.append(
             "INSERT OR REPLACE INTO productivity_months "
             "(account_id, year, month, billable_tests, productive_hours, non_productive_hours, "
@@ -293,29 +318,250 @@ FROM staff_employees e WHERE e.user_id = {USER_ID};
         "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES ("
         f"{USER_ID}, 'Q2 2026 Pre-COLA Scan {SEED_TAG}', {lit(NOW_ISO)}, {lit(NOW_ISO)});"
     )
-    # Use last_insert_rowid to insert items in the same script
-    # Distribute statuses: 60% Compliant, 18% Needs Attention, 8% Immediate Action, 14% Not Assessed
-    statuses = []
-    for idx, _iid in enumerate(item_ids):
-        h = idx % 100
+
+    # ------------------------------------------------------------------
+    # Parse domain for each item from veritaScanData.ts so notes can
+    # reference the correct sibling-module record (policy, PT enrollment,
+    # VeritaMap map, VeritaTrack task, competency program, etc.).
+    # ------------------------------------------------------------------
+    item_domain = {}
+    for m in re.finditer(r"\{\s*id:\s*(\d+),\s*domain:\s*\"([^\"]+)\"", ts):
+        item_domain[int(m.group(1))] = m.group(2)
+
+    # Per-domain wiring: which seeded VeritaPolicy policy + which
+    # sibling module/record each domain points at. These reference
+    # real seeded rows (POL-001..POL-012, the 8 VeritaMap maps,
+    # the seeded competency programs, PT enrollments, etc.).
+    DOMAIN_POLICY = {
+        "Quality Systems & QC":          ("POL-003", "Quality Control Plan (IQCP)"),
+        "Calibration & Verification":    ("POL-005", "Method Validation and Verification"),
+        "Proficiency Testing":           ("POL-006", "Proficiency Testing Program"),
+        "Personnel & Competency":        ("POL-004", "Staff Competency Assessment Policy"),
+        "Test Management & Procedures": ("POL-001", "Specimen Collection and Handling SOP"),
+        "Equipment & Maintenance":       ("POL-010", "Reagent and Calibrator Management"),
+        "Safety & Environment":          ("POL-008", "Safety and Infection Control Plan"),
+        "Blood Bank & Transfusion":      ("POL-002", "Critical Value Reporting Policy"),
+        "Point of Care Testing":         ("POL-012", "Waived Testing Quality Plan"),
+        "Leadership & Governance":       ("POL-007", "Record Retention and Documentation"),
+    }
+
+    # Per-domain templates referencing sibling modules. Each list has
+    # several variants so notes don't repeat. Templates use only data
+    # the demo actually has seeded.
+    # Tone: Compliant = brief evidence pointer; Needs Attention = gap
+    # + corrective action path; Immediate Action = blocking finding +
+    # owner + escalation path.
+    DOMAIN_REFS = {
+        "Quality Systems & QC": {
+            "Compliant": [
+                "Verified against {pol_num} ({pol_name}). QC review records in VeritaCheck \u2192 Hematology and Chemistry; Levey-Jennings charts current.",
+                "Confirmed via {pol_num}. Monthly QC sign-off captured in VeritaTrack \u2192 'QC Monthly Review' task; PI metric 'QC Failures' trending green.",
+                "Reviewed {pol_num} \u00a74. End-of-month QC reviewed by Michael Veri; evidence attached in VeritaCheck study log.",
+            ],
+            "Needs Attention": [
+                "Levey-Jennings review behind schedule; {pol_num} \u00a74.2 calls for weekly review. Open VeritaTrack task 'Hematology QC Review' to clear backlog.",
+                "Westgard rule application inconsistent on Chemistry. Cross-check VeritaCheck \u2192 Chemistry study and update {pol_num} \u00a76 with current rule set.",
+                "Critical-value read-back log incomplete for 3 of last 30 events. Reinforce {pol_num} (Critical Value Reporting) and update VeritaTrack 'Critical Value Audit' task.",
+            ],
+            "Immediate Action": [
+                "Director sign-off on {pol_num} ({pol_name}) overdue >18 months. Open VeritaPolicy \u2192 {pol_num} and route for attestation before COLA arrival.",
+                "QC corrective actions not documented for 2 out-of-range events. Reconstruct from VeritaCheck \u2192 Chemistry log and attach CAR to {pol_num}.",
+                "Delta-check policy missing from {pol_num}. Draft addendum and circulate via VeritaPolicy before survey.",
+            ],
+        },
+        "Calibration & Verification": {
+            "Compliant": [
+                "Cal-ver records on file per {pol_num} ({pol_name}). See VeritaMap \u2192 'Chemistry - Siemens Dimension EXL' for analyte-level due dates.",
+                "Method comparison documented in VeritaMap \u2192 'Hematology - Sysmex XN-2000 + Manual Diff' (correlation group); meets {pol_num} \u00a73.",
+                "Reportable range verified for all quantitative tests; evidence in VeritaMap detail view per {pol_num}.",
+            ],
+            "Needs Attention": [
+                "Cal-ver due in <30 days for 4 Chemistry analytes. See VeritaMap \u2192 'Chemistry - Siemens Dimension EXL' \u2192 next-due column; schedule per {pol_num}.",
+                "Method comparison documentation thin for Stago/Stago backup pairing. Re-run correlation per {pol_num} and log in VeritaMap correlation group.",
+                "Pearson r threshold not stated in {pol_num}; current practice accepts \u22650.95 but policy is silent. Update policy text.",
+            ],
+            "Immediate Action": [
+                "Cal-ver lapsed >30 days on Dimension EXL Glucose. Halt reporting until verified per {pol_num} \u00a72.1; capture evidence in VeritaMap.",
+                "Cross-instrument correlation between i-STAT G3+ and Nova StatStrip (POC Glucose) overdue. Open VeritaMap \u2192 'Point of Care' \u2192 Glucose row and run Pri\u2194Backup correlation.",
+            ],
+        },
+        "Proficiency Testing": {
+            "Compliant": [
+                "PT enrollment current with API for all regulated analytes per {pol_num}. See VeritaPT enrollments and PT events log.",
+                "Director review of PT results documented for last 4 events; evidence in VeritaPT \u2192 events tab per {pol_num}.",
+                "PT samples handled identical to patient samples; attestation captured per {pol_num} \u00a72.",
+            ],
+            "Needs Attention": [
+                "PT result trend declining on one Hematology analyte (last 3 events). Open VeritaPT \u2192 corrective actions and document RCA per {pol_num}.",
+                "Alternative performance assessment (APA) overdue for one non-regulated analyte; document per {pol_num} \u00a76.",
+                "PT enrollment certificate scan missing for 1 program. Upload to VeritaPolicy \u2192 {pol_num} attachments.",
+            ],
+            "Immediate Action": [
+                "Unsuccessful PT performance not investigated within 30 days; {pol_num} \u00a75 requires RCA. Open VeritaPT corrective action and assign to Michael Veri before COLA.",
+                "PT records for 1 prior event not retained per 2-year minimum. Locate or reconstruct per {pol_num}; document gap in corrective action log.",
+            ],
+        },
+        "Personnel & Competency": {
+            "Compliant": [
+                "Competency program current per {pol_num}. See Competency \u2192 'Chemistry Technical Competency 2026' and 'Hematology Technical Competency 2026' assessments.",
+                "All 6 CLIA methods captured per assessment; evidence in Competency module per {pol_num} \u00a73.",
+                "Annual competency complete for all 5 staff; sign-offs in Competency module and Staff schedule.",
+            ],
+            "Needs Attention": [
+                "6-month competency due in <60 days for 1 employee. See Staff \u2192 competency schedules; schedule observation per {pol_num}.",
+                "Remedial training pathway in {pol_num} \u00a75 not exercised in 12 months; verify policy still reflects practice.",
+                "Continuing education tracking outside Competency module. Consolidate into Staff records per {pol_num}.",
+            ],
+            "Immediate Action": [
+                "Lapsed competency on file for 1 testing employee. Pull from bench until re-assessed per {pol_num}; capture in Competency \u2192 assessments.",
+                "Director attestation of staff qualifications missing for 2026 cycle. Generate via Staff \u2192 Director Attestation report and route per {pol_num}.",
+            ],
+        },
+        "Test Management & Procedures": {
+            "Compliant": [
+                "SOP set current per {pol_num} ({pol_name}); 2-year director review captured in VeritaPolicy.",
+                "Specimen labeling and rejection criteria documented per {pol_num}; staff trained (Competency module).",
+                "Result reporting elements meet CLIA per {pol_num}; LIS report template attached.",
+            ],
+            "Needs Attention": [
+                "Two SOPs past 24-month review window. Open VeritaPolicy \u2192 {pol_num} and re-route for director sign-off.",
+                "Reflex testing criteria in {pol_num} reference outdated panel. Update before survey.",
+                "Biotin interference policy missing patient notification step required by {pol_num}.",
+            ],
+            "Immediate Action": [
+                "LDT validation packet incomplete for 1 in-house method; CLIA \u00a7493.1213 evidence not on file. Reconstruct per {pol_num} or suspend test.",
+                "LIS-instrument interface validation not documented after last upgrade. Capture per {pol_num}; reference VeritaMap instrument list.",
+            ],
+        },
+        "Equipment & Maintenance": {
+            "Compliant": [
+                "PM schedule current; logs in VeritaTrack maintenance tasks per {pol_num} ({pol_name}).",
+                "Temperature monitoring continuous; excursion log clean for last 90 days per {pol_num}.",
+                "Reagent lot acceptance documented in Inventory module before use per {pol_num} \u00a74.",
+            ],
+            "Needs Attention": [
+                "Pipette calibration due in <30 days for 2 pipettes. Open VeritaTrack \u2192 'Pipette Calibration' task; schedule per {pol_num}.",
+                "Centrifuge timer/speed verification log behind by 1 cycle. Add to VeritaTrack and reference {pol_num}.",
+                "Water-quality monitoring log gap (1 month) on Chemistry analyzer. Backfill per {pol_num} \u00a76.",
+            ],
+            "Immediate Action": [
+                "Out-of-service Hematology analyzer not documented with patient-result review per {pol_num}. Reconstruct from VeritaCheck and Inventory; close before survey.",
+                "New reagent lot placed in service without acceptance testing. Document retroactively per {pol_num} \u00a74.3 or remove from service.",
+            ],
+        },
+        "Safety & Environment": {
+            "Compliant": [
+                "Exposure control plan current per {pol_num} ({pol_name}); annual training documented in Competency module.",
+                "Eyewash weekly checks logged in VeritaTrack \u2192 'Eyewash Inspection' task per {pol_num}.",
+                "Chemical hygiene plan reviewed within 12 months per {pol_num} \u00a73.",
+            ],
+            "Needs Attention": [
+                "Annual safety inspection report not yet finalized for 2026. Schedule via VeritaTrack and document per {pol_num}.",
+                "SDS index not refreshed since 2025. Update Inventory \u2192 hazardous materials list per {pol_num}.",
+                "Hepatitis B declination form on file but not re-offered at policy interval. Confirm per {pol_num}.",
+            ],
+            "Immediate Action": [
+                "Eyewash station weekly checks missing for past 6 weeks. Open VeritaTrack 'Eyewash Inspection' task; backfill per {pol_num}.",
+                "Exposure incident from prior quarter has no post-exposure follow-up record. Reconstruct per {pol_num} \u00a76 before survey.",
+            ],
+        },
+        "Blood Bank & Transfusion": {
+            "Compliant": [
+                "ABO/Rh and antibody screen workflow current; evidence in VeritaMap \u2192 'Blood Bank - Tube + Ortho ID-MTS Gel' per {pol_num}.",
+                "Daily reagent QC (anti-sera, screening cells, check cells) logged per {pol_num}; see VeritaCheck Blood Bank study.",
+                "Transfusion-reaction workup policy reviewed within cycle per {pol_num}.",
+            ],
+            "Needs Attention": [
+                "Crossmatch (AHG) correlation between Tube and Ortho ID-MTS Gel due in <30 days. Open VeritaMap \u2192 Blood Bank \u2192 Crossmatch correlation group.",
+                "Massive transfusion protocol last reviewed 14 months ago; refresh in VeritaPolicy and capture in {pol_num}.",
+                "Blood-product visual inspection log inconsistent on weekends. Reinforce per {pol_num} \u00a73.",
+            ],
+            "Immediate Action": [
+                "Transfusion-fatality reporting checklist missing FDA contact path. Update {pol_num} \u00a76 and post in Blood Bank work area.",
+                "10-year retention of compatibility-testing records: 1 month gap detected. Reconstruct per {pol_num} or document permanent loss.",
+            ],
+        },
+        "Point of Care Testing": {
+            "Compliant": [
+                "POCT operator competency current; lockouts active in connectivity middleware per {pol_num} ({pol_name}).",
+                "i-STAT G3+ and Nova StatStrip glucose correlation documented in VeritaMap \u2192 Point of Care.",
+                "POCT QC daily; logs accessible per {pol_num}.",
+            ],
+            "Needs Attention": [
+                "POCT glucose meter correlation between i-STAT and Nova StatStrip due in <30 days. Open VeritaMap \u2192 Point of Care \u2192 Glucose correlation.",
+                "POCT operator roster has 2 lapsed operators; lockout enforced but re-training not scheduled. Add to Competency program per {pol_num}.",
+                "POCT critical-value escalation path in {pol_num} differs from core lab. Reconcile.",
+            ],
+            "Immediate Action": [
+                "POCT device CLIA certificate coverage not reconciled to current device list. Update via {pol_num} and Inventory \u2192 devices.",
+                "FDA 2016 ICU glucose-meter accuracy attestation missing for 1 location. Capture per {pol_num} before survey.",
+            ],
+        },
+        "Leadership & Governance": {
+            "Compliant": [
+                "Director review of all required policies current per {pol_num} ({pol_name}); see VeritaPolicy sign-off tab.",
+                "CLIA certificate posted; copy attached to {pol_num} in VeritaPolicy.",
+                "Annual self-assessment scheduled and tracked in VeritaTrack per {pol_num}.",
+            ],
+            "Needs Attention": [
+                "Corrective-action log has 3 open items >60 days. Triage in VeritaTrack and close per {pol_num} \u00a72.",
+                "Strategic plan last reviewed 11 months ago; refresh before annual cycle per {pol_num}.",
+                "Disaster-recovery plan references retired LIS vendor. Update {pol_num} \u00a74.",
+            ],
+            "Immediate Action": [
+                "Annual mock inspection not on calendar for 2026. Schedule via VeritaTrack and capture findings per {pol_num}.",
+                "Accreditation-body notification not filed for recent director-coverage change. File per {pol_num} \u00a73 immediately.",
+            ],
+        },
+    }
+
+    # ------------------------------------------------------------------
+    # Status distribution (deterministic, scattered across all domains).
+    # Use a hash that mixes item_id with a salt so Not Assessed items do
+    # not cluster on consecutive items in one domain.
+    # Targets approx: 60% Compliant, 18% Needs Attention, 8% Immediate, 14% Not Assessed.
+    # ------------------------------------------------------------------
+    def status_for(iid: int) -> str:
+        h = (iid * 73 + 11) % 100
         if h < 14:
-            statuses.append(("Not Assessed", None, None))
-        elif h < 22:
-            statuses.append(("Immediate Action",
-                            f"Action item flagged during pre-COLA review {SEED_TAG}",
-                            "Michael Veri"))
-        elif h < 40:
-            statuses.append(("Needs Attention",
-                            f"Documentation gap noted, review scheduled {SEED_TAG}",
-                            "Michael Veri"))
-        else:
-            statuses.append(("Compliant", None, "Michael Veri"))
-    for iid, (status, notes, owner) in zip(item_ids, statuses):
+            return "Not Assessed"
+        if h < 22:
+            return "Immediate Action"
+        if h < 40:
+            return "Needs Attention"
+        return "Compliant"
+
+    def note_for(iid: int, status: str) -> str | None:
+        if status == "Not Assessed":
+            return None
+        domain = item_domain.get(iid, "Quality Systems & QC")
+        pol_num, pol_name = DOMAIN_POLICY.get(domain, ("POL-003", "Quality Control Plan (IQCP)"))
+        variants = DOMAIN_REFS.get(domain, {}).get(status, [])
+        if not variants:
+            return None
+        # Pick a variant deterministically by item_id so notes vary
+        # within the same status+domain bucket.
+        variant = variants[(iid // 3) % len(variants)]
+        # Compliant items often warrant no note in real life; keep ~40%
+        # of Compliant items note-less so the demo doesn't look auto-
+        # filled. Use a separate hash so it scatters.
+        if status == "Compliant" and ((iid * 17 + 5) % 5) < 2:
+            return None
+        return variant.format(pol_num=pol_num, pol_name=pol_name)
+
+    statuses = []
+    for iid in item_ids:
+        st = status_for(iid)
+        nt = note_for(iid, st)
+        owner = None if st == "Not Assessed" else "Michael Veri"
+        statuses.append((iid, st, nt, owner))
+
+    for iid, status, notes, owner in statuses:
         due = None
         if status == "Immediate Action":
-            due = days_ago(-30)
+            due = days_ago(-((iid % 14) + 7))   # 7..20 days out
         elif status == "Needs Attention":
-            due = days_ago(-60)
+            due = days_ago(-((iid % 30) + 30))  # 30..59 days out
         out.append(
             "INSERT INTO veritascan_items "
             "(scan_id, item_id, status, notes, owner, due_date, updated_at, completion_source) VALUES ("
@@ -338,7 +584,7 @@ FROM staff_employees e WHERE e.user_id = {USER_ID};
     print(f"  competency_method_groups: 3")
     print(f"  competency_assessments: 5 employees x 3 (2 tech + 1 nontech) = 15")
     print(f"  staff_competency_schedules: 1 per staff (5)")
-    print(f"  veritascan: 1 scan + {len(item_ids)} items, ~{sum(1 for s,_,_ in statuses if s != 'Not Assessed')} assessed")
+    print(f"  veritascan: 1 scan + {len(item_ids)} items, ~{sum(1 for _,s,_,_ in statuses if s != 'Not Assessed')} assessed")
     return 0
 
 
