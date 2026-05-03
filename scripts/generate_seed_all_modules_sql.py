@@ -259,18 +259,38 @@ WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = {USER_ID})
     out.append("")
 
     # ----------------------------------------------------------------------
-    # 3. VeritaTrack signoffs - one recent + one prior per task
+    # 3. VeritaTrack signoffs - one recent + one prior per task, with
+    #    policy/practice-grounded notes that reference VeritaPolicy. The
+    #    note text is selected per task name + category via a SQL CASE
+    #    expression so the seed file is self-contained.
     # ----------------------------------------------------------------------
-    out.append("-- VeritaTrack signoffs (~58+: 2 per task, including new common tasks) --")
+    from repair_veritatrack_notes import CATEGORY_NOTES, TASK_OVERRIDES
+    out.append("-- VeritaTrack signoffs (2 per task, with policy-grounded notes) --")
     out.append(f"DELETE FROM veritatrack_signoffs WHERE user_id={USER_ID};")
-    # We can't enumerate task ids in SQL, so we use a SELECT inside INSERT...SELECT
-    # For each task, insert two signoffs at predictable offsets.
+
+    def build_case_sql(idx: int) -> str:
+        # idx 0 = prior, idx 1 = recent
+        whens = []
+        for tname, pair in TASK_OVERRIDES.items():
+            whens.append(f"WHEN t.name = {lit(tname)} THEN {lit(pair[idx])}")
+        for cat, pair in CATEGORY_NOTES.items():
+            whens.append(f"WHEN t.category = {lit(cat)} THEN {lit(pair[idx])}")
+        fallback_prior = "Prior signoff reviewed per applicable laboratory SOP (VeritaPolicy library). Records retained per CLIA documentation requirements."
+        fallback_recent = "Signoff current per applicable laboratory SOP (VeritaPolicy library). Documentation filed and available for surveyor review."
+        fallback = fallback_prior if idx == 0 else fallback_recent
+        return "CASE " + " ".join(whens) + f" ELSE {lit(fallback)} END"
+
+    prior_case = build_case_sql(0)
+    recent_case = build_case_sql(1)
+
     out.append(f"""
 INSERT INTO veritatrack_signoffs (task_id, user_id, completed_date, initials, performed_by, notes, created_at)
 SELECT
   t.id, {USER_ID},
   date('now', '-' || (40 + (t.id % 50)) || ' days'),
-  'MV', 'Michael Veri', '{SEED_TAG} most recent', {lit(NOW_ISO)}
+  'MV', 'Michael Veri',
+  {recent_case},
+  {lit(NOW_ISO)}
 FROM veritatrack_tasks t WHERE t.user_id = {USER_ID};
 """.strip())
     out.append(f"""
@@ -278,7 +298,9 @@ INSERT INTO veritatrack_signoffs (task_id, user_id, completed_date, initials, pe
 SELECT
   t.id, {USER_ID},
   date('now', '-' || (220 + (t.id % 60)) || ' days'),
-  'MV', 'Michael Veri', '{SEED_TAG} prior', {lit(NOW_ISO)}
+  'MV', 'Michael Veri',
+  {prior_case},
+  {lit(NOW_ISO)}
 FROM veritatrack_tasks t WHERE t.user_id = {USER_ID};
 """.strip())
     out.append("")
