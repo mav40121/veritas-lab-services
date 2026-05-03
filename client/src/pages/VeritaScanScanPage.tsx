@@ -604,6 +604,8 @@ export default function VeritaScanScanPage() {
         tjc: item.tjc,
         cap: item.cap,
         cfr: item.cfr,
+        aabb: item.aabb,
+        cola: item.cola,
       }));
       const res = await fetch(
         `${API_BASE}/api/veritascan/pdf/${scanId}/${type}`,
@@ -643,6 +645,8 @@ export default function VeritaScanScanPage() {
         tjc: item.tjc,
         cap: item.cap,
         cfr: item.cfr,
+        aabb: item.aabb,
+        cola: item.cola,
       }));
       const res = await fetch(
         `${API_BASE}/api/veritascan/excel/${scanId}`,

@@ -314,6 +314,13 @@ import {
   MAYO_CRITICAL_VALUES, UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
 } from "./veritamapData";
+// Phase 3.6 (2026-05-03): Authoritative server-side reference for VeritaScan items.
+// Used as a fallback when client-sent referenceItems are missing accreditor fields
+// (e.g. stale browser bundles). Pure data module, safe to import on the server.
+import { SCAN_ITEMS as VERITASCAN_SCAN_ITEMS } from "../client/src/lib/veritaScanData";
+const VERITASCAN_ITEM_BY_ID: Record<number, any> = Object.fromEntries(
+  VERITASCAN_SCAN_ITEMS.map((it: any) => [it.id, it])
+);
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -2980,15 +2987,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Build data rows
       const dataRows = referenceItems.map((ref: any) => {
         const saved = itemMap[ref.id] || {};
+        // Phase 3.6 fallback: if client omitted an accreditor field (stale
+        // bundle), pull it from the authoritative server-side SCAN_ITEMS.
+        const authoritative = VERITASCAN_ITEM_BY_ID[ref.id] || {};
         const accreditorCells = xlsxSelected.map(a => {
-          const v = ref[a.key];
+          const v = ref[a.key] || authoritative[a.key];
           return v && v !== "N/A" ? v : "";
         });
         return [
           ref.id,
           ref.domain,
           ref.question,
-          ref.cfr || "",
+          ref.cfr || authoritative.cfr || "",
           ...accreditorCells,
           saved.status || "Not Assessed",
           saved.owner || "",
@@ -3114,17 +3124,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Merge reference data with DB statuses
     const mergedItems = referenceItems.map((ref: any) => {
       const saved = itemMap[ref.id] || {};
+      // Phase 3.6 (2026-05-03) fallback: stale browser bundles may omit
+      // accreditor fields (cola/aabb were added later). Use the authoritative
+      // server-side SCAN_ITEMS as a fallback so the PDF always renders the
+      // correct codes regardless of client cache state.
+      const authoritative = VERITASCAN_ITEM_BY_ID[ref.id] || {};
       return {
         id: ref.id,
-        domain: ref.domain,
-        question: ref.question,
-        tjc: ref.tjc || "",
-        cap: ref.cap || "",
-        cfr: ref.cfr || "",
+        domain: ref.domain || authoritative.domain,
+        question: ref.question || authoritative.question,
+        tjc: ref.tjc || authoritative.tjc || "",
+        cap: ref.cap || authoritative.cap || "",
+        cfr: ref.cfr || authoritative.cfr || "",
         // Phase 3.5 (2026-05-01): aabb + cola pass-through to match the
         // ScanItem shape and keep the PDF data complete for future use.
-        aabb: ref.aabb || "",
-        cola: ref.cola || "",
+        aabb: ref.aabb || authoritative.aabb || "",
+        cola: ref.cola || authoritative.cola || "",
         status: saved.status || "Not Assessed",
         notes: saved.notes || "",
         owner: saved.owner || "",
@@ -4646,18 +4661,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const mergedItems = referenceItems.map((ref: any) => {
         const saved = itemMap[ref.id] || {};
+        // Phase 3.6 (2026-05-03) fallback against authoritative SCAN_ITEMS.
+        const authoritative = VERITASCAN_ITEM_BY_ID[ref.id] || {};
         return {
           id: ref.id,
-          domain: ref.domain,
-          question: ref.question,
-          tjc: ref.tjc || "",
-          cap: ref.cap || "",
-          cfr: ref.cfr || "",
+          domain: ref.domain || authoritative.domain,
+          question: ref.question || authoritative.question,
+          tjc: ref.tjc || authoritative.tjc || "",
+          cap: ref.cap || authoritative.cap || "",
+          cfr: ref.cfr || authoritative.cfr || "",
           // Phase 3.5 (2026-05-01): pass through aabb + cola so future PDF
           // accreditor gating has the data. The current PDF table renders
           // TJC/CAP/CFR columns only.
-          aabb: ref.aabb || "",
-          cola: ref.cola || "",
+          aabb: ref.aabb || authoritative.aabb || "",
+          cola: ref.cola || authoritative.cola || "",
           status: saved.status || "Not Assessed",
           notes: saved.notes || "",
           owner: saved.owner || "",
