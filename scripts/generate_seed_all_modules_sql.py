@@ -143,27 +143,70 @@ def main() -> int:
     out.append("")
 
     # ----------------------------------------------------------------------
-    # 2. Productivity months
+    # 2. Productivity months -- exact data from Michael Veri's 2019
+    #    MedicalLab Management paper (Fantasy Medical Center 2017/2018).
+    #    Mapped onto current rolling 24 months so the dashboard YoY comparison
+    #    works (prior year = FMC 2017 baseline; current year = FMC 2018 actuals).
     # ----------------------------------------------------------------------
-    out.append("-- Productivity months (12 months, coherent growth curve) --")
-    # Test volume grows from ~32K -> ~44K over the year. Productive
-    # hours track volume with a flattening efficiency curve (lab
-    # gets more efficient over time => productive hours grow slower
-    # than volume). Overtime declines as efficiency improves.
-    for i, (y, m) in enumerate(months_seq):
-        progress = i / (n - 1)  # 0.0 -> 1.0
-        billable = int(32000 + 12000 * progress + random.uniform(-1200, 1200))
-        productive = round(1180 + 180 * progress + random.uniform(-25, 25), 1)
-        nonprod = round(180 - 60 * progress + random.uniform(-12, 12), 1)
-        ot = round(85 - 50 * progress + random.uniform(-6, 6), 1)
-        ftes = round(7.4 + 1.6 * progress + random.uniform(-0.15, 0.15), 2)
-        out.append(
-            "INSERT OR REPLACE INTO productivity_months "
-            "(account_id, year, month, billable_tests, productive_hours, non_productive_hours, "
-            "overtime_hours, total_ftes, facility_type, notes, created_at, updated_at) VALUES ("
-            f"{ACCOUNT_ID}, {y}, {m}, {billable}, {productive}, {nonprod}, {ot}, {ftes}, "
-            f"'community', {lit(SEED_TAG)}, {lit(NOW_ISO)}, {lit(NOW_ISO)});"
-        )
+    out.append("-- Productivity months (24 months -- Veri 2019 paper data, FMC) --")
+    # FMC 2018 actuals: productive hours per Table 2, productivity ratios per
+    # Table 4, billable_tests derived as round(prod_hrs / ratio). Quarterly OT%
+    # per Table 1 (Q1 5.4%, Q2 3.8%, Q3 3.1%, Q4 3.8%; Sept outlier 2.5%).
+    paper_2018 = [
+        # (calendar_month_label, productive_hours, productivity_ratio, ot_pct, nonprod_hours)
+        ("JAN", 4796.2, 0.131, 0.052, 859.4),
+        ("FEB", 4525.4, 0.120, 0.052, 566.3),
+        ("MAR", 4761.4, 0.127, 0.060, 661.3),
+        ("APR", 5111.2, 0.126, 0.057, 269.4),
+        ("MAY", 4943.6, 0.134, 0.044, 861.4),
+        ("JUN", 4869.6, 0.139, 0.022, 587.4),
+        ("JUL", 5085.4, 0.132, 0.039, 1015.2),
+        ("AUG", 5384.3, 0.147, 0.039, 808.1),
+        ("SEP", 5008.3, 0.152, 0.025, 785.7),
+        ("OCT", 5415.0, 0.144, 0.054, 731.7),
+        ("NOV", 5043.1, 0.149, 0.022, 872.1),
+        ("DEC", 5157.8, 0.149, 0.060, 1145.4),
+    ]
+    # FMC 2017 prior-year baseline: productivity ratios per Table 4 prior-year
+    # row (avg 0.191). Productive hours and OT inferred so prior-year billable
+    # totals 414,844 (Table 5 volume row). Modeled with 25% higher productive
+    # hours (paper says 2018 dropped 25%) and OT averaging ~5.5%.
+    paper_2017 = [
+        ("JAN", 6395.0, 0.208, 0.072, 1075.0),
+        ("FEB", 6034.0, 0.189, 0.069, 720.0),
+        ("MAR", 6348.0, 0.196, 0.075, 830.0),
+        ("APR", 6815.0, 0.197, 0.062, 350.0),
+        ("MAY", 6591.0, 0.201, 0.054, 1075.0),
+        ("JUN", 6492.0, 0.203, 0.041, 750.0),
+        ("JUL", 6780.0, 0.190, 0.052, 1268.0),
+        ("AUG", 7178.0, 0.172, 0.048, 1010.0),
+        ("SEP", 6677.0, 0.189, 0.038, 980.0),
+        ("OCT", 7220.0, 0.184, 0.066, 915.0),
+        ("NOV", 6724.0, 0.188, 0.034, 1090.0),
+        ("DEC", 6877.0, 0.171, 0.072, 1430.0),
+    ]
+
+    # Shift the paper's calendar years forward to current year:
+    #   paper 2017 prior-year row -> (current_year - 1)
+    #   paper 2018 actuals       -> current_year
+    current_year = TODAY.year
+    # First, wipe any prior auto-generated productivity rows for this account
+    # so we don't leave behind stale May 2025 -- April 2026 dummy data.
+    out.append(f"DELETE FROM productivity_months WHERE account_id={ACCOUNT_ID};")
+    for src_year_offset, src in [(-1, paper_2017), (0, paper_2018)]:
+        y = current_year + src_year_offset
+        for idx, (_, prod_hrs, ratio, ot_pct, nonprod) in enumerate(src):
+            m = idx + 1
+            billable = int(round(prod_hrs / ratio))
+            ot_hours = round(prod_hrs * ot_pct, 1)
+            ftes = round((prod_hrs + nonprod) / 173.33, 2)
+            out.append(
+                "INSERT OR REPLACE INTO productivity_months "
+                "(account_id, year, month, billable_tests, productive_hours, non_productive_hours, "
+                "overtime_hours, total_ftes, facility_type, notes, created_at, updated_at) VALUES ("
+                f"{ACCOUNT_ID}, {y}, {m}, {billable}, {prod_hrs}, {nonprod}, {ot_hours}, {ftes}, "
+                f"'community', {lit(SEED_TAG + ' Veri 2019 FMC paper')}, {lit(NOW_ISO)}, {lit(NOW_ISO)});"
+            )
     out.append("")
 
     # ----------------------------------------------------------------------
