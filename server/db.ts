@@ -141,6 +141,31 @@ sqlite.exec(`
     UNIQUE(map_id, analyte)
   );
 
+  CREATE TABLE IF NOT EXISTS veritamap_test_correlations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    test_a_id INTEGER NOT NULL,
+    test_b_id INTEGER NOT NULL,
+    correlation_group_id INTEGER,
+    correlation_method TEXT,
+    acceptable_criteria TEXT,
+    actual_bias_or_sd TEXT,
+    pass_fail TEXT,
+    work_performed_date TEXT,
+    signoff_date TEXT,
+    signoff_by_user_id INTEGER,
+    signoff_by_name TEXT,
+    next_due TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (test_a_id <= test_b_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_corr_test_a ON veritamap_test_correlations(test_a_id);
+  CREATE INDEX IF NOT EXISTS idx_corr_test_b ON veritamap_test_correlations(test_b_id);
+  CREATE INDEX IF NOT EXISTS idx_corr_next_due ON veritamap_test_correlations(next_due);
+  CREATE INDEX IF NOT EXISTS idx_corr_group ON veritamap_test_correlations(correlation_group_id);
+  CREATE INDEX IF NOT EXISTS idx_corr_signoff_date ON veritamap_test_correlations(signoff_date);
+
   CREATE TABLE IF NOT EXISTS veritascan_scans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -461,6 +486,106 @@ sqlite.exec(`
   if (!instrColNames.includes("nickname")) {
     try { sqlite.exec("ALTER TABLE veritamap_instruments ADD COLUMN nickname TEXT"); } catch {}
   }
+}
+
+// veritamap_test_correlations migration block (idempotent)
+// Per New DB Table Rule: every new CREATE TABLE ships with a PRAGMA-guarded ALTER block.
+// Adds sign-off audit columns to any DB that has an earlier version of the table.
+//
+// 2026-05-03 reshape: a correlation is one record about ONE analyte that has
+// 2+ methods on it. The original v1 schema modeled it as test_a_id <-> test_b_id
+// with CHECK(a<b) + UNIQUE(a,b). That was wrong: it can't represent the most
+// common kind of correlation — Pri vs Backup running the same analyte on the
+// same map (one test row, multiple instruments listed in instrument_source).
+//
+// Reshape: test_b_id becomes optional. NULL means "single-row multi-method
+// correlation on this analyte." Non-NULL preserves cross-row pairing for any
+// future cross-map use. CHECK and UNIQUE constraints removed because (a) self-
+// referencing rows are valid, and (b) a single test row may carry multiple
+// distinct studies (different group_ids).
+{
+  const corrCols = sqlite.prepare("PRAGMA table_info(veritamap_test_correlations)").all() as { name: string }[];
+  const corrColNames = corrCols.map((c) => c.name);
+  if (!corrColNames.includes("work_performed_date")) {
+    try { sqlite.exec("ALTER TABLE veritamap_test_correlations ADD COLUMN work_performed_date TEXT"); } catch {}
+  }
+  if (!corrColNames.includes("signoff_date")) {
+    try { sqlite.exec("ALTER TABLE veritamap_test_correlations ADD COLUMN signoff_date TEXT"); } catch {}
+  }
+  if (!corrColNames.includes("signoff_by_user_id")) {
+    try { sqlite.exec("ALTER TABLE veritamap_test_correlations ADD COLUMN signoff_by_user_id INTEGER"); } catch {}
+  }
+  if (!corrColNames.includes("signoff_by_name")) {
+    try { sqlite.exec("ALTER TABLE veritamap_test_correlations ADD COLUMN signoff_by_name TEXT"); } catch {}
+  }
+
+  // Detect legacy v1 shape (CHECK constraint or UNIQUE on test_b_id) by
+  // querying sqlite_master and rebuilding the table if found. SQLite cannot
+  // drop a CHECK constraint or change a UNIQUE in place; the safe path is
+  // CREATE new + COPY + DROP old + RENAME, all inside a single transaction.
+  const corrTblSql = (sqlite.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='veritamap_test_correlations'"
+  ).get() as { sql?: string } | undefined)?.sql ?? "";
+  const hasLegacyCheck = /CHECK\s*\(\s*test_a_id\s*<\s*test_b_id\s*\)/i.test(corrTblSql);
+  const hasLegacyUnique = /UNIQUE\s*\(\s*test_a_id\s*,\s*test_b_id\s*\)/i.test(corrTblSql);
+  // Legacy: CHECK(a<b) blocks self-pairs (intra-row Pri↔Backup correlations).
+  // Legacy: UNIQUE(a,b) blocks multiple distinct studies on the same test row.
+  // New shape relaxes both: CHECK(a<=b) so test_a_id == test_b_id is allowed,
+  // no UNIQUE so a single test row can carry multiple studies (group_ids).
+  const hasOldCheckLT = /CHECK\s*\(\s*test_a_id\s*<\s*test_b_id\s*\)/i.test(corrTblSql);
+  const needsReshape = hasOldCheckLT || hasLegacyUnique;
+  if (needsReshape) {
+    try {
+      sqlite.exec("BEGIN");
+      sqlite.exec(`
+        CREATE TABLE veritamap_test_correlations_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          test_a_id INTEGER NOT NULL,
+          test_b_id INTEGER NOT NULL,
+          correlation_group_id INTEGER,
+          correlation_method TEXT,
+          acceptable_criteria TEXT,
+          actual_bias_or_sd TEXT,
+          pass_fail TEXT,
+          work_performed_date TEXT,
+          signoff_date TEXT,
+          signoff_by_user_id INTEGER,
+          signoff_by_name TEXT,
+          next_due TEXT,
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (test_a_id <= test_b_id)
+        )
+      `);
+      sqlite.exec(`
+        INSERT INTO veritamap_test_correlations_new
+          (id, test_a_id, test_b_id, correlation_group_id, correlation_method,
+           acceptable_criteria, actual_bias_or_sd, pass_fail,
+           work_performed_date, signoff_date, signoff_by_user_id, signoff_by_name,
+           next_due, notes, created_at, updated_at)
+        SELECT id, test_a_id, test_b_id, correlation_group_id, correlation_method,
+           acceptable_criteria, actual_bias_or_sd, pass_fail,
+           work_performed_date, signoff_date, signoff_by_user_id, signoff_by_name,
+           next_due, notes, created_at, updated_at
+        FROM veritamap_test_correlations
+      `);
+      sqlite.exec("DROP TABLE veritamap_test_correlations");
+      sqlite.exec("ALTER TABLE veritamap_test_correlations_new RENAME TO veritamap_test_correlations");
+      sqlite.exec("COMMIT");
+      console.log("[migration] veritamap_test_correlations reshaped: CHECK relaxed to a<=b, UNIQUE(a,b) removed");
+    } catch (err) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[migration] veritamap_test_correlations reshape failed:", err);
+    }
+  }
+
+  // Defensive: ensure indexes exist even on DBs upgraded from a partial schema
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_corr_test_a ON veritamap_test_correlations(test_a_id)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_corr_test_b ON veritamap_test_correlations(test_b_id)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_corr_next_due ON veritamap_test_correlations(next_due)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_corr_group ON veritamap_test_correlations(correlation_group_id)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_corr_signoff_date ON veritamap_test_correlations(signoff_date)"); } catch {}
 }
 
 // Seed VeritaStaff demo data for Riverside Regional (user_id = 1)

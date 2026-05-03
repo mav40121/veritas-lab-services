@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
 
 interface MapSummary {
   id: number;
@@ -273,6 +274,9 @@ export default function VeritaMapAppPage() {
           </div>
         </div>
       )}
+
+      {/* Correlations due soon */}
+      <CorrelationsDueSoonWidget className="mb-6" />
 
       {/* Maps list */}
       {isLoading ? (

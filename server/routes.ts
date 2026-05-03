@@ -2006,6 +2006,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
     const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
+    // Cleanup correlation rows referencing any test on this map (cascade)
+    (db as any).$client.prepare(`
+      DELETE FROM veritamap_test_correlations
+      WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
+         OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
+    `).run(req.params.id, req.params.id);
     (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -2030,7 +2036,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
       instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null });
     }
-    const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
+    // Fetch correlations involving any test on this map (one query, one round trip)
+    const testIds = rawTests.map((t: any) => t.id);
+    const corrByTestId: Record<number, any[]> = {};
+    if (testIds.length > 0) {
+      const placeholders = testIds.map(() => "?").join(",");
+      const correlations = (db as any).$client.prepare(`
+        SELECT
+          c.id,
+          c.test_a_id,
+          c.test_b_id,
+          c.correlation_group_id,
+          c.correlation_method,
+          c.acceptable_criteria,
+          c.actual_bias_or_sd,
+          c.pass_fail,
+          c.work_performed_date,
+          c.signoff_date,
+          c.signoff_by_user_id,
+          c.signoff_by_name,
+          c.next_due,
+          c.notes,
+          partner.id AS partner_test_id,
+          partner.analyte AS partner_analyte,
+          partner.map_id AS partner_map_id,
+          partner_map.name AS partner_map_name,
+          partner.instrument_source AS partner_instrument,
+          CASE WHEN c.test_a_id = c.test_b_id THEN 1 ELSE 0 END AS is_self_pair
+        FROM veritamap_test_correlations c
+        JOIN veritamap_tests partner
+          ON partner.id = CASE WHEN c.test_a_id IN (${placeholders}) THEN c.test_b_id ELSE c.test_a_id END
+        JOIN veritamap_maps partner_map ON partner_map.id = partner.map_id
+        WHERE c.test_a_id IN (${placeholders}) OR c.test_b_id IN (${placeholders})
+      `).all(...testIds, ...testIds, ...testIds);
+      for (const corr of correlations) {
+        // Determine which side of the pair is the local test (on this map)
+        const localTestId = testIds.includes(corr.test_a_id) ? corr.test_a_id : corr.test_b_id;
+        if (!corrByTestId[localTestId]) corrByTestId[localTestId] = [];
+        corrByTestId[localTestId].push(corr);
+      }
+    }
+    const tests = rawTests.map((t: any) => ({
+      ...t,
+      instruments: instrMap[t.analyte] ?? [],
+      correlations: corrByTestId[t.id] ?? []
+    }));
     res.json({ ...map, tests });
   });
 
@@ -2399,12 +2449,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const deleteAmrValStmt = (db as any).$client.prepare(
       "DELETE FROM veritamap_amr_values WHERE map_id = ? AND analyte = ?"
     );
+    // Cascade: remove correlation rows referencing the test we're about to delete.
+    // Resolves test id by (map_id, analyte) before the test row vanishes.
+    const deleteCorrelationsStmt = (db as any).$client.prepare(`
+      DELETE FROM veritamap_test_correlations
+      WHERE test_a_id = (SELECT id FROM veritamap_tests WHERE map_id = ? AND analyte = ?)
+         OR test_b_id = (SELECT id FROM veritamap_tests WHERE map_id = ? AND analyte = ?)
+    `);
 
     const bulk = (db as any).$client.transaction((newRows: any[], orphans: string[]) => {
       for (const r of newRows) {
         insertStmt.run(mapId, r.analyte, r.specialty, r.complexity, r.instrument_name, now);
       }
       for (const a of orphans) {
+        deleteCorrelationsStmt.run(mapId, a, mapId, a);
         deleteTestStmt.run(mapId, a);
         deleteAnalyteValStmt.run(mapId, a);
         deleteAmrValStmt.run(mapId, a);
@@ -2436,7 +2494,424 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
-  // ── VERITAMAP EXCEL EXPORT ────────────────────────────────────────────────
+  // ── VERITAMAP TEST CORRELATIONS ────────────────────────────────────────────
+  //
+  // Cross-map test correlations (junction table veritamap_test_correlations).
+  // Auth model: caller's users.lab_id must match the lab_id of BOTH map owners.
+  // Pair normalization: server swaps test_a/test_b so test_a_id < test_b_id
+  // (matches CHECK constraint). Callers don't need to know about ordering.
+  // Sign-off model: signoff_date is the regulatory-binding date; next_due is
+  // calculated from signoff_date, not work_performed_date. work_performed_date
+  // logs the actual run day per pair (often spread over the 6-month window
+  // before director sign-off).
+
+  // Helper: resolve the caller's lab_id and confirm both tests share it
+  // Returns { ok: true } if authorized, or { ok: false, status, error } otherwise.
+  function authorizeCorrelationPair(callerUserId: number, testAId: number, testBId: number) {
+    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    if (!callerLabId) {
+      return { ok: false as const, status: 403, error: "Caller has no lab_id assigned" };
+    }
+    const row = (db as any).$client.prepare(`
+      SELECT u_a.lab_id AS a_lab_id, u_b.lab_id AS b_lab_id
+      FROM veritamap_tests vt_a
+      JOIN veritamap_maps vm_a ON vm_a.id = vt_a.map_id
+      JOIN users u_a ON u_a.id = vm_a.user_id
+      JOIN veritamap_tests vt_b ON vt_b.id = ?
+      JOIN veritamap_maps vm_b ON vm_b.id = vt_b.map_id
+      JOIN users u_b ON u_b.id = vm_b.user_id
+      WHERE vt_a.id = ?
+    `).get(testBId, testAId);
+    if (!row) {
+      return { ok: false as const, status: 404, error: "One or both tests not found" };
+    }
+    if (row.a_lab_id !== callerLabId || row.b_lab_id !== callerLabId) {
+      return { ok: false as const, status: 403, error: "Both tests must belong to your lab" };
+    }
+    return { ok: true as const, callerLabId };
+  }
+
+  // Helper: normalize pair so a < b (matches CHECK constraint)
+  function normalizePair(a: number, b: number): [number, number] {
+    return a < b ? [a, b] : [b, a];
+  }
+
+  // GET /api/veritamap/correlations?test_id=:id
+  // List all correlations for one test. Returns enriched partner info for badge rendering.
+  app.get("/api/veritamap/correlations", authMiddleware, (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
+    const testIdRaw = req.query.test_id;
+    if (!testIdRaw) return res.status(400).json({ error: "test_id query param required" });
+    const testId = parseInt(String(testIdRaw), 10);
+    if (!Number.isFinite(testId)) return res.status(400).json({ error: "test_id must be a number" });
+
+    // Confirm caller owns the test (lab_id match)
+    const ownership = (db as any).$client.prepare(`
+      SELECT u.lab_id FROM veritamap_tests vt
+      JOIN veritamap_maps vm ON vm.id = vt.map_id
+      JOIN users u ON u.id = vm.user_id
+      WHERE vt.id = ?
+    `).get(testId);
+    if (!ownership) return res.status(404).json({ error: "Test not found" });
+    if (ownership.lab_id !== callerLabId) return res.status(403).json({ error: "Test belongs to another lab" });
+
+    // List correlations where this test is on either side, joining the partner
+    const rows = (db as any).$client.prepare(`
+      SELECT
+        c.id,
+        c.correlation_group_id,
+        c.correlation_method,
+        c.acceptable_criteria,
+        c.actual_bias_or_sd,
+        c.pass_fail,
+        c.work_performed_date,
+        c.signoff_date,
+        c.signoff_by_user_id,
+        c.signoff_by_name,
+        c.next_due,
+        c.notes,
+        CASE WHEN c.test_a_id = ? THEN c.test_b_id ELSE c.test_a_id END AS partner_test_id,
+        partner.analyte AS partner_analyte,
+        partner.map_id AS partner_map_id,
+        partner_map.name AS partner_map_name,
+        partner.instrument_source AS partner_instrument
+      FROM veritamap_test_correlations c
+      JOIN veritamap_tests partner
+        ON partner.id = CASE WHEN c.test_a_id = ? THEN c.test_b_id ELSE c.test_a_id END
+      JOIN veritamap_maps partner_map ON partner_map.id = partner.map_id
+      WHERE c.test_a_id = ? OR c.test_b_id = ?
+      ORDER BY c.next_due ASC
+    `).all(testId, testId, testId, testId);
+    res.json(rows);
+  });
+
+  // GET /api/veritamap/correlations/due-soon?days=60
+  // Dashboard widget query. Returns correlations due within N days for the caller's lab.
+  app.get("/api/veritamap/correlations/due-soon", authMiddleware, (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
+    const days = Math.max(0, Math.min(365, parseInt(String(req.query.days ?? "60"), 10) || 60));
+    const cutoff = new Date(Date.now() + days * 86400_000).toISOString().slice(0, 10);
+
+    const rows = (db as any).$client.prepare(`
+      SELECT
+        c.id,
+        c.correlation_group_id,
+        c.correlation_method,
+        c.signoff_date,
+        c.next_due,
+        c.pass_fail,
+        ta.id AS test_a_id, ta.analyte AS test_a_analyte, ma.id AS test_a_map_id, ma.name AS test_a_map_name, ta.instrument_source AS test_a_instrument,
+        tb.id AS test_b_id, tb.analyte AS test_b_analyte, mb.id AS test_b_map_id, mb.name AS test_b_map_name, tb.instrument_source AS test_b_instrument
+      FROM veritamap_test_correlations c
+      JOIN veritamap_tests ta ON ta.id = c.test_a_id
+      JOIN veritamap_maps ma ON ma.id = ta.map_id
+      JOIN users ua ON ua.id = ma.user_id
+      JOIN veritamap_tests tb ON tb.id = c.test_b_id
+      JOIN veritamap_maps mb ON mb.id = tb.map_id
+      JOIN users ub ON ub.id = mb.user_id
+      WHERE ua.lab_id = ? AND ub.lab_id = ?
+        AND (c.next_due IS NULL OR c.next_due <= ?)
+      ORDER BY c.next_due ASC NULLS FIRST
+    `).all(callerLabId, callerLabId, cutoff);
+    res.json(rows);
+  });
+
+  // GET /api/veritamap/correlations/candidate-partners?test_id=:id&q=:search
+  // List candidate partner tests for a given test, scoped to the caller's lab.
+  // Excludes the test itself and any test already correlated with it.
+  // Optional ?q= filter is matched against analyte (case-insensitive substring).
+  app.get("/api/veritamap/correlations/candidate-partners", authMiddleware, (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
+    const testId = parseInt(String(req.query.test_id ?? ""), 10);
+    if (!Number.isFinite(testId)) return res.status(400).json({ error: "test_id query param required" });
+    const q = String(req.query.q ?? "").trim().toLowerCase();
+
+    // Confirm caller's lab owns the source test
+    const ownership = (db as any).$client.prepare(`
+      SELECT u.lab_id FROM veritamap_tests vt
+      JOIN veritamap_maps vm ON vm.id = vt.map_id
+      JOIN users u ON u.id = vm.user_id
+      WHERE vt.id = ?
+    `).get(testId);
+    if (!ownership) return res.status(404).json({ error: "Test not found" });
+    if (ownership.lab_id !== callerLabId) return res.status(403).json({ error: "Test belongs to another lab" });
+
+    // Find all tests in the same lab. Includes the source test itself so the
+    // caller can record an intra-row Pri↔Backup correlation when the analyte
+    // has 2+ methods on it (instrument_source contains a comma). Cross-row
+    // partners are also included.
+    const rows = (db as any).$client.prepare(`
+      SELECT
+        vt.id, vt.analyte, vt.specialty, vt.complexity, vt.instrument_source,
+        vm.id AS map_id, vm.name AS map_name,
+        CASE WHEN vt.id = ? THEN 1 ELSE 0 END AS is_self
+      FROM veritamap_tests vt
+      JOIN veritamap_maps vm ON vm.id = vt.map_id
+      JOIN users u ON u.id = vm.user_id
+      WHERE u.lab_id = ?
+      ORDER BY (vt.id = ?) DESC, vm.name, vt.specialty, vt.analyte
+    `).all(testId, callerLabId, testId);
+
+    // For self (the source test itself): only include if it has 2+ instruments
+    // listed in instrument_source. A single-method test has nothing to
+    // correlate with itself.
+    const sourceRow = rows.find((r: any) => r.is_self === 1);
+    const sourceHasMultiMethod = sourceRow && typeof sourceRow.instrument_source === "string"
+      ? sourceRow.instrument_source.includes(",")
+      : false;
+    const usable = rows.filter((r: any) => {
+      if (r.is_self === 1) return sourceHasMultiMethod;
+      return true;
+    });
+
+    const filtered = q ? usable.filter((r: any) => r.analyte.toLowerCase().includes(q)) : usable;
+    res.json(filtered);
+  });
+
+  // POST /api/veritamap/correlations
+  // Upsert a single correlation pair.
+  app.post("/api/veritamap/correlations", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const b = req.body || {};
+    const aRaw = parseInt(b.test_a_id, 10);
+    // test_b_id may equal test_a_id (intra-row Pri↔Backup correlation) or be
+    // a different test row (cross-map). It must be a finite int either way.
+    const bRaw = b.test_b_id == null || b.test_b_id === "" ? aRaw : parseInt(b.test_b_id, 10);
+    if (!Number.isFinite(aRaw) || !Number.isFinite(bRaw)) {
+      return res.status(400).json({ error: "test_a_id and test_b_id must be integers" });
+    }
+    const [aId, bId] = normalizePair(aRaw, bRaw);
+    const auth = authorizeCorrelationPair(callerUserId, aId, bId);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+    const correlationId = b.id != null ? parseInt(b.id, 10) : null;
+    const groupId = b.correlation_group_id == null ? null : parseInt(b.correlation_group_id, 10);
+
+    // Detect whether this is a create or update for the audit action label.
+    // With UNIQUE(a,b) removed, identity is by row id when provided, else by
+    // (a, b, group_id) which is the natural key for one study.
+    const before = correlationId
+      ? (db as any).$client.prepare(
+          "SELECT * FROM veritamap_test_correlations WHERE id = ?"
+        ).get(correlationId)
+      : (db as any).$client.prepare(
+          "SELECT * FROM veritamap_test_correlations WHERE test_a_id = ? AND test_b_id = ? AND (correlation_group_id IS ? OR correlation_group_id = ?)"
+        ).get(aId, bId, groupId, groupId);
+    const auditAction: "create" | "update" = before ? "update" : "create";
+
+    const now = new Date().toISOString();
+    let savedId: number;
+    if (before?.id) {
+      (db as any).$client.prepare(`
+        UPDATE veritamap_test_correlations SET
+          test_a_id = ?, test_b_id = ?, correlation_group_id = ?,
+          correlation_method = ?, acceptable_criteria = ?, actual_bias_or_sd = ?, pass_fail = ?,
+          work_performed_date = ?, signoff_date = ?, signoff_by_user_id = ?, signoff_by_name = ?,
+          next_due = ?, notes = ?, updated_at = ?
+        WHERE id = ?
+      `).run(
+        aId, bId, groupId,
+        b.correlation_method ?? null, b.acceptable_criteria ?? null,
+        b.actual_bias_or_sd ?? null, b.pass_fail ?? null,
+        b.work_performed_date ?? null, b.signoff_date ?? null,
+        b.signoff_by_user_id ?? null, b.signoff_by_name ?? null,
+        b.next_due ?? null, b.notes ?? null, now,
+        before.id
+      );
+      savedId = before.id;
+    } else {
+      const result = (db as any).$client.prepare(`
+        INSERT INTO veritamap_test_correlations (
+          test_a_id, test_b_id, correlation_group_id,
+          correlation_method, acceptable_criteria, actual_bias_or_sd, pass_fail,
+          work_performed_date, signoff_date, signoff_by_user_id, signoff_by_name,
+          next_due, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        aId, bId, groupId,
+        b.correlation_method ?? null, b.acceptable_criteria ?? null,
+        b.actual_bias_or_sd ?? null, b.pass_fail ?? null,
+        b.work_performed_date ?? null, b.signoff_date ?? null,
+        b.signoff_by_user_id ?? null, b.signoff_by_name ?? null,
+        b.next_due ?? null, b.notes ?? null, now, now
+      );
+      savedId = Number(result.lastInsertRowid);
+    }
+    const saved = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_test_correlations WHERE id = ?"
+    ).get(savedId);
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritamap", action: auditAction, entityType: "correlation",
+      entityId: saved?.id,
+      entityLabel: aId === bId ? `${aId} multi-method` : `${aId}↔${bId}`,
+      before: before ?? undefined, after: saved, ipAddress: req.ip
+    });
+    res.json(saved);
+  });
+
+  // POST /api/veritamap/correlations/group
+  // One-shot multi-pair group correlation. All pairs share group_id, signoff fields, next_due.
+  app.post("/api/veritamap/correlations/group", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const b = req.body || {};
+    const pairs = Array.isArray(b.pairs) ? b.pairs : null;
+    if (!pairs || pairs.length === 0) return res.status(400).json({ error: "pairs array required" });
+    if (pairs.length > 500) return res.status(400).json({ error: "max 500 pairs per group" });
+
+    // Validate + authorize all pairs up front
+    const normalized: [number, number][] = [];
+    for (const p of pairs) {
+      const a = parseInt(p.test_a_id, 10);
+      // Self-pairs allowed (intra-row Pri↔Backup correlation on one analyte).
+      const x = p.test_b_id == null || p.test_b_id === "" ? a : parseInt(p.test_b_id, 10);
+      if (!Number.isFinite(a) || !Number.isFinite(x)) {
+        return res.status(400).json({ error: `Invalid pair: ${JSON.stringify(p)}` });
+      }
+      const [lo, hi] = normalizePair(a, x);
+      const auth = authorizeCorrelationPair(callerUserId, lo, hi);
+      if (!auth.ok) return res.status(auth.status).json({ error: `${auth.error} (pair ${lo}↔${hi})` });
+      normalized.push([lo, hi]);
+    }
+
+    // Allocate a new correlation_group_id (max+1, or 1 if empty)
+    const maxGroup = (db as any).$client.prepare(
+      "SELECT COALESCE(MAX(correlation_group_id), 0) AS max_id FROM veritamap_test_correlations"
+    ).get();
+    const groupId: number = (maxGroup?.max_id ?? 0) + 1;
+    const now = new Date().toISOString();
+
+    const stmt = (db as any).$client.prepare(`
+      INSERT INTO veritamap_test_correlations (
+        test_a_id, test_b_id, correlation_group_id,
+        correlation_method, acceptable_criteria, actual_bias_or_sd, pass_fail,
+        work_performed_date, signoff_date, signoff_by_user_id, signoff_by_name,
+        next_due, notes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(test_a_id, test_b_id) DO UPDATE SET
+        correlation_group_id = excluded.correlation_group_id,
+        correlation_method = excluded.correlation_method,
+        acceptable_criteria = excluded.acceptable_criteria,
+        actual_bias_or_sd = excluded.actual_bias_or_sd,
+        pass_fail = excluded.pass_fail,
+        work_performed_date = excluded.work_performed_date,
+        signoff_date = excluded.signoff_date,
+        signoff_by_user_id = excluded.signoff_by_user_id,
+        signoff_by_name = excluded.signoff_by_name,
+        next_due = excluded.next_due,
+        notes = excluded.notes,
+        updated_at = excluded.updated_at
+    `);
+    const bulk = (db as any).$client.transaction(() => {
+      for (const [lo, hi] of normalized) {
+        stmt.run(
+          lo, hi, groupId,
+          b.correlation_method ?? null, b.acceptable_criteria ?? null,
+          b.actual_bias_or_sd ?? null, b.pass_fail ?? null,
+          b.work_performed_date ?? null, b.signoff_date ?? null,
+          b.signoff_by_user_id ?? null, b.signoff_by_name ?? null,
+          b.next_due ?? null, b.notes ?? null, now, now
+        );
+      }
+    });
+    bulk();
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritamap", action: "create", entityType: "correlation_group",
+      entityId: groupId, entityLabel: `group ${groupId} (${normalized.length} pairs)`,
+      after: { group_id: groupId, pair_count: normalized.length, signoff_date: b.signoff_date, next_due: b.next_due },
+      ipAddress: req.ip
+    });
+    res.json({ ok: true, correlation_group_id: groupId, pair_count: normalized.length });
+  });
+
+  // POST /api/veritamap/correlations/group/:id/signoff
+  // Update sign-off fields on every pair in an existing correlation group.
+  // Used by the dashboard widget's "Sign off group" action: lab does the work
+  // across the allowed window, then signs off all pairs on a single date.
+  app.post("/api/veritamap/correlations/group/:id/signoff", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const groupId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(groupId)) return res.status(400).json({ error: "group id must be a number" });
+    const b = req.body || {};
+    const signoffDate = b.signoff_date;
+    if (!signoffDate || typeof signoffDate !== "string") {
+      return res.status(400).json({ error: "signoff_date required (YYYY-MM-DD)" });
+    }
+
+    // Pull every pair in the group and authorize each. Reject if any pair
+    // crosses a lab boundary (defensive: shouldn't happen since group creation
+    // already enforces this, but keep the check tight).
+    const pairs = (db as any).$client.prepare(
+      "SELECT id, test_a_id, test_b_id FROM veritamap_test_correlations WHERE correlation_group_id = ?"
+    ).all(groupId);
+    if (pairs.length === 0) return res.status(404).json({ error: "Group not found or empty" });
+    for (const p of pairs) {
+      const auth = authorizeCorrelationPair(callerUserId, p.test_a_id, p.test_b_id);
+      if (!auth.ok) return res.status(auth.status).json({ error: `${auth.error} (pair ${p.test_a_id}\u2194${p.test_b_id})` });
+    }
+
+    const now = new Date().toISOString();
+    const stmt = (db as any).$client.prepare(`
+      UPDATE veritamap_test_correlations
+      SET signoff_date = ?, signoff_by_user_id = ?, signoff_by_name = ?,
+          next_due = ?, work_performed_date = COALESCE(?, work_performed_date),
+          pass_fail = COALESCE(?, pass_fail), notes = COALESCE(?, notes),
+          updated_at = ?
+      WHERE correlation_group_id = ?
+    `);
+    stmt.run(
+      signoffDate,
+      b.signoff_by_user_id ?? null,
+      b.signoff_by_name ?? null,
+      b.next_due ?? null,
+      b.work_performed_date ?? null,
+      b.pass_fail ?? null,
+      b.notes ?? null,
+      now,
+      groupId
+    );
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritamap", action: "update", entityType: "correlation_group",
+      entityId: groupId, entityLabel: `group ${groupId} signoff (${pairs.length} pairs)`,
+      after: { group_id: groupId, pair_count: pairs.length, signoff_date: signoffDate, next_due: b.next_due },
+      ipAddress: req.ip
+    });
+    res.json({ ok: true, correlation_group_id: groupId, pair_count: pairs.length });
+  });
+
+  // DELETE /api/veritamap/correlations/:id
+  app.delete("/api/veritamap/correlations/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    const callerUserId = req.user.userId;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "id must be a number" });
+
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_test_correlations WHERE id = ?"
+    ).get(id);
+    if (!existing) return res.status(404).json({ error: "Correlation not found" });
+
+    const auth = authorizeCorrelationPair(callerUserId, existing.test_a_id, existing.test_b_id);
+    if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+    (db as any).$client.prepare("DELETE FROM veritamap_test_correlations WHERE id = ?").run(id);
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritamap", action: "delete", entityType: "correlation",
+      entityId: id, entityLabel: `${existing.test_a_id}↔${existing.test_b_id}`,
+      before: existing, ipAddress: req.ip
+    });
+    res.json({ ok: true });
+  });
+
+  // ── VERITAMAP EXCEL EXPORT ──────────────────────────────────────────────────
   app.post("/api/veritamap/maps/:id/excel", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
@@ -2479,6 +2954,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const amrValuesMap: Record<string, any> = {};
     for (const av of amrValuesRaw) amrValuesMap[`${av.instrument_id}::${av.analyte}`] = av;
 
+    // Fetch correlations for every test on this map. For each correlation row,
+    // we need to know the partner test (analyte + map name) regardless of which
+    // side (test_a or test_b) the source-map test sits on.
+    const correlationsRaw = (db as any).$client.prepare(`
+      SELECT
+        c.id, c.test_a_id, c.test_b_id, c.correlation_group_id,
+        c.signoff_date, c.next_due, c.pass_fail,
+        ta.id AS ta_id, ta.analyte AS ta_analyte, ta.map_id AS ta_map_id, ma.name AS ta_map_name,
+        tb.id AS tb_id, tb.analyte AS tb_analyte, tb.map_id AS tb_map_id, mb.name AS tb_map_name
+      FROM veritamap_test_correlations c
+      JOIN veritamap_tests ta ON ta.id = c.test_a_id
+      JOIN veritamap_maps ma ON ma.id = ta.map_id
+      JOIN veritamap_tests tb ON tb.id = c.test_b_id
+      JOIN veritamap_maps mb ON mb.id = tb.map_id
+      WHERE ta.map_id = ? OR tb.map_id = ?
+    `).all(req.params.id, req.params.id);
+    // Index correlations by source-test analyte (the test on this map). One
+    // analyte can have multiple correlations.
+    const correlationsByAnalyte: Record<string, Array<{ partner_analyte: string; partner_map_name: string; signoff_date: string | null; next_due: string | null; pass_fail: string | null; group_id: number | null }>> = {};
+    const thisMapId = parseInt(req.params.id, 10);
+    for (const c of correlationsRaw) {
+      // Determine which side is on this map
+      let sourceAnalyte: string | null = null;
+      let partner: { analyte: string; map_name: string } | null = null;
+      if (c.ta_map_id === thisMapId) {
+        sourceAnalyte = c.ta_analyte;
+        partner = { analyte: c.tb_analyte, map_name: c.tb_map_name };
+      } else if (c.tb_map_id === thisMapId) {
+        sourceAnalyte = c.tb_analyte;
+        partner = { analyte: c.ta_analyte, map_name: c.ta_map_name };
+      }
+      if (!sourceAnalyte || !partner) continue;
+      if (!correlationsByAnalyte[sourceAnalyte]) correlationsByAnalyte[sourceAnalyte] = [];
+      correlationsByAnalyte[sourceAnalyte].push({
+        partner_analyte: partner.analyte,
+        partner_map_name: partner.map_name,
+        signoff_date: c.signoff_date,
+        next_due: c.next_due,
+        pass_fail: c.pass_fail,
+        group_id: c.correlation_group_id,
+      });
+    }
+
+    // Build a compact one-cell summary for each test's correlations.
+    // Format: "Hgb on Lab Backup (next due 10/20/26); Hct on Floor (overdue)"
+    function shortDateMDY(iso: string | null): string {
+      if (!iso) return "-";
+      const d = iso.length >= 10 ? iso.slice(0, 10) : iso;
+      const [y, m, dd] = d.split("-");
+      if (!y || !m || !dd) return iso;
+      return `${m}/${dd}/${y.slice(2)}`;
+    }
+    function correlationSummary(analyte: string): string {
+      const list = correlationsByAnalyte[analyte] || [];
+      if (list.length === 0) return "";
+      const today = new Date().toISOString().slice(0, 10);
+      const parts = list.map((c) => {
+        let status = "";
+        if (c.pass_fail === "Fail") {
+          status = "FAIL";
+        } else if (!c.signoff_date) {
+          status = "not signed";
+        } else if (c.next_due) {
+          if (c.next_due < today) status = "overdue";
+          else status = `next due ${shortDateMDY(c.next_due)}`;
+        }
+        const groupTag = c.group_id != null ? ` [grp ${c.group_id}]` : "";
+        return `${c.partner_analyte} on ${c.partner_map_name}${status ? ` (${status})` : ""}${groupTag}`;
+      });
+      return parts.join("; ");
+    }
+
     // Sort by Department → Specialty → Analyte (A-Z)
     tests.sort((a: any, b: any) => {
       const catA = (a.instruments[0]?.category || "").toLowerCase();
@@ -2506,14 +3053,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Last Calibration Verification Date", "Calibration Verification Status",
         "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
         "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
-        "Notes",
+        "Notes", "Correlates With (cross-map pairs)",
       ];
 
       // Column widths
       const colWidths = [
         22, 55, 20, 18, 20, 14, 22, 14, 20,
         18, 20, 20, 16, 16, 16, 22,
-        30, 28, 36, 36, 18, 18, 18, 18, 30,
+        30, 28, 36, 36, 18, 18, 18, 18, 30, 50,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
 
@@ -2576,6 +3123,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           t.last_sop_review || "",
           sopStatus,
           t.notes || "",
+          correlationSummary(t.analyte),
         ];
       });
 
@@ -8271,6 +8819,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ ok: true, deleted: result });
     } catch (err: any) {
       console.error('[seed-michaels-lab DELETE] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── ADMIN: Expand Michael's lab to 8-map / 21-instrument / 77-correlation fleet ──
+  // POST /api/admin/expand-michaels-lab?secret=$ADMIN_SECRET
+  // Idempotent: wipes Michael's existing maps/instruments/tests/correlations
+  // (preserving map ids 40/41/42 by repurposing them) and rebuilds from
+  // scripts/seed/michaels_lab_expand_v3_2026_05_03.sql.
+  app.post("/api/admin/expand-michaels-lab", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const sqlPath = path.join(process.cwd(), "scripts", "seed", "michaels_lab_expand_v3_2026_05_03.sql");
+      if (!fs.existsSync(sqlPath)) {
+        return res.status(500).json({ error: "seed_file_missing", path: sqlPath });
+      }
+      const before = {
+        maps: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_maps WHERE user_id=17").get() as { n: number }).n,
+        instruments: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_instruments WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+        tests: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+        correlations: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_test_correlations").get() as { n: number }).n,
+      };
+      const sql = fs.readFileSync(sqlPath, "utf-8");
+      sqlite.exec(sql);
+      const after = {
+        maps: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_maps WHERE user_id=17").get() as { n: number }).n,
+        instruments: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_instruments WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+        tests: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+        correlations: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_test_correlations").get() as { n: number }).n,
+        instrument_tests: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_instrument_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+      };
+      const groups = sqlite.prepare("SELECT correlation_group_id, COUNT(*) as n FROM veritamap_test_correlations GROUP BY correlation_group_id").all();
+      console.log('[expand-michaels-lab] before:', before, 'after:', after, 'groups:', groups);
+      res.json({ ok: true, before, after, correlation_groups: groups, sql_bytes: sql.length });
+    } catch (err: any) {
+      console.error('[expand-michaels-lab] Error:', err.message);
       res.status(500).json({ error: err.message });
     }
   });

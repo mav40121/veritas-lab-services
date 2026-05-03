@@ -209,6 +209,37 @@ Features, comparison tables) doesn't carry the same staleness.
 
 ---
 
+### 9. VeritaScan has no sign-off date field, breaking cross-reference with VeritaMap
+
+**What:** VeritaScan tracks scan items and completion, but has no
+field for the date the director (or designee) signed off on the
+scan / closed it out. The VeritaMap correlation feature (in flight
+2026-05-03) is adding `signoff_date`, `signoff_by_user_id`, and
+`signoff_by_name` so the regulatory-binding date drives `next_due`.
+VeritaScan should follow the same pattern so a scan can tie back
+to a sign-off event and (eventually) cross-reference VeritaMap
+correlation sign-offs (e.g. "this VeritaScan finding was closed
+by the same sign-off that closed Hem correlation group 47 on
+2026-04-15").
+
+**Fix shape:** Add `signoff_date`, `signoff_by_user_id`,
+`signoff_by_name` to the VeritaScan completion path (likely
+`veritascan_items` and/or a parent scan-level record). PRAGMA-guarded
+ALTER per New DB Table Rule. Backend endpoints to record sign-off.
+UI surface for director sign-off action. Cross-reference query so
+VeritaMap correlation widget can link to VeritaScan items closed
+under the same sign-off, and vice versa.
+
+**Source:** Michael flagged 2026-05-03 during VeritaMap correlation
+feature design conversation. Quote: "This is actually a worry of mine
+with VeritaScan because it has nowhere to document the sign-off date
+to tie back into VeritaMap and VeritaScan."
+
+**Status:** Open. Deferred until after VeritaMap correlation feature
+ships so the sign-off pattern is settled and reusable.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"

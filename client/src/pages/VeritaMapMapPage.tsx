@@ -31,6 +31,24 @@ import {
   Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getUser } from "@/lib/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,11 +63,38 @@ interface InstrumentOnTest {
   nickname?: string | null;
 }
 
+interface CorrelationRecord {
+  id: number;
+  test_a_id: number;
+  test_b_id: number;
+  correlation_group_id?: number | null;
+  correlation_method?: string | null;
+  acceptable_criteria?: string | null;
+  actual_bias_or_sd?: string | null;
+  pass_fail?: string | null;
+  work_performed_date?: string | null;
+  signoff_date?: string | null;
+  signoff_by_user_id?: number | null;
+  signoff_by_name?: string | null;
+  next_due?: string | null;
+  notes?: string | null;
+  partner_test_id: number;
+  partner_analyte: string;
+  partner_map_id: number;
+  partner_map_name: string;
+  partner_instrument?: string | null;
+  // 1 when test_a_id == test_b_id: an intra-row Pri↔Backup correlation on a
+  // single analyte that has multiple methods listed in instrument_source.
+  is_self_pair?: 0 | 1;
+}
+
 interface TestRecord {
+  id: number;
   analyte: string;
   specialty: string;
   complexity: Complexity;
   instruments: InstrumentOnTest[];
+  correlations?: CorrelationRecord[];
   last_cal_ver?: string | null;
   last_method_comp?: string | null;
   last_precision?: string | null;
@@ -515,10 +560,450 @@ interface TestRowProps {
   amrValues?: AmrValues;
   onSaveAnalyteValues?: (analyte: string, values: AnalyteValues) => void;
   onSaveAmrValues?: (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => void;
+  onEditCorrelation?: (test: TestRecord, corr: CorrelationRecord | null) => void;
+  readOnly?: boolean;
   colCount: number;
 }
 
-function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveAnalyteValues, onSaveAmrValues, colCount }: TestRowProps) {
+// ── Correlation badges (read-only display on test rows) ─────────────────────
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  // Accept full ISO or YYYY-MM-DD
+  const dateOnly = iso.length >= 10 ? iso.slice(0, 10) : iso;
+  const [y, m, d] = dateOnly.split("-");
+  if (!y || !m || !d) return iso;
+  return `${m}/${d}/${y.slice(2)}`;
+}
+
+function correlationStatusColor(corr: CorrelationRecord): { bg: string; text: string; label: string } {
+  if (corr.pass_fail === "Fail") {
+    return { bg: "bg-red-100 dark:bg-red-950/40", text: "text-red-700 dark:text-red-300", label: "Fail" };
+  }
+  if (!corr.signoff_date) {
+    return { bg: "bg-slate-100 dark:bg-slate-800/40", text: "text-slate-600 dark:text-slate-400", label: "Not signed" };
+  }
+  if (corr.next_due) {
+    const dueDate = new Date(corr.next_due);
+    const now = new Date();
+    const daysUntil = (dueDate.getTime() - now.getTime()) / 86400_000;
+    if (daysUntil < 0) return { bg: "bg-red-100 dark:bg-red-950/40", text: "text-red-700 dark:text-red-300", label: "Overdue" };
+    if (daysUntil < 30) return { bg: "bg-amber-100 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300", label: "Due soon" };
+  }
+  return { bg: "bg-emerald-100 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300", label: "Current" };
+}
+
+function CorrelationBadges({
+  correlations,
+  onEdit,
+  onAdd,
+  readOnly,
+}: {
+  correlations: CorrelationRecord[];
+  onEdit?: (corr: CorrelationRecord) => void;
+  onAdd?: () => void;
+  readOnly?: boolean;
+}) {
+  const hasAny = correlations && correlations.length > 0;
+  if (!hasAny && (readOnly || !onAdd)) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1 items-center">
+      {correlations.map((corr) => {
+        const status = correlationStatusColor(corr);
+        const isSelf = corr.is_self_pair === 1 || corr.test_a_id === corr.test_b_id;
+        const partnerLabel = isSelf
+          ? `Pri↔Backup (${corr.partner_analyte})`
+          : `${corr.partner_analyte} on ${corr.partner_map_name}`;
+        const tooltipTitle = isSelf
+          ? `Pri↔Backup correlation on ${corr.partner_analyte}`
+          : `Correlates with ${corr.partner_analyte}`;
+        const tooltipSub = isSelf
+          ? (corr.partner_instrument ?? "Multiple methods on this analyte")
+          : `on ${corr.partner_map_name}${corr.partner_instrument ? `, ${corr.partner_instrument}` : ""}`;
+        const clickable = !!onEdit && !readOnly;
+        return (
+          <TooltipProvider key={corr.id} delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={clickable ? () => onEdit!(corr) : undefined}
+                  onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEdit!(corr); } } : undefined}
+                  className={`inline-flex items-center gap-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded border border-border ${status.bg} ${status.text} ${clickable ? "cursor-pointer hover:ring-1 hover:ring-primary/40" : "cursor-default"}`}
+                >
+                  <GitMerge size={9} className="shrink-0" />
+                  <span className="truncate max-w-[160px]">{partnerLabel}</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs max-w-[280px]">
+                <div className="space-y-1">
+                  <div className="font-semibold">{tooltipTitle}</div>
+                  <div className="text-muted-foreground">{tooltipSub}</div>
+                  {corr.correlation_method && <div><span className="text-muted-foreground">Method:</span> {corr.correlation_method}</div>}
+                  {corr.acceptable_criteria && <div><span className="text-muted-foreground">Criteria:</span> {corr.acceptable_criteria}</div>}
+                  {corr.actual_bias_or_sd && <div><span className="text-muted-foreground">Result:</span> {corr.actual_bias_or_sd}</div>}
+                  {corr.signoff_date && <div><span className="text-muted-foreground">Signed off:</span> {formatShortDate(corr.signoff_date)}{corr.signoff_by_name ? ` by ${corr.signoff_by_name}` : ""}</div>}
+                  {corr.work_performed_date && <div><span className="text-muted-foreground">Work performed:</span> {formatShortDate(corr.work_performed_date)}</div>}
+                  {corr.next_due && <div><span className="text-muted-foreground">Next due:</span> {formatShortDate(corr.next_due)} ({status.label})</div>}
+                  {corr.pass_fail && <div><span className="text-muted-foreground">Status:</span> {corr.pass_fail}</div>}
+                  {clickable && <div className="text-muted-foreground italic pt-1">Click to edit</div>}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      })}
+      {!readOnly && onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded border border-dashed border-border text-muted-foreground hover:text-primary hover:border-primary/60"
+          title="Add correlation to a test on another map"
+        >
+          <GitMerge size={9} className="shrink-0" />
+          <span>Add</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Correlation edit modal (single-pair) ───────────────────────────────────
+
+interface CandidatePartner {
+  id: number;
+  analyte: string;
+  specialty: string;
+  complexity: Complexity;
+  instrument_source: string | null;
+  map_id: number;
+  map_name: string;
+}
+
+interface CorrelationEditModalProps {
+  open: boolean;
+  onClose: () => void;
+  sourceTest: TestRecord | null;
+  existing: CorrelationRecord | null; // null = new
+  mapId: number | null;
+  onSaved: () => void;
+}
+
+function addMonthsISO(iso: string, months: number): string {
+  // iso = YYYY-MM-DD
+  const [y, m, d] = iso.split("-").map((s) => parseInt(s, 10));
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCMonth(dt.getUTCMonth() + months);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSaved }: CorrelationEditModalProps) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const isEdit = !!existing;
+
+  // Form state
+  const [partnerTestId, setPartnerTestId] = useState<number | null>(
+    existing?.partner_test_id ?? null
+  );
+  const [partnerSearch, setPartnerSearch] = useState("");
+  const [method, setMethod] = useState(existing?.correlation_method ?? "");
+  const [criteria, setCriteria] = useState(existing?.acceptable_criteria ?? "");
+  const [actual, setActual] = useState(existing?.actual_bias_or_sd ?? "");
+  const [passFail, setPassFail] = useState(existing?.pass_fail ?? "");
+  const [workDate, setWorkDate] = useState(existing?.work_performed_date ?? "");
+  const [signoffDate, setSignoffDate] = useState(existing?.signoff_date ?? "");
+  const [signoffName, setSignoffName] = useState(existing?.signoff_by_name ?? "");
+  const [nextDue, setNextDue] = useState(existing?.next_due ?? "");
+  const [nextDueDirty, setNextDueDirty] = useState(false);
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Reset form when opening for a different correlation/test
+  useEffect(() => {
+    if (!open) return;
+    setPartnerTestId(existing?.partner_test_id ?? null);
+    setPartnerSearch("");
+    setMethod(existing?.correlation_method ?? "");
+    setCriteria(existing?.acceptable_criteria ?? "");
+    setActual(existing?.actual_bias_or_sd ?? "");
+    setPassFail(existing?.pass_fail ?? "");
+    setWorkDate(existing?.work_performed_date ?? "");
+    setSignoffDate(existing?.signoff_date ?? "");
+    setSignoffName(existing?.signoff_by_name ?? "");
+    setNextDue(existing?.next_due ?? "");
+    setNextDueDirty(false);
+    setNotes(existing?.notes ?? "");
+  }, [open, existing]);
+
+  // Auto-fill signoff name + auto-calc next_due when signoff_date set
+  useEffect(() => {
+    if (signoffDate && !signoffName) {
+      const u = getUser();
+      if (u?.name) setSignoffName(u.name);
+    }
+    if (signoffDate && !nextDueDirty) {
+      setNextDue(addMonthsISO(signoffDate, 6));
+    }
+  }, [signoffDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Candidate partners (only for new correlations)
+  const { data: candidates = [], isLoading: candLoading } = useQuery<CandidatePartner[]>({
+    queryKey: [`/api/veritamap/correlations/candidate-partners`, sourceTest?.id, partnerSearch],
+    queryFn: async () => {
+      if (!sourceTest?.id) return [];
+      const params = new URLSearchParams({ test_id: String(sourceTest.id) });
+      if (partnerSearch.trim()) params.set("q", partnerSearch.trim());
+      const r = await fetch(`${API_BASE}/api/veritamap/correlations/candidate-partners?${params}`, {
+        headers: authHeaders(),
+      });
+      if (!r.ok) throw new Error("Failed to load candidate tests");
+      return r.json();
+    },
+    enabled: open && !isEdit && !!sourceTest?.id,
+  });
+
+  async function handleSave() {
+    if (!sourceTest) return;
+    if (!isEdit && !partnerTestId) {
+      toast({ title: "Pick a partner test", description: "Choose the analyte on another map this correlates with.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const u = getUser();
+      const body: Record<string, unknown> = {
+        test_a_id: sourceTest.id,
+        test_b_id: isEdit
+          ? (existing!.partner_test_id) // server normalizes a<b
+          : partnerTestId,
+        correlation_method: method || null,
+        acceptable_criteria: criteria || null,
+        actual_bias_or_sd: actual || null,
+        pass_fail: passFail || null,
+        work_performed_date: workDate || null,
+        signoff_date: signoffDate || null,
+        signoff_by_user_id: signoffDate ? (u?.id ?? null) : null,
+        signoff_by_name: signoffDate ? (signoffName || u?.name || null) : null,
+        next_due: nextDue || null,
+        notes: notes || null,
+      };
+      const r = await fetch(`${API_BASE}/api/veritamap/correlations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Save failed", description: data.error || "Server error", variant: "destructive" });
+        return;
+      }
+      toast({ title: isEdit ? "Correlation updated" : "Correlation added" });
+      if (mapId != null) qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+      onSaved();
+      onClose();
+    } catch {
+      toast({ title: "Save failed", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!existing) return;
+    if (!window.confirm("Remove this correlation? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/veritamap/correlations/${existing.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        toast({ title: "Delete failed", description: data.error || "Server error", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Correlation removed" });
+      if (mapId != null) qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+      onSaved();
+      onClose();
+    } catch {
+      toast({ title: "Delete failed", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (!sourceTest) return null;
+
+  const partnerLabel = isEdit
+    ? `${existing!.partner_analyte} on ${existing!.partner_map_name}${existing!.partner_instrument ? `, ${existing!.partner_instrument}` : ""}`
+    : null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? "Edit correlation" : "Add correlation"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? `${sourceTest.analyte} <-> ${partnerLabel}`
+              : `Pick the analyte on another map that ${sourceTest.analyte} correlates with.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Partner picker (new only) */}
+          {!isEdit && (
+            <div className="space-y-1">
+              <Label>Partner test</Label>
+              <Input
+                placeholder="Filter by analyte..."
+                value={partnerSearch}
+                onChange={(e) => setPartnerSearch(e.target.value)}
+                className="text-sm"
+              />
+              <div className="max-h-48 overflow-y-auto border border-border rounded text-sm">
+                {candLoading ? (
+                  <div className="p-3 text-muted-foreground">Loading...</div>
+                ) : candidates.length === 0 ? (
+                  <div className="p-3 text-muted-foreground italic">
+                    No eligible partner tests in this lab. Either no other map has this analyte, or it is already correlated.
+                  </div>
+                ) : (
+                  candidates.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setPartnerTestId(c.id)}
+                      className={`w-full text-left px-3 py-1.5 border-b border-border last:border-0 hover:bg-muted/50 ${partnerTestId === c.id ? "bg-primary/10 ring-1 ring-primary/40" : ""}`}
+                    >
+                      <div className="font-medium">{c.analyte}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {c.map_name} - {c.specialty}
+                        {c.instrument_source ? ` - ${c.instrument_source}` : ""}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Method & criteria */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Correlation method</Label>
+              <Input
+                placeholder="e.g., Split-sample comparison, n=20"
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Acceptable criteria</Label>
+              <Input
+                placeholder="e.g., Bias <= 10%"
+                value={criteria}
+                onChange={(e) => setCriteria(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Actual bias or SD</Label>
+              <Input
+                placeholder="e.g., Bias 4.2%"
+                value={actual}
+                onChange={(e) => setActual(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Result</Label>
+              <Select value={passFail || "unset"} onValueChange={(v) => setPassFail(v === "unset" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">Not set</SelectItem>
+                  <SelectItem value="Pass">Pass</SelectItem>
+                  <SelectItem value="Fail">Fail</SelectItem>
+                  <SelectItem value="Pass with notes">Pass with notes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label>Work performed</Label>
+              <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Sign-off date</Label>
+              <Input type="date" value={signoffDate} onChange={(e) => setSignoffDate(e.target.value)} />
+              <div className="text-[10px] text-muted-foreground">Drives next-due (sign-off + 6 mo).</div>
+            </div>
+            <div className="space-y-1">
+              <Label>Next due</Label>
+              <Input
+                type="date"
+                value={nextDue}
+                onChange={(e) => { setNextDue(e.target.value); setNextDueDirty(true); }}
+              />
+              {signoffDate && !nextDueDirty && (
+                <div className="text-[10px] text-muted-foreground">Auto from sign-off. Override if needed.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Signed off by</Label>
+            <Input
+              placeholder={signoffDate ? "Auto-filled from your account" : "Set sign-off date first"}
+              value={signoffName}
+              onChange={(e) => setSignoffName(e.target.value)}
+              disabled={!signoffDate}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Notes</Label>
+            <Textarea
+              placeholder="Optional notes about this correlation"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="flex flex-row justify-between sm:justify-between gap-2">
+          <div>
+            {isEdit && (
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting || saving}>
+                {deleting ? "Removing..." : "Remove"}
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={saving || deleting}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving || deleting}>
+              {saving ? "Saving..." : isEdit ? "Save changes" : "Add correlation"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveAnalyteValues, onSaveAmrValues, onEditCorrelation, readOnly, colCount }: TestRowProps) {
   const [expanded, setExpanded] = React.useState(false);
   const [localAv, setLocalAv] = React.useState<AnalyteValues>(analyteValues || {});
   const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrValues || {});
@@ -565,7 +1050,7 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
       className={`border-b border-border text-xs group transition-colors hover:bg-muted/30 ${borderClass}`}
     >
       {/* Analyte */}
-      <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap max-w-[180px]">
+      <td className="px-3 py-2 font-medium text-foreground max-w-[220px]">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setExpanded(e => !e)}
@@ -578,6 +1063,12 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
           </button>
           <span className="truncate">{test.analyte}</span>
         </div>
+        <CorrelationBadges
+          correlations={test.correlations ?? []}
+          onEdit={onEditCorrelation ? (corr) => onEditCorrelation(test, corr) : undefined}
+          onAdd={onEditCorrelation ? () => onEditCorrelation(test, null) : undefined}
+          readOnly={readOnly}
+        />
       </td>
 
       {/* Instruments */}
@@ -988,6 +1479,16 @@ export default function VeritaMapMapPage() {
   // Analyte values and AMR values keyed by analyte and instId::analyte respectively
   const [analyteValuesMap, setAnalyteValuesMap] = useState<Record<string, AnalyteValues>>({});
   const [amrValuesMap, setAmrValuesMap] = useState<Record<string, { amr_low?: string; amr_high?: string }>>({});
+
+  // Correlation edit modal state
+  const [corrModalOpen, setCorrModalOpen] = useState(false);
+  const [corrModalTest, setCorrModalTest] = useState<TestRecord | null>(null);
+  const [corrModalExisting, setCorrModalExisting] = useState<CorrelationRecord | null>(null);
+  const openCorrModal = (test: TestRecord, corr: CorrelationRecord | null) => {
+    setCorrModalTest(test);
+    setCorrModalExisting(corr);
+    setCorrModalOpen(true);
+  };
 
   // Refs for row scrolling (keyed by analyte)
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -1676,6 +2177,8 @@ export default function VeritaMapMapPage() {
                     )}
                     onSaveAnalyteValues={handleSaveAnalyteValues}
                     onSaveAmrValues={handleSaveAmrValues}
+                    onEditCorrelation={openCorrModal}
+                    readOnly={readOnly}
                     colCount={12}
                   />
                 ))}
@@ -1698,6 +2201,15 @@ export default function VeritaMapMapPage() {
           </p>
         </div>
       </div>
+
+      <CorrelationEditModal
+        open={corrModalOpen}
+        onClose={() => setCorrModalOpen(false)}
+        sourceTest={corrModalTest}
+        existing={corrModalExisting}
+        mapId={mapId ? parseInt(mapId, 10) : null}
+        onSaved={() => { /* invalidation handled inside modal */ }}
+      />
     </div>
   );
 }

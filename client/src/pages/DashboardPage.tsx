@@ -12,6 +12,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useState } from "react";
 import { getToken } from "@/lib/auth";
+import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -117,6 +118,9 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Correlations due soon */}
+      <CorrelationsDueSoonWidget className="mb-6" />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-6">
