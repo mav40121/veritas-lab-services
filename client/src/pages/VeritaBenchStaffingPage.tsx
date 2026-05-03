@@ -370,15 +370,15 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
     return { totalWeekly, peakHour, lowHour, peakDay, avgDaily };
   }, [avgReceived]);
 
-  // FTE staffing recommendation: volume / throughput rate, with a floor of 2.
-  // A clinical lab is never staffed with a single tech: a one-person shift
-  // cannot witness blood-bank issuance, back up critical-result callbacks,
-  // or maintain competency oversight. CLIA-accredited labs operating 24/7
-  // require a minimum of two qualified personnel on site at all times.
-  const MIN_STAFF = 2;
+  // FTE staffing recommendation: volume / throughput rate.
+  // A floor of 1 reflects that a shift always has at least one tech on duty
+  // to receive specimens; the math is allowed to return exactly 1 when low
+  // volume genuinely warrants a single-person staffing model (eg, overnight
+  // on a weekend, on-call coverage). The director adjusts upward as needed
+  // for safety, blood-bank witness, or competency-oversight requirements.
   const fteGrid = useMemo(() => {
     const rate = throughputRate > 0 ? throughputRate : 20;
-    return avgReceived.map(row => row.map(val => Math.max(MIN_STAFF, Math.ceil(val / rate))));
+    return avgReceived.map(row => row.map(val => Math.max(1, Math.ceil(val / rate))));
   }, [avgReceived, throughputRate]);
 
   return (
@@ -506,7 +506,7 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border" /> More staff needed than currently scheduled</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-50 border" /> Fewer staff needed than currently scheduled</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">FTE = max(2, ceil(specimens per hour / throughput rate)). The minimum of 2 reflects safe-staffing baseline: a 24/7 lab is never staffed with a single tech. Adjust the throughput rate to match your department's processing capacity.</p>
+        <p className="text-xs text-muted-foreground mt-2">FTE = max(1, ceil(specimens per hour / throughput rate)). One tech is appropriate during genuine low-volume hours; the director adjusts upward as needed for blood-bank witness, critical-result coverage, or competency oversight. Adjust the throughput rate to match your department's processing capacity.</p>
       </div>
     </div>
   );
