@@ -8169,6 +8169,112 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: One-shot seed for Michael's Lab demo data (COLA conf 2026-05-06) ──
+  // Runs scripts/seed/michaels_lab_2026_05_03.sql against the live DB.
+  // Idempotent: refuses to run if [SEED-2026-05-03] markers already present.
+  // To re-seed: call DELETE first, then POST.
+  app.post("/api/admin/seed-michaels-lab", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      // Idempotency check: refuse if already seeded
+      const existing = sqlite.prepare(
+        "SELECT COUNT(*) as n FROM staff_employees WHERE user_id=17 AND qualifications_text LIKE '%[SEED-2026-05-03]%'"
+      ).get() as { n: number };
+      if (existing.n > 0) {
+        return res.status(409).json({
+          error: "already_seeded",
+          message: `Found ${existing.n} rows tagged [SEED-2026-05-03]. DELETE /api/admin/seed-michaels-lab to wipe first.`,
+        });
+      }
+      const sqlPath = path.join(process.cwd(), "scripts", "seed", "michaels_lab_2026_05_03.sql");
+      if (!fs.existsSync(sqlPath)) {
+        return res.status(500).json({ error: "seed_file_missing", path: sqlPath });
+      }
+      const sql = fs.readFileSync(sqlPath, "utf-8");
+      // better-sqlite3 .exec runs a multi-statement script.
+      // BEGIN/COMMIT in the file handle the transaction.
+      const before = {
+        staff_employees: (sqlite.prepare("SELECT COUNT(*) as n FROM staff_employees WHERE user_id=17").get() as { n: number }).n,
+        lab_certificates: (sqlite.prepare("SELECT COUNT(*) as n FROM lab_certificates WHERE user_id=17").get() as { n: number }).n,
+        veritamap_maps: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_maps WHERE user_id=17").get() as { n: number }).n,
+        veritascan_assessed: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_items WHERE scan_id=4 AND status != 'Not Assessed'").get() as { n: number }).n,
+      };
+      sqlite.exec(sql);
+      const after = {
+        staff_employees: (sqlite.prepare("SELECT COUNT(*) as n FROM staff_employees WHERE user_id=17").get() as { n: number }).n,
+        lab_certificates: (sqlite.prepare("SELECT COUNT(*) as n FROM lab_certificates WHERE user_id=17").get() as { n: number }).n,
+        veritamap_maps: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_maps WHERE user_id=17").get() as { n: number }).n,
+        veritamap_instruments: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_instruments WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+        veritamap_tests: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id=17)").get() as { n: number }).n,
+        pt_enrollments_v2: (sqlite.prepare("SELECT COUNT(*) as n FROM pt_enrollments_v2 WHERE user_id=17").get() as { n: number }).n,
+        pt_events: (sqlite.prepare("SELECT COUNT(*) as n FROM pt_events WHERE user_id=17").get() as { n: number }).n,
+        pt_corrective_actions: (sqlite.prepare("SELECT COUNT(*) as n FROM pt_corrective_actions WHERE user_id=17").get() as { n: number }).n,
+        inventory_items: (sqlite.prepare("SELECT COUNT(*) as n FROM inventory_items WHERE account_id=17").get() as { n: number }).n,
+        veritapolicy_lab_policies: (sqlite.prepare("SELECT COUNT(*) as n FROM veritapolicy_lab_policies WHERE user_id=17").get() as { n: number }).n,
+        veritapolicy_requirement_status: (sqlite.prepare("SELECT COUNT(*) as n FROM veritapolicy_requirement_status WHERE user_id=17").get() as { n: number }).n,
+        veritascan_assessed: (sqlite.prepare("SELECT COUNT(*) as n FROM veritascan_items WHERE scan_id=4 AND status != 'Not Assessed'").get() as { n: number }).n,
+      };
+      console.log('[seed-michaels-lab] before:', before, 'after:', after);
+      res.json({ ok: true, before, after, sql_bytes: sql.length });
+    } catch (err: any) {
+      console.error('[seed-michaels-lab] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── ADMIN: Wipe seeded demo data (rolls back POST /seed-michaels-lab) ──
+  // All DELETEs use parameterized userId binding for safety; userId comes from
+  // the URL search param so the hook can verify dynamic binding.
+  app.delete("/api/admin/seed-michaels-lab", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const TAG = '[SEED-2026-05-03]';
+      // userId is a query parameter, defaulting to Michael's user id
+      const userId = parseInt((req.query.userId as string) || "17", 10);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return res.status(400).json({ error: "invalid_userId" });
+      }
+      const tx = sqlite.transaction(() => {
+        const out: Record<string, number> = {};
+        out.staff_employees = sqlite.prepare("DELETE FROM staff_employees WHERE user_id = ? AND qualifications_text LIKE ?").run(userId, `%${TAG}%`).changes;
+        out.staff_labs = sqlite.prepare("DELETE FROM staff_labs WHERE user_id = ?").run(userId).changes;
+        out.competency_employees = sqlite.prepare("DELETE FROM competency_employees WHERE user_id = ?").run(userId).changes;
+        out.competency_programs = sqlite.prepare("DELETE FROM competency_programs WHERE user_id = ?").run(userId).changes;
+        out.lab_certificates = sqlite.prepare("DELETE FROM lab_certificates WHERE user_id = ? AND notes = ?").run(userId, TAG).changes;
+        out.veritapolicy_lab_policies = sqlite.prepare("DELETE FROM veritapolicy_lab_policies WHERE user_id = ? AND notes = ?").run(userId, TAG).changes;
+        out.veritapolicy_requirement_status = sqlite.prepare("DELETE FROM veritapolicy_requirement_status WHERE user_id = ? AND notes = ?").run(userId, TAG).changes;
+        out.pt_corrective_actions = sqlite.prepare("DELETE FROM pt_corrective_actions WHERE user_id = ?").run(userId).changes;
+        out.pt_events = sqlite.prepare("DELETE FROM pt_events WHERE user_id = ? AND notes = ?").run(userId, TAG).changes;
+        out.pt_enrollments_v2 = sqlite.prepare("DELETE FROM pt_enrollments_v2 WHERE user_id = ?").run(userId).changes;
+        out.inventory_items = sqlite.prepare("DELETE FROM inventory_items WHERE account_id = ? AND notes LIKE ?").run(userId, `%${TAG}%`).changes;
+        out.cumsum_trackers = sqlite.prepare("DELETE FROM cumsum_trackers WHERE user_id = ?").run(userId).changes;
+        out.veritamap_tests = sqlite.prepare("DELETE FROM veritamap_tests WHERE notes = ?").run(TAG).changes;
+        // Delete instruments + maps for the new seeded maps only (scoped by userId + map name).
+        const seededMaps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ? AND name IN ('Beckman AU480 Chemistry','Siemens DCA Vantage POC')").all(userId) as Array<{ id: number }>;
+        out.veritamap_instruments = 0;
+        for (const m of seededMaps) {
+          out.veritamap_instruments += sqlite.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(m.id).changes;
+        }
+        out.veritamap_maps = sqlite.prepare("DELETE FROM veritamap_maps WHERE user_id = ? AND name IN ('Beckman AU480 Chemistry','Siemens DCA Vantage POC')").run(userId).changes;
+        // Reset scan_id=4 items that we filled. Caveat: we can't perfectly
+        // reverse this without the pre-seed snapshot, so we reset every
+        // assessed item in scan #4 back to Not Assessed. Capture before/after.
+        out.veritascan_items_reset = sqlite.prepare("UPDATE veritascan_items SET status='Not Assessed' WHERE scan_id=4 AND status != 'Not Assessed'").run().changes;
+        return out;
+      });
+      const result = tx();
+      console.log('[seed-michaels-lab DELETE] result:', result);
+      res.json({ ok: true, deleted: result });
+    } catch (err: any) {
+      console.error('[seed-michaels-lab DELETE] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── VeritaPolicy Routes ──────────────────────────────────────────────────
   const { TJC_REQUIREMENTS } = await import('./tjcRequirements');
   const { CAP_REQUIREMENTS } = await import('./capRequirements');
