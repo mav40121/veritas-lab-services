@@ -273,6 +273,8 @@ export default function DemoLabPage() {
           tjc: item.tjc || "",
           cap: item.cap || "",
           cfr: item.cfr || "",
+          aabb: item.aabb || "",
+          cola: item.cola || "",
         }));
       const res = await fetch(`${API_BASE}/api/demo/scan/pdf/${type}`, {
         method: "POST",
