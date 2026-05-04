@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Calculator, TrendingDown, DollarSign, ArrowRight, Users } from "lucide-react";
+import { Calculator, TrendingDown, DollarSign, ArrowRight, Users, BookOpen, ExternalLink } from "lucide-react";
 import { useSEO } from "@/hooks/useSEO";
 
 const BENCHMARKS: Record<string, { label: string; low: number; high: number }> = {
@@ -114,6 +114,26 @@ export default function ProductivityCalculatorPage() {
             No account required.
           </p>
         </div>
+
+        {/* How-to article banner */}
+        <a
+          href="https://www.medlabmag.com/article/1575/?search=michael%20veri"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between gap-3 mb-8 px-4 py-3 rounded-lg border hover:shadow-sm transition-shadow"
+          style={{ backgroundColor: "#01696F10", borderColor: "#01696F40" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: "#01696F", color: "white" }}>
+              <BookOpen size={16} />
+            </div>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: "#01696F" }}>How to use VeritaBench and VeritaPace</div>
+              <div className="text-xs text-muted-foreground">Read the MedLab Magazine walkthrough by Michael Veri</div>
+            </div>
+          </div>
+          <ExternalLink size={16} style={{ color: "#01696F" }} />
+        </a>
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Input Card */}
