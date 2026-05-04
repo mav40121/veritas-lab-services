@@ -124,6 +124,7 @@ export default function VeritaPolicyAppPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingMasterList, setDownloadingMasterList] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Filter/search state
@@ -246,6 +247,26 @@ export default function VeritaPolicyAppPage() {
     }
   }
 
+  async function handleDownloadMasterList() {
+    setDownloadingMasterList(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/veritapolicy/master-list/excel`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Excel generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      a.download = `VeritaPolicy_MasterList_${date}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Excel generation failed", variant: "destructive" });
+    } finally {
+      setDownloadingMasterList(false);
+    }
+  }
+
   async function handleBulkNa(chapter: string, chapterLabel: string, reqs: Requirement[], markNa: boolean) {
     setBulkConfirm({ chapter, label: chapterLabel, reqs, markNa });
   }
@@ -365,6 +386,9 @@ export default function VeritaPolicyAppPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
+            <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}
+          </Button>
           <Button size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-1.5">
             <Download size={14} /> {downloadingPdf ? "Generating..." : "Download PDF"}
           </Button>

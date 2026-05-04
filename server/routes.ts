@@ -9784,6 +9784,222 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── VeritaPolicy Master List Excel export ──────────────────────────────
+  // 96-row policy crosswalk filtered to CFR + the lab's accrediting body only.
+  // About sheet content is hand-written for VeritaPolicy (per standing rule —
+  // no shared helper, no template). If the lab has more than one AO checked,
+  // the matching columns are all included; if no AO is checked, CFR-only.
+  app.get('/api/veritapolicy/master-list/excel', authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.userId;
+      const lab = resolveLabForUser(userId);
+      const ownerUser = storage.getUserById(userId);
+      const labName = (ownerUser as any)?.cliaLabName || (ownerUser as any)?.clia_lab_name || ownerUser?.name || 'Laboratory';
+      const cliaNumber = (ownerUser as any)?.cliaNumber || (ownerUser as any)?.clia_number || 'Not on file';
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || 'veritaassure-export';
+
+      // Pick the AO columns to include based on the lab record. CFR is always
+      // included. If no AO is checked, the workbook is CFR-only.
+      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
+      const aoCols: AoCol[] = [];
+      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC Citations' });
+      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP Citations' });
+      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA Citations' });
+      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB Citations' });
+      const aoLabel = aoCols.length === 0
+        ? 'CLIA only (CFR-only view)'
+        : aoCols.map(a => a.label.replace(' Citations', '')).join(', ');
+
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
+      const { default: ExcelJS } = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'VeritaAssure';
+      wb.created = new Date();
+
+      const thinBorder: any = {
+        top:    { style: 'thin', color: { argb: 'FFD0D0D0' } },
+        bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+        left:   { style: 'thin', color: { argb: 'FFD0D0D0' } },
+        right:  { style: 'thin', color: { argb: 'FFD0D0D0' } },
+      };
+
+      // ===== About sheet (hand-written for VeritaPolicy Master List) =====
+      const about = wb.addWorksheet('About');
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell('A1');
+      aboutTitle.value = 'VeritaPolicy Master List';
+      aboutTitle.font = { name: 'Calibri', bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+      aboutTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF01696F' } };
+      aboutTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell('A2');
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: 'Calibri', bold: true, size: 11, color: { argb: 'FF0A3A3D' } };
+      aboutIdentity.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2F2' } };
+      aboutIdentity.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
+      aboutIdentity.border = thinBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: 'Calibri', bold: true, size: 12, color: { argb: 'FF0A3A3D' } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2F2' } };
+        c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
+        c.border = thinBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: 'Calibri', size: 11, color: { argb: 'FF28251D' } };
+        c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
+        c.border = thinBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+
+      aboutSection('About this product');
+      aboutBody('The VeritaPolicy Master List is a working draft of the written policies most clinical laboratories need to satisfy federal regulations and the published standards of their accrediting body. Each row names one policy, identifies the Section and service line it applies to, lists the most-relevant citations from the CFR plus the lab\u2019s accrediting body on file, and carries Notes describing where the supporting documentation typically lives. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the Notes and Keep columns, and returned for the next iteration.');
+      aboutBlank();
+
+      aboutSection('How to use this workbook');
+      aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
+      aboutBody('Sections: Sections organize policies by where they live in laboratory operations \u2014 Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
+      aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
+      aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
+      aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
+      aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
+      aboutBlank();
+
+      aboutSection('Disclaimer');
+      aboutBody('This workbook is a working draft and a self-assessment tool, not an audit-grade compliance attestation, not a regulatory submission, and not a substitute for the laboratory\u2019s actual policies, SOPs, or the accrediting body\u2019s published manual. The requirement set is a curated crosswalk from VeritaAssure\u2019s master citation index as of the file generation date; standards from TJC, CAP, COLA, AABB, CMS / CFR 493, OSHA, NRC, FDA, and state agencies change, and the laboratory director is responsible for confirming the requirement set against the most recent published manual or letter of correction before relying on it.');
+      aboutBody('Citations shown for each policy are the most-relevant standards by frequency in the crosswalk, capped at five per accrediting body. They are not an exhaustive list of every standard that touches a given policy, and they are not a determination that naming the cited standards in a written policy will satisfy any inspector. The laboratory remains responsible for the content, approval, version control, signed review, staff training, and operational implementation of every policy it adopts; naming a policy in the Notes column is not evidence the policy exists, is current, or is being followed.');
+      aboutBody('What governs in conflict: the accrediting body\u2019s own published manual (TJC standards, CAP All Common / Laboratory General / specialty checklists, AABB Standards for Blood Banks and Transfusion Services, COLA Accreditation Manual), the federal regulation (42 CFR 493 and the relevant 21 CFR / 29 CFR / 10 CFR / 45 CFR sections), the laboratory\u2019s own signed and dated SOP / policy manual, and the inspector\u2019s findings always govern over this workbook. If there is any disagreement between this workbook and those source documents, those source documents are correct.');
+      aboutBody('The laboratory director (or designee) is responsible for confirming the policy list matches the laboratory\u2019s actual service mix and state requirements, for the currency of every policy named in the Notes column, and for any operational, personnel, or accreditation decision taken on the basis of this workbook.');
+      aboutBody('VeritaAssure\u2122 / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory\u2019s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every policy in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
+      aboutBlank();
+
+      aboutSection('Lab identity');
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The accrediting body on file for this lab is ${aoLabel}. The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+
+      aboutSection('Source');
+      aboutBody('Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of TJC, CAP, COLA, and AABB.');
+      aboutBlank();
+
+      aboutSection('Coverage gaps');
+      aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here that should be \u2014 a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
+
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
+      // ===== Master List sheet =====
+      const ws = wb.addWorksheet('Master List');
+      const baseHeaders = [
+        { label: 'ID',           width: 6  },
+        { label: 'Policy Name',  width: 38 },
+        { label: 'Section',      width: 20 },
+        { label: 'Subspecialty', width: 18 },
+        { label: 'Service Line', width: 14 },
+        { label: 'Description',  width: 70 },
+        { label: 'CFR Citations', width: 38 },
+      ];
+      const aoHeaderDefs = aoCols.map(a => ({ label: a.label, width: 28 }));
+      const tailHeaders = [
+        { label: 'Notes',        width: 60 },
+        { label: 'Keep (y/n)',   width: 10 },
+      ];
+      const allHeaders = [...baseHeaders, ...aoHeaderDefs, ...tailHeaders];
+      ws.columns = allHeaders.map((h, i) => ({ header: h.label, key: `col${i}`, width: h.width }));
+
+      for (const r of VERITAPOLICY_MASTER_LIST) {
+        const aoCells = aoCols.map(a => (r as any)[a.key] || '');
+        ws.addRow([
+          r.policy_id,
+          r.policy_name,
+          r.section,
+          r.subspecialty,
+          r.service_line,
+          r.description,
+          r.cfr_citations,
+          ...aoCells,
+          r.notes || '',
+          '',
+        ]);
+      }
+
+      // Header row styling
+      const headerRow = ws.getRow(1);
+      headerRow.height = 36;
+      headerRow.eachCell((cell) => {
+        cell.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF01696F' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = thinBorder;
+      });
+
+      // Data rows: zebra-stripe + base styling, lock all cells except Notes + Keep
+      const notesColIdx = allHeaders.findIndex(h => h.label === 'Notes') + 1;
+      const keepColIdx  = allHeaders.findIndex(h => h.label === 'Keep (y/n)') + 1;
+      const totalRows = VERITAPOLICY_MASTER_LIST.length + 1;
+      for (let r = 2; r <= totalRows; r++) {
+        const row = ws.getRow(r);
+        const isEven = r % 2 === 0;
+        const bg = isEven ? 'FFEBF3F8' : 'FFFFFFFF';
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = { name: 'Calibri', color: { argb: 'FF28251D' }, size: 10 };
+          cell.alignment = { vertical: 'top', wrapText: true };
+          cell.border = thinBorder;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+          // Notes + Keep editable; everything else locked.
+          if (colNumber === notesColIdx || colNumber === keepColIdx) {
+            cell.protection = { locked: false };
+          } else {
+            cell.protection = { locked: true };
+          }
+        });
+      }
+
+      ws.views = [{ state: 'frozen' as const, xSplit: 2, ySplit: 1, topLeftCell: 'C2' }];
+      const lastColNum = allHeaders.length;
+      const lastColLetter = lastColNum <= 26
+        ? String.fromCharCode(64 + lastColNum)
+        : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
+      ws.autoFilter = { from: 'A1', to: `${lastColLetter}1` };
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: 'visible' }];
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `VeritaPolicy_MasterList_${date}.xlsx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(Buffer.from(buffer));
+    } catch (err: any) {
+      console.error('VeritaPolicy master-list excel error:', err);
+      res.status(500).json({ error: err.message || 'Excel generation failed' });
+    }
+  });
+
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');
   registerVeritaTrackRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
