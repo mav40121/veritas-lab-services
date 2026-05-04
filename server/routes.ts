@@ -1591,6 +1591,84 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.creator = "Perplexity Computer";
       wb.created = new Date();
 
+      // ===== About sheet (sheet 1) =====
+      // Per Excel Export Standard: workbook opens to About; lab identity is
+      // stamped in three layers (visible row, page header, page footer);
+      // sheet is read-only under password protection.
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaCheck Studies Summary";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22;
+        aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16);
+        aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+
+      aboutSection("About this product");
+      aboutBody("This workbook summarizes the verification, validation, calibration verification, AMR, and reference interval studies on file for this laboratory. It is provided for operational summary purposes and is not a substitute for the per-study PDF reports, which are the audit-grade documentation. Each study row links back to its full report.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Studies tab lists every study on file. Use the column filters to narrow by analyte, study type, instrument, or verdict. Click the Report Link cell to open the full per-study PDF in your browser.");
+      aboutBlank();
+      aboutBody("Verdict color coding: Pass is green, Fail is magenta, Completed and other states are muted gray. The Verdict column reflects the final disposition of the study, not the status of any single replicate.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is an operational summary of the studies on file for this laboratory. It is NOT audit-grade documentation and is NOT intended for submission to CMS, CLIA surveyors, COLA, TJC, CAP, or any other accrediting body. The audit-grade record for any single study is the per-study PDF report linked in the Report Link column; if there is a conflict between this summary and the per-study PDF, the per-study PDF governs. Verdicts shown here reflect the disposition recorded at the time of the study and may not reflect subsequent investigations, corrective actions, or repeat testing. The lab director is responsible for the accuracy of the underlying study data; VeritaAssure does not validate study inputs.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs a study type, instrument, or report field not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaCheck Studies Summary&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
       const ws = wb.addWorksheet("Studies");
 
       // Title block (rows 1-3)
@@ -1724,6 +1802,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ws.getCell(`A${footerRowNum}`).value = "VeritaAssure\u2122 | VeritaCheck\u2122 | Confidential, For Internal Lab Use Only";
       ws.getCell(`A${footerRowNum}`).font = { name: "Calibri", italic: true, size: 8, color: { argb: "FF7A7974" } };
       ws.getCell(`A${footerRowNum}`).alignment = { vertical: "middle", horizontal: "center" };
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaCheck Studies&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+      // Lock the Studies sheet under password (read-only — no review-input columns on this export).
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       // Filename: VeritaCheck_Studies_<labname>_<YYYY-MM-DD>.xlsx
       const safeLabName = String(labName).replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "Laboratory";
@@ -3041,7 +3136,79 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
 
-      // ── Sheet 1: Compliance Map ──
+      // ===== Lab identity (Excel Export Standard) =====
+      const ownerUserVm = storage.getUserById(dataUserId);
+      const labName = (ownerUserVm as any)?.cliaLabName || (ownerUserVm as any)?.clia_lab_name || ownerUserVm?.name || "Laboratory";
+      const cliaNumber = (ownerUserVm as any)?.cliaNumber || (ownerUserVm as any)?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaMap Compliance Map";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this product");
+      aboutBody("This workbook is the compliance map for one laboratory. It lists every analyte tested on this map, the instruments performing each test, the units and reference ranges in use, and the dates of the most recent calibration verification, correlation, precision, and SOP review activities. Use it as the operational source of truth for surveyor readiness and as a planning tool for upcoming maintenance windows.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Compliance Map tab lists every analyte. The Instructions tab explains each column. Use the auto-filter on the header row to narrow by department, specialty, or complexity, and the Status columns to spot anything overdue or due soon.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is the laboratory's own compliance map, populated from data the laboratory has entered into VeritaMap. It is NOT a regulatory determination. The Status columns (Calibration Verification, Correlation, Precision, SOP Review) are calculated from the most recent date the lab has recorded against each activity and the standard CMS/CLIA recurrence intervals; they do not assess whether the underlying activity was performed correctly, only whether it was performed within the expected window. Reference ranges, critical values, and AMR limits are the values the lab has entered; VeritaAssure does not verify them against the manufacturer's package insert or the lab's validation studies. The lab director is responsible for the accuracy of every value shown. This workbook is a planning and surveyor-readiness tool, not a substitute for the lab's primary documentation (validation records, calibration records, SOPs, package inserts).");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs a column or status indicator not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaMap Compliance Map&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
+      // ── Sheet 2: Compliance Map ──
       const ws = wb.addWorksheet("Compliance Map");
 
       const headers = [
@@ -3256,6 +3423,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Style the title row
       const titleCell = ws2.getCell("A1");
       titleCell.font = { bold: true, size: 14, color: { argb: "FF01696F" } };
+
+      // Page-setup identity stamp + protection on data sheets
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaMap Compliance Map&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+      ws2.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaMap Instructions&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws2.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await ws2.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       // Write to buffer
       const buffer = await wb.xlsx.writeBuffer();
@@ -3541,6 +3730,84 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      // ===== Lab identity (Excel Export Standard) =====
+      const ownerUserVs = storage.getUserById(dataUserId);
+      const labName = (ownerUserVs as any)?.cliaLabName || (ownerUserVs as any)?.clia_lab_name || ownerUserVs?.name || "Laboratory";
+      const cliaNumber = (ownerUserVs as any)?.cliaNumber || (ownerUserVs as any)?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaScan Compliance Self-Assessment";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      const accreditorList = xlsxSelected.length > 0
+        ? xlsxSelected.map(a => a.label.replace(/ (Standard|Requirement|Criterion)$/, "")).join(", ")
+        : "none on file (CFR-only view)";
+      aboutSection("About this product");
+      aboutBody(`This workbook is the row-by-row record of a VeritaScan self-assessment. It walks 168 compliance questions across the operational domains of a clinical laboratory and records, for each question, the lab's self-assessed status, the owner accountable for it, the due date for follow-up, and the lab's notes. Citations columns reflect the accreditation bodies on file for this lab: ${accreditorList}.`);
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The VeritaScan tab lists every compliance question. Use the auto-filter on the header row to narrow by domain or status. The Status column is color-coded: green for Pass/Compliant/Current, amber for Due Soon/Pending, magenta for Fail/Overdue/Non-Compliant, gray for N/A or Not Assessed. Owner and Due Date capture remediation accountability; Notes capture the lab's own context for each item.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is the laboratory's own self-assessment, not an external audit and not a regulatory determination. Every status, owner, due date, and note shown is what the lab entered in VeritaScan; VeritaAssure does not validate the underlying evidence and does not certify that the lab is or is not compliant. Citation columns (42 CFR, COLA, TJC, CAP, AABB) point back to the accreditation bodies on file for this lab and are intended as locator references, not authoritative reproductions of the source standards. The lab director is responsible for the accuracy of every entry and for the corrective action implied by any non-compliant status. This workbook is NOT a substitute for an on-site survey, a mock survey, or the lab's primary documentation; if there is a conflict between this workbook and the actual accreditation manual the lab follows, the accreditation manual governs.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs a domain, citation column, or status indicator not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaScan Compliance Self-Assessment&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
       const ws = wb.addWorksheet("VeritaScan");
 
       // Column order: # / Domain / Question / CFR / <accreditor(s) by selection> / Status / Owner / Due / Notes
@@ -3651,6 +3918,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ? String.fromCharCode(64 + lastColNum)
         : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
       ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaScan Self-Assessment&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+      // Sheet protection: cells visible and selectable, but not editable.
+      // Note: VeritaScan editing happens in the app, not in the export.
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
@@ -4285,6 +4570,83 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      // ===== Lab identity (Excel Export Standard) =====
+      const ownerUserCs = storage.getUserById(req.user.userId);
+      const labName = (ownerUserCs as any)?.cliaLabName || (ownerUserCs as any)?.clia_lab_name || ownerUserCs?.name || "Laboratory";
+      const cliaNumber = (ownerUserCs as any)?.cliaNumber || (ownerUserCs as any)?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+      const instrumentLabel = String(tracker.instrument_name || "instrument").trim() || "instrument";
+      const analyteLabel = String((tracker as any).analyte || "PT").trim() || "PT";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaCheck CUMSUM \u2014 Lot-to-Lot Drift Tracker";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this product");
+      aboutBody(`This workbook is the lot-to-lot CUMSUM tracker for ${analyteLabel} on ${instrumentLabel}. Each row represents a lot crossover: the geometric mean of the previous reagent lot, the geometric mean of the new lot, the difference between them, and the running cumulative sum (CumSum) used to detect slow drift across multiple lot changes. Use it to demonstrate ongoing reagent-lot performance monitoring as required for coagulation testing.`);
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The CUMSUM tab lists every lot crossover entered for this tracker, oldest at the top. The Difference column is (new geomean - old geomean) in seconds. The CumSum column is the running sum of those differences. The Verdict column is color-coded: green for Accept/Pass, magenta for Reject/Fail, amber for Pending, gray for N/A. Filter by Year to focus on a single calendar year, or by Verdict to see only flagged crossovers.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is the laboratory's own CUMSUM tracker, populated from values the lab has entered into VeritaCheck. It is NOT a substitute for the per-lot validation studies that govern whether a new lot is accepted into clinical use; those studies (parallel testing, geometric mean comparison against the lab's acceptance criteria) live outside this tracker and remain the audit-grade record. The CumSum value shown here is a running total of differences and reflects the lab's own decision rule for when drift becomes significant; VeritaAssure does not set or audit that decision rule. Geometric means and differences are the values the lab entered; VeritaAssure does not validate them against the analyzer's raw output. The lab director is responsible for the accuracy of every entry and for the disposition of any out-of-control crossover. If there is a conflict between this tracker and the lab's per-lot validation records, the validation records govern.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs an additional column (for example, alternate decision rules, non-PT analytes, or different units of measure) please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaCheck CUMSUM \u2014 ${analyteLabel} on ${instrumentLabel}&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
       const ws = wb.addWorksheet("CUMSUM");
 
       const headers = [
@@ -4374,6 +4736,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ? String.fromCharCode(64 + lastColNum)
         : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
       ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaCheck CUMSUM \u2014 ${analyteLabel} on ${instrumentLabel}&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
@@ -5083,6 +5461,81 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      // ===== Lab identity (Excel Export Standard) =====
+      // Demo lab is hard-coded; real maps use the user's CLIA record.
+      const labName = "Riverside Regional Medical Center (DEMO)";
+      const cliaNumber = "22D0999999 (DEMO)";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaMap Demo Compliance Map";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Demo lab: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this product");
+      aboutBody("This is a public demo of the VeritaMap compliance map. The data shown is fictional, generated for a fictional laboratory called Riverside Regional Medical Center under fictional CLIA number 22D0999999. It exists so prospective users can see what a populated compliance map looks like before subscribing. None of the analytes, instruments, dates, or notes represent any real laboratory.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Compliance Map tab lists every analyte in the demo. Use the auto-filter on the header row to narrow by department, specialty, or complexity. The shape of the export (columns, color coding, layout) is identical to a real subscriber's export; only the data is fictional.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("DEMO DATA. This workbook is a marketing demo and is NOT a regulatory document. Do not present this file to a surveyor, post it on a public web page representing your lab, or use it as a template for your lab's actual compliance records. Every value shown is fictional. The lab name, CLIA number, instruments, analytes, dates, and notes are illustrative only and were generated for demonstration. Subscribers receive their own VeritaMap with their own data; this demo is not a substitute for that subscription. VeritaAssure makes no representation that the structure, columns, or status logic in this demo file matches the requirements of any specific accrediting body for any real laboratory; the production VeritaMap is the audit-grade product, not this demo.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This demo workbook is labeled with the fictional lab name "${labName}" and fictional CLIA "${cliaNumber}". On a subscriber's VeritaMap export, those fields are populated from the user's CLIA record.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("This demo shows a representative slice of VeritaMap functionality, not every column or feature. To see the full product, sign up at veritaslabservices.com or email info@veritaslabservices.com.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaMap Demo Compliance Map&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure DEMO`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
       const ws = wb.addWorksheet("Compliance Map");
 
       const headers = [
@@ -5174,6 +5627,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Auto-filter on all columns
       const lastColLetter = String.fromCharCode(64 + headers.length);
       ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaMap Demo Compliance Map&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure DEMO`;
+
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -7636,6 +8105,81 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      // ===== Lab identity (Excel Export Standard) =====
+      const ownerUserLc = storage.getUserById(req.userId);
+      const labName = (ownerUserLc as any)?.cliaLabName || (ownerUserLc as any)?.clia_lab_name || ownerUserLc?.name || "Laboratory";
+      const cliaNumber = (ownerUserLc as any)?.cliaNumber || (ownerUserLc as any)?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaLab Certificate Register";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this product");
+      aboutBody("This workbook is a register of the laboratory's certificates and licenses on file in VeritaLab \u2014 CLIA certificate, CAP/TJC accreditation certificates, state laboratory licenses, lab director licenses, and any other regulatory credentials the lab has uploaded. Each row shows what the certificate covers, when it was issued, when it expires, and how many days remain until expiration.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Certificates tab lists every active certificate. The Status column is calculated from today's date and the Expiration Date: green for Current (more than 90 days), amber for Expiring (31-90 days) or Expires Soon (1-30 days), magenta for Expired. Filter by Status to surface anything needing renewal action; sort by Expiration Date to see what is closest to lapsing. The Documents Count column shows how many supporting files are attached to each certificate inside VeritaLab itself.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is a register of certificate metadata, not an authoritative copy of the certificates themselves. The actual certificate documents (signed PDFs from CMS, your accrediting body, your state, etc.) live as attachments inside VeritaLab and are the audit-grade record; if there is a conflict between this register and the underlying certificate document, the underlying certificate governs. Status (Current / Expiring / Expired) is calculated from the Expiration Date the user entered and today's date; VeritaAssure does not validate that expiration date against the issuing body. Days Until Expiration assumes the lab has not already received a renewal that supersedes the date shown. The lab director is responsible for tracking renewals; this register is a planning aid, not a renewal service. VeritaAssure does not file, renew, or pay for any certificate on the lab's behalf.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs a certificate type or column not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaLab Certificate Register&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
       const ws = wb.addWorksheet("Certificates");
 
       const headers = [
@@ -7732,6 +8276,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Auto-filter
       const lastColLetter = String.fromCharCode(64 + headers.length);
       ws.autoFilter = { from: "A1", to: `${lastColLetter}1` };
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaLab Certificate Register&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split("T")[0];

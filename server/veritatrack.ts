@@ -306,6 +306,83 @@ export function registerVeritaTrackRoutes(
 
     const { default: ExcelJS } = await import("exceljs");
     const wb = new ExcelJS.Workbook();
+    wb.creator = "Perplexity Computer";
+    wb.created = new Date();
+
+    // ===== Lab identity (Excel Export Standard) =====
+    const ownerRow = sqlite.prepare(
+      "SELECT clia_lab_name, clia_number, name FROM users WHERE id = ?"
+    ).get(userId) as any;
+    const labName = ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
+    const cliaNumber = ownerRow?.clia_number || "Not on file";
+    const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+    // ===== About sheet (sheet 1) =====
+    const aboutBorder: any = {
+      top: { style: "thin", color: { argb: "FFD0D0D0" } },
+      bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+      left: { style: "thin", color: { argb: "FFD0D0D0" } },
+      right: { style: "thin", color: { argb: "FFD0D0D0" } },
+    };
+    const about = wb.addWorksheet("About");
+    about.getColumn(1).width = 110;
+    const aboutTitle = about.getCell("A1");
+    aboutTitle.value = "VeritaTrack Regulatory Calendar";
+    aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+    aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+    aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    about.getRow(1).height = 30;
+    const aboutIdentity = about.getCell("A2");
+    aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+    aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+    aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+    aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+    aboutIdentity.border = aboutBorder;
+    about.getRow(2).height = 24;
+    let aboutRow = 3;
+    const aboutSection = (text: string) => {
+      const c = about.getCell(`A${aboutRow}`);
+      c.value = text;
+      c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      c.border = aboutBorder;
+      about.getRow(aboutRow).height = 22; aboutRow += 1;
+    };
+    const aboutBody = (text: string) => {
+      const c = about.getCell(`A${aboutRow}`);
+      c.value = text;
+      c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+      c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      c.border = aboutBorder;
+      const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+      about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+    };
+    const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+    aboutSection("About this product");
+    aboutBody("This workbook is a snapshot of the laboratory's recurring regulatory and quality tasks tracked in VeritaTrack \u2014 daily, weekly, monthly, quarterly, semiannual, and annual checks tied to CLIA, CAP, TJC, AABB, FDA, OSHA, and state requirements. Each row shows what the task is, which instrument or category it covers, the last documented sign-off, when it is next due, and a status flag (Current / Due Soon / Overdue / Not Started) computed from the frequency and the most recent sign-off date.");
+    aboutBlank();
+    aboutSection("How to use this workbook");
+    aboutBody("The Regulatory Calendar tab is grouped by Frequency (Daily, Weekly, Monthly, Quarterly, Semiannual, Annual) and then by Category. Sort or filter the Status column to triage what needs immediate attention: Overdue first, then Due Soon (within 14 days). The Days Until Due column shows the gap between today and the next due date and turns magenta when overdue. The Performed By column captures the initials or full name recorded at the time of the last sign-off; this is the audit trail for who attests the task was done. Notes carry instrument-specific or procedure-specific reminders set by the lab.");
+    aboutBlank();
+    aboutSection("Disclaimer");
+    aboutBody("This workbook is an internal tracking aid, not an audit-grade compliance attestation, not a regulatory submission, and not a substitute for the lab's procedure manual or the underlying signed records. Status (Current / Due Soon / Overdue / Not Started) is calculated mechanically from the frequency_months value and the most recent completed_date in VeritaTrack \u2014 it does not validate that the work was actually performed competently, that the recorded initials belong to the named person, or that the procedure followed the lab's SOP. The signed sign-off record (paper logs, instrument printouts, LIS records, validation files) is the audit-grade evidence; if there is a conflict between this calendar and those records, the underlying records govern. Due dates assume the frequency value is correct and that no regulatory or accreditation change has shortened the interval; the lab director is responsible for keeping intervals current with the latest CMS, CAP, TJC, AABB, FDA, OSHA, and state guidance. VeritaAssure does not certify regulatory compliance, does not advise on whether a given task satisfies a specific accreditation standard, does not file or report on the lab's behalf, and does not warrant that completing every row in this workbook will satisfy any inspector.");
+    aboutBlank();
+    aboutSection("Lab identity");
+    aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+    aboutBlank();
+    aboutSection("Coverage gaps");
+    aboutBody("If your laboratory needs a task category, frequency band, or column not represented here \u2014 for example, multi-shift sign-off tracking, separate competency vs maintenance lanes, or per-method QC linkage \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+    about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaTrack Regulatory Calendar&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+    about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    await about.protect(exportPwd, {
+      selectLockedCells: false, selectUnlockedCells: false,
+      formatCells: false, formatColumns: false, formatRows: false,
+      insertRows: false, insertColumns: false, insertHyperlinks: false,
+      deleteRows: false, deleteColumns: false,
+      sort: false, autoFilter: false, pivotTables: false,
+    });
+
     const ws = wb.addWorksheet("Regulatory Calendar");
 
     const headers = ["Frequency","Category","Task","Instrument / Serial","Owner","Last Performed","Performed By","Due Next","Days Until Due","Status","Notes"];
@@ -378,6 +455,22 @@ export function registerVeritaTrackRoutes(
 
     ws.views = [{ state:"frozen" as const, xSplit:3, ySplit:1, topLeftCell:"D2" }];
     ws.autoFilter = { from:"A1", to: ws.getCell(1, headers.length).address };
+
+    // Page-setup header/footer carry lab identity on every printed page.
+    ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaTrack Regulatory Calendar&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+    await ws.protect(exportPwd, {
+      selectLockedCells: true, selectUnlockedCells: true,
+      formatCells: false, formatColumns: false, formatRows: false,
+      insertRows: false, insertColumns: false, insertHyperlinks: false,
+      deleteRows: false, deleteColumns: false,
+      sort: false, autoFilter: true, pivotTables: false,
+    });
+
+    // Workbook opens to the About sheet (sheet 1, activeTab 0).
+    wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                  firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
     const buf = await wb.xlsx.writeBuffer();
     const filename = `VeritaTrack_${new Date().getFullYear()}.xlsx`;
