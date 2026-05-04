@@ -29,6 +29,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS studies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
+    created_by_user_id INTEGER,
     test_name TEXT NOT NULL,
     instrument TEXT NOT NULL,
     analyst TEXT NOT NULL,
@@ -961,6 +962,14 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_unit TEXT"); } c
 
 // Add instrument_meta column for VeritaMap-linked instrument data (JSON)
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catch {}
+
+// Add created_by_user_id column for seat-aware study attribution.
+// user_id remains the lab/owner id (so lab continuity is preserved when
+// seats churn). created_by_user_id records who actually clicked Create so
+// the Admin Report Studies column attributes credit to the actual analyst,
+// not just the primary seat holder. Legacy rows have NULL here and fall
+// back to user_id in the report SQL.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN created_by_user_id INTEGER"); } catch {}
 
 // Plan/tier definitions: seat limits, pricing, bed ranges
 export const PLAN_SEATS: Record<string, number> = {
