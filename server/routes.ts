@@ -9785,13 +9785,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── VeritaPolicy Master List Excel export ──────────────────────────────
-  // Emits the same per-lab requirement set the app shows on screen (TJC + CAP
-  // + COLA + CFR per the lab's accreditation flags), overlaid with the user's
-  // tracked status (Our Policy Name, Status, N/A, Notes). About sheet is
-  // hand-written for VeritaPolicy (per standing rule -- no shared helper).
+  // 96-row policy crosswalk filtered to CFR + the lab's accrediting body only.
+  // About sheet content is hand-written for VeritaPolicy (per standing rule —
+  // no shared helper, no template). If the lab has more than one AO checked,
+  // the matching columns are all included; if no AO is checked, CFR-only.
   app.get('/api/veritapolicy/master-list/excel', authMiddleware, async (req: any, res) => {
     try {
-      const sqlite = db.$client;
       const userId = req.userId;
       const lab = resolveLabForUser(userId);
       const ownerUser = storage.getUserById(userId);
@@ -9799,71 +9798,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const cliaNumber = (ownerUser as any)?.cliaNumber || (ownerUser as any)?.clia_number || 'Not on file';
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || 'veritaassure-export';
 
-      // Build the same data the app fetches: requirement set for this lab,
-      // user status overlay, lab policies (for linked policy name lookups),
-      // and settings (is_independent etc.).
-      const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
-      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
-      const statusMap: Record<number, any> = {};
-      for (const s of statuses) statusMap[s.requirement_id] = s;
-      const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ?').all(userId) as any[];
-      const policyMap: Record<number, any> = {};
-      for (const p of policies) policyMap[p.id] = p;
-      const reqSets = veritapolicyReqSetsForLab(lab);
+      // Pick the AO columns to include based on the lab record. CFR is always
+      // included. If no AO is checked, the workbook is CFR-only.
+      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
+      const aoCols: AoCol[] = [];
+      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC Citations' });
+      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP Citations' });
+      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA Citations' });
+      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB Citations' });
+      const aoLabel = aoCols.length === 0
+        ? 'CLIA only (CFR-only view)'
+        : aoCols.map(a => a.label.replace(' Citations', '')).join(', ');
 
-      // Compose the rows in the same shape the app uses.
-      const rows = reqSets.map((r: any) => {
-        const us = statusMap[r.id];
-        let autoNa = false;
-        if (settings && r.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        const isNa = autoNa || !!(us?.is_na);
-        const status = isNa ? 'na' : (us?.status || 'not_started');
-        const linkedPolicy = us?.lab_policy_id ? policyMap[us.lab_policy_id] : null;
-        const ourPolicyName = us?.policy_name || linkedPolicy?.policy_name || '';
-        return {
-          id: r.id,
-          source: (r.source || '').toUpperCase(),
-          chapter: r.chapter || '',
-          chapter_label: r.chapter_label || r.chapter || '',
-          standard: r.standard || '',
-          name: r.name || '',
-          description: r.description || '',
-          service_line: r.service_line || 'all',
-          our_policy_name: ourPolicyName,
-          status_label: isNa ? 'N/A' : status === 'complete' ? 'Complete' : status === 'in_progress' ? 'In Progress' : 'Not Started',
-          na_reason: us?.na_reason || '',
-          notes: us?.notes || '',
-          updated_at: us?.updated_at || '',
-        };
-      });
-
-      // Sort like the app: by chapter_label, then standard, then name.
-      rows.sort((a, b) => {
-        if (a.chapter_label !== b.chapter_label) return a.chapter_label.localeCompare(b.chapter_label);
-        if (a.standard !== b.standard) return a.standard.localeCompare(b.standard);
-        return a.name.localeCompare(b.name);
-      });
-
-      // Counts for the Summary sheet.
-      let cComplete = 0, cInProgress = 0, cNotStarted = 0, cNa = 0;
-      for (const r of rows) {
-        if (r.status_label === 'Complete') cComplete += 1;
-        else if (r.status_label === 'In Progress') cInProgress += 1;
-        else if (r.status_label === 'N/A') cNa += 1;
-        else cNotStarted += 1;
-      }
-      const totalAll = rows.length;
-      const applicable = totalAll - cNa;
-      const readinessPct = applicable > 0 ? Math.round((cComplete / applicable) * 100) : 0;
-
-      // Accreditation label for headers / About
-      const aoParts: string[] = [];
-      if (lab?.accreditation_tjc)  aoParts.push('TJC');
-      if (lab?.accreditation_cap)  aoParts.push('CAP');
-      if (lab?.accreditation_cola) aoParts.push('COLA');
-      if (lab?.accreditation_aabb) aoParts.push('AABB');
-      const aoLabel = aoParts.length === 0 ? 'CLIA only' : aoParts.join(', ');
-
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
       const { default: ExcelJS } = await import('exceljs');
       const wb = new ExcelJS.Workbook();
       wb.creator = 'VeritaAssure';
@@ -9886,7 +9833,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
       about.getRow(1).height = 30;
       const aboutIdentity = about.getCell('A2');
-      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}    Accrediting body on file: ${aoLabel}`;
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
       aboutIdentity.font = { name: 'Calibri', bold: true, size: 11, color: { argb: 'FF0A3A3D' } };
       aboutIdentity.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2F2' } };
       aboutIdentity.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
@@ -9914,25 +9861,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
 
       aboutSection('About this product');
-      aboutBody('The VeritaPolicy Master List is the laboratory\u2019s working policy compliance tracker. It contains every requirement the app shows on screen \u2014 the federal CFR set plus the published standards of the accrediting body on file \u2014 carrying the lab\u2019s tracked Our Policy Name, Status, N/A flag, N/A reason, and Notes for each requirement. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the editable columns, and saved back to the application.');
+      aboutBody('The VeritaPolicy Master List is a working draft of the written policies most clinical laboratories need to satisfy federal regulations and the published standards of their accrediting body. Each row names one policy, identifies the Section and service line it applies to, lists the most-relevant citations from the CFR plus the lab\u2019s accrediting body on file, and carries Notes describing where the supporting documentation typically lives. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the Notes and Keep columns, and returned for the next iteration.');
       aboutBlank();
 
       aboutSection('How to use this workbook');
-      aboutBody('Summary: The Summary sheet shows the lab settings, total counts (Complete, In Progress, Not Started, N/A), and the calculated Readiness Score \u2014 the percentage of applicable (non-N/A) requirements marked Complete.');
-      aboutBody('Master List: Every requirement in the lab\u2019s active set is listed by Section and Standard. Use the column filters at the top of each column to narrow by Source (CFR/COLA/CAP/TJC), Section, Service Line, or Status.');
-      aboutBody('Source: Source identifies which body issued the requirement (CFR for the federal regulation, plus TJC/CAP/COLA/AABB for the accrediting body). CFR appears for every laboratory because CLIA binds every laboratory.');
-      aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix.');
-      aboutBody('Status: Status reflects the value tracked in the application \u2014 Not Started, In Progress, Complete, or N/A. The N/A reason explains why a requirement does not apply if marked N/A.');
-      aboutBody('Our Policy Name: Our Policy Name is the policy in your manual that addresses the requirement, as recorded in the application.');
-      aboutBody('Notes: Notes capture any free-text commentary the laboratory has added against the requirement.');
+      aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
+      aboutBody('Sections: Sections organize policies by where they live in laboratory operations \u2014 Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
+      aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
+      aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
+      aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
+      aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
 
       aboutSection('Disclaimer');
-      aboutBody('This workbook is a working compliance tracker and a self-assessment tool, not an audit-grade compliance attestation, not a regulatory submission, and not a substitute for the laboratory\u2019s actual policies, SOPs, or the accrediting body\u2019s published manual. The requirement set is a curated crosswalk from VeritaAssure\u2019s master citation index as of the file generation date; standards from TJC, CAP, COLA, AABB, CMS / CFR 493, OSHA, NRC, FDA, and state agencies change, and the laboratory director is responsible for confirming the requirement set against the most recent published manual or letter of correction before relying on it.');
-      aboutBody('The Status, Our Policy Name, and Notes columns reflect the values recorded in the application by laboratory personnel. They are not an inspector finding, not a CMS or accrediting body determination, and not a guarantee that any policy named is current, signed, or operationally followed. The laboratory remains responsible for the content, approval, version control, signed review, staff training, and operational implementation of every policy it adopts; naming a policy in this workbook is not evidence the policy exists, is current, or is being followed.');
+      aboutBody('This workbook is a working draft and a self-assessment tool, not an audit-grade compliance attestation, not a regulatory submission, and not a substitute for the laboratory\u2019s actual policies, SOPs, or the accrediting body\u2019s published manual. The requirement set is a curated crosswalk from VeritaAssure\u2019s master citation index as of the file generation date; standards from TJC, CAP, COLA, AABB, CMS / CFR 493, OSHA, NRC, FDA, and state agencies change, and the laboratory director is responsible for confirming the requirement set against the most recent published manual or letter of correction before relying on it.');
+      aboutBody('Citations shown for each policy are the most-relevant standards by frequency in the crosswalk, capped at five per accrediting body. They are not an exhaustive list of every standard that touches a given policy, and they are not a determination that naming the cited standards in a written policy will satisfy any inspector. The laboratory remains responsible for the content, approval, version control, signed review, staff training, and operational implementation of every policy it adopts; naming a policy in the Notes column is not evidence the policy exists, is current, or is being followed.');
       aboutBody('What governs in conflict: the accrediting body\u2019s own published manual (TJC standards, CAP All Common / Laboratory General / specialty checklists, AABB Standards for Blood Banks and Transfusion Services, COLA Accreditation Manual), the federal regulation (42 CFR 493 and the relevant 21 CFR / 29 CFR / 10 CFR / 45 CFR sections), the laboratory\u2019s own signed and dated SOP / policy manual, and the inspector\u2019s findings always govern over this workbook. If there is any disagreement between this workbook and those source documents, those source documents are correct.');
-      aboutBody('The laboratory director (or designee) is responsible for confirming the policy list matches the laboratory\u2019s actual service mix and state requirements, for the currency of every policy named in the Our Policy Name column, and for any operational, personnel, or accreditation decision taken on the basis of this workbook.');
-      aboutBody('VeritaAssure\u2122 / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory\u2019s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every requirement in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
+      aboutBody('The laboratory director (or designee) is responsible for confirming the policy list matches the laboratory\u2019s actual service mix and state requirements, for the currency of every policy named in the Notes column, and for any operational, personnel, or accreditation decision taken on the basis of this workbook.');
+      aboutBody('VeritaAssure\u2122 / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory\u2019s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every policy in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
       aboutBlank();
 
       aboutSection('Lab identity');
@@ -9940,7 +9886,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBlank();
 
       aboutSection('Source');
-      aboutBody('Requirements are sourced from the active requirement libraries shipped with the application (TJC, CAP, COLA, AABB, and CFR 493), filtered to the accreditation flags on the lab record. Status, N/A, and Notes are read live from the laboratory\u2019s VeritaPolicy data at the moment of export.');
+      aboutBody('Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of TJC, CAP, COLA, and AABB.');
       aboutBlank();
 
       aboutSection('Coverage gaps');
@@ -9956,101 +9902,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sort: false, autoFilter: false, pivotTables: false,
       });
 
-      // ===== Summary sheet =====
-      const summary = wb.addWorksheet('Summary');
-      summary.getColumn(1).width = 36;
-      summary.getColumn(2).width = 26;
-      const sumTitle = summary.getCell('A1');
-      sumTitle.value = 'VeritaPolicy Readiness Summary';
-      sumTitle.font = { name: 'Calibri', bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-      sumTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF01696F' } };
-      sumTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-      summary.mergeCells('A1:B1');
-      summary.getRow(1).height = 30;
-
-      let sRow = 2;
-      const sumKV = (k: string, v: string | number, isHeader = false) => {
-        const a = summary.getCell(`A${sRow}`);
-        const b = summary.getCell(`B${sRow}`);
-        a.value = k; b.value = v;
-        if (isHeader) {
-          a.font = { name: 'Calibri', bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-          a.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0A3A3D' } };
-          a.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-          summary.mergeCells(`A${sRow}:B${sRow}`);
-          summary.getRow(sRow).height = 22;
-        } else {
-          a.font = { name: 'Calibri', bold: true, size: 11, color: { argb: 'FF0A3A3D' } };
-          b.font = { name: 'Calibri', size: 11, color: { argb: 'FF28251D' } };
-          a.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2F2' } };
-          a.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-          b.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-          a.border = thinBorder; b.border = thinBorder;
-          summary.getRow(sRow).height = 20;
-        }
-        sRow += 1;
-      };
-
-      sumKV('Lab Identity', '', true);
-      sumKV('Lab name', labName);
-      sumKV('CLIA number', cliaNumber);
-      sumKV('Accrediting body on file', aoLabel);
-      sumKV('Independent laboratory (not hospital-based)', settings?.is_independent ? 'Yes' : 'No');
-      sumKV('Generated', new Date().toISOString().split('T')[0]);
-      sRow += 1;
-      sumKV('Counts', '', true);
-      sumKV('Total requirements', totalAll);
-      sumKV('Applicable (excludes N/A)', applicable);
-      sumKV('Complete', cComplete);
-      sumKV('In Progress', cInProgress);
-      sumKV('Not Started', cNotStarted);
-      sumKV('N/A', cNa);
-      sRow += 1;
-      sumKV('Readiness', '', true);
-      sumKV('Readiness score (Complete / Applicable)', `${readinessPct}%`);
-
-      summary.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Readiness Summary&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
-      summary.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
-      await summary.protect(exportPwd, {
-        selectLockedCells: true, selectUnlockedCells: true,
-        formatCells: false, formatColumns: false, formatRows: false,
-        insertRows: false, insertColumns: false, insertHyperlinks: false,
-        deleteRows: false, deleteColumns: false,
-        sort: false, autoFilter: false, pivotTables: false,
-      });
-
       // ===== Master List sheet =====
       const ws = wb.addWorksheet('Master List');
-      const headers = [
-        { label: 'ID',                width: 8  },
-        { label: 'Source',            width: 9  },
-        { label: 'Section',           width: 22 },
-        { label: 'Standard',          width: 18 },
-        { label: 'Requirement',       width: 44 },
-        { label: 'Description',       width: 70 },
-        { label: 'Service Line',      width: 14 },
-        { label: 'Our Policy Name',   width: 32 },
-        { label: 'Status',            width: 14 },
-        { label: 'N/A Reason',        width: 28 },
-        { label: 'Notes',             width: 40 },
-        { label: 'Last Updated',      width: 20 },
+      const baseHeaders = [
+        { label: 'ID',           width: 6  },
+        { label: 'Policy Name',  width: 38 },
+        { label: 'Section',      width: 20 },
+        { label: 'Subspecialty', width: 18 },
+        { label: 'Service Line', width: 14 },
+        { label: 'Description',  width: 70 },
+        { label: 'CFR Citations', width: 38 },
       ];
-      ws.columns = headers.map((h, i) => ({ header: h.label, key: `col${i}`, width: h.width }));
+      const aoHeaderDefs = aoCols.map(a => ({ label: a.label, width: 28 }));
+      const tailHeaders = [
+        { label: 'Notes',        width: 60 },
+        { label: 'Keep (y/n)',   width: 10 },
+      ];
+      const allHeaders = [...baseHeaders, ...aoHeaderDefs, ...tailHeaders];
+      ws.columns = allHeaders.map((h, i) => ({ header: h.label, key: `col${i}`, width: h.width }));
 
-      for (const r of rows) {
+      for (const r of VERITAPOLICY_MASTER_LIST) {
+        const aoCells = aoCols.map(a => (r as any)[a.key] || '');
         ws.addRow([
-          r.id,
-          r.source,
-          r.chapter_label,
-          r.standard,
-          r.name,
-          r.description,
+          r.policy_id,
+          r.policy_name,
+          r.section,
+          r.subspecialty,
           r.service_line,
-          r.our_policy_name,
-          r.status_label,
-          r.na_reason,
-          r.notes,
-          r.updated_at,
+          r.description,
+          r.cfr_citations,
+          ...aoCells,
+          r.notes || '',
+          '',
         ]);
       }
 
@@ -10064,43 +9947,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cell.border = thinBorder;
       });
 
-      // Data rows: zebra-stripe + base styling, lock all cells except editable
-      // user-tracked columns (Our Policy Name, Status, N/A Reason, Notes).
-      const editableLabels = new Set(['Our Policy Name', 'Status', 'N/A Reason', 'Notes']);
-      const editableIdx = new Set(headers.map((h, i) => editableLabels.has(h.label) ? i + 1 : -1).filter(n => n > 0));
-      const statusColIdx = headers.findIndex(h => h.label === 'Status') + 1;
-      const totalRows = rows.length + 1;
-      for (let rIdx = 2; rIdx <= totalRows; rIdx++) {
-        const row = ws.getRow(rIdx);
-        const isEven = rIdx % 2 === 0;
+      // Data rows: zebra-stripe + base styling, lock all cells except Notes + Keep
+      const notesColIdx = allHeaders.findIndex(h => h.label === 'Notes') + 1;
+      const keepColIdx  = allHeaders.findIndex(h => h.label === 'Keep (y/n)') + 1;
+      const totalRows = VERITAPOLICY_MASTER_LIST.length + 1;
+      for (let r = 2; r <= totalRows; r++) {
+        const row = ws.getRow(r);
+        const isEven = r % 2 === 0;
         const bg = isEven ? 'FFEBF3F8' : 'FFFFFFFF';
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           cell.font = { name: 'Calibri', color: { argb: 'FF28251D' }, size: 10 };
           cell.alignment = { vertical: 'top', wrapText: true };
           cell.border = thinBorder;
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-          if (editableIdx.has(colNumber)) {
+          // Notes + Keep editable; everything else locked.
+          if (colNumber === notesColIdx || colNumber === keepColIdx) {
             cell.protection = { locked: false };
           } else {
             cell.protection = { locked: true };
           }
         });
-        // Status pill coloring
-        const statusCell = row.getCell(statusColIdx);
-        const sv = String(statusCell.value || '');
-        if (sv === 'Complete') {
-          statusCell.font = { name: 'Calibri', bold: true, color: { argb: 'FF0A6A3A' }, size: 10 };
-        } else if (sv === 'In Progress') {
-          statusCell.font = { name: 'Calibri', bold: true, color: { argb: 'FFB87333' }, size: 10 };
-        } else if (sv === 'N/A') {
-          statusCell.font = { name: 'Calibri', bold: true, color: { argb: 'FF6B7280' }, size: 10 };
-        } else {
-          statusCell.font = { name: 'Calibri', color: { argb: 'FF6B7280' }, size: 10 };
-        }
       }
 
-      ws.views = [{ state: 'frozen' as const, xSplit: 4, ySplit: 1, topLeftCell: 'E2' }];
-      const lastColNum = headers.length;
+      ws.views = [{ state: 'frozen' as const, xSplit: 2, ySplit: 1, topLeftCell: 'C2' }];
+      const lastColNum = allHeaders.length;
       const lastColLetter = lastColNum <= 26
         ? String.fromCharCode(64 + lastColNum)
         : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
