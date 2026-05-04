@@ -28,6 +28,7 @@ export type User = typeof users.$inferSelect;
 export const studies = sqliteTable("studies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("user_id"),
+  createdByUserId: integer("created_by_user_id"),
   testName: text("test_name").notNull(),
   instrument: text("instrument").notNull(),
   analyst: text("analyst").notNull(),

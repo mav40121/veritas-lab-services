@@ -576,11 +576,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         GROUP BY user_id
       ) sess ON sess.user_id = u.id
       LEFT JOIN (
-        SELECT user_id, COUNT(*) as study_count
+        -- Attribute studies to whoever actually ran them (created_by_user_id),
+        -- falling back to user_id for legacy rows from before that column
+        -- existed. Without this fallback, seat users (e.g. Rodrigo under
+        -- John Hall) would show 0 studies even when they ran most of them.
+        SELECT COALESCE(created_by_user_id, user_id) as actor_id, COUNT(*) as study_count
         FROM studies
-        WHERE user_id IS NOT NULL
-        GROUP BY user_id
-      ) st ON st.user_id = u.id
+        WHERE COALESCE(created_by_user_id, user_id) IS NOT NULL
+        GROUP BY COALESCE(created_by_user_id, user_id)
+      ) st ON st.actor_id = u.id
     `;
 
     const conditions: string[] = [];
@@ -1867,6 +1871,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     // Attach userId if authenticated
     let userId: number | null = null;
+    let createdByUserId: number | null = null;
     const auth = req.headers.authorization;
     if (auth?.startsWith("Bearer ")) {
       try {
@@ -1883,6 +1888,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           }
         }
         userId = seatRow ? seatRow.owner_user_id : payload.userId;
+        // Track who actually ran the study so the Admin Report attributes
+        // credit to the seat user (not just the primary seat holder).
+        createdByUserId = payload.userId;
         // Check subscription write access for authenticated users
         const fullUser = storage.getUserById(seatRow ? seatRow.owner_user_id : payload.userId);
         if (fullUser) {
@@ -1909,7 +1917,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (parsed.data as any).teaIsPercentage !== 0,
       (parsed.data as any).cliaAbsoluteFloor ?? null
     );
-    const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId });
+    const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId, createdByUserId });
 
     // VeritaCheck → VeritaScan integration bridge
     try {
