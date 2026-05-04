@@ -83,6 +83,83 @@ export function registerVeritaBenchRoutes(
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      // ===== Lab identity (Excel Export Standard) =====
+      const ownerRow = sqlite.prepare(
+        "SELECT clia_lab_name, clia_number, name FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      const labName = ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
+      const cliaNumber = ownerRow?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaBench Productivity Tracker";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this product");
+      aboutBody("This workbook is a month-by-month export of the productivity data the laboratory has entered into VeritaBench. Each row represents a single calendar month and shows billable test volume, productive and non-productive hours, overtime, total FTEs, and three derived metrics (Productivity Ratio, Overtime Percentage, Productive Percentage). It is intended for internal trending, board reporting, and benchmarking conversations \u2014 not as a personnel evaluation instrument and not as a substitute for a formal time-and-motion study.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Productivity Data tab is sorted oldest-to-newest so a quick glance shows the trend line for each metric. Productivity Ratio is productive hours divided by billable tests (lower is leaner). OT % is overtime hours as a share of productive hours. Productive % is productive hours divided by total worked hours (productive plus non-productive). Use the auto-filter on row 1 to isolate a year, a facility type, or a month range. Notes capture context the lab director recorded at the time \u2014 staffing changes, instrument downtime, holiday weeks \u2014 and should be read alongside the numeric columns.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is an internal management report, not an audit-grade productivity assessment, not a regulatory submission, and not a substitute for a formal staffing or time-and-motion study. The numbers reflect what the laboratory entered into VeritaBench; VeritaAssure does not validate the underlying timecards, LIS billable-test counts, or FTE allocations. Productivity Ratio, OT %, and Productive % are mechanical formulas applied to the entered values \u2014 they are not benchmarks against an external standard, and a 'good' or 'bad' ratio depends on the lab's test mix, automation level, complexity, and union or contractual rules. This workbook is not a personnel evaluation tool and must not be used to discipline, terminate, or compensate individual employees. The lab director and senior leadership are responsible for staffing decisions, productivity targets, and any operational action taken on the basis of these numbers. VeritaAssure does not certify staffing levels, does not advise on labor law compliance, and does not represent these figures to any accrediting or regulatory body.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs a productivity metric or column not represented here \u2014 for example, test-mix-weighted CAP workload units, send-out volume, or department-level breakouts \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Productivity Tracker&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
       const ws = wb.addWorksheet("Productivity Data");
 
       const headers = [
@@ -134,6 +211,22 @@ export function registerVeritaBenchRoutes(
           cell.border = { top: { style: "thin", color: { argb: "FFD0D0D0" } }, bottom: { style: "thin", color: { argb: "FFD0D0D0" } }, left: { style: "thin", color: { argb: "FFD0D0D0" } }, right: { style: "thin", color: { argb: "FFD0D0D0" } } };
         });
       }
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Productivity Tracker&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+      await ws.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       const buffer = await wb.xlsx.writeBuffer();
       res.set("Content-Disposition", `attachment; filename="VeritaBench-Productivity_${new Date().toISOString().split("T")[0]}.xlsx"`);
@@ -375,6 +468,82 @@ export function registerVeritaBenchRoutes(
     try {
       const { default: ExcelJS } = await import("exceljs");
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Perplexity Computer";
+      wb.created = new Date();
+
+      // ===== Lab identity (Excel Export Standard) =====
+      const ownerRow = sqlite.prepare(
+        "SELECT clia_lab_name, clia_number, name FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      const labName = ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
+      const cliaNumber = ownerRow?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      // ===== About sheet (sheet 1) =====
+      const aboutBorder: any = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = `VeritaBench Staffing Analyzer \u2014 ${study.name}`;
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      aboutIdentity.border = aboutBorder;
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        about.getRow(aboutRow).height = 22; aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        c.border = aboutBorder;
+        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
+        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this product");
+      aboutBody("This workbook is the analysis output of a VeritaBench Staffing Analyzer study. The lab recorded specimen-receipt and result-verification volumes hour-by-hour and day-by-day; the Averages tab shows the mean specimens received and results verified for each of the 168 hour-of-week slots (24 hours \u00d7 7 days), averaged across every observation week the study contains. It is a workload-shape report intended to inform shift design, bench coverage, and break scheduling \u2014 not an FTE entitlement calculation, not a CAP workload-unit study, and not a personnel evaluation tool.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Averages tab is laid out with 24 rows (one per hour slot, midnight at the top) and 14 day columns: the first 7 are average specimens Received per hour, the second 7 are average results Verified per hour. Read across a row to see how a single hour-of-day compares Monday-through-Sunday; read down a column to see how a single weekday's volume curve looks. Pair the Received and Verified columns to identify lag (high receipt volume followed by delayed verification) or pile-up risk. The freeze pane keeps the Hour Slot column visible while you scroll across the 14 day columns.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is an internal staffing-shape analysis, not an audit-grade staffing study, not a CAP/CLIA-required workload assessment, and not a substitute for a formal time-and-motion or productivity engineering study. The averages reflect only the hours and days the lab entered into VeritaBench for this study; gaps, holiday weeks, instrument outages, and short-staffed weeks are baked into the averages and are not corrected for. Specimen-receipt and result-verification counts are not equivalent to actual hands-on work time \u2014 they are volume proxies. This workbook is not a personnel evaluation tool and must not be used to discipline, terminate, or compensate individual employees, nor to justify reductions in force. The lab director and senior leadership are responsible for shift design, FTE allocation, and any operational action taken on the basis of these numbers. VeritaAssure does not certify staffing levels, does not advise on labor or scheduling law, and does not represent these figures to any accrediting or regulatory body.");
+      aboutBlank();
+      aboutSection("Lab identity");
+      aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs additional metrics in this analysis \u2014 for example, send-out volumes, STAT vs routine separation, instrument-level breakouts, or 15-minute granularity \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Staffing Analyzer&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
 
       const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
       const hourLabels: string[] = [];
@@ -429,6 +598,22 @@ export function registerVeritaBenchRoutes(
           cell.border = { top: { style: "thin", color: { argb: "FFD0D0D0" } }, bottom: { style: "thin", color: { argb: "FFD0D0D0" } }, left: { style: "thin", color: { argb: "FFD0D0D0" } }, right: { style: "thin", color: { argb: "FFD0D0D0" } } };
         });
       }
+
+      // Page-setup header/footer carry lab identity on every printed page.
+      wsAvg.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Staffing Analyzer \u2014 ${study.name}&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      wsAvg.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+
+      await wsAvg.protect(exportPwd, {
+        selectLockedCells: true, selectUnlockedCells: true,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: true, pivotTables: false,
+      });
+
+      // Workbook opens to the About sheet (sheet 1, activeTab 0).
+      wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                    firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       const buffer = await wb.xlsx.writeBuffer();
       res.set("Content-Disposition", `attachment; filename="Staffing-Analysis_${study.name.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx"`);
