@@ -1196,6 +1196,45 @@ try { sqlite.exec(`ALTER TABLE veritapolicy_requirement_status ADD COLUMN policy
 // Add accreditation_body to settings (tjc | cap | both)
 try { sqlite.exec(`ALTER TABLE veritapolicy_settings ADD COLUMN accreditation_body TEXT NOT NULL DEFAULT 'tjc'`); } catch {}
 
+// VeritaPolicy Master List status -- per-user state for the 96 polished policies
+// (keyed by string policy_id from VERITAPOLICY_MASTER_LIST). Mirrors the
+// in-app tracker against the same dataset the Excel export uses.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_master_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    policy_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_started',
+    is_na INTEGER NOT NULL DEFAULT 0,
+    na_reason TEXT,
+    our_policy_name TEXT,
+    notes TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, policy_id)
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON veritapolicy_master_status(user_id, policy_id)`); } catch {}
+
+// ALTER TABLE migration for veritapolicy_master_status
+{
+  const vmsCols = sqlite.prepare("PRAGMA table_info(veritapolicy_master_status)").all() as { name: string }[];
+  const vmsColNames = vmsCols.map((c) => c.name);
+  if (vmsCols.length > 0) {
+    if (!vmsColNames.includes("is_na")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN is_na INTEGER NOT NULL DEFAULT 0"); } catch {}
+    }
+    if (!vmsColNames.includes("na_reason")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN na_reason TEXT"); } catch {}
+    }
+    if (!vmsColNames.includes("our_policy_name")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN our_policy_name TEXT"); } catch {}
+    }
+    if (!vmsColNames.includes("notes")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN notes TEXT"); } catch {}
+    }
+  }
+}
+
 // VeritaTrack -- regulatory compliance calendar
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritatrack_tasks (
