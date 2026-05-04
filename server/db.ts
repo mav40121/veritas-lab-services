@@ -1099,8 +1099,22 @@ if (!colNames.includes("lab_id")) {
     "SELECT id, clia_number, clia_lab_name, preferred_standards FROM users WHERE (clia_number IS NOT NULL OR clia_lab_name IS NOT NULL) AND lab_id IS NULL"
   ).all() as any[];
 
+  // Pre-compute which user ids are active seats. A user that is somebody else's
+  // seat must NEVER have its own lab created from stale clia_* fields on its
+  // user row — it must inherit the owner's lab. (Seat-accept may have copied
+  // CLIA values onto the seat user historically.)
+  const activeSeatUserIds = new Set<number>(
+    (sqlite.prepare("SELECT seat_user_id FROM user_seats WHERE status = 'active' AND seat_user_id IS NOT NULL").all() as any[])
+      .map(r => Number(r.seat_user_id))
+  );
+
   let labsMigrated = 0;
   for (const u of usersWithLabData) {
+    if (activeSeatUserIds.has(Number(u.id))) {
+      // Skip: this user is a seat under another owner. Lab inheritance is
+      // handled by the seat-fixup loop below.
+      continue;
+    }
     // Parse preferred_standards JSON to set accreditation flags
     let accCap = 0, accTjc = 0, accCola = 0, accAabb = 0;
     if (u.preferred_standards) {
@@ -1133,14 +1147,16 @@ if (!colNames.includes("lab_id")) {
     labsMigrated++;
   }
 
-  // Backfill seat users: inherit owner's lab_id
+  // Backfill seat users: every active seat user must point at the owner's
+  // lab_id, even if the seat user already has a (potentially stale) lab_id
+  // from an older backfill pass. Owner identity wins.
   let seatsMigrated = 0;
   const seatsNeedingLab = sqlite.prepare(
-    "SELECT us.seat_user_id, u_owner.lab_id FROM user_seats us JOIN users u_owner ON us.owner_user_id = u_owner.id WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL AND u_owner.lab_id IS NOT NULL"
+    "SELECT us.seat_user_id, u_owner.lab_id AS owner_lab_id FROM user_seats us JOIN users u_owner ON us.owner_user_id = u_owner.id WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL AND u_owner.lab_id IS NOT NULL"
   ).all() as any[];
   for (const seat of seatsNeedingLab) {
-    sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ? AND lab_id IS NULL").run(seat.lab_id, seat.seat_user_id);
-    seatsMigrated++;
+    const r = sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ? AND (lab_id IS NULL OR lab_id != ?)").run(seat.owner_lab_id, seat.seat_user_id, seat.owner_lab_id);
+    if (r.changes > 0) seatsMigrated++;
   }
 
   if (labsMigrated > 0 || seatsMigrated > 0) {
