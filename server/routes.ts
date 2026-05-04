@@ -9784,6 +9784,116 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── VeritaPolicy Master List (in-app) ─────────────────────────────
+  // GET returns the 96 polished policies filtered to CFR + the lab's AO,
+  // overlaid with the user's tracked status. PATCH updates a single policy's
+  // tracking fields. The page mirrors the polished Excel rather than the
+  // 367-row TJC/CAP/COLA/CFR requirement set.
+  app.get('/api/veritapolicy/master-list', authMiddleware, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const userId = req.userId;
+      const lab = resolveLabForUser(userId);
+      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
+      const aoCols: AoCol[] = [];
+      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC' });
+      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP' });
+      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA' });
+      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB' });
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
+      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE user_id = ?').all(userId) as any[];
+      const sm: Record<string, any> = {};
+      for (const s of statuses) sm[s.policy_id] = s;
+      const rows = VERITAPOLICY_MASTER_LIST.map(p => {
+        const us = sm[p.policy_id];
+        const isNa = !!(us?.is_na);
+        const status = isNa ? 'na' : (us?.status || 'not_started');
+        return {
+          policy_id: p.policy_id,
+          policy_name: p.policy_name,
+          section: p.section,
+          subspecialty: p.subspecialty,
+          service_line: p.service_line,
+          description: p.description,
+          cfr_citations: p.cfr_citations,
+          ao_citations: aoCols.map(a => ({ label: a.label, value: (p as any)[a.key] || '' })),
+          notes: p.notes || '',
+          status,
+          is_na: isNa,
+          na_reason: us?.na_reason || null,
+          our_policy_name: us?.our_policy_name || null,
+          user_notes: us?.notes || null,
+          updated_at: us?.updated_at || null,
+        };
+      });
+      const ao_label = aoCols.length === 0 ? 'CLIA only' : aoCols.map(a => a.label).join(', ');
+      res.json({ rows, ao_label, ao_columns: aoCols.map(a => a.label) });
+    } catch (err: any) {
+      console.error('VeritaPolicy master-list (in-app) error:', err);
+      res.status(500).json({ error: err.message || 'Failed to load master list' });
+    }
+  });
+
+  app.patch('/api/veritapolicy/master-list/:policyId', authMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = db.$client;
+    const userId = req.userId;
+    const policyId = String(req.params.policyId);
+    const { status, is_na, na_reason, our_policy_name, notes } = req.body || {};
+    sqlite.prepare(`
+      INSERT INTO veritapolicy_master_status (user_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, policy_id) DO UPDATE SET
+        status          = COALESCE(excluded.status, status),
+        is_na           = COALESCE(excluded.is_na, is_na),
+        na_reason       = COALESCE(excluded.na_reason, na_reason),
+        our_policy_name = COALESCE(excluded.our_policy_name, our_policy_name),
+        notes           = COALESCE(excluded.notes, notes),
+        updated_at      = excluded.updated_at
+    `).run(
+      userId, policyId,
+      status || 'not_started',
+      typeof is_na === 'boolean' ? (is_na ? 1 : 0) : 0,
+      na_reason ?? null,
+      our_policy_name ?? null,
+      notes ?? null,
+    );
+    res.json({ ok: true });
+  });
+
+  app.get('/api/veritapolicy/master-list/summary', authMiddleware, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const userId = req.userId;
+      const lab = resolveLabForUser(userId);
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
+      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE user_id = ?').all(userId) as any[];
+      const sm: Record<string, any> = {};
+      for (const s of statuses) sm[s.policy_id] = s;
+      let complete = 0, in_progress = 0, not_started = 0, na = 0;
+      for (const p of VERITAPOLICY_MASTER_LIST) {
+        const us = sm[p.policy_id];
+        if (us?.is_na) { na += 1; continue; }
+        const st = us?.status || 'not_started';
+        if (st === 'complete') complete += 1;
+        else if (st === 'in_progress') in_progress += 1;
+        else not_started += 1;
+      }
+      const total = VERITAPOLICY_MASTER_LIST.length;
+      const applicable = total - na;
+      const score = applicable > 0 ? Math.round((complete / applicable) * 100) : 0;
+      const aoParts: string[] = [];
+      if (lab?.accreditation_tjc)  aoParts.push('TJC');
+      if (lab?.accreditation_cap)  aoParts.push('CAP');
+      if (lab?.accreditation_cola) aoParts.push('COLA');
+      if (lab?.accreditation_aabb) aoParts.push('AABB');
+      res.json({ total, complete, in_progress, not_started, na, applicable, score,
+        ao_label: aoParts.length === 0 ? 'CLIA only' : aoParts.join(', ') });
+    } catch (err: any) {
+      console.error('VeritaPolicy master-list summary error:', err);
+      res.status(500).json({ error: err.message || 'Failed to load summary' });
+    }
+  });
+
   // ── VeritaPolicy Master List Excel export ──────────────────────────────
   // 96-row policy crosswalk filtered to CFR + the lab's accrediting body only.
   // About sheet content is hand-written for VeritaPolicy (per standing rule —
