@@ -575,17 +575,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         FROM user_sessions
         GROUP BY user_id
       ) sess ON sess.user_id = u.id
-      LEFT JOIN (
-        -- Attribute studies to whoever actually ran them (created_by_user_id),
-        -- falling back to user_id for legacy rows from before that column
-        -- existed. Without this fallback, seat users (e.g. Rodrigo under
-        -- John Hall) would show 0 studies even when they ran most of them.
-        SELECT COALESCE(created_by_user_id, user_id) as actor_id, COUNT(*) as study_count
-        FROM studies
-        WHERE COALESCE(created_by_user_id, user_id) IS NOT NULL
-        GROUP BY COALESCE(created_by_user_id, user_id)
-      ) st ON st.actor_id = u.id
     `;
+    // Study attribution is computed in JS below (after the SQL fetch) so we
+    // can fuzzy-match the studies.analyst free-text field for legacy rows.
+    // For new rows, studies.created_by_user_id is the source of truth.
+    
 
     const conditions: string[] = [];
     const params: any[] = [];
@@ -607,10 +601,102 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     try {
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
+
+      // Attribute studies to the actual analyst by combining two signals:
+      //  1) studies.created_by_user_id (set on new studies, post seat-aware fix)
+      //  2) studies.analyst free-text (e.g. "RODRIGO GASPAR-TRILLO/EMILY DU")
+      //     fuzzy-matched against users in the same lab. Each "/"-separated
+      //     name segment that resolves to a known user gets credited 1/N of
+      //     the study (rounded). If no match resolves, the study falls back
+      //     to the lab owner so totals still add up.
+      const studyRows = (db as any).$client.prepare(
+        "SELECT id, user_id, created_by_user_id, analyst FROM studies WHERE user_id IS NOT NULL"
+      ).all() as Array<{ id: number; user_id: number; created_by_user_id: number | null; analyst: string | null }>;
+
+      // Build a per-lab roster: ownerId -> [{ id, normalized_name }]
+      // Members are the owner plus all active seat users.
+      const seatLinks = (db as any).$client.prepare(
+        "SELECT owner_user_id, seat_user_id FROM user_seats WHERE status = 'active' AND seat_user_id IS NOT NULL"
+      ).all() as Array<{ owner_user_id: number; seat_user_id: number }>;
+      const allUsers = (db as any).$client.prepare(
+        "SELECT id, name, email FROM users"
+      ).all() as Array<{ id: number; name: string | null; email: string | null }>;
+      const userById = new Map<number, { id: number; name: string | null; email: string | null }>();
+      for (const u of allUsers) userById.set(u.id, u);
+
+      const labRoster = new Map<number, Array<{ id: number; tokens: string[] }>>();
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      const tokenize = (u: { id: number; name: string | null; email: string | null }) => {
+        const out = new Set<string>();
+        if (u.name) for (const t of norm(u.name).split(' ')) if (t.length >= 2) out.add(t);
+        if (u.email) {
+          const local = u.email.split('@')[0] || '';
+          for (const t of norm(local.replace(/[._-]/g, ' ')).split(' ')) if (t.length >= 2) out.add(t);
+        }
+        return Array.from(out);
+      };
+      // Owners themselves are members of their own lab
+      for (const u of allUsers) {
+        const arr = labRoster.get(u.id) || [];
+        arr.push({ id: u.id, tokens: tokenize(u) });
+        labRoster.set(u.id, arr);
+      }
+      // Active seat users join their owner's lab
+      for (const link of seatLinks) {
+        const seatUser = userById.get(link.seat_user_id);
+        if (!seatUser) continue;
+        const arr = labRoster.get(link.owner_user_id) || [];
+        arr.push({ id: seatUser.id, tokens: tokenize(seatUser) });
+        labRoster.set(link.owner_user_id, arr);
+      }
+
+      // Resolve a free-text analyst segment (e.g. "RODRIGO GASPAR-TRILLO")
+      // to a user id within the lab. Returns null if no member's tokens
+      // intersect the segment's tokens.
+      const resolveAnalystSegment = (segment: string, members: Array<{ id: number; tokens: string[] }>): number | null => {
+        const segTokens = new Set(norm(segment).split(' ').filter(t => t.length >= 2));
+        if (segTokens.size === 0) return null;
+        let best: { id: number; score: number } | null = null;
+        for (const m of members) {
+          let score = 0;
+          for (const t of m.tokens) if (segTokens.has(t)) score += 1;
+          if (score > 0 && (!best || score > best.score)) best = { id: m.id, score };
+        }
+        return best ? best.id : null;
+      };
+
+      const counts = new Map<number, number>();
+      for (const study of studyRows) {
+        // New rows: trust created_by_user_id directly (one credit, full).
+        if (study.created_by_user_id) {
+          counts.set(study.created_by_user_id, (counts.get(study.created_by_user_id) || 0) + 1);
+          continue;
+        }
+        // Legacy rows: try to resolve from analyst free-text within the lab.
+        const members = labRoster.get(study.user_id) || [];
+        const segments = (study.analyst || '').split(/[\/,;&]/).map(s => s.trim()).filter(Boolean);
+        const resolved: number[] = [];
+        for (const seg of segments) {
+          const id = resolveAnalystSegment(seg, members);
+          if (id) resolved.push(id);
+        }
+        if (resolved.length === 0) {
+          // Unmatched: keep credit with the lab owner so totals still add up.
+          counts.set(study.user_id, (counts.get(study.user_id) || 0) + 1);
+        } else {
+          // Split credit evenly across resolved analysts; each gets 1/N
+          // (kept as a fraction; rounded once at the end so totals are stable).
+          const share = 1 / resolved.length;
+          for (const id of resolved) counts.set(id, (counts.get(id) || 0) + share);
+        }
+      }
+
       const users = rows.map((row: any) => {
         const { password_hash, ...rest } = row;
+        const raw = counts.get(rest.id) || 0;
         return {
           ...rest,
+          study_count: Math.round(raw),
           planDisplayName: PLAN_DISPLAY_NAMES[rest.plan] || rest.plan || "Unknown",
         };
       });
