@@ -698,6 +698,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, seat });
   });
 
+  // Admin: create a pending seat under an owner with a fresh invite token.
+  // Used to manually onboard teammates whose corporate email gateway
+  // quarantines automated invitations from Resend.
+  app.post("/api/admin/create-pending-seat", (req, res) => {
+    const { secret, ownerUserId, seatEmail } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!ownerUserId || !seatEmail) return res.status(400).json({ error: "ownerUserId and seatEmail required" });
+    const sqlite = (db as any).$client;
+    const owner = sqlite.prepare("SELECT id, seat_count FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
+    if (!owner) return res.status(404).json({ error: "Owner not found" });
+    const seatCap = Number(owner.seat_count || 1);
+    const usedRow = sqlite.prepare("SELECT COUNT(*) AS n FROM user_seats WHERE owner_user_id = ? AND status IN ('active','pending')").get(Number(ownerUserId)) as any;
+    const used = Number(usedRow?.n || 0);
+    // seat_count includes the owner; existing seats do not, so the limit on
+    // additional seats is seatCap - 1.
+    if (used >= seatCap - 1) {
+      return res.status(409).json({ error: "Owner has no available seats", used, seatCap });
+    }
+    const existing = sqlite.prepare("SELECT id, status FROM user_seats WHERE owner_user_id = ? AND lower(seat_email) = lower(?)").get(Number(ownerUserId), String(seatEmail)) as any;
+    if (existing) return res.status(409).json({ error: "Seat already exists for this email", seat: existing });
+    const token = crypto.randomUUID();
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO user_seats (owner_user_id, seat_email, invited_at, status, permissions, invite_token)
+      VALUES (?, ?, ?, 'pending', '{}', ?)
+    `).run(Number(ownerUserId), String(seatEmail), now, token);
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status, invited_at, invite_token FROM user_seats WHERE owner_user_id = ? AND lower(seat_email) = lower(?)").get(Number(ownerUserId), String(seatEmail)) as any;
+    const url = `${process.env.FRONTEND_URL || ''}/join?token=${token}`;
+    res.json({ ok: true, seat, url });
+  });
+
   // Admin: delete a user by id (destructive, requires confirm=true)
   app.delete("/api/admin/users/:id", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
