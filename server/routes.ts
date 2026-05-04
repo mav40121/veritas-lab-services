@@ -7629,7 +7629,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[seats] RESEND_API_KEY is not set; seat invite email skipped (seat row was still created)");
     } else {
     try {
-      await fetch("https://api.resend.com/emails", {
+      const resendRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
@@ -7652,7 +7652,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           `,
         }),
       });
-      emailSent = true;
+      // Resend's REST API returns 4xx for invalid recipient, paused account,
+      // rate limit, malformed payload, etc. Without checking response.ok the
+      // route reported emailSent: true on any of those failures. Surface the
+      // truthful flag so the UI can prompt the owner to use the Copy invite
+      // link fallback.
+      if (!resendRes.ok) {
+        const body = await resendRes.text().catch(() => "<unreadable>");
+        console.error(`[seats] Resend rejected invite send: status=${resendRes.status} body=${body}`);
+        emailSent = false;
+      } else {
+        emailSent = true;
+      }
     } catch (emailErr) {
       console.error("[seats] Invite email failed:", emailErr);
     }
@@ -7688,6 +7699,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       inviterName: seat.owner_name || "Your lab administrator",
       seatEmail: seat.seat_email,
     });
+  });
+
+  // Owner-only fetch of the direct invite link for a pending seat. Some
+  // recipient mail systems (hospital gateways, corporate spam filters)
+  // silently quarantine outside transactional email even when the sending
+  // domain authenticates correctly. The Copy invite link affordance lets
+  // the owner deliver the link through any channel that works for that
+  // recipient. Only pending seats expose a link; active or deactivated
+  // seats return 404. Strict owner_user_id scoping prevents one tenant
+  // from reading another tenant's tokens.
+  app.get("/api/account/seats/:seatId/invite-link", authMiddleware, (req: any, res) => {
+    const seatId = parseInt(req.params.seatId);
+    if (!Number.isFinite(seatId)) return res.status(400).json({ error: "Invalid seat id" });
+    const seat = (db as any).$client.prepare(
+      "SELECT id, status, invite_token FROM user_seats WHERE id = ? AND owner_user_id = ?"
+    ).get(seatId, req.userId) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (seat.status !== "pending") return res.status(404).json({ error: "Invite link only available for pending seats" });
+    if (!seat.invite_token) return res.status(404).json({ error: "Invite token missing on this seat" });
+    const url = `${FRONTEND_URL}/join?token=${seat.invite_token}`;
+    res.json({ url });
   });
 
   // Update seat permissions
