@@ -19,6 +19,7 @@ import {
 import {
   Lock, Plus, FileDown, Edit2, Trash2, TrendingUp, TrendingDown,
   BarChart3, Users, Activity, ChevronRight, Clock, Award,
+  BookOpen, ExternalLink,
 } from "lucide-react";
 import { useSEO } from "@/hooks/useSEO";
 import { useToast } from "@/hooks/use-toast";
@@ -344,6 +345,26 @@ export default function VeritaBenchPage() {
           <Button size="sm" onClick={openAdd} disabled={readOnly} style={{ backgroundColor: "#01696F" }}><Plus size={14} className="mr-1.5" />Add Month</Button>
         </div>
       </div>
+
+      {/* How-to article banner */}
+      <a
+        href="https://www.medlabmag.com/article/1575/?search=michael%20veri"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between gap-3 mb-6 px-4 py-3 rounded-lg border hover:shadow-sm transition-shadow"
+        style={{ backgroundColor: "#01696F10", borderColor: "#01696F40" }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: "#01696F", color: "white" }}>
+            <BookOpen size={16} />
+          </div>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: "#01696F" }}>How to use VeritaPace and VeritaBench</div>
+            <div className="text-xs text-muted-foreground">Read the MedLab Magazine walkthrough by Michael Veri</div>
+          </div>
+        </div>
+        <ExternalLink size={16} style={{ color: "#01696F" }} />
+      </a>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b">

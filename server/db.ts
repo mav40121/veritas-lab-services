@@ -29,6 +29,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS studies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
+    created_by_user_id INTEGER,
     test_name TEXT NOT NULL,
     instrument TEXT NOT NULL,
     analyst TEXT NOT NULL,
@@ -962,6 +963,14 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_unit TEXT"); } c
 // Add instrument_meta column for VeritaMap-linked instrument data (JSON)
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catch {}
 
+// Add created_by_user_id column for seat-aware study attribution.
+// user_id remains the lab/owner id (so lab continuity is preserved when
+// seats churn). created_by_user_id records who actually clicked Create so
+// the Admin Report Studies column attributes credit to the actual analyst,
+// not just the primary seat holder. Legacy rows have NULL here and fall
+// back to user_id in the report SQL.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN created_by_user_id INTEGER"); } catch {}
+
 // Plan/tier definitions: seat limits, pricing, bed ranges
 export const PLAN_SEATS: Record<string, number> = {
   clinic: 2,
@@ -1195,6 +1204,45 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_policies_user ON 
 try { sqlite.exec(`ALTER TABLE veritapolicy_requirement_status ADD COLUMN policy_name TEXT`); } catch {}
 // Add accreditation_body to settings (tjc | cap | both)
 try { sqlite.exec(`ALTER TABLE veritapolicy_settings ADD COLUMN accreditation_body TEXT NOT NULL DEFAULT 'tjc'`); } catch {}
+
+// VeritaPolicy Master List status -- per-user state for the 96 polished policies
+// (keyed by string policy_id from VERITAPOLICY_MASTER_LIST). Mirrors the
+// in-app tracker against the same dataset the Excel export uses.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_master_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    policy_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_started',
+    is_na INTEGER NOT NULL DEFAULT 0,
+    na_reason TEXT,
+    our_policy_name TEXT,
+    notes TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, policy_id)
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON veritapolicy_master_status(user_id, policy_id)`); } catch {}
+
+// ALTER TABLE migration for veritapolicy_master_status
+{
+  const vmsCols = sqlite.prepare("PRAGMA table_info(veritapolicy_master_status)").all() as { name: string }[];
+  const vmsColNames = vmsCols.map((c) => c.name);
+  if (vmsCols.length > 0) {
+    if (!vmsColNames.includes("is_na")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN is_na INTEGER NOT NULL DEFAULT 0"); } catch {}
+    }
+    if (!vmsColNames.includes("na_reason")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN na_reason TEXT"); } catch {}
+    }
+    if (!vmsColNames.includes("our_policy_name")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN our_policy_name TEXT"); } catch {}
+    }
+    if (!vmsColNames.includes("notes")) {
+      try { sqlite.exec("ALTER TABLE veritapolicy_master_status ADD COLUMN notes TEXT"); } catch {}
+    }
+  }
+}
 
 // VeritaTrack -- regulatory compliance calendar
 sqlite.exec(`
