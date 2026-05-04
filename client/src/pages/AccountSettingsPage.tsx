@@ -125,6 +125,8 @@ export default function AccountSettingsPage() {
   const [editingMode, setEditingMode] = useState<PermMode>('view_all');
   const [editingPermissions, setEditingPermissions] = useState<Record<string, string>>({});
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [copiedSeatId, setCopiedSeatId] = useState<number | null>(null);
+  const [copyingSeatId, setCopyingSeatId] = useState<number | null>(null);
 
   // Infer the current mode from a seat's stored permissions object so the
   // edit dialog opens on the right radio. Mirrors resolveSeatPermission()
@@ -601,6 +603,9 @@ export default function AccountSettingsPage() {
             <p className="text-sm text-muted-foreground">
               Invite staff to access your VeritaAssure™ account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
             </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Some hospital and corporate email systems quarantine outside invitations before they reach the inbox. If a teammate hasn&apos;t received their email after a few minutes, click &quot;Copy invite link&quot; on their row and send the link to them directly through email, Teams, Slack, or text.
+            </p>
           </CardHeader>
           <CardContent className="space-y-3">
             {activeSeats.length > 0 && (
@@ -635,6 +640,59 @@ export default function AccountSettingsPage() {
                           >
                             {isEditing ? "Cancel" : "Edit Permissions"}
                           </button>
+                          {seat.status === 'pending' && (
+                            <button
+                              type="button"
+                              disabled={copyingSeatId === seat.id}
+                              onClick={async () => {
+                                setCopyingSeatId(seat.id);
+                                try {
+                                  const res = await fetch(`${API_BASE}/api/account/seats/${seat.id}/invite-link`, { headers: authHeaders() });
+                                  if (!res.ok) {
+                                    const body = await res.json().catch(() => ({}));
+                                    throw new Error(body?.error || `Failed to fetch invite link (${res.status})`);
+                                  }
+                                  const data = await res.json();
+                                  const url = data?.url as string;
+                                  if (!url) throw new Error('No invite URL returned');
+                                  let copied = false;
+                                  try {
+                                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                                      await navigator.clipboard.writeText(url);
+                                      copied = true;
+                                    }
+                                  } catch {}
+                                  if (!copied) {
+                                    // Fallback for browsers without async clipboard API
+                                    const ta = document.createElement('textarea');
+                                    ta.value = url;
+                                    ta.setAttribute('readonly', '');
+                                    ta.style.position = 'fixed';
+                                    ta.style.left = '-9999px';
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    try { copied = document.execCommand('copy'); } catch { copied = false; }
+                                    document.body.removeChild(ta);
+                                  }
+                                  if (copied) {
+                                    setCopiedSeatId(seat.id);
+                                    setTimeout(() => setCopiedSeatId(prev => (prev === seat.id ? null : prev)), 2000);
+                                  } else {
+                                    toast({ title: 'Copy failed', description: 'Your browser blocked clipboard access. Long-press or right-click to copy from a prompt.', variant: 'destructive' });
+                                    window.prompt('Copy this invite link and send it to your teammate:', url);
+                                  }
+                                } catch (err: any) {
+                                  toast({ title: 'Could not get invite link', description: err?.message || 'Please try again.', variant: 'destructive' });
+                                } finally {
+                                  setCopyingSeatId(null);
+                                }
+                              }}
+                              className="text-xs underline"
+                              style={{ color: '#01696F' }}
+                            >
+                              {copiedSeatId === seat.id ? 'Copied' : (copyingSeatId === seat.id ? 'Copying...' : 'Copy invite link')}
+                            </button>
+                          )}
                           <ConfirmDialog
                             title="Remove Team Member?"
                             message="Remove this team member? They will lose access immediately."
@@ -800,7 +858,7 @@ export default function AccountSettingsPage() {
                   {inviteLoading ? "Sending..." : "Send Invite"}
                 </Button>
                 {inviteError && <p className="text-xs text-red-500 mt-1">{inviteError}</p>}
-                {inviteSuccess && <p className="text-xs text-green-600 mt-1">Invite sent. They will receive an email to create their account.</p>}
+                {inviteSuccess && <p className="text-xs text-green-600 mt-1">Invite sent. If they don&apos;t receive the email within a few minutes, use &quot;Copy invite link&quot; to send it directly.</p>}
               </form>
             ) : (
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
