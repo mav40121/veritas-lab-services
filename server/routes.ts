@@ -1367,7 +1367,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(user.id, sessionToken, req.headers["user-agent"] || "Unknown", now, now);
 
     const responsePlan = isSeatUser ? ownerPlan : selectedPlan;
-    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, subscriptionExpiresAt: null, subscriptionStatus: responsePlan === 'free' ? 'free' : 'active', accessLevel: responsePlan === 'free' ? 'free' : 'paid', cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
+    // Resolve subscriptionStatus + accessLevel from the same source /api/auth/me
+    // uses, so the dashboard does not see a transient "active/paid" payload
+    // immediately followed by a corrected "free/free" on first /me call.
+    // For seat users, inherit the owner's status; otherwise read this user's row.
+    const statusRow = (db as any).$client.prepare(
+      "SELECT subscription_expires_at, subscription_status FROM users WHERE id = ?"
+    ).get(isSeatUser && seatInvite ? seatInvite.owner_user_id : (activeSeat?.owner_user_id ?? user.id)) as any;
+    const responseSubExpiry = statusRow?.subscription_expires_at || null;
+    const responseSubStatus = statusRow?.subscription_status || 'free';
+    const responseAccessLevel = getAccessLevel({ subscription_expires_at: responseSubExpiry });
+    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
     // Send welcome email via Resend
     if (resend) {
