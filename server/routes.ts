@@ -698,6 +698,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, seat });
   });
 
+  // Admin: dry-run a checkout to inspect what sessionParams the server WOULD
+  // send to Stripe, including the resolved discount + trial values. No Stripe
+  // call is made. Useful for QA'ing discount code wiring without creating real
+  // sessions or charging cards. ADMIN_SECRET-gated.
+  app.post("/api/admin/qa-checkout", async (req, res) => {
+    const { secret, priceType, discountCode, additionalSeats } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!priceType || !PRICES[priceType as keyof typeof PRICES]) {
+      return res.status(400).json({ error: "Invalid price type" });
+    }
+    const priceId = PRICES[priceType as keyof typeof PRICES];
+    const isSubscription = priceType !== "perStudy";
+    let discountRow: any = null;
+    let discountPct = 0;
+    let trialDays: number | null = null;
+    if (discountCode) {
+      discountRow = db.$client.prepare("SELECT * FROM discount_codes WHERE UPPER(code) = UPPER(?)").get(String(discountCode).trim()) as any;
+      const expired = discountRow?.expires_at && new Date(discountRow.expires_at).getTime() < Date.now();
+      if (discountRow && discountRow.active && !expired && (discountRow.max_uses === null || discountRow.uses < discountRow.max_uses) && (discountRow.applies_to === "all" || discountRow.applies_to === priceType || discountRow.applies_to === "annual")) {
+        if (discountRow.trial_days) trialDays = discountRow.trial_days;
+        if (discountRow.discount_pct) discountPct = discountRow.discount_pct;
+      }
+    }
+    if (isSubscription && !trialDays) trialDays = 14;
+    const totalSeats = 1 + (additionalSeats || 0);
+    const lineItems: any[] = [{ price: priceId, quantity: 1 }];
+    if (additionalSeats && additionalSeats > 0 && priceType !== "veritacheck_only") {
+      const seatTier = getSeatPrice(totalSeats);
+      if (seatTier) lineItems.push({ price: seatTier.priceId, quantity: additionalSeats });
+    }
+    const sessionParams: any = {
+      mode: isSubscription ? "subscription" : "payment",
+      line_items: lineItems,
+      metadata: { priceType, totalSeats: String(totalSeats) },
+    };
+    if (trialDays && isSubscription) {
+      sessionParams.subscription_data = { trial_period_days: trialDays };
+      sessionParams.payment_method_collection = "always";
+    }
+    if (discountPct) {
+      sessionParams.discounts = [{ coupon: `(would create) percent_off=${discountPct}, duration=once, name=${discountRow.partner_name} - ${discountPct}% off` }];
+    }
+    res.json({
+      ok: true,
+      resolved: {
+        priceType,
+        priceId,
+        isSubscription,
+        additionalSeats: additionalSeats || 0,
+        totalSeats,
+        discountCode: discountCode || null,
+        discountFound: !!discountRow,
+        discountActive: !!discountRow?.active,
+        discountPct,
+        trialDays,
+        appliesTo: discountRow?.applies_to ?? null,
+        partnerName: discountRow?.partner_name ?? null,
+      },
+      sessionParams,
+    });
+  });
+
   // Admin: create a pending seat under an owner with a fresh invite token.
   // Used to manually onboard teammates whose corporate email gateway
   // quarantines automated invitations from Resend.
