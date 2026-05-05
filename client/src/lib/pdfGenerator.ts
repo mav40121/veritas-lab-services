@@ -1,6 +1,8 @@
 import jsPDF from "jspdf";
 import type { Study } from "@shared/schema";
 import type { StudyResults, CalVerResults, MethodCompResults, QualitativeResults, SemiQuantResults } from "./calculations";
+import { applyLicenseToPdf } from "./licenseStamp";
+import { getUser } from "./auth";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const TEAL        = [14, 165, 150]  as const;
@@ -881,5 +883,12 @@ export async function generatePDF(study: Study, results: StudyResults) {
     : results.type === "semi_quantitative" ? "SemiQuantComp"
     : study.studyType === "cal_ver" ? "CalVer" : "MethodComp";
   const filename = `VeritaCheck_${typeLabel}_${study.testName.replace(/\s+/g,"_")}_${study.date}.pdf`;
+  const u = getUser();
+  applyLicenseToPdf(doc, {
+    licensee: u?.cliaLabName || u?.name || u?.email || "Demo Preview",
+    email: u?.email || "anonymous",
+    plan: u?.plan,
+    issueDate: new Date().toISOString().slice(0, 10),
+  });
   doc.save(filename);
 }

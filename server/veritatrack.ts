@@ -1,5 +1,30 @@
 import type { Express } from "express";
+import crypto from "crypto";
 import { db } from "./db";
+import { applyLicenseToExcelJS } from "./licenseStamp";
+import type { LicenseContext } from "@shared/licenseText";
+
+function trackLicenseCtx(req: any): LicenseContext {
+  const u = req?.user || null;
+  const sqlite = (db as any).$client;
+  const ownerId = req?.ownerUserId ?? req?.userId;
+  const row = ownerId
+    ? (sqlite.prepare("SELECT clia_lab_name, clia_number FROM users WHERE id = ?").get(ownerId) as any)
+    : null;
+  if (u?.email) {
+    return {
+      licensee: row?.clia_lab_name || u.name || u.email,
+      email: u.email,
+      plan: u.plan,
+      issueDate: new Date().toISOString().slice(0, 10),
+    };
+  }
+  const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
+  const ipHash = ipRaw
+    ? "ip-" + crypto.createHash("sha256").update(ipRaw).digest("hex").slice(0, 8)
+    : "anonymous";
+  return { licensee: "Demo Preview", email: ipHash, plan: "demo", issueDate: new Date().toISOString().slice(0, 10) };
+}
 
 function frequencyToMonths(freq: string): number {
   switch (freq) {
@@ -472,6 +497,7 @@ export function registerVeritaTrackRoutes(
     wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                   firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+    applyLicenseToExcelJS(wb, trackLicenseCtx(req));
     const buf = await wb.xlsx.writeBuffer();
     const filename = `VeritaTrack_${new Date().getFullYear()}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
