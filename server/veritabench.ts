@@ -2,8 +2,38 @@
  * VeritaBench routes - Productivity Tracker + Staffing Analyzer
  */
 import type { Express } from "express";
+import crypto from "crypto";
 import { db } from "./db";
 import { DEMO_USER_EMAIL } from "./constants";
+import { applyLicenseToExcelJS } from "./licenseStamp";
+import type { LicenseContext } from "@shared/licenseText";
+
+function bencheLicenseCtx(req: any): LicenseContext {
+  const u = req?.user || null;
+  const sqlite = (db as any).$client;
+  const ownerId = req?.ownerUserId ?? req?.userId;
+  const row = ownerId
+    ? (sqlite.prepare("SELECT clia_lab_name, clia_number, email, name, plan FROM users WHERE id = ?").get(ownerId) as any)
+    : null;
+  if (u?.email) {
+    return {
+      licensee: row?.clia_lab_name || u.name || u.email,
+      email: u.email,
+      plan: u.plan,
+      issueDate: new Date().toISOString().slice(0, 10),
+    };
+  }
+  const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
+  const ipHash = ipRaw
+    ? "ip-" + crypto.createHash("sha256").update(ipRaw).digest("hex").slice(0, 8)
+    : "anonymous";
+  return {
+    licensee: "Demo Preview",
+    email: ipHash,
+    plan: "demo",
+    issueDate: new Date().toISOString().slice(0, 10),
+  };
+}
 
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"];
 
@@ -228,6 +258,7 @@ export function registerVeritaBenchRoutes(
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+      applyLicenseToExcelJS(wb, bencheLicenseCtx(req));
       const buffer = await wb.xlsx.writeBuffer();
       res.set("Content-Disposition", `attachment; filename="VeritaBench-Productivity_${new Date().toISOString().split("T")[0]}.xlsx"`);
       res.set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -615,6 +646,7 @@ export function registerVeritaBenchRoutes(
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+      applyLicenseToExcelJS(wb, bencheLicenseCtx(req));
       const buffer = await wb.xlsx.writeBuffer();
       res.set("Content-Disposition", `attachment; filename="Staffing-Analysis_${study.name.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx"`);
       res.set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

@@ -11,6 +11,35 @@ import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS,
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF } from "./pdfReport";
+import { applyLicenseToExcelJS } from "./licenseStamp";
+import type { LicenseContext } from "@shared/licenseText";
+
+function licenseCtxFromReq(req: any): LicenseContext {
+  // Prefer authenticated user identity. Falls back to a hashed IP for
+  // anonymous/demo paths so the licensee field still distinguishes recipients
+  // without ever logging a raw IP.
+  const u = req?.user || null;
+  const userRow = req?.userId ? storage.getUserById(req.userId) as any : null;
+  const labName = userRow?.cliaLabName || userRow?.clia_lab_name || null;
+  if (u?.email) {
+    return {
+      licensee: labName || u.name || u.email,
+      email: u.email,
+      plan: u.plan,
+      issueDate: new Date().toISOString().slice(0, 10),
+    };
+  }
+  const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
+  const ipHash = ipRaw
+    ? "ip-" + crypto.createHash("sha256").update(ipRaw).digest("hex").slice(0, 8)
+    : "anonymous";
+  return {
+    licensee: "Demo Preview",
+    email: ipHash,
+    plan: "demo",
+    issueDate: new Date().toISOString().slice(0, 10),
+  };
+}
 import { logAudit } from "./audit";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
@@ -1931,6 +1960,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const safeLabName = String(labName).replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "Laboratory";
       const filename = `VeritaCheck_Studies_${safeLabName}_${exportDate}.xlsx`;
 
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -2122,7 +2152,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         } catch {}
       }
 
-      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any);
+      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtxFromReq(req));
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
@@ -3558,6 +3588,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       // Write to buffer
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (map.name || "Map").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -4048,6 +4079,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -4149,7 +4181,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           labName: scanLabName,
           preferredStandards: scanPreferredStandards as any,
         },
-        type as "executive" | "full"
+        type as "executive" | "full",
+        licenseCtxFromReq(req)
       );
 
       if (!pdfBuffer || pdfBuffer.length === 0) {
@@ -4864,6 +4897,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.xlsx`;
@@ -5151,7 +5185,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             : `${totalCount - passCount} of ${totalCount} measurements exceeded the adopted acceptance criterion (TEa) of +/-${teaPct}%.`,
         };
 
-        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_CalVer_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
@@ -5188,7 +5222,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           type: "ref_interval", analyte: analyte || studyRow.test_name, units: units || "",
           refLow, refHigh, n, outsideCount, outsidePct, overallPass, specimens: enriched, summary,
         };
-        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_RefInterval_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
@@ -5282,7 +5316,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             ? `All ${levelResults.length} precision levels passed within the adopted acceptance criterion (TEa) of ${_teaDisplay}. Manufacturer precision claims verified.`
             : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the adopted acceptance criterion (TEa) of ${_teaDisplay}.`,
         };
-        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_Precision_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
@@ -5349,7 +5383,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             ? `All ${totalCount} paired specimens passed within the adopted acceptance criterion (TEa) of ${_teaDisplay}. New reagent lot acceptable for clinical use.`
             : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the adopted acceptance criterion (TEa) of ${_teaDisplay}.`,
         };
-        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+        const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_LotToLot_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
@@ -5505,7 +5539,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           : `${n - passCount} of ${n} samples exceeded the adopted acceptance criterion (TEa) of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}.`,
       };
 
-      const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999");
+      const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
       const filename = `VeritaCheck_MethodComp_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
@@ -5538,7 +5572,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // GET /api/demo/map/excel - demo map Excel export
-  app.get("/api/demo/map/excel", async (_req, res) => {
+  app.get("/api/demo/map/excel", async (req, res) => {
     const userId = getDemoUserId();
     if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
@@ -5755,6 +5789,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="VeritaMap_Demo_Riverside_Regional.xlsx"`);
@@ -5854,7 +5889,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           cliaNumber: "22D0999999",
           preferredStandards: demoStandards as any,
         },
-        type as "executive" | "full"
+        type as "executive" | "full",
+        licenseCtxFromReq(req)
       );
 
       const safeName = "Riverside_Regional";
@@ -5932,7 +5968,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // GET /api/demo/competency/pdf - generate competency PDF for demo
-  app.get("/api/demo/competency/pdf", async (_req, res) => {
+  app.get("/api/demo/competency/pdf", async (req, res) => {
     const userId = getDemoUserId();
     if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
@@ -6005,7 +6041,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         labName: "Riverside Regional Medical Center",
         quizResults,
         cliaNumber: "22D0999999",
-      });
+      }, licenseCtxFromReq(req));
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `VeritaComp_Technical_${safeName}_Demo.pdf`;
@@ -6018,7 +6054,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // GET /api/demo/staff/cms209 - generate CMS 209 PDF for demo lab
-  app.get("/api/demo/staff/cms209", async (_req, res) => {
+  app.get("/api/demo/staff/cms209", async (req, res) => {
     try {
       const demoLab = {
         lab_name: "Riverside Regional Medical Center",
@@ -6083,7 +6119,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lab: demoLab,
         employees: demoEmployees,
         specialties,
-      });
+      }, licenseCtxFromReq(req));
 
       const date = new Date().toISOString().split("T")[0];
       const filename = `CMS_209_22D0999999_${date}.pdf`;
@@ -6937,7 +6973,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cliaForComp = compUserRow?.clia_number || undefined;
     }
     try {
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp });
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
@@ -7016,7 +7052,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         labName,
         quizResults,
         cliaNumber: compUserRow2?.clia_number || undefined,
-      });
+      }, licenseCtxFromReq(req));
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -7097,7 +7133,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cumsumLabName = cumsumUserRow?.clia_lab_name || undefined;
     }
     try {
-      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumClia, cumsumLabName);
+      const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumClia, cumsumLabName, licenseCtxFromReq(req));
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `VeritaCheck_CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
       const cumsumToken = storePdfToken(pdfBuffer, filename);
@@ -7465,7 +7501,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lab,
         employees: employeesWithRoles,
         specialties: CMS_SPECIALTIES,
-      });
+      }, licenseCtxFromReq(req));
       const date = new Date().toISOString().split("T")[0];
       const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;
       const cms209Token = storePdfToken(pdfBuffer, filename);
@@ -8436,6 +8472,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split("T")[0];
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -8788,7 +8825,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         enrollments,
         events,
         correctiveActions: cas,
-      });
+      }, licenseCtxFromReq(req));
       const date = new Date().toISOString().split("T")[0];
       const filename = `VeritaPT_Report_${date}.pdf`;
       const ptPdfToken = storePdfToken(pdfBuffer, filename);
@@ -9919,7 +9956,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       else if (accCountPdf === 1 && lab?.accreditation_cola) accreditationChoicePdf = 'COLA';
       else if (accCountPdf === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) accreditationChoicePdf = 'CAP+AABB';
       const { generateVeritaPolicyPDF } = await import('./pdfReport');
-      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: accreditationChoicePdf });
+      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: accreditationChoicePdf }, licenseCtxFromReq(req));
       res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
@@ -10241,6 +10278,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: 'visible' }];
 
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split('T')[0];
       const filename = `VeritaPolicy_MasterList_${date}.xlsx`;

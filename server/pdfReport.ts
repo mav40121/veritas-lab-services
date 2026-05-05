@@ -10,6 +10,24 @@ import puppeteer from "puppeteer";
 import type { Study } from "@shared/schema";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
+import {
+  injectLicenseHtml,
+  licenseAugmentedFooterTemplate,
+  type LicenseContext,
+} from "./licenseStamp";
+
+// Used by every page.pdf() call below: takes the original HTML + footer
+// template and the request's license context, returns the augmented pair.
+function applyLicenseToPuppeteer(
+  html: string,
+  baseFooter: string,
+  ctx?: Partial<LicenseContext> | null,
+): { html: string; footerTemplate: string } {
+  return {
+    html: injectLicenseHtml(html, ctx),
+    footerTemplate: licenseAugmentedFooterTemplate(baseFooter, ctx),
+  };
+}
 
 // ─── Safe number formatting helper ──────────────────────────────────────────
 function sf(value: any, digits: number): string {
@@ -2178,7 +2196,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
 }
 
 // ─── CUMSUM PDF GENERATOR ─────────────────────────────────────────────────────
-export async function generateCumsumPDF(tracker: any, entries: any[], currentSpecimens?: any[], cliaNumber?: string, labName?: string): Promise<Buffer> {
+export async function generateCumsumPDF(tracker: any, entries: any[], currentSpecimens?: any[], cliaNumber?: string, labName?: string, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const historyRows = (entries || []).map((e: any) => `
     <tr style="${e.verdict === 'ACTION REQUIRED' ? 'background:#fef2f2;' : e.verdict === 'ACCEPT' ? 'background:#f0fdf4;' : ''}">
       <td>${e.year}</td>
@@ -2238,13 +2256,14 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, FOOTER_TEMPLATE, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: "<span></span>",
-      footerTemplate: FOOTER_TEMPLATE,
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
     return Buffer.from(pdfBuffer);
@@ -2253,7 +2272,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   }
 }
 
-export async function generatePDFBuffer(study: Study, results: any, cliaNumber?: string, preferredStandards?: AccreditationBody[] | null): Promise<Buffer> {
+export async function generatePDFBuffer(study: Study, results: any, cliaNumber?: string, preferredStandards?: AccreditationBody[] | null, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   if (!study || typeof study !== "object") {
     throw new Error("generatePDFBuffer: study must be a valid object, received " + typeof study);
   }
@@ -2287,13 +2306,14 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, FOOTER_TEMPLATE, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: "<span></span>",
-      footerTemplate: FOOTER_TEMPLATE,
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
     return Buffer.from(pdfBuffer);
@@ -2591,7 +2611,7 @@ const VERITASCAN_FOOTER_TEMPLATE = `
   </div>
 </div>`;
 
-export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "executive" | "full"): Promise<Buffer> {
+export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "executive" | "full", licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = type === "executive"
     ? buildVeritaScanExecutiveHTML(data)
     : buildVeritaScanFullHTML(data);
@@ -2599,13 +2619,14 @@ export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "exec
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, VERITASCAN_FOOTER_TEMPLATE, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: "<span></span>",
-      footerTemplate: VERITASCAN_FOOTER_TEMPLATE,
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
     return Buffer.from(pdfBuffer);
@@ -3070,18 +3091,19 @@ const COMPETENCY_FOOTER = `<div style="width:100%;padding:4px 15mm;font-family:s
   </div>
 </div>`;
 
-export async function generateCompetencyPDF(input: CompetencyPDFInput): Promise<Buffer> {
+export async function generateCompetencyPDF(input: CompetencyPDFInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = buildCompetencyHTML(input);
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, COMPETENCY_FOOTER, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: "<span></span>",
-      footerTemplate: COMPETENCY_FOOTER,
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
     return Buffer.from(pdfBuffer);
@@ -3321,16 +3343,20 @@ function buildCMS209HTML(input: CMS209Input): string {
   </body></html>`;
 }
 
-export async function generateCMS209PDF(input: CMS209Input): Promise<Buffer> {
+export async function generateCMS209PDF(input: CMS209Input, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = buildCMS209HTML(input);
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       landscape: true,
       printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "10mm", right: "12mm", bottom: "14mm", left: "12mm" },
     });
     return Buffer.from(pdfBuffer);
@@ -3464,15 +3490,19 @@ function buildVeritaPTPDFHTML(data: VeritaPTPDFData): string {
   </body></html>`;
 }
 
-export async function generateVeritaPTPDF(data: VeritaPTPDFData): Promise<Buffer> {
+export async function generateVeritaPTPDF(data: VeritaPTPDFData, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = buildVeritaPTPDFHTML(data);
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
     return Buffer.from(pdfBuffer);
@@ -3911,15 +3941,19 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 </html>`;
 }
 
-export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput): Promise<Buffer> {
+export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = buildVeritaPolicyPDFHTML(input);
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
     return Buffer.from(pdfBuffer);

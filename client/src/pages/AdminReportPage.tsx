@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import { applyLicenseToExcelJS } from "@/lib/licenseStamp";
+import { getUser } from "@/lib/auth";
 
 interface UserRecord {
   id: number;
@@ -445,6 +447,13 @@ export default function AdminReportPage() {
     wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                   firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
+    const u = getUser();
+    applyLicenseToExcelJS(wb, {
+      licensee: u?.cliaLabName || u?.name || u?.email || "Admin Console",
+      email: u?.email || "anonymous",
+      plan: u?.plan,
+      issueDate: new Date().toISOString().slice(0, 10),
+    });
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
