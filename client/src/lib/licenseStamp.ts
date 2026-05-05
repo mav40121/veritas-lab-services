@@ -130,9 +130,9 @@ function appendAppendixPage(doc: jsPDF, ctx: LicenseContext): void {
     y = h - margin - 8;
   }
   doc.text(stampLine, margin, y, { maxWidth: contentW });
-
-  // Footer band still belongs on the appendix page.
-  drawFooterBand(doc, LICENSE_BAND(ctx.licensee, ctx.email, ctx.issueDate));
+  // NOTE: do not draw the footer band here. stampAllPages() runs after
+  // appendAppendixPage() and will paint the band on every page including
+  // this one. Drawing it here too produced a duplicate footer (QC 2026-05-05).
 }
 
 function setDocumentMetadata(doc: jsPDF, ctx: LicenseContext): void {
