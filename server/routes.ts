@@ -820,6 +820,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, seat, url });
   });
 
+  // Admin: attach an existing user to a pending seat. Used to repair signups
+  // that landed as their own owner instead of as a seat (e.g. invitee used a
+  // different email than the invite was sent to). Effects:
+  //   - user_seats.id = seatId  -> seat_user_id, status='active', accepted_at=now
+  //   - users.id     = userId  -> plan = owner.plan, seat_count=1, lab_id = owner.lab_id,
+  //                                hospital_name/state/bed_count = NULL,
+  //                                has_completed_onboarding = 1
+  // ADMIN_SECRET-gated. Returns the updated rows.
+  app.post("/api/admin/attach-seat-user", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { userId, seatId } = req.body || {};
+    if (!userId || !seatId) return res.status(400).json({ error: "userId and seatId required" });
+    const sqlite = (db as any).$client;
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status FROM user_seats WHERE id = ?").get(Number(seatId)) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (seat.status === "active" && seat.seat_user_id) {
+      return res.status(409).json({ error: "Seat already claimed", seat });
+    }
+    const userRow = sqlite.prepare("SELECT id, email FROM users WHERE id = ?").get(Number(userId)) as any;
+    if (!userRow) return res.status(404).json({ error: "User not found" });
+    const owner = sqlite.prepare("SELECT id, plan, lab_id FROM users WHERE id = ?").get(Number(seat.owner_user_id)) as any;
+    if (!owner) return res.status(404).json({ error: "Seat owner not found" });
+    const now = new Date().toISOString();
+    try {
+      sqlite.prepare(
+        "UPDATE user_seats SET seat_user_id = ?, status = 'active', accepted_at = ? WHERE id = ?"
+      ).run(Number(userId), now, Number(seatId));
+      sqlite.prepare(
+        "UPDATE users SET plan = ?, seat_count = 1, lab_id = ?, hospital_name = NULL, hospital_state = NULL, bed_count = NULL, has_completed_onboarding = 1 WHERE id = ?"
+      ).run(owner.plan, owner.lab_id || null, Number(userId));
+      // Keep in-memory storage consistent so the next /api/auth/me reflects the change.
+      try {
+        const cached = storage.getUserById(Number(userId));
+        if (cached) storage.updateUserPlan(Number(userId), owner.plan, cached.studyCredits);
+      } catch {}
+    } catch (err: any) {
+      return res.status(500).json({ error: "Repair failed", detail: err.message });
+    }
+    const updatedSeat = sqlite.prepare("SELECT id, owner_user_id, seat_email, seat_user_id, status, accepted_at FROM user_seats WHERE id = ?").get(Number(seatId));
+    const updatedUser = sqlite.prepare("SELECT id, email, plan, seat_count, lab_id, hospital_name, has_completed_onboarding FROM users WHERE id = ?").get(Number(userId));
+    res.json({ ok: true, seat: updatedSeat, user: updatedUser, owner: { id: owner.id, plan: owner.plan } });
+  });
+
   // Admin: delete a user by id (destructive, requires confirm=true)
   app.delete("/api/admin/users/:id", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
@@ -1316,21 +1360,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
 
-    // Save HIPAA acknowledgment + hospital info + plan from signup
-    const { plan: reqPlan, hospital_name, hospital_state, bed_count } = req.body;
-    const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
-    const selectedPlan = validPlans.includes(reqPlan) ? reqPlan : "free";
-    const selectedSeatCount = PLAN_SEATS[selectedPlan] || 1;
-    try {
-      (db as any).$client.prepare(
-        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ? WHERE id = ?"
-      ).run(new Date().toISOString(), selectedPlan, selectedSeatCount, hospital_name || null, hospital_state || null, bed_count || null, user.id);
-      // Also update in-memory storage so the returned user object reflects the new plan
-      storage.updateUserPlan(user.id, selectedPlan, user.studyCredits);
-    } catch {}
-
-
-    // Check if this user was invited as a seat (by token or by email)
+    // Resolve seat-invite FIRST so token-claim takes precedence over any
+    // body.plan / body.hospital_name / body.seat_count / body.bed_count the
+    // signup form may have included. Without this ordering, an invitee who
+    // chose a plan in the UI before HIPAA gets stamped as their own owner
+    // (e.g. plan='community', seat_count=5) and the seat-claim block below
+    // only patches plan + lab_id, leaving the seat_count + hospital_name
+    // wrong. See incident 2026-05-05 (Emily Du / xiaoyiem@usc.edu).
     const { inviteToken: reqInviteToken } = req.body;
     let seatInvite: any = null;
     if (reqInviteToken) {
@@ -1343,6 +1379,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
       ).get(email.toLowerCase()) as any;
     }
+
+    // Save HIPAA acknowledgment + hospital info + plan from signup. When a
+    // pending seat invite resolved above, we IGNORE body.plan/hospital/seat
+    // fields entirely: the user is becoming a seat under an existing owner,
+    // so any selected plan is wrong by definition. The seat-claim block
+    // below will set plan/lab_id/seat_count from the owner's record.
+    const { plan: reqPlan, hospital_name, hospital_state, bed_count } = req.body;
+    const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
+    const selectedPlan = seatInvite ? "free" : (validPlans.includes(reqPlan) ? reqPlan : "free");
+    const selectedSeatCount = seatInvite ? 1 : (PLAN_SEATS[selectedPlan] || 1);
+    const effHospitalName = seatInvite ? null : (hospital_name || null);
+    const effHospitalState = seatInvite ? null : (hospital_state || null);
+    const effBedCount = seatInvite ? null : (bed_count || null);
+    try {
+      (db as any).$client.prepare(
+        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ? WHERE id = ?"
+      ).run(new Date().toISOString(), selectedPlan, selectedSeatCount, effHospitalName, effHospitalState, effBedCount, user.id);
+      // Also update in-memory storage so the returned user object reflects the new plan
+      storage.updateUserPlan(user.id, selectedPlan, user.studyCredits);
+    } catch {}
+
     // Also check if user is already an active seat (e.g. manually attached via admin)
     let activeSeat: any = null;
     if (!seatInvite) {
@@ -1365,10 +1422,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Get owner's plan so seat user inherits it
       const ownerRow = (db as any).$client.prepare("SELECT plan, lab_id FROM users WHERE id = ?").get(seatInvite.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
-      // Write owner's plan into seat user's DB record AND in-memory store
-      // Also inherit owner's lab_id so seat user sees the same lab identity
+      // Write owner's plan into seat user's DB record AND in-memory store.
+      // Also inherit owner's lab_id so seat user sees the same lab identity.
+      // Force seat_count=1 and clear hospital fields defensively in case any
+      // upstream code path wrote owner-shaped values onto this seat user.
       try {
-        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ? WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     } else if (activeSeat) {
@@ -1376,12 +1435,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       isSeatUser = true;
       const ownerRow = (db as any).$client.prepare("SELECT plan, lab_id FROM users WHERE id = ?").get(activeSeat.owner_user_id) as any;
       ownerPlan = ownerRow?.plan || selectedPlan;
-      // Ensure seat_user_id is linked, plan inherited, and onboarding skipped
+      // Ensure seat_user_id is linked, plan inherited, and onboarding skipped.
+      // Force seat_count=1 and clear hospital fields defensively (same
+      // reasoning as the seatInvite branch above).
       (db as any).$client.prepare(
         "UPDATE user_seats SET seat_user_id = ? WHERE id = ?"
       ).run(user.id, activeSeat.id);
       try {
-        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ? WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     }
