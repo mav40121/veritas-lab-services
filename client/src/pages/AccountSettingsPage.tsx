@@ -426,6 +426,8 @@ export default function AccountSettingsPage() {
         </CardContent>
       </Card>
 
+      <ChangePasswordCard />
+
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="text-base">Accreditation &amp; Standards</CardTitle>
@@ -869,5 +871,106 @@ export default function AccountSettingsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+// Change Password card. Self-serve: verifies current password against the
+// server, then sets a new one. Server enforces >= 8 chars and that new !=
+// current. UI also enforces that the two new-password fields match before
+// submit, so users see the validation client-side too.
+function ChangePasswordCard() {
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      toast({ title: "Password too short", description: "New password must be at least 8 characters.", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Passwords do not match", description: "Re-enter the new password to confirm.", variant: "destructive" });
+      return;
+    }
+    if (newPassword === currentPassword) {
+      toast({ title: "Pick a different password", description: "Your new password must be different from your current password.", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast({ title: "Could not change password", description: data?.error || "Please try again.", variant: "destructive" });
+      } else {
+        toast({ title: "Password updated", description: "Your password has been changed." });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (err: any) {
+      toast({ title: "Network error", description: String(err?.message || err), variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="text-base">Change Password</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current password</Label>
+            <Input
+              id="current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+            <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm new password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+          </div>
+          <Button type="submit" disabled={submitting || !currentPassword || !newPassword || !confirmPassword}>
+            {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Update password
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

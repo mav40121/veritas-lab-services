@@ -864,6 +864,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, seat: updatedSeat, user: updatedUser, owner: { id: owner.id, plan: owner.plan } });
   });
 
+  // Self-serve: change password. Auth-required. Verifies current password,
+  // bcrypt-hashes new password (cost 10, matching /api/auth/register), kills
+  // all other active sessions defensively. New password must be at least 8
+  // characters and different from current.
+  app.post("/api/auth/change-password", authMiddleware, async (req: any, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "currentPassword and newPassword are required" });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: "New password must be different from current password" });
+    }
+    const sqlite = (db as any).$client;
+    const userRow = sqlite.prepare("SELECT id, password_hash FROM users WHERE id = ?").get(req.userId) as any;
+    if (!userRow) return res.status(404).json({ error: "User not found" });
+    const valid = await bcrypt.compare(String(currentPassword), userRow.password_hash);
+    if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+    const newHash = await bcrypt.hash(String(newPassword), 10);
+    sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, req.userId);
+    res.json({ ok: true });
+  });
+
   // Admin: kill all active sessions for a user. Used to clear a stuck
   // session_conflict on login. ADMIN_SECRET-gated.
   app.post("/api/admin/kill-sessions", (req, res) => {
