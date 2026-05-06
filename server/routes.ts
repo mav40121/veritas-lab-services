@@ -14,10 +14,12 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 
-function licenseCtxFromReq(req: any): LicenseContext {
+function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // Prefer authenticated user identity. Falls back to a hashed IP for
   // anonymous/demo paths so the licensee field still distinguishes recipients
-  // without ever logging a raw IP.
+  // without ever logging a raw IP. `productName` is the trademarked product
+  // shown in the row-1 license band; defaults to "VeritaAssure\u2122" via
+  // normalizeLicenseContext when omitted.
   const u = req?.user || null;
   const userRow = req?.userId ? storage.getUserById(req.userId) as any : null;
   const labName = userRow?.cliaLabName || userRow?.clia_lab_name || null;
@@ -27,6 +29,7 @@ function licenseCtxFromReq(req: any): LicenseContext {
       email: u.email,
       plan: u.plan,
       issueDate: new Date().toISOString().slice(0, 10),
+      productName,
     };
   }
   const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
@@ -38,6 +41,7 @@ function licenseCtxFromReq(req: any): LicenseContext {
     email: ipHash,
     plan: "demo",
     issueDate: new Date().toISOString().slice(0, 10),
+    productName,
   };
 }
 import { logAudit } from "./audit";
@@ -1904,8 +1908,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
         c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
         c.border = aboutBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16);
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4;
         aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
@@ -2092,7 +2101,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const safeLabName = String(labName).replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "Laboratory";
       const filename = `VeritaCheck_Studies_${safeLabName}_${exportDate}.xlsx`;
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck™"));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -3453,8 +3462,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
         c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
         c.border = aboutBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4; aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
@@ -3720,7 +3734,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       // Write to buffer
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap™"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (map.name || "Map").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -4051,8 +4065,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
         c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
         c.border = aboutBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4; aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       const accreditorList = xlsxSelected.length > 0
@@ -4211,7 +4230,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaScan™"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -4895,8 +4914,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
         c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
         c.border = aboutBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4; aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
@@ -5029,7 +5053,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck™"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.xlsx`;
@@ -5785,8 +5809,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
         c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
         c.border = aboutBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4; aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
@@ -5921,7 +5950,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap™"));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="VeritaMap_Demo_Riverside_Regional.xlsx"`);
@@ -8463,8 +8492,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } };
         c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
         c.border = aboutBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4; aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
@@ -8604,7 +8638,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaLab™"));
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split("T")[0];
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -10277,8 +10311,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         c.font = { name: 'Calibri', size: 11, color: { argb: 'FF28251D' } };
         c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
         c.border = thinBorder;
-        const estLines = Math.max(1, Math.floor(text.length / 100) + 1);
-        about.getRow(aboutRow).height = Math.max(20, estLines * 16); aboutRow += 1;
+        // ~88 chars/line is the safe wrap width for Calibri 11 in column-width 110.
+        // Count explicit newlines so multi-paragraph text is sized correctly, and
+        // keep a 2-line minimum to absorb font metric variance across viewers.
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4; aboutRow += 1;
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
 
@@ -10410,7 +10449,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: 'visible' }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaPolicy™"));
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split('T')[0];
       const filename = `VeritaPolicy_MasterList_${date}.xlsx`;

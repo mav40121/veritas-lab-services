@@ -45,6 +45,13 @@ export interface LicenseContext {
   email: string;
   issueDate: string;
   plan?: string;
+  /**
+   * Product name shown in the row-1 license band, e.g. "VeritaMap\u2122",
+   * "VeritaCheck\u2122", "VeritaScan\u2122", "VeritaPolicy\u2122".
+   * Defaults to "VeritaAssure\u2122" when not supplied. The Copyright /
+   * License terms blocks below remain product-neutral on purpose.
+   */
+  productName?: string;
 }
 
 export function normalizeLicenseContext(
@@ -55,5 +62,6 @@ export function normalizeLicenseContext(
     email: (ctx?.email || "anonymous").trim(),
     issueDate: (ctx?.issueDate || new Date().toISOString().slice(0, 10)).trim(),
     plan: ctx?.plan ? String(ctx.plan).trim() : undefined,
+    productName: (ctx?.productName && String(ctx.productName).trim()) || "VeritaAssure\u2122",
   };
 }

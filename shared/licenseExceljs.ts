@@ -23,6 +23,29 @@ function maxColumns(ws: ExcelJS.Worksheet): number {
   return Math.max(cc, 8);
 }
 
+/**
+ * Estimate a safe wrapped-cell row height in points for Calibri 11 at the
+ * About-sheet column width (~110). Counts explicit newlines and floors
+ * char-per-line conservatively to avoid mid-word cutoffs.
+ */
+function estimateWrappedHeight(
+  text: string,
+  charsPerLine: number = 88,
+  pxPerLine: number = 16,
+  minLines: number = 2,
+): number {
+  const segments = String(text || "").split(/\r?\n/);
+  let lines = 0;
+  for (const seg of segments) {
+    if (seg.length === 0) {
+      lines += 1;
+      continue;
+    }
+    lines += Math.ceil(seg.length / charsPerLine);
+  }
+  return Math.max(minLines, lines) * pxPerLine + 4;
+}
+
 function shiftFreezePane(ws: ExcelJS.Worksheet): void {
   const views = ws.views;
   if (!Array.isArray(views) || views.length === 0) return;
@@ -43,15 +66,20 @@ function insertLicenseBand(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
   ws.spliceRows(1, 0, []);
   const row = ws.getRow(1);
   const top = ws.getCell(1, 1);
-  top.value =
-    `© 2026 Veritas Lab Services, LLC. VeritaPolicy™. All rights reserved. ` +
-    `Licensed to: ${ctx.licensee} (${ctx.email}) · Issued ${ctx.issueDate} · ` +
+  const bandText =
+    `\u00A9 2026 Veritas Lab Services, LLC. ${ctx.productName}. All rights reserved. ` +
+    `Licensed to: ${ctx.licensee} (${ctx.email}) \u00B7 Issued ${ctx.issueDate} \u00B7 ` +
     `Single-facility internal use only. No redistribution, no derivative works, no resale.`;
+  top.value = bandText;
   top.font = { name: "Calibri", size: 9, italic: true, bold: true, color: { argb: AMBER_TEXT_ARGB } };
   top.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AMBER_FILL_ARGB } };
   top.alignment = { wrapText: true, vertical: "middle", horizontal: "left" };
   ws.mergeCells(1, 1, 1, cols);
-  row.height = 30;
+  // Band spans `cols` merged columns; assume each column is ~16 chars wide on
+  // average for the worksheets we ship (data tables are wide). Use a generous
+  // chars-per-line so the band stays compact when the sheet has many columns.
+  const bandCharsPerLine = Math.max(120, cols * 16);
+  row.height = Math.max(30, estimateWrappedHeight(bandText, bandCharsPerLine, 14, 1));
   shiftFreezePane(ws);
 }
 
@@ -95,20 +123,23 @@ function ensureAboutSheet(workbook: ExcelJS.Workbook, ctx: LicenseContext): void
     about!.getRow(rowIdx).height = height;
   };
 
-  put(startRow,     "Copyright and license", subFont, 18);
-  put(startRow + 1, COPYRIGHT_BLOCK,         bodyFont, 110);
-  put(startRow + 3, "License terms",         subFont, 18);
-  put(startRow + 4, LICENSE_TERMS_BLOCK,     bodyFont, 110);
-  put(startRow + 6, "Licensed to",           subFont, 18);
-  put(startRow + 7,
-      `${ctx.licensee} | ${ctx.email}` +
-      (ctx.plan ? ` | Plan: ${ctx.plan}` : "") +
-      ` | Issued ${ctx.issueDate}`,
-      bodyFont, 24);
-  put(startRow + 9,
-      `Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} · ` +
-      `Veritas Lab Services, LLC`,
-      noteFont, 18);
+  // Column 1 is width 110 in Excel column-units \u2248 ~88 chars of Calibri 11
+  // before wrap. Use estimateWrappedHeight() so blocks never clip on long text.
+  const licensedTo =
+    `${ctx.licensee} | ${ctx.email}` +
+    (ctx.plan ? ` | Plan: ${ctx.plan}` : "") +
+    ` | Issued ${ctx.issueDate}`;
+  const generated =
+    `Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} \u00B7 ` +
+    `Veritas Lab Services, LLC`;
+
+  put(startRow,     "Copyright and license", subFont, 22);
+  put(startRow + 1, COPYRIGHT_BLOCK,         bodyFont, estimateWrappedHeight(COPYRIGHT_BLOCK, 88, 16, 4));
+  put(startRow + 3, "License terms",         subFont, 22);
+  put(startRow + 4, LICENSE_TERMS_BLOCK,     bodyFont, estimateWrappedHeight(LICENSE_TERMS_BLOCK, 88, 16, 4));
+  put(startRow + 6, "Licensed to",           subFont, 22);
+  put(startRow + 7, licensedTo,              bodyFont, estimateWrappedHeight(licensedTo, 88, 16, 1));
+  put(startRow + 9, generated,               noteFont, estimateWrappedHeight(generated, 88, 14, 1));
 }
 
 export function applyLicenseToExcelJSWorkbook(
