@@ -864,6 +864,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, seat: updatedSeat, user: updatedUser, owner: { id: owner.id, plan: owner.plan } });
   });
 
+  // Admin: kill all active sessions for a user. Used to clear a stuck
+  // session_conflict on login. ADMIN_SECRET-gated.
+  app.post("/api/admin/kill-sessions", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { userId, email } = req.body || {};
+    if (!userId && !email) return res.status(400).json({ error: "userId or email required" });
+    const sqlite = (db as any).$client;
+    let uid = Number(userId) || null;
+    if (!uid && email) {
+      const u = sqlite.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(String(email)) as any;
+      if (!u) return res.status(404).json({ error: "User not found" });
+      uid = u.id;
+    }
+    const before = sqlite.prepare("SELECT COUNT(*) AS n FROM user_sessions WHERE user_id = ? AND is_active = 1").get(uid) as any;
+    sqlite.prepare("UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1").run(uid);
+    res.json({ ok: true, userId: uid, sessionsKilled: Number(before?.n || 0) });
+  });
+
+  // Admin: reset a user's password to a known value. ADMIN_SECRET-gated.
+  // Used to recover an account when the owner has lost the password and the
+  // self-serve forgot-password flow is unavailable.
+  app.post("/api/admin/reset-password", async (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { userId, email, newPassword } = req.body || {};
+    if ((!userId && !email) || !newPassword) {
+      return res.status(400).json({ error: "userId-or-email and newPassword required" });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: "newPassword must be at least 8 characters" });
+    }
+    const sqlite = (db as any).$client;
+    let uid = Number(userId) || null;
+    if (!uid && email) {
+      const u = sqlite.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(String(email)) as any;
+      if (!u) return res.status(404).json({ error: "User not found" });
+      uid = u.id;
+    }
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, uid);
+    // Also kill any stuck sessions so the next login is clean.
+    sqlite.prepare("UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1").run(uid);
+    res.json({ ok: true, userId: uid });
+  });
+
   // Admin: delete a user by id (destructive, requires confirm=true)
   app.delete("/api/admin/users/:id", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
