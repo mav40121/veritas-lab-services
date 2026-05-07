@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF } from "./pdfReport";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
+import { validateClia } from "@shared/validateClia";
 
 function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // Prefer authenticated user identity. Falls back to a hashed IP for
@@ -9601,6 +9602,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor } = req.body;
 
+      // CLIA format validation (D3, parking-lot #13). Save-time only —
+      // existing rows continue to load and display unchanged. Validation
+      // applies when the caller is sending a non-empty new value. An
+      // empty/undefined clia_number means "don't change CLIA on this save"
+      // OR "clear CLIA" (downstream code uses `clia_number || null`),
+      // neither of which should be format-rejected here.
+      let normalizedClia: string | null | undefined = clia_number;
+      if (typeof clia_number === "string" && clia_number.trim().length > 0) {
+        const v = validateClia(clia_number);
+        if (!v.ok) {
+          return res.status(400).json({ error: v.error || "Invalid CLIA number format." });
+        }
+        normalizedClia = v.normalized;
+      }
+
       // Resolve or create lab row for this owner
       let lab = resolveLabForUser(req.userId);
       if (!lab) {
@@ -9608,7 +9624,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const now = new Date().toISOString();
         const result = (db as any).$client.prepare(
           "INSERT INTO labs (clia_number, lab_name, owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-        ).run(clia_number || null, clia_lab_name || null, req.userId, now, now);
+        ).run(normalizedClia || null, clia_lab_name || null, req.userId, now, now);
         const newLabId = Number(result.lastInsertRowid);
         (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(newLabId, req.userId);
         // Also link existing seat users to this new lab
@@ -9626,7 +9642,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       // Check lock state for CLIA and lab name
-      if (lab.clia_locked && clia_number !== undefined && (clia_number || null) !== (lab.clia_number || null)) {
+      if (lab.clia_locked && clia_number !== undefined && (normalizedClia || null) !== (lab.clia_number || null)) {
         return res.status(403).json({ error: "CLIA number is locked once reports have been generated. Contact support to change." });
       }
       if (lab.lab_name_locked && clia_lab_name !== undefined && (clia_lab_name || null) !== (lab.lab_name || null)) {
@@ -9676,7 +9692,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Audit log: track each changed field
       const fieldsToAudit: [string, any, any][] = [];
-      if ((clia_number || null) !== (lab.clia_number || null)) fieldsToAudit.push(["clia_number", lab.clia_number, clia_number || null]);
+      if ((normalizedClia || null) !== (lab.clia_number || null)) fieldsToAudit.push(["clia_number", lab.clia_number, normalizedClia || null]);
       if ((clia_lab_name || null) !== (lab.lab_name || null)) fieldsToAudit.push(["lab_name", lab.lab_name, clia_lab_name || null]);
       if (accCap !== lab.accreditation_cap) fieldsToAudit.push(["accreditation_cap", String(lab.accreditation_cap), String(accCap)]);
       if (accTjc !== lab.accreditation_tjc) fieldsToAudit.push(["accreditation_tjc", String(lab.accreditation_tjc), String(accTjc)]);
@@ -9693,7 +9709,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `UPDATE labs SET clia_number = ?, lab_name = ?, accreditation_cap = ?, accreditation_tjc = ?,
          accreditation_cola = ?, accreditation_aabb = ?, updated_at = ? WHERE id = ?`
       ).run(
-        clia_number || null, clia_lab_name || null,
+        normalizedClia || null, clia_lab_name || null,
         accCap, accTjc, accCola, accAabb, now, lab.id
       );
 
@@ -9708,7 +9724,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const ptVendor = VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
       (db as any).$client.prepare(
         "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
-      ).run(clia_number || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
+      ).run(normalizedClia || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
 
       res.json({ success: true });
     } catch (err: any) {
