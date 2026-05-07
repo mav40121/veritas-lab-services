@@ -240,6 +240,33 @@ ships so the sign-off pattern is settled and reusable.
 
 ---
 
+### 10. Operations module for cost-per-test calculations
+
+**What:** A new VeritaAssure module (working name: VeritaOps or similar)
+for laboratory cost-per-test calculations. Inputs span reagent cost,
+calibrator cost, control cost, QC frequency, instrument depreciation,
+labor (tech time per run, per result), batch sizes, send-out blends,
+and overhead allocation. Output: per-test cost with breakdown, plus
+throughput and break-even analysis.
+
+**Fix shape:** TBD. Needs a scoping question pass before any code:
+which cost dimensions are in scope for v1, what data the user already
+has vs needs to enter, how it integrates with VeritaMap (test list)
+and VeritaScan (volume), report shapes (PDF, Excel), and whether it
+needs its own subscription tier or rolls into an existing one.
+
+**Source:** This thread, 2026-05-07 12:05 PM CDT, user message:
+"Parking lot:  build an operations module for cost per test
+calculations."
+
+**Status:** Open. Not started. Memory entry exists at
+work.projects.veritaassure.operations_module.
+
+**Pre- vs post-COLA:** Post-COLA. New module, not on the conference
+demo path.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
