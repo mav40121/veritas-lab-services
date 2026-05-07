@@ -507,6 +507,224 @@ the wrong order of operations.
 
 ---
 
+### 17. New flagship module: VeritaResponse (post-survey deficiency response)
+
+**FLAGSHIP — Tier 1 product expansion. Sized larger than VeritaPT or
+VeritaCheck. Treat with same architectural care as the original
+VeritaAssure suite.**
+
+**What:** A new module that helps a lab manage the full lifecycle of
+responding to inspection deficiencies (CAP, TJC, COLA, CMS-2567,
+AABB), from intake of a citation through corrective-action authoring,
+supporting-evidence collection, submission tracking, and 30/60/90-day
+effectiveness verification. Pairs with VeritaCheck (find gaps before
+they cite you) and VeritaPT (prove your PT covers your menu) to
+complete the compliance lifecycle: prevent → respond → prove.
+
+**Why now:** Decision recorded 2026-05-07 at COLA Nashville booth.
+User identified this as a high-value gap not covered by any of our
+existing modules. CMS released QSO-25-19-ALL on 2025-06-17 shortening
+the public-release timeline for CMS-2567 statements of deficiencies
+from 90 days to 14 days, which materially raises the reputational
+stakes on getting a fast, defensible response submitted. Most COLA
+labs (small physician-office labs) have no coherent system for this
+today — they use Word docs and email threads. This is the strongest
+booth pitch we have for that segment.
+
+**Common spine across all accreditors (the data model anchor):**
+
+1. Citation/finding ID (their numbering)
+2. Standard / regulation referenced
+3. Description of the deficiency
+4. Immediate / containment action
+5. Root cause
+6. Corrective action (what changed)
+7. Preventive / system-level action (so it does not recur)
+8. Effectiveness monitoring plan
+9. Completion date
+10. Signature / approval
+11. Supporting evidence attachments
+
+Accreditor-specific layer is just (a) which fields are required vs
+optional, (b) field naming, (c) submission portal, (d) deadline
+clock, (e) terminology. One normalized `findings` table with
+per-accreditor renderer adapters.
+
+**Accreditor matrix (researched 2026-05-07):**
+
+- **CAP:** 30 days from inspection date. All online via e-LAB
+  Solutions Suite (no email/fax/mail). Phase I = written response
+  only. Phase II = written response plus supporting documentation.
+  One response per checklist item, numerical order. Technical
+  specialist back-and-forth. Decision target 50-75 days.
+  Sources:
+  https://documents.cap.org/documents/Guide-to-Accreditation_11_2025.pdf ,
+  https://www.nsh.org/blogs/natalie-paskoski/2021/03/09/cap-deficiencies-and-how-to-avoid-them ,
+  https://www.cap.org/laboratory-improvement/proficiency-testing/e-lab-solutions-suite
+
+- **TJC:** 60 days from posted final report. Submitted via Joint
+  Commission Connect (Survey Process > Post-Survey, or Review Process
+  > Post-Review for certifications). Each Requirement for Improvement
+  (RFI) gets its own ESC. May 2024 update: ESC must additionally
+  document any factors impacting patient care found during root-cause
+  analysis, including patient follow-up where applicable.
+  Sources:
+  https://www.jointcommission.org/en-us/knowledge-library/support-center/post-survey-or-review/what-is-evidence-of-standards-compliance ,
+  https://barrins-assoc.com/tjc-cms-blog/behavioral-health/evidence-of-standards-compliance/
+
+- **COLA:** Educational/consultative model. COLA technical support is
+  free during corrective action plan development. Emphasis on "why"
+  not just "what was fixed." 2-year cycle, ongoing PT monitoring.
+  Source: https://cola.org/accreditation/
+
+- **CMS / state surveyors (CLIA):** Form CMS-2567 "Statement of
+  Deficiencies and Plan of Correction." Left column = surveyor's
+  cited deficiency, right column = lab's plan. Returned within 10
+  days of receipt, signed by lab director. Five required POC
+  elements per State Operations Manual section 7314: (1) corrective
+  action for affected patients/items, (2) identify others potentially
+  affected, (3) systems/measures to prevent recurrence, (4) ongoing
+  monitoring, (5) completion date. Condition-level deficiencies
+  escalate to Directed Plan of Correction with 12-month hard deadline
+  before CLIA cert revocation (42 CFR 493.1832). NEW 2025: public
+  release at 14 days post-receipt instead of 90.
+  Sources:
+  https://www.cms.gov/medicare/cms-forms/cms-forms/downloads/cms2567.pdf ,
+  https://apps.hhs.texas.gov/business/CBT/correctionplans-nf/Writing_Acc_POCs_for_NF_REV_NOV_2023_FINAL_print.html ,
+  https://www.law.cornell.edu/cfr/text/42/493.1832 ,
+  https://leadingage.org/cms-shortens-timeline-on-public-release-of-statements-of-deficiencies/
+
+- **AABB:** Event/nonconformance-driven model rather than survey-only.
+  Nonconforming Event Report (NER) form has Sections A-M with risk
+  leveling 1-5, FDA notification within 45 days for reportable events,
+  lead-staff review chain, CAPA evaluation. Different shape from
+  CAP/TJC/CMS but same underlying spine.
+  Source:
+  https://www.aabb.org/docs/default-source/default-document-library/accreditation/commendable-practices/nonconforming-event-report.pdf
+
+**Proposed data model (no schema yet, just shape):**
+
+```
+findings:
+  id, lab_id, accreditor (CAP|TJC|COLA|CMS|AABB|Other),
+  inspection_id, finding_number,
+  standard_ref (e.g. GEN.20377 / 42 CFR 493.1251 / RFI 03.01.01.01),
+  phase_or_severity (Phase I, Phase II, Condition, Standard, RFI,
+                     NER risk 1-5),
+  description, surveyor_notes,
+  due_date (computed from accreditor-specific rule),
+  status (open, drafting, submitted, accepted, rejected-resubmit,
+          closed),
+  immediate_action, containment, root_cause,
+  corrective_action, preventive_action, monitoring_plan,
+  completion_date, signed_by, signed_at,
+  external_submission_ref (e-LAB ticket, JC Connect ID, CMS-2567
+                           page#)
+
+finding_attachments: finding_id, file, type
+  (SOP, training log, QC chart, ...)
+
+finding_history: finding_id, event, by_user, at, payload
+  (audit trail, immutable)
+
+finding_extension_requests: finding_id, requested_until, reason,
+  status
+```
+
+**Per-accreditor renderer:** each accreditor gets a template adapter
+that maps the common spine onto their required output. CAP gets a
+per-checklist-item PDF. TJC gets ESC-formatted output. CMS gets a
+CMS-2567 right-column populated PDF with all 5 POC elements
+explicitly labeled. AABB gets the NER A-M structure. Same data,
+different render.
+
+**v1 must-haves beyond the obvious CRUD:**
+
+1. **Due-date auto-computation** per accreditor rule (CAP =
+   inspection_date + 30; TJC = report_posted + 60; CMS-2567 =
+   receipt + 10; AABB = event-dependent). Calendar feed and email
+   reminders at T-14, T-7, T-3, T-1.
+2. **CMS-2567 renderer**: real left/right column PDF matching the
+   federal form. Forces all 5 POC elements before submit. This alone
+   is a big differentiator given the 14-day public-release rule.
+3. **Five-elements coach**: blocks submission and tells the user in
+   plain language which POC element is missing (same UX shape as
+   the CLIA validator hedge from PR #62).
+4. **Cross-link to VeritaCheck**: when a deficiency comes in citing
+   GEN.20377, surface the most recent VeritaCheck score for that
+   item ("Compliant last quarter, what changed?" or "At Risk —
+   here's the mitigation we already drafted"). This is the moat. No
+   standalone deficiency tool can do that.
+5. **Effectiveness check tickler**: 30/60/90 days after
+   completion_date, prompt the QA reviewer to attach monitoring
+   evidence. Labs almost always drop this; surveyors love to ding it
+   at the next inspection.
+
+**Risks to address before build:**
+
+- **Submission integration ceiling:** CAP e-LAB Suite and JC Connect
+  are proprietary, online-only, no public API. We help the lab
+  prepare and produce artifacts; they paste/upload. Marketing must
+  be honest — this is a response-authoring and tracking tool, not a
+  submission integration.
+- **PHI surface:** TJC's May 2024 update requires patient-impact
+  documentation. Strong recommendation: PHI-free zone. Narrative
+  only, no patient identifiers; UI nudge "refer by internal case
+  number, do not paste PHI." Avoids HIPAA exposure on a SaaS surface
+  that small labs will sign up for via self-serve checkout.
+- **Accreditor IP:** CMS-2567 is a federal form, public domain.
+  CAP/TJC/AABB templates are proprietary. Mirror required CONTENT
+  (mandated by regulation) without copying branded forms. Likely
+  worth a courtesy contact with CAP and TJC before launch — follows
+  the same vendor-side pattern as the WSLH outreach in #16.
+- **Module weight:** 3-5 weeks for v1 covering CMS-2567 + CAP
+  rendering only. Per-accreditor adapters added over time. Larger
+  than VeritaPT or VeritaCheck.
+
+**Scope tiers:**
+
+- **Tier 1 (v1, ~3-5 weeks):** findings table + CRUD UI + CAP
+  renderer + CMS-2567 renderer + 5-elements validator + due-date
+  computation + email reminders + VeritaCheck cross-link surface.
+  Single-accreditor-per-finding for v1; if a lab is dual-accredited
+  CAP+TJC, they create separate finding records.
+- **Tier 2 (v1.1, ~2-3 weeks):** TJC ESC renderer + COLA renderer +
+  effectiveness-check tickler + extension-request workflow.
+- **Tier 3 (v2, ~3-4 weeks):** AABB NER renderer + multi-accreditor
+  finding linking (one event, two cited bodies) + trend analytics
+  across multi-year inspections.
+- **Tier 4 (deferred, indefinite):** any actual portal integration
+  (e-LAB, JC Connect) only if the accreditor publishes an API.
+
+**Naming chosen:** VeritaResponse. Confirmed by user 2026-05-07.
+Alternates considered and rejected: VeritaResolve (more abstract),
+VeritaCAPA (insider jargon, conflicts with the federal CMS-2567 "CAP"
+acronym).
+
+**Source:** 2026-05-07 conference user request, COLA Nashville. User
+asked for thoughts and recommendations on adding a deficiency-response
+module. Online research conducted same session covering CAP, TJC,
+COLA, CMS-2567, AABB. URLs cited above.
+
+**Status:** Open. Decision to build = Yes. Sequencing = Decide
+later. User explicitly chose "decide later — just park for now" on
+2026-05-07; will revisit after week of 2026-05-11 once COLA pipeline
+is clearer and multi-lab Tier 2 sequencing is firmer.
+
+**Pre- vs post-COLA:** Post-COLA. Build is multi-week regardless;
+zero rationale for any code change before the conference ends.
+
+**Cross-references:**
+
+- Depends on multi-lab Tier 2 (#11, #12) for `lab_members` table —
+  findings should belong to a specific lab, not a user. Not a hard
+  block but cleaner if Tier 2 lands first.
+- Cross-link with VeritaCheck (existing module) is a v1 feature, not
+  a dependency.
+- Pattern for accreditor-courtesy outreach echoes #16 (WSLH email).
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
