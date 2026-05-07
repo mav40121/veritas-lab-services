@@ -9884,6 +9884,102 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Migrate custom-named instruments on a map to canonical catalog names ──
+  // POST /api/admin/migrate-map-instruments?secret=$ADMIN_SECRET
+  // Body: {
+  //   mapId: number,
+  //   renames: [{ from: string, to: string }],
+  //   dryRun?: boolean
+  // }
+  // Behavior (transactional):
+  //   For each rename {from, to}:
+  //     - Find rows in veritamap_instruments where map_id=mapId AND instrument_name=from.
+  //     - Update each row's instrument_name to `to` (preserves id, role, category, nickname, serial_number).
+  //     - Update all veritamap_tests rows on this map where instrument_source=from to instrument_source=to.
+  //   Returns a per-rename summary of rows changed and verifies invariants.
+  // Errors abort the whole transaction (no partial updates).
+  app.post("/api/admin/migrate-map-instruments", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { mapId, renames, dryRun } = req.body || {};
+    if (!mapId || typeof mapId !== "number") return res.status(400).json({ error: "mapId required" });
+    if (!Array.isArray(renames) || renames.length === 0) return res.status(400).json({ error: "renames required" });
+    for (const r of renames) {
+      if (!r || typeof r.from !== "string" || typeof r.to !== "string") {
+        return res.status(400).json({ error: "each rename needs {from, to}" });
+      }
+    }
+    try {
+      const sqlite = (db as any).$client;
+      // Verify map exists
+      const mapRow = sqlite.prepare("SELECT id, user_id, name FROM veritamap_maps WHERE id=?").get(mapId);
+      if (!mapRow) return res.status(404).json({ error: "map_not_found", mapId });
+
+      const summary: any[] = [];
+      const beforeCounts = {
+        instruments: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_instruments WHERE map_id=?").get(mapId) as { n: number }).n,
+        tests: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_tests WHERE map_id=?").get(mapId) as { n: number }).n,
+      };
+
+      const tx = sqlite.transaction(() => {
+        for (const { from, to } of renames) {
+          const matchedInstruments = sqlite.prepare(
+            "SELECT id, role, category, nickname, serial_number FROM veritamap_instruments WHERE map_id=? AND instrument_name=?"
+          ).all(mapId, from);
+          const matchedTests = sqlite.prepare(
+            "SELECT id, analyte FROM veritamap_tests WHERE map_id=? AND instrument_source=?"
+          ).all(mapId, from);
+
+          if (!dryRun) {
+            const instUpd = sqlite.prepare(
+              "UPDATE veritamap_instruments SET instrument_name=? WHERE map_id=? AND instrument_name=?"
+            ).run(to, mapId, from);
+            const testUpd = sqlite.prepare(
+              "UPDATE veritamap_tests SET instrument_source=? WHERE map_id=? AND instrument_source=?"
+            ).run(to, mapId, from);
+            summary.push({
+              from, to,
+              instrumentsRenamed: instUpd.changes,
+              testsRepointed: testUpd.changes,
+              matchedInstruments,
+              matchedTests,
+            });
+          } else {
+            summary.push({
+              from, to,
+              wouldRename: matchedInstruments.length,
+              wouldRepoint: matchedTests.length,
+              matchedInstruments,
+              matchedTests,
+            });
+          }
+        }
+      });
+      tx();
+
+      const afterCounts = {
+        instruments: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_instruments WHERE map_id=?").get(mapId) as { n: number }).n,
+        tests: (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_tests WHERE map_id=?").get(mapId) as { n: number }).n,
+      };
+
+      // Invariant: counts on this map should not change
+      if (!dryRun && (beforeCounts.instruments !== afterCounts.instruments || beforeCounts.tests !== afterCounts.tests)) {
+        return res.status(500).json({
+          error: "row_count_changed",
+          before: beforeCounts,
+          after: afterCounts,
+          summary,
+        });
+      }
+
+      console.log('[migrate-map-instruments] mapId=%d dryRun=%s before=%j after=%j', mapId, !!dryRun, beforeCounts, afterCounts);
+      res.json({ ok: true, mapId, mapName: (mapRow as any).name, dryRun: !!dryRun, before: beforeCounts, after: afterCounts, summary });
+    } catch (err: any) {
+      console.error('[migrate-map-instruments] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: Seed all remaining demo modules for Michael's lab ──
   // POST /api/admin/seed-all-modules?secret=$ADMIN_SECRET
   // Fills PI entries, productivity, veritatrack signoffs, competency
