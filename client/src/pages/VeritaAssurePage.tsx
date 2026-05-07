@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
   ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
+  TestTubes,
 } from "lucide-react";
 
 const MODULES = [
@@ -97,6 +98,17 @@ const MODULES = [
     badgeColor: "emerald",
     icon: CalendarDays,
     color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20",
+  },
+  {
+    href: "/veritapt",
+    label: "VeritaPT™",
+    desc: "Proficiency Testing Tracker",
+    detail:
+      "Reads your VeritaMap™ test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP and API enrollments per category and year.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: TestTubes,
+    color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
   },
 ];
 
