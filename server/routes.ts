@@ -7640,6 +7640,212 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, deleted: req.params.id });
   });
 
+  // ── Bulk import: download Excel template ──
+  app.get("/api/staff/employees/template", authMiddleware, async (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const lab = (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    try {
+      const { buildStaffImportWorkbook } = await import("./staffBulkImport");
+      const buf = await buildStaffImportWorkbook({ labName: lab?.lab_name });
+      const filename = `VeritaStaff_Bulk_Import_Template.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[staff/template] error:", err);
+      res.status(500).json({ error: err.message || "template_generation_failed" });
+    }
+  });
+
+  // ── Bulk import: dry-run preview ──
+  // POST /api/staff/employees/bulk-preview  (multipart/form-data, field 'file')
+  // Returns { rows: ValidatedRow[], summary: {...}, fatal?: string }
+  // No DB writes.
+  app.post("/api/staff/employees/bulk-preview", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'),
+    (() => {
+      const m = require("multer");
+      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+    })(),
+    async (req: any, res) => {
+      if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+      const dataUserId = req.ownerUserId ?? req.user.userId;
+      const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+      if (!lab) return res.status(400).json({ error: "Set up your lab first" });
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const { parseStaffWorkbook, validateRows } = await import("./staffBulkImport");
+        const parsed = await parseStaffWorkbook(req.file.buffer);
+        if (parsed.fatal) return res.status(400).json({ fatal: parsed.fatal, rows: [], summary: { total: 0, ok: 0, warning: 0, error: 0, willInsert: 0, willUpdate: 0 } });
+        const existing = (db as any).$client.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE lab_id = ? AND status = 'active'").all(lab.id) as any[];
+        const validated = validateRows(parsed.rows, { existingEmployees: existing });
+        const summary = {
+          total: validated.length,
+          ok: validated.filter((v) => v.status === "ok").length,
+          warning: validated.filter((v) => v.status === "warning").length,
+          error: validated.filter((v) => v.status === "error").length,
+          willInsert: validated.filter((v) => v.willInsert).length,
+          willUpdate: validated.filter((v) => v.willUpdate).length,
+        };
+        res.json({ rows: validated, summary });
+      } catch (err: any) {
+        console.error("[staff/bulk-preview] error:", err);
+        res.status(500).json({ error: err.message || "preview_failed" });
+      }
+    }
+  );
+
+  // ── Bulk import: commit ──
+  // POST /api/staff/employees/bulk-commit  (multipart/form-data, field 'file')
+  // Re-parses, re-validates, then inserts/updates inside a single transaction.
+  // If ANY row has status='error' or any insert/update throws, the entire batch rolls back.
+  app.post("/api/staff/employees/bulk-commit", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'),
+    (() => {
+      const m = require("multer");
+      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+    })(),
+    async (req: any, res) => {
+      if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+      const dataUserId = req.ownerUserId ?? req.user.userId;
+      const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+      if (!lab) return res.status(400).json({ error: "Set up your lab first" });
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const { parseStaffWorkbook, validateRows } = await import("./staffBulkImport");
+        const parsed = await parseStaffWorkbook(req.file.buffer);
+        if (parsed.fatal) return res.status(400).json({ fatal: parsed.fatal });
+        const existing = (db as any).$client.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE lab_id = ? AND status = 'active'").all(lab.id) as any[];
+        const validated = validateRows(parsed.rows, { existingEmployees: existing });
+
+        const errorRows = validated.filter((v) => v.status === "error");
+        if (errorRows.length > 0) {
+          return res.status(400).json({
+            error: "validation_errors",
+            message: `Cannot commit: ${errorRows.length} row(s) have errors. Fix them and re-upload.`,
+            errorRows: errorRows.map((r) => ({ rowNumber: r.rowNumber, issues: r.issues })),
+          });
+        }
+
+        const now = new Date().toISOString();
+        const sqlite = (db as any).$client;
+        const includesTJCorCAP = ["TJC", "CAP"].includes(lab.accreditation_body);
+        const includesNYS = lab.includes_nys === 1;
+
+        const computeSchedule = (hireDate: string | null) => {
+          const hire = hireDate ? new Date(hireDate) : new Date();
+          let sixMonthDue: string | null = null;
+          let nysSixMonthDue: string | null = null;
+          if (includesTJCorCAP && !includesNYS) {
+            sixMonthDue = null;
+          } else {
+            const sixFromHire = new Date(hire);
+            sixFromHire.setMonth(sixFromHire.getMonth() + 6);
+            sixMonthDue = sixFromHire.toISOString().split("T")[0];
+          }
+          if (includesNYS) {
+            const nysSix = new Date(hire);
+            nysSix.setMonth(nysSix.getMonth() + 6);
+            nysSixMonthDue = nysSix.toISOString().split("T")[0];
+          }
+          if (includesTJCorCAP && includesNYS) {
+            const sixFromHire = new Date(hire);
+            sixFromHire.setMonth(sixFromHire.getMonth() + 6);
+            sixMonthDue = sixFromHire.toISOString().split("T")[0];
+          }
+          return { sixMonthDue, nysSixMonthDue };
+        };
+
+        const insertEmpStmt = sqlite.prepare(
+          "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        );
+        const updateEmpStmt = sqlite.prepare(
+          "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=? AND lab_id=?"
+        );
+        const deleteRolesStmt = sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?");
+        const insertRoleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
+        const insertScheduleStmt = sqlite.prepare(
+          "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
+        );
+        const hasScheduleStmt = sqlite.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?");
+
+        const results: { rowNumber: number; action: "insert" | "update"; employeeId: number }[] = [];
+        const beforeAfterAudit: any[] = [];
+
+        const tx = sqlite.transaction(() => {
+          for (const r of validated) {
+            const p = r.parsed;
+            if (r.willInsert) {
+              const result = insertEmpStmt.run(
+                lab.id, dataUserId, p.lastName, p.firstName,
+                p.middleInitial ? p.middleInitial.charAt(0) : null,
+                p.title, p.hireDate, p.qualificationsText, p.highestComplexity, p.performsTesting,
+                "active", now, now
+              );
+              const empId = Number(result.lastInsertRowid);
+              for (const role of p.roles) {
+                insertRoleStmt.run(empId, lab.id, role.role, role.specialtyNumber);
+              }
+              if (p.performsTesting === 1) {
+                const sched = computeSchedule(p.hireDate);
+                insertScheduleStmt.run(empId, lab.id, sched.sixMonthDue, sched.nysSixMonthDue);
+              }
+              results.push({ rowNumber: r.rowNumber, action: "insert", employeeId: empId });
+              beforeAfterAudit.push({ rowNumber: r.rowNumber, action: "insert", employeeId: empId, parsed: p });
+            } else if (r.willUpdate && p.employeeId) {
+              const before = sqlite.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(p.employeeId, lab.id);
+              if (!before) throw new Error(`Row ${r.rowNumber}: employee #${p.employeeId} not found in lab`);
+              updateEmpStmt.run(
+                p.lastName, p.firstName,
+                p.middleInitial ? p.middleInitial.charAt(0) : null,
+                p.title, p.hireDate, p.qualificationsText, p.highestComplexity, p.performsTesting,
+                now, p.employeeId, lab.id
+              );
+              deleteRolesStmt.run(p.employeeId);
+              for (const role of p.roles) {
+                insertRoleStmt.run(p.employeeId, lab.id, role.role, role.specialtyNumber);
+              }
+              // Add schedule if newly performs testing and none exists
+              if (p.performsTesting === 1) {
+                const has = hasScheduleStmt.get(p.employeeId);
+                if (!has) {
+                  const sched = computeSchedule(p.hireDate);
+                  insertScheduleStmt.run(p.employeeId, lab.id, sched.sixMonthDue, sched.nysSixMonthDue);
+                }
+              }
+              results.push({ rowNumber: r.rowNumber, action: "update", employeeId: p.employeeId });
+              beforeAfterAudit.push({ rowNumber: r.rowNumber, action: "update", employeeId: p.employeeId, before, after: p });
+            }
+            // skip rows that are neither willInsert nor willUpdate (shouldn't happen if validation passed)
+          }
+        });
+        tx();
+
+        logAudit({
+          userId: req.userId,
+          ownerUserId: req.ownerUserId ?? req.userId,
+          module: "veritastaff",
+          action: "create",
+          entityType: "bulk_import",
+          entityId: String(lab.id),
+          entityLabel: `Bulk import (${results.length} rows)`,
+          before: null,
+          after: { count: results.length, rows: beforeAfterAudit },
+          ipAddress: req.ip,
+        });
+
+        res.json({
+          ok: true,
+          inserted: results.filter((r) => r.action === "insert").length,
+          updated: results.filter((r) => r.action === "update").length,
+          results,
+        });
+      } catch (err: any) {
+        console.error("[staff/bulk-commit] error:", err);
+        res.status(500).json({ error: err.message || "commit_failed", message: "All changes rolled back. No employees were imported." });
+      }
+    }
+  );
+
   // Update competency schedule
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });

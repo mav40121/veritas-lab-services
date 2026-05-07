@@ -20,7 +20,7 @@ import {
 import {
   Plus, Trash2, ChevronLeft, Users, Lock, FileDown, Building2,
   CheckCircle2, AlertTriangle, Clock, UserPlus, Edit2, Calendar,
-  Download, X,
+  Download, X, Upload, FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -140,6 +140,7 @@ export default function VeritaStaffAppPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCompetency, setShowCompetency] = useState<Employee | null>(null);
   const [generating209, setGenerating209] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   // Auth + plan check
   const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
@@ -225,6 +226,9 @@ export default function VeritaStaffAppPage() {
               <Button variant="outline" size="sm" onClick={() => setShowAddEmployee(true)} disabled={readOnly}>
                 <UserPlus size={14} className="mr-1.5" /> Add Employee
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowBulkImport(true)} disabled={readOnly}>
+                <Upload size={14} className="mr-1.5" /> Bulk Import
+              </Button>
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
                 <FileDown size={14} className="mr-1.5" /> {generating209 ? "Generating..." : "Generate CMS 209"}
               </Button>
@@ -302,6 +306,15 @@ export default function VeritaStaffAppPage() {
           onOpenChange={(open) => { if (!open) setShowCompetency(null); }}
           employee={showCompetency}
           lab={lab!}
+        />
+      )}
+
+      {/* Bulk Import Dialog */}
+      {lab && (
+        <BulkImportDialog
+          open={showBulkImport}
+          onOpenChange={setShowBulkImport}
+          lab={lab}
         />
       )}
     </div>
@@ -995,5 +1008,273 @@ function MilestoneCard({ label, due, completed, signedBy }: { label: string; due
       {completed && <p className="text-xs text-emerald-600">Completed: {completed}</p>}
       {signedBy && <p className="text-xs text-muted-foreground">By: {signedBy}</p>}
     </div>
+  );
+}
+
+// ── Bulk Import Dialog ──────────────────────────────────────────────────
+interface BulkValidatedRow {
+  rowNumber: number;
+  status: "ok" | "warning" | "error";
+  parsed: {
+    employeeId: number | null;
+    lastName: string;
+    firstName: string;
+    middleInitial: string | null;
+    title: string | null;
+    hireDate: string | null;
+    qualificationsText: string | null;
+    highestComplexity: string;
+    performsTesting: number;
+    roles: { role: string; specialtyNumber: number | null }[];
+  };
+  issues: { field?: string; severity: "error" | "warning"; message: string }[];
+  willInsert: boolean;
+  willUpdate: boolean;
+  duplicateOfEmployeeId?: number | null;
+}
+
+interface BulkPreview {
+  rows: BulkValidatedRow[];
+  summary: { total: number; ok: number; warning: number; error: number; willInsert: number; willUpdate: number };
+  fatal?: string;
+}
+
+function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChange: (o: boolean) => void; lab: Lab }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<BulkPreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setFile(null);
+      setPreview(null);
+      setPreviewing(false);
+      setCommitting(false);
+    }
+  }, [open]);
+
+  async function handleDownloadTemplate() {
+    setDownloadingTemplate(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/employees/template`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "VeritaStaff_Bulk_Import_Template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Could not download template", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  }
+
+  async function handlePreview() {
+    if (!file) return;
+    setPreviewing(true);
+    setPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API_BASE}/api/staff/employees/bulk-preview`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.fatal) {
+          setPreview({ rows: [], summary: { total: 0, ok: 0, warning: 0, error: 0, willInsert: 0, willUpdate: 0 }, fatal: data.fatal });
+        } else {
+          throw new Error(data.error || data.message || "Preview failed");
+        }
+      } else {
+        setPreview(data);
+      }
+    } catch (err: any) {
+      toast({ title: "Preview failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function handleCommit() {
+    if (!file || !preview || preview.summary.error > 0) return;
+    setCommitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API_BASE}/api/staff/employees/bulk-commit`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Commit failed");
+      toast({
+        title: "Import complete",
+        description: `${data.inserted} added, ${data.updated} updated.`,
+      });
+      qc.invalidateQueries({ queryKey: ["/api/staff/employees"] });
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setCommitting(false);
+    }
+  }
+
+  const canCommit = !!preview && preview.summary.error === 0 && (preview.summary.willInsert + preview.summary.willUpdate) > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Bulk Import Staff</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <FileSpreadsheet size={20} className="text-primary mt-0.5" />
+                <div className="text-sm flex-1">
+                  <p className="font-medium">Step 1. Download the template</p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    The template has dropdowns and instructions built in. Have your lab fill in one row per employee, save as .xlsx, and upload below.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleDownloadTemplate} disabled={downloadingTemplate}>
+                  <Download size={14} className="mr-1.5" />
+                  {downloadingTemplate ? "Preparing..." : "Download template"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <Upload size={20} className="text-primary mt-0.5" />
+                <div className="text-sm flex-1">
+                  <p className="font-medium">Step 2. Upload the completed file</p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    We will validate every row before saving anything. You can review the preview below and only commit if it looks right.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => { setFile(e.target.files?.[0] || null); setPreview(null); }}
+                />
+                <Button size="sm" onClick={handlePreview} disabled={!file || previewing}>
+                  {previewing ? "Validating..." : "Preview"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {preview?.fatal && (
+            <Card className="border-destructive">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={18} className="text-destructive mt-0.5" />
+                  <div>
+                    <p className="font-medium text-sm text-destructive">Could not read the file</p>
+                    <p className="text-xs text-muted-foreground mt-1">{preview.fatal}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {preview && !preview.fatal && (
+            <Card>
+              <CardContent className="py-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <span><strong>{preview.summary.total}</strong> rows</span>
+                    <span className="text-emerald-600"><strong>{preview.summary.ok}</strong> ok</span>
+                    <span className="text-amber-600"><strong>{preview.summary.warning}</strong> with warnings</span>
+                    <span className="text-destructive"><strong>{preview.summary.error}</strong> with errors</span>
+                    <span className="text-muted-foreground">|</span>
+                    <span><strong>{preview.summary.willInsert}</strong> to add</span>
+                    <span><strong>{preview.summary.willUpdate}</strong> to update</span>
+                  </div>
+                  <Button size="sm" onClick={handleCommit} disabled={!canCommit || committing}>
+                    {committing ? "Importing..." : preview.summary.error > 0 ? "Fix errors first" : "Commit import"}
+                  </Button>
+                </div>
+
+                <div className="border rounded-md overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left">Row</th>
+                        <th className="px-2 py-1.5 text-left">Status</th>
+                        <th className="px-2 py-1.5 text-left">Action</th>
+                        <th className="px-2 py-1.5 text-left">Name</th>
+                        <th className="px-2 py-1.5 text-left">Complexity</th>
+                        <th className="px-2 py-1.5 text-left">Tests?</th>
+                        <th className="px-2 py-1.5 text-left">Roles</th>
+                        <th className="px-2 py-1.5 text-left">Issues</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.map((r) => {
+                        const rowClass =
+                          r.status === "error" ? "bg-destructive/5" :
+                          r.status === "warning" ? "bg-amber-50 dark:bg-amber-900/10" :
+                          "";
+                        const action = r.willUpdate ? "Update" : r.willInsert ? "Add" : "Skip";
+                        const roleSummary = Array.from(new Set(r.parsed.roles.map((x) => x.role))).join(", ") || "-";
+                        return (
+                          <tr key={r.rowNumber} className={`border-t ${rowClass}`}>
+                            <td className="px-2 py-1.5">{r.rowNumber}</td>
+                            <td className="px-2 py-1.5">
+                              {r.status === "ok" && <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">OK</Badge>}
+                              {r.status === "warning" && <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">Warning</Badge>}
+                              {r.status === "error" && <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">Error</Badge>}
+                            </td>
+                            <td className="px-2 py-1.5">{action}</td>
+                            <td className="px-2 py-1.5">
+                              {r.parsed.lastName || r.parsed.firstName ? `${r.parsed.lastName}, ${r.parsed.firstName}` : <span className="text-muted-foreground">-</span>}
+                            </td>
+                            <td className="px-2 py-1.5">{r.parsed.highestComplexity}</td>
+                            <td className="px-2 py-1.5">{r.parsed.performsTesting === 1 ? "Yes" : "No"}</td>
+                            <td className="px-2 py-1.5 font-mono text-xs">{roleSummary}</td>
+                            <td className="px-2 py-1.5">
+                              {r.issues.length === 0 ? <span className="text-muted-foreground">-</span> : (
+                                <ul className="space-y-0.5">
+                                  {r.issues.map((iss, i) => (
+                                    <li key={i} className={iss.severity === "error" ? "text-destructive" : "text-amber-600"}>
+                                      {iss.field ? `${iss.field}: ` : ""}{iss.message}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
