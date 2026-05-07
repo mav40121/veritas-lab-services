@@ -373,6 +373,81 @@ slightly higher demo risk than CLIA validation alone.
 
 ---
 
+### 15. Add WSLH PT as third PT vendor with full catalog mapping
+
+**What:** Today VeritaPT recognizes only two named vendors
+(`pt_enrollments_v2.vendor` is `CHECK(vendor IN ('CAP', 'API', 'Other'))`).
+WSLH PT (Wisconsin State Laboratory of Hygiene Proficiency Testing) is
+a CMS-approved PT provider accepted by CAP, TJC, and COLA, and the
+user met them in person at the COLA Nashville 2026 booth on
+2026-05-07 (trade-show business card + UTM-tagged catalog URL
+confirms direct contact). User's stated goal: map their products to
+VeritaMap so VeritaPT can verify that a WSLH order line actually
+covers the analytes a lab runs, same as CAP and API today.
+
+**Why it works for our matcher:** WSLH publishes module/program codes
+(e.g., 1310-1322 = general chem panel, 1260 = cardiac BNP/troponin,
+1080 = blood lead, 1524 = HbA1c, 4190 = HBV/HCV serology, 2230-2370
+= hematology by instrument family). Each module is a stable
+analyte-list bundle that maps cleanly onto our existing `pt_category`
+strings. No new categories needed; the coverage matcher in
+`computePTCoverage()` (server/routes.ts ~line 6411) already keys on
+`pt_category`, not vendor.
+
+**Fix shape (Tier M, ~½ day):**
+
+1. Migration: drop the `CHECK(vendor IN ('CAP','API','Other'))`
+   constraint on `pt_enrollments_v2`; replace with
+   `CHECK(vendor IN ('CAP','API','WSLH','Other'))`. SQLite requires
+   table rebuild for CHECK changes — do via
+   `CREATE TABLE pt_enrollments_v2_new ... ; INSERT SELECT ... ; DROP ; RENAME`
+   pattern, idempotent like the other db.ts migrations.
+2. Add `'WSLH'` to `users.preferred_pt_vendor` allowed values
+   (currently free-text, just update the AccountSettings dropdown +
+   any UI guards).
+3. Create `shared/wslhCatalog.ts` mirroring the structure of the
+   existing `cliaAnalytes` data: `{ programCode, programName,
+   ptCategory, analytes[], shipmentsPerYear, samplesPerShipment,
+   notes }`. Source: WSLH 2022 Clinical Catalog PDF
+   (https://www.slh.wisc.edu/wp-content/uploads/2021/08/WSLHPT_2022_Clinical_Catalog-1.pdf)
+   plus 2025 CMS regulated-analyte updates
+   (https://wslhpt.org/clia-and-proficiency-testing-changes/). Refresh
+   to 2026 catalog when WSLH publishes it ("Coming Soon" on their
+   page as of 2026-05-07).
+4. VeritaPT enrollment form: when vendor=WSLH, surface a program-code
+   autocomplete sourced from `wslhCatalog.ts`. Selecting a code
+   auto-fills `program_name` and `pt_category`.
+5. Render WSLH alongside CAP and API anywhere vendor logos appear
+   (account settings, VeritaPT dashboard, coverage report PDFs).
+6. Unit test the catalog: every entry must have a `pt_category` that
+   exists in our coverage map; no orphan categories.
+
+**Out of scope for Tier M (deferred to Tier L or later):** parsing
+WSLH enrollment-quote PDFs/CSVs to bulk-create enrollments. Manual
+entry by program code is fine for v1.
+
+**Source:** 2026-05-07 conference user request, WSLH catalog URL
+shared via business card with UTM tags `utm_source=tradeshow`
+`utm_medium=business_card` `utm_campaign=catalog_page`. User explicit
+goal: "map their products to our veritamap and use veritapt to
+document what PT materials were purchased to ensure full PT coverage
+for the site."
+
+**Status:** Open. Decision recorded 2026-05-07. Build deferred to
+post-COLA week of 2026-05-11 to honor the conference deploy freeze
+(same rationale as items #11, #12, #14).
+
+**Pre- vs post-COLA:** Post-COLA. CHECK constraint change requires
+table rebuild — non-trivial migration during a live demo week is
+out. No customer is blocked today; vendor=Other works as a
+placeholder if any booth lab signs up before the build ships.
+
+**Follow-up artifact owed (separate task):** WSLH partnership
+follow-up email template tied to the booth meeting. Not in the
+codebase scope; user can request when ready.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
