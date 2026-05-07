@@ -22435,9 +22435,17 @@
   "Cepheid GeneXpert Infinity": {
     "vendor": "Cepheid",
     "category": "Molecular",
-    "testCount": 14,
+    "testCount": 42,
     "tests": {
       "SARS-CoV-2 (COVID-19)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress SARS-CoV-2 plus": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
@@ -22449,7 +22457,19 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
+      "Xpress Flu (A/B)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu/RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
       "RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Strep A": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
@@ -22461,15 +22481,47 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "C. difficile": {
+      "Clostridioides difficile (C. difficile)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "MRSA": {
+      "Xpert C. difficile/Epi": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA NxG (active surveillance)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA SSTI (skin & soft tissue)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA Blood Culture (BC)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "vanA / vanB (VRE)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "MTB/RIF (Tuberculosis)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/XDR": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
       },
@@ -22477,30 +22529,98 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
+      "Trichomonas vaginalis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "TV + MG (Trich + M. genitalium)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HSV 1 & 2": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk + 16/18/45 genotype)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
       "HIV-1 Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Qualitative (early infant diagnosis)": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
       },
       "HCV Viral Load": {
-        "complexity": "HIGH",
-        "specialty": "Microbiology"
-      },
-      "Norovirus": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "Carbapenem Resistance (carba-R)": {
+      "HCV Viral Load Fingerstick": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mpox (monkeypox / non-variola orthopox)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Ebola virus (Xpert Ebola)": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
+      },
+      "Factor II (G20210A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Factor V Leiden (G1691A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "BCR-ABL Ultra (CML monitoring)": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "BCR-ABL p210 / p190": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
       }
     }
   },
   "Cepheid GeneXpert Xpress": {
     "vendor": "Cepheid",
     "category": "Molecular",
-    "testCount": 14,
+    "testCount": 42,
     "tests": {
       "SARS-CoV-2 (COVID-19)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress SARS-CoV-2 plus": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
@@ -22512,7 +22632,19 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
+      "Xpress Flu (A/B)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu/RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
       "RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Strep A": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
@@ -22524,15 +22656,47 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "C. difficile": {
+      "Clostridioides difficile (C. difficile)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "MRSA": {
+      "Xpert C. difficile/Epi": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA NxG (active surveillance)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA SSTI (skin & soft tissue)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA Blood Culture (BC)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "vanA / vanB (VRE)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "MTB/RIF (Tuberculosis)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/XDR": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
       },
@@ -22540,30 +22704,98 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
+      "Trichomonas vaginalis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "TV + MG (Trich + M. genitalium)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HSV 1 & 2": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk + 16/18/45 genotype)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
       "HIV-1 Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Qualitative (early infant diagnosis)": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
       },
       "HCV Viral Load": {
-        "complexity": "HIGH",
-        "specialty": "Microbiology"
-      },
-      "Norovirus": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "Carbapenem Resistance (carba-R)": {
+      "HCV Viral Load Fingerstick": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mpox (monkeypox / non-variola orthopox)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Ebola virus (Xpert Ebola)": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
+      },
+      "Factor II (G20210A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Factor V Leiden (G1691A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "BCR-ABL Ultra (CML monitoring)": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "BCR-ABL p210 / p190": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
       }
     }
   },
   "Cepheid GeneXpert XVI": {
     "vendor": "Cepheid",
     "category": "Molecular",
-    "testCount": 14,
+    "testCount": 42,
     "tests": {
       "SARS-CoV-2 (COVID-19)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress SARS-CoV-2 plus": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
@@ -22575,7 +22807,19 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
+      "Xpress Flu (A/B)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu/RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
       "RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Strep A": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
@@ -22587,15 +22831,47 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "C. difficile": {
+      "Clostridioides difficile (C. difficile)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "MRSA": {
+      "Xpert C. difficile/Epi": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA NxG (active surveillance)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA SSTI (skin & soft tissue)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA Blood Culture (BC)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "vanA / vanB (VRE)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "MTB/RIF (Tuberculosis)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/XDR": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
       },
@@ -22603,21 +22879,81 @@
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
+      "Trichomonas vaginalis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "TV + MG (Trich + M. genitalium)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HSV 1 & 2": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk + 16/18/45 genotype)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
       "HIV-1 Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Qualitative (early infant diagnosis)": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
       },
       "HCV Viral Load": {
-        "complexity": "HIGH",
-        "specialty": "Microbiology"
-      },
-      "Norovirus": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
-      "Carbapenem Resistance (carba-R)": {
+      "HCV Viral Load Fingerstick": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mpox (monkeypox / non-variola orthopox)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Ebola virus (Xpert Ebola)": {
         "complexity": "HIGH",
         "specialty": "Microbiology"
+      },
+      "Factor II (G20210A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Factor V Leiden (G1691A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "BCR-ABL Ultra (CML monitoring)": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "BCR-ABL p210 / p190": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
       }
     }
   },
@@ -26473,6 +26809,531 @@
       "Body fluid total protein (refractometric)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Cepheid GeneXpert IV": {
+    "vendor": "Cepheid",
+    "category": "Molecular",
+    "testCount": 42,
+    "tests": {
+      "SARS-CoV-2 (COVID-19)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress SARS-CoV-2 plus": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza B": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu (A/B)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu/RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Strep A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Strep A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Strep B (GBS)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Clostridioides difficile (C. difficile)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpert C. difficile/Epi": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA NxG (active surveillance)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA SSTI (skin & soft tissue)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA Blood Culture (BC)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "vanA / vanB (VRE)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF (Tuberculosis)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/XDR": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "CT/NG (Chlamydia/Gonorrhea)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Trichomonas vaginalis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "TV + MG (Trich + M. genitalium)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HSV 1 & 2": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk + 16/18/45 genotype)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Qualitative (early infant diagnosis)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HCV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HCV Viral Load Fingerstick": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mpox (monkeypox / non-variola orthopox)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Ebola virus (Xpert Ebola)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Factor II (G20210A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Factor V Leiden (G1691A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "BCR-ABL Ultra (CML monitoring)": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "BCR-ABL p210 / p190": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Cepheid GeneXpert II": {
+    "vendor": "Cepheid",
+    "category": "Molecular",
+    "testCount": 42,
+    "tests": {
+      "SARS-CoV-2 (COVID-19)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress SARS-CoV-2 plus": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza B": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu (A/B)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu/RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Strep A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Strep A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Strep B (GBS)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Clostridioides difficile (C. difficile)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpert C. difficile/Epi": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA NxG (active surveillance)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA SSTI (skin & soft tissue)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA Blood Culture (BC)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "vanA / vanB (VRE)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF (Tuberculosis)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/XDR": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "CT/NG (Chlamydia/Gonorrhea)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Trichomonas vaginalis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "TV + MG (Trich + M. genitalium)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HSV 1 & 2": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk + 16/18/45 genotype)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Qualitative (early infant diagnosis)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HCV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HCV Viral Load Fingerstick": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mpox (monkeypox / non-variola orthopox)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Ebola virus (Xpert Ebola)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Factor II (G20210A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Factor V Leiden (G1691A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "BCR-ABL Ultra (CML monitoring)": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "BCR-ABL p210 / p190": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Cepheid GeneXpert Edge": {
+    "vendor": "Cepheid",
+    "category": "Molecular",
+    "testCount": 42,
+    "tests": {
+      "SARS-CoV-2 (COVID-19)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress SARS-CoV-2 plus": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza B": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu (A/B)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Flu/RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpress Strep A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Strep A": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Strep B (GBS)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Clostridioides difficile (C. difficile)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Xpert C. difficile/Epi": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA NxG (active surveillance)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA SSTI (skin & soft tissue)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA/SA Blood Culture (BC)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "vanA / vanB (VRE)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF (Tuberculosis)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/RIF Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MTB/XDR": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "CT/NG (Chlamydia/Gonorrhea)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Trichomonas vaginalis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "TV + MG (Trich + M. genitalium)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HSV 1 & 2": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk + 16/18/45 genotype)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 Qualitative (early infant diagnosis)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HCV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HCV Viral Load Fingerstick": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mpox (monkeypox / non-variola orthopox)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Ebola virus (Xpert Ebola)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Factor II (G20210A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Factor V Leiden (G1691A) genotype": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "BCR-ABL Ultra (CML monitoring)": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "BCR-ABL p210 / p190": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
       }
     }
   }
