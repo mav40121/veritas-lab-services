@@ -696,6 +696,22 @@ if (!colNames.includes("subscription_status")) {
   sqlite.exec("UPDATE users SET subscription_status = 'active' WHERE plan IN ('starter', 'professional', 'lab', 'complete', 'annual')");
 }
 
+// ── Freemium-cap loophole fix (May 2026) ──────────────────────────────────────
+// Pre-existing accounts (granted free for 1 year, seat invitees, internal
+// testers) must not be retroactively capped. New signups going forward who pick
+// a paid plan label without paying must hit the 4-instrument / 10-analyte cap.
+// `grandfathered` is set ONCE at migration time on every account that exists
+// at that moment. Any user created after this migration runs starts with
+// grandfathered = 0 and is subject to the cap unless their owner has
+// subscription_status='active' or grandfathered=1.
+if (!colNames.includes("grandfathered")) {
+  sqlite.exec("ALTER TABLE users ADD COLUMN grandfathered INTEGER NOT NULL DEFAULT 0");
+  // Backfill: every existing user gets grandfathered = 1 EXCEPT id = 28
+  // (drsmohsin@yahoo.com — Sheher Mohsin, signed up Apr 30, never returned;
+  // serves as the canonical "new freemium signup" test case).
+  sqlite.exec("UPDATE users SET grandfathered = 1 WHERE id != 28");
+}
+
 // Invoice requests table — ALTER migrations for upgrades from older schemas
 const invoiceCols = sqlite.prepare("PRAGMA table_info(invoice_requests)").all() as { name: string }[];
 const invoiceColNames = invoiceCols.map((c) => c.name);
