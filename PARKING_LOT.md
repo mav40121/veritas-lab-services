@@ -444,7 +444,66 @@ placeholder if any booth lab signs up before the build ships.
 
 **Follow-up artifact owed (separate task):** WSLH partnership
 follow-up email template tied to the booth meeting. Not in the
-codebase scope; user can request when ready.
+codebase scope; user can request when ready. (Now tracked as #16.)
+
+---
+
+### 16. WSLH PT booth follow-up email
+
+**What:** User met WSLH Proficiency Testing in person at COLA Nashville
+2026 on 2026-05-07 (trade-show business card, UTM-tagged catalog URL
+`utm_source=tradeshow&utm_medium=business_card&utm_campaign=catalog_page`).
+A follow-up email is owed to the WSLH contact within the standard
+post-conference window (~5-10 business days from booth meeting), pegging
+the relationship before the warmth fades.
+
+**Why this is parked, not done now:** User is still on the floor at
+COLA. The right email depends on:
+
+1. The exact WSLH contact name / title / email from the business card
+   (user has the card; not in our system).
+2. Whether the conversation was vendor-partnership intent (we list them
+   as a recognized PT vendor in VeritaPT; they refer mutual labs back
+   to us) or pure information-gathering ("here's our catalog, take a
+   look").
+3. Whether user wants to hand them anything tangible in the email
+   (e.g., a screenshot of the WSLH card on the upcoming
+   `/veritaassure` catalog, or a short Loom of the VeritaPT coverage
+   matcher) — some of which doesn't exist until #15 ships the week of
+   2026-05-11.
+
+**Fix shape (when user is ready, post-COLA):**
+
+- User shares: WSLH contact name, email, title, and 1-2 sentences on
+  what was actually discussed at the booth.
+- Draft a short (~150-200 word), no-em-dash email that:
+  - Thanks them for the conversation by name.
+  - States the integration we're committing to: WSLH as a recognized
+    third PT vendor in VeritaPT, with program-code catalog mapping so
+    a WSLH order line auto-credits coverage for the lab's analytes.
+  - Names a target ship window (week of 2026-05-11, contingent on
+    review).
+  - Asks one specific question: confirm we're allowed to use the WSLH
+    name + module codes in product UI, and whether they have an API
+    or downloadable enrollment-quote schema we should target for the
+    Tier L parser later.
+  - Closes with a soft co-marketing ask (joint blurb on our
+    `/veritaassure` page, mutual referral) only if the booth
+    conversation went that direction.
+- Reply-to: michael@veritaslabservices.com.
+- Sign with full credential block (MS, MBA, MLS(ASCP), CPHQ).
+- Confirm before send (per standing rule on outbound communications).
+
+**Source:** 2026-05-07 conference user request; user said "Parking
+lot the email" at 14:52 CDT after the WSLH catalog discussion.
+
+**Status:** Open. Blocked on user returning from COLA with the WSLH
+business card / contact details. No deadline this week; target send
+day is 2026-05-11 or 2026-05-12 to land on a Monday/Tuesday inbox.
+
+**Pre- vs post-COLA:** Post-COLA. User is on the booth floor today
+and tomorrow; drafting an outbound vendor email mid-conference is
+the wrong order of operations.
 
 ---
 
