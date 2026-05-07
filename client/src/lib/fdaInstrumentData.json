@@ -22678,7 +22678,7 @@
   "Hologic Panther": {
     "vendor": "Hologic",
     "category": "Molecular",
-    "testCount": 9,
+    "testCount": 20,
     "tests": {
       "CT/NG (Chlamydia/Gonorrhea)": {
         "complexity": "MODERATE",
@@ -22715,13 +22715,57 @@
       "Group B Strep (GBS)": {
         "complexity": "MODERATE",
         "specialty": "Microbiology"
+      },
+      "Bacterial vaginosis (BV) Aptima": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Candida vaginitis / Trichomonas (CV/TV) Aptima": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV qualitative": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HCV qualitative": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mycoplasma genitalium with macrolide resistance": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV 16/18/45 genotype": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Zika virus RNA": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Hepatitis A (HAV)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
       }
     }
   },
   "Hologic Panther Fusion": {
     "vendor": "Hologic",
     "category": "Molecular",
-    "testCount": 13,
+    "testCount": 31,
     "tests": {
       "CT/NG (Chlamydia/Gonorrhea)": {
         "complexity": "MODERATE",
@@ -22773,6 +22817,78 @@
       },
       "Adenovirus/hMPV/RV": {
         "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Bacterial vaginosis (BV) Aptima": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Candida vaginitis / Trichomonas (CV/TV) Aptima": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "CMV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "EBV Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "BK Virus (BKV) Viral Load": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HBV qualitative": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HCV qualitative": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Mycoplasma genitalium with macrolide resistance": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "HPV 16/18/45 genotype": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Zika virus RNA": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Hepatitis A (HAV)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Clostridioides difficile (C. difficile)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA / SA (nasal)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Bordetella pertussis / parapertussis": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Norovirus GI/GII": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Influenza A/B + RSV": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 + Flu A/B + RSV (combo)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Open-Access PCR (LDT channel)": {
+        "complexity": "HIGH",
         "specialty": "Microbiology"
       }
     }
@@ -26120,6 +26236,243 @@
       "Protein-to-Creatinine ratio, urine": {
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
+      }
+    }
+  },
+  "Cellavision DC-1": {
+    "vendor": "Cellavision (Sysmex)",
+    "category": "Hematology",
+    "testCount": 6,
+    "tests": {
+      "White blood cell differential (WBC diff)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell morphology": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet estimate": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count (digital morphology)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid cell differential": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Cellavision DM9600": {
+    "vendor": "Cellavision (Sysmex)",
+    "category": "Hematology",
+    "testCount": 6,
+    "tests": {
+      "White blood cell differential (WBC diff)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell morphology": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet estimate": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count (digital morphology)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid cell differential": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Cellavision DM1200": {
+    "vendor": "Cellavision (Sysmex)",
+    "category": "Hematology",
+    "testCount": 6,
+    "tests": {
+      "White blood cell differential (WBC diff)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell morphology": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet estimate": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count (digital morphology)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid cell differential": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Cellavision DI-60": {
+    "vendor": "Cellavision (Sysmex)",
+    "category": "Hematology",
+    "testCount": 6,
+    "tests": {
+      "White blood cell differential (WBC diff)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Red blood cell morphology": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet estimate": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count (digital morphology)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid cell differential": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Alcor Scientific iSED": {
+    "vendor": "Alcor Scientific",
+    "category": "ESR",
+    "testCount": 1,
+    "tests": {
+      "Erythrocyte Sedimentation Rate (ESR)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Werfen Avoximeter 1000E": {
+    "vendor": "Werfen",
+    "category": "Blood Gas",
+    "testCount": 4,
+    "tests": {
+      "Total hemoglobin (tHb)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Oxygen saturation (SO2)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carboxyhemoglobin (COHb)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methemoglobin (MetHb)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Werfen Avoximeter 4000": {
+    "vendor": "Werfen",
+    "category": "Coagulation",
+    "testCount": 2,
+    "tests": {
+      "Fibrinogen (functional / Clauss)": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      },
+      "Functional fibrinogen": {
+        "complexity": "HIGH",
+        "specialty": "Hemostasis"
+      }
+    }
+  },
+  "Nova Biomedical (Advanced Instruments) Model 3320": {
+    "vendor": "Nova Biomedical",
+    "category": "Chemistry",
+    "testCount": 2,
+    "tests": {
+      "Serum osmolality": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urine osmolality": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Nova Biomedical (Advanced Instruments) OsmoPRO": {
+    "vendor": "Nova Biomedical",
+    "category": "Chemistry",
+    "testCount": 3,
+    "tests": {
+      "Serum osmolality": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urine osmolality": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Stool osmolality (body fluid)": {
+        "complexity": "HIGH",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Hologic TLiIQ System": {
+    "vendor": "Hologic",
+    "category": "Point of Care",
+    "testCount": 1,
+    "tests": {
+      "Fetal fibronectin (fFN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      }
+    }
+  },
+  "Refractometer (Clinical)": {
+    "vendor": "Generic",
+    "category": "Manual Procedures",
+    "testCount": 3,
+    "tests": {
+      "Urine specific gravity (refractometric)": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Total protein (refractometric)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Body fluid total protein (refractometric)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
       }
     }
   }
