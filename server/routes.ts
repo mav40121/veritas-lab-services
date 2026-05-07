@@ -7498,6 +7498,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(result);
   });
 
+  // ── Bulk import: download Excel template ──
+  // NOTE: must be registered BEFORE the /api/staff/employees/:id route below,
+  // otherwise Express matches "template" as the :id param.
+  app.get("/api/staff/employees/template", authMiddleware, async (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const lab = (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    try {
+      const { buildStaffImportWorkbook } = await import("./staffBulkImport");
+      const buf = await buildStaffImportWorkbook({ labName: lab?.lab_name });
+      const filename = `VeritaStaff_Bulk_Import_Template.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[staff/template] error:", err);
+      res.status(500).json({ error: err.message || "template_generation_failed" });
+    }
+  });
+
   // Get single employee
   app.get("/api/staff/employees/:id", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
@@ -7638,24 +7658,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
     res.json({ ok: true, deleted: req.params.id });
-  });
-
-  // ── Bulk import: download Excel template ──
-  app.get("/api/staff/employees/template", authMiddleware, async (req: any, res) => {
-    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
-    try {
-      const { buildStaffImportWorkbook } = await import("./staffBulkImport");
-      const buf = await buildStaffImportWorkbook({ labName: lab?.lab_name });
-      const filename = `VeritaStaff_Bulk_Import_Template.xlsx`;
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.send(buf);
-    } catch (err: any) {
-      console.error("[staff/template] error:", err);
-      res.status(500).json({ error: err.message || "template_generation_failed" });
-    }
   });
 
   // ── Bulk import: dry-run preview ──
