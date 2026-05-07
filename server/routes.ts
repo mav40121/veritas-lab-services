@@ -9980,6 +9980,91 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Seed catalog menu rows onto an existing instrument (idempotent merge) ──
+  // POST /api/admin/seed-instrument-menu?secret=$ADMIN_SECRET
+  // Body: {
+  //   mapId: number,
+  //   instrumentId: number,
+  //   tests: [{ analyte: string, specialty?: string, complexity?: string, active?: 0|1 }],
+  //   defaultActive?: 0|1   // applied when individual test omits active (default 1)
+  // }
+  // Behavior: INSERT OR IGNORE per (instrument_id, analyte). Existing analyte
+  // rows are preserved (their active flag and existing specialty/complexity stay
+  // exactly as the user had them). Only NEW analytes from the supplied list are
+  // inserted. After insertion, calls rebuildMapTests(mapId) so the merged
+  // veritamap_tests view stays in sync. No freemium check.
+  app.post("/api/admin/seed-instrument-menu", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { mapId, instrumentId, tests, defaultActive } = req.body || {};
+    if (!mapId || typeof mapId !== "number") return res.status(400).json({ error: "mapId required" });
+    if (!instrumentId || typeof instrumentId !== "number") return res.status(400).json({ error: "instrumentId required" });
+    if (!Array.isArray(tests) || tests.length === 0) return res.status(400).json({ error: "tests array required" });
+    const dActive = (defaultActive === 0 || defaultActive === 1) ? defaultActive : 1;
+    try {
+      const sqlite = (db as any).$client;
+      const inst = sqlite.prepare("SELECT id, instrument_name, map_id FROM veritamap_instruments WHERE id=?").get(instrumentId) as any;
+      if (!inst) return res.status(404).json({ error: "instrument_not_found", instrumentId });
+      if (inst.map_id !== mapId) return res.status(400).json({ error: "instrument_not_on_map", instrumentId, mapId, actual_map_id: inst.map_id });
+
+      const beforeRows = sqlite.prepare("SELECT analyte, active FROM veritamap_instrument_tests WHERE instrument_id=?").all(instrumentId) as any[];
+      const beforeAnalytes = new Set(beforeRows.map((r: any) => r.analyte));
+
+      const stmt = sqlite.prepare(
+        "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      let inserted = 0;
+      const skipped: string[] = [];
+      const tx = sqlite.transaction((rows: any[]) => {
+        for (const t of rows) {
+          const analyte = String(t.analyte || "").trim();
+          if (!analyte) continue;
+          const specialty = String(t.specialty || "").trim();
+          const complexity = String(t.complexity || "MODERATE").trim();
+          const active = (typeof t.active === "number" && (t.active === 0 || t.active === 1)) ? t.active : dActive;
+          const r = stmt.run(instrumentId, mapId, analyte, specialty, complexity, active);
+          if (r.changes === 1) inserted++;
+          else skipped.push(analyte);
+        }
+      });
+      tx(tests);
+
+      // Resync map-level test view
+      rebuildMapTests(mapId);
+
+      const afterRows = sqlite.prepare("SELECT analyte, active FROM veritamap_instrument_tests WHERE instrument_id=?").all(instrumentId) as any[];
+      logAudit({
+        userId: 0,
+        ownerUserId: 0,
+        module: "veritamap",
+        action: "update",
+        entityType: "instrument_tests",
+        entityId: String(instrumentId),
+        entityLabel: inst.instrument_name,
+        before: beforeRows,
+        after: afterRows,
+        ipAddress: req.ip,
+      });
+
+      console.log('[seed-instrument-menu] map=%d inst=%d (%s) before=%d inserted=%d skipped=%d after=%d',
+        mapId, instrumentId, inst.instrument_name, beforeRows.length, inserted, skipped.length, afterRows.length);
+      res.json({
+        ok: true,
+        mapId,
+        instrumentId,
+        instrumentName: inst.instrument_name,
+        beforeCount: beforeRows.length,
+        inserted,
+        skipped: skipped.length,
+        skippedAnalytes: skipped,
+        afterCount: afterRows.length,
+      });
+    } catch (err: any) {
+      console.error('[seed-instrument-menu] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: Seed all remaining demo modules for Michael's lab ──
   // POST /api/admin/seed-all-modules?secret=$ADMIN_SECRET
   // Fills PI entries, productivity, veritatrack signoffs, competency
