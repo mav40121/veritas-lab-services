@@ -407,7 +407,20 @@ function authMiddleware(req: any, res: any, next: any) {
     const user = storage.getUserById(payload.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     req.userId = user.id;
-    req.user = { userId: user.id, plan: user.plan, email: user.email, name: user.name, studyCredits: user.studyCredits };
+    // Pull subscription_status and grandfathered directly from DB (storage.getUserById
+    // returns the typed user but TS shape may not include all migrated columns).
+    const fullRow = (db as any).$client.prepare(
+      "SELECT subscription_status, grandfathered FROM users WHERE id = ?"
+    ).get(user.id) as any;
+    req.user = {
+      userId: user.id,
+      plan: user.plan,
+      email: user.email,
+      name: user.name,
+      studyCredits: user.studyCredits,
+      subscriptionStatus: fullRow?.subscription_status ?? 'free',
+      grandfathered: Number(fullRow?.grandfathered ?? 0) === 1,
+    };
 
     // Check if this user is a seat user
     const seatRow = (db as any).$client.prepare(
@@ -426,10 +439,17 @@ function authMiddleware(req: any, res: any, next: any) {
       } catch {
         req.seatPermissions = {} as SeatPermissions;
       }
-      // Seat users inherit the owner's plan for access checks
-      const ownerUser = storage.getUserById(seatRow.owner_user_id);
-      if (ownerUser) {
-        req.user.plan = ownerUser.plan;
+      // Seat users inherit the owner's plan, subscription_status, and
+      // grandfathered flag for access + cap checks. Without this, a seat
+      // invited by a paying owner would still show subscription_status='free'
+      // on its own row and trigger the freemium cap incorrectly.
+      const ownerRow = (db as any).$client.prepare(
+        "SELECT plan, subscription_status, grandfathered FROM users WHERE id = ?"
+      ).get(seatRow.owner_user_id) as any;
+      if (ownerRow) {
+        req.user.plan = ownerRow.plan;
+        req.user.subscriptionStatus = ownerRow.subscription_status ?? 'free';
+        req.user.grandfathered = Number(ownerRow.grandfathered ?? 0) === 1;
       }
     } else {
       req.isSeatUser = false;
@@ -2339,8 +2359,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VERITAMAP ───────────────────────────────────────────────────────────
 
+  // Plan label alone does NOT grant unlimited access — the user must have
+  // actually paid (subscription_status='active') OR be a pre-existing
+  // grandfathered account (set once at migration time for accounts that
+  // existed before May 2026). Seat users have already inherited the owner's
+  // subscriptionStatus + grandfathered flag in authMiddleware, so this works
+  // for both owners and seats.
   function hasMapAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
+    if (!user) return false;
+    if (user.subscriptionStatus === 'active') return true;
+    if (user.grandfathered === true) return true;
+    return false;
+  }
+
+  // Lab-wide pool usage: sum instruments + active analytes across the entire
+  // owner graph (the owner plus every active seat user attached to them).
+  // For owners, ownerUserId === their own user id, so this naturally covers
+  // the owner-only case too. Used for the freemium 4/10 cap.
+  function getLabPoolUsage(ownerId: number) {
+    const seatUserIds = ((db as any).$client.prepare(
+      "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
+    ).all(ownerId) as any[]).map((r: any) => Number(r.seat_user_id));
+    const allUserIds = Array.from(new Set([Number(ownerId), ...seatUserIds]));
+    const placeholders = allUserIds.map(() => '?').join(',');
+    const instrumentCount = ((db as any).$client.prepare(
+      `SELECT COUNT(*) AS cnt FROM veritamap_instruments WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id IN (${placeholders}))`
+    ).get(...allUserIds) as any).cnt as number;
+    const analyteCount = ((db as any).$client.prepare(
+      `SELECT COUNT(*) AS cnt FROM veritamap_instrument_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id IN (${placeholders})) AND active = 1`
+    ).get(...allUserIds) as any).cnt as number;
+    return { instrumentCount, analyteCount };
+  }
+
+  const FREE_INSTRUMENT_LIMIT = 4;
+  const FREE_ANALYTE_LIMIT = 10;
+  const CAP_MESSAGE_PRICING_URL = "https://www.veritaslabservices.com/pricing";
+  const CAP_MESSAGE_CONTACT = "michael@veritaslabservices.com";
+  function capMessage(kind: "instruments" | "analytes") {
+    const limit = kind === "instruments" ? FREE_INSTRUMENT_LIMIT : FREE_ANALYTE_LIMIT;
+    return `Free plan limit reached (${FREE_INSTRUMENT_LIMIT} instruments / ${FREE_ANALYTE_LIMIT} analytes lab-wide). Upgrade at ${CAP_MESSAGE_PRICING_URL} or contact ${CAP_MESSAGE_CONTACT} to unlock more.`;
   }
 
   // List maps
@@ -2536,10 +2593,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    // Freemium limit: 4 instruments per map for free users
+    // Freemium limit: 4 instruments LAB-WIDE (across owner + all seats) for
+    // unpaid, non-grandfathered accounts. Lab-wide pool means a clinic with
+    // 2 seats still shares one 4/10 pool, not 4/10 per seat.
     if (!hasMapAccess(req.user)) {
-      const count = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(req.params.id).cnt;
-      if (count >= 4) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 4 instruments", limitReached: true, limit: 4, type: "instruments" });
+      const usage = getLabPoolUsage(dataUserId);
+      if (usage.instrumentCount >= FREE_INSTRUMENT_LIMIT) {
+        return res.status(402).json({
+          error: capMessage("instruments"),
+          limitReached: true,
+          limit: FREE_INSTRUMENT_LIMIT,
+          type: "instruments",
+          current: usage.instrumentCount,
+          pricingUrl: CAP_MESSAGE_PRICING_URL,
+          contactEmail: CAP_MESSAGE_CONTACT,
+        });
+      }
     }
     const { instrument_name, role, category, serial_number, nickname } = req.body;
     if (!instrument_name?.trim()) return res.status(400).json({ error: "Instrument name required" });
@@ -2664,14 +2733,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { tests } = req.body; // [{ analyte, specialty, complexity, active }]
       if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
       console.log(`[VeritaMap] Saving ${tests.length} tests for instrument ${req.params.instId} on map ${req.params.id}`);
-      // Freemium limit: 10 total analytes across all instruments for free users
+      // Freemium limit: 10 active analytes LAB-WIDE (across all maps owned by
+      // the owner + every active seat user) for unpaid, non-grandfathered
+      // accounts. We exclude the instrument being replaced from the existing
+      // pool count, then check pool + newActive against the cap.
       if (!hasMapAccess(req.user)) {
-        // Count active analytes from OTHER instruments (not the one being replaced)
-        const otherCount = (db as any).$client.prepare(
-          "SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ? AND active = 1"
-        ).get(req.params.id, req.params.instId).cnt;
+        const seatUserIds = ((db as any).$client.prepare(
+          "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
+        ).all(dataUserId) as any[]).map((r: any) => Number(r.seat_user_id));
+        const allUserIds = Array.from(new Set([Number(dataUserId), ...seatUserIds]));
+        const placeholders = allUserIds.map(() => '?').join(',');
+        const otherCount = ((db as any).$client.prepare(
+          `SELECT COUNT(*) AS cnt FROM veritamap_instrument_tests
+             WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id IN (${placeholders}))
+               AND instrument_id != ?
+               AND active = 1`
+        ).get(...allUserIds, req.params.instId) as any).cnt as number;
         const newActive = tests.filter((t: any) => t.active !== 0 && t.active !== false).length;
-        if (otherCount + newActive > 10) return res.status(403).json({ error: "Free plan limit: upgrade to add more than 10 analytes", limitReached: true, limit: 10, type: "analytes", current: otherCount + newActive });
+        if (otherCount + newActive > FREE_ANALYTE_LIMIT) {
+          return res.status(402).json({
+            error: capMessage("analytes"),
+            limitReached: true,
+            limit: FREE_ANALYTE_LIMIT,
+            type: "analytes",
+            current: otherCount + newActive,
+            pricingUrl: CAP_MESSAGE_PRICING_URL,
+            contactEmail: CAP_MESSAGE_CONTACT,
+          });
+        }
       }
       // Capture before state for audit log
       const beforeTests = (db as any).$client.prepare(
@@ -2764,20 +2853,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ intelligence, correlationCount, calVerCount, totalAnalytes: Object.keys(intelligence).length });
   });
 
-  // Freemium limits info for a map
+  // Freemium limits info — returns LAB-WIDE pool counts (across owner + all
+  // active seats), not per-map. UI uses this to show "X / 10 analytes used
+  // across your lab" rather than misleading per-map numbers.
   app.get("/api/veritamap/maps/:id/limits", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const isFree = !hasMapAccess(req.user);
-    const instrumentCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(req.params.id).cnt;
-    const analyteCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE map_id = ? AND active = 1").get(req.params.id).cnt;
+    const usage = getLabPoolUsage(dataUserId);
     res.json({
       isFree,
-      instrumentCount,
-      analyteCount,
-      instrumentLimit: isFree ? 4 : null,
-      analyteLimit: isFree ? 10 : null,
+      instrumentCount: usage.instrumentCount,
+      analyteCount: usage.analyteCount,
+      instrumentLimit: isFree ? FREE_INSTRUMENT_LIMIT : null,
+      analyteLimit: isFree ? FREE_ANALYTE_LIMIT : null,
+      scope: "lab_wide",
+      pricingUrl: isFree ? CAP_MESSAGE_PRICING_URL : null,
+      contactEmail: isFree ? CAP_MESSAGE_CONTACT : null,
     });
   });
 
