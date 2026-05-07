@@ -33386,5 +33386,17 @@
         "specialty": "Hematology"
       }
     }
+  },
+  "Advanced Instruments Osmo1": {
+    "vendor": "Advanced Instruments",
+    "category": "Chemistry",
+    "testCount": 1,
+    "tests": {
+      "Osmolality": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    },
+    "menuLastVerifiedAt": "2026-05-07"
   }
 }
