@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Tag, Loader2, CheckCircle2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
 
 const API_BASE = "https://www.veritaslabservices.com";
 
@@ -389,9 +390,13 @@ export default function AccountSettingsPage() {
               id="clia_number"
               value={cliaNumber}
               onChange={(e) => setCliaNumber(e.target.value)}
-              placeholder="e.g. 05D2187634"
+              placeholder="e.g. 22D0070843"
               disabled={isLoading || !!settings?.is_seat || !!settings?.clia_locked}
+              aria-invalid={cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok}
             />
+            {cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok && (
+              <p className="text-xs text-destructive">{CLIA_FORMAT_HINT}</p>
+            )}
             {!settings?.is_seat && settings?.clia_locked && (
               <p className="text-xs text-muted-foreground" title="Locked once the first report was generated under this lab.">
                 Locked - contact support to change
@@ -416,7 +421,11 @@ export default function AccountSettingsPage() {
           {!settings?.is_seat && (
             <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || isLoading}
+              disabled={
+                saveMutation.isPending ||
+                isLoading ||
+                (cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok)
+              }
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               <Save size={14} className="mr-1.5" />
