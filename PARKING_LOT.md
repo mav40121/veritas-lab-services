@@ -267,6 +267,112 @@ demo path.
 
 ---
 
+### 11. Multi-lab pricing model — Option A (full price per lab, no baseline discount)
+
+**What:** Decision recorded for how multi-lab system accounts (one
+human owning multiple labs) are priced. Lisa Veri is the canonical
+case: Hospital tier on UMass Memorial Milford + Clinic tier on a
+second lab she owns. Decision: each lab is its own independent
+subscription at full tier price. No published multi-lab discount.
+Custom deals handled per-customer via Stripe coupon at owner's
+discretion (email-only, not on pricing page).
+
+**Fix shape:** Pricing page shows one line: "Managing multiple labs?
+Email us." Each lab gets its own Stripe subscription, its own renewal
+date, its own seat count, its own tier, its own CLIA. No
+`parent_lab_id` linkage in billing. Self-serve "Add another lab"
+checkout deferred (Tier 3); manual Stripe creation for the first few
+cases is fine.
+
+**Source:** 2026-05-07 multi-lab discussion (this session), Lisa Veri
+bringing online a second lab.
+
+**Status:** Open. Decision recorded; build deferred to post-COLA.
+
+**Pre- vs post-COLA:** Post-COLA. Tied to Tier 2 (multi-lab data
+layer) build.
+
+---
+
+### 12. Primary-lab seat counting — owner counts on primary lab only, free on secondaries
+
+**What:** Decision recorded for how the lab owner consumes seats when
+they own multiple labs. Owner burns one paid seat on their primary
+(first) lab. On every additional lab they own, they are a free
+implicit seat. Only invited users count against per-lab seat caps on
+secondary labs.
+
+**Fix shape:** Add `is_primary_lab` flag (likely on a new
+`lab_members` join table replacing the single `users.lab_id` FK).
+Default to first lab created; owner can change which lab is primary
+via Account Settings. Update seat-cap enforcement to honor the
+primary-lab rule. Confirm whether seat-enforcement code needs
+refactoring (separate read scoped for this).
+
+**Source:** 2026-05-07 multi-lab discussion (this session).
+
+**Status:** Open. Decision recorded; build deferred to post-COLA.
+Depends on Tier 2 (multi-lab data layer).
+
+**Pre- vs post-COLA:** Post-COLA.
+
+---
+
+### 13. CLIA number format validation (client + server)
+
+**What:** Today the CLIA number field accepts any string. Lisa's row
+in production has two comma-joined CLIAs ("22D0070843, 22D1077821")
+as a result of single-lab schema not supporting multi-lab. New
+customers can enter malformed CLIAs that pass through to PDF/Excel
+report headers and external sources of truth.
+
+**Fix shape:** Centralized `shared/validateClia.ts` helper. Regex
+`^\d{2}D\d{7}$` after stripping whitespace/dashes and uppercasing the
+D. Validated client-side in onboarding wizard + AccountSettingsPage,
+and server-side on every write path that touches `clia_number`. Error
+message: "Must be 10 characters: 2 digits, 'D', then 7 digits — e.g.,
+22D0070843." Format-only — no live CMS database lookup. Existing
+non-conformant rows continue to load and display unchanged;
+validation only blocks **new save attempts** with malformed values.
+Retroactive cleanup of Lisa's row deferred until Tier 2 multi-lab
+data layer ships.
+
+**Source:** 2026-05-07 multi-lab discussion (this session). Triggered
+by admin report screenshot showing comma-joined CLIAs in Lisa's row.
+
+**Status:** Open. Approved to ship as a hedge during COLA — minimal
+scope (save-time validation only, no retroactive enforcement).
+
+**Pre- vs post-COLA:** Pre-COLA hedge approved 2026-05-07. Smallest
+viable shape to prevent new customers from entering malformed CLIAs.
+
+---
+
+### 14. Admin report — render one row per lab instead of one row per user
+
+**What:** Admin report currently shows one row per user, which causes
+Lisa's row to display two CLIAs concatenated in a single cell
+("22D0070843, 22D1077821"). The data layer is already lab-aware (two
+`labs` rows under her user), but the report query and rendering are
+user-centric.
+
+**Fix shape:** Rewrite admin report query to `SELECT FROM labs JOIN
+users ON labs.owner_user_id`. One row per lab, with its own CLIA,
+tier, status, and primary contact. Owners of multiple labs (Lisa)
+appear in the Primary Contact column on multiple rows. Stats label
+becomes "Total Labs" (or both Total Accounts and Total Labs).
+
+**Source:** 2026-05-07 multi-lab discussion (this session). Admin
+report screenshot showed concatenated CLIAs.
+
+**Status:** Open. Decision recorded; build deferred to post-COLA to
+minimize demo risk during conference.
+
+**Pre- vs post-COLA:** Post-COLA. Read-only view change but considered
+slightly higher demo risk than CLIA validation alone.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
