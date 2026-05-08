@@ -1506,6 +1506,12 @@ export default function VeritaMapMapPage() {
     refetchOnMount: true,
   });
 
+  // Lightweight: count of maps owned by this user (drives toggle visibility).
+  // PARKING_LOT #19 Phase 1.
+  const { data: allMaps = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ["/api/veritamap/maps"],
+  });
+
   // Fetch instruments for copy-from feature
   const { data: allInstruments = [] } = useQuery<
     Array<{id: number, instrument_name: string, role: string, category: string, tests?: any[]}>
@@ -1873,6 +1879,27 @@ export default function VeritaMapMapPage() {
               <ArrowLeft size={12} className="mr-1" /> All Maps
             </Link>
           </Button>
+
+          {/* Toggle: This map / Whole lab. PARKING_LOT #19 Phase 1.
+              Hidden for single-map labs to avoid clutter. */}
+          {allMaps.length > 1 && (
+            <div className="flex items-center gap-1 rounded-md border border-border bg-background p-0.5">
+              <Button
+                size="sm"
+                className="flex-1 h-7 text-[11px] px-2 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                This map
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="flex-1 h-7 text-[11px] px-2"
+                onClick={() => navigate("/veritamap-app/labwide")}
+              >
+                Whole lab
+              </Button>
+            </div>
+          )}
 
           {/* Map name + date */}
           <div>

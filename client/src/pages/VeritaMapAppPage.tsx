@@ -207,6 +207,26 @@ export default function VeritaMapAppPage() {
 
         {/* New Map button + resources link + dialog */}
         <div className="flex items-center gap-2">
+          {/* Toggle: This map / Whole lab. PARKING_LOT #19 Phase 1.
+              Hidden when only 0 or 1 maps exist (single-map labs don't need it). */}
+          {(maps?.length ?? 0) > 1 && (
+            <div className="hidden sm:flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
+              <Button
+                size="sm"
+                className="h-7 text-xs px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                This map
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs px-3"
+                onClick={() => navigate("/veritamap-app/labwide")}
+              >
+                Whole lab
+              </Button>
+            </div>
+          )}
           <a
             href="/veritamap-app/resources"
             className="text-xs text-muted-foreground hover:text-primary underline transition-colors"
