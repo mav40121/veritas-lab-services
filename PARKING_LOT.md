@@ -725,6 +725,224 @@ zero rationale for any code change before the conference ends.
 
 ---
 
+### 18. Unregulated analyte / Alternative Assessment (AAA) coverage — cross-module gap
+
+**Cross-module: touches VeritaScan, VeritaCheck, VeritaPT, and (later)
+VeritaResponse #17. Treat as a single product capability with phased
+delivery, not three separate fixes.**
+
+**Question that prompted this (user, 2026-05-07 COLA Nashville):**
+"In VeritaScan do we cover unregulated analytes that use alternative
+verification and do not purchase PT?"
+
+**Honest answer to user, recorded for posterity:** Partially. Today
+VeritaScan / VeritaCheck have exactly one checkbox-grade item on
+this topic (item #46: "Alternative performance assessment (APA) in
+place for analytes without approved PT program?" citing GEN.19500 /
+42 CFR §493.833). VeritaPT does not model AAA at all — its coverage
+matcher only sees `pt_enrollments_v2` rows. The user's actual goal
+(map a lab's complete reportable menu to a coverage source, PT or
+AAA) is unmet.
+
+**Why this matters:** The CLIA-regulated analyte list at
+[42 CFR §§493.929-959 Subpart I](https://www.law.cornell.edu/cfr/text/42/part-493/subpart-I)
+is finite. Everything else a lab reports is unregulated and falls
+under 42 CFR §493.1236(c)(1) requiring twice-yearly verification of
+accuracy via alternative methods. CAP enforces the same with
+GEN.41770. So a lab's true coverage equation is:
+
+```
+reportable test menu = {regulated analytes : PT-required}
+                     ∪ {unregulated analytes : AAA-required}
+```
+
+Our product currently scores the left set well (VeritaPT) and the
+right set with one yes/no checkbox (VeritaScan #46). A surveyor
+asking "show me your AAA program for albumin/globulin ratio" — a
+calculated, unregulated analyte — leaves the lab on its own. This is
+exactly the kind of gap that becomes a CAP Phase II deficiency or a
+CMS-2567 condition-level finding under §493.1236, both of which
+VeritaResponse #17 would later remediate. CMS QSO-25-19-ALL
+(2025-06-17) made these citations publicly visible at 14 days post-
+receipt instead of 90, so the reputational stakes are higher than
+they used to be.
+
+**Acceptable AAA methods (per CMS S&C 14-12-CLIA and CAP guidance):**
+
+- Split-sample comparison with another laboratory of comparable or
+  higher complexity
+- Split-sample with a different method or instrument within the
+  same lab
+- Blind replicate testing of patient samples
+- Calibration verification material with assigned values across the
+  reportable range (when used for accuracy verification, not the
+  CLIA-required calibration verification itself)
+- Peer-group comparison via assayed control material with peer
+  statistics (e.g. Bio-Rad Unity, API Sigma VP)
+- Manufacturer-assayed control material with target values
+- Clinical correlation review (limited — acceptable for some
+  qualitative tests)
+- Other documented method approved by lab director
+
+**Required cadence:** at least twice per year per CMS
+§493.1236(c)(1). CAP recommends matching PT cadence (3x/year) but
+does not require it.
+
+**Required documentation per surveyor expectation:**
+
+1. List of unregulated analytes the lab reports
+2. Method of alternative assessment per analyte
+3. Cadence per analyte (must be ≥2/yr)
+4. Acceptance criteria per analyte
+5. Results of each event with pass/fail determination
+6. Corrective action when failure occurs
+7. Lab director review and signature
+8. 2-year retention (same as PT records, per
+   [42 CFR §493.1105(a)(8)](https://www.law.cornell.edu/cfr/text/42/493.1105))
+
+**Decided scope (Option C — both, sequenced). User confirmed
+2026-05-07.**
+
+**Phase 1 — VeritaScan AAA mini-section (~½ day, post-COLA week of
+2026-05-11):**
+
+- Replace VeritaScan item #46 with a 4-5 item AAA sub-block in the
+  Proficiency Testing domain. Renumber downstream items or use
+  46a-46e to avoid breaking persisted scan results in the DB.
+- Candidate items:
+  1. Have you identified all unregulated analytes on your reportable
+     menu and documented the list? (CFR §493.1236, CAP GEN.41770)
+  2. Is each unregulated analyte assigned a documented alternative
+     assessment method?
+  3. Is alternative assessment performed at least twice per year per
+     analyte?
+  4. Are acceptance criteria defined and pass/fail determinations
+     recorded for each AAA event?
+  5. Does the lab director or designee review and sign AAA records
+     at defined intervals?
+  6. Are AAA records retained at least 2 years matching PT retention
+     under §493.1105(a)(8)?
+- This is a content-only change to
+  `client/src/lib/veritaScanData.ts` plus matching strings in any
+  exported PDFs / CSVs. No schema change required.
+- Booth-credible within days; no real coverage logic yet.
+
+**Phase 2 — Real AAA coverage in VeritaPT (~3-4 days, week of
+2026-05-11 to 2026-05-18, after #15 lands):**
+
+- New `aa_records` table (proposed shape, no schema yet):
+
+  ```
+  aa_records:
+    id, lab_id,
+    analyte (FK or text matching VeritaMap),
+    method (split_sample_external | split_sample_internal |
+            blind_replicate | calibration_verif_material |
+            peer_group | manufacturer_material | clinical_correlation |
+            other),
+    method_notes,
+    frequency_per_year (int, must be >=2),
+    last_performed_date, next_due_date (computed),
+    acceptance_criteria, last_result_summary,
+    last_pass_fail (pass | fail | pending),
+    corrective_action_ref (FK to VeritaResponse #17 finding when fail),
+    director_reviewed_at, director_id,
+    attached_evidence (file refs),
+    retention_through_date (computed: last_performed + 2 years)
+  ```
+
+- Extend VeritaPT coverage matcher
+  (`computePTCoverage()` in server/routes.ts ~line 6411) to union
+  `pt_enrollments_v2` with `aa_records` and report THREE buckets per
+  analyte on the reportable menu:
+  - PT-covered (existing)
+  - AAA-covered (new)
+  - Uncovered (new — gap; surveyor finding waiting to happen)
+- Dashboard tile / UI: "Menu coverage" with three counts; click into
+  the Uncovered bucket to see which analytes need either PT
+  enrollment or an AAA plan.
+- AAA enrollment form mirrors the VeritaPT enrollment form pattern
+  used for CAP/API/WSLH; method dropdown drives which fields are
+  required.
+- When `last_pass_fail = fail`, auto-prompt to open a VeritaResponse
+  #17 finding (post-#17-launch). Until #17 ships, just surface the
+  failure prominently in the UI and require corrective_action notes.
+
+**Phase 3 (deferred, post-#17):** AAA-failure-to-finding linkage in
+VeritaResponse so the same root-cause / corrective-action narrative
+flows to surveyors without re-keying.
+
+**Cross-references:**
+
+- #15 (WSLH catalog mapping): same matcher, AAA is the second source
+  of coverage truth after vendor-mapped PT. Phase 2 should ship
+  AFTER #15 so the matcher is touched once.
+- #17 (VeritaResponse): AAA failures are deficiency precursors;
+  Phase 3 closes that loop.
+- #11/#12 (multi-lab Tier 2): `aa_records.lab_id` should reference
+  the new `lab_members` lab scope. Not a hard block; same stance as
+  #17.
+- VeritaScan item #46 (today): replaced by Phase 1 sub-block.
+- VeritaCheck verification engine: cross-link from CFR §493.1236 and
+  CAP GEN.41770 evidence prompts to the lab's AAA records.
+
+**Booth posture (in effect from 2026-05-07 onward):**
+
+If a prospect asks "do you handle AAA?" the answer is:
+
+> "Yes. VeritaScan flags it today, and our coverage analyzer
+> treats AAA as a first-class equivalent to PT, shipping next week.
+> Our coverage report tells you exactly which analytes on your
+> reportable menu are covered by purchased PT, which by alternative
+> assessment, and which are uncovered, before a surveyor finds out
+> for you."
+
+User confirmed this booth answer 2026-05-07.
+
+**Risks:**
+
+- Phase 1 renumbering risk: existing scan results in the DB key on
+  `id`. Use 46a-46e or a new id range (e.g. 169-173) to preserve
+  historical scan data integrity. Audit any persisted ScanResult
+  table before changing.
+- Phase 2 reportable-menu source-of-truth: this requires the lab to
+  have entered their full reportable test menu somewhere. VeritaMap
+  may or may not be that source today. Confirm during Phase 2 design
+  that we have a single canonical menu list per lab, not three.
+- Phase 2 method-validity rules per analyte: not every method is
+  appropriate for every analyte (e.g. clinical correlation is not
+  acceptable for quantitative chemistry). Build a method-acceptable-
+  for-this-test guard or accept that the lab director's signature is
+  the validity gate.
+- PHI surface (split-sample external) low risk: methods reference
+  reference-lab name and date, not patient identifiers.
+
+**Sources (researched 2026-05-07):**
+
+- 42 CFR §493.1236(c)(1) (twice-yearly verification of accuracy):
+  https://www.law.cornell.edu/cfr/text/42/493.1236
+- 42 CFR Subpart I regulated analyte list:
+  https://www.law.cornell.edu/cfr/text/42/part-493/subpart-I
+- 42 CFR §493.833 (PT for nonregulated analytes — the basis for
+  GEN.19500 / Scan #46):
+  https://www.law.cornell.edu/cfr/text/42/493.833
+- 42 CFR §493.1105(a)(8) (records retention):
+  https://www.law.cornell.edu/cfr/text/42/493.1105
+- CAP GEN.41770 (alternative assessment requirement) referenced in
+  CAP All Common Checklist 2024 edition; primary source: CAP
+  e-LAB Solutions Suite checklist export for client laboratories.
+- VeritaScan item #46 today:
+  client/src/lib/veritaScanData.ts:96
+
+**Status:** Open. User confirmed Option C and Phase 1 + Phase 2
+sequencing on 2026-05-07. Phase 1 target: post-COLA week of
+2026-05-11. Phase 2 target: same week, after #15 ships.
+
+**Pre- vs post-COLA:** Post-COLA. No code changes during the
+conference; booth answer above bridges the gap verbally.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
