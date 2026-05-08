@@ -943,6 +943,185 @@ conference; booth answer above bridges the gap verbally.
 
 ---
 
+### 19. VeritaMap lab-wide menu toggle (cross-department / cross-map view)
+
+**What:** Today VeritaMap's `veritamap_maps` table allows a single
+user to own multiple named maps, and many labs split their setup
+by department (Chemistry map, Hematology map, Coag map, Blood Bank
+map, etc.) instead of building one monolithic map. When the user is
+inside a single department map, there is no way to see the test menu
+of their other maps without leaving the active map. Add a toggle
+(`[ This map ] [ Whole lab ]`) inside VeritaMap that surfaces the
+read-only union of all the user's maps as a lab-wide test menu view.
+
+**Question that prompted this (user, 2026-05-08 COLA Nashville):**
+"In VeritaMap, if a lab does individual department as opposed to a
+monolith build, there needs to be a toggle switch where they can see
+the full lab test menu (as opposed to the department map they are
+currently in)."
+
+**Current architecture (verified 2026-05-08):**
+
+- `veritamap_maps`: id, user_id, name, instruments[], timestamps
+  (server/db.ts:119). One user can own multiple maps. No `lab_id`
+  yet — multi-lab Tier 2 (#11/#12) has not shipped.
+- `veritamap_tests`: keyed by `map_id` only; no department column.
+  Department lives on the instrument inside the map
+  (`veritamap_instruments.category`), not on the test row directly.
+- `veritamap_test_correlations`: cross-instrument method-comparison
+  records, also scoped to a single `map_id` today.
+- Department field options: Chemistry, Hematology, Coag, Blood Bank,
+  Microbiology, Immunology, etc. — from `CATEGORY_ORDER` in
+  client/src/pages/VeritaMapBuildPage.tsx.
+- So a "monolithic build" lab uses department-on-instrument inside a
+  single map; a "by-department build" lab creates one map per
+  department. Both are structurally supported today; only the second
+  has the toggle gap.
+
+**Why this matters more than it looks (sequencing implication):**
+
+The by-department-build labs are exactly the labs where #18
+(unregulated analyte AAA coverage) and #15 (WSLH catalog mapping)
+break silently. VeritaPT's coverage matcher
+(`computePTCoverage()` in server/routes.ts ~line 6411) operates per
+map, so a lab with 5 department maps gets 5 coverage scores instead
+of one lab-wide score. **#18 Phase 2 is wrong by default for
+multi-map labs unless the matcher is taught to union across maps,
+or this fix lands first.** This is a hard sequencing dependency, not
+an optional polish.
+
+**Decided scope (Option A first, then upgrade to Option B inside #18
+Phase 2). User confirmed 2026-05-08.**
+
+**Phase 1 (~1 day, post-COLA week of 2026-05-11):**
+
+- New top-level toggle inside VeritaMap UI:
+  `[ This map ] [ Whole lab ]`. Persistent per-session selection.
+- "Whole lab" view = read-only union of `veritamap_tests` across
+  every `veritamap_maps` row owned by the same `user_id` today. (Lab
+  scope refactor below.)
+- Columns: analyte, source map name, source instrument, department
+  (from instrument category), specialty, complexity, last calibration
+  verification, last method comparison, last precision, last SOP
+  review.
+- Sort/filter on department, source map, analyte name.
+- Surface duplicates explicitly: when the same analyte appears in 2+
+  maps, flag with an icon and a tooltip "Same analyte in 2 maps —
+  consider linking via method comparison." This is a useful nudge
+  toward `veritamap_test_correlations` records.
+- Read-only. To edit an analyte, click routes user back to its
+  source map. No inline editing in v1.
+- Empty-state copy when user has only one map: hide the toggle
+  entirely (no value to show).
+
+**Phase 2 (folded into #18 Phase 2, ~part of those 3-4 days):**
+
+- Coverage matcher (`computePTCoverage()`) extended to operate on
+  the lab-wide union of `veritamap_tests`, not a single `map_id`.
+- Lab-wide "Menu coverage" dashboard tile: PT-covered / AAA-covered
+  / Uncovered (the 3-bucket model from #18) computed across all
+  maps.
+- Gap analysis: analytes in CLIA Subpart I regulated list that are
+  not present in ANY of the user's maps (= analytes the lab might
+  not realize they're not running, or are running but not yet
+  documented in VeritaMap).
+- Duplicate-without-correlation analysis: same analyte in 2+ maps
+  with no `veritamap_test_correlations` row = method-comparison gap;
+  surveyor citation risk under 42 CFR §493.1281(a) and CAP COM.04250.
+- Department-rollup counts on the lab-wide menu (e.g. "42 analytes
+  across Chemistry, 28 across Hematology, 14 across Coag").
+
+**Lab scope refactor (when #11/#12 multi-lab Tier 2 lands):**
+
+- Today: union scope is "all maps where `veritamap_maps.user_id =
+  current_user`."
+- Post-#11/#12: union scope becomes "all maps where the map's
+  owning user is a member of the active `lab_id` per `lab_members`
+  table, AND the map is associated with that lab."
+- Estimated cost of refactor: ~30 minutes once `lab_members` exists.
+  Same pattern as the AAA records lab-id refactor in #18 Phase 2.
+- Defensive: when shipping Phase 1, isolate the union query in one
+  helper so the swap is one function later.
+
+**Out of scope for v1 (deferred):**
+
+- Inline editing in the unified view (raises "which map does this
+  edit go to if the analyte is in 2 maps?" — real product question).
+- Per-department editor permissions (Lisa-style hematology-director-
+  only-edits-Hematology). Belongs with #11/#12 multi-lab role work,
+  not here.
+- A `veritamap_lab_views` parent table grouping multiple maps under
+  one lab umbrella (Option C in user discussion). Premature without
+  a real customer asking for cross-department editing.
+
+**Booth posture (in effect from 2026-05-08 onward):**
+
+If a prospect or current customer asks about per-department setups:
+
+> "Yes — VeritaMap supports per-department setups today, and we're
+> shipping a lab-wide menu toggle next week so you can see your full
+> test menu across departments without leaving your active map. Our
+> coverage analyzer will work on the lab-wide menu, not just the
+> department you're currently in."
+
+**Risks:**
+
+- Performance: a lab with 5 maps and 200 analytes total is fine; a
+  hospital with 30 maps and 2000 analytes might need pagination or
+  virtualized rendering. Verify on the largest existing customer
+  data shape before shipping.
+- Map-name collisions across departments ("My Lab Map" used twice).
+  Surface map IDs or created-at timestamps for disambiguation in the
+  unified view.
+- Read-only constraint may surprise users who expect to edit
+  in-place. UI must communicate "click to edit in source map"
+  affordance clearly.
+- Empty state: hide toggle entirely if user has only one map (most
+  current users); otherwise the affordance creates phantom
+  expectations.
+
+**Cross-references:**
+
+- **#18 (AAA coverage):** HARD sequencing dependency. Phase 2 of
+  #18 must operate on the lab-wide union from this entry, not
+  per-map. Either ship #19 Phase 1 first, or build the union into
+  #18's matcher directly.
+- **#15 (WSLH catalog mapping):** same matcher; same sequencing
+  benefit.
+- **#11/#12 (multi-lab Tier 2):** lab-id refactor follows once
+  `lab_members` exists. Defensive coding in Phase 1 isolates the
+  scope query.
+- **#17 (VeritaResponse):** future deficiency findings tied to a
+  specific map's analyte should still surface in lab-wide search;
+  no Phase 1 dependency.
+- **veritamap_test_correlations:** the duplicate-without-correlation
+  analytics in Phase 2 directly motivate use of this existing table;
+  good moat-building.
+
+**Sources:**
+
+- 2026-05-08 conference user request, COLA Nashville. User goal
+  recorded verbatim above.
+- Code review 2026-05-08:
+  - server/db.ts:119 (veritamap_maps schema)
+  - server/db.ts:128 (veritamap_tests schema)
+  - server/db.ts:145 (veritamap_test_correlations schema)
+  - server/routes.ts ~line 6411 (computePTCoverage)
+  - client/src/pages/VeritaMapBuildPage.tsx:520-528 (department
+    select)
+- 42 CFR §493.1281(a) and CAP COM.04250 (multi-instrument method
+  comparison requirement) cited under Phase 2 duplicate analysis.
+
+**Status:** Open. User confirmed Option A first / B in #18 Phase 2,
+user_id-scoped now with lab_id refactor when #11/#12 lands,
+read-only v1, on 2026-05-08. Phase 1 target: post-COLA week of
+2026-05-11. Phase 2 target: folded into #18 Phase 2 same week.
+
+**Pre- vs post-COLA:** Post-COLA. No code changes during the
+conference; booth posture above bridges verbally.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
