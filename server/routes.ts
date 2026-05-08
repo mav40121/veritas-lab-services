@@ -1604,6 +1604,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `,
       }).catch((err: any) => console.error("[register] Welcome email failed:", err));
     }
+
+    // Internal admin notification on every new-account creation.
+    // Fire-and-forget so registration never fails because of email infra.
+    // Tag in subject lets the owner triage [OWNER] vs [SEAT-CLAIM] vs
+    // [SEAT-ATTACH]. Triggered by post-COLA Dr. Mohsin pattern (an account
+    // signed up Apr 30 went unnoticed for a week).
+    if (resend) {
+      const flowTag = seatInvite ? "SEAT-CLAIM" : (activeSeat ? "SEAT-ATTACH" : "OWNER");
+      const safe = (v: any) => (v == null || v === "" ? "(none)" : String(v));
+      const fwd = req.headers["x-forwarded-for"];
+      const ipFromFwd = Array.isArray(fwd) ? fwd[0] : (typeof fwd === "string" ? fwd.split(",")[0].trim() : null);
+      const signupIp = ipFromFwd || (req as any).ip || req.socket?.remoteAddress || null;
+      const signupUA = req.headers["user-agent"] || null;
+      const adminLink = `https://www.veritaslabservices.com/admin?user_id=${user.id}`;
+      const escape = (s: any) => safe(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const planLine = (selectedPlan === responsePlan)
+        ? escape(selectedPlan)
+        : `${escape(selectedPlan)} (selected) -> ${escape(responsePlan)} (effective, inherited from owner)`;
+      resend.emails.send({
+        from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+        to: ["verilabguy@gmail.com"],
+        subject: `[VeritaAssure] New signup: ${safe(name)} (${flowTag} / ${safe(responsePlan)})`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; background: #ffffff; color: #1B2B2B;">
+            <div style="background: #01696F; padding: 18px 22px; border-radius: 8px 8px 0 0;">
+              <div style="color: rgba(255,255,255,0.85); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px;">VeritaAssure internal notification</div>
+              <h1 style="color: #ffffff; font-size: 18px; margin: 0;">New signup: ${escape(name)}</h1>
+              <div style="color: rgba(255,255,255,0.85); font-size: 12px; margin-top: 4px;">Flow: <strong style="color:#fff">${flowTag}</strong> &nbsp;\u2022&nbsp; Plan: <strong style="color:#fff">${escape(responsePlan)}</strong></div>
+            </div>
+            <div style="background: #f9fafb; padding: 22px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+              <table style="width: 100%; font-size: 13px; line-height: 1.5; border-collapse: collapse;">
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280; width: 160px;">User ID</td><td style="padding: 4px 0;">${user.id}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Email</td><td style="padding: 4px 0;"><a href="mailto:${escape(email)}" style="color:#01696F; text-decoration:none;">${escape(email)}</a></td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Name</td><td style="padding: 4px 0;">${escape(name)}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Flow</td><td style="padding: 4px 0;"><strong>${flowTag}</strong></td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Plan</td><td style="padding: 4px 0;">${planLine}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Seat count</td><td style="padding: 4px 0;">${selectedSeatCount}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Hospital</td><td style="padding: 4px 0;">${escape(effHospitalName)}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">State</td><td style="padding: 4px 0;">${escape(effHospitalState)}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Bed count</td><td style="padding: 4px 0;">${escape(effBedCount)}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">HIPAA ack</td><td style="padding: 4px 0;">acknowledged at signup</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Created at</td><td style="padding: 4px 0;">${new Date().toISOString()}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">Signup IP</td><td style="padding: 4px 0;">${escape(signupIp)}</td></tr>
+                <tr><td style="padding: 4px 8px 4px 0; color:#6B7280;">User agent</td><td style="padding: 4px 0; word-break: break-all;">${escape(signupUA)}</td></tr>
+              </table>
+              <div style="margin-top: 18px;">
+                <a href="${adminLink}" style="display: inline-block; background: #01696F; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 6px;">Open user in admin</a>
+              </div>
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 18px 0;" />
+              <p style="font-size: 11px; color: #9CA3AF; line-height: 1.5; margin: 0;">
+                Sent automatically on /api/auth/register success. To stop, unset RESEND_API_KEY or remove the notification block in server/routes.ts.
+              </p>
+            </div>
+          </div>
+        `,
+      }).catch((err: any) => console.error("[register] Admin notification email failed:", err));
+    } else {
+      console.warn("[register] Resend not configured; admin notification skipped for user", user.id);
+    }
   });
 
   app.post("/api/auth/login", async (req, res) => {
