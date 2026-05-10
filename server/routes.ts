@@ -10055,7 +10055,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       );
 
       // Validate preferred PT vendor
-      const VALID_PT_VENDORS = ["cap", "api", "none"];
+      const VALID_PT_VENDORS = ["cap", "api", "wslh", "none"];
       const ptVendor = VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
       (db as any).$client.prepare(
         "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
