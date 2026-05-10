@@ -738,10 +738,10 @@ User confirmed this booth answer 2026-05-07.
   PR #78 (`client/src/lib/veritaScanData.ts`). Item #46 retained as
   AAA gateway; new 5-item block uses ids 169-173 to preserve historical
   scan data integrity.
-- Phase 2 v1 (data layer) **CLOSED** via PR #80: `aa_records` table
-  added in `server/db.ts` with method CHECK constraint and
-  `frequency_per_year >= 2` CHECK; four CRUD endpoints under
-  `/api/pt/aa-records` in `server/routes.ts`.
+- Phase 2 v1 (data layer) **CLOSED** 2026-05-10 via PR #80 (merge
+  commit 98d184a): `aa_records` table added in `server/db.ts` with
+  method CHECK constraint and `frequency_per_year >= 2` CHECK; four
+  CRUD endpoints under `/api/pt/aa-records` in `server/routes.ts`.
 - Phase 2 v2 (UI + coverage union) **STILL OWED**: AAA enrollment
   form, extend `computePTCoverage()` to union `pt_enrollments_v2`
   with `aa_records`, 3-bucket dashboard tile (PT-covered / AAA-covered
