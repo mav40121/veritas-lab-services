@@ -230,6 +230,18 @@ export const SCAN_ITEMS: ScanItem[] = [
   { id: 166, domain: "Leadership & Governance", question: "Laboratory participates in hospital patient safety program and medical staff committees as required?", tjc: "LD.04.01.01 EP7", cap: "DIR.90000", cfr: "N/A", aabb: "AABB 1.2.3", cola: "LDR 3" },
   { id: 167, domain: "Leadership & Governance", question: "Disaster recovery and business continuity plan in place for laboratory operations?", tjc: "EM.02.02.01 EP1", cap: "GEN.61500", cfr: "N/A", aabb: "AABB 1.2.4", cola: "LDR 4" },
   { id: 168, domain: "Leadership & Governance", question: "Annual laboratory self-assessment or mock inspection performed and findings documented?", tjc: "LD.04.05.03 EP3", cap: "GEN.20500", cfr: "42 CFR §493.1282", aabb: "AABB 1.3.4", cola: "LDR 5" },
+
+  // ─── ALTERNATIVE ASSESSMENT (AAA) sub-block — parking-lot #18 Phase 1 ─────
+  // Item #46 above is the umbrella question ("APA in place"). The five items
+  // below break out the specific surveyor-expected documentation per CMS
+  // §493.1236(c)(1) and CAP GEN.41770: documented method, cadence, acceptance
+  // criteria, director review, and retention. New IDs (169-173) preserve
+  // existing persisted scan data that keys on ID.
+  { id: 169, domain: "Proficiency Testing", question: "Each unregulated analyte assigned a documented alternative assessment method (split-sample, blind replicate, peer-group, manufacturer-assayed material, or other director-approved method)?", tjc: "QSA.04.09.01 EP8", cap: "GEN.41770", cfr: "42 CFR §493.1236(c)(1)", aabb: "AABB 5.10.7", cola: "PT 7" },
+  { id: 170, domain: "Proficiency Testing", question: "Alternative assessment performed at least twice per year per unregulated analyte (≥2/yr cadence per CMS §493.1236(c)(1))?", tjc: "QSA.04.09.01 EP8", cap: "GEN.41770", cfr: "42 CFR §493.1236(c)(1)", aabb: "AABB 5.10.7", cola: "PT 7" },
+  { id: 171, domain: "Proficiency Testing", question: "Acceptance criteria defined and pass/fail determinations recorded for each AAA event, with corrective action documented when failure occurs?", tjc: "QSA.04.09.01 EP8", cap: "GEN.41770", cfr: "42 CFR §493.1236(c)(1)", aabb: "AABB 5.10.7", cola: "PT 7" },
+  { id: 172, domain: "Proficiency Testing", question: "Laboratory director or designee reviews and signs AAA records at defined intervals?", tjc: "QSA.04.09.01 EP8", cap: "GEN.41770", cfr: "42 CFR §493.1236(c)(1)", aabb: "AABB 5.10.7", cola: "PT 7" },
+  { id: 173, domain: "Proficiency Testing", question: "AAA records retained at least 2 years matching PT retention under §493.1105(a)(8)?", tjc: "IM.02.01.01 EP1", cap: "GEN.41770", cfr: "42 CFR §493.1105(a)(8)", aabb: "AABB 6.2.1", cola: "QA 7" },
 ];
 
 export const DOMAIN_COLORS: Record<ScanDomain, string> = {
