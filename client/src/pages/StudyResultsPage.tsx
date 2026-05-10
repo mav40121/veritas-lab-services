@@ -46,6 +46,7 @@ import {
   isRefInterval,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
+import { teaLabelFor } from "@/lib/cliaTeaData";
 import {
   ScatterChart,
   Scatter,
@@ -510,7 +511,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
         {[
           { label: "Data Levels", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "CLIA TEa", value: formatTeaDisplay(study) },
+          { label: teaLabelFor(study.testName), value: formatTeaDisplay(study) },
           { label: "Max % Recovery", value: `${results.maxPctRecovery.toFixed(1)}%` },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -929,7 +930,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
         {[
           { label: "Patient Samples", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "CLIA TEa", value: formatTeaDisplay(study) },
+          { label: teaLabelFor(study.testName), value: formatTeaDisplay(study) },
           { label: "Instruments", value: allInstrumentNames.length },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
