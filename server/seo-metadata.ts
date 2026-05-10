@@ -8,7 +8,7 @@ const BASE_URL = "https://www.veritaslabservices.com";
 export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/": {
     title: "Veritas Lab Services | Clinical Laboratory Compliance Software",
-    description: "VeritaAssure\u2122 is the all-in-one compliance platform for clinical laboratories. Method validation, inspection readiness, PT gap analysis, competency tracking, and more.",
+    description: "VeritaAssure\u2122 is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT gap analysis, competency tracking, and more.",
   },
   "/veritaassure": {
     title: "VeritaAssure\u2122 | Lab Compliance Software Suite for Clinical Laboratories",
@@ -59,7 +59,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "See what is coming next for VeritaAssure\u2122. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness.",
   },
   "/veritacheck": {
-    title: "VeritaCheck\u2122 | CLIA Method Validation Software for Clinical Labs",
+    title: "VeritaCheck\u2122 | CLIA Performance Verification Software for Clinical Labs",
     description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation.",
   },
   "/veritascan": {

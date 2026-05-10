@@ -1222,7 +1222,7 @@ export default function VeritaCheckPage() {
     saveMutation.mutate(study);
   };
 
-    useSEO({ title: "VeritaCheck™ | CLIA Method Validation Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
+    useSEO({ title: "VeritaCheck™ | CLIA Performance Verification Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
 return (
     <div>
       {!isLoggedIn ? (
