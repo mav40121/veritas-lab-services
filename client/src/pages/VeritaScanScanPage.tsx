@@ -60,7 +60,25 @@ interface ItemState {
   completionNote?: string;
 }
 
-// Build the initial flat map of all 168 items
+// Global running-tally ordinal map. Iterates DOMAINS in display order,
+// then items within each domain in array order, assigning a sequential
+// 1-based number. Per operator preference (2026-05-10): users want a
+// single running tally across the whole report (e.g. 1..173) rather than
+// per-domain ordinals (1..N reset per domain). Computed once at module
+// load since SCAN_ITEMS and DOMAINS are static.
+const GLOBAL_ORDINALS: Record<number, number> = (() => {
+  const map: Record<number, number> = {};
+  let n = 0;
+  for (const domain of DOMAINS) {
+    for (const item of SCAN_ITEMS.filter((i) => i.domain === domain)) {
+      n++;
+      map[item.id] = n;
+    }
+  }
+  return map;
+})();
+
+// Build the initial flat map of all SCAN_ITEMS (count is dynamic).
 function buildInitialItems(): Record<number, ItemState> {
   const map: Record<number, ItemState> = {};
   for (const item of SCAN_ITEMS) {
@@ -103,7 +121,7 @@ function overallScore(items: Record<number, ItemState>): number | null {
       if (s === "Compliant") compliant++;
     }
   }
-  const denom = 168 - na;
+  const denom = SCAN_ITEMS.length - na;
   if (assessed === 0 || denom === 0) return null;
   return (compliant / denom) * 100;
 }
@@ -202,11 +220,15 @@ function ItemRow({
   state,
   onChange,
   accreditationChoice,
+  displayNumber,
 }: {
   item: ScanItem;
   state: ItemState;
   onChange: (patch: Partial<ItemState>) => void;
   accreditationChoice: string;
+  // Domain-relative ordinal (1, 2, 3...) for the visible row label.
+  // Underlying item.id is still the persistence key; this is rendering only.
+  displayNumber: number;
 }) {
   const [citExpanded, setCitExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -219,9 +241,9 @@ function ItemRow({
       className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${rowBorderClass(state.status)}`}
     >
       <div className="flex items-start gap-2.5">
-        {/* Item number */}
+        {/* Item number (domain-relative ordinal; persistence still uses item.id) */}
         <span className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 shrink-0 w-7 text-right">
-          {item.id}
+          {displayNumber}
         </span>
 
         {/* Main content */}
@@ -354,7 +376,13 @@ function DomainSection({
   sectionRef?: (el: HTMLDivElement | null) => void;
   accreditationChoice: string;
 }) {
-  const domainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
+  // Total items in this domain (used for stats); active items exclude N/A
+  // because N/A items render in the parked section at the bottom of the
+  // report so they do not consume the lab's attention during the scan walk.
+  const allDomainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
+  const activeDomainItems = allDomainItems.filter(
+    (i) => (items[i.id]?.status ?? "Not Assessed") !== "N/A",
+  );
   const stats = domainStats(domain, items);
   const denom = stats.total - stats.na;
   const pct = denom > 0 && stats.compliant + stats.gap > 0
@@ -376,7 +404,10 @@ function DomainSection({
           {domain}
         </Badge>
         <span className="text-xs text-muted-foreground">
-          {domainItems.length} items
+          {activeDomainItems.length} items
+          {stats.na > 0 && (
+            <span className="text-muted-foreground/60"> ({stats.na} N/A parked)</span>
+          )}
         </span>
         {pct !== null && (
           <span className={`text-xs font-semibold ${scoreColor(pct)}`}>
@@ -390,12 +421,13 @@ function DomainSection({
         )}
       </div>
 
-      {/* Item rows */}
+      {/* Item rows (N/A items omitted; they render in the Parked section) */}
       <div className="space-y-0.5">
-        {domainItems.map((item) => (
+        {activeDomainItems.map((item) => (
           <ItemRow
             key={item.id}
             item={item}
+            displayNumber={GLOBAL_ORDINALS[item.id]}
             state={items[item.id] ?? {
               itemId: item.id,
               status: "Not Assessed",
@@ -408,6 +440,91 @@ function DomainSection({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Parked (N/A) items section ──────────────────────────────────────────────
+// Renders below all the active domain sections. Collects every item the lab
+// has marked N/A across every domain, grouped under sub-headers so the
+// surveyor narrative ("we excluded these because we don't run them") still
+// reads cleanly. Per operator request: keeping N/A items inline in their
+// domain pulls attention to work that does not apply to the lab; routing
+// them to the bottom keeps the active domains uncluttered.
+function ParkedItemsSection({
+  items,
+  onChange,
+  accreditationChoice,
+}: {
+  items: Record<number, ItemState>;
+  onChange: (id: number, patch: Partial<ItemState>) => void;
+  accreditationChoice: string;
+}) {
+  const naByDomain: Partial<Record<ScanDomain, ScanItem[]>> = {};
+  for (const domain of DOMAINS) {
+    naByDomain[domain] = SCAN_ITEMS.filter(
+      (i) => i.domain === domain && items[i.id]?.status === "N/A",
+    );
+  }
+  const totalNa = Object.values(naByDomain).reduce(
+    (sum, arr) => sum + (arr?.length ?? 0),
+    0,
+  );
+  if (totalNa === 0) return null;
+
+  return (
+    <div className="mt-12 pt-8 border-t border-muted-foreground/20">
+      {/* Parked-section header */}
+      <div className="flex items-center gap-3 mb-4">
+        <Badge
+          variant="outline"
+          className="text-xs font-semibold px-2.5 py-1 bg-muted/50 text-muted-foreground border-muted-foreground/30"
+        >
+          N/A Items (parked)
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          {totalNa} item{totalNa !== 1 ? "s" : ""} not applicable to this lab
+        </span>
+      </div>
+
+      {/* Per-domain sub-groups (only domains that have N/A items) */}
+      {DOMAINS.map((domain) => {
+        const naItems = naByDomain[domain] ?? [];
+        if (naItems.length === 0) return null;
+        return (
+          <div key={domain} className="mb-6 opacity-70">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge
+                variant="outline"
+                className={`text-[10px] px-2 py-0.5 ${DOMAIN_COLORS[domain]}`}
+              >
+                {domain}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">
+                {naItems.length} N/A
+              </span>
+            </div>
+            <div className="space-y-0.5">
+              {naItems.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  displayNumber={GLOBAL_ORDINALS[item.id]}
+                  state={items[item.id] ?? {
+                    itemId: item.id,
+                    status: "N/A",
+                    notes: "",
+                    owner: "",
+                    dueDate: "",
+                  }}
+                  onChange={(patch) => onChange(item.id, patch)}
+                  accreditationChoice={accreditationChoice}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -739,7 +856,7 @@ export default function VeritaScanScanPage() {
               Overall Readiness
             </div>
             <div className="text-[10px] text-muted-foreground">
-              {totalAssessed}/168 assessed
+              {totalAssessed}/{SCAN_ITEMS.length} assessed
             </div>
           </div>
         </div>
@@ -919,7 +1036,7 @@ export default function VeritaScanScanPage() {
               {scanMeta?.name ?? "Loading…"}
             </h1>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <span>{totalAssessed}/168 assessed</span>
+              <span>{totalAssessed}/{SCAN_ITEMS.length} assessed</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
               {saveStatus === "saving" && (
@@ -955,6 +1072,15 @@ export default function VeritaScanScanPage() {
             accreditationChoice={accreditationChoice}
           />
         ))}
+
+        {/* Parked (N/A) items section -- always renders last, below every
+            active domain. Lets the lab N/A items they don't apply and have
+            them disappear from active work without losing the audit trail. */}
+        <ParkedItemsSection
+          items={items}
+          onChange={handleItemChange}
+          accreditationChoice={accreditationChoice}
+        />
       </div>
     </div>
   );

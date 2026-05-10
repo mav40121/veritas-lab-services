@@ -597,12 +597,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { plan, status } = req.query as { plan?: string; status?: string };
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
-    // Owner counts as one of the seats. For any user who owns a multi-seat
-    // plan (seat_count > 1) we add 1 to active_seats so the report reads
-    // "4 of 25 used" instead of "3 of 25 used" for an owner with 3 invitees.
+    // Per parking-lot #14: report renders one row per LAB instead of one row
+    // per user, so a user who owns multiple labs (Lisa Veri's case) shows one
+    // row per lab instead of two CLIAs concatenated in a single cell.
+    //
+    // Implementation: LEFT JOIN users -> labs on owner_user_id. Users with
+    // multiple labs expand into multiple rows; users with zero labs (legacy
+    // pre-migration accounts) get one row with NULL lab fields and the UI
+    // falls back to user.clia_number / user.clia_lab_name. Seat users keep
+    // their single row (they own zero labs); the existing UI grouping in
+    // AdminReportPage still nests them under their owner correctly.
+    //
+    // Seat counts (active/pending), session/login, and study counts remain
+    // owner-scoped (user-level aggregates). For Lisa with 2 labs, she shows
+    // identical seat/session/study figures on each row — that is the correct
+    // interpretation under the current data model since seats are scoped to
+    // owner_user_id, not to lab_id. Per-lab seat counting is parking-lot
+    // #12, deferred until that lands.
     let sql = `
       SELECT
         u.*,
+        l.id as lab_id,
+        l.clia_number as lab_clia_number,
+        l.lab_name as lab_name,
+        l.accreditation_cap,
+        l.accreditation_tjc,
+        l.accreditation_cola,
+        l.accreditation_aabb,
+        l.clia_locked as lab_clia_locked,
+        l.lab_name_locked as lab_name_locked,
+        l.created_at as lab_created_at,
         COALESCE(s.active_seats, 0) + (CASE WHEN u.seat_count > 1 THEN 1 ELSE 0 END) as active_seats,
         COALESCE(s.pending_seats, 0) as pending_seats,
         seat_link.owner_user_id as seat_owner_id,
@@ -614,6 +638,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         COALESCE(sess.session_count, 0) as session_count,
         COALESCE(st.study_count, 0) as study_count
       FROM users u
+      LEFT JOIN labs l ON l.owner_user_id = u.id
       LEFT JOIN (
         SELECT
           owner_user_id,
@@ -657,21 +682,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sql += " WHERE " + conditions.join(" AND ");
     }
 
-    sql += " ORDER BY u.created_at DESC";
+    // Order by user created_at so seat-user grouping in the UI still works
+    // (owner appears before their seats), with lab id as a tiebreaker so
+    // multiple labs from the same owner appear adjacent in stable order.
+    sql += " ORDER BY u.created_at DESC, l.id ASC";
 
     try {
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
-      const users = rows.map((row: any) => {
+      const labs = rows.map((row: any) => {
         const { password_hash, ...rest } = row;
+        // Prefer lab-level identity when available; fall back to user-level
+        // for legacy users who never got a labs row (pre-migration accounts).
         return {
           ...rest,
           planDisplayName: PLAN_DISPLAY_NAMES[rest.plan] || rest.plan || "Unknown",
+          // Effective lab identity for the UI to render. Prefer lab fields.
+          effective_clia_number: rest.lab_clia_number || rest.clia_number || null,
+          effective_lab_name: rest.lab_name || rest.clia_lab_name || null,
         };
       });
       res.json({
         generatedAt: new Date().toISOString(),
-        totalUsers: users.length,
-        users,
+        totalLabs: labs.length,
+        labs,
+        // Backward-compatible aliases so any cached frontend bundle still
+        // sees a readable response. Remove on the next major release once
+        // all clients are confirmed on the new shape.
+        totalUsers: labs.length,
+        users: labs,
       });
     } catch (err: any) {
       console.error("Admin report error:", err.message);
@@ -8821,7 +8859,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST /api/veritalab/certificates - create a new certificate
-  app.post("/api/veritalab/certificates", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritalab/certificates", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
     if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
@@ -8841,7 +8879,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT /api/veritalab/certificates/:id - update a certificate
-  app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     const existing = (db as any).$client.prepare(
@@ -8878,7 +8916,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE /api/veritalab/certificates/:id - soft delete
-  app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const existing = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
@@ -8898,7 +8936,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const multer = require("multer");
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
 
-  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, upload.single("file"), (req: any, res: any) => {
+  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), upload.single("file"), (req: any, res: any) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const cert = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
@@ -8953,7 +8991,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE /api/veritalab/certificates/:id/documents/:docId - delete document
-  app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const doc = (db as any).$client.prepare(
       "SELECT id FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
@@ -10683,7 +10721,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PUT settings (lab type + accreditation body)
   // Deprecated columns (has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, waived_only)
   // are retained in the schema but no longer written; they keep their existing or default values.
-  app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const { is_independent, setup_complete, accreditation_body } = req.body;
@@ -10749,7 +10787,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PATCH requirement status
-  app.patch('/api/veritapolicy/requirements/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch('/api/veritapolicy/requirements/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const reqId = parseInt(req.params.id);
@@ -10781,7 +10819,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST lab policy
-  app.post('/api/veritapolicy/policies', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post('/api/veritapolicy/policies', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
     if (!policy_name) return res.status(400).json({ error: 'policy_name required' });
@@ -10793,7 +10831,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT lab policy
-  app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
@@ -10807,7 +10845,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE lab policy
-  app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const policyId = parseInt(req.params.id);
@@ -10818,7 +10856,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST document upload for a policy
-  app.post('/api/veritapolicy/policies/:id/upload', authMiddleware, requireWriteAccess, async (req: any, res) => {
+  app.post('/api/veritapolicy/policies/:id/upload', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), async (req: any, res) => {
     try {
       const sqlite = db.$client;
       const userId = req.userId;
@@ -10975,7 +11013,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.patch('/api/veritapolicy/master-list/:policyId', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch('/api/veritapolicy/master-list/:policyId', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const policyId = String(req.params.policyId);

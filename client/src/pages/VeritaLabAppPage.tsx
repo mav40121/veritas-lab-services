@@ -91,7 +91,7 @@ function formatFileSize(bytes: number): string {
 
 export default function VeritaLabAppPage() {
   const { user, isLoggedIn } = useAuth();
-  const isReadOnly = useIsReadOnly();
+  const isReadOnly = useIsReadOnly('veritalab');
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 

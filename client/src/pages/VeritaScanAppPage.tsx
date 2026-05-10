@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { SCAN_ITEMS } from "@/lib/veritaScanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,7 @@ interface ScanSummary {
   needsAttentionCount: number;
   immediateActionCount: number;
   naCount: number;
-  totalItems: number;       // always 168
+  totalItems: number;       // dynamic; equals SCAN_ITEMS.length on the client at scan-creation time
 }
 
 function ComplianceMeter({ pct }: { pct: number | null }) {
@@ -218,7 +219,7 @@ export default function VeritaScanAppPage() {
           <h1 className="text-2xl font-bold mb-2">VeritaScan™ Access Required</h1>
           <p className="text-muted-foreground text-sm mb-6">
             Your current plan doesn't include VeritaScan™. Upgrade to access the
-            168-item inspection readiness self-assessment.
+            {SCAN_ITEMS.length}-item inspection readiness self-assessment.
           </p>
           <Button asChild>
             <Link href="/veritascan">View Plans</Link>
@@ -244,7 +245,7 @@ export default function VeritaScanAppPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Inspection Readiness Self-Assessment: 168 items across 10 domains
+            Inspection Readiness Self-Assessment: {SCAN_ITEMS.length} items across 10 domains
           </p>
         </div>
 
@@ -348,7 +349,7 @@ export default function VeritaScanAppPage() {
         <div className="space-y-3">
           {scans.map((scan) => {
             const assessed = scan.assessedCount ?? 0;
-            const total = scan.totalItems ?? 168;
+            const total = scan.totalItems ?? SCAN_ITEMS.length;
             const compliant = scan.compliantCount ?? 0;
             const na = scan.naCount ?? 0;
             const gap =

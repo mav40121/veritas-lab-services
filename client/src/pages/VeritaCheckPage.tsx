@@ -110,6 +110,18 @@ const CLIA_PRESETS = [
   { label: "Partial Thromboplastin Time (±15%)",       value: 0.15,  cfr: "42 CFR §493.941" },
   { label: "Platelet Count (±25%)",                    value: 0.25,  cfr: "42 CFR §493.941" },
   { label: "Prothrombin Time / PT (±15%)",             value: 0.15,  cfr: "42 CFR §493.941" },
+  // ── Lab-Set Internal Goal - no CLIA TEa ─────────────────────────────────
+  // Common analytes that have no canonical 42 CFR §493 PT criterion. Picking
+  // one auto-flips the form to custom-input mode (value: 0 triggers the
+  // Custom number field) and the form omits the §493 reference line so the
+  // resulting study does not falsely cite a regulation that does not list
+  // these analytes. Parking-lot #1.
+  { label: "Lipase",                                   value: 0, cfr: "" },
+  { label: "Bilirubin, Direct",                        value: 0, cfr: "" },
+  { label: "Bilirubin, Unbound",                       value: 0, cfr: "" },
+  { label: "Iron Saturation",                          value: 0, cfr: "" },
+  { label: "Vitamin D, 25-Hydroxy",                    value: 0, cfr: "" },
+  { label: "Procalcitonin",                            value: 0, cfr: "" },
   // ── Custom ───────────────────────────────────────────────────────────────
   { label: "Custom", value: 0, cfr: "" },
 ];
@@ -1619,11 +1631,19 @@ return (
                       <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Hematology §493.941</SelectLabel>
                         {CLIA_PRESETS.slice(66, 74).map((p, i) => <SelectItem key={66+i} value={String(66+i)}>{p.label}</SelectItem>)}
                       </SelectGroup>
+                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Lab-Set Internal Goal (no CLIA TEa)</SelectLabel>
+                        {CLIA_PRESETS.slice(75, 81).map((p, i) => <SelectItem key={75+i} value={String(75+i)}>{p.label}</SelectItem>)}
+                      </SelectGroup>
                       <SelectGroup>
-                        <SelectItem key={74} value={String(74)}>Custom</SelectItem>
+                        <SelectItem key={CLIA_PRESETS.length - 1} value={String(CLIA_PRESETS.length - 1)}>Custom</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2.5">
+                    <p className="text-sm text-amber-900 dark:text-amber-200 leading-snug">
+                      <strong>Don&apos;t see your analyte?</strong> CLIA has no defined TEa for it. Choose <strong>Custom</strong> below and enter your lab-defined goal.
+                    </p>
+                  </div>
                   {CLIA_PRESETS[cliaPreset].value === 0 && (
                     <div className="flex items-center gap-2">
                       <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.075)} className="max-w-[120px]" />
