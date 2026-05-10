@@ -31,7 +31,7 @@ const ACCREDITATION_CHOICES: { value: AccreditationChoice; label: string; descri
   { value: "CLIA",     label: "CLIA only",      description: "No accreditor; CLIA-certified only. Federal CFR citations only." },
 ];
 
-type PtVendorPref = "none" | "cap" | "api";
+type PtVendorPref = "none" | "cap" | "api" | "wslh";
 
 interface AccountSettings {
   clia_number: string;
@@ -512,7 +512,7 @@ export default function AccountSettingsPage() {
               Your preferred vendor's programs will appear first in PT recommendations.
             </p>
             <div className="flex gap-3">
-              {(["none", "cap", "api"] as const).map((val) => (
+              {(["none", "cap", "api", "wslh"] as const).map((val) => (
                 <button
                   key={val}
                   onClick={() => !settings?.is_seat && setPreferredPtVendor(val)}

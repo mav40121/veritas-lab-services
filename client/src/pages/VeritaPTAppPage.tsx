@@ -47,7 +47,7 @@ const PT_CATEGORIES = [
   "Urinalysis",
 ];
 
-const VENDORS = ["CAP", "API", "Other"];
+const VENDORS = ["CAP", "API", "WSLH", "Other"];
 
 type FilterType = "all" | "gaps" | "covered" | "waived";
 
