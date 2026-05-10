@@ -163,6 +163,32 @@ export const specialties: TeaSpecialty[] = [
   "Urinalysis",
 ];
 
+/**
+ * True if the named analyte has a canonical 42 CFR §493 PT criterion in `teaData`.
+ * Match is case-insensitive on whitespace-trimmed names. Used to decide whether
+ * VeritaCheck should label the acceptance criterion as "CLIA TEa" (canonical)
+ * or "Lab-Set Internal Goal" (laboratory-defined, no §493 citation).
+ *
+ * Mirrors the server-side helper at server/backfillAbsoluteFloor.ts so client
+ * and server stay in sync. Parking-lot item #1.
+ */
+export function hasCanonicalTea(analyte: string | null | undefined): boolean {
+  if (!analyte) return false;
+  const needle = String(analyte).trim().toLowerCase();
+  if (!needle) return false;
+  return teaData.some((row) => row.analyte.trim().toLowerCase() === needle);
+}
+
+/**
+ * Returns the user-facing label for the acceptance criterion. Returns "CLIA TEa"
+ * when the analyte has a canonical §493 PT criterion, otherwise "Lab-Set Internal
+ * Goal" so the UI does not falsely imply a CLIA citation that does not exist
+ * (e.g., LIPASE, BILIRUBIN UNBOUND/DIRECT, IRON SAT).
+ */
+export function teaLabelFor(analyte: string | null | undefined): string {
+  return hasCanonicalTea(analyte) ? "CLIA TEa" : "Lab-Set Internal Goal";
+}
+
 export function searchTea(query: string, specialty?: TeaSpecialty): TeaAnalyte[] {
   const q = query.toLowerCase().trim();
   return teaData.filter(a => {
