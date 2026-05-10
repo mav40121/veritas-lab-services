@@ -202,11 +202,15 @@ function ItemRow({
   state,
   onChange,
   accreditationChoice,
+  displayNumber,
 }: {
   item: ScanItem;
   state: ItemState;
   onChange: (patch: Partial<ItemState>) => void;
   accreditationChoice: string;
+  // Domain-relative ordinal (1, 2, 3...) for the visible row label.
+  // Underlying item.id is still the persistence key; this is rendering only.
+  displayNumber: number;
 }) {
   const [citExpanded, setCitExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -219,9 +223,9 @@ function ItemRow({
       className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${rowBorderClass(state.status)}`}
     >
       <div className="flex items-start gap-2.5">
-        {/* Item number */}
+        {/* Item number (domain-relative ordinal; persistence still uses item.id) */}
         <span className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 shrink-0 w-7 text-right">
-          {item.id}
+          {displayNumber}
         </span>
 
         {/* Main content */}
@@ -392,10 +396,11 @@ function DomainSection({
 
       {/* Item rows */}
       <div className="space-y-0.5">
-        {domainItems.map((item) => (
+        {domainItems.map((item, index) => (
           <ItemRow
             key={item.id}
             item={item}
+            displayNumber={index + 1}
             state={items[item.id] ?? {
               itemId: item.id,
               status: "Not Assessed",
