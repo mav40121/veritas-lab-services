@@ -60,6 +60,24 @@ interface ItemState {
   completionNote?: string;
 }
 
+// Global running-tally ordinal map. Iterates DOMAINS in display order,
+// then items within each domain in array order, assigning a sequential
+// 1-based number. Per operator preference (2026-05-10): users want a
+// single running tally across the whole report (e.g. 1..173) rather than
+// per-domain ordinals (1..N reset per domain). Computed once at module
+// load since SCAN_ITEMS and DOMAINS are static.
+const GLOBAL_ORDINALS: Record<number, number> = (() => {
+  const map: Record<number, number> = {};
+  let n = 0;
+  for (const domain of DOMAINS) {
+    for (const item of SCAN_ITEMS.filter((i) => i.domain === domain)) {
+      n++;
+      map[item.id] = n;
+    }
+  }
+  return map;
+})();
+
 // Build the initial flat map of all SCAN_ITEMS (count is dynamic).
 function buildInitialItems(): Record<number, ItemState> {
   const map: Record<number, ItemState> = {};
@@ -405,11 +423,11 @@ function DomainSection({
 
       {/* Item rows (N/A items omitted; they render in the Parked section) */}
       <div className="space-y-0.5">
-        {activeDomainItems.map((item, index) => (
+        {activeDomainItems.map((item) => (
           <ItemRow
             key={item.id}
             item={item}
-            displayNumber={index + 1}
+            displayNumber={GLOBAL_ORDINALS[item.id]}
             state={items[item.id] ?? {
               itemId: item.id,
               status: "Not Assessed",
@@ -487,11 +505,11 @@ function ParkedItemsSection({
               </span>
             </div>
             <div className="space-y-0.5">
-              {naItems.map((item, index) => (
+              {naItems.map((item) => (
                 <ItemRow
                   key={item.id}
                   item={item}
-                  displayNumber={index + 1}
+                  displayNumber={GLOBAL_ORDINALS[item.id]}
                   state={items[item.id] ?? {
                     itemId: item.id,
                     status: "N/A",

@@ -1639,7 +1639,11 @@ return (
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">If you don&apos;t see your analyte, CLIA has no defined TEa for it. Choose <strong>Custom</strong> below and enter your lab-defined goal.</p>
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2.5">
+                    <p className="text-sm text-amber-900 dark:text-amber-200 leading-snug">
+                      <strong>Don&apos;t see your analyte?</strong> CLIA has no defined TEa for it. Choose <strong>Custom</strong> below and enter your lab-defined goal.
+                    </p>
+                  </div>
                   {CLIA_PRESETS[cliaPreset].value === 0 && (
                     <div className="flex items-center gap-2">
                       <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.075)} className="max-w-[120px]" />
