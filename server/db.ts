@@ -475,7 +475,50 @@ sqlite.exec(`
     year_enrolled INTEGER NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS aa_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    method TEXT NOT NULL CHECK(method IN (
+      'split_sample_external','split_sample_internal','blind_replicate',
+      'calibration_verif_material','peer_group','manufacturer_material',
+      'clinical_correlation','other'
+    )),
+    method_notes TEXT,
+    frequency_per_year INTEGER NOT NULL DEFAULT 2 CHECK(frequency_per_year >= 2),
+    last_performed_date TEXT,
+    next_due_date TEXT,
+    acceptance_criteria TEXT,
+    last_result_summary TEXT,
+    last_pass_fail TEXT CHECK(last_pass_fail IN ('pass','fail','pending') OR last_pass_fail IS NULL),
+    corrective_action_notes TEXT,
+    director_reviewed_at TEXT,
+    director_id INTEGER,
+    retention_through_date TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+// aa_records migration block (idempotent). Per New DB Table Rule (CLAUDE.md
+// Section 8): every new CREATE TABLE ships with a PRAGMA-guarded ALTER block
+// so columns added in later versions can be applied to live DBs that already
+// have the table. v1 ships with the full column list above; this block exists
+// so future column additions follow the established pattern. Parking-lot #18
+// Phase 2.
+{
+  try {
+    const aaCols = sqlite.prepare("PRAGMA table_info(aa_records)").all() as { name: string }[];
+    const aaColNames = aaCols.map((c) => c.name);
+    if (aaColNames.length > 0) {
+      // Future ALTER TABLE aa_records ADD COLUMN ... blocks go here, mirroring the pattern in
+      // veritamap_instruments and other migration blocks below.
+    }
+  } catch {
+    // table doesn't exist yet (fresh DB); the CREATE above handled it
+  }
+}
 
 // Add serial_number column to veritamap_instruments if upgrading
 {

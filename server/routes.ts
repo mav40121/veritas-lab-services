@@ -6857,6 +6857,125 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── VERITAPT — ALTERNATIVE ASSESSMENT (AAA) RECORDS ────────────────────
+  // CMS §493.1236(c)(1) requires twice-yearly accuracy verification for
+  // unregulated analytes; CAP GEN.41770 mirrors. These endpoints back the
+  // aa_records table that VeritaPT uses (in #18 Phase 2's matcher extension)
+  // to compute a lab's true coverage as PT-covered + AAA-covered + Uncovered.
+
+  const VALID_AAA_METHODS = [
+    'split_sample_external','split_sample_internal','blind_replicate',
+    'calibration_verif_material','peer_group','manufacturer_material',
+    'clinical_correlation','other',
+  ];
+
+  // GET all AAA records for the active data user
+  app.get("/api/pt/aa-records", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM aa_records WHERE user_id = ? ORDER BY analyte"
+    ).all(dataUserId);
+    res.json(rows);
+  });
+
+  // POST a new AAA record
+  app.post("/api/pt/aa-records", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const {
+      analyte, method, method_notes, frequency_per_year,
+      last_performed_date, next_due_date, acceptance_criteria,
+      last_result_summary, last_pass_fail, corrective_action_notes,
+      director_reviewed_at, director_id, retention_through_date,
+    } = req.body || {};
+    if (!analyte || !method) {
+      return res.status(400).json({ error: "analyte and method are required" });
+    }
+    if (!VALID_AAA_METHODS.includes(method)) {
+      return res.status(400).json({ error: `method must be one of: ${VALID_AAA_METHODS.join(', ')}` });
+    }
+    const freq = Number(frequency_per_year || 2);
+    if (!Number.isFinite(freq) || freq < 2) {
+      return res.status(400).json({ error: "frequency_per_year must be at least 2 per CMS §493.1236(c)(1)" });
+    }
+    const result = (db as any).$client.prepare(
+      `INSERT INTO aa_records (
+        user_id, analyte, method, method_notes, frequency_per_year,
+        last_performed_date, next_due_date, acceptance_criteria,
+        last_result_summary, last_pass_fail, corrective_action_notes,
+        director_reviewed_at, director_id, retention_through_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      dataUserId, analyte, method, method_notes ?? null, freq,
+      last_performed_date ?? null, next_due_date ?? null, acceptance_criteria ?? null,
+      last_result_summary ?? null, last_pass_fail ?? null, corrective_action_notes ?? null,
+      director_reviewed_at ?? null, director_id ?? null, retention_through_date ?? null,
+    );
+    const created = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.status(201).json(created);
+  });
+
+  // PUT update an AAA record
+  app.put("/api/pt/aa-records/:id", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM aa_records WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!existing) return res.status(404).json({ error: "AAA record not found" });
+    const {
+      analyte, method, method_notes, frequency_per_year,
+      last_performed_date, next_due_date, acceptance_criteria,
+      last_result_summary, last_pass_fail, corrective_action_notes,
+      director_reviewed_at, director_id, retention_through_date,
+    } = req.body || {};
+    if (method && !VALID_AAA_METHODS.includes(method)) {
+      return res.status(400).json({ error: `method must be one of: ${VALID_AAA_METHODS.join(', ')}` });
+    }
+    if (frequency_per_year !== undefined) {
+      const freq = Number(frequency_per_year);
+      if (!Number.isFinite(freq) || freq < 2) {
+        return res.status(400).json({ error: "frequency_per_year must be at least 2" });
+      }
+    }
+    (db as any).$client.prepare(
+      `UPDATE aa_records SET
+        analyte = COALESCE(?, analyte),
+        method = COALESCE(?, method),
+        method_notes = ?,
+        frequency_per_year = COALESCE(?, frequency_per_year),
+        last_performed_date = ?,
+        next_due_date = ?,
+        acceptance_criteria = ?,
+        last_result_summary = ?,
+        last_pass_fail = ?,
+        corrective_action_notes = ?,
+        director_reviewed_at = ?,
+        director_id = ?,
+        retention_through_date = ?,
+        updated_at = datetime('now')
+      WHERE id = ?`
+    ).run(
+      analyte ?? null, method ?? null, method_notes ?? null,
+      frequency_per_year !== undefined ? Number(frequency_per_year) : null,
+      last_performed_date ?? null, next_due_date ?? null, acceptance_criteria ?? null,
+      last_result_summary ?? null, last_pass_fail ?? null, corrective_action_notes ?? null,
+      director_reviewed_at ?? null, director_id ?? null, retention_through_date ?? null,
+      req.params.id,
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(req.params.id);
+    res.json(updated);
+  });
+
+  // DELETE an AAA record
+  app.delete("/api/pt/aa-records/:id", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM aa_records WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!existing) return res.status(404).json({ error: "AAA record not found" });
+    (db as any).$client.prepare("DELETE FROM aa_records WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
