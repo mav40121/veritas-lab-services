@@ -469,7 +469,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS pt_enrollments_v2 (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    vendor TEXT NOT NULL CHECK(vendor IN ('CAP', 'API', 'Other')),
+    vendor TEXT NOT NULL CHECK(vendor IN ('CAP', 'API', 'WSLH', 'Other')),
     program_name TEXT NOT NULL,
     pt_category TEXT NOT NULL,
     year_enrolled INTEGER NOT NULL,
@@ -517,6 +517,42 @@ sqlite.exec(`
     }
   } catch {
     // table doesn't exist yet (fresh DB); the CREATE above handled it
+  }
+}
+
+// pt_enrollments_v2 vendor-CHECK migration (idempotent).
+// SQLite cannot ALTER an existing CHECK constraint in place — the column
+// must be rebuilt. This block reads the live table definition from
+// sqlite_master and rebuilds the table if the constraint does not yet
+// include 'WSLH'. Existing rows are preserved. Parking-lot #15.
+{
+  try {
+    const row = sqlite.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='pt_enrollments_v2'"
+    ).get() as { sql?: string } | undefined;
+    const existingSql = row?.sql || "";
+    if (existingSql && !existingSql.includes("'WSLH'")) {
+      sqlite.exec(`
+        BEGIN TRANSACTION;
+        CREATE TABLE pt_enrollments_v2_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          vendor TEXT NOT NULL CHECK(vendor IN ('CAP', 'API', 'WSLH', 'Other')),
+          program_name TEXT NOT NULL,
+          pt_category TEXT NOT NULL,
+          year_enrolled INTEGER NOT NULL,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        INSERT INTO pt_enrollments_v2_new (id, user_id, vendor, program_name, pt_category, year_enrolled, created_at)
+          SELECT id, user_id, vendor, program_name, pt_category, year_enrolled, created_at FROM pt_enrollments_v2;
+        DROP TABLE pt_enrollments_v2;
+        ALTER TABLE pt_enrollments_v2_new RENAME TO pt_enrollments_v2;
+        COMMIT;
+      `);
+      console.log("[migration] pt_enrollments_v2 vendor CHECK rebuilt to include 'WSLH'");
+    }
+  } catch (e) {
+    console.warn("[migration] pt_enrollments_v2 WSLH CHECK rebuild failed:", e);
   }
 }
 
