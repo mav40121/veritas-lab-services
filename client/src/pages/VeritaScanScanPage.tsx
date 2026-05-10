@@ -358,7 +358,13 @@ function DomainSection({
   sectionRef?: (el: HTMLDivElement | null) => void;
   accreditationChoice: string;
 }) {
-  const domainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
+  // Total items in this domain (used for stats); active items exclude N/A
+  // because N/A items render in the parked section at the bottom of the
+  // report so they do not consume the lab's attention during the scan walk.
+  const allDomainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
+  const activeDomainItems = allDomainItems.filter(
+    (i) => (items[i.id]?.status ?? "Not Assessed") !== "N/A",
+  );
   const stats = domainStats(domain, items);
   const denom = stats.total - stats.na;
   const pct = denom > 0 && stats.compliant + stats.gap > 0
@@ -380,7 +386,10 @@ function DomainSection({
           {domain}
         </Badge>
         <span className="text-xs text-muted-foreground">
-          {domainItems.length} items
+          {activeDomainItems.length} items
+          {stats.na > 0 && (
+            <span className="text-muted-foreground/60"> ({stats.na} N/A parked)</span>
+          )}
         </span>
         {pct !== null && (
           <span className={`text-xs font-semibold ${scoreColor(pct)}`}>
@@ -394,9 +403,9 @@ function DomainSection({
         )}
       </div>
 
-      {/* Item rows */}
+      {/* Item rows (N/A items omitted; they render in the Parked section) */}
       <div className="space-y-0.5">
-        {domainItems.map((item, index) => (
+        {activeDomainItems.map((item, index) => (
           <ItemRow
             key={item.id}
             item={item}
@@ -413,6 +422,91 @@ function DomainSection({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Parked (N/A) items section ──────────────────────────────────────────────
+// Renders below all the active domain sections. Collects every item the lab
+// has marked N/A across every domain, grouped under sub-headers so the
+// surveyor narrative ("we excluded these because we don't run them") still
+// reads cleanly. Per operator request: keeping N/A items inline in their
+// domain pulls attention to work that does not apply to the lab; routing
+// them to the bottom keeps the active domains uncluttered.
+function ParkedItemsSection({
+  items,
+  onChange,
+  accreditationChoice,
+}: {
+  items: Record<number, ItemState>;
+  onChange: (id: number, patch: Partial<ItemState>) => void;
+  accreditationChoice: string;
+}) {
+  const naByDomain: Partial<Record<ScanDomain, ScanItem[]>> = {};
+  for (const domain of DOMAINS) {
+    naByDomain[domain] = SCAN_ITEMS.filter(
+      (i) => i.domain === domain && items[i.id]?.status === "N/A",
+    );
+  }
+  const totalNa = Object.values(naByDomain).reduce(
+    (sum, arr) => sum + (arr?.length ?? 0),
+    0,
+  );
+  if (totalNa === 0) return null;
+
+  return (
+    <div className="mt-12 pt-8 border-t border-muted-foreground/20">
+      {/* Parked-section header */}
+      <div className="flex items-center gap-3 mb-4">
+        <Badge
+          variant="outline"
+          className="text-xs font-semibold px-2.5 py-1 bg-muted/50 text-muted-foreground border-muted-foreground/30"
+        >
+          N/A Items (parked)
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          {totalNa} item{totalNa !== 1 ? "s" : ""} not applicable to this lab
+        </span>
+      </div>
+
+      {/* Per-domain sub-groups (only domains that have N/A items) */}
+      {DOMAINS.map((domain) => {
+        const naItems = naByDomain[domain] ?? [];
+        if (naItems.length === 0) return null;
+        return (
+          <div key={domain} className="mb-6 opacity-70">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge
+                variant="outline"
+                className={`text-[10px] px-2 py-0.5 ${DOMAIN_COLORS[domain]}`}
+              >
+                {domain}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">
+                {naItems.length} N/A
+              </span>
+            </div>
+            <div className="space-y-0.5">
+              {naItems.map((item, index) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  displayNumber={index + 1}
+                  state={items[item.id] ?? {
+                    itemId: item.id,
+                    status: "N/A",
+                    notes: "",
+                    owner: "",
+                    dueDate: "",
+                  }}
+                  onChange={(patch) => onChange(item.id, patch)}
+                  accreditationChoice={accreditationChoice}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -960,6 +1054,15 @@ export default function VeritaScanScanPage() {
             accreditationChoice={accreditationChoice}
           />
         ))}
+
+        {/* Parked (N/A) items section -- always renders last, below every
+            active domain. Lets the lab N/A items they don't apply and have
+            them disappear from active work without losing the audit trail. */}
+        <ParkedItemsSection
+          items={items}
+          onChange={handleItemChange}
+          accreditationChoice={accreditationChoice}
+        />
       </div>
     </div>
   );
