@@ -1279,8 +1279,11 @@ prerequisite, not a code bug). Shipped via PR #85.
 
 ### C13. WSLH PT vendor (formerly #15)
 
-**Closure evidence:** `pt_enrollments_v2` CHECK constraint rebuilt
-in `server/db.ts` to include `'WSLH'` via idempotent
+**Closure evidence:** Shipped 2026-05-10 via PR #79 (merge commit
+eeebc6e; merged after rebase to resolve a `server/db.ts` collision
+with PR #80's `aa_records` migration block, with both blocks
+preserved side by side). `pt_enrollments_v2` CHECK constraint
+rebuilt in `server/db.ts` to include `'WSLH'` via idempotent
 CREATE NEW + INSERT SELECT + DROP + RENAME migration block.
 `shared/wslhCatalog.ts` added with 6 starter programs (1310 General
 Chem, 1260 Cardiac, 1080 Blood Lead, 1524 HbA1c, 4190 Hepatitis
