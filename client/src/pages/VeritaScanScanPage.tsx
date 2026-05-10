@@ -60,7 +60,7 @@ interface ItemState {
   completionNote?: string;
 }
 
-// Build the initial flat map of all 168 items
+// Build the initial flat map of all SCAN_ITEMS (count is dynamic).
 function buildInitialItems(): Record<number, ItemState> {
   const map: Record<number, ItemState> = {};
   for (const item of SCAN_ITEMS) {
@@ -103,7 +103,7 @@ function overallScore(items: Record<number, ItemState>): number | null {
       if (s === "Compliant") compliant++;
     }
   }
-  const denom = 168 - na;
+  const denom = SCAN_ITEMS.length - na;
   if (assessed === 0 || denom === 0) return null;
   return (compliant / denom) * 100;
 }
@@ -744,7 +744,7 @@ export default function VeritaScanScanPage() {
               Overall Readiness
             </div>
             <div className="text-[10px] text-muted-foreground">
-              {totalAssessed}/168 assessed
+              {totalAssessed}/{SCAN_ITEMS.length} assessed
             </div>
           </div>
         </div>
@@ -924,7 +924,7 @@ export default function VeritaScanScanPage() {
               {scanMeta?.name ?? "Loading…"}
             </h1>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <span>{totalAssessed}/168 assessed</span>
+              <span>{totalAssessed}/{SCAN_ITEMS.length} assessed</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
               {saveStatus === "saving" && (
