@@ -302,7 +302,7 @@ export default function ArticleInventoryManagementPage() {
         </div>
 
         <p className="text-xs text-muted-foreground mt-10 pt-6 border-t border-border">
-          Veritas Lab Services, LLC offers VeritaAssure™, a clinical laboratory compliance and quality management platform. A laboratory inventory management module (VeritaStock™) is planned for a future release.
+          Veritas Lab Services, LLC offers VeritaAssure™, a clinical laboratory compliance and quality management platform that includes VeritaStock™ for laboratory inventory management.
         </p>
 
       </div>
