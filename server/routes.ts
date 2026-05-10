@@ -6613,7 +6613,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id FROM veritamap_maps WHERE user_id = ? LIMIT 1"
     ).get(userId) as any;
 
-    if (!mapRow) return { coverage: [], summary: { totalAnalytes: 0, regulatedGaps: 0, regulatedCovered: 0, recommendedGaps: 0, recommendedCovered: 0, waived: 0 } };
+    if (!mapRow) return { coverage: [], summary: { totalAnalytes: 0, regulatedGaps: 0, regulatedCovered: 0, recommendedGaps: 0, recommendedCovered: 0, aaaCovered: 0, waived: 0 } };
 
     const testMenu = (db as any).$client.prepare(
       "SELECT DISTINCT analyte, specialty, complexity FROM veritamap_tests WHERE map_id = ? AND active = 1"
@@ -6626,9 +6626,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const enrolledCategories = new Set(enrollments.map((e: any) => e.pt_category));
 
+    // Parking-lot #18 Phase 2 v2: AAA-covered analytes count as coverage too.
+    // Per 42 CFR §493.1236(c)(1), unregulated analytes need twice-yearly accuracy
+    // verification by an alternative method. CAP GEN.41770 mirrors. A surveyor
+    // counts an aa_record as valid coverage for an unregulated analyte and as
+    // valid for a regulated analyte only when PT is not feasible (rare; PT
+    // still wins when both exist, so PT is checked first below).
+    const aaRecords = (db as any).$client.prepare(
+      "SELECT * FROM aa_records WHERE user_id = ?"
+    ).all(userId) as any[];
+    const aaByLowerAnalyte = new Map<string, any>();
+    for (const r of aaRecords) {
+      if (r.analyte) aaByLowerAnalyte.set(String(r.analyte).toLowerCase(), r);
+    }
+    // Match an AAA record to a test analyte using the same canonical-name +
+    // alias logic the PT matcher uses, so "Lipase" entered in AAA covers a
+    // VeritaMap row labeled "Serum Lipase" (alias) and vice versa.
+    const findAaa = (testAnalyte: string, ptMatch: any): any | null => {
+      const direct = aaByLowerAnalyte.get(testAnalyte.toLowerCase());
+      if (direct) return direct;
+      if (ptMatch) {
+        const canonical = aaByLowerAnalyte.get(String(ptMatch.name).toLowerCase());
+        if (canonical) return canonical;
+        for (const alias of (ptMatch.aliases || [])) {
+          const c = aaByLowerAnalyte.get(String(alias).toLowerCase());
+          if (c) return c;
+        }
+      }
+      return null;
+    };
+    const aaaSummary = (rec: any) => {
+      const method = String(rec.method || "").replace(/_/g, " ");
+      const freq = rec.frequency_per_year ?? 2;
+      return `Covered by alternative assessment: ${method}, ${freq}x/yr per 42 CFR §493.1236(c)(1).`;
+    };
+
     // Map each analyte on test menu to CLIA status
     const coverage: any[] = [];
-    let regulatedGaps = 0, regulatedCovered = 0, recommendedGaps = 0, recommendedCovered = 0, waived = 0;
+    let regulatedGaps = 0, regulatedCovered = 0, recommendedGaps = 0, recommendedCovered = 0, aaaCovered = 0, waived = 0;
 
     for (const test of testMenu) {
       // Check if waived
@@ -6656,6 +6691,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       if (!match) {
         // Not in regulated or common unregulated list.
+        // Still check AAA: a lab may run alternative assessment on an analyte
+        // that is not in the CLIA Subpart I list at all, and that record is
+        // surveyor-meaningful evidence.
+        const aaa = findAaa(test.analyte, null);
+        if (aaa) {
+          aaaCovered++;
+          coverage.push({
+            analyteName: test.analyte,
+            specialty: test.specialty,
+            subspecialty: test.specialty,
+            ptCategory: null,
+            tier: "unmatched",
+            status: "aaa_covered",
+            complexity: test.complexity,
+            enrolledProgram: null,
+            aaaRecord: aaa,
+            notes: aaaSummary(aaa),
+          });
+          continue;
+        }
         // If complexity is known from VeritaMap (MODERATE or HIGH), the test exists in the
         // FDA database but simply has no PT requirement under CLIA for this analyte.
         // Only flag "Verify Complexity" if the complexity is genuinely unknown.
@@ -6692,71 +6747,77 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const isCovered = enrolledCategories.has(match.ptCategory);
       const covEnrollment = enrollments.find((e: any) => e.pt_category === match.ptCategory);
 
+      if (isCovered) {
+        if (match.tier === "regulated") regulatedCovered++;
+        else recommendedCovered++;
+        coverage.push({
+          analyteName: test.analyte,
+          specialty: match.specialty,
+          subspecialty: match.subspecialty,
+          ptCategory: match.ptCategory,
+          tier: match.tier,
+          status: "covered",
+          enrolledProgram: covEnrollment ? `${covEnrollment.vendor} - ${covEnrollment.program_name} (${covEnrollment.year_enrolled})` : null,
+          notes: match.notes || null,
+          links: ptCategoryLinks[match.ptCategory] || null,
+        });
+        continue;
+      }
+
+      // No PT enrollment for this category. Check AAA before declaring a gap.
+      const aaa = findAaa(test.analyte, match);
+      if (aaa) {
+        aaaCovered++;
+        const combinedNotes = match.notes ? `${aaaSummary(aaa)} ${match.notes}` : aaaSummary(aaa);
+        coverage.push({
+          analyteName: test.analyte,
+          specialty: match.specialty,
+          subspecialty: match.subspecialty,
+          ptCategory: match.ptCategory,
+          tier: match.tier,
+          status: "aaa_covered",
+          enrolledProgram: null,
+          aaaRecord: aaa,
+          notes: combinedNotes,
+          links: ptCategoryLinks[match.ptCategory] || null,
+        });
+        continue;
+      }
+
       if (match.tier === "regulated") {
-        if (isCovered) {
-          regulatedCovered++;
-          coverage.push({
-            analyteName: test.analyte,
-            specialty: match.specialty,
-            subspecialty: match.subspecialty,
-            ptCategory: match.ptCategory,
-            tier: "regulated",
-            status: "covered",
-            enrolledProgram: covEnrollment ? `${covEnrollment.vendor} - ${covEnrollment.program_name} (${covEnrollment.year_enrolled})` : null,
-            notes: match.notes || null,
-            links: ptCategoryLinks[match.ptCategory] || null,
-          });
-        } else {
-          regulatedGaps++;
-          coverage.push({
-            analyteName: test.analyte,
-            specialty: match.specialty,
-            subspecialty: match.subspecialty,
-            ptCategory: match.ptCategory,
-            tier: "regulated",
-            status: "gap",
-            enrolledProgram: null,
-            notes: match.notes || null,
-            links: ptCategoryLinks[match.ptCategory] || null,
-          });
-        }
+        regulatedGaps++;
+        coverage.push({
+          analyteName: test.analyte,
+          specialty: match.specialty,
+          subspecialty: match.subspecialty,
+          ptCategory: match.ptCategory,
+          tier: "regulated",
+          status: "gap",
+          enrolledProgram: null,
+          notes: match.notes || null,
+          links: ptCategoryLinks[match.ptCategory] || null,
+        });
       } else {
-        // unregulated
-        if (isCovered) {
-          recommendedCovered++;
-          coverage.push({
-            analyteName: test.analyte,
-            specialty: match.specialty,
-            subspecialty: match.subspecialty,
-            ptCategory: match.ptCategory,
-            tier: "unregulated",
-            status: "covered",
-            enrolledProgram: covEnrollment ? `${covEnrollment.vendor} - ${covEnrollment.program_name} (${covEnrollment.year_enrolled})` : null,
-            notes: match.notes || null,
-            links: ptCategoryLinks[match.ptCategory] || null,
-          });
-        } else {
-          recommendedGaps++;
-          coverage.push({
-            analyteName: test.analyte,
-            specialty: match.specialty,
-            subspecialty: match.subspecialty,
-            ptCategory: match.ptCategory,
-            tier: "unregulated",
-            status: "recommended",
-            enrolledProgram: null,
-            notes: match.notes || null,
-            links: ptCategoryLinks[match.ptCategory] || null,
-          });
-        }
+        recommendedGaps++;
+        coverage.push({
+          analyteName: test.analyte,
+          specialty: match.specialty,
+          subspecialty: match.subspecialty,
+          ptCategory: match.ptCategory,
+          tier: "unregulated",
+          status: "recommended",
+          enrolledProgram: null,
+          notes: match.notes || null,
+          links: ptCategoryLinks[match.ptCategory] || null,
+        });
       }
     }
 
-    // Sort: regulated gaps first, regulated covered, unregulated recommended, unregulated covered, waived, unmatched
-    const sortOrder: Record<string, number> = { gap: 0, recommended: 1, covered: 2, waived: 3, no_pt_required: 4, unmatched: 5 };
+    // Sort: regulated gaps first, recommended, covered (PT), aaa_covered, waived, no_pt_required, unmatched
+    const sortOrder: Record<string, number> = { gap: 0, recommended: 1, covered: 2, aaa_covered: 3, waived: 4, no_pt_required: 5, unmatched: 6 };
     coverage.sort((a, b) => {
-      const ao = sortOrder[a.status] ?? 5;
-      const bo = sortOrder[b.status] ?? 5;
+      const ao = sortOrder[a.status] ?? 6;
+      const bo = sortOrder[b.status] ?? 6;
       if (ao !== bo) return ao - bo;
       // Within same status: regulated before unregulated
       if (a.tier === "regulated" && b.tier !== "regulated") return -1;
@@ -6772,6 +6833,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         regulatedCovered,
         recommendedGaps,
         recommendedCovered,
+        aaaCovered,
         waived,
       },
     };

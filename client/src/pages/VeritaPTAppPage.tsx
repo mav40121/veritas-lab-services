@@ -49,16 +49,29 @@ const PT_CATEGORIES = [
 
 const VENDORS = ["CAP", "API", "WSLH", "Other"];
 
-type FilterType = "all" | "gaps" | "covered" | "waived";
+const AAA_METHODS: { value: string; label: string }[] = [
+  { value: "split_sample_external", label: "Split sample, external reference lab" },
+  { value: "split_sample_internal", label: "Split sample, different method/instrument internally" },
+  { value: "blind_replicate", label: "Blind replicate testing of patient samples" },
+  { value: "calibration_verif_material", label: "Calibration verification material with assigned values" },
+  { value: "peer_group", label: "Peer-group comparison (assayed control + peer statistics)" },
+  { value: "manufacturer_material", label: "Manufacturer-assayed control material with target values" },
+  { value: "clinical_correlation", label: "Clinical correlation review (qualitative tests only)" },
+  { value: "other", label: "Other documented method approved by lab director" },
+];
+
+type FilterType = "all" | "gaps" | "covered" | "aaa" | "waived";
 
 export default function VeritaPTAppPage() {
   const { user } = useAuth();
   const [coverage, setCoverage] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [aaRecords, setAaRecords] = useState<any[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [loading, setLoading] = useState(true);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [showAaaModal, setShowAaaModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // New enrollment form state
@@ -67,20 +80,31 @@ export default function VeritaPTAppPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newYear, setNewYear] = useState(String(new Date().getFullYear()));
 
+  // New AAA record form state
+  const [newAaaAnalyte, setNewAaaAnalyte] = useState("");
+  const [newAaaMethod, setNewAaaMethod] = useState("split_sample_external");
+  const [newAaaFrequency, setNewAaaFrequency] = useState("2");
+  const [newAaaCriteria, setNewAaaCriteria] = useState("");
+  const [newAaaLastDate, setNewAaaLastDate] = useState("");
+  const [newAaaPassFail, setNewAaaPassFail] = useState<"pending" | "pass" | "fail">("pending");
+
   const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [covRes, enrollRes] = await Promise.all([
+      const [covRes, enrollRes, aaaRes] = await Promise.all([
         fetch(`${API_BASE}/api/pt/coverage`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/pt/enrollments`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/pt/aa-records`, { headers: authHeaders() }),
       ]);
       const covData = await covRes.json();
       const enrollData = await enrollRes.json();
+      const aaaData = await aaaRes.json();
       setCoverage(covData.coverage ?? []);
       setSummary(covData.summary ?? null);
       setEnrollments(Array.isArray(enrollData) ? enrollData : []);
+      setAaRecords(Array.isArray(aaaData) ? aaaData : []);
     } catch {
       // silent fail
     } finally {
@@ -129,11 +153,50 @@ export default function VeritaPTAppPage() {
     await fetchData();
   };
 
+  const handleAddAaaRecord = async () => {
+    if (!newAaaAnalyte.trim() || !newAaaMethod) return;
+    const freq = Number(newAaaFrequency);
+    if (!Number.isFinite(freq) || freq < 2) return;
+    setSaving(true);
+    try {
+      await fetch(`${API_BASE}/api/pt/aa-records`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analyte: newAaaAnalyte.trim(),
+          method: newAaaMethod,
+          frequency_per_year: freq,
+          acceptance_criteria: newAaaCriteria.trim() || null,
+          last_performed_date: newAaaLastDate || null,
+          last_pass_fail: newAaaPassFail,
+        }),
+      });
+      setNewAaaAnalyte("");
+      setNewAaaMethod("split_sample_external");
+      setNewAaaFrequency("2");
+      setNewAaaCriteria("");
+      setNewAaaLastDate("");
+      setNewAaaPassFail("pending");
+      await fetchData();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveAaaRecord = async (id: number) => {
+    await fetch(`${API_BASE}/api/pt/aa-records/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    await fetchData();
+  };
+
   // Filter coverage rows
   const filteredCoverage = coverage.filter((row) => {
     if (filter === "all") return true;
     if (filter === "gaps") return row.status === "gap" || row.status === "recommended";
     if (filter === "covered") return row.status === "covered";
+    if (filter === "aaa") return row.status === "aaa_covered";
     if (filter === "waived") return row.status === "waived";
     return true;
   });
@@ -199,6 +262,14 @@ export default function VeritaPTAppPage() {
           </Button>
           <Button
             size="sm"
+            variant="outline"
+            onClick={() => setShowAaaModal(true)}
+          >
+            <Plus size={14} className="mr-1.5" />
+            Manage AAA Records
+          </Button>
+          <Button
+            size="sm"
             className="bg-[#006064] hover:bg-[#004d50] text-white"
             onClick={() => setShowEnrollModal(true)}
           >
@@ -209,7 +280,7 @@ export default function VeritaPTAppPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-4 pb-4 text-center">
             <div className={`text-3xl font-bold ${(summary?.regulatedGaps ?? 0) > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
@@ -224,6 +295,14 @@ export default function VeritaPTAppPage() {
               {summary?.regulatedCovered ?? 0}
             </div>
             <div className="text-xs text-muted-foreground mt-1">Required PT Covered</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 text-center">
+            <div className="text-3xl font-bold text-[#006064] dark:text-teal-400">
+              {summary?.aaaCovered ?? 0}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">AAA-Covered</div>
           </CardContent>
         </Card>
         <Card>
@@ -261,7 +340,7 @@ export default function VeritaPTAppPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-base font-semibold">PT Coverage by Analyte</CardTitle>
             <div className="flex gap-1.5 flex-wrap">
-              {(["all", "gaps", "covered", "waived"] as FilterType[]).map((f) => (
+              {(["all", "gaps", "covered", "aaa", "waived"] as FilterType[]).map((f) => (
                 <Button
                   key={f}
                   variant={filter === f ? "default" : "outline"}
@@ -269,7 +348,7 @@ export default function VeritaPTAppPage() {
                   onClick={() => setFilter(f)}
                   className={filter === f ? "bg-[#006064] hover:bg-[#004d50] text-white h-7 text-xs px-3" : "h-7 text-xs px-3"}
                 >
-                  {f === "all" ? "All" : f === "gaps" ? "Gaps" : f === "covered" ? "Covered" : "Waived"}
+                  {f === "all" ? "All" : f === "gaps" ? "Gaps" : f === "covered" ? "PT-Covered" : f === "aaa" ? "AAA-Covered" : "Waived"}
                 </Button>
               ))}
             </div>
@@ -325,6 +404,12 @@ export default function VeritaPTAppPage() {
                           Enrolled
                         </Badge>
                       )}
+                      {row.status === "aaa_covered" && (
+                        <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 text-xs whitespace-nowrap font-medium">
+                          <CheckCircle2 size={11} className="mr-1" />
+                          AAA-Covered
+                        </Badge>
+                      )}
                       {row.status === "waived" && (
                         <Badge className="bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-xs whitespace-nowrap">
                           Waived
@@ -365,6 +450,14 @@ export default function VeritaPTAppPage() {
                       )}
                       {row.status === "covered" && row.enrolledProgram && (
                         <span className="text-xs text-muted-foreground">{row.enrolledProgram}</span>
+                      )}
+                      {row.status === "aaa_covered" && row.aaaRecord && (
+                        <span className="text-xs text-muted-foreground">
+                          {String(row.aaaRecord.method).replace(/_/g, " ")}, {row.aaaRecord.frequency_per_year}x/yr
+                          {row.aaaRecord.last_pass_fail === "fail" && (
+                            <span className="ml-1 font-semibold text-red-600 dark:text-red-400">(last result: fail)</span>
+                          )}
+                        </span>
                       )}
                       {row.status === "waived" && (
                         <span className="text-xs text-muted-foreground">PT not required per CLIA</span>
@@ -500,6 +593,156 @@ export default function VeritaPTAppPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEnrollModal(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage AAA Records Modal */}
+      <Dialog open={showAaaModal} onOpenChange={setShowAaaModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Alternative Assessment (AAA) Records</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/10 dark:border-teal-800 p-3 text-sm text-teal-900 dark:text-teal-200">
+            <Info size={16} className="mt-0.5 shrink-0" />
+            <div>
+              For analytes without an approved PT program, CMS 42 CFR §493.1236(c)(1) requires twice-yearly verification of accuracy by an alternative method. CAP GEN.41770 mirrors. Add a record per analyte; coverage analysis above will credit it.
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {aaRecords.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No AAA records recorded yet.</p>
+            ) : (
+              <div className="overflow-x-auto rounded border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground border-b text-xs bg-muted/30">
+                      <th className="text-left py-2 px-3">Analyte</th>
+                      <th className="text-left py-2 pr-3">Method</th>
+                      <th className="text-left py-2 pr-3">Freq</th>
+                      <th className="text-left py-2 pr-3">Last</th>
+                      <th className="text-left py-2 pr-3">Result</th>
+                      <th className="py-2 pr-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aaRecords.map((r) => (
+                      <tr key={r.id} className="border-b border-border/50">
+                        <td className="py-2 px-3 font-medium">{r.analyte}</td>
+                        <td className="py-2 pr-3 text-muted-foreground text-xs">{String(r.method).replace(/_/g, " ")}</td>
+                        <td className="py-2 pr-3 text-muted-foreground">{r.frequency_per_year}x/yr</td>
+                        <td className="py-2 pr-3 text-muted-foreground text-xs">{r.last_performed_date || "-"}</td>
+                        <td className="py-2 pr-3 text-xs">
+                          {r.last_pass_fail === "pass" && <span className="text-emerald-700 dark:text-emerald-400 font-medium">Pass</span>}
+                          {r.last_pass_fail === "fail" && <span className="text-red-700 dark:text-red-400 font-medium">Fail</span>}
+                          {(!r.last_pass_fail || r.last_pass_fail === "pending") && <span className="text-muted-foreground">Pending</span>}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <ConfirmDialog
+                            title="Remove AAA Record?"
+                            message="Remove this alternative assessment record? Coverage analysis will update."
+                            confirmLabel="Remove"
+                            onConfirm={() => handleRemoveAaaRecord(r.id)}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          </ConfirmDialog>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Add new AAA record */}
+            <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
+              <p className="text-sm font-medium">Add AAA Record</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Analyte</Label>
+                  <Input
+                    value={newAaaAnalyte}
+                    onChange={(e) => setNewAaaAnalyte(e.target.value)}
+                    placeholder="e.g. Lipase, Vitamin D 25-OH"
+                    className="h-8 text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">Use the same analyte name as on your VeritaMap menu so coverage matches.</p>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Alternative Method</Label>
+                  <Select value={newAaaMethod} onValueChange={setNewAaaMethod}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AAA_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Frequency per year (min 2)</Label>
+                  <Input
+                    type="number"
+                    value={newAaaFrequency}
+                    onChange={(e) => setNewAaaFrequency(e.target.value)}
+                    className="h-8 text-sm"
+                    min={2}
+                    max={52}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Last Performed Date</Label>
+                  <Input
+                    type="date"
+                    value={newAaaLastDate}
+                    onChange={(e) => setNewAaaLastDate(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Acceptance Criteria</Label>
+                  <Input
+                    value={newAaaCriteria}
+                    onChange={(e) => setNewAaaCriteria(e.target.value)}
+                    placeholder="e.g. within +/- 10% of split-sample reference value"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Last Result</Label>
+                  <Select value={newAaaPassFail} onValueChange={(v) => setNewAaaPassFail(v as "pending" | "pass" | "fail")}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="pass">Pass</SelectItem>
+                      <SelectItem value="fail">Fail</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-[#006064] hover:bg-[#004d50] text-white"
+                onClick={handleAddAaaRecord}
+                disabled={saving || !newAaaAnalyte.trim() || !newAaaMethod || Number(newAaaFrequency) < 2}
+              >
+                {saving ? "Saving..." : "Add AAA Record"}
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAaaModal(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
