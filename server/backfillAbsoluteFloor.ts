@@ -70,6 +70,20 @@ export const teaData: { analyte: string; criteria: string }[] = [
  * Parse a CLIA criteria string and extract the absolute floor value.
  * Returns { value, unit } or null if no absolute floor (percent-only or absolute-only).
  */
+/**
+ * Returns true if the named analyte has a canonical 42 CFR §493 PT criterion
+ * in `teaData`. Match is case-insensitive on whitespace-trimmed names. Used to
+ * decide whether VeritaCheck should label the acceptance criterion as "CLIA TEa"
+ * (canonical, with a §493 Subpart I citation) or "Lab-Set Internal Goal"
+ * (laboratory-defined, no §493 citation). Parking-lot item #1.
+ */
+export function hasCanonicalTea(analyte: string | null | undefined): boolean {
+  if (!analyte) return false;
+  const needle = String(analyte).trim().toLowerCase();
+  if (!needle) return false;
+  return teaData.some((row) => row.analyte.trim().toLowerCase() === needle);
+}
+
 export function parseAbsoluteFloor(criteria: string): { value: number; unit: string } | null {
   const dualMatch = criteria.match(
     /±[\d.]+%\s+or\s+±([\d.]+)\s+([^(]+?)\s*\(greater\)/i

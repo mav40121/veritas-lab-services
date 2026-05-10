@@ -104,7 +104,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function VeritaPolicyAppPage() {
   const { user, isLoggedIn } = useAuth();
-  const isReadOnly = useIsReadOnly();
+  const isReadOnly = useIsReadOnly('veritapolicy');
   const { toast } = useToast();
 
   const hasPlanAccess = !!user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
