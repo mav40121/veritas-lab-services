@@ -4,6 +4,11 @@ import { saveAs } from "file-saver";
 import { applyLicenseToExcelJS } from "@/lib/licenseStamp";
 import { getUser } from "@/lib/auth";
 
+// Each row represents one (user, lab) combination. Users who own multiple
+// labs (Lisa Veri's case) appear in multiple rows -- one per lab. Users with
+// no labs (legacy pre-migration accounts and seat users) appear in one row
+// with NULL lab fields; the UI falls back to the user-level clia_number /
+// clia_lab_name in that case via effective_* fields. Parking-lot #14.
 interface UserRecord {
   id: number;
   email: string;
@@ -38,12 +43,33 @@ interface UserRecord {
   last_login: string | null;
   session_count: number;
   study_count: number;
+  // Per-lab fields (parking-lot #14): present when the row joins to a labs
+  // record; null for users with no labs row yet.
+  lab_id: number | null;
+  lab_clia_number: string | null;
+  lab_name: string | null;
+  accreditation_cap: number | null;
+  accreditation_tjc: number | null;
+  accreditation_cola: number | null;
+  accreditation_aabb: number | null;
+  lab_clia_locked: number | null;
+  lab_name_locked: number | null;
+  lab_created_at: string | null;
+  // Effective identity computed server-side: lab fields when present, user
+  // fields otherwise. Use these in the UI to render lab name + CLIA so a
+  // multi-lab owner shows correctly per row.
+  effective_clia_number: string | null;
+  effective_lab_name: string | null;
 }
 
 interface ReportData {
   generatedAt: string;
-  totalUsers: number;
-  users: UserRecord[];
+  // New shape (parking-lot #14): one row per (user, lab) combination.
+  totalLabs: number;
+  labs: UserRecord[];
+  // Backward-compatible aliases the server still emits during the rollout.
+  totalUsers?: number;
+  users?: UserRecord[];
 }
 
 type SortKey =
@@ -144,15 +170,18 @@ export default function AdminReportPage() {
       });
       const result = await res.json();
       if (!res.ok) { alert(result.error || "Failed to set plan"); return; }
-      // Update local data
+      // Update local data. Mutate whichever shape the server returned (the
+      // new `labs` field, the legacy `users` alias, or both for the
+      // backward-compatible rollout window).
       if (data) {
+        const updateRow = (u: UserRecord): UserRecord =>
+          u.id === userId
+            ? { ...u, plan: result.user.plan, seat_count: result.user.seatCount, planDisplayName: PLAN_OPTIONS.find(p => p.value === result.user.plan)?.label || result.user.plan }
+            : u;
         setData({
           ...data,
-          users: data.users.map(u =>
-            u.id === userId
-              ? { ...u, plan: result.user.plan, seat_count: result.user.seatCount, planDisplayName: PLAN_OPTIONS.find(p => p.value === result.user.plan)?.label || result.user.plan }
-              : u
-          ),
+          labs: data.labs ? data.labs.map(updateRow) : data.labs,
+          users: data.users ? data.users.map(updateRow) : data.users,
         });
       }
     } catch { alert("Network error"); }
@@ -185,16 +214,18 @@ export default function AdminReportPage() {
 
   const filtered = useMemo(() => {
     if (!data) return [];
-    let rows = data.users;
+    // Prefer the new per-lab `labs` field; fall back to legacy `users` for
+    // backward compatibility during the rollout.
+    let rows = data.labs ?? data.users ?? [];
 
     if (search) {
       const q = search.toLowerCase();
       rows = rows.filter(
         (u) =>
-          (u.clia_lab_name || "").toLowerCase().includes(q) ||
+          (u.effective_lab_name || u.clia_lab_name || "").toLowerCase().includes(q) ||
           (u.email || "").toLowerCase().includes(q) ||
           (u.name || "").toLowerCase().includes(q) ||
-          (u.clia_number || "").toLowerCase().includes(q)
+          (u.effective_clia_number || u.clia_number || "").toLowerCase().includes(q)
       );
     }
 
@@ -399,8 +430,8 @@ export default function AdminReportPage() {
     // Data rows
     for (const u of filtered) {
       ws.addRow([
-        u.clia_lab_name || "Not set",
-        u.clia_number || "Not on file",
+        u.effective_lab_name || u.clia_lab_name || "Not set",
+        u.effective_clia_number || u.clia_number || "Not on file",
         u.clia_director || u.name || "",
         u.email,
         u.planDisplayName,
@@ -609,7 +640,7 @@ export default function AdminReportPage() {
             <tbody>
               {grouped.map((u, i) => (
                 <tr
-                  key={u.id}
+                  key={u.lab_id != null ? `lab-${u.lab_id}` : `user-${u.id}`}
                   className={`text-foreground ${
                     u._isSeat
                       ? "bg-blue-50/40 dark:bg-blue-950/20 border-l-4 border-l-blue-400"
@@ -620,8 +651,8 @@ export default function AdminReportPage() {
                     {u._isSeat && <span className="inline-block w-4" />}
                     <span className="font-medium">
                       {u.seat_owner_id
-                        ? (u.clia_lab_name || u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
-                        : (u.clia_lab_name || <span className="text-muted-foreground font-normal">Not set</span>)
+                        ? (u.effective_lab_name || u.clia_lab_name || u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
+                        : (u.effective_lab_name || u.clia_lab_name || <span className="text-muted-foreground font-normal">Not set</span>)
                       }
                     </span>
                     {!u._isSeat && u.seat_count > 0 && (
@@ -644,7 +675,7 @@ export default function AdminReportPage() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u.seat_owner_id
                       ? (u.seat_owner_clia_number || <span className="text-muted-foreground">Not on file</span>)
-                      : (u.clia_number || <span className="text-muted-foreground">Not on file</span>)
+                      : (u.effective_clia_number || u.clia_number || <span className="text-muted-foreground">Not on file</span>)
                     }
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">

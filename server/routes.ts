@@ -597,12 +597,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { plan, status } = req.query as { plan?: string; status?: string };
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
-    // Owner counts as one of the seats. For any user who owns a multi-seat
-    // plan (seat_count > 1) we add 1 to active_seats so the report reads
-    // "4 of 25 used" instead of "3 of 25 used" for an owner with 3 invitees.
+    // Per parking-lot #14: report renders one row per LAB instead of one row
+    // per user, so a user who owns multiple labs (Lisa Veri's case) shows one
+    // row per lab instead of two CLIAs concatenated in a single cell.
+    //
+    // Implementation: LEFT JOIN users -> labs on owner_user_id. Users with
+    // multiple labs expand into multiple rows; users with zero labs (legacy
+    // pre-migration accounts) get one row with NULL lab fields and the UI
+    // falls back to user.clia_number / user.clia_lab_name. Seat users keep
+    // their single row (they own zero labs); the existing UI grouping in
+    // AdminReportPage still nests them under their owner correctly.
+    //
+    // Seat counts (active/pending), session/login, and study counts remain
+    // owner-scoped (user-level aggregates). For Lisa with 2 labs, she shows
+    // identical seat/session/study figures on each row — that is the correct
+    // interpretation under the current data model since seats are scoped to
+    // owner_user_id, not to lab_id. Per-lab seat counting is parking-lot
+    // #12, deferred until that lands.
     let sql = `
       SELECT
         u.*,
+        l.id as lab_id,
+        l.clia_number as lab_clia_number,
+        l.lab_name as lab_name,
+        l.accreditation_cap,
+        l.accreditation_tjc,
+        l.accreditation_cola,
+        l.accreditation_aabb,
+        l.clia_locked as lab_clia_locked,
+        l.lab_name_locked as lab_name_locked,
+        l.created_at as lab_created_at,
         COALESCE(s.active_seats, 0) + (CASE WHEN u.seat_count > 1 THEN 1 ELSE 0 END) as active_seats,
         COALESCE(s.pending_seats, 0) as pending_seats,
         seat_link.owner_user_id as seat_owner_id,
@@ -614,6 +638,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         COALESCE(sess.session_count, 0) as session_count,
         COALESCE(st.study_count, 0) as study_count
       FROM users u
+      LEFT JOIN labs l ON l.owner_user_id = u.id
       LEFT JOIN (
         SELECT
           owner_user_id,
@@ -657,21 +682,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sql += " WHERE " + conditions.join(" AND ");
     }
 
-    sql += " ORDER BY u.created_at DESC";
+    // Order by user created_at so seat-user grouping in the UI still works
+    // (owner appears before their seats), with lab id as a tiebreaker so
+    // multiple labs from the same owner appear adjacent in stable order.
+    sql += " ORDER BY u.created_at DESC, l.id ASC";
 
     try {
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
-      const users = rows.map((row: any) => {
+      const labs = rows.map((row: any) => {
         const { password_hash, ...rest } = row;
+        // Prefer lab-level identity when available; fall back to user-level
+        // for legacy users who never got a labs row (pre-migration accounts).
         return {
           ...rest,
           planDisplayName: PLAN_DISPLAY_NAMES[rest.plan] || rest.plan || "Unknown",
+          // Effective lab identity for the UI to render. Prefer lab fields.
+          effective_clia_number: rest.lab_clia_number || rest.clia_number || null,
+          effective_lab_name: rest.lab_name || rest.clia_lab_name || null,
         };
       });
       res.json({
         generatedAt: new Date().toISOString(),
-        totalUsers: users.length,
-        users,
+        totalLabs: labs.length,
+        labs,
+        // Backward-compatible aliases so any cached frontend bundle still
+        // sees a readable response. Remove on the next major release once
+        // all clients are confirmed on the new shape.
+        totalUsers: labs.length,
+        users: labs,
       });
     } catch (err: any) {
       console.error("Admin report error:", err.message);
