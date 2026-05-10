@@ -1122,6 +1122,179 @@ conference; booth posture above bridges verbally.
 
 ---
 
+## COMPETITOR-DRIVEN CANDIDATES
+
+Six items added 2026-05-10 from a Perplexity competitor analysis of
+myLabCompliance.io (encountered at the COLA conference). The analysis
+identified gaps where the competitor ships features VeritaAssure does
+not. Each item below preserves the analysis source so future agents
+do not re-derive Perplexity's recommendations as their own.
+
+Pricing comparison is intentionally NOT included as a parking-lot
+item. Operator flagged it as "a separate conversation, not a parking
+lot item until you decide" (2026-05-10).
+
+---
+
+### 20. Live QC engine (Levey-Jennings + Westgard)
+
+**What:** A daily-use QC workflow: Levey-Jennings charts, Westgard
+multi-rule violation detection, control lot management, automated QC
+scheduling. Today VeritaAssure documents QC posture (sign-offs,
+records, retention); it does not run the QC. The COLA segment (small
+physician-office labs, urgent care, ER) lives in daily QC and will
+pick the tool that draws their L-J chart.
+
+**Why this matters:** Per Perplexity analysis 2026-05-10, this is the
+single largest gap vs. myLabCompliance.io. Without it, VeritaAssure
+is a compliance documentation tool; with it, it becomes a lab
+operations platform. Strongest pitch for the COLA-segment audience
+the operator just met.
+
+**Fix shape:** Flagship-scale module. Hard build: multi-rule logic
+(1-2s, 1-3s, 2-2s, R-4s, 4-1s, 10-x, etc.), statistical control
+(SD, CV, mean tracking per lot), lot-bridging studies (parallel
+testing of old vs new lot, mean-shift detection), automated alerts.
+Pairs with VeritaCheck (verification studies feed initial ranges)
+and VeritaTrack (QC sign-offs).
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Operator forwarded the analysis; no decision yet.
+
+**Status:** Open. Scoping doc required per Section 8 Process Rules
+("Large tasks: present a build breakdown first, get approval, THEN
+build") before any code.
+
+**Pre- vs post-COLA:** Post-COLA. Multi-week scoping + multi-month
+v1 build. Comparable in scale to VeritaResponse (#17).
+
+---
+
+### 21. VeritaStock — lot tracking, expiration monitoring, reorder alerts
+
+**What:** Per Perplexity analysis, myLabCompliance.io has reagent and
+control inventory shipping at the bench-tech level with explicit lot
+tracking, expiration monitoring, and reorder alerts. Today VeritaStock
+covers par levels and burn-rate-based reorder calculations (per the
+Roadmap entry), but it is unclear whether it already has lot-level
+tracking and expiration alerts at the depth myLabCompliance.io ships.
+
+**Fix shape:** **Verify before building.** Read VeritaStock today
+(client/src/pages/VeritaStockPage.tsx and the related server routes)
+and confirm what is missing vs the Perplexity claim. If lot tracking,
+expiration alerts, and per-lot consumption reporting are absent, add
+them. If they are present, this item closes as already-shipped.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Tied to the bench-level surface that VeritaAssure
+historically deemphasized in favor of compliance documentation.
+
+**Status:** Open. Requires audit pass on existing VeritaStock surface
+before scoping.
+
+**Pre- vs post-COLA:** Post-COLA. Bench-level UX work; days to weeks
+depending on what's missing.
+
+---
+
+### 22. CMS-116 application support + state licensing tracking
+
+**What:** CMS-116 is the federal CLIA application form. Today
+VeritaPolicy covers ongoing CLIA posture but not the application
+itself. The form is also relevant at certificate-type changes (waived
+to moderate, moderate to high). State licensing tracking is the
+adjacent piece: many states require their own licensure on top of
+CLIA.
+
+**Fix shape:** Concrete, narrow, finite. Form-fill UX for CMS-116,
+with state-licensure registry per state (each state's authority,
+form, fee, renewal cadence). Pairs with VeritaPolicy and VeritaLab.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. myLabCompliance.io has this; VeritaAssure does not.
+
+**Status:** Open. Small build relative to the other competitor-driven
+candidates. Useful at lab startup and at certificate-type changes.
+
+**Pre- vs post-COLA:** Post-COLA. ~1-2 weeks for v1 (CMS-116 form +
+top-10-state licensure registry).
+
+---
+
+### 23. PAL studies as a dedicated guided workflow (conditional)
+
+**What:** myLabCompliance.io packages Precision, Accuracy, and
+Linearity studies as guided workflows (one workflow per study type).
+VeritaCheck today provides EP studies for these (precision, accuracy,
+reportable range, calibration verification, method comparison) — the
+question is whether VeritaCheck already covers the PAL framing at
+study-workflow depth or whether a dedicated wrapper is missing.
+
+**Fix shape:** **Conditional.** Audit VeritaCheck's existing study
+workflows; compare against the PAL framing myLabCompliance.io uses.
+If VeritaCheck already covers the workflow at equivalent depth, this
+item closes as already-shipped (possibly with a copy/UX update to
+match terminology). If not, scope a guided-workflow wrapper inside
+VeritaCheck.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Flagged conditional pending VeritaCheck depth audit.
+
+**Status:** Open. Audit required before any build decision.
+
+**Pre- vs post-COLA:** Post-COLA. Likely small (rename / wrapper) or
+medium (new guided-workflow surface) depending on audit outcome.
+
+---
+
+### 24. Mini-LIS module (deferred unless asked)
+
+**What:** A lightweight LIS for labs too small to justify a real
+LIS. myLabCompliance.io ships this. Per Perplexity analysis, this
+would be a wedge into very small physician-office labs that have no
+LIS at all and is well-positioned for the COLA Nashville segment —
+but it is also a different product, not a feature.
+
+**Fix shape:** **Deferred unless a customer explicitly asks.**
+Mini-LIS is a category change for VeritaAssure (compliance platform
+vs operational LIS). Scoping is non-trivial; the build is multi-month;
+the support burden post-launch is real. Recommend not chasing
+proactively.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Recommendation: do not build unless a paying customer
+requests.
+
+**Status:** Open, deferred. Park here; reopen only if a customer
+specifically asks for an LIS-shaped product.
+
+**Pre- vs post-COLA:** Indefinite.
+
+---
+
+### 25. Phlebotomy module (deferred unless asked)
+
+**What:** Specimen collection competency, draw-station tracking.
+myLabCompliance.io has a phlebotomy module. Per Perplexity analysis,
+every COLA-segment lab does phlebotomy, but the module is outside
+VeritaAssure's current spine.
+
+**Fix shape:** **Deferred unless a customer explicitly asks.** Niche
+unless a specific customer use case surfaces. VeritaStaff could
+absorb phlebotomist credentialing and competency tracking when those
+ship; specimen-collection workflow is the larger piece and more
+LIS-shaped than compliance-shaped.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Recommendation: lower priority than every other
+competitor-driven candidate.
+
+**Status:** Open, deferred.
+
+**Pre- vs post-COLA:** Indefinite.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
