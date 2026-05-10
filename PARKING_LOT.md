@@ -46,12 +46,20 @@ this analyte under 42 CFR §493 Subpart I."
 **Source:** session 299e9a73, conversation lines 559, 653, 729 (around
 2026-04-28).
 
-**Status:** Open. Confirmed not yet implemented as of 2026-05-01: no
-matches for "Lab-Set Internal Goal" or "labSetInternalGoal" in
-client/src or server.
+**Status:** PARTIAL. Form-side and StudyResultsPage shipped 2026-05-10:
+PR #77 added `hasCanonicalTea`/`teaLabelFor` helpers and swapped the
+KPI label on StudyResultsPage. PR #89 added 6 non-canonical analytes
+(Lipase, Bilirubin Direct/Unbound, Iron Saturation, Vitamin D 25-OH,
+Procalcitonin) to the CLIA_PRESETS dropdown with no §493 cite, plus
+help text directing users to Custom for unlisted analytes. PR #92
+promoted the help text to a visible amber callout. STILL OWED in a
+follow-up sweep: PDF table headers / column labels in pdfReport.ts,
+PDF regulatory-compliance narrative wording, Excel export column
+headers. Operator decision required on whether to ship the PDF/Excel
+sweep as a separate PR.
 
-**Pre- vs post-COLA:** Open question. VeritaCheck improvements are
-inside the freeze exception. User can pull this forward if desired.
+**Pre- vs post-COLA:** Form-side done. PDF/Excel sweep deferred until
+explicit go.
 
 ---
 
@@ -121,63 +129,19 @@ Monday available before the booth.
 
 ### 6. Tier-1 smoke test of today's five-phase deploy stack
 
-**What:** Phases 1, 2, 3, 3.5, 3.6 all live in production. Code review
-and CI passed each one. End-to-end click-through as a logged-in lab
-across each accreditation_choice value (TJC, CAP, AABB, COLA, CAP+AABB,
-CLIA) was not done. VeritaScan PDF export with badges generated for
-each accreditor type was not done. /veritapolicy and /veritacomp
-end-to-end click-through was not done.
-
-**Fix shape:** Process step. User logs in, clicks through each
-accreditation_choice value, generates one VeritaScan PDF per
-accreditor type, reports back what renders.
-
-**Source:** 2026-05-01 evening QC review.
-
-**Status:** Open. Process item, not a build.
+**CLOSED 2026-05-10 — see CLOSED C9 below.**
 
 ---
 
 ### 7. Per-module gating on VeritaPT, VeritaPolicy, VeritaLab, VeritaTrack pages
 
-**What:** These four pages call `useIsReadOnly()` with no module key, so
-they only respect the base access level (`read_only` / `locked`) and
-never check seat-level permissions. They appear in MODULE_LIST in the
-seat invite UI, so an owner picking "Custom" and setting them to View
-will see no effect on the seat user. Pages should call
-`useIsReadOnly('veritapt')`, `useIsReadOnly('veritapolicy')`,
-`useIsReadOnly('veritalab')`, `useIsReadOnly('veritatrack')` respectively
-to match the rest of the modules.
-
-**Fix shape:** Code change. Update the relevant page components to
-pass their module key into `useIsReadOnly`. Add the same module key
-to the corresponding write-side mutation routes via `requireModuleEdit`
-middleware (mirroring the pattern in routes.ts for veritacheck etc).
-
-**Source:** 2026-05-01 seat-permissions-mode review (PR #10, commit
-a43fbba). Discovered while auditing MODULE_LIST coverage.
-
-**Status:** Open. Not regression-causing; the four pages just
-currently behave as if every seat user has edit access regardless of
-MODULE_LIST setting for those keys.
+**CLOSED 2026-05-10 — see CLOSED C10 below.**
 
 ---
 
 ### 8. FAQ + Roadmap pages still describe VeritaStock as "planned"
 
-**What:** VeritaStock is shipped at /veritastock but the public FAQ
-and Roadmap pages still classify it as planned/upcoming. Audit found
-this when the user pushed back on the agent's initial mis-claim that
-veritastock didn't exist (it did, just unrenamed in some places). The
-public copy follows.
-
-**Fix shape:** Copy edit. Update FAQ and Roadmap to reflect that
-VeritaStock is live. Confirm any other public surface (TeamPage,
-Features, comparison tables) doesn't carry the same staleness.
-
-**Source:** 2026-05-01 David VeritaQA bug session.
-
-**Status:** Open. Public copy bug, not a code bug.
+**CLOSED 2026-05-10 — see CLOSED C11 below.**
 
 ---
 
@@ -273,106 +237,13 @@ Depends on Tier 2 (multi-lab data layer).
 
 ### 14. Admin report — render one row per lab instead of one row per user
 
-**What:** Admin report currently shows one row per user, which causes
-Lisa's row to display two CLIAs concatenated in a single cell
-("22D0070843, 22D1077821"). The data layer is already lab-aware (two
-`labs` rows under her user), but the report query and rendering are
-user-centric.
-
-**Fix shape:** Rewrite admin report query to `SELECT FROM labs JOIN
-users ON labs.owner_user_id`. One row per lab, with its own CLIA,
-tier, status, and primary contact. Owners of multiple labs (Lisa)
-appear in the Primary Contact column on multiple rows. Stats label
-becomes "Total Labs" (or both Total Accounts and Total Labs).
-
-**Source:** 2026-05-07 multi-lab discussion. Admin
-report screenshot showed concatenated CLIAs.
-
-**Status:** Open. Operator believes this was fixed; agent verification
-2026-05-10 found admin report still per-user (`server/routes.ts:595`
-selects `FROM users u`; `client/src/pages/AdminReportPage.tsx`
-declares `interface UserRecord { … clia_number, clia_lab_name … }` and
-renders one row per user). No `interface LabRecord` or `FROM labs JOIN
-users` query found. Operator to point at the file that closes this if
-fix lives elsewhere; otherwise build still owed.
-
-**Pre- vs post-COLA:** Post-COLA. Read-only view change but considered
-slightly higher demo risk than CLIA validation alone.
+**CLOSED 2026-05-10 — see CLOSED C12 below.**
 
 ---
 
 ### 15. Add WSLH PT as third PT vendor with full catalog mapping
 
-**What:** Today VeritaPT recognizes only two named vendors
-(`pt_enrollments_v2.vendor` is `CHECK(vendor IN ('CAP', 'API', 'Other'))`).
-WSLH PT (Wisconsin State Laboratory of Hygiene Proficiency Testing) is
-a CMS-approved PT provider accepted by CAP, TJC, and COLA, and the
-user met them in person at the COLA Nashville 2026 booth on
-2026-05-07 (trade-show business card + UTM-tagged catalog URL
-confirms direct contact). User's stated goal: map their products to
-VeritaMap so VeritaPT can verify that a WSLH order line actually
-covers the analytes a lab runs, same as CAP and API today.
-
-**Why it works for our matcher:** WSLH publishes module/program codes
-(e.g., 1310-1322 = general chem panel, 1260 = cardiac BNP/troponin,
-1080 = blood lead, 1524 = HbA1c, 4190 = HBV/HCV serology, 2230-2370
-= hematology by instrument family). Each module is a stable
-analyte-list bundle that maps cleanly onto our existing `pt_category`
-strings. No new categories needed; the coverage matcher in
-`computePTCoverage()` (server/routes.ts ~line 6411) already keys on
-`pt_category`, not vendor.
-
-**Fix shape (Tier M, ~½ day):**
-
-1. Migration: drop the `CHECK(vendor IN ('CAP','API','Other'))`
-   constraint on `pt_enrollments_v2`; replace with
-   `CHECK(vendor IN ('CAP','API','WSLH','Other'))`. SQLite requires
-   table rebuild for CHECK changes — do via
-   `CREATE TABLE pt_enrollments_v2_new ... ; INSERT SELECT ... ; DROP ; RENAME`
-   pattern, idempotent like the other db.ts migrations.
-2. Add `'WSLH'` to `users.preferred_pt_vendor` allowed values
-   (currently free-text, just update the AccountSettings dropdown +
-   any UI guards).
-3. Create `shared/wslhCatalog.ts` mirroring the structure of the
-   existing `cliaAnalytes` data: `{ programCode, programName,
-   ptCategory, analytes[], shipmentsPerYear, samplesPerShipment,
-   notes }`. Source: WSLH 2022 Clinical Catalog PDF
-   (https://www.slh.wisc.edu/wp-content/uploads/2021/08/WSLHPT_2022_Clinical_Catalog-1.pdf)
-   plus 2025 CMS regulated-analyte updates
-   (https://wslhpt.org/clia-and-proficiency-testing-changes/). Refresh
-   to 2026 catalog when WSLH publishes it ("Coming Soon" on their
-   page as of 2026-05-07).
-4. VeritaPT enrollment form: when vendor=WSLH, surface a program-code
-   autocomplete sourced from `wslhCatalog.ts`. Selecting a code
-   auto-fills `program_name` and `pt_category`.
-5. Render WSLH alongside CAP and API anywhere vendor logos appear
-   (account settings, VeritaPT dashboard, coverage report PDFs).
-6. Unit test the catalog: every entry must have a `pt_category` that
-   exists in our coverage map; no orphan categories.
-
-**Out of scope for Tier M (deferred to Tier L or later):** parsing
-WSLH enrollment-quote PDFs/CSVs to bulk-create enrollments. Manual
-entry by program code is fine for v1.
-
-**Source:** 2026-05-07 conference user request, WSLH catalog URL
-shared via business card with UTM tags `utm_source=tradeshow`
-`utm_medium=business_card` `utm_campaign=catalog_page`. User explicit
-goal: "map their products to our veritamap and use veritapt to
-document what PT materials were purchased to ensure full PT coverage
-for the site."
-
-**Status:** Open. Decision recorded 2026-05-07. Build deferred to
-post-COLA week of 2026-05-11 to honor the conference deploy freeze
-(same rationale as items #11, #12, #14).
-
-**Pre- vs post-COLA:** Post-COLA. CHECK constraint change requires
-table rebuild — non-trivial migration during a live demo week is
-out. No customer is blocked today; vendor=Other works as a
-placeholder if any booth lab signs up before the build ships.
-
-**Follow-up artifact owed (separate task):** WSLH partnership
-follow-up email template tied to the booth meeting. Not in the
-codebase scope; user can request when ready. (Now tracked as #16.)
+**CLOSED 2026-05-10 — see CLOSED C13 below.**
 
 ---
 
@@ -861,12 +732,26 @@ User confirmed this booth answer 2026-05-07.
 - VeritaScan item #46 today:
   client/src/lib/veritaScanData.ts:96
 
-**Status:** Open. User confirmed Option C and Phase 1 + Phase 2
-sequencing on 2026-05-07. Phase 1 target: post-COLA week of
-2026-05-11. Phase 2 target: same week, after #15 ships.
+**Status:** PARTIAL as of 2026-05-10.
 
-**Pre- vs post-COLA:** Post-COLA. No code changes during the
-conference; booth answer above bridges the gap verbally.
+- Phase 1 (VeritaScan AAA sub-block, items 169-173) **CLOSED** via
+  PR #78 (`client/src/lib/veritaScanData.ts`). Item #46 retained as
+  AAA gateway; new 5-item block uses ids 169-173 to preserve historical
+  scan data integrity.
+- Phase 2 v1 (data layer) **CLOSED** 2026-05-10 via PR #80 (merge
+  commit 98d184a): `aa_records` table added in `server/db.ts` with
+  method CHECK constraint and `frequency_per_year >= 2` CHECK; four
+  CRUD endpoints under `/api/pt/aa-records` in `server/routes.ts`.
+- Phase 2 v2 (UI + coverage union) **STILL OWED**: AAA enrollment
+  form, extend `computePTCoverage()` to union `pt_enrollments_v2`
+  with `aa_records`, 3-bucket dashboard tile (PT-covered / AAA-covered
+  / Uncovered). Sequencing dependency on #19 (lab-wide menu toggle)
+  is now satisfied (#19 closed as C8 on 2026-05-10).
+- Phase 3 (AAA-failure-to-finding linkage) remains deferred pending
+  #17 launch.
+
+**Pre- vs post-COLA:** Post-COLA. Phase 1 and Phase 2 data layer
+shipped 2026-05-10.
 
 ---
 
@@ -1332,6 +1217,84 @@ original entry called out is satisfied.
 
 **Source:** Agent verification 2026-05-10 via grep + file read.
 Operator confirmed shipped 2026-05-10.
+
+---
+
+### C9. Tier-1 smoke test checklist (formerly #6)
+
+**Closure evidence:** `docs/smoke-test-tier1.md` documents the Tier-1
+smoke-test process and post-deploy verification steps. Shipped via
+PR #81 as part of the 2026-05-10 wave.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C10. Per-module gating (formerly #7)
+
+**Closure evidence:** Client-side `useIsReadOnly` module keys wired
+on `client/src/pages/VeritaPolicyAppPage.tsx` and
+`client/src/pages/VeritaLabAppPage.tsx`. Server-side
+`requireModuleEdit('veritapolicy')` and `requireModuleEdit('veritalab')`
+guards added on `/api/veritapolicy/*` and `/api/veritalab/*` write
+routes in `server/routes.ts`; `requireModuleEdit('veritatrack')`
+added on 7 write routes in `server/veritatrack.ts`. Verified by
+operator: seat user set to View on `veritapolicy` blocks UI saves
+and returns 403 from curl; restoring Edit resumes writes; same
+pattern verified for `veritalab` and `veritatrack`. Shipped via
+PR #76.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C11. VeritaStock shipped copy (formerly #8)
+
+**Closure evidence:** `client/src/pages/ArticleInventoryManagementPage.tsx`
+line 305 footer reads "platform that includes VeritaStock™" instead
+of the prior "planned for a future release" wording. Verified live
+on `/resources/laboratory-inventory-management`. Shipped via PR #75.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C12. Admin report one-row-per-lab (formerly #14)
+
+**Closure evidence:** `/api/admin/report` rewritten in
+`server/routes.ts` (~line 595) to LEFT JOIN `labs` on
+`owner_user_id`, expanding multi-lab owners into one row per lab
+with the lab's own CLIA. Backward-compatible response shape returns
+both `labs` (new) and `users` (legacy alias) so the rollout is
+revertible. `client/src/pages/AdminReportPage.tsx` updated to read
+`data.labs ?? data.users`, use `effective_clia_number` /
+`effective_lab_name`, and key React rows by `lab_id` when present.
+Operator-confirmed multi-lab owners now require a second `labs`
+row added via Account Settings to surface two rows (data
+prerequisite, not a code bug). Shipped via PR #85.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C13. WSLH PT vendor (formerly #15)
+
+**Closure evidence:** Shipped 2026-05-10 via PR #79 (merge commit
+eeebc6e; merged after rebase to resolve a `server/db.ts` collision
+with PR #80's `aa_records` migration block, with both blocks
+preserved side by side). `pt_enrollments_v2` CHECK constraint
+rebuilt in `server/db.ts` to include `'WSLH'` via idempotent
+CREATE NEW + INSERT SELECT + DROP + RENAME migration block.
+`shared/wslhCatalog.ts` added with 6 starter programs (1310 General
+Chem, 1260 Cardiac, 1080 Blood Lead, 1524 HbA1c, 4190 Hepatitis
+Serology, 2230 Hematology). `'wslh'` added to `VALID_PT_VENDORS` in
+`server/routes.ts`. WSLH wired into the vendor selector on
+`client/src/pages/AccountSettingsPage.tsx` and into the vendor list
+on `client/src/pages/VeritaPTAppPage.tsx`. Migration log line
+`[migration] pt_enrollments_v2 vendor CHECK rebuilt to include
+'WSLH'` is the post-deploy success signal. Shipped via PR #79.
+
+**Source:** Operator instruction 2026-05-10 in this session.
 
 ---
 
