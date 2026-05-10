@@ -8702,7 +8702,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST /api/veritalab/certificates - create a new certificate
-  app.post("/api/veritalab/certificates", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritalab/certificates", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
     if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
@@ -8722,7 +8722,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT /api/veritalab/certificates/:id - update a certificate
-  app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     const existing = (db as any).$client.prepare(
@@ -8759,7 +8759,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE /api/veritalab/certificates/:id - soft delete
-  app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const existing = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
@@ -8779,7 +8779,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const multer = require("multer");
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
 
-  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, upload.single("file"), (req: any, res: any) => {
+  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), upload.single("file"), (req: any, res: any) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const cert = (db as any).$client.prepare(
       "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
@@ -8834,7 +8834,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE /api/veritalab/certificates/:id/documents/:docId - delete document
-  app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const doc = (db as any).$client.prepare(
       "SELECT id FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
@@ -10564,7 +10564,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PUT settings (lab type + accreditation body)
   // Deprecated columns (has_blood_bank, has_transplant, has_microbiology, has_maternal_serum, waived_only)
   // are retained in the schema but no longer written; they keep their existing or default values.
-  app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const { is_independent, setup_complete, accreditation_body } = req.body;
@@ -10630,7 +10630,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PATCH requirement status
-  app.patch('/api/veritapolicy/requirements/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch('/api/veritapolicy/requirements/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const reqId = parseInt(req.params.id);
@@ -10662,7 +10662,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST lab policy
-  app.post('/api/veritapolicy/policies', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post('/api/veritapolicy/policies', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
     if (!policy_name) return res.status(400).json({ error: 'policy_name required' });
@@ -10674,7 +10674,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT lab policy
-  app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
@@ -10688,7 +10688,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE lab policy
-  app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const policyId = parseInt(req.params.id);
@@ -10699,7 +10699,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST document upload for a policy
-  app.post('/api/veritapolicy/policies/:id/upload', authMiddleware, requireWriteAccess, async (req: any, res) => {
+  app.post('/api/veritapolicy/policies/:id/upload', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), async (req: any, res) => {
     try {
       const sqlite = db.$client;
       const userId = req.userId;
@@ -10856,7 +10856,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.patch('/api/veritapolicy/master-list/:policyId', authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch('/api/veritapolicy/master-list/:policyId', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.userId;
     const policyId = String(req.params.policyId);

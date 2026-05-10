@@ -102,7 +102,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // POST create task
-  app.post("/api/veritatrack/tasks", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritatrack/tasks", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
@@ -116,7 +116,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // PUT update task
-  app.put("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes, active } = req.body;
@@ -128,7 +128,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // DELETE (soft) task
-  app.delete("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     sqlite.prepare("UPDATE veritatrack_tasks SET active=0 WHERE id=? AND user_id=?").run(Number(req.params.id), userId);
@@ -136,7 +136,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // POST sign off a task
-  app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const task = sqlite.prepare(
@@ -168,7 +168,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // DELETE a sign-off
-  app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     sqlite.prepare("DELETE FROM veritatrack_signoffs WHERE id = ? AND user_id = ?").run(Number(req.params.id), userId);
@@ -176,7 +176,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // POST import tasks from VeritaMap
-  app.post("/api/veritatrack/import-from-map", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritatrack/import-from-map", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const map = sqlite.prepare(
@@ -251,7 +251,7 @@ export function registerVeritaTrackRoutes(
   });
 
   // POST seed default tasks (idempotent)
-  app.post("/api/veritatrack/seed-defaults", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritatrack/seed-defaults", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { categories } = req.body as { categories: string[] };
