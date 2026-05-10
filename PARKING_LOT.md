@@ -57,20 +57,7 @@ inside the freeze exception. User can pull this forward if desired.
 
 ### 2. Real Stripe checkout abandonment diagnostic using session data
 
-**What:** A genuine diagnosis of whether checkout abandonment is
-happening, using Stripe session data, rather than the text-parsed
-inference that was incorrectly presented as diagnosis on 2026-04-27.
-
-**Fix shape:** Pull abandoned checkout sessions from Stripe API, group
-by drop-off step, surface in admin dashboard or as a daily report.
-
-**Source:** session b2bfb4df, line 1366 (2026-04-27).
-
-**Status:** Open. Confirmed not yet built as of 2026-05-01: no matches
-for "checkout.session.expired", "abandoned.cart", or "abandonment" in
-server code.
-
-**Pre- vs post-COLA:** Post-COLA per the parking instruction.
+**REMOVED 2026-05-10 — see NOT CARRIED OVER R2 below.**
 
 ---
 
@@ -101,22 +88,7 @@ still on screen.
 
 ### 4. VeritaPolicy service-line filtering removed
 
-**What:** A CAP-only lab without a blood bank still sees all 21 CFR
-Part 606 (FDA blood-bank cGMP) rows on /veritapolicy. The data has
-service_line: "blood_bank" on most of these rows, but VeritaPolicy no
-longer applies a service-line filter; the prior-session refactor pulled
-the blood-bank/transplant/microbiology/maternal-serum toggles out and
-replaced them with per-row N/A buttons.
-
-**Fix shape:** UX decision (auto N/A vs. hidden vs. per-row N/A vs.
-service-line picker). Then implement in
-client/src/pages/VeritaPolicyAppPage.tsx and
-server/routes.ts /api/veritapolicy/requirements.
-
-**Source:** CAP customer screenshot of /veritapolicy, 2026-05-01
-evening.
-
-**Status:** Open.
+**CLOSED 2026-05-10 by operator decision — see CLOSED C6 below.**
 
 ---
 
@@ -211,32 +183,7 @@ Features, comparison tables) doesn't carry the same staleness.
 
 ### 9. VeritaScan has no sign-off date field, breaking cross-reference with VeritaMap
 
-**What:** VeritaScan tracks scan items and completion, but has no
-field for the date the director (or designee) signed off on the
-scan / closed it out. The VeritaMap correlation feature (in flight
-2026-05-03) is adding `signoff_date`, `signoff_by_user_id`, and
-`signoff_by_name` so the regulatory-binding date drives `next_due`.
-VeritaScan should follow the same pattern so a scan can tie back
-to a sign-off event and (eventually) cross-reference VeritaMap
-correlation sign-offs (e.g. "this VeritaScan finding was closed
-by the same sign-off that closed Hem correlation group 47 on
-2026-04-15").
-
-**Fix shape:** Add `signoff_date`, `signoff_by_user_id`,
-`signoff_by_name` to the VeritaScan completion path (likely
-`veritascan_items` and/or a parent scan-level record). PRAGMA-guarded
-ALTER per New DB Table Rule. Backend endpoints to record sign-off.
-UI surface for director sign-off action. Cross-reference query so
-VeritaMap correlation widget can link to VeritaScan items closed
-under the same sign-off, and vice versa.
-
-**Source:** Michael flagged 2026-05-03 during VeritaMap correlation
-feature design conversation. Quote: "This is actually a worry of mine
-with VeritaScan because it has nowhere to document the sign-off date
-to tie back into VeritaMap and VeritaScan."
-
-**Status:** Open. Deferred until after VeritaMap correlation feature
-ships so the sign-off pattern is settled and reusable.
+**REMOVED 2026-05-10 — see NOT CARRIED OVER R3 below.**
 
 ---
 
@@ -320,31 +267,7 @@ Depends on Tier 2 (multi-lab data layer).
 
 ### 13. CLIA number format validation (client + server)
 
-**What:** Today the CLIA number field accepts any string. Lisa's row
-in production has two comma-joined CLIAs ("22D0070843, 22D1077821")
-as a result of single-lab schema not supporting multi-lab. New
-customers can enter malformed CLIAs that pass through to PDF/Excel
-report headers and external sources of truth.
-
-**Fix shape:** Centralized `shared/validateClia.ts` helper. Regex
-`^\d{2}D\d{7}$` after stripping whitespace/dashes and uppercasing the
-D. Validated client-side in onboarding wizard + AccountSettingsPage,
-and server-side on every write path that touches `clia_number`. Error
-message: "Must be 10 characters: 2 digits, 'D', then 7 digits — e.g.,
-22D0070843." Format-only — no live CMS database lookup. Existing
-non-conformant rows continue to load and display unchanged;
-validation only blocks **new save attempts** with malformed values.
-Retroactive cleanup of Lisa's row deferred until Tier 2 multi-lab
-data layer ships.
-
-**Source:** 2026-05-07 multi-lab discussion (this session). Triggered
-by admin report screenshot showing comma-joined CLIAs in Lisa's row.
-
-**Status:** Open. Approved to ship as a hedge during COLA — minimal
-scope (save-time validation only, no retroactive enforcement).
-
-**Pre- vs post-COLA:** Pre-COLA hedge approved 2026-05-07. Smallest
-viable shape to prevent new customers from entering malformed CLIAs.
+**CLOSED 2026-05-10 — see CLOSED C7 below.**
 
 ---
 
@@ -362,11 +285,16 @@ tier, status, and primary contact. Owners of multiple labs (Lisa)
 appear in the Primary Contact column on multiple rows. Stats label
 becomes "Total Labs" (or both Total Accounts and Total Labs).
 
-**Source:** 2026-05-07 multi-lab discussion (this session). Admin
+**Source:** 2026-05-07 multi-lab discussion. Admin
 report screenshot showed concatenated CLIAs.
 
-**Status:** Open. Decision recorded; build deferred to post-COLA to
-minimize demo risk during conference.
+**Status:** Open. Operator believes this was fixed; agent verification
+2026-05-10 found admin report still per-user (`server/routes.ts:595`
+selects `FROM users u`; `client/src/pages/AdminReportPage.tsx`
+declares `interface UserRecord { … clia_number, clia_lab_name … }` and
+renders one row per user). No `interface LabRecord` or `FROM labs JOIN
+users` query found. Operator to point at the file that closes this if
+fix lives elsewhere; otherwise build still owed.
 
 **Pre- vs post-COLA:** Post-COLA. Read-only view change but considered
 slightly higher demo risk than CLIA validation alone.
@@ -497,13 +425,12 @@ COLA. The right email depends on:
 **Source:** 2026-05-07 conference user request; user said "Parking
 lot the email" at 14:52 CDT after the WSLH catalog discussion.
 
-**Status:** Open. Blocked on user returning from COLA with the WSLH
-business card / contact details. No deadline this week; target send
-day is 2026-05-11 or 2026-05-12 to land on a Monday/Tuesday inbox.
+**Status:** **DELAYED 2026-05-10 by operator instruction.** Revisit
+when WSLH contact details (name, email, title, 1-2 sentences on what
+was discussed at booth) are in hand. No date set.
 
-**Pre- vs post-COLA:** Post-COLA. User is on the booth floor today
-and tomorrow; drafting an outbound vendor email mid-conference is
-the wrong order of operations.
+**Pre- vs post-COLA:** Post-COLA. Was originally targeted 2026-05-11
+or 12; deferred indefinitely on 2026-05-10.
 
 ---
 
@@ -945,6 +872,13 @@ conference; booth answer above bridges the gap verbally.
 
 ### 19. VeritaMap lab-wide menu toggle (cross-department / cross-map view)
 
+**CLOSED 2026-05-10 — see CLOSED C8 below.**
+
+(Original entry preserved below for historical context. Subsequent
+sections in the file may still reference #19 as a sequencing
+prerequisite for #18 Phase 2; that dependency has been satisfied by
+the closure.)
+
 **What:** Today VeritaMap's `veritamap_maps` table allows a single
 user to own multiple named maps, and many labs split their setup
 by department (Chemistry map, Hematology map, Coag map, Blood Bank
@@ -1122,6 +1056,179 @@ conference; booth posture above bridges verbally.
 
 ---
 
+## COMPETITOR-DRIVEN CANDIDATES
+
+Six items added 2026-05-10 from a Perplexity competitor analysis of
+myLabCompliance.io (encountered at the COLA conference). The analysis
+identified gaps where the competitor ships features VeritaAssure does
+not. Each item below preserves the analysis source so future agents
+do not re-derive Perplexity's recommendations as their own.
+
+Pricing comparison is intentionally NOT included as a parking-lot
+item. Operator flagged it as "a separate conversation, not a parking
+lot item until you decide" (2026-05-10).
+
+---
+
+### 20. Live QC engine (Levey-Jennings + Westgard)
+
+**What:** A daily-use QC workflow: Levey-Jennings charts, Westgard
+multi-rule violation detection, control lot management, automated QC
+scheduling. Today VeritaAssure documents QC posture (sign-offs,
+records, retention); it does not run the QC. The COLA segment (small
+physician-office labs, urgent care, ER) lives in daily QC and will
+pick the tool that draws their L-J chart.
+
+**Why this matters:** Per Perplexity analysis 2026-05-10, this is the
+single largest gap vs. myLabCompliance.io. Without it, VeritaAssure
+is a compliance documentation tool; with it, it becomes a lab
+operations platform. Strongest pitch for the COLA-segment audience
+the operator just met.
+
+**Fix shape:** Flagship-scale module. Hard build: multi-rule logic
+(1-2s, 1-3s, 2-2s, R-4s, 4-1s, 10-x, etc.), statistical control
+(SD, CV, mean tracking per lot), lot-bridging studies (parallel
+testing of old vs new lot, mean-shift detection), automated alerts.
+Pairs with VeritaCheck (verification studies feed initial ranges)
+and VeritaTrack (QC sign-offs).
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Operator forwarded the analysis; no decision yet.
+
+**Status:** Open. Scoping doc required per Section 8 Process Rules
+("Large tasks: present a build breakdown first, get approval, THEN
+build") before any code.
+
+**Pre- vs post-COLA:** Post-COLA. Multi-week scoping + multi-month
+v1 build. Comparable in scale to VeritaResponse (#17).
+
+---
+
+### 21. VeritaStock — lot tracking, expiration monitoring, reorder alerts
+
+**What:** Per Perplexity analysis, myLabCompliance.io has reagent and
+control inventory shipping at the bench-tech level with explicit lot
+tracking, expiration monitoring, and reorder alerts. Today VeritaStock
+covers par levels and burn-rate-based reorder calculations (per the
+Roadmap entry), but it is unclear whether it already has lot-level
+tracking and expiration alerts at the depth myLabCompliance.io ships.
+
+**Fix shape:** **Verify before building.** Read VeritaStock today
+(client/src/pages/VeritaStockPage.tsx and the related server routes)
+and confirm what is missing vs the Perplexity claim. If lot tracking,
+expiration alerts, and per-lot consumption reporting are absent, add
+them. If they are present, this item closes as already-shipped.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Tied to the bench-level surface that VeritaAssure
+historically deemphasized in favor of compliance documentation.
+
+**Status:** Open. Requires audit pass on existing VeritaStock surface
+before scoping.
+
+**Pre- vs post-COLA:** Post-COLA. Bench-level UX work; days to weeks
+depending on what's missing.
+
+---
+
+### 22. CMS-116 application support + state licensing tracking
+
+**What:** CMS-116 is the federal CLIA application form. Today
+VeritaPolicy covers ongoing CLIA posture but not the application
+itself. The form is also relevant at certificate-type changes (waived
+to moderate, moderate to high). State licensing tracking is the
+adjacent piece: many states require their own licensure on top of
+CLIA.
+
+**Fix shape:** Concrete, narrow, finite. Form-fill UX for CMS-116,
+with state-licensure registry per state (each state's authority,
+form, fee, renewal cadence). Pairs with VeritaPolicy and VeritaLab.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. myLabCompliance.io has this; VeritaAssure does not.
+
+**Status:** Open. Small build relative to the other competitor-driven
+candidates. Useful at lab startup and at certificate-type changes.
+
+**Pre- vs post-COLA:** Post-COLA. ~1-2 weeks for v1 (CMS-116 form +
+top-10-state licensure registry).
+
+---
+
+### 23. PAL studies as a dedicated guided workflow (conditional)
+
+**What:** myLabCompliance.io packages Precision, Accuracy, and
+Linearity studies as guided workflows (one workflow per study type).
+VeritaCheck today provides EP studies for these (precision, accuracy,
+reportable range, calibration verification, method comparison) — the
+question is whether VeritaCheck already covers the PAL framing at
+study-workflow depth or whether a dedicated wrapper is missing.
+
+**Fix shape:** **Conditional.** Audit VeritaCheck's existing study
+workflows; compare against the PAL framing myLabCompliance.io uses.
+If VeritaCheck already covers the workflow at equivalent depth, this
+item closes as already-shipped (possibly with a copy/UX update to
+match terminology). If not, scope a guided-workflow wrapper inside
+VeritaCheck.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Flagged conditional pending VeritaCheck depth audit.
+
+**Status:** Open. Audit required before any build decision.
+
+**Pre- vs post-COLA:** Post-COLA. Likely small (rename / wrapper) or
+medium (new guided-workflow surface) depending on audit outcome.
+
+---
+
+### 24. Mini-LIS module (deferred unless asked)
+
+**What:** A lightweight LIS for labs too small to justify a real
+LIS. myLabCompliance.io ships this. Per Perplexity analysis, this
+would be a wedge into very small physician-office labs that have no
+LIS at all and is well-positioned for the COLA Nashville segment —
+but it is also a different product, not a feature.
+
+**Fix shape:** **Deferred unless a customer explicitly asks.**
+Mini-LIS is a category change for VeritaAssure (compliance platform
+vs operational LIS). Scoping is non-trivial; the build is multi-month;
+the support burden post-launch is real. Recommend not chasing
+proactively.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Recommendation: do not build unless a paying customer
+requests.
+
+**Status:** Open, deferred. Park here; reopen only if a customer
+specifically asks for an LIS-shaped product.
+
+**Pre- vs post-COLA:** Indefinite.
+
+---
+
+### 25. Phlebotomy module (deferred unless asked)
+
+**What:** Specimen collection competency, draw-station tracking.
+myLabCompliance.io has a phlebotomy module. Per Perplexity analysis,
+every COLA-segment lab does phlebotomy, but the module is outside
+VeritaAssure's current spine.
+
+**Fix shape:** **Deferred unless a customer explicitly asks.** Niche
+unless a specific customer use case surfaces. VeritaStaff could
+absorb phlebotomist credentialing and competency tracking when those
+ship; specimen-collection workflow is the larger piece and more
+LIS-shaped than compliance-shaped.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io),
+2026-05-10. Recommendation: lower priority than every other
+competitor-driven candidate.
+
+**Status:** Open, deferred.
+
+**Pre- vs post-COLA:** Indefinite.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
@@ -1180,6 +1287,54 @@ SESSION_HANDOFF.md or SESSION_HANDOFF-2.md as of 2026-05-01.
 
 ---
 
+### C6. VeritaPolicy service-line filtering removed (formerly #4)
+
+**Closure rationale (operator decision 2026-05-10):** Keep all
+VeritaPolicy rows. CFR-only references with no accreditor reference
+are intentional. Labs are welcome to N/A specific lines that do not
+apply to them. The "service-line filtering" reframing of the original
+report misread the design intent.
+
+**Closure evidence:** No code change required. The current behavior
+(all rows shown, per-row N/A available) is the desired behavior.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C7. CLIA number format validation (formerly #13)
+
+**Closure evidence:** `shared/validateClia.ts` defines `CLIA_REGEX =
+/^\d{2}D\d{7}$/` (line 24), `validateClia()` helper with whitespace
+and dash stripping plus uppercasing (lines 43-57), and
+`CLIA_FORMAT_HINT` user-facing error message (lines 26-27). Used in
+`client/src/pages/AccountSettingsPage.tsx:393` as placeholder text.
+The centralized helper described in the original parking lot fix
+shape exists and behaves as specified.
+
+**Source:** Agent verification 2026-05-10 via grep + file read.
+Operator confirmed shipped 2026-05-10.
+
+---
+
+### C8. VeritaMap lab-wide menu toggle (formerly #19)
+
+**Closure evidence:** `client/src/pages/VeritaMapLabwidePage.tsx`
+exists and implements the labwide read-only union view. Route is
+registered in `client/src/App.tsx`. Toggle integration appears in
+`client/src/pages/VeritaMapAppPage.tsx` and
+`client/src/pages/VeritaMapMapPage.tsx`. Phase 1 of the original
+parking lot plan (read-only union view, per-session toggle) shipped.
+
+**Sequencing note:** #18 Phase 2 (real AAA coverage) can now build on
+this lab-wide union safely. The hard sequencing dependency the
+original entry called out is satisfied.
+
+**Source:** Agent verification 2026-05-10 via grep + file read.
+Operator confirmed shipped 2026-05-10.
+
+---
+
 ## NOT CARRIED OVER (explicitly rejected)
 
 ### R1. Rotate Railway token because it appeared in chat
@@ -1192,5 +1347,27 @@ committed SESSION_HANDOFF.md files in past sessions and pushed to the
 repo, which is an actual leak. Token-in-our-conversation is not.
 
 **Source:** session 299e9a73 turn 7, ~2026-04-28.
+
+---
+
+### R2. Real Stripe checkout abandonment diagnostic (formerly #2)
+
+**Reason:** Operator decision 2026-05-10 — abandoned. Not pursuing a
+Stripe-session-based abandonment diagnostic. The original concern
+(text-parsed inference incorrectly presented as diagnosis) is noted
+as a class of error to avoid; the build itself is no longer wanted.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### R3. VeritaScan sign-off date field (formerly #9)
+
+**Reason:** Operator clarification 2026-05-10 — VeritaScan sign-off
+is not a regulatory requirement. The cross-reference value with
+VeritaMap correlation (originally proposed as the motivating use case)
+does not justify adding the schema and UI. No code change.
+
+**Source:** Operator instruction 2026-05-10 in this session.
 
 ---
