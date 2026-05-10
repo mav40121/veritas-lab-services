@@ -81,3 +81,7 @@ These touch only markdown. Safe to merge as a batch in any order. No verificatio
 ## When to use this template
 
 This file is dated 2026-05-10 to mark the specific wave. For future merge cycles, copy this file to a new dated filename (e.g., `merge-checklist-YYYY-MM-DD.md`) and adjust the PR list. The structural approach (Waves by risk; per-PR Verify + Rollback; rules at the end) is the reusable part.
+
+## Postscript: 2026-05-10 Railway auto-deploy repair
+
+During this wave the operator noticed that pushes to `main` were no longer triggering Railway auto-deploys. Root cause: Railway's GitHub App had been uninstalled from the `mav40121` GitHub account at some prior point, breaking the webhook chain. Repair: reinstall Railway App with access to `mav40121/veritas-lab-services`, reconnect the source repo on the `radiant-quietude` service, enable "Auto deploys when pushed to GitHub" and "Wait for CI." Verified post-repair: Railway service `repoTriggers` shows one trigger on `main`; pushes auto-fire deploys again. Tracked here so future sessions know to check `repoTriggers` first if auto-deploy ever silently stops again.
