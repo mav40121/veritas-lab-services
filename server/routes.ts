@@ -7050,6 +7050,195 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── VERITARESPONSE — POST-SURVEY DEFICIENCY RESPONSE ───────────────────
+  // Parking-lot #17. Phase 1 ships the data layer + CRUD + due-date
+  // auto-computation. Renderers (CMS-2567, CAP per-checklist, TJC ESC) and
+  // the 5-elements POC validator land in Phase 2. See
+  // docs/scoping-veritaresponse.md.
+
+  const VALID_ACCREDITORS = ['CAP','TJC','COLA','CMS','AABB','Other'];
+  const VALID_FINDING_STATUSES = ['open','drafting','submitted','accepted','rejected_resubmit','closed'];
+
+  // Auto-compute due date from accreditor + anchor date.
+  // Anchor semantics per accreditor:
+  //   CAP   anchor = inspection date,        due = anchor + 30 days
+  //   TJC   anchor = final report posted,    due = anchor + 60 days
+  //   CMS   anchor = receipt date,           due = anchor + 10 days
+  //   AABB  event-driven; nonconforming-event-report timing varies. Default
+  //         to event date + 45 days (FDA reportable cap) so the UI has a
+  //         clock the lab can pull forward.
+  //   COLA  consultative model with no hard deadline. Surface a soft target
+  //         of anchor + 30 days as a check-in reminder, not a regulatory cap.
+  //   Other anchor + 30 days as a neutral default.
+  function dueDateForFinding(accreditor: string, anchorDate: string | null): string | null {
+    if (!anchorDate) return null;
+    const offsets: Record<string, number> = {
+      'CAP': 30, 'TJC': 60, 'CMS': 10, 'AABB': 45, 'COLA': 30, 'Other': 30,
+    };
+    const days = offsets[accreditor];
+    if (days === undefined) return null;
+    const d = new Date(anchorDate);
+    if (isNaN(d.getTime())) return null;
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // GET all findings for the active data user
+  app.get("/api/findings", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE user_id = ? ORDER BY due_date IS NULL, due_date ASC, id DESC"
+    ).all(dataUserId);
+    res.json(rows);
+  });
+
+  // GET single finding
+  app.get("/api/findings/:id", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!row) return res.status(404).json({ error: "Finding not found" });
+    res.json(row);
+  });
+
+  // POST new finding
+  app.post("/api/findings", authMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const {
+      accreditor, inspection_id, finding_number, standard_ref,
+      phase_or_severity, description, surveyor_notes,
+      anchor_date, status,
+      immediate_action, containment, root_cause,
+      corrective_action, preventive_action, monitoring_plan,
+      completion_date, signed_by, signed_at, external_submission_ref,
+    } = req.body || {};
+    if (!accreditor || !VALID_ACCREDITORS.includes(accreditor)) {
+      return res.status(400).json({ error: `accreditor must be one of: ${VALID_ACCREDITORS.join(', ')}` });
+    }
+    if (status && !VALID_FINDING_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
+    }
+    const due_date = dueDateForFinding(accreditor, anchor_date ?? null);
+    const result = (db as any).$client.prepare(
+      `INSERT INTO findings (
+        user_id, accreditor, inspection_id, finding_number, standard_ref,
+        phase_or_severity, description, surveyor_notes,
+        anchor_date, due_date, status,
+        immediate_action, containment, root_cause,
+        corrective_action, preventive_action, monitoring_plan,
+        completion_date, signed_by, signed_at, external_submission_ref
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      dataUserId, accreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
+      phase_or_severity ?? null, description ?? null, surveyor_notes ?? null,
+      anchor_date ?? null, due_date, status ?? 'open',
+      immediate_action ?? null, containment ?? null, root_cause ?? null,
+      corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
+      completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
+    );
+    const created = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(Number(result.lastInsertRowid));
+    // Audit trail entry for the create event
+    try {
+      (db as any).$client.prepare(
+        `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+      ).run(Number(result.lastInsertRowid), 'created', req.user?.userId ?? null, JSON.stringify({ accreditor, status: status ?? 'open' }));
+    } catch {}
+    res.status(201).json(created);
+  });
+
+  // PUT update finding
+  app.put("/api/findings/:id", authMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId) as any;
+    if (!existing) return res.status(404).json({ error: "Finding not found" });
+
+    const body = req.body || {};
+    if (body.accreditor && !VALID_ACCREDITORS.includes(body.accreditor)) {
+      return res.status(400).json({ error: `accreditor must be one of: ${VALID_ACCREDITORS.join(', ')}` });
+    }
+    if (body.status && !VALID_FINDING_STATUSES.includes(body.status)) {
+      return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
+    }
+    // Recompute due_date when accreditor or anchor_date changes
+    const nextAccreditor = body.accreditor ?? existing.accreditor;
+    const nextAnchor = body.anchor_date !== undefined ? body.anchor_date : existing.anchor_date;
+    const recomputed = (body.accreditor !== undefined || body.anchor_date !== undefined)
+      ? dueDateForFinding(nextAccreditor, nextAnchor)
+      : existing.due_date;
+
+    (db as any).$client.prepare(
+      `UPDATE findings SET
+        accreditor = COALESCE(?, accreditor),
+        inspection_id = ?,
+        finding_number = ?,
+        standard_ref = ?,
+        phase_or_severity = ?,
+        description = ?,
+        surveyor_notes = ?,
+        anchor_date = ?,
+        due_date = ?,
+        status = COALESCE(?, status),
+        immediate_action = ?,
+        containment = ?,
+        root_cause = ?,
+        corrective_action = ?,
+        preventive_action = ?,
+        monitoring_plan = ?,
+        completion_date = ?,
+        signed_by = ?,
+        signed_at = ?,
+        external_submission_ref = ?,
+        updated_at = datetime('now')
+      WHERE id = ?`
+    ).run(
+      body.accreditor ?? null,
+      body.inspection_id ?? existing.inspection_id ?? null,
+      body.finding_number ?? existing.finding_number ?? null,
+      body.standard_ref ?? existing.standard_ref ?? null,
+      body.phase_or_severity ?? existing.phase_or_severity ?? null,
+      body.description ?? existing.description ?? null,
+      body.surveyor_notes ?? existing.surveyor_notes ?? null,
+      nextAnchor ?? null,
+      recomputed ?? null,
+      body.status ?? null,
+      body.immediate_action ?? existing.immediate_action ?? null,
+      body.containment ?? existing.containment ?? null,
+      body.root_cause ?? existing.root_cause ?? null,
+      body.corrective_action ?? existing.corrective_action ?? null,
+      body.preventive_action ?? existing.preventive_action ?? null,
+      body.monitoring_plan ?? existing.monitoring_plan ?? null,
+      body.completion_date ?? existing.completion_date ?? null,
+      body.signed_by ?? existing.signed_by ?? null,
+      body.signed_at ?? existing.signed_at ?? null,
+      body.external_submission_ref ?? existing.external_submission_ref ?? null,
+      req.params.id,
+    );
+    try {
+      (db as any).$client.prepare(
+        `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+      ).run(Number(req.params.id), 'updated', req.user?.userId ?? null, JSON.stringify({ changed: Object.keys(body) }));
+    } catch {}
+    const updated = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(req.params.id);
+    res.json(updated);
+  });
+
+  // DELETE finding
+  app.delete("/api/findings/:id", authMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!existing) return res.status(404).json({ error: "Finding not found" });
+    (db as any).$client.prepare("DELETE FROM finding_attachments WHERE finding_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM finding_history WHERE finding_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM finding_extension_requests WHERE finding_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {

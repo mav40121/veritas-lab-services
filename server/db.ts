@@ -1886,6 +1886,113 @@ try {
   console.error('[veritamap-reconcile] Failed:', err);
 }
 
+// ─── VeritaResponse (parking-lot #17) ─────────────────────────────────────────
+// Post-survey deficiency response. One normalized findings table with
+// per-accreditor renderers added in later phases. Schema follows the common
+// spine documented in docs/scoping-veritaresponse.md §6.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    accreditor TEXT NOT NULL CHECK(accreditor IN ('CAP','TJC','COLA','CMS','AABB','Other')),
+    inspection_id TEXT,
+    finding_number TEXT,
+    standard_ref TEXT,
+    phase_or_severity TEXT,
+    description TEXT,
+    surveyor_notes TEXT,
+    anchor_date TEXT,
+    due_date TEXT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','drafting','submitted','accepted','rejected_resubmit','closed')),
+    immediate_action TEXT,
+    containment TEXT,
+    root_cause TEXT,
+    corrective_action TEXT,
+    preventive_action TEXT,
+    monitoring_plan TEXT,
+    completion_date TEXT,
+    signed_by TEXT,
+    signed_at TEXT,
+    external_submission_ref TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS finding_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT,
+    file_bytes BLOB,
+    note TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS finding_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id INTEGER NOT NULL,
+    event TEXT NOT NULL,
+    by_user_id INTEGER,
+    at TEXT DEFAULT (datetime('now')),
+    payload TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS finding_extension_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id INTEGER NOT NULL,
+    requested_until TEXT NOT NULL,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','granted','denied','withdrawn')),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
+// VeritaResponse migration blocks (idempotent). Per New DB Table Rule
+// (CLAUDE.md §8): every new CREATE TABLE ships with a PRAGMA-guarded ALTER
+// block so future column additions can be applied to live DBs that already
+// have the tables. One block per table; the audit script enforces this.
+{
+  try {
+    const cols = sqlite.prepare("PRAGMA table_info(findings)").all() as { name: string }[];
+    if (cols.length > 0) {
+      // Future ALTER TABLE findings ADD COLUMN ... blocks go here.
+    }
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
+{
+  try {
+    const cols = sqlite.prepare("PRAGMA table_info(finding_attachments)").all() as { name: string }[];
+    if (cols.length > 0) {
+      // Future ALTER TABLE finding_attachments ADD COLUMN ... blocks go here.
+    }
+  } catch {}
+}
+{
+  try {
+    const cols = sqlite.prepare("PRAGMA table_info(finding_history)").all() as { name: string }[];
+    if (cols.length > 0) {
+      // Future ALTER TABLE finding_history ADD COLUMN ... blocks go here.
+    }
+  } catch {}
+}
+{
+  try {
+    const cols = sqlite.prepare("PRAGMA table_info(finding_extension_requests)").all() as { name: string }[];
+    if (cols.length > 0) {
+      // Future ALTER TABLE finding_extension_requests ADD COLUMN ... blocks go here.
+    }
+  } catch {}
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_user ON findings(user_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_due ON findings(user_id, due_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_attachments_finding ON finding_attachments(finding_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_history_finding ON finding_history(finding_id, at)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_extension_finding ON finding_extension_requests(finding_id, status)`); } catch {}
+
 // Step 3: Seed plan from env var (for testing — SEED_USER_PLAN=email:plan:credits)
 if (process.env.SEED_USER_PLAN) {
   const [seedEmail, seedPlan, seedCredits] = process.env.SEED_USER_PLAN.split(":");

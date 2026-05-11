@@ -98,13 +98,14 @@ export default function AccountSettingsPage() {
     { key: 'veritapolicy', label: 'VeritaPolicy™' },
     { key: 'veritalab',    label: 'VeritaLab™' },
     { key: 'veritatrack',  label: 'VeritaTrack™' },
+    { key: 'veritaresponse', label: 'VeritaResponse™' },
   ];
 
   const DEFAULT_PERMISSIONS: Record<string, string> = {
     veritacheck: 'view', veritamap: 'view', veritascan: 'view',
     veritacomp: 'view', veritastaff: 'view', veritabench: 'view',
     veritastock: 'view', veritapt: 'view', veritapolicy: 'view',
-    veritalab: 'view', veritatrack: 'view',
+    veritalab: 'view', veritatrack: 'view', veritaresponse: 'view',
   };
 
   // Permission mode -- selected before invite is sent or when editing a seat.
