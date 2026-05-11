@@ -32,7 +32,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "Other";
 type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_resubmit" | "closed";
@@ -77,6 +77,7 @@ function daysUntil(iso: string | null): number | null {
 
 export default function VeritaResponseAppPage() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [findings, setFindings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -308,7 +309,11 @@ export default function VeritaResponseAppPage() {
                   const status = (f.status || "open") as FindingStatus;
                   const badge = STATUS_BADGES[status] ?? STATUS_BADGES.open;
                   return (
-                    <tr key={f.id} className="border-b border-border/50 hover:bg-muted/20">
+                    <tr
+                      key={f.id}
+                      className="border-b border-border/50 hover:bg-muted/20 cursor-pointer"
+                      onClick={() => navigate(`/veritaresponse/${f.id}`)}
+                    >
                       <td className="py-3 px-4 font-medium">{f.accreditor}</td>
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
                       <td className="py-3 pr-4 text-muted-foreground text-xs">{f.standard_ref || "-"}</td>
@@ -319,7 +324,7 @@ export default function VeritaResponseAppPage() {
                           {badge.label}
                         </Badge>
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pr-4" onClick={(e) => e.stopPropagation()}>
                         <ConfirmDialog
                           title="Delete Finding?"
                           message="Delete this finding and all its history? This cannot be undone."
