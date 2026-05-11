@@ -21,10 +21,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  Download,
   Info,
   RefreshCw,
   Save,
   Trash2,
+  XCircle,
 } from "lucide-react";
 
 type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "Other";
@@ -68,6 +70,20 @@ function daysUntil(iso: string | null): number | null {
 }
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+// Mirror of server-side validateCms2567POC. Drives the in-form POC tile so
+// the user sees what's missing as they type, without round-tripping. The
+// server still enforces on the render endpoint.
+function clientValidateCms2567(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) return { ok: false, missing: ["finding"] };
+  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
+  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action (POC element 1)");
+  if (!finding.preventive_action || !String(finding.preventive_action).trim()) missing.push("Preventive / system-level action (POC elements 2 + 3)");
+  if (!finding.monitoring_plan || !String(finding.monitoring_plan).trim()) missing.push("Monitoring plan (POC element 4)");
+  if (!finding.completion_date || !String(finding.completion_date).trim()) missing.push("Completion date (POC element 5)");
+  return { ok: missing.length === 0, missing };
+}
 
 export default function VeritaResponseFindingPage() {
   const { user } = useAuth();
@@ -163,6 +179,37 @@ export default function VeritaResponseFindingPage() {
       headers: authHeaders(),
     });
     navigate("/veritaresponse");
+  };
+
+  const [renderState, setRenderState] = useState<"idle" | "rendering" | "error">("idle");
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  const handleGenerateCms2567 = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/cms-2567-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
   };
 
   // Plan gate
@@ -284,6 +331,63 @@ export default function VeritaResponseFindingPage() {
           </div>
         </div>
       )}
+
+      {/* POC completeness + CMS-2567 render (CMS findings only) */}
+      {finding.accreditor === "CMS" && (() => {
+        const poc = clientValidateCms2567(finding);
+        const elements = [
+          { key: "description", label: "Deficiency description" },
+          { key: "corrective_action", label: "Corrective action (POC element 1)" },
+          { key: "preventive_action", label: "Preventive / system-level (POC elements 2 + 3)" },
+          { key: "monitoring_plan", label: "Monitoring plan (POC element 4)" },
+          { key: "completion_date", label: "Completion date (POC element 5)" },
+        ];
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base font-semibold">CMS-2567 Plan of Correction</CardTitle>
+                <Button
+                  size="sm"
+                  className="bg-[#006064] hover:bg-[#004d50] text-white"
+                  onClick={handleGenerateCms2567}
+                  disabled={!poc.ok || renderState === "rendering"}
+                >
+                  <Download size={14} className="mr-1.5" />
+                  {renderState === "rendering" ? "Rendering..." : "Generate CMS-2567 PDF"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="text-xs text-muted-foreground">
+                CMS form 2567 requires 5 Plan of Correction elements per State Operations Manual section 7314. Save your draft to update this checklist.
+              </div>
+              <ul className="space-y-1">
+                {elements.map((el) => {
+                  const val = finding[el.key];
+                  const present = !!(val && String(val).trim());
+                  return (
+                    <li key={el.key} className="flex items-center gap-2 text-sm">
+                      {present
+                        ? <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        : <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />}
+                      <span className={present ? "" : "text-muted-foreground"}>{el.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {renderState === "error" && renderError && (
+                <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
+              )}
+              {!poc.ok && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Fill in the missing fields below, save, then generate the PDF.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Identification */}
       <Card>
