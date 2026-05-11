@@ -1167,7 +1167,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <Package size={14} />
-              Module 4: Inventory Manager
+              Module 4: VeritaStock{"™"}
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Smart Inventory Management</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
