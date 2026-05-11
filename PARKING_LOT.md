@@ -1084,6 +1084,115 @@ competitor-driven candidate.
 
 ---
 
+### 26. Source-ground the 21 CFR / 29 CFR / 45 CFR / 42 CFR 482-485 portions of cfrRequirements.ts
+
+**What:** PR #105 (2026-05-11) source-grounded the 209 entries in
+`server/cfrRequirements.ts` that cite 42 CFR Part 493 against verbatim
+eCFR XML. 77 entries citing other CFR titles still carry pre-eCFR-
+rebuild descriptions (LLM paraphrases). Breakdown:
+
+- 43 entries citing 21 CFR (Parts 606, 610, 640 - blood bank cGMP)
+- 12 entries citing 29 CFR 1910.x (OSHA bloodborne pathogens,
+  chemical hygiene)
+- 10 entries citing 45 CFR 164.x (HIPAA Security Rule)
+- 9 entries citing 42 CFR 482 / 483 / 484 / 485 (hospital and LTC
+  Conditions of Participation)
+- 3 entries with legacy "Non_CLIA_*" or other agent-era chapter
+  labels (parking-lot #3 territory)
+
+**Fix shape:** Same approach as PR #105. Fetch each title's eCFR XML
+via `https://www.ecfr.gov/api/versioner/v1/full/{date}/title-{N}.xml`
+(Title 21, Title 29, Title 45, Title 42 sections 482-485). Parse to
+extract verbatim section titles + first paragraphs. Apply via the
+`rebuild_cfr_from_ecfr_v10.py` pattern. Em-dash normalize per
+CLAUDE.md §3. Update header comments to record the additional
+issue date.
+
+**Source:** PR #105 commit ab59ea0, called out as "explicitly out of
+scope for this round" in the PR body and the file's auto-generated
+header comment.
+
+**Status:** Open. Same shape as the completed 42 CFR 493 work; ~1
+hour of focused work to ship all four CFR titles together.
+
+**Pre- vs post-COLA:** Post-COLA. No customer urgency; eCFR is
+authoritative and stable.
+
+---
+
+### 27. Acquire CAP MOL (Molecular) checklist to verify 2 pending entries
+
+**What:** PR #108 left 2 entries in `server/capRequirements.ts`
+flagged as unverified because the operator does not hold the CAP MOL
+(Molecular Pathology) MAS xlsx file:
+
+- `MOL.35855` - NGS HLA Discrepancy Resolution
+- `MOL.37460` - Contamination Control
+
+The other 11 CAP modules (ANP, CHM, COM, CYP, DRA, GEN, HEM, IMM,
+MIC, POC, TRM, URN) were verified against the 12 MAS files held on
+the operator's local drive at
+`C:/Users/veril/OneDrive/Desktop/Lab/Regulatory/2026 Cap checklists/`.
+The MOL module's MAS xlsx is the only one missing from that set.
+
+**Fix shape:** Operator obtains `MAS_MOL_12092025_Long_*.xlsx` from
+CAP e-LAB Solutions Suite (download requires CAP accreditation
+credentials). Drops the file in the same folder. Re-run
+`fix_cap_fabricated_ids_v10.py` with the MOL module included to
+verify these 2 IDs exist; if either is fake, substitute against the
+real MOL Subject Headers using the same surgical-replacement
+discipline.
+
+**Source:** PR #108 commit 92f9573 (closed via merge 2026-05-11),
+audit findings.
+
+**Status:** Open, blocks on operator obtaining the MOL checklist.
+
+**Pre- vs post-COLA:** Post-COLA. Two entries; low traffic.
+
+---
+
+### 28. Acquire AABB Standards 35th edition + current COLA Accreditation Manual for exhaustive citation verification
+
+**What:** The 2026-05-11 QC audit found that VeritaScan, cfrRequirements
+cross-refs, and colaRequirements.ts cite about 180 AABB and COLA codes
+that the public compilations
+(`build_aabb_pdf.py` / `build_cola_pdf.py`) do not cover. These are
+format-valid (correct chapter prefix and section format) and the master
+citation index treats many of them as real, but they cannot be
+exhaustively verified against authoritative source until the gated
+accreditor manuals are held.
+
+Examples (representative; not exhaustive):
+- AABB: `1.2.3`, `1.2.4`, `1.3.3`, `2.1.6`-`2.3.2`, `3.1.1`+ - sequential
+  AABB Standards for Blood Banks and Transfusion Services 35th edition
+  (effective April 1, 2026) chapter codes.
+- COLA: `APM 2`-`APM 16`, `CA 3`-`CA 6`, `FAC 11`-`FAC 14`,
+  `MA 4`, `PST 23`, `VER 9` - real COLA criterion codes that the
+  public 2013 manual + LabGuides + 2019 Validation excerpts compilation
+  does not enumerate fully.
+
+**Fix shape:** Operator obtains the gated manuals (AABB Standards via
+AABB enrollment; current COLA Accreditation Manual via the lab's
+COLA enrollment). Once held, an exhaustive ID set is extracted and the
+QA audit re-run. Any format-valid code that still does not appear in
+the real manual gets surgical replacement; any code already in the
+manual is confirmed and the "compilation gap" flag in PROVENANCE.md
+is downgraded.
+
+**Source:** 2026-05-11 QC/QA audit, documented in
+`OneDrive\Lab\Regulatory\aaa Truth Master Document\PROVENANCE.md`
+"Audit-coverage limits" section.
+
+**Status:** Open, blocks on operator obtaining the gated accreditor
+manuals. Until then, AABB / COLA citations are best-effort against
+the public-source compilations.
+
+**Pre- vs post-COLA:** Post-COLA. Operator-side action item, no code
+work pending until the source documents land.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
