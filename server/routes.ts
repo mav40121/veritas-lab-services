@@ -7289,6 +7289,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Cross-link to VeritaCheck (scoping doc §5.4, "the moat"). When a finding
+  // cites a regulatory standard, surface the lab's most recent VeritaCheck
+  // study so the user can answer "what had we already done about this
+  // standard?" in front of a surveyor.
+  //
+  // v1 matching: if the standard_ref contains a "493.XXX" reference (any
+  // CMS-cited CFR), return the most recent completed study for this user.
+  // For CAP item IDs (GEN.20377 etc.) or TJC RFI numbers there is no
+  // automatic mapping today; return null with a labeled reason. This is
+  // intentionally permissive in v1 (most-recent-study, not specialty-matched)
+  // so a passed quarterly verification answers most CMS-2567 deficiencies.
+  function normalizeStandardRef(ref: string | null | undefined): { kind: 'cfr493' | 'cap' | 'tjc' | 'other'; raw: string; key?: string } | null {
+    if (!ref) return null;
+    const s = String(ref).trim();
+    if (!s) return null;
+    const cfr = s.match(/493\.\d{3,4}/);
+    if (cfr) return { kind: 'cfr493', raw: s, key: cfr[0] };
+    if (/\b[A-Z]{2,4}\.\d{4,6}\b/.test(s)) return { kind: 'cap', raw: s };
+    if (/\bRFI\b/i.test(s) || /\b\d+\.\d{2}\.\d{2}\.\d{2}/.test(s)) return { kind: 'tjc', raw: s };
+    return { kind: 'other', raw: s };
+  }
+
+  app.get("/api/findings/:id/veritacheck-link", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+
+    const normalized = normalizeStandardRef(finding.standard_ref);
+    if (!normalized) {
+      return res.json({ match: null, normalizedKey: null, reason: "No standard reference recorded on this finding." });
+    }
+    if (normalized.kind !== 'cfr493') {
+      const reasons: Record<string, string> = {
+        cap:   "CAP item IDs are not automatically linked yet. Open VeritaCheck™ to find your most recent study for the same analyte.",
+        tjc:   "TJC RFI numbers are not automatically linked yet. Open VeritaCheck™ to find your most recent study for the cited area.",
+        other: "This standard reference is not in a format VeritaCheck links to today.",
+      };
+      return res.json({ match: null, normalizedKey: normalized.raw, reason: reasons[normalized.kind] });
+    }
+
+    // CFR §493 match: most recent completed study for the user.
+    const study = (db as any).$client.prepare(
+      `SELECT id, test_name, study_type, date, status, created_at
+       FROM studies
+       WHERE user_id = ?
+       ORDER BY date DESC, id DESC
+       LIMIT 1`
+    ).get(dataUserId) as any;
+    if (!study) {
+      return res.json({
+        match: null,
+        normalizedKey: normalized.key,
+        reason: "No VeritaCheck studies on file for this lab yet.",
+      });
+    }
+
+    const studyDate = study.date ? new Date(study.date) : null;
+    const todayMs = Date.now();
+    const daysAgo = studyDate && !isNaN(studyDate.getTime())
+      ? Math.round((todayMs - studyDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    res.json({
+      match: {
+        studyId: study.id,
+        testName: study.test_name,
+        studyType: study.study_type,
+        date: study.date,
+        verdict: (study.status || "").toLowerCase() || null,
+        daysAgo,
+        deepLink: `/study/${study.id}/results`,
+      },
+      normalizedKey: normalized.key,
+      reason: null,
+    });
+  });
+
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any) {
