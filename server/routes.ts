@@ -10,7 +10,7 @@ import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } fro
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC } from "./pdfReport";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -7237,6 +7237,56 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM finding_extension_requests WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
+  });
+
+  // GET POC completeness for a finding (read-only; used by the UI tile).
+  app.get("/api/findings/:id/poc-completeness", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!row) return res.status(404).json({ error: "Finding not found" });
+    const result = validateCms2567POC(row);
+    res.json(result);
+  });
+
+  // GET CMS-2567 PDF token for a finding. CMS findings only; other accreditors
+  // would render to their own form shape in a later phase.
+  app.get("/api/findings/:id/cms-2567-pdf", authMiddleware, async (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    if (finding.accreditor !== "CMS") {
+      return res.status(400).json({ error: `CMS-2567 renderer only applies to CMS-accreditor findings; this finding is ${finding.accreditor}.` });
+    }
+    const validation = validateCms2567POC(finding);
+    if (!validation.ok) {
+      return res.status(400).json({
+        error: "Plan of Correction is incomplete; cannot render CMS-2567",
+        missing: validation.missing,
+      });
+    }
+    try {
+      const user = await storage.getUserById(dataUserId);
+      const pdfBuffer = await generateCms2567PDF(
+        { finding, user },
+        licenseCtxFromReq(req, "VeritaResponse™"),
+      );
+      const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
+      const filename = `CMS-2567_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      // Audit-trail entry so the history shows when a render was produced.
+      try {
+        (db as any).$client.prepare(
+          `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+        ).run(Number(req.params.id), 'cms_2567_rendered', req.user?.userId ?? null, JSON.stringify({}));
+      } catch {}
+      res.json({ token: storePdfToken(pdfBuffer, filename) });
+    } catch (err: any) {
+      console.error("[cms-2567-pdf] render failed:", err);
+      res.status(500).json({ error: err?.message || "PDF render failed" });
+    }
   });
 
   // ── VERITACOMP ─────────────────────────────────────────────────────────

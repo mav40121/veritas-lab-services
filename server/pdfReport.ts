@@ -4020,3 +4020,200 @@ export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput, licen
     await page.close();
   }
 }
+
+// ─── VeritaResponse™ CMS-2567 PDF (parking-lot #17 Phase 3) ───────────────────
+// Renders a CMS Statement of Deficiencies and Plan of Correction in the
+// federal-form two-column shape: left = surveyor's deficiency narrative,
+// right = the lab's plan of correction with the 5 POC elements explicitly
+// labeled per State Operations Manual section 7314.
+
+export interface Cms2567Input {
+  finding: any; // row from `findings` table
+  user: any;    // row from `users` (for lab identity)
+}
+
+// Server-side validation of the 5 POC elements required by CMS-2567.
+// Mirrors the client-side guard so a direct API hit cannot bypass it.
+export function validateCms2567POC(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) {
+    return { ok: false, missing: ["finding"] };
+  }
+  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
+  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action (POC element 1)");
+  if (!finding.preventive_action || !String(finding.preventive_action).trim()) missing.push("Preventive / system-level action (POC elements 2 + 3)");
+  if (!finding.monitoring_plan || !String(finding.monitoring_plan).trim()) missing.push("Monitoring plan (POC element 4)");
+  if (!finding.completion_date || !String(finding.completion_date).trim()) missing.push("Completion date (POC element 5)");
+  return { ok: missing.length === 0, missing };
+}
+
+function buildCms2567HTML(input: Cms2567Input): string {
+  const { finding, user } = input;
+  const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
+  const cliaRaw = user?.clia_number || user?.cliaNumber || "";
+  const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file - enter in account settings";
+  const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const findingNum = escHtml(finding.finding_number || `#${finding.id}`);
+  const standardRef = escHtml(finding.standard_ref || "Not recorded");
+  const phase = escHtml(finding.phase_or_severity || "Not classified");
+  const anchor = escHtml(finding.anchor_date || "Not set");
+  const due = escHtml(finding.due_date || "Not computed");
+  const inspectionId = escHtml(finding.inspection_id || "");
+
+  const description = escHtml(finding.description || "").replace(/\n/g, "<br>");
+  const surveyorNotes = escHtml(finding.surveyor_notes || "").replace(/\n/g, "<br>");
+
+  const immediateAction = escHtml(finding.immediate_action || "").replace(/\n/g, "<br>");
+  const containment = escHtml(finding.containment || "").replace(/\n/g, "<br>");
+  const rootCause = escHtml(finding.root_cause || "").replace(/\n/g, "<br>");
+  const correctiveAction = escHtml(finding.corrective_action || "").replace(/\n/g, "<br>");
+  const preventiveAction = escHtml(finding.preventive_action || "").replace(/\n/g, "<br>");
+  const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
+  const completionDate = escHtml(finding.completion_date || "");
+  const signedBy = escHtml(finding.signed_by || "");
+  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>CMS-2567 Plan of Correction - ${findingNum}</title>
+<style>
+  @page { size: Letter; margin: 14mm 15mm 16mm 15mm; }
+  body { font-family: 'Calibri', 'Helvetica Neue', Arial, sans-serif; color: #28251D; font-size: 9pt; line-height: 1.4; margin: 0; }
+  .header { border-bottom: 2px solid #01696F; padding-bottom: 8px; margin-bottom: 10px; }
+  .header-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .form-id { font-size: 7.5pt; color: #7A7974; letter-spacing: 0.05em; }
+  .title { font-size: 14pt; font-weight: 700; color: #01696F; margin-top: 4px; }
+  .subtitle { font-size: 9pt; color: #28251D; margin-top: 2px; }
+  .lab-row { display: flex; justify-content: space-between; font-size: 8.5pt; margin-top: 6px; color: #0A3A3D; font-weight: 600; }
+
+  .ident-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px 12px; margin-bottom: 10px; font-size: 8pt; }
+  .ident-grid .label { color: #7A7974; text-transform: uppercase; letter-spacing: 0.04em; font-size: 7pt; }
+  .ident-grid .value { color: #28251D; font-weight: 600; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+  .col-head { background: #01696F; color: #FFFFFF; font-weight: 700; font-size: 9pt; padding: 5px 8px; letter-spacing: 0.03em; }
+  .col-sub { font-size: 7.5pt; font-weight: 500; opacity: 0.85; margin-top: 1px; }
+  .col-body { border: 1px solid #D4D1CA; border-top: none; padding: 8px 10px; min-height: 220px; font-size: 8.5pt; }
+
+  .poc-element { margin-top: 6px; padding-top: 4px; border-top: 1px dashed #D4D1CA; }
+  .poc-element:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .poc-label { font-size: 7pt; color: #01696F; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 2px; }
+  .poc-content { font-size: 8.5pt; color: #28251D; }
+  .poc-content em { color: #7A7974; font-style: italic; }
+
+  .director-block { margin-top: 14px; border: 1.5px solid #01696F; padding: 10px 12px; background: #F7F6F2; }
+  .director-title { font-size: 8pt; font-weight: 700; color: #01696F; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+  .director-checkbox { display: inline-block; margin-right: 14px; font-size: 8.5pt; }
+  .director-checkbox .box { display: inline-block; width: 10px; height: 10px; border: 1.5px solid #28251D; margin-right: 4px; vertical-align: middle; }
+  .director-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-top: 8px; font-size: 8pt; }
+  .director-field-label { color: #7A7974; font-size: 7pt; text-transform: uppercase; letter-spacing: 0.04em; }
+  .director-field-value { border-bottom: 1px solid #28251D; min-height: 16px; padding: 2px 0; font-weight: 600; }
+  .director-attestation { margin-top: 8px; font-size: 7.5pt; color: #28251D; font-style: italic; }
+
+  .footer-note { margin-top: 12px; font-size: 7pt; color: #7A7974; border-top: 1px dashed #D4D1CA; padding-top: 6px; }
+</style></head><body>
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="form-id">FORM CMS-2567 (compatible) - STATEMENT OF DEFICIENCIES AND PLAN OF CORRECTION</div>
+        <div class="title">Plan of Correction</div>
+        <div class="subtitle">42 CFR &sect;493 - Clinical Laboratory Improvement Amendments (CLIA)</div>
+      </div>
+      <div style="text-align:right;font-size:7.5pt;color:#7A7974;">
+        Generated ${escHtml(dateGen)}<br>
+        Finding ${findingNum}
+      </div>
+    </div>
+    <div class="lab-row"><span>${labName}</span><span>${clia}</span></div>
+  </div>
+
+  <div class="ident-grid">
+    <div><div class="label">Citation / Standard</div><div class="value">${standardRef}</div></div>
+    <div><div class="label">Phase / Severity</div><div class="value">${phase}</div></div>
+    <div><div class="label">Receipt Date</div><div class="value">${anchor}</div></div>
+    <div><div class="label">Response Due</div><div class="value">${due}</div></div>
+    ${inspectionId ? `<div style="grid-column: 1 / span 4;"><div class="label">Inspection / Survey Reference</div><div class="value">${inspectionId}</div></div>` : ""}
+  </div>
+
+  <div class="two-col">
+    <div>
+      <div class="col-head">
+        Statement of Deficiencies
+        <div class="col-sub">(Surveyor narrative)</div>
+      </div>
+      <div class="col-body">
+        ${description || "<em>No deficiency description recorded.</em>"}
+        ${surveyorNotes ? `<div style="margin-top:10px;padding-top:6px;border-top:1px dashed #D4D1CA;"><div class="poc-label">Surveyor Notes</div><div class="poc-content">${surveyorNotes}</div></div>` : ""}
+      </div>
+    </div>
+    <div>
+      <div class="col-head">
+        Plan of Correction
+        <div class="col-sub">(5 POC elements per SOM section 7314)</div>
+      </div>
+      <div class="col-body">
+        ${immediateAction ? `<div class="poc-element"><div class="poc-label">Immediate Action</div><div class="poc-content">${immediateAction}</div></div>` : ""}
+        ${containment ? `<div class="poc-element"><div class="poc-label">Containment</div><div class="poc-content">${containment}</div></div>` : ""}
+        ${rootCause ? `<div class="poc-element"><div class="poc-label">Root Cause</div><div class="poc-content">${rootCause}</div></div>` : ""}
+        <div class="poc-element"><div class="poc-label">1. Corrective Action (for affected patients or items)</div><div class="poc-content">${correctiveAction || "<em>Not recorded.</em>"}</div></div>
+        <div class="poc-element"><div class="poc-label">2 + 3. Identify Others Affected and Prevent Recurrence</div><div class="poc-content">${preventiveAction || "<em>Not recorded.</em>"}</div></div>
+        <div class="poc-element"><div class="poc-label">4. Ongoing Monitoring</div><div class="poc-content">${monitoringPlan || "<em>Not recorded.</em>"}</div></div>
+        <div class="poc-element"><div class="poc-label">5. Completion Date</div><div class="poc-content">${completionDate || "<em>Not recorded.</em>"}</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="director-block">
+    <div class="director-title">Laboratory Director or Designee Review</div>
+    <div>
+      <span class="director-checkbox"><span class="box"></span>Accepted</span>
+      <span class="director-checkbox"><span class="box"></span>Not accepted, returned for revision</span>
+    </div>
+    <div class="director-fields">
+      <div>
+        <div class="director-field-label">Print Name / Initials</div>
+        <div class="director-field-value">${signedBy || "&nbsp;"}</div>
+      </div>
+      <div>
+        <div class="director-field-label">Signature</div>
+        <div class="director-field-value">&nbsp;</div>
+      </div>
+      <div>
+        <div class="director-field-label">Date</div>
+        <div class="director-field-value">${signedAt || "&nbsp;"}</div>
+      </div>
+    </div>
+    <div class="director-attestation">
+      Final approval and clinical determination of the Plan of Correction must be made by the laboratory director or designee. The signature above attests that the corrective and preventive actions described are accurate and will be implemented as documented.
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Generated by VeritaResponse&trade; from VeritaAssure&trade;. This document mirrors the structure of CMS Form 2567 and the five Plan of Correction elements required by the State Operations Manual section 7314 (42 CFR &sect;493). Submit through CMS, state, or regional CLIA channels per your facility's standard procedure. Public release of the underlying Statement of Deficiencies follows CMS QSO-25-19-ALL (14 days post-receipt).
+  </div>
+</body></html>`;
+}
+
+export async function generateCms2567PDF(input: Cms2567Input, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  const validation = validateCms2567POC(input.finding);
+  if (!validation.ok) {
+    throw new Error(`CMS-2567 cannot be rendered: missing ${validation.missing.join(", ")}`);
+  }
+  const html = buildCms2567HTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
