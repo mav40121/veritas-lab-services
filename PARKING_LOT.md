@@ -29,37 +29,7 @@ past_session_contexts archive (earliest parking-lot mention found is
 
 ### 1. UI relabel "CLIA TEa" -> "Lab-Set Internal Goal" when no canonical CLIA TEa exists
 
-**What:** Several analytes have no §493 PT criterion (LIPASE, BILIRUBIN
-UNBOUND/DIRECT, IRON SAT, and others). Today the platform forces the
-user to pick a preset, which is functionally the same as forcing them
-to invent a non-canonical value. Reports for those analytes cite §493
-Subpart I, but §493 Subpart I does not contain a number for them, so
-the citation is misleading.
-
-**Fix shape:** When the analyte has no canonical CLIA TEa, the input
-field labels and the resulting PDF/Excel report headers should read
-"Lab-Set Internal Goal" instead of "CLIA TEa". The narrative should
-read "Acceptance criterion: ±X% (laboratory-defined). Source:
-laboratory director or designee policy. No CLIA PT criterion exists for
-this analyte under 42 CFR §493 Subpart I."
-
-**Source:** session 299e9a73, conversation lines 559, 653, 729 (around
-2026-04-28).
-
-**Status:** PARTIAL. Form-side and StudyResultsPage shipped 2026-05-10:
-PR #77 added `hasCanonicalTea`/`teaLabelFor` helpers and swapped the
-KPI label on StudyResultsPage. PR #89 added 6 non-canonical analytes
-(Lipase, Bilirubin Direct/Unbound, Iron Saturation, Vitamin D 25-OH,
-Procalcitonin) to the CLIA_PRESETS dropdown with no §493 cite, plus
-help text directing users to Custom for unlisted analytes. PR #92
-promoted the help text to a visible amber callout. STILL OWED in a
-follow-up sweep: PDF table headers / column labels in pdfReport.ts,
-PDF regulatory-compliance narrative wording, Excel export column
-headers. Operator decision required on whether to ship the PDF/Excel
-sweep as a separate PR.
-
-**Pre- vs post-COLA:** Form-side done. PDF/Excel sweep deferred until
-explicit go.
+**CLOSED 2026-05-10 — see CLOSED C14 below.**
 
 ---
 
@@ -1272,6 +1242,53 @@ revertible. `client/src/pages/AdminReportPage.tsx` updated to read
 Operator-confirmed multi-lab owners now require a second `labs`
 row added via Account Settings to surface two rows (data
 prerequisite, not a code bug). Shipped via PR #85.
+
+**Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C14. UI relabel "CLIA TEa" -> "Lab-Set Internal Goal" (formerly #1)
+
+**Closure evidence:** Shipped across four PRs over 2026-05-10.
+
+- PR #77: added `hasCanonicalTea(analyte)` and `teaLabelFor(analyte)`
+  helpers in `client/src/lib/cliaTeaData.ts` and
+  `server/backfillAbsoluteFloor.ts`; swapped the
+  `StudyResultsPage.tsx` KPI label so non-canonical analytes show
+  "Lab-Set Internal Goal" instead of "CLIA TEa".
+- PR #89: added 6 non-canonical analytes (Lipase, Bilirubin Direct,
+  Bilirubin Unbound, Iron Saturation, Vitamin D 25-OH, Procalcitonin)
+  to `CLIA_PRESETS` on `VeritaCheckPage.tsx` under a new SelectGroup
+  "Lab-Set Internal Goal (no CLIA TEa)" with value=0 and cfr="" so
+  the form does not cite §493 for them.
+- PR #92: promoted the in-form help text to a visible amber callout
+  box so users notice the non-canonical category.
+- PR #96 (merge commit ccae239): completed the customer-facing
+  artifact sweep. Added 4 wording helpers in `server/pdfReport.ts`
+  (`criterionLabel`, `criterionAdjective`, `criterionSourcePhrase`,
+  `criterionAuthorityPhrase`). Wired them into supportingPageHTML
+  (headline "Adopted Acceptance Criterion (TEa)" + "CFR Reference"
+  rows become "Lab-Set Internal Goal (no CLIA TEa)" + "Source:
+  Laboratory-defined per director or designee policy. No CLIA PT
+  criterion exists for this analyte under 42 CFR §493 Subpart I."
+  for non-canonical). Wired through all 6 narrative branches:
+  cal_ver pass/fail, method_comp pass/fail, precision pass/fail,
+  lot_to_lot, pt_coag (the multi-analyte aggregate uses neutral
+  per-analyte phrasing since one study can mix canonical and
+  lab-defined analytes). Added `acceptanceCriterionLabel(testName)`
+  helper in `server/routes.ts` and replaced all 8 demo-PDF persisted
+  summaries.
+
+**Verification:** Live `/api/demo/studies/364/pdf` (Glucose precision,
+canonical analyte) returns a 3-page PDF that still cites "§493 PT TEa
+for this analyte", "Adopted Acceptance Criterion (TEa)", and "adopted
+under 42 CFR", and contains NONE of the non-canonical wording
+("Lab-Set Internal Goal", "laboratory-defined", "no canonical CLIA PT
+criterion", "per laboratory director or designee policy"). The
+non-canonical branch is the opposite ternary arm of the same helper
+calls and is type-checked by Railway's build; no demo studies exist
+for non-canonical analytes yet, so end-to-end PDF verification of
+that branch requires creating a real Lipase or Vitamin D study.
 
 **Source:** Operator instruction 2026-05-10 in this session.
 
