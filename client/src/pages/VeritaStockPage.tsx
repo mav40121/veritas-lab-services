@@ -596,7 +596,7 @@ export default function VeritaStockInventoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>Inventory Manager</h1>
+          <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>VeritaStock{"™"}</h1>
           <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated par levels, and standing order management</p>
         </div>
         <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
