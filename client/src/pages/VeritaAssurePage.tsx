@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
   ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
-  TestTubes,
+  TestTubes, ClipboardList,
 } from "lucide-react";
 
 const MODULES = [
@@ -104,11 +104,22 @@ const MODULES = [
     label: "VeritaPT™",
     desc: "Proficiency Testing Tracker",
     detail:
-      "Reads your VeritaMap™ test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP and API enrollments per category and year.",
+      "Reads your VeritaMap™ test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. AAA-covered analytes count as coverage with 5 alternative assessment methods per 42 CFR 493.1236(c)(1).",
     badge: "Live",
     badgeColor: "emerald",
     icon: TestTubes,
     color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
+  },
+  {
+    href: "/veritaresponse",
+    label: "VeritaResponse™",
+    desc: "Post-Survey Deficiency Response",
+    detail:
+      "When you get cited, VeritaResponse turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled. Cross-links to your most recent VeritaCheck study for the cited standard so you can show the surveyor what you had already done.",
+    badge: "New",
+    badgeColor: "emerald",
+    icon: ClipboardList,
+    color: "text-rose-600 bg-rose-500/10 border-rose-500/20",
   },
 ];
 
@@ -156,7 +167,7 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 
 export default function VeritaAssurePage() {
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaAssure™ | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure™ | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, VeritaResponse™, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 
