@@ -134,6 +134,7 @@ export const SEAT_MODULE_KEYS = [
   'veritatrack',
   'veritabench',  // covers VeritaPace, VeritaShift, VeritaQA (all under /veritabench/*)
   'veritastock',  // VeritaStock inventory manager
+  'veritaresponse',  // VeritaResponse post-survey deficiency response (parking-lot #17)
 ] as const;
 
 export type SeatModuleKey = typeof SEAT_MODULE_KEYS[number];

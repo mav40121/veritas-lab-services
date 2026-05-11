@@ -56,6 +56,7 @@ import VeritaCompPage from "@/pages/VeritaCompPage";
 import VeritaCompAppPage from "@/pages/VeritaCompAppPage";
 import VeritaPTPage from "@/pages/VeritaPTPage";
 import VeritaPTAppPage from "@/pages/VeritaPTAppPage";
+import VeritaResponseAppPage from "@/pages/VeritaResponseAppPage";
 import VeritaStaffPage from "@/pages/VeritaStaffPage";
 import VeritaStaffAppPage from "@/pages/VeritaStaffAppPage";
 import VeritaLabPage from "@/pages/VeritaLabPage";
@@ -298,6 +299,7 @@ function AppContent() {
           <Route path="/veritacomp-app/:programId" component={VeritaCompAppPage} />
           <Route path="/veritapt" component={VeritaPTPage} />
           <Route path="/veritapt/app" component={VeritaPTAppPage} />
+          <Route path="/veritaresponse" component={VeritaResponseAppPage} />
           <Route path="/veritastaff" component={VeritaStaffPage} />
           <Route path="/veritastaff-app" component={VeritaStaffAppPage} />
           <Route path="/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
