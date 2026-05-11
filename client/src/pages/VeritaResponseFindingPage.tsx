@@ -183,6 +183,26 @@ export default function VeritaResponseFindingPage() {
 
   const [renderState, setRenderState] = useState<"idle" | "rendering" | "error">("idle");
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [vcLink, setVcLink] = useState<any>(null);
+
+  // Refetch the VeritaCheck cross-link whenever the finding's standard_ref
+  // changes (so saving a new reference updates the link panel without a
+  // full page refresh).
+  useEffect(() => {
+    if (!id || !hasPlanAccess) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/findings/${id}/veritacheck-link`, {
+          headers: authHeaders(),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setVcLink(data);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [id, hasPlanAccess, finding?.standard_ref]);
 
   const handleGenerateCms2567 = async () => {
     if (!id) return;
@@ -388,6 +408,66 @@ export default function VeritaResponseFindingPage() {
           </Card>
         );
       })()}
+
+      {/* VeritaCheck cross-link (the moat). Shows the lab's most recent
+          VeritaCheck study so the user can answer "what had we done about
+          this standard?" before the surveyor asks. */}
+      {vcLink && (
+        <Card>
+          <CardHeader className="py-3 px-4 border-b">
+            <CardTitle className="text-base font-semibold">
+              Most recent VeritaCheck&trade;
+              {vcLink.normalizedKey && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">for {vcLink.normalizedKey}</span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            {vcLink.match ? (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {vcLink.match.verdict === "pass" && (
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-medium">
+                        <CheckCircle2 size={11} className="mr-1" />
+                        Compliant
+                      </Badge>
+                    )}
+                    {vcLink.match.verdict === "fail" && (
+                      <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs font-medium">
+                        <XCircle size={11} className="mr-1" />
+                        At Risk
+                      </Badge>
+                    )}
+                    {vcLink.match.verdict && vcLink.match.verdict !== "pass" && vcLink.match.verdict !== "fail" && (
+                      <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-xs font-medium capitalize">
+                        {vcLink.match.verdict}
+                      </Badge>
+                    )}
+                    <span className="font-medium">{vcLink.match.testName}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {String(vcLink.match.studyType).replace(/_/g, " ")} on {vcLink.match.date}
+                    {vcLink.match.daysAgo !== null && vcLink.match.daysAgo !== undefined && (
+                      <> ({vcLink.match.daysAgo}d ago)</>
+                    )}
+                  </div>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <a href={vcLink.match.deepLink} target="_blank" rel="noopener noreferrer">
+                    Open study&nbsp;&rarr;
+                  </a>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Info size={14} className="mt-0.5 shrink-0" />
+                <span>{vcLink.reason || "No matching VeritaCheck study found."}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Identification */}
       <Card>
