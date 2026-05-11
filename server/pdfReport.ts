@@ -15,6 +15,32 @@ import {
   licenseAugmentedFooterTemplate,
   type LicenseContext,
 } from "./licenseStamp";
+import { hasCanonicalTea } from "./backfillAbsoluteFloor";
+
+// ─── Acceptance-criterion wording helpers (parking-lot #1) ───────────────────
+// For analytes with a canonical 42 CFR §493 Subpart I PT criterion, narratives
+// say "adopted ... CLIA TEa" and cite §493. For analytes without one (Lipase,
+// Vitamin D 25-OH, Bilirubin Direct/Unbound, Iron Sat, Procalcitonin, and any
+// other test not in the canonical teaData list), the acceptance criterion is
+// laboratory-defined per the lab director or designee, and citing a §493 PT
+// number that does not exist is a real compliance error. These helpers keep
+// the two phrasings co-located.
+function criterionLabel(testName: string): string {
+  return hasCanonicalTea(testName) ? "CLIA TEa" : "Lab-Set Internal Goal";
+}
+function criterionAdjective(testName: string): string {
+  return hasCanonicalTea(testName) ? "adopted" : "laboratory-defined";
+}
+function criterionSourcePhrase(testName: string, cfrAdoptedUnder: string): string {
+  return hasCanonicalTea(testName)
+    ? `§493 PT TEa for this analyte; adopted under ${cfrAdoptedUnder}`
+    : `Lab-Set Internal Goal per laboratory director or designee policy; no canonical CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I`;
+}
+function criterionAuthorityPhrase(testName: string, cfrSection: string): string {
+  return hasCanonicalTea(testName)
+    ? `per ${cfrSection}`
+    : `per laboratory director or designee policy`;
+}
 
 // Used by every page.pdf() call below: takes the original HTML + footer
 // template and the request's license context, returns the augmented pair.
@@ -417,11 +443,21 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cfr = (study as any).cfr || "42 CFR §493.931";
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931";
 
+  const isCanonical = hasCanonicalTea(study.testName);
+  const criterionRowLabel = isCanonical
+    ? "Adopted Acceptance Criterion (TEa)"
+    : "Lab-Set Internal Goal (no CLIA TEa)";
+  const cfrReferenceLabel = isCanonical
+    ? "CFR Reference (PT TEa, adopted)"
+    : "Source";
+  const cfrReferenceValue = isCanonical
+    ? `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`
+    : "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I.";
   const specs = [
     ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
-    ["Adopted Acceptance Criterion (TEa)", teaStr],
-    ["CFR Reference (PT TEa, adopted)", `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`],
+    [criterionRowLabel, teaStr],
+    [cfrReferenceLabel, cfrReferenceValue],
     ["Allowable Systematic Error", teaStr],
   ];
   const supporting = [
@@ -729,20 +765,24 @@ function narrativeHTML(
         ? `a small positive constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`
         : `a small negative constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`;
 
+    const calAdj = criterionAdjective(analyteName);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)");
+    const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
+    const calLabel = criterionLabel(analyteName);
     if (results.overallPass) {
-      narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(3) and §493.1253(b)(2)). `;
+      narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the ${calAdj} calibration verification acceptance criterion of ±${cliaPct}% (${calSource}). `;
       if (meetsAdlm) {
-        narrative += `The maximum observed error of ${sf(maxErr, 1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `;
+        narrative += `The maximum observed error of ${sf(maxErr, 1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the ${calAdj} acceptance criterion. `;
       } else {
-        narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets the adopted acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+        narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets the ${calAdj} acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
-      narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the adopted limits across its reportable range. `;
-      narrative += `<b>Each calibration level was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the ${calAdj} limits across its reportable range. `;
+      narrative += `<b>Each calibration level was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       const failCount = results.totalCount - results.passCount;
-      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; ${cfrSection}; adopted under 42 CFR §493.1255(b)(3) and §493.1253(b)(2)). `;
+      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the ${calAdj} calibration verification acceptance criterion of ±${cliaPct}% (${calSource}). `;
       narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. `;
-      narrative += `<b>Each calibration level was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each calibration level was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -767,17 +807,22 @@ function narrativeHTML(
     const biasDescr = isAbsolute
       ? `${meanBiasAbs >= 0 ? "+" : ""}${sf(meanBiasAbs, 2)} ${(study as any)?.teaUnit || (study as any)?.tea_unit || ''}`
       : `${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}%`;
+    const mcAdj = criterionAdjective(analyteName);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)");
+    const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
+    const mcLabel = criterionLabel(analyteName);
+
     const biasInterp = isAbsolute
       ? (Math.abs(meanBiasAbs) <= cliaError
-        ? `within the adopted method comparison acceptance criterion of ${teaStr}`
-        : `exceeds the adopted method comparison acceptance criterion of ${teaStr} and requires investigation`)
+        ? `within the ${mcAdj} method comparison acceptance criterion of ${teaStr}`
+        : `exceeds the ${mcAdj} method comparison acceptance criterion of ${teaStr} and requires investigation`)
       : (Math.abs(meanBiasPct) <= cliaError * 100
-        ? `within the adopted method comparison acceptance criterion of ${teaStr}`
-        : `exceeds the adopted method comparison acceptance criterion of ${teaStr} and requires investigation`);
+        ? `within the ${mcAdj} method comparison acceptance criterion of ${teaStr}`
+        : `exceeds the ${mcAdj} method comparison acceptance criterion of ${teaStr} and requires investigation`);
 
     const nPairs: number = firstReg?.n ?? 0;
-    const decisionRuleSentence = `Decision rule: with N=${nPairs} paired specimens, every specimen must fall within TEa for the comparison to pass. Any single specimen exceeding TEa fails the comparison and triggers investigation; this all-or-nothing per-specimen criterion is more conservative than a percentage-tolerance rule.`;
-    const equivalenceSentence = `This study evaluates clinical equivalence per the adopted Allowable Total Error, not statistical equivalence: two methods can be statistically different yet clinically equivalent when their bias is well within TEa, and statistically indistinguishable yet clinically unacceptable when bias approaches TEa.`;
+    const decisionRuleSentence = `Decision rule: with N=${nPairs} paired specimens, every specimen must fall within the acceptance criterion for the comparison to pass. Any single specimen exceeding the criterion fails the comparison and triggers investigation; this all-or-nothing per-specimen criterion is more conservative than a percentage-tolerance rule.`;
+    const equivalenceSentence = `This study evaluates clinical equivalence per the ${mcAdj} Allowable Total Error, not statistical equivalence: two methods can be statistically different yet clinically equivalent when their bias is well within the criterion, and statistically indistinguishable yet clinically unacceptable when bias approaches it.`;
 
     if (results.overallPass) {
       narrative = `The Pearson correlation coefficient of ${sf(rVal, 3)} indicates ${correlationInterp} agreement between methods for ${analyteName}. `;
@@ -785,12 +830,12 @@ function narrativeHTML(
       narrative += `The mean bias is ${biasDescr} (supporting statistic; not the verdict criterion). `;
       narrative += `The Bland-Altman analysis confirms no clinically significant systematic difference between the primary and comparison methods. `;
       narrative += `${equivalenceSentence} ${decisionRuleSentence} `;
-      narrative += `<b>Each paired specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). All paired specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each paired specimen was individually evaluated against the ${mcAdj} acceptance criterion (${mcLabel}) of ${teaStr} ${mcAuthority} (${mcSource}). All paired specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
-      narrative = `The method comparison for ${analyteName} did not meet the adopted acceptance criterion. `;
-      narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${biasDescr} (adopted limit: ${teaStr}) indicate unacceptable agreement between methods. `;
+      narrative = `The method comparison for ${analyteName} did not meet the ${mcAdj} acceptance criterion. `;
+      narrative += `The correlation of ${sf(rVal, 3)} and a mean bias of ${biasDescr} (${mcAdj} limit: ${teaStr}) indicate unacceptable agreement between methods. `;
       narrative += `${equivalenceSentence} ${decisionRuleSentence} `;
-      narrative += `<b>Each paired specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). One or more paired specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each paired specimen was individually evaluated against the ${mcAdj} acceptance criterion (${mcLabel}) of ${teaStr} ${mcAuthority} (${mcSource}). One or more paired specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -800,10 +845,14 @@ function narrativeHTML(
     const meetsAdlm = maxCV <= cliaError * 50;
     const isAdvanced = results.mode === "advanced";
 
+    const prAdj = criterionAdjective(analyteName);
+    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(1)(i)");
+    const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
+    const prLabel = criterionLabel(analyteName);
     if (results.overallPass) {
-      narrative = `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)). `;
+      narrative = `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
       if (meetsAdlm) {
-        narrative += `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `;
+        narrative += `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the ${prAdj} acceptance criterion. `;
       } else {
         narrative += `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
       }
@@ -813,10 +862,10 @@ function narrativeHTML(
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
-      narrative += `<b>Each precision level was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
-      narrative = `The precision study for ${analyteName} did not meet the adopted acceptance criterion. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)). `;
-      narrative += `<b>Each precision level was individually evaluated against the adopted acceptance criterion (TEa) of ${teaStr} per ${cfrSection}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative = `The precision study for ${analyteName} did not meet the ${prAdj} acceptance criterion. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
+      narrative += `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
 
@@ -1774,9 +1823,13 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
   const l2lTeaStr = teaDisplayStr(study);
   const l2lCfr = (study as any).cfr || "42 CFR \u00A7493.931";
+  const l2lAdj = criterionAdjective(study.testName);
+  const l2lLabel = criterionLabel(study.testName);
+  const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr);
+  const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)");
   const cliaStatement = results.overallPass
-    ? `<b>Each specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${l2lTeaStr} per ${l2lCfr} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). All specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each specimen was individually evaluated against the adopted acceptance criterion (TEa) of ${l2lTeaStr} per ${l2lCfr} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). One or more specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each specimen was individually evaluated against the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}). All specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each specimen was individually evaluated against the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}). One or more specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
@@ -1962,9 +2015,13 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const narrativeText = results.summary;
   const ptCoagTeaStr = teaDisplayStr(study);
   const ptCoagCfr = (study as any).cfr || "42 CFR \u00A7493.941";
+  const ptCoagAdj = criterionAdjective(study.testName);
+  const ptCoagLabel = criterionLabel(study.testName);
+  const ptCoagAuthority = criterionAuthorityPhrase(study.testName, ptCoagCfr);
+  const ptCoagSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)");
   const ptCoagCliaStatement = results.overallPass
-    ? `<b>Each module was individually evaluated against the adopted acceptance criterion (TEa) of ${ptCoagTeaStr} per ${ptCoagCfr} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). All modules satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each module was individually evaluated against the adopted acceptance criterion (TEa) of ${ptCoagTeaStr} per ${ptCoagCfr} (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)). One or more modules did not satisfy this criterion; see the module results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). All modules satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). One or more modules did not satisfy this criterion; see the module results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText} ${ptCoagCliaStatement}</p>
@@ -2151,9 +2208,11 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   const sampleLabel = rawDP.sampleType === "normal" ? "normal" : "random";
   const validAnalytes = (r.analyteResults || []).filter((ar: any) => ar.n > 0);
   const maCfr = (study as any).cfr || "42 CFR \u00A7493.941";
+  // Multi-analyte study: aggregate phrasing must cover the case where some
+  // analytes have canonical CLIA TEa and others use a lab-set internal goal.
   const maCoagCliaStatement = r.overallPass
-    ? `<b>Each analyte was individually evaluated against its adopted acceptance criterion (TEa) per ${maCfr} (§493 PT TEa for each analyte; adopted under 42 CFR §493.1253(b)(2)). All analytes satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each analyte was individually evaluated against its adopted acceptance criterion (TEa) per ${maCfr} (§493 PT TEa for each analyte; adopted under 42 CFR §493.1253(b)(2)). One or more analytes did not satisfy this criterion; see the per-analyte results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>Each analyte was individually evaluated against its acceptance criterion per ${maCfr} where a canonical 42 CFR §493 PT criterion exists, and per laboratory director or designee policy where the criterion is lab-defined; see the per-analyte results for the source applied to each. All analytes satisfied their respective criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>Each analyte was individually evaluated against its acceptance criterion per ${maCfr} where a canonical 42 CFR §493 PT criterion exists, and per laboratory director or designee policy where the criterion is lab-defined; see the per-analyte results for the source applied to each. One or more analytes did not satisfy this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrative = `${(r.specimens || []).length} ${sampleLabel} specimens were compared between old lot and new lot on ${study.instrument}. ` +
     validAnalytes.map((ar: any) => `${ar.analyte} showed a mean difference of ${ar.meanPctDiff.toFixed(1)}% (${ar.pass ? 'PASS' : 'FAIL'} at ${maAnalyteTeaStr(ar)} TEa).`).join(" ") +
     ` ${maCoagCliaStatement}`;

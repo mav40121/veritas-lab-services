@@ -48,7 +48,19 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
 import { logAudit } from "./audit";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
+import { hasCanonicalTea } from "./backfillAbsoluteFloor";
 import { DEMO_USER_EMAIL } from "./constants";
+
+// Per parking-lot #1: VeritaCheck artifacts (PDF narratives, persisted
+// summary text) must say "Lab-Set Internal Goal" for analytes without a
+// canonical 42 CFR §493 PT criterion. Citing §493 PT TEa for Lipase or
+// Vitamin D 25-OH would be a real compliance error: the §493 number does
+// not exist for those analytes.
+function acceptanceCriterionLabel(testName: string): string {
+  return hasCanonicalTea(testName)
+    ? "adopted acceptance criterion (TEa)"
+    : "laboratory-defined acceptance criterion (Lab-Set Internal Goal)";
+}
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -5647,8 +5659,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           passCount,
           totalCount,
           summary: overallPass
-            ? `All ${totalCount} measurements passed within the adopted acceptance criterion (TEa) of +/-${teaPct}%. Calibration verification acceptable.`
-            : `${totalCount - passCount} of ${totalCount} measurements exceeded the adopted acceptance criterion (TEa) of +/-${teaPct}%.`,
+            ? `All ${totalCount} measurements passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of +/-${teaPct}%. Calibration verification acceptable.`
+            : `${totalCount - passCount} of ${totalCount} measurements exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of +/-${teaPct}%.`,
         };
 
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
@@ -5779,8 +5791,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           passCount,
           totalCount: levelResults.length,
           summary: overallPass
-            ? `All ${levelResults.length} precision levels passed within the adopted acceptance criterion (TEa) of ${_teaDisplay}. Manufacturer precision claims verified.`
-            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the adopted acceptance criterion (TEa) of ${_teaDisplay}.`,
+            ? `All ${levelResults.length} precision levels passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}. Manufacturer precision claims verified.`
+            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_Precision_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
@@ -5846,8 +5858,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           passCount,
           totalCount,
           summary: overallPass
-            ? `All ${totalCount} paired specimens passed within the adopted acceptance criterion (TEa) of ${_teaDisplay}. New reagent lot acceptable for clinical use.`
-            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the adopted acceptance criterion (TEa) of ${_teaDisplay}.`,
+            ? `All ${totalCount} paired specimens passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}. New reagent lot acceptable for clinical use.`
+            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_LotToLot_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
@@ -6001,8 +6013,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         xRange: { min: Math.min(...xs), max: Math.max(...xs) },
         yRange: { [comparisonName]: { min: Math.min(...ys), max: Math.max(...ys) } },
         summary: overallPass
-          ? `All ${n} samples passed within the adopted acceptance criterion (TEa) of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
-          : `${n - passCount} of ${n} samples exceeded the adopted acceptance criterion (TEa) of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}.`,
+          ? `All ${n} samples passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
+          : `${n - passCount} of ${n} samples exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}.`,
       };
 
       const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
