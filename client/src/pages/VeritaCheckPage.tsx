@@ -440,7 +440,7 @@ export default function VeritaCheckPage() {
   // Remembers the most recent non-custom analyte preset so unchecking the "Use custom TEa" box
   // restores the user's prior selection rather than dropping them at the default (ALT/SGPT).
   const prevAnalytePresetRef = useRef(0);
-  const [customClia, setCustomClia] = useState(0.075);
+  const [customClia, setCustomClia] = useState(0.15);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
 
@@ -1678,7 +1678,7 @@ return (
                         </div>
                         {customMode && (
                           <div className="flex items-center gap-2">
-                            <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.075)} className="max-w-[120px]" />
+                            <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.15)} className="max-w-[120px]" />
                             <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
                           </div>
                         )}
