@@ -85,6 +85,20 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
     if (!rawData) return "fail";
 
+    // Sensitivity (EP17-A2) — dataPoints is the wrapper {input, results} that
+    // VeritaCheckPage.tsx persists; trust the pre-computed results.overallPass.
+    // Without this branch, recomputeAllStudyStatuses fell through to the
+    // unknown-study-type default ("fail") and overwrote correct pass verdicts
+    // on every boot.
+    if (studyType === "sensitivity") {
+      const wrapper: any = rawData;
+      if (wrapper && typeof wrapper === "object" && wrapper.results && typeof wrapper.results.overallPass === "boolean") {
+        return wrapper.results.overallPass ? "pass" : "fail";
+      }
+      // Wrapper-less or malformed: cannot verify, fail-safe.
+      return "fail";
+    }
+
     if (studyType === "cal_ver") {
       // Dual-criterion S493 rule: |observed - assigned| <= max(percent_allowance, absolute_floor)
       const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
