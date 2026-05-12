@@ -5705,6 +5705,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.json({ token: storePdfToken(pdfBuffer, filename) });
       }
 
+      // ── Sensitivity (EP17) PDF ──
+      // Demo seed stores dataPoints as {input, results}; unpack results directly for
+      // rendering. Avoids server-side import of client/src/lib/calculations.
+      if (studyRow.study_type === "sensitivity") {
+        const sensWrapper: any = (dp && typeof dp === "object" && (dp as any).results) ? dp : { input: dp, results: dp };
+        const sensResults = sensWrapper.results;
+        const study = {
+          testName: studyRow.test_name,
+          instrument: studyRow.instrument,
+          analyst: studyRow.analyst,
+          date: studyRow.date,
+          studyType: "sensitivity",
+          cliaAllowableError: 0,
+          teaIsPercentage: 0,
+          tea_is_percentage: 0,
+          teaUnit: studyRow.tea_unit || "",
+          tea_unit: studyRow.tea_unit || "",
+          dataPoints: dp,
+          instruments: instNames,
+          status: studyRow.status,
+          _labName: "Riverside Regional Medical Center",
+          _cliaNumber: "22D0999999",
+        };
+        const pdfBuffer = await generatePDFBuffer(study as any, sensResults, "22D0999999", null, licenseCtxFromReq(req));
+        const filename = `VeritaCheck_Sensitivity_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
+        return res.json({ token: storePdfToken(pdfBuffer, filename) });
+      }
+
       // ── Precision PDF ──
       if (studyRow.study_type === "precision") {
         const teaFraction = teaFractionStored;          // e.g. 0.08 for 8%

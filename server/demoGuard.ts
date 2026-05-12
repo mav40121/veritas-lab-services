@@ -49,6 +49,11 @@ const REQUIRED_DEMO_STUDIES = [
     study_type: "lot_to_lot",
     description: "Hemoglobin A1c Lot-to-Lot Verification (Bio-Rad D-100, EP26-A)",
   },
+  {
+    test_name: "Troponin I",
+    study_type: "sensitivity",
+    description: "Troponin I Sensitivity Verification (Beckman DxI 9000 Access, CLSI EP17-A2)",
+  },
 ];
 
 export async function verifyDemoIntegrity() {
