@@ -282,17 +282,22 @@ const CFR_URLS: Record<string, string> = {
   "42 CFR §493.937": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
   "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
   "42 CFR §493.959": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.959",
-  // Subpart K (quality-system regs -- page-1 references block)
-  "42 CFR §493.1213":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
-  "42 CFR §493.1213(b)(2)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
-  "42 CFR §493.1253(b)(2)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
-  "42 CFR §493.1255":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
-  "42 CFR §493.1255(b)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
-  "42 CFR §493.1255(b)(3)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
-  "42 CFR §493.1256":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1256",
-  "42 CFR §493.1271":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
-  "42 CFR §493.1271(a)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
-  "42 CFR §493.1271(b)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  // Subpart K (quality-system regs -- page-1 references block).
+  // Note on §493.1213: this section is "Condition: Toxicology", not a verification
+  // authority. Kept here only so an existing reference to it links to the real
+  // section page. The invalid §493.1213(b)(2) variant was removed; that paragraph
+  // structure does not exist in the current CFR.
+  "42 CFR §493.1213":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
+  "42 CFR §493.1253(b)(2)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1253(b)(2)(ii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1255":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1255(b)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1255(b)(3)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1256":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1256",
+  "42 CFR §493.1271":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1271(a)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1271(b)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1281":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1281",
 };
 
 // ─── Shared CSS ───────────────────────────────────────────────────────────────
@@ -415,7 +420,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Lot-to-Lot Verification",
     ref_interval: "Reference Range Verification",
-    pt_coag: "PT/Coag New Lot Validation",
+    pt_coag: "PT/Coag New Lot Verification",
     qc_range: "QC Range Establishment",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
   };
@@ -560,7 +565,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.022", "LAB.023"],
     aabb: ["5.7.1", "5.7.3"],
     clsi: ["EP09-A3"],
-    cfr:  ["42 CFR §493.1213"],
+    cfr:  ["42 CFR §493.1281"],
   },
   precision: {
     cap:  ["CHM.13830"],
@@ -568,7 +573,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.021", "LAB.023"],
     aabb: ["5.7.1"],
     clsi: ["EP15-A3"],
-    cfr:  ["42 CFR §493.1213(b)(2)"],
+    cfr:  ["42 CFR §493.1253(b)(2)(ii)"],
   },
   lot_to_lot: {
     cap:  ["CHM.13840"],
@@ -600,7 +605,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.023", "LAB.025"],
     aabb: ["5.14.1", "5.14.3"],
     clsi: ["EP26-A", "H21-A5"],
-    cfr:  ["42 CFR §493.1255", "42 CFR §493.1213"],
+    cfr:  ["42 CFR §493.1255", "42 CFR §493.1281"],
   },
   ref_interval: {
     cap:  ["CHM.13900", "GEN.40460"],
@@ -846,7 +851,7 @@ function narrativeHTML(
     const isAdvanced = results.mode === "advanced";
 
     const prAdj = criterionAdjective(analyteName);
-    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(1)(i)");
+    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)");
     const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
     const prLabel = criterionLabel(analyteName);
     if (results.overallPass) {
@@ -1061,7 +1066,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
 
   const narrative = overallPass
     ? `The qualitative method comparison for ${study.testName} demonstrated ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
-    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Investigation and corrective action are recommended. Final determination must be made by the laboratory director or designee.</b>`;
+    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Investigation and corrective action are recommended. Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Qualitative Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1158,7 +1163,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
 
   const narrative = overallPass
     ? `The semi-quantitative method comparison for ${study.testName} demonstrated ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy observed was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
-    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Investigation and corrective action are recommended. Final determination must be made by the laboratory director or designee.</b>`;
+    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Investigation and corrective action are recommended. Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Semi-Quantitative Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1827,9 +1832,14 @@ function buildLotToLotHTML(study: Study, results: any): string {
   const l2lLabel = criterionLabel(study.testName);
   const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr);
   const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)");
+  // The lot-to-lot pass rule (calculations.ts:821) requires both: mean absolute
+  // percent difference within TEa AND at least 90% of paired specimens within
+  // TEa. The narrative must describe the actual rule; a prior wording said "All
+  // specimens satisfied" on PASS, which over-stated the test (the rule allows
+  // up to 10% of specimens to fall outside TEa on a PASS).
   const cliaStatement = results.overallPass
-    ? `<b>Each specimen was individually evaluated against the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}). All specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each specimen was individually evaluated against the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}). One or more specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The lot-to-lot comparison met the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): the mean absolute percent difference did not exceed the criterion, and at least 90% of paired specimens fell within it. Specimens outside the criterion, if any, are documented in the per-sample table.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The lot-to-lot comparison did not meet the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): either the mean absolute percent difference exceeded the criterion or fewer than 90% of paired specimens fell within it. See the per-sample table for the failure pattern.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
@@ -2039,7 +2049,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const ptCompactM2Pass = module2.pass ? "PASS" : "FAIL";
   const ptCompactM3Pass = module3 ? (module3.pass ? "PASS" : "FAIL") : "N/A";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT Coag New Lot Validation - ${study.testName}</title><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT Coag New Lot Verification - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
@@ -3964,7 +3974,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 
   ${chapterSections}
 
-  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only | Detailed results continued from page 1</div>
+  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
 </div>
 
 <!-- FINAL PAGE: Policy Library -->
