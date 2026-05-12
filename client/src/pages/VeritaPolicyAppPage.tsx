@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -64,11 +65,11 @@ interface Summary {
 }
 
 // ── Status config ──────────────────────────────────────────────────────────────
-const STATUS_CONFIG: Record<string, { label: string; color: string; next: string }> = {
-  not_started: { label: "Not Started", color: "bg-muted text-muted-foreground", next: "in_progress" },
-  in_progress: { label: "In Progress", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", next: "complete" },
-  complete:    { label: "Complete",    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", next: "not_started" },
-  na:          { label: "N/A",         color: "bg-muted/50 text-muted-foreground", next: "not_started" },
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  not_started: { label: "Not Started", color: "bg-muted text-muted-foreground" },
+  in_progress: { label: "In Progress", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  complete:    { label: "Complete",    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  na:          { label: "N/A",         color: "bg-muted/50 text-muted-foreground" },
 };
 
 const DEFAULT_SETTINGS: PolicySettings = {
@@ -208,12 +209,6 @@ export default function VeritaPolicyAppPage() {
       toast({ title: "Error saving", variant: "destructive" });
       setPolicies(prev => prev.map(r => r.policy_id === p.policy_id ? p : r));
     }
-  }
-
-  function cycleStatus(p: MasterPolicy) {
-    if (p.is_na || isReadOnly) return;
-    const next = STATUS_CONFIG[p.status]?.next || "not_started";
-    updatePolicy(p, { status: next });
   }
 
   async function handleDownloadPdf() {
@@ -618,13 +613,23 @@ export default function VeritaPolicyAppPage() {
 
                           {/* Status */}
                           <td className="px-3 py-2 align-top">
-                            <button
+                            <Select
+                              value={isNa ? "na" : p.status}
                               disabled={isReadOnly || isNa}
-                              onClick={() => cycleStatus(p)}
-                              title={isNa ? "Marked N/A" : "Click to change status"}
-                              className={`px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${statusCfg.color} ${isReadOnly || isNa ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}>
-                              {statusCfg.label}
-                            </button>
+                              onValueChange={(v) => updatePolicy(p, { status: v })}
+                            >
+                              <SelectTrigger
+                                title={isNa ? "Marked N/A" : "Change status"}
+                                className={`h-7 text-xs w-36 border ${statusCfg.color} ${isReadOnly || isNa ? "cursor-default" : "cursor-pointer"}`}
+                              >
+                                <SelectValue>{statusCfg.label}</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="not_started" className="text-xs">Not Started</SelectItem>
+                                <SelectItem value="in_progress" className="text-xs">In Progress</SelectItem>
+                                <SelectItem value="complete" className="text-xs">Complete</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </td>
 
                           {/* N/A toggle */}
