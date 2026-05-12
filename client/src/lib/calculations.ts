@@ -57,27 +57,36 @@ function demingRegression(x: number[], y: number[]): { slope: number; intercept:
 }
 
 // 95% CI for OLS slope and intercept using t-distribution (df = n-2)
-// t critical value approximation for common n values
+// Two-sided t critical value at alpha = 0.05.
+// Explicit values for df 1..30; sparse table for df > 30 with linear interpolation.
+// The prior step-function lookup under-estimated t for intermediate df (e.g. df=11
+// returned 2.131 instead of 2.201, a 3.2% narrowing of the CI), which is meaningful
+// for small-n method-comparison and cal-ver studies.
+const T_TABLE: { df: number; t: number }[] = [
+  { df: 1, t: 12.706 }, { df: 2, t: 4.303 }, { df: 3, t: 3.182 }, { df: 4, t: 2.776 },
+  { df: 5, t: 2.571 }, { df: 6, t: 2.447 }, { df: 7, t: 2.365 }, { df: 8, t: 2.306 },
+  { df: 9, t: 2.262 }, { df: 10, t: 2.228 }, { df: 11, t: 2.201 }, { df: 12, t: 2.179 },
+  { df: 13, t: 2.160 }, { df: 14, t: 2.145 }, { df: 15, t: 2.131 }, { df: 16, t: 2.120 },
+  { df: 17, t: 2.110 }, { df: 18, t: 2.101 }, { df: 19, t: 2.093 }, { df: 20, t: 2.086 },
+  { df: 21, t: 2.080 }, { df: 22, t: 2.074 }, { df: 23, t: 2.069 }, { df: 24, t: 2.064 },
+  { df: 25, t: 2.060 }, { df: 26, t: 2.056 }, { df: 27, t: 2.052 }, { df: 28, t: 2.048 },
+  { df: 29, t: 2.045 }, { df: 30, t: 2.042 }, { df: 40, t: 2.021 }, { df: 50, t: 2.009 },
+  { df: 60, t: 2.000 }, { df: 80, t: 1.990 }, { df: 100, t: 1.984 }, { df: 120, t: 1.980 },
+];
 function tCritical(df: number): number {
-  // Approximation of t(0.025, df) — accurate enough for lab use
-  if (df <= 1) return 12.706;
-  if (df <= 2) return 4.303;
-  if (df <= 3) return 3.182;
-  if (df <= 4) return 2.776;
-  if (df <= 5) return 2.571;
-  if (df <= 6) return 2.447;
-  if (df <= 7) return 2.365;
-  if (df <= 8) return 2.306;
-  if (df <= 9) return 2.262;
-  if (df <= 10) return 2.228;
-  if (df <= 15) return 2.131;
-  if (df <= 20) return 2.086;
-  if (df <= 25) return 2.060;
-  if (df <= 30) return 2.042;
-  if (df <= 40) return 2.021;
-  if (df <= 60) return 2.000;
-  if (df <= 120) return 1.980;
-  return 1.960;
+  if (df <= 1) return T_TABLE[0].t;
+  if (df > 120) return 1.960;
+  for (let i = 0; i < T_TABLE.length - 1; i++) {
+    const a = T_TABLE[i], b = T_TABLE[i + 1];
+    if (df === a.df) return a.t;
+    if (df > a.df && df < b.df) {
+      // Linear interpolation between adjacent table entries
+      const w = (df - a.df) / (b.df - a.df);
+      return a.t + w * (b.t - a.t);
+    }
+  }
+  // df === 120 falls through the loop; return the last table entry.
+  return T_TABLE[T_TABLE.length - 1].t;
 }
 
 function olsCI(x: number[], y: number[]): { slopeLo: number; slopeHi: number; interceptLo: number; interceptHi: number } {
@@ -720,7 +729,12 @@ export function calculatePrecision(
 
     const varWithinRun = msWithin;
     const varBetweenRun = Math.max(0, (msBetweenRun - msWithin) / replicatesPerRun);
-    const varBetweenDay = Math.max(0, (msBetweenDay - msBetweenRun) / (runsPerDay * replicatesPerRun));
+    // When runs_per_day = 1, df_between_run = 0 so msBetweenRun = 0. The next-lower
+    // mean square in the expected-mean-square ladder is msWithin, not the meaningless
+    // msBetweenRun = 0. Using msBetweenRun here over-estimates between-day variance
+    // by msWithin / replicatesPerRun in single-run designs (the EP15 default shape).
+    const msNextDown = dfBetweenRun > 0 ? msBetweenRun : msWithin;
+    const varBetweenDay = Math.max(0, (msBetweenDay - msNextDown) / (runsPerDay * replicatesPerRun));
     const varTotal = varWithinRun + varBetweenRun + varBetweenDay;
 
     const toCV = (v: number) => meanVal !== 0 ? (Math.sqrt(v) / meanVal) * 100 : 0;
