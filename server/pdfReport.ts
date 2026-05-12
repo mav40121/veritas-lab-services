@@ -282,17 +282,22 @@ const CFR_URLS: Record<string, string> = {
   "42 CFR §493.937": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.937",
   "42 CFR §493.941": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.941",
   "42 CFR §493.959": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.959",
-  // Subpart K (quality-system regs -- page-1 references block)
-  "42 CFR §493.1213":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
-  "42 CFR §493.1213(b)(2)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
-  "42 CFR §493.1253(b)(2)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
-  "42 CFR §493.1255":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
-  "42 CFR §493.1255(b)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
-  "42 CFR §493.1255(b)(3)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
-  "42 CFR §493.1256":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1256",
-  "42 CFR §493.1271":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
-  "42 CFR §493.1271(a)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
-  "42 CFR §493.1271(b)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  // Subpart K (quality-system regs -- page-1 references block).
+  // Note on §493.1213: this section is "Condition: Toxicology", not a verification
+  // authority. Kept here only so an existing reference to it links to the real
+  // section page. The invalid §493.1213(b)(2) variant was removed; that paragraph
+  // structure does not exist in the current CFR.
+  "42 CFR §493.1213":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
+  "42 CFR §493.1253(b)(2)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1253(b)(2)(ii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1255":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1255(b)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1255(b)(3)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
+  "42 CFR §493.1256":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1256",
+  "42 CFR §493.1271":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1271(a)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1271(b)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1271",
+  "42 CFR §493.1281":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1281",
 };
 
 // ─── Shared CSS ───────────────────────────────────────────────────────────────
@@ -560,7 +565,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.022", "LAB.023"],
     aabb: ["5.7.1", "5.7.3"],
     clsi: ["EP09-A3"],
-    cfr:  ["42 CFR §493.1213"],
+    cfr:  ["42 CFR §493.1281"],
   },
   precision: {
     cap:  ["CHM.13830"],
@@ -568,7 +573,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.021", "LAB.023"],
     aabb: ["5.7.1"],
     clsi: ["EP15-A3"],
-    cfr:  ["42 CFR §493.1213(b)(2)"],
+    cfr:  ["42 CFR §493.1253(b)(2)(ii)"],
   },
   lot_to_lot: {
     cap:  ["CHM.13840"],
@@ -600,7 +605,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.023", "LAB.025"],
     aabb: ["5.14.1", "5.14.3"],
     clsi: ["EP26-A", "H21-A5"],
-    cfr:  ["42 CFR §493.1255", "42 CFR §493.1213"],
+    cfr:  ["42 CFR §493.1255", "42 CFR §493.1281"],
   },
   ref_interval: {
     cap:  ["CHM.13900", "GEN.40460"],
@@ -846,7 +851,7 @@ function narrativeHTML(
     const isAdvanced = results.mode === "advanced";
 
     const prAdj = criterionAdjective(analyteName);
-    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(1)(i)");
+    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)");
     const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
     const prLabel = criterionLabel(analyteName);
     if (results.overallPass) {
