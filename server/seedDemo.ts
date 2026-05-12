@@ -133,8 +133,12 @@ export async function seedDemoData() {
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.075, tea_is_percentage = 1, tea_unit = '%' WHERE user_id = ? AND test_name = 'Creatinine'").run(demoUserId);
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 4, tea_is_percentage = 0, tea_unit = 'mmol/L', data_points = ? WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'method_comparison'").run(JSON.stringify(generateSodiumData()), demoUserId);
   sqlite.prepare("UPDATE studies SET result = 'pass', clia_allowable_error = 0.3, tea_is_percentage = 0, tea_unit = 'mmol/L', data_points = ? WHERE user_id = ? AND test_name = 'Potassium'").run(JSON.stringify(generatePotassiumData()), demoUserId);
-  // Troponin I: backfill verified data points + result for existing deployments
-  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%', data_points = ? WHERE user_id = ? AND test_name = 'Troponin I'").run(JSON.stringify(generateTroponinData()), demoUserId);
+  // Troponin I method comparison: backfill verified data points + result for existing deployments.
+  // MUST scope by study_type because there are now multiple Troponin I rows (the failing method
+  // comparison study seeded here AND the passing sensitivity study seeded in section 4f below);
+  // without the scope, this UPDATE would clobber the sensitivity row's tea_unit, data_points,
+  // and result fields on every seed cycle.
+  sqlite.prepare("UPDATE studies SET result = 'fail', clia_allowable_error = 0.30, tea_is_percentage = 1, tea_unit = '%', data_points = ? WHERE user_id = ? AND test_name = 'Troponin I' AND study_type = 'method_comparison'").run(JSON.stringify(generateTroponinData()), demoUserId);
   // Sodium Reference Range Verification - restore if deleted, backfill if exists
   const existingSodiumRefInterval = sqlite.prepare(
     "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Sodium' AND study_type = 'ref_interval' LIMIT 1"
@@ -297,7 +301,7 @@ export async function seedDemoData() {
     console.log("[seed] Inserted Troponin I Sensitivity study");
   } else {
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
     ).run(
       "Beckman DxI 9000 Access",
       "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
