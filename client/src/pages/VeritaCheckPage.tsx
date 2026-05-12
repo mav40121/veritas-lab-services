@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -436,6 +437,9 @@ export default function VeritaCheckPage() {
   };
 
   const [cliaPreset, setCliaPreset] = useState(0);
+  // Remembers the most recent non-custom analyte preset so unchecking the "Use custom TEa" box
+  // restores the user's prior selection rather than dropping them at the default (ALT/SGPT).
+  const prevAnalytePresetRef = useRef(0);
   const [customClia, setCustomClia] = useState(0.075);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
@@ -1616,40 +1620,71 @@ return (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  <Select value={String(cliaPreset)} onValueChange={v => setCliaPreset(parseInt(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Routine Chemistry §493.931</SelectLabel>
-                        {CLIA_PRESETS.slice(0, 37).map((p, i) => <SelectItem key={i} value={String(i)}>{p.label}</SelectItem>)}
-                      </SelectGroup>
-                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Endocrinology §493.933</SelectLabel>
-                        {CLIA_PRESETS.slice(37, 55).map((p, i) => <SelectItem key={37+i} value={String(37+i)}>{p.label}</SelectItem>)}
-                      </SelectGroup>
-                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Toxicology §493.935</SelectLabel>
-                        {CLIA_PRESETS.slice(55, 66).map((p, i) => <SelectItem key={55+i} value={String(55+i)}>{p.label}</SelectItem>)}
-                      </SelectGroup>
-                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Hematology §493.941</SelectLabel>
-                        {CLIA_PRESETS.slice(66, 74).map((p, i) => <SelectItem key={66+i} value={String(66+i)}>{p.label}</SelectItem>)}
-                      </SelectGroup>
-                      <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Lab-Set Internal Goal (no CLIA TEa)</SelectLabel>
-                        {CLIA_PRESETS.slice(75, 81).map((p, i) => <SelectItem key={75+i} value={String(75+i)}>{p.label}</SelectItem>)}
-                      </SelectGroup>
-                      <SelectGroup>
-                        <SelectItem key={CLIA_PRESETS.length - 1} value={String(CLIA_PRESETS.length - 1)}>Custom</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2.5">
-                    <p className="text-sm text-amber-900 dark:text-amber-200 leading-snug">
-                      <strong>Don&apos;t see your analyte?</strong> CLIA has no defined TEa for it. Choose <strong>Custom</strong> below and enter your lab-defined goal.
-                    </p>
-                  </div>
-                  {CLIA_PRESETS[cliaPreset].value === 0 && (
-                    <div className="flex items-center gap-2">
-                      <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.075)} className="max-w-[120px]" />
-                      <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
-                    </div>
-                  )}
+                  {(() => {
+                    // customMode is derived from cliaPreset (the Custom preset lives at the last index of
+                    // CLIA_PRESETS). The "previous analyte" ref remembers the last non-custom selection so
+                    // unchecking the box returns the user to their prior analyte rather than dropping them
+                    // at the default.
+                    const customIdx = CLIA_PRESETS.length - 1;
+                    const customMode = cliaPreset === customIdx;
+                    return (
+                      <>
+                        <Select
+                          value={String(cliaPreset)}
+                          onValueChange={v => { const i = parseInt(v); prevAnalytePresetRef.current = i; setCliaPreset(i); }}
+                          disabled={customMode}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Routine Chemistry §493.931</SelectLabel>
+                              {CLIA_PRESETS.slice(0, 37).map((p, i) => <SelectItem key={i} value={String(i)}>{p.label}</SelectItem>)}
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Endocrinology §493.933</SelectLabel>
+                              {CLIA_PRESETS.slice(37, 55).map((p, i) => <SelectItem key={37+i} value={String(37+i)}>{p.label}</SelectItem>)}
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Toxicology §493.935</SelectLabel>
+                              {CLIA_PRESETS.slice(55, 66).map((p, i) => <SelectItem key={55+i} value={String(55+i)}>{p.label}</SelectItem>)}
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Hematology §493.941</SelectLabel>
+                              {CLIA_PRESETS.slice(66, 74).map((p, i) => <SelectItem key={66+i} value={String(66+i)}>{p.label}</SelectItem>)}
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Lab-Set Internal Goal (no CLIA TEa)</SelectLabel>
+                              {CLIA_PRESETS.slice(75, 81).map((p, i) => <SelectItem key={75+i} value={String(75+i)}>{p.label}</SelectItem>)}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2.5">
+                          <p className="text-sm text-amber-900 dark:text-amber-200 leading-snug">
+                            <strong>Don&apos;t see your analyte?</strong> CLIA has no defined TEa for it. Check the box below and enter your lab-defined goal.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 pl-1">
+                          <Checkbox
+                            id="use-custom-tea"
+                            checked={customMode}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                if (cliaPreset !== customIdx) prevAnalytePresetRef.current = cliaPreset;
+                                setCliaPreset(customIdx);
+                              } else {
+                                const restore = prevAnalytePresetRef.current === customIdx ? 0 : prevAnalytePresetRef.current;
+                                setCliaPreset(restore);
+                              }
+                            }}
+                          />
+                          <Label htmlFor="use-custom-tea" className="text-sm font-medium cursor-pointer">
+                            Use custom TEa (enter lab-defined goal)
+                          </Label>
+                        </div>
+                        {customMode && (
+                          <div className="flex items-center gap-2">
+                            <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.075)} className="max-w-[120px]" />
+                            <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   {CLIA_PRESETS[cliaPreset].cfr && <p className="text-xs text-muted-foreground">Reference: {CLIA_PRESETS[cliaPreset].cfr}</p>}
                   <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
                     <p className="text-xs text-primary font-medium">Active TEa: {teaIsPercentage ? `\u00B1${(cliaValue * 100).toFixed(1)}%` : `\u00B1${cliaValue} ${teaUnit}`}{cliaAbsoluteFloor != null ? ` or \u00B1${cliaAbsoluteFloor} ${cliaAbsoluteUnit} (greater)` : ''}</p>
