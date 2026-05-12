@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, calculateINR } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR } from "@/lib/calculations";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
@@ -357,7 +357,7 @@ export default function VeritaCheckPage() {
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -497,6 +497,23 @@ export default function VeritaCheckPage() {
   const [precisionRunsPerDay, setPrecisionRunsPerDay] = useState(1);
   const [precisionReplicatesPerRun, setPrecisionReplicatesPerRun] = useState(2);
   const [precisionAdvancedData, setPrecisionAdvancedData] = useState<number[][][]>([[], [], []]);
+
+  // Sensitivity (EP17) state. Two paste-friendly textareas hold the blank and low-level
+  // replicate values respectively; one value per line, optional ",lot" suffix per line for
+  // per-lot LoB breakdown. LoQ levels are a dynamic list (expected concentration plus a
+  // replicate textarea per level). Establishment vs Verification toggles whether mfg-claim
+  // inputs are surfaced.
+  const [sensMode, setSensMode] = useState<"establishment" | "verification">("establishment");
+  const [sensAnalyteName, setSensAnalyteName] = useState("");
+  const [sensUnits, setSensUnits] = useState("");
+  const [sensBlanksText, setSensBlanksText] = useState("");
+  const [sensLowLevelText, setSensLowLevelText] = useState("");
+  const [sensLoqLevels, setSensLoqLevels] = useState<{ expectedConcentration: string; repsText: string }[]>([]);
+  const [sensCvThreshold, setSensCvThreshold] = useState(20);
+  const [sensBiasThreshold, setSensBiasThreshold] = useState(25);
+  const [sensMfgLob, setSensMfgLob] = useState("");
+  const [sensMfgLod, setSensMfgLod] = useState("");
+  const [sensMfgLoq, setSensMfgLoq] = useState("");
 
   // Lot-to-Lot state
   const [lotSampleType, setLotSampleType] = useState<"normal" | "abnormal" | "both">("normal");
@@ -962,6 +979,8 @@ export default function VeritaCheckPage() {
     ? maSpecimens.filter(s => (s.ptNew && s.ptOld) || (s.apttNew && s.apttOld) || (s.fibNew && s.fibOld)).length
     : studyType === "ref_interval"
     ? refData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
+    : studyType === "sensitivity"
+    ? sensBlanksText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length
     : studyType === "method_comparison" && assayType !== "quantitative"
     ? dataPoints.filter(dp => dp.expectedCategory && instrumentNames.slice(1).some(n => dp.instrumentCategories?.[n])).length
     : studyType === "method_comparison"
@@ -1127,6 +1146,62 @@ export default function VeritaCheckPage() {
         date, studyType: "ref_interval", cliaAllowableError: 0.1,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
         dataPoints: JSON.stringify({ specimens: refData.map(d => ({ specimenId: d.specimenId, value: d.value })), refLow: lo, refHigh: hi, analyte: refAnalyte, units: refUnits }),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
+        status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "sensitivity") {
+      // Parse a sensitivity textarea: one replicate per line, "value" or "value,lot".
+      const parseSens = (text: string): { value: number; lot?: string }[] =>
+        text.split(/\r?\n/).map(line => {
+          const parts = line.split(/[,\t]/).map(p => p.trim()).filter(p => p.length > 0);
+          if (parts.length === 0) return null;
+          const val = parseFloat(parts[0]);
+          if (isNaN(val)) return null;
+          return { value: val, lot: parts[1] || undefined };
+        }).filter((x): x is { value: number; lot?: string } => x !== null);
+
+      const blanks = parseSens(sensBlanksText);
+      const lowLevel = parseSens(sensLowLevelText);
+      if (blanks.length < 5) { toast({ title: "Enter at least 5 blank replicates", variant: "destructive" }); return; }
+      if (lowLevel.length < 5) { toast({ title: "Enter at least 5 low-level replicates", variant: "destructive" }); return; }
+
+      const loqLevels = sensLoqLevels
+        .map(lvl => ({ expectedConcentration: parseFloat(lvl.expectedConcentration), replicates: parseSens(lvl.repsText) }))
+        .filter(g => !isNaN(g.expectedConcentration) && g.replicates.length > 0);
+
+      const mfgClaim = sensMode === "verification" ? {
+        lob: sensMfgLob !== "" ? parseFloat(sensMfgLob) : undefined,
+        lod: sensMfgLod !== "" ? parseFloat(sensMfgLod) : undefined,
+        loq: sensMfgLoq !== "" ? parseFloat(sensMfgLoq) : undefined,
+      } : undefined;
+
+      const input: SensitivityInput = {
+        mode: sensMode,
+        blanks,
+        lowLevel,
+        loqLevels: loqLevels.length > 0 ? loqLevels : undefined,
+        cvThreshold: sensCvThreshold / 100,
+        biasThreshold: sensBiasThreshold / 100,
+        manufacturerClaim: mfgClaim,
+      };
+      const results = calculateSensitivity(input);
+      const study: InsertStudy = {
+        testName: testName.trim() || sensAnalyteName || "Sensitivity Study",
+        instrument: instrumentNames[0] || "-",
+        analyst: analyst.trim() || "-",
+        date,
+        studyType: "sensitivity",
+        cliaAllowableError: 0,
+        teaIsPercentage: 0,
+        teaUnit: sensUnits || null,
+        cliaAbsoluteFloor: null,
+        cliaAbsoluteUnit: sensUnits || null,
+        dataPoints: JSON.stringify({ input, results }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1385,10 +1460,11 @@ return (
                           <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
                           <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
                           <SelectItem value="lot_to_lot">Lot-to-Lot Verification</SelectItem>
-                          <SelectItem value="pt_coag">PT/Coag New Lot Validation</SelectItem>
+                          <SelectItem value="pt_coag">PT/Coag New Lot Verification</SelectItem>
                           <SelectItem value="qc_range">QC Range Establishment</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
                           <SelectItem value="ref_interval">Reference Range Verification</SelectItem>
+                          <SelectItem value="sensitivity">Sensitivity Verification (EP17)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -1617,6 +1693,44 @@ return (
                 </Card>
               )}
 
+              {studyType === "sensitivity" && (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Analytical Sensitivity Setup (CLSI EP17-A2)</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                      <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                      <span>EP17-A2 establishes Limit of Blank, Limit of Detection, and Limit of Quantitation. Establishment mode is used for modified or in-house tests (42 CFR {"§"}493.1253(b)(1)(iii)). Verification mode confirms a manufacturer's published claim (42 CFR {"§"}493.1253(b)(2)). Establishment requires ~60 blank and ~60 low-level replicates across multiple reagent lots and days for full EP17-A2 compliance.</span>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5"><Label>Study Mode</Label>
+                        <Select value={sensMode} onValueChange={v => setSensMode(v as "establishment" | "verification")}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="establishment">Establishment (full EP17-A2 study)</SelectItem>
+                            <SelectItem value="verification">Verification (confirm manufacturer claim)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Troponin I" value={sensAnalyteName} onChange={e => setSensAnalyteName(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. ng/mL" value={sensUnits} onChange={e => setSensUnits(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>LoQ CV Threshold (%)</Label><Input type="number" step="any" min={1} max={50} value={sensCvThreshold} onChange={e => setSensCvThreshold(parseFloat(e.target.value) || 20)} /></div>
+                      <div className="space-y-1.5"><Label>LoQ |Bias| Threshold (%)</Label><Input type="number" step="any" min={1} max={50} value={sensBiasThreshold} onChange={e => setSensBiasThreshold(parseFloat(e.target.value) || 25)} /></div>
+                    </div>
+                    {sensMode === "verification" && (
+                      <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 p-3 space-y-3">
+                        <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Manufacturer's Published Claims</p>
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoB</Label><Input type="number" step="any" placeholder="e.g. 0.010" value={sensMfgLob} onChange={e => setSensMfgLob(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoD</Label><Input type="number" step="any" placeholder="e.g. 0.020" value={sensMfgLod} onChange={e => setSensMfgLod(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoQ</Label><Input type="number" step="any" placeholder="e.g. 0.040" value={sensMfgLoq} onChange={e => setSensMfgLoq(e.target.value)} /></div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {studyType !== "sensitivity" && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
@@ -1691,6 +1805,7 @@ return (
                   </div>
                 </CardContent>
               </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="data">
@@ -2179,6 +2294,84 @@ return (
                     </div>
                   </CardContent>
                 </Card>
+              ) : studyType === "sensitivity" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Analytical Sensitivity Data Entry</CardTitle></CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                      <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                      <span>Paste replicate values, one per line. Optional second value per line (comma or tab separated) is the reagent lot label, which enables a per-lot LoB breakdown in the report.</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Blank Samples</Label>
+                        <span className="text-xs text-muted-foreground">{sensBlanksText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length} valid replicates</span>
+                      </div>
+                      <textarea
+                        value={sensBlanksText}
+                        onChange={e => setSensBlanksText(e.target.value)}
+                        placeholder={"0.005\n0.008,LotA\n0.006,LotA\n0.012,LotB\n0.004,LotB\n..."}
+                        className="w-full min-h-[140px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Low-Level Samples (for LoD)</Label>
+                        <span className="text-xs text-muted-foreground">{sensLowLevelText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length} valid replicates</span>
+                      </div>
+                      <textarea
+                        value={sensLowLevelText}
+                        onChange={e => setSensLowLevelText(e.target.value)}
+                        placeholder={"0.020\n0.025,LotA\n0.022,LotB\n..."}
+                        className="w-full min-h-[140px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">LoQ Concentration Levels (optional)</Label>
+                        <Button variant="outline" size="sm" onClick={() => setSensLoqLevels([...sensLoqLevels, { expectedConcentration: "", repsText: "" }])}>
+                          <PlusCircle size={12} className="mr-1" />Add Level
+                        </Button>
+                      </div>
+                      {sensLoqLevels.length === 0 && (
+                        <p className="text-xs text-muted-foreground italic">Add one or more low concentration levels to calculate the Limit of Quantitation. Each level needs an expected concentration and several replicate measurements.</p>
+                      )}
+                      {sensLoqLevels.map((lvl, idx) => (
+                        <div key={idx} className="rounded-md border border-border p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs shrink-0">Expected Concentration</Label>
+                            <Input
+                              type="number"
+                              step="any"
+                              value={lvl.expectedConcentration}
+                              onChange={e => {
+                                const copy = [...sensLoqLevels];
+                                copy[idx] = { ...copy[idx], expectedConcentration: e.target.value };
+                                setSensLoqLevels(copy);
+                              }}
+                              className="h-8 max-w-[140px] text-sm"
+                            />
+                            <span className="text-xs text-muted-foreground">{sensUnits}</span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={() => setSensLoqLevels(sensLoqLevels.filter((_, i) => i !== idx))}>
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                          <textarea
+                            value={lvl.repsText}
+                            onChange={e => {
+                              const copy = [...sensLoqLevels];
+                              copy[idx] = { ...copy[idx], repsText: e.target.value };
+                              setSensLoqLevels(copy);
+                            }}
+                            placeholder={"Replicate values, one per line"}
+                            className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                          />
+                          <span className="text-xs text-muted-foreground">{lvl.repsText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length} valid replicates</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : studyType === "precision" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
@@ -2432,9 +2625,9 @@ return (
 
           <div className="mt-8 flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : 3} minimum filled</span>}
+              {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "sensitivity" ? "blank replicate" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3} minimum filled</span>}
             </div>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
               {saveMutation.isPending ? "Calculating…" : "Run Study & Generate Report"}
             </Button>
           </div>
