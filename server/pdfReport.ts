@@ -1832,9 +1832,14 @@ function buildLotToLotHTML(study: Study, results: any): string {
   const l2lLabel = criterionLabel(study.testName);
   const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr);
   const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)");
+  // The lot-to-lot pass rule (calculations.ts:821) requires both: mean absolute
+  // percent difference within TEa AND at least 90% of paired specimens within
+  // TEa. The narrative must describe the actual rule; a prior wording said "All
+  // specimens satisfied" on PASS, which over-stated the test (the rule allows
+  // up to 10% of specimens to fall outside TEa on a PASS).
   const cliaStatement = results.overallPass
-    ? `<b>Each specimen was individually evaluated against the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}). All specimens satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each specimen was individually evaluated against the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}). One or more specimens did not satisfy this criterion; see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The lot-to-lot comparison met the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): the mean absolute percent difference did not exceed the criterion, and at least 90% of paired specimens fell within it. Specimens outside the criterion, if any, are documented in the per-sample table.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The lot-to-lot comparison did not meet the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): either the mean absolute percent difference exceeded the criterion or fewer than 90% of paired specimens fell within it. See the per-sample table for the failure pattern.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
