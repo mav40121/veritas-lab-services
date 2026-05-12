@@ -289,7 +289,10 @@ const CFR_URLS: Record<string, string> = {
   // structure does not exist in the current CFR.
   "42 CFR §493.1213":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1213",
   "42 CFR §493.1253(b)(2)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1253(b)(2)(i)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(2)(ii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1253(b)(1)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1253(b)(1)(iii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1255":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
   "42 CFR §493.1255(b)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
   "42 CFR §493.1255(b)(3)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
@@ -538,7 +541,7 @@ function directorReviewHTML(): string {
 
 
 // ─── Regulatory Compliance References box ───────────────────────────────────
-type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval";
+type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity";
 export type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 
 interface RegulatoryRefs {
@@ -614,6 +617,14 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     aabb: ["5.6.2"],
     clsi: ["EP28-A3c", "C28-A3c"],
     cfr:  ["42 CFR §493.1253(b)(2)", "42 CFR §493.1271(a)"],
+  },
+  sensitivity: {
+    cap:  ["CHM.13845", "GEN.41036"],
+    tjc:  ["QSA.02.01.01"],
+    cola: ["LAB.021"],
+    aabb: ["5.6.1"],
+    clsi: ["EP17-A2"],
+    cfr:  ["42 CFR §493.1253(b)(1)(iii)", "42 CFR §493.1253(b)(2)(i)"],
   },
 };
 
@@ -1769,6 +1780,120 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+function buildSensitivityHTML(study: Study, results: any): string {
+  // EP17-A2 results shape: { mode, lob: {parametric, nonParametric, meanBlank, sdBlank,
+  // nBlank, byLot?}, lod: {value, lobUsed, cBeta, sdLowLevel, nLowLevel}, loq: {value,
+  // byLevel[], cvThreshold, biasThreshold} | null, manufacturerClaim?, overallPass, summary }
+  const mode: "establishment" | "verification" = results.mode || "establishment";
+  const analyte = (study as any).testName || "Analyte";
+  const units = study.teaUnit || "";
+  const overallPass = results.overallPass;
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass
+    ? (mode === "establishment" ? "Meets CLSI EP17-A2 establishment criteria" : "Verifies manufacturer's sensitivity claims per CLSI EP17-A2")
+    : (mode === "establishment" ? "Does not meet CLSI EP17-A2 establishment criteria" : "Does not verify manufacturer's sensitivity claims per CLSI EP17-A2");
+
+  const lob = results.lob || {};
+  const lod = results.lod || {};
+  const loq = results.loq || null;
+  const mfg = results.manufacturerClaim || {};
+
+  const cfrCite = mode === "establishment"
+    ? "42 CFR §493.1253(b)(1)(iii)"
+    : "42 CFR §493.1253(b)(2)(i)";
+
+  const cliaStatement = overallPass
+    ? (mode === "establishment"
+        ? `<b>The analytical sensitivity for ${analyte} meets the criteria for establishment of performance specifications per ${cfrCite} and CLSI EP17-A2.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+        : `<b>The analytical sensitivity for ${analyte} verifies the manufacturer's published claims per ${cfrCite} and CLSI EP17-A2.</b> Final approval and clinical determination must be made by the laboratory director or designee.`)
+    : (mode === "establishment"
+        ? `<b>The analytical sensitivity for ${analyte} does not meet the criteria for establishment of performance specifications per ${cfrCite} and CLSI EP17-A2.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+        : `<b>The analytical sensitivity for ${analyte} does not verify the manufacturer's published claims per ${cfrCite} and CLSI EP17-A2.</b> Final approval and clinical determination must be made by the laboratory director or designee.`);
+
+  // Per-lot LoB breakdown (only if byLot present)
+  const byLotRows = lob.byLot ? Object.entries(lob.byLot).map(([lot, v], i) => {
+    const data: any = v;
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${lot}</td>
+      <td class="text-right">${data.n}</td>
+      <td class="text-right">${sf(data.mean, 4)}</td>
+      <td class="text-right">${sf(data.sd, 4)}</td>
+      <td class="text-right">${sf(data.lobParametric, 4)}</td>
+      <td class="text-right">${sf(data.lobNonParametric, 4)}</td>
+    </tr>`;
+  }).join("") : "";
+
+  // LoQ levels table (only if loq present)
+  const loqRows = loq ? (loq.byLevel || []).map((lvl: any, i: number) => {
+    const precClass = lvl.meetsPrecision ? "pass" : "fail";
+    const biasClass = lvl.meetsBias ? "pass" : "fail";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td class="text-right">${sf(lvl.expectedConcentration, 4)}</td>
+      <td class="text-right">${sf(lvl.meanObserved, 4)}</td>
+      <td class="text-right">${sf(lvl.sd, 4)}</td>
+      <td class="text-right">${sf(lvl.cv, 2)}%</td>
+      <td class="text-right">${lvl.biasPct >= 0 ? "+" : ""}${sf(lvl.biasPct, 2)}%</td>
+      <td class="text-right ${precClass}">${lvl.meetsPrecision ? "Pass" : "Fail"}</td>
+      <td class="text-right ${biasClass}">${lvl.meetsBias ? "Pass" : "Fail"}</td>
+    </tr>`;
+  }).join("") : "";
+
+  // Key stats panel — varies by mode
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">Study Mode</div><div class="stat-value">${mode === "establishment" ? "Establishment (full EP17-A2)" : "Verification (mfg claim)"}</div></div>
+      <div class="stat-item"><div class="stat-label">LoB (parametric)</div><div class="stat-value">${sf(lob.parametric, 4)} ${units}</div></div>
+      <div class="stat-item"><div class="stat-label">LoB (non-parametric)</div><div class="stat-value">${sf(lob.nonParametric, 4)} ${units}</div></div>
+      <div class="stat-item"><div class="stat-label">LoD</div><div class="stat-value">${sf(lod.value, 4)} ${units}</div></div>
+      <div class="stat-item"><div class="stat-label">LoQ</div><div class="stat-value">${loq && loq.value !== null ? sf(loq.value, 4) + " " + units : "Not assessed"}</div></div>
+      <div class="stat-item"><div class="stat-label">Blank Replicates (n)</div><div class="stat-value">${lob.nBlank || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">Low-Level Replicates (n)</div><div class="stat-value">${lod.nLowLevel || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">Cβ (finite-sample correction)</div><div class="stat-value">${sf(lod.cBeta, 3)}</div></div>
+      ${mode === "verification" && mfg.lob !== undefined ? `<div class="stat-item"><div class="stat-label">Claimed LoB</div><div class="stat-value">${sf(mfg.lob, 4)} ${units}</div></div>` : ""}
+      ${mode === "verification" && mfg.lod !== undefined ? `<div class="stat-item"><div class="stat-label">Claimed LoD</div><div class="stat-value">${sf(mfg.lod, 4)} ${units}</div></div>` : ""}
+      ${mode === "verification" && mfg.loq !== undefined ? `<div class="stat-item"><div class="stat-label">Claimed LoQ</div><div class="stat-value">${sf(mfg.loq, 4)} ${units}</div></div>` : ""}
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary || ""} ${cliaStatement}</p>
+  </div>`;
+
+  // Detailed-results page only when there's something to show: per-lot breakdown or LoQ levels.
+  const hasDetail = byLotRows.length > 0 || loqRows.length > 0;
+  const detailSection = hasDetail ? `
+  <div class="page-break"></div>
+  ${byLotRows.length > 0 ? `
+    <div class="section-heading">Per-Reagent-Lot LoB Breakdown</div>
+    <table>
+      <thead><tr><th>Lot</th><th class="text-right">N</th><th class="text-right">Mean</th><th class="text-right">SD</th><th class="text-right">LoB (param)</th><th class="text-right">LoB (non-param)</th></tr></thead>
+      <tbody>${byLotRows}</tbody>
+    </table>` : ""}
+  ${loqRows.length > 0 ? `
+    <div class="section-heading" style="margin-top:14px;">LoQ Concentration Levels</div>
+    <table>
+      <thead><tr><th class="text-right">Expected</th><th class="text-right">Observed Mean</th><th class="text-right">SD</th><th class="text-right">CV%</th><th class="text-right">Bias%</th><th class="text-right">Precision (CV ≤ ${sf(loq.cvThreshold, 0)}%)</th><th class="text-right">Bias (|bias| ≤ ${sf(loq.biasThreshold, 0)}%)</th></tr></thead>
+      <tbody>${loqRows}</tbody>
+    </table>
+    <p style="font-size:8pt;color:#28251D;margin-top:8px;">LoQ identified at: <b>${loq.value !== null ? sf(loq.value, 4) + " " + units : "Not identified"}</b> (lowest concentration meeting both criteria).</p>` : ""}
+  ` : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck™ - Sensitivity Verification (EP17) - ${(study as any).testName || "Study"}</title><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
+  ${summaryStats}
+  ${narrative}
+  ${regulatoryComplianceBoxHTML("sensitivity", (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  ${detailSection}
+  </body></html>`;
+}
+
 function buildLotToLotHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
@@ -2366,6 +2491,8 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildMultiAnalyteCoagHTML(study, results)
     : study.studyType === "ref_interval"
     ? buildRefIntervalHTML(study, results)
+    : study.studyType === "sensitivity"
+    ? buildSensitivityHTML(study, results)
     : isQualResult
     ? buildQualitativeHTML(study, results)
     : isSemiQuantResult
