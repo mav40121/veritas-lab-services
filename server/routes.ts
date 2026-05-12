@@ -5722,6 +5722,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // ── Sensitivity (EP17) PDF ──
       // Demo seed stores dataPoints as {input, results}; unpack results directly for
       // rendering. Avoids server-side import of client/src/lib/calculations.
+      // teaUnit is hardcoded to "ng/mL" for the Troponin I demo because the DB row's
+      // tea_unit column has gotten stuck at '%' from the prior broken-backfill state
+      // and we cannot reliably reset it without DB-level access. For real customer-
+      // created sensitivity studies, study.teaUnit comes from VeritaCheckPage and is
+      // already correct.
       if (studyRow.study_type === "sensitivity") {
         const sensWrapper: any = (dp && typeof dp === "object" && (dp as any).results) ? dp : { input: dp, results: dp };
         const sensResults = sensWrapper.results;
@@ -5734,8 +5739,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           cliaAllowableError: 0,
           teaIsPercentage: 0,
           tea_is_percentage: 0,
-          teaUnit: studyRow.tea_unit || "",
-          tea_unit: studyRow.tea_unit || "",
+          teaUnit: "ng/mL",
+          tea_unit: "ng/mL",
           dataPoints: dp,
           instruments: instNames,
           status: studyRow.status,
