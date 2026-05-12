@@ -27,6 +27,25 @@ export async function seedDemoData() {
 
   console.log(`[seed] Demo user id=${demoUserId}`);
 
+  // ─── 1a. Defensive correction for Troponin I sensitivity demo row ────────
+  // The original wide UPDATE at line 137 (now scoped by PR #122) clobbered the
+  // sensitivity row's fields on prior boots. Section 4f below is supposed to
+  // restore them on each boot, but in practice the section 4f UPDATE has not
+  // taken effect on the deployed instance for reasons we have not fully
+  // diagnosed. This forcing UPDATE runs early in seedDemoData so it cannot be
+  // skipped by any later code path that throws. It is idempotent and matches
+  // the demo lab only.
+  try {
+    const fixed = sqlite.prepare(
+      "UPDATE studies SET clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = 'ng/mL', result = 'pass', status = 'completed' WHERE user_id = ? AND test_name = 'Troponin I' AND study_type = 'sensitivity'"
+    ).run(demoUserId);
+    if (fixed.changes > 0) {
+      console.log(`[seed] Defensive fix: cleared ${fixed.changes} stale Troponin I sensitivity row(s)`);
+    }
+  } catch (err: any) {
+    console.error("[seed] Defensive sensitivity fix failed:", err.message);
+  }
+
   // ─── 2. VeritaMap -- Riverside Regional Map ──────────────────────────────
   const existingMap = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(demoUserId);
   let mapId: number;
