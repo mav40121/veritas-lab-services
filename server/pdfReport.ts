@@ -420,7 +420,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Lot-to-Lot Verification",
     ref_interval: "Reference Range Verification",
-    pt_coag: "PT/Coag New Lot Validation",
+    pt_coag: "PT/Coag New Lot Verification",
     qc_range: "QC Range Establishment",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
   };
@@ -1066,7 +1066,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
 
   const narrative = overallPass
     ? `The qualitative method comparison for ${study.testName} demonstrated ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
-    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Investigation and corrective action are recommended. Final determination must be made by the laboratory director or designee.</b>`;
+    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Investigation and corrective action are recommended. Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Qualitative Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1163,7 +1163,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
 
   const narrative = overallPass
     ? `The semi-quantitative method comparison for ${study.testName} demonstrated ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy observed was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
-    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Investigation and corrective action are recommended. Final determination must be made by the laboratory director or designee.</b>`;
+    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Investigation and corrective action are recommended. Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Semi-Quantitative Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -2049,7 +2049,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const ptCompactM2Pass = module2.pass ? "PASS" : "FAIL";
   const ptCompactM3Pass = module3 ? (module3.pass ? "PASS" : "FAIL") : "N/A";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT Coag New Lot Validation - ${study.testName}</title><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT Coag New Lot Verification - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
@@ -3974,7 +3974,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 
   ${chapterSections}
 
-  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only | Detailed results continued from page 1</div>
+  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
 </div>
 
 <!-- FINAL PAGE: Policy Library -->
