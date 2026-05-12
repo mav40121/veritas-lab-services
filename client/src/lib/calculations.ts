@@ -1186,7 +1186,7 @@ export function calculateMultiAnalyteCoag(
 }
 
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults;
+export type StudyResults = CalVerResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults | SensitivityResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -1264,3 +1264,228 @@ export function calculateRefInterval(
 }
 
 export function isRefInterval(r: StudyResults | RefIntervalResults): r is RefIntervalResults { return (r as any).type === "ref_interval"; }
+
+// ─── ANALYTICAL SENSITIVITY (CLSI EP17-A2) ────────────────────────────────────
+// Limit of Blank (LoB): highest signal expected from a blank sample
+// Limit of Detection (LoD): lowest concentration reliably distinguished from blank
+// Limit of Quantitation (LoQ): lowest concentration measurable at acceptable
+//   precision AND acceptable bias (default thresholds: CV <= 20%, |bias| <= 25%)
+//
+// Modes:
+//   Establishment — full CLSI EP17-A2 study (~60 blank reps, ~60 low-level reps,
+//     4-5 LoQ levels). For modified / LDT / in-house tests. CFR §493.1253(b)(1)(iii).
+//   Verification — confirm manufacturer's published claims with smaller study.
+//     For FDA-cleared assays. CFR §493.1253(b)(2)(i) (implicit in accuracy).
+
+export interface SensitivityReplicate {
+  value: number;
+  lot?: string;
+  day?: number;
+  run?: number;
+}
+
+export interface SensitivityLowLevelGroup {
+  expectedConcentration: number;
+  replicates: SensitivityReplicate[];
+}
+
+export interface SensitivityLobResult {
+  parametric: number;        // mean(blank) + 1.645 * SD(blank)
+  nonParametric: number;     // 95th percentile of blank measurements
+  meanBlank: number;
+  sdBlank: number;
+  nBlank: number;
+  byLot?: { [lot: string]: { mean: number; sd: number; n: number; lobParametric: number; lobNonParametric: number } };
+}
+
+export interface SensitivityLodResult {
+  value: number;             // LoD = LoB + Cβ * SD(low-level)
+  lobUsed: number;           // which LoB went into the formula (parametric per EP17-A2 default)
+  cBeta: number;             // finite-sample correction factor from Table A1
+  sdLowLevel: number;
+  nLowLevel: number;
+}
+
+export interface SensitivityLoqLevelResult {
+  expectedConcentration: number;
+  meanObserved: number;
+  sd: number;
+  cv: number;                // percent
+  bias: number;              // mean - expected
+  biasPct: number;           // bias / expected * 100
+  meetsPrecision: boolean;
+  meetsBias: boolean;
+  meetsLoq: boolean;         // both criteria
+}
+
+export interface SensitivityLoqResult {
+  value: number | null;      // lowest expectedConcentration that meets both criteria; null if none
+  byLevel: SensitivityLoqLevelResult[];   // sorted ascending by expectedConcentration
+  cvThreshold: number;       // percent
+  biasThreshold: number;     // percent
+}
+
+export interface SensitivityManufacturerClaim {
+  lob?: number;
+  lod?: number;
+  loq?: number;
+}
+
+export interface SensitivityResults {
+  type: "sensitivity";
+  mode: "establishment" | "verification";
+  lob: SensitivityLobResult;
+  lod: SensitivityLodResult;
+  loq: SensitivityLoqResult | null;
+  manufacturerClaim?: SensitivityManufacturerClaim;
+  overallPass: boolean;
+  summary: string;
+}
+
+export interface SensitivityInput {
+  mode: "establishment" | "verification";
+  blanks: SensitivityReplicate[];
+  lowLevel: SensitivityReplicate[];                // for LoD
+  loqLevels?: SensitivityLowLevelGroup[];          // optional, for LoQ
+  cvThreshold?: number;                            // fraction, default 0.20 (20%)
+  biasThreshold?: number;                          // fraction, default 0.25 (25%)
+  manufacturerClaim?: SensitivityManufacturerClaim; // required when mode = verification
+}
+
+// EP17-A2 Table A1: Cβ finite-sample correction factor at α=β=0.05 (one-sided).
+// Linear interpolation between table entries; asymptote at 1.645 as n grows.
+const CBETA_TABLE: { n: number; c: number }[] = [
+  { n: 5,    c: 2.063 }, { n: 10,   c: 1.831 }, { n: 15,   c: 1.766 },
+  { n: 20,   c: 1.749 }, { n: 25,   c: 1.717 }, { n: 30,   c: 1.704 },
+  { n: 40,   c: 1.683 }, { n: 50,   c: 1.671 }, { n: 60,   c: 1.660 },
+  { n: 80,   c: 1.654 }, { n: 100,  c: 1.652 }, { n: 1000, c: 1.645 },
+];
+function cBeta(n: number): number {
+  if (n <= CBETA_TABLE[0].n) return CBETA_TABLE[0].c;
+  if (n >= CBETA_TABLE[CBETA_TABLE.length - 1].n) return 1.645;
+  for (let i = 0; i < CBETA_TABLE.length - 1; i++) {
+    const a = CBETA_TABLE[i], b = CBETA_TABLE[i + 1];
+    if (n === a.n) return a.c;
+    if (n > a.n && n < b.n) {
+      const w = (n - a.n) / (b.n - a.n);
+      return a.c + w * (b.c - a.c);
+    }
+  }
+  return 1.645;
+}
+
+// Non-parametric percentile via linear interpolation (R-7 / numpy default).
+function percentile(values: number[], pct: number): number {
+  if (values.length === 0) return 0;
+  if (values.length === 1) return values[0];
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (pct / 100) * (sorted.length - 1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
+}
+
+export function calculateSensitivity(input: SensitivityInput): SensitivityResults {
+  // ── LoB ───────────────────────────────────────────────────────────────────
+  const blanks = input.blanks.filter(r => r.value != null && !isNaN(r.value));
+  const blankValues = blanks.map(r => r.value);
+  const meanBlank = mean(blankValues);
+  const sdBlank = stddev(blankValues);
+  const nBlank = blankValues.length;
+  const lobParametric = meanBlank + 1.645 * sdBlank;
+  const lobNonParametric = percentile(blankValues, 95);
+
+  // Per-lot breakdown (only emitted when at least one replicate carries a lot label)
+  let byLot: SensitivityLobResult["byLot"] | undefined;
+  const lotLabels = Array.from(new Set(blanks.map(r => r.lot).filter((l): l is string => !!l)));
+  if (lotLabels.length > 0) {
+    byLot = {};
+    for (const lot of lotLabels) {
+      const lotVals = blanks.filter(r => r.lot === lot).map(r => r.value);
+      if (lotVals.length === 0) continue;
+      const m = mean(lotVals);
+      const s = stddev(lotVals);
+      byLot[lot] = {
+        mean: m, sd: s, n: lotVals.length,
+        lobParametric: m + 1.645 * s,
+        lobNonParametric: percentile(lotVals, 95),
+      };
+    }
+  }
+
+  // ── LoD ───────────────────────────────────────────────────────────────────
+  const lowValues = input.lowLevel.filter(r => r.value != null && !isNaN(r.value)).map(r => r.value);
+  const sdLowLevel = stddev(lowValues);
+  const nLowLevel = lowValues.length;
+  const cb = cBeta(nLowLevel);
+  // EP17-A2 default: LoD = LoB(parametric) + Cβ * SD(low-level)
+  const lobUsed = lobParametric;
+  const lodValue = lobUsed + cb * sdLowLevel;
+
+  // ── LoQ (optional) ────────────────────────────────────────────────────────
+  let loq: SensitivityLoqResult | null = null;
+  if (input.loqLevels && input.loqLevels.length > 0) {
+    const cvThr = (input.cvThreshold ?? 0.20) * 100;
+    const biasThr = (input.biasThreshold ?? 0.25) * 100;
+    const byLevel: SensitivityLoqLevelResult[] = input.loqLevels.map(group => {
+      const vals = group.replicates.filter(r => r.value != null && !isNaN(r.value)).map(r => r.value);
+      const m = vals.length > 0 ? mean(vals) : 0;
+      const s = vals.length > 1 ? stddev(vals) : 0;
+      const cv = m !== 0 ? (s / m) * 100 : 0;
+      const bias = m - group.expectedConcentration;
+      const biasPct = group.expectedConcentration !== 0 ? (bias / group.expectedConcentration) * 100 : 0;
+      const meetsPrecision = cv <= cvThr;
+      const meetsBias = Math.abs(biasPct) <= biasThr;
+      return {
+        expectedConcentration: group.expectedConcentration,
+        meanObserved: m, sd: s, cv, bias, biasPct,
+        meetsPrecision, meetsBias,
+        meetsLoq: meetsPrecision && meetsBias,
+      };
+    }).sort((a, b) => a.expectedConcentration - b.expectedConcentration);
+    const lowestPassing = byLevel.find(l => l.meetsLoq);
+    loq = {
+      value: lowestPassing ? lowestPassing.expectedConcentration : null,
+      byLevel,
+      cvThreshold: cvThr,
+      biasThreshold: biasThr,
+    };
+  }
+
+  // ── Pass logic ────────────────────────────────────────────────────────────
+  // Establishment mode: pass if LoD > LoB (sanity) and, when LoQ requested, LoQ identified.
+  // Verification mode: pass if observed LoB / LoD / LoQ are all <= the manufacturer's claims.
+  let overallPass: boolean;
+  if (input.mode === "verification" && input.manufacturerClaim) {
+    overallPass = true;
+    if (input.manufacturerClaim.lob !== undefined) overallPass = overallPass && lobParametric <= input.manufacturerClaim.lob;
+    if (input.manufacturerClaim.lod !== undefined) overallPass = overallPass && lodValue <= input.manufacturerClaim.lod;
+    if (input.manufacturerClaim.loq !== undefined && loq) overallPass = overallPass && loq.value !== null && loq.value <= input.manufacturerClaim.loq;
+  } else {
+    // Establishment: LoD must be > LoB by definition; LoQ identified if requested.
+    overallPass = lodValue > lobUsed && (loq ? loq.value !== null : true);
+  }
+
+  const summary = input.mode === "establishment"
+    ? `Analytical sensitivity established per CLSI EP17-A2. LoB = ${lobParametric.toFixed(3)} (parametric, n=${nBlank}); LoD = ${lodValue.toFixed(3)} (n=${nLowLevel} low-level replicates, Cβ=${cb.toFixed(3)})` +
+      (loq ? `; LoQ = ${loq.value !== null ? loq.value.toFixed(3) : "not identified"} (criteria: CV ≤ ${loq.cvThreshold.toFixed(0)}%, |bias| ≤ ${loq.biasThreshold.toFixed(0)}%).` : '.') +
+      ` ${overallPass ? 'PASSED' : 'FAILED'} the establishment criterion.`
+    : `Manufacturer's analytical sensitivity claim verification per CLSI EP17-A2. ` +
+      `Observed LoB = ${lobParametric.toFixed(3)}` + (input.manufacturerClaim?.lob !== undefined ? ` (claim: ${input.manufacturerClaim.lob})` : '') + `; ` +
+      `Observed LoD = ${lodValue.toFixed(3)}` + (input.manufacturerClaim?.lod !== undefined ? ` (claim: ${input.manufacturerClaim.lod})` : '') +
+      (loq && input.manufacturerClaim?.loq !== undefined ? `; Observed LoQ = ${loq.value !== null ? loq.value.toFixed(3) : "not identified"} (claim: ${input.manufacturerClaim.loq})` : '') +
+      `. ${overallPass ? 'PASSED' : 'FAILED'} the verification criterion.`;
+
+  return {
+    type: "sensitivity",
+    mode: input.mode,
+    lob: { parametric: lobParametric, nonParametric: lobNonParametric, meanBlank, sdBlank, nBlank, byLot },
+    lod: { value: lodValue, lobUsed, cBeta: cb, sdLowLevel, nLowLevel },
+    loq,
+    manufacturerClaim: input.manufacturerClaim,
+    overallPass,
+    summary,
+  };
+}
+
+export function isSensitivity(r: StudyResults | SensitivityResults): r is SensitivityResults { return (r as any).type === "sensitivity"; }
