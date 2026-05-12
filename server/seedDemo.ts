@@ -266,6 +266,50 @@ export async function seedDemoData() {
     console.log(`[seed] Backfilled Hemoglobin A1c Lot-to-Lot study id=${existingHbA1cLotToLot.id}`);
   }
 
+  // ─── 4f. Troponin I Sensitivity (CLSI EP17-A2) ─────────────────────────
+  // Establishment study. 20 blank replicates across two reagent lots (LotA, LotB),
+  // 20 low-level replicates near the expected LoD, and three LoQ concentration
+  // levels (0.025, 0.040, 0.060 ng/mL). Demonstrates a passing PASS verdict with
+  // LoQ identified at the lowest tested level. Drives the Pfizer New Haven demo
+  // (Daniela Rivera, 2026-05-12 inbound).
+  const existingTroponinSensitivity = sqlite.prepare(
+    "SELECT id FROM studies WHERE user_id = ? AND test_name = 'Troponin I' AND study_type = 'sensitivity' LIMIT 1"
+  ).get(demoUserId);
+  if (!existingTroponinSensitivity) {
+    const troponinSensitivityData = generateTroponinSensitivityData();
+    sqlite.prepare(`
+      INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, result, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'completed', ?)
+    `).run(
+      demoUserId,
+      "Troponin I",
+      "Beckman DxI 9000 Access",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-04-08",
+      "sensitivity",
+      0,       // sensitivity does not use cliaAllowableError; CV / bias thresholds are baked into the input
+      0,
+      "ng/mL",
+      JSON.stringify(troponinSensitivityData),
+      JSON.stringify(["Beckman DxI 9000 Access"]),
+      now
+    );
+    console.log("[seed] Inserted Troponin I Sensitivity study");
+  } else {
+    sqlite.prepare(
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+    ).run(
+      "Beckman DxI 9000 Access",
+      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "2026-04-08",
+      "ng/mL",
+      JSON.stringify(generateTroponinSensitivityData()),
+      JSON.stringify(["Beckman DxI 9000 Access"]),
+      existingTroponinSensitivity.id
+    );
+    console.log(`[seed] Backfilled Troponin I Sensitivity study id=${existingTroponinSensitivity.id}`);
+  }
+
   // ─── 5. VeritaComp -- Competency Assessment ────────────────────────────
   const existingComp = sqlite.prepare(
     "SELECT id FROM competency_programs WHERE user_id = ?"
@@ -1543,4 +1587,81 @@ function seedAdditionalCumsumEntries(sqlite: any, demoUserId: number, now: strin
   }
 
   console.log("[seed] CUMSUM entries bulked up (entries 4-25)");
+}
+
+// Troponin I Sensitivity (CLSI EP17-A2) — Establishment-mode demo data.
+// 20 blank replicates split across two reagent lots (LotA, LotB) for the per-lot
+// LoB breakdown; 20 low-level replicates near the expected LoD; three LoQ
+// concentration levels (0.025, 0.040, 0.060 ng/mL).
+// Hardcoded results (computed via the EP17-A2 audit harness against this exact
+// input on 2026-05-12) so the demo PDF renders deterministically without the
+// server needing to import the client-side math module.
+function generateTroponinSensitivityData() {
+  return {
+    input: {
+      mode: "establishment",
+      blanks: [
+        { value: 0.004, lot: "LotA" }, { value: 0.006, lot: "LotA" }, { value: 0.005, lot: "LotA" }, { value: 0.007, lot: "LotA" }, { value: 0.003, lot: "LotA" },
+        { value: 0.005, lot: "LotA" }, { value: 0.006, lot: "LotA" }, { value: 0.004, lot: "LotA" }, { value: 0.005, lot: "LotA" }, { value: 0.007, lot: "LotA" },
+        { value: 0.005, lot: "LotB" }, { value: 0.006, lot: "LotB" }, { value: 0.004, lot: "LotB" }, { value: 0.008, lot: "LotB" }, { value: 0.005, lot: "LotB" },
+        { value: 0.006, lot: "LotB" }, { value: 0.007, lot: "LotB" }, { value: 0.005, lot: "LotB" }, { value: 0.004, lot: "LotB" }, { value: 0.006, lot: "LotB" },
+      ],
+      lowLevel: [
+        { value: 0.018 }, { value: 0.022 }, { value: 0.019 }, { value: 0.024 }, { value: 0.021 },
+        { value: 0.020 }, { value: 0.023 }, { value: 0.018 }, { value: 0.021 }, { value: 0.022 },
+        { value: 0.019 }, { value: 0.024 }, { value: 0.020 }, { value: 0.023 }, { value: 0.021 },
+        { value: 0.022 }, { value: 0.018 }, { value: 0.024 }, { value: 0.021 }, { value: 0.020 },
+      ],
+      loqLevels: [
+        { expectedConcentration: 0.025, replicates: [
+          { value: 0.024 }, { value: 0.026 }, { value: 0.025 }, { value: 0.024 }, { value: 0.026 },
+          { value: 0.025 }, { value: 0.025 }, { value: 0.024 }, { value: 0.026 }, { value: 0.025 },
+        ]},
+        { expectedConcentration: 0.040, replicates: [
+          { value: 0.039 }, { value: 0.041 }, { value: 0.040 }, { value: 0.039 }, { value: 0.041 },
+          { value: 0.040 }, { value: 0.040 }, { value: 0.039 }, { value: 0.041 }, { value: 0.040 },
+        ]},
+        { expectedConcentration: 0.060, replicates: [
+          { value: 0.059 }, { value: 0.061 }, { value: 0.060 }, { value: 0.059 }, { value: 0.061 },
+          { value: 0.060 }, { value: 0.060 }, { value: 0.059 }, { value: 0.061 }, { value: 0.060 },
+        ]},
+      ],
+      cvThreshold: 0.20,
+      biasThreshold: 0.25,
+    },
+    results: {
+      type: "sensitivity",
+      mode: "establishment",
+      lob: {
+        parametric: 0.007494,
+        nonParametric: 0.007,
+        meanBlank: 0.005350,
+        sdBlank: 0.001305,
+        nBlank: 20,
+        byLot: {
+          LotA: { mean: 0.005200, sd: 0.001317, n: 10, lobParametric: 0.007367, lobNonParametric: 0.0067 },
+          LotB: { mean: 0.005500, sd: 0.001269, n: 10, lobParametric: 0.007587, lobNonParametric: 0.00715 },
+        },
+      },
+      lod: {
+        value: 0.010992,
+        lobUsed: 0.007494,
+        cBeta: 1.749,
+        sdLowLevel: 0.002000,
+        nLowLevel: 20,
+      },
+      loq: {
+        value: 0.025,
+        byLevel: [
+          { expectedConcentration: 0.025, meanObserved: 0.025, sd: 0.000816, cv: 3.265, bias: 0, biasPct: 0, meetsPrecision: true, meetsBias: true, meetsLoq: true },
+          { expectedConcentration: 0.040, meanObserved: 0.040, sd: 0.000816, cv: 2.041, bias: 0, biasPct: 0, meetsPrecision: true, meetsBias: true, meetsLoq: true },
+          { expectedConcentration: 0.060, meanObserved: 0.060, sd: 0.000816, cv: 1.361, bias: 0, biasPct: 0, meetsPrecision: true, meetsBias: true, meetsLoq: true },
+        ],
+        cvThreshold: 20.0,
+        biasThreshold: 25.0,
+      },
+      overallPass: true,
+      summary: "Analytical sensitivity established per CLSI EP17-A2. LoB = 0.0075 (parametric, n=20); LoD = 0.0110 (n=20 low-level replicates, Cβ=1.749); LoQ = 0.0250 (criteria: CV ≤ 20%, |bias| ≤ 25%). PASSED the establishment criterion.",
+    },
+  };
 }
