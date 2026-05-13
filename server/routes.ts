@@ -11139,7 +11139,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // no longer authoritative. Six choices: TJC, CAP, AABB, COLA, CAP+AABB, CLIA.
   app.get('/api/veritapolicy/settings', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     let settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
     if (!settings) {
       sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
@@ -11162,7 +11162,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // are retained in the schema but no longer written; they keep their existing or default values.
   app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     const { is_independent, setup_complete, accreditation_body } = req.body;
     sqlite.prepare(`
       INSERT INTO veritapolicy_settings (user_id, is_independent, setup_complete, accreditation_body, updated_at)
@@ -11179,7 +11179,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET requirements with user status overlay
   app.get('/api/veritapolicy/requirements', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     // Get all user requirement statuses
     const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
     const statusMap: Record<number, any> = {};
@@ -11228,7 +11228,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PATCH requirement status
   app.patch('/api/veritapolicy/requirements/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     const reqId = parseInt(req.params.id);
     const { status, is_na, na_reason, lab_policy_id, policy_name, notes } = req.body;
     sqlite.prepare(`
@@ -11249,9 +11249,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET lab policies
   app.get('/api/veritapolicy/policies', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
-    const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(req.userId) as any[];
+    const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(req.ownerUserId) as any[];
     // For each policy, count how many requirements it covers
-    const counts = sqlite.prepare('SELECT lab_policy_id, COUNT(*) as count FROM veritapolicy_requirement_status WHERE user_id = ? AND lab_policy_id IS NOT NULL GROUP BY lab_policy_id').all(req.userId) as any[];
+    const counts = sqlite.prepare('SELECT lab_policy_id, COUNT(*) as count FROM veritapolicy_requirement_status WHERE user_id = ? AND lab_policy_id IS NOT NULL GROUP BY lab_policy_id').all(req.ownerUserId) as any[];
     const countMap: Record<number, number> = {};
     for (const c of counts) countMap[c.lab_policy_id] = c.count;
     res.json(policies.map((p: any) => ({ ...p, requirements_covered: countMap[p.id] || 0 })));
@@ -11265,14 +11265,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = sqlite.prepare(`
       INSERT INTO veritapolicy_lab_policies (user_id, policy_number, policy_name, owner, status, last_reviewed, next_review, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(req.userId, policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null) as any;
+    `).run(req.ownerUserId, policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null) as any;
     res.json({ ok: true, id: result.lastInsertRowid });
   });
 
   // PUT lab policy
   app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
     sqlite.prepare(`
       UPDATE veritapolicy_lab_policies SET
@@ -11286,7 +11286,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE lab policy
   app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     const policyId = parseInt(req.params.id);
     // Unlink from requirements
     sqlite.prepare('UPDATE veritapolicy_requirement_status SET lab_policy_id = NULL WHERE user_id = ? AND lab_policy_id = ?').run(userId, policyId);
@@ -11298,7 +11298,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/veritapolicy/policies/:id/upload', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), async (req: any, res) => {
     try {
       const sqlite = db.$client;
-      const userId = req.userId;
+      const userId = req.ownerUserId;
       const policyId = parseInt(req.params.id);
       const policy = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE id = ? AND user_id = ?').get(policyId, userId) as any;
       if (!policy) return res.status(404).json({ error: 'Policy not found' });
@@ -11321,7 +11321,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET readiness summary
   app.get('/api/veritapolicy/summary', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
     const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
     const statusMap: Record<number, any> = {};
@@ -11355,7 +11355,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/veritapolicy/pdf', authMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
-      const userId = req.userId;
+      const userId = req.ownerUserId;
       const user = sqlite.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
       const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
@@ -11410,7 +11410,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/veritapolicy/master-list', authMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
-      const userId = req.userId;
+      const userId = req.ownerUserId;
       const lab = resolveLabForUser(userId);
       type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
       const aoCols: AoCol[] = [];
@@ -11454,7 +11454,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch('/api/veritapolicy/master-list/:policyId', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
-    const userId = req.userId;
+    const userId = req.ownerUserId;
     const policyId = String(req.params.policyId);
     const { status, is_na, na_reason, our_policy_name, notes } = req.body || {};
     sqlite.prepare(`
@@ -11481,7 +11481,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/veritapolicy/master-list/summary', authMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
-      const userId = req.userId;
+      const userId = req.ownerUserId;
       const lab = resolveLabForUser(userId);
       const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE user_id = ?').all(userId) as any[];
@@ -11519,7 +11519,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // the matching columns are all included; if no AO is checked, CFR-only.
   app.get('/api/veritapolicy/master-list/excel', authMiddleware, async (req: any, res) => {
     try {
-      const userId = req.userId;
+      const userId = req.ownerUserId;
       const lab = resolveLabForUser(userId);
       const ownerUser = storage.getUserById(userId);
       const labName = (ownerUser as any)?.cliaLabName || (ownerUser as any)?.clia_lab_name || ownerUser?.name || 'Laboratory';
