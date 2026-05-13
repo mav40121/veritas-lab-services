@@ -127,6 +127,18 @@ app.use((req, res, next) => {
     console.error("[backfill] Startup backfill import error:", err.message);
   }
 
+  // Re-key VeritaPolicy seat-user rows to owner. Required because the routes
+  // previously scoped data by req.userId (seat's own id) instead of
+  // req.ownerUserId (the owner's id). After the route fix, any rows still
+  // keyed by seat-user-id become unreachable. This backfill moves them to
+  // owner-keyed rows; owner wins on conflict.
+  try {
+    const { backfillVeritapolicySeatsOnStartup } = await import("./backfillVeritapolicySeats");
+    backfillVeritapolicySeatsOnStartup();
+  } catch (err: any) {
+    console.error("[backfill-veritapolicy] Startup backfill import error:", err.message);
+  }
+
   // Recompute pass/fail status for all existing studies to fix any stale values
   try {
     const { recomputeAllStudyStatuses } = await import("./routes");
