@@ -69,6 +69,7 @@ import RoadmapPage from "@/pages/RoadmapPage";
 import GettingStartedPage from "@/pages/GettingStartedPage";
 import AccountSettingsPage from "@/pages/AccountSettingsPage";
 import VeritaAssurePage from "@/pages/VeritaAssurePage";
+import OperationsPage from "@/pages/OperationsPage";
 import AdminReportPage from "@/pages/AdminReportPage";
 import JoinPage from "@/pages/JoinPage";
 import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
@@ -317,6 +318,7 @@ function AppContent() {
           <Route path="/veritastock" component={VeritaStockPage} />
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
+          <Route path="/operations" component={OperationsPage} />
           <Route path="/getting-started" component={GettingStartedPage} />
           <Route path="/account/settings" component={AccountSettingsPage} />
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>

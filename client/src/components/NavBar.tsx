@@ -7,15 +7,6 @@ import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-// Products dropdown items
-const productLinks = [
-  { href: "/veritacheck", label: "VeritaCheck\u2122", desc: "Method Verification & CUMSUM", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritascan", label: "VeritaScan\u2122", desc: "Inspection Readiness", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritamap", label: "VeritaMap\u2122", desc: "Test Menu Mapping", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritatrack", label: "VeritaTrack\u2122", desc: "QC Task Tracking & Sign-off", badge: "Live", badgeColor: "emerald" },
-  { href: "/veritaassure", label: "All modules", desc: "View the full suite", highlight: false, badge: null, badgeColor: null },
-];
-
 const allMobileLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
@@ -91,47 +82,19 @@ export function NavBar() {
             Pricing
           </Link>
 
-          {/* VeritaAssure dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/book"].includes(location)
-                    ? "text-foreground bg-secondary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                )}
-              >
-                <ShieldCheck size={13} className="text-primary" />
-                VeritaAssure&#8482;
-                <ChevronDown size={12} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {productLinks.map(({ href, label, desc, badge, badgeColor, highlight }: any) => (
-                <DropdownMenuItem key={href} asChild>
-                  <Link href={href} className="flex items-start gap-2 py-2">
-                    <div>
-                      <div className={cn("text-sm font-medium flex items-center gap-1.5", highlight && "text-primary")}>
-                        {label}
-                        {badge && (
-                          <span className={cn(
-                            "text-[9px] font-semibold border rounded px-1 py-0.5 leading-none",
-                            badgeColor === "emerald"
-                              ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/25"
-                              : "bg-amber-500/15 text-amber-600 border-amber-500/25"
-                          )}>
-                            {badge}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{desc}</div>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* VeritaAssure — direct link to all-modules suite page */}
+          <Link
+            href="/veritaassure"
+            className={cn(
+              "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/veritaresponse","/book"].some(p => location === p || location.startsWith(p + "/"))
+                ? "text-foreground bg-secondary"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            )}
+          >
+            <ShieldCheck size={13} className="text-primary" />
+            VeritaAssure&#8482;
+          </Link>
 
           {/* Resources dropdown */}
           <DropdownMenu>
@@ -200,64 +163,19 @@ export function NavBar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* VeritaBench dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className={cn(
-                "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/calculator"].includes(location)
-                  ? "text-foreground bg-secondary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              )}>
-                <BarChart3 size={13} className="text-primary" />
-                Operations
-                <ChevronDown size={12} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem asChild>
-                <Link href="/calculator" className="flex items-start gap-2 py-2">
-                  <div>
-                    <div className="text-sm font-medium">VeritaBench™</div>
-                    <div className="text-xs text-muted-foreground">Free quick benchmarking tool</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/veritabench" className="flex items-start gap-2 py-2">
-                  <div>
-                    <div className="text-sm font-medium">VeritaPace™</div>
-                    <div className="text-xs text-muted-foreground">Monthly data and trends</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/veritabench/staffing" className="flex items-start gap-2 py-2">
-                  <div>
-                    <div className="text-sm font-medium">VeritaShift™</div>
-                    <div className="text-xs text-muted-foreground">By-hour demand analysis</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/veritabench/pi" className="flex items-start gap-2 py-2">
-                  <div>
-                    <div className="text-sm font-medium">VeritaQA™</div>
-                    <div className="text-xs text-muted-foreground">Department quality metrics</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/veritastock" className="flex items-start gap-2 py-2">
-                  <div>
-                    <div className="text-sm font-medium">VeritaStock{"™"}</div>
-                    <div className="text-xs text-muted-foreground">Reagent & supply tracking</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Operations — direct link to the operations tile page */}
+          <Link
+            href="/operations"
+            className={cn(
+              "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              ["/operations","/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/calculator"].some(p => location === p || location.startsWith(p + "/"))
+                ? "text-foreground bg-secondary"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            )}
+          >
+            <BarChart3 size={13} className="text-primary" />
+            Operations
+          </Link>
 
           {/* Live Demo */}
           <Link href="/demo" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">
