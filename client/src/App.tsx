@@ -42,6 +42,7 @@ import ArticleCLIACalVerRequirementsPage from "@/pages/ArticleCLIACalVerRequirem
 import ArticleMethodComparisonPage from "@/pages/ArticleMethodComparisonPage";
 import ArticleTJCInspectionPage from "@/pages/ArticleTJCInspectionPage";
 import ArticleValidateVeritaCheckPage from "@/pages/ArticleValidateVeritaCheckPage";
+import ArticleManualLogsPage from "@/pages/ArticleManualLogsPage";
 import TeaLookupPage from "@/pages/TeaLookupPage";
 import VeritaScanAppPage from "@/pages/VeritaScanAppPage";
 import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
@@ -286,6 +287,7 @@ function AppContent() {
           <Route path="/resources/tjc-laboratory-inspection-checklist-preparation" component={ArticleTJCInspectionPage} />
           <Route path="/resources/how-to-validate-veritacheck-clia" component={ArticleValidateVeritaCheckPage} />
           <Route path="/resources/laboratory-inventory-management" component={ArticleInventoryManagementPage} />
+          <Route path="/resources/manual-logs-why-most-labs-should-stop" component={ArticleManualLogsPage} />
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route path="/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/veritascan-app/:id" component={VeritaScanScanPage} />
