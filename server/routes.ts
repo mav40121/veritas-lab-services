@@ -2867,6 +2867,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
     ).run(dataUserId, name.trim(), now, now);
+    // Phase 3.3 dual-write lab_id from the user's lab so new maps land
+    // already scoped to the right lab. Best-effort; if lab_id is missing
+    // it gets picked up by the next idempotent backfill.
+    try {
+      (db as any).$client.prepare(
+        "UPDATE veritamap_maps SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(dataUserId, result.lastInsertRowid);
+    } catch {}
     res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
   });
 
