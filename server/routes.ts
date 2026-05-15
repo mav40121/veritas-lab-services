@@ -1897,6 +1897,110 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ── MULTI-LAB Tier 2 — Phase 2a: backend scope infrastructure ──────────────
+  // Doc: docs/scoping-multi-lab-tier2.md, Section 5 Phase 2 / Section 6.
+  // These endpoints + middleware are infrastructure that Phases 2b, 2c, and
+  // beyond consume. They are NOT wired into existing reader/writer routes
+  // yet — those flip per-module in Phase 3. Shipping them early lets the
+  // NavBar (Phase 2b) and module API routes (Phase 2c) build against a
+  // stable contract.
+
+  // GET /api/labs/me — list the authenticated user's active memberships
+  // with denormalized lab info for the NavBar switcher. Returns an array
+  // ordered by is_primary_lab DESC, then membership id ASC, so the user's
+  // primary lab is always first.
+  app.get("/api/labs/me", authMiddleware, (req: any, res) => {
+    const memberships = (db as any).$client.prepare(`
+      SELECT
+        lm.id AS membership_id,
+        lm.lab_id,
+        lm.role,
+        lm.permissions_json,
+        lm.is_primary_lab,
+        lm.last_active_at,
+        l.clia_number,
+        l.lab_name,
+        l.plan,
+        l.subscription_status,
+        l.subscription_expires_at
+      FROM lab_members lm
+      JOIN labs l ON lm.lab_id = l.id
+      WHERE lm.user_id = ? AND lm.status = 'active'
+      ORDER BY lm.is_primary_lab DESC, lm.id ASC
+    `).all(req.userId) as any[];
+
+    res.json(memberships.map(m => ({
+      membershipId: m.membership_id,
+      labId: m.lab_id,
+      cliaNumber: m.clia_number,
+      labName: m.lab_name,
+      role: m.role,
+      permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
+      isPrimaryLab: !!m.is_primary_lab,
+      lastActiveAt: m.last_active_at,
+      plan: m.plan,
+      subscriptionStatus: m.subscription_status,
+      subscriptionExpiresAt: m.subscription_expires_at,
+    })));
+  });
+
+  // POST /api/labs/me/default { labId } — set the user's default_lab_id.
+  // Called by the NavBar switcher (Phase 2b) when a user picks a lab.
+  // Validates active membership before updating; returns the new value.
+  app.post("/api/labs/me/default", authMiddleware, (req: any, res) => {
+    const labId = Number(req.body?.labId);
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "labId required" });
+    const membership = (db as any).$client.prepare(
+      "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+    ).get(req.userId, labId);
+    if (!membership) return res.status(403).json({ error: "No active membership for this lab" });
+    (db as any).$client.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, req.userId);
+    res.json({ defaultLabId: labId });
+  });
+
+  // labScopeMiddleware — resolves :labId from the URL, validates that the
+  // authenticated user has an active membership on that lab, attaches
+  // { labId, userId, role, permissions } to req.scope, and refreshes the
+  // user's last_active_at on the membership row. Phases 2c and 3 attach
+  // this to every lab-scoped route (e.g. /api/labs/:labId/studies).
+  function labScopeMiddleware(req: any, res: any, next: any) {
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "Missing or invalid labId in URL" });
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const membership = (db as any).$client.prepare(
+      "SELECT id, role, permissions_json FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+    ).get(userId, labId) as any;
+    if (!membership) return res.status(403).json({ error: "No active membership for this lab" });
+
+    let permissions: Record<string, any> = {};
+    try { permissions = JSON.parse(membership.permissions_json || '{}'); } catch {}
+
+    req.scope = { labId, userId, role: membership.role, permissions, membershipId: membership.id };
+
+    // Refresh last_active_at + auto-update users.default_lab_id so the
+    // bare-/dashboard redirect (Phase 2b) resumes here next time.
+    const nowIso = new Date().toISOString();
+    (db as any).$client.prepare("UPDATE lab_members SET last_active_at = ? WHERE id = ?").run(nowIso, membership.id);
+    (db as any).$client.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
+
+    next();
+  }
+
+  // Expose labScopeMiddleware on app.locals so Phase 2c module routes
+  // can attach it without re-declaring. Pattern mirrors authMiddleware
+  // which is already in this closure scope.
+  (app as any).locals.labScopeMiddleware = labScopeMiddleware;
+
+  // GET /api/labs/:labId/scope-probe — read-only smoke test for the
+  // middleware. Returns the scope payload if access is granted.
+  // Useful for the Phase 2b NavBar to verify the URL is valid before
+  // rendering, and for ops to confirm the middleware works after deploy.
+  // Removed in Phase 2c cleanup once real lab-scoped routes exist.
+  app.get("/api/labs/:labId/scope-probe", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    res.json({ ok: true, scope: req.scope });
+  });
+
   // ── STUDIES ───────────────────────────────────────────────────────────────
   app.get("/api/studies", (req, res) => {
     const auth = req.headers.authorization;
