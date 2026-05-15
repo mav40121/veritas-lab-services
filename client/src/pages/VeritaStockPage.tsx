@@ -5,6 +5,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -406,12 +407,18 @@ export default function VeritaStockInventoryPage() {
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
+  // Multi-Lab Tier 2 Phase 3.11b: lab-scope inventory reads/writes.
+  const activeLabId = useActiveLabId();
+  const inventoryListUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/inventory`
+    : `${API_BASE}/api/inventory`;
+
   const loadItems = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/inventory`, { headers: authHeaders() });
+      const res = await fetch(inventoryListUrl, { headers: authHeaders() });
       if (res.ok) setItems(await res.json());
     } catch {} finally { setLoading(false); }
-  }, []);
+  }, [inventoryListUrl]);
 
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess) loadItems();
@@ -420,7 +427,7 @@ export default function VeritaStockInventoryPage() {
 
   const handleSave = async (data: Partial<InventoryItem>) => {
     const isEdit = !!editItem;
-    const url = isEdit ? `${API_BASE}/api/inventory/${editItem!.id}` : `${API_BASE}/api/inventory`;
+    const url = isEdit ? `${API_BASE}/api/inventory/${editItem!.id}` : inventoryListUrl;
     const method = isEdit ? "PUT" : "POST";
     try {
       const res = await fetch(url, {

@@ -7624,6 +7624,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
       completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
     );
+    // Phase 3.10 dual-write lab_id from the owning user's lab.
+    try {
+      (db as any).$client.prepare("UPDATE findings SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(Number(result.lastInsertRowid));
     // Audit trail entry for the create event
     try {
@@ -7853,6 +7857,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       normalizedKey: normalized.key,
       reason: null,
     });
+  });
+
+  // ── MULTI-LAB Tier 2 — Phase 3.10b: lab-scoped VeritaResponse endpoints ────
+  app.get("/api/labs/:labId/findings", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE lab_id = ? ORDER BY due_date IS NULL, due_date ASC, id DESC"
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+  app.get("/api/labs/:labId/findings/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!row) return res.status(404).json({ error: "Finding not found" });
+    res.json(row);
+  });
+  app.post("/api/labs/:labId/findings", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const {
+      accreditor, inspection_id, finding_number, standard_ref,
+      phase_or_severity, description, surveyor_notes,
+      anchor_date, status,
+      immediate_action, containment, root_cause,
+      corrective_action, preventive_action, monitoring_plan,
+      completion_date, signed_by, signed_at, external_submission_ref,
+    } = req.body || {};
+    if (!accreditor || !VALID_ACCREDITORS.includes(accreditor)) {
+      return res.status(400).json({ error: `accreditor must be one of: ${VALID_ACCREDITORS.join(', ')}` });
+    }
+    if (status && !VALID_FINDING_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
+    }
+    const due_date = dueDateForFinding(accreditor, anchor_date ?? null);
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const result = (db as any).$client.prepare(
+      `INSERT INTO findings (
+        user_id, lab_id, accreditor, inspection_id, finding_number, standard_ref,
+        phase_or_severity, description, surveyor_notes,
+        anchor_date, due_date, status,
+        immediate_action, containment, root_cause,
+        corrective_action, preventive_action, monitoring_plan,
+        completion_date, signed_by, signed_at, external_submission_ref
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      userIdForRow, req.scope.labId, accreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
+      phase_or_severity ?? null, description ?? null, surveyor_notes ?? null,
+      anchor_date ?? null, due_date, status ?? 'open',
+      immediate_action ?? null, containment ?? null, root_cause ?? null,
+      corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
+      completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
+    );
+    try {
+      (db as any).$client.prepare(
+        `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+      ).run(Number(result.lastInsertRowid), 'created', req.user?.userId ?? null, JSON.stringify({ accreditor, status: status ?? 'open' }));
+    } catch {}
+    const created = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.status(201).json(created);
   });
 
   // ── VERITACOMP ─────────────────────────────────────────────────────────

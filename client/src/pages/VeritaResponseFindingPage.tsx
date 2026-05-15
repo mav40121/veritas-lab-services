@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,11 @@ export default function VeritaResponseFindingPage() {
   const params = useParams<{ id?: string }>();
   const [, navigate] = useLocation();
   const id = params.id;
+  // Multi-Lab Tier 2 Phase 3.10b: lab-scoped finding fetch.
+  const activeLabId = useActiveLabId();
+  const findingUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/findings/${id}`
+    : findingUrl;
 
   const [finding, setFinding] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,7 +108,7 @@ export default function VeritaResponseFindingPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/findings/${id}`, { headers: authHeaders() });
+      const res = await fetch(findingUrl, { headers: authHeaders() });
       if (!res.ok) {
         setFinding(null);
         return;
@@ -132,7 +138,7 @@ export default function VeritaResponseFindingPage() {
     setSaveState("saving");
     setSaveError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/findings/${id}`, {
+      const res = await fetch(findingUrl, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -174,7 +180,7 @@ export default function VeritaResponseFindingPage() {
 
   const handleDelete = async () => {
     if (!id) return;
-    await fetch(`${API_BASE}/api/findings/${id}`, {
+    await fetch(findingUrl, {
       method: "DELETE",
       headers: authHeaders(),
     });

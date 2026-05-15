@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -94,10 +95,20 @@ export default function VeritaResponseAppPage() {
 
   const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
+  // Multi-Lab Tier 2 Phase 3.10b: lab-scope reads/writes.
+  const activeLabId = useActiveLabId();
+  const findingsApi = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/findings`
+    : `${findingsApi}`;
+  const findingItemUrl = (id: number | string) =>
+    activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/findings/${id}`
+      : `${findingsApi}/${id}`;
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/findings`, { headers: authHeaders() });
+      const res = await fetch(`${findingsApi}`, { headers: authHeaders() });
       const data = await res.json();
       setFindings(Array.isArray(data) ? data : []);
     } catch {
@@ -119,7 +130,7 @@ export default function VeritaResponseAppPage() {
     if (!newAccreditor) return;
     setSaving(true);
     try {
-      await fetch(`${API_BASE}/api/findings`, {
+      await fetch(`${findingsApi}`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -148,7 +159,7 @@ export default function VeritaResponseAppPage() {
   };
 
   const handleDelete = async (id: number) => {
-    await fetch(`${API_BASE}/api/findings/${id}`, {
+    await fetch(`${findingsApi}/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
