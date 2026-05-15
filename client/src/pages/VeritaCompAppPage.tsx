@@ -6,6 +6,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { downloadPdfToken } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -336,8 +337,17 @@ function ProgramListView() {
   const readOnly = useIsReadOnly('veritacomp');
   const [wizardOpen, setWizardOpen] = useState(false);
 
+  // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
+  // Inner endpoints (programs/:id DELETE, assessments, quizzes) stay on
+  // legacy URLs — their ownership check via user_id resolves correctly
+  // in single-lab today.
+  const activeLabId = useActiveLabId();
+  const programsListUrl = activeLabId
+    ? `/api/labs/${activeLabId}/competency/programs`
+    : `/api/competency/programs`;
+
   const { data: programs, isLoading, error } = useQuery<Program[]>({
-    queryKey: ["/api/competency/programs"],
+    queryKey: [programsListUrl],
   });
 
   const deleteProgram = useMutation({
@@ -348,7 +358,7 @@ function ProgramListView() {
       });
       if (!res.ok) throw new Error("Failed to delete");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/competency/programs"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [programsListUrl] }),
   });
 
   return (
@@ -492,6 +502,7 @@ function DeleteConfirmDialog({ name, onDelete }: { name: string; onDelete: () =>
 
 function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
   const { user } = useAuth();
+  const activeLabId = useActiveLabId();
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("Chemistry");
@@ -548,7 +559,10 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
   async function handleCreate() {
     setCreating(true);
     try {
-      const res = await fetch(`${API_BASE}/api/competency/programs`, {
+      const createUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/competency/programs`
+        : `${API_BASE}/api/competency/programs`;
+      const res = await fetch(createUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
@@ -1136,6 +1150,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
 
 function EmployeesTab({ employees }: { employees: Employee[] }) {
   const qc = useQueryClient();
+  const activeLabId = useActiveLabId();
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -1144,7 +1159,10 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
 
   const createEmployee = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/api/competency/employees`, {
+      const url = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/competency/employees`
+        : `${API_BASE}/api/competency/employees`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ name: name.trim(), title, hireDate: hireDate || null, lisInitials: lisInitials || null }),

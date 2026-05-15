@@ -8073,6 +8073,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── MULTI-LAB Tier 2 — Phase 3.5b: lab-scoped VeritaComp entry endpoints ───
+  // Doc: docs/scoping-multi-lab-tier2.md Section 5 Phase 3.
+  // Lab-scoped variants of the 4 in-app entry endpoints (programs list/create,
+  // employees list/create). Inner endpoints (programs/:id GET/PUT/DELETE,
+  // employees/:id PUT/DELETE, assessments, quizzes) stay legacy in this PR;
+  // they scope by program_id / employee_id which are globally unique.
+
+  app.get("/api/labs/:labId/competency/programs", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const programs = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId);
+    const result = programs.map((p: any) => {
+      const employeeCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM competency_employees WHERE lab_id = ? AND status = 'active'"
+      ).get(labId)?.cnt || 0;
+      const assessmentCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM competency_assessments WHERE program_id = ?"
+      ).get(p.id)?.cnt || 0;
+      const methodGroups = (db as any).$client.prepare(
+        "SELECT * FROM competency_method_groups WHERE program_id = ?"
+      ).all(p.id);
+      return { ...p, employeeCount, assessmentCount, methodGroups };
+    });
+    res.json(result);
+  });
+
+  app.post("/api/labs/:labId/competency/programs", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const { name, department, type, mapId, methodGroups } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
+    if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+    const now = new Date().toISOString();
+    const labId = req.scope.labId;
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_programs (user_id, lab_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(userIdForRow, labId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
+    const programId = Number(result.lastInsertRowid);
+    if (type === "technical" && Array.isArray(methodGroups)) {
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+      );
+      for (const g of methodGroups) {
+        stmt.run(programId, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+      }
+    }
+    res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
+  });
+
+  app.get("/api/labs/:labId/competency/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
+    ).all(req.scope.labId);
+    res.json(employees);
+  });
+
+  app.post("/api/labs/:labId/competency/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const { name, title, hireDate, lisInitials } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Employee name required" });
+    const now = new Date().toISOString();
+    const labId = req.scope.labId;
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?)"
+    ).run(userIdForRow, labId, name.trim(), title || "", hireDate || null, lisInitials || null, now);
+    res.json({ id: Number(result.lastInsertRowid), user_id: userIdForRow, name: name.trim(), title: title || "", hire_date: hireDate || null, lis_initials: lisInitials || null, status: "active", created_at: now });
+  });
+
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
 
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
