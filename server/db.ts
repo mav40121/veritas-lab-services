@@ -1682,6 +1682,31 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.8 (VeritaLab module):
+// Three user_id tables: lab_certificates (parent), lab_certificate_documents
+// and lab_certificate_reminders (children, both carry user_id for audit).
+// All get lab_id directly to keep query paths flat.
+{
+  const tables = ["lab_certificates", "lab_certificate_documents", "lab_certificate_reminders"];
+  for (const t of tables) {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map(c => c.name);
+    if (!cols.includes("lab_id")) {
+      try { sqlite.exec(`ALTER TABLE ${t} ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
+    }
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_lab ON ${t}(lab_id)`); } catch {}
+    const backfilled = sqlite.prepare(`
+      UPDATE ${t}
+      SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id)
+      WHERE lab_id IS NULL
+        AND user_id IS NOT NULL
+        AND (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id) IS NOT NULL
+    `).run();
+    if (backfilled.changes > 0) {
+      console.log(`[migration] Multi-lab Phase 3.8 (${t}): backfilled lab_id on ${backfilled.changes} row(s)`);
+    }
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.7 (VeritaTrack module):
 // Two user_id tables: veritatrack_tasks (parent), veritatrack_signoffs
 // (child but also carries user_id for audit). Both get lab_id directly.
