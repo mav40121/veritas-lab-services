@@ -2964,6 +2964,123 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ...map, tests });
   });
 
+  // ── MULTI-LAB Tier 2 — Phase 3.3b: lab-scoped VeritaMap entry endpoints ───
+  // Doc: docs/scoping-multi-lab-tier2.md Section 5 Phase 3.
+  // Variants of the legacy /api/veritamap/maps* endpoints that read/write by
+  // lab_id (validated by labScopeMiddleware) instead of by req.ownerUserId.
+  // Covers the 4 entry-surface endpoints VeritaMapAppPage hits (list, create,
+  // delete) plus the single-map GET that VeritaMapMapPage calls. Inner
+  // endpoints (/api/veritamap/maps/:id/tests, /instruments, /correlations,
+  // /excel, etc.) deliberately stay on legacy URLs in this PR — they scope
+  // by map_id which is globally unique, and their ownership check via
+  // req.ownerUserId still resolves correctly today. They will get a
+  // membership-aware ownership check upgrade in a future cleanup once a
+  // multi-lab user demands it.
+
+  // GET /api/labs/:labId/veritamap/maps — list maps for the active lab.
+  app.get("/api/labs/:labId/veritamap/maps", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const maps = (db as any).$client.prepare(
+      "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(req.scope.labId);
+    const result = maps.map((m: any) => {
+      const tests = (db as any).$client.prepare(
+        "SELECT active, last_cal_ver, last_method_comp, complexity FROM veritamap_tests WHERE map_id = ?"
+      ).all(m.id);
+      const activeTests = tests.filter((t: any) => t.active);
+      const gaps = activeTests.filter((t: any) =>
+        (t.complexity === 'MODERATE' || t.complexity === 'HIGH') &&
+        (!t.last_cal_ver || !t.last_method_comp)
+      ).length;
+      return { ...m, totalTests: activeTests.length, gaps };
+    });
+    res.json(result);
+  });
+
+  // POST /api/labs/:labId/veritamap/maps — create a map in this lab.
+  app.post("/api/labs/:labId/veritamap/maps", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Map name required" });
+    const now = new Date().toISOString();
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO veritamap_maps (user_id, lab_id, name, instruments, created_at, updated_at) VALUES (?, ?, ?, '[]', ?, ?)"
+    ).run(userIdForRow, req.scope.labId, name.trim(), now, now);
+    res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
+  });
+
+  // DELETE /api/labs/:labId/veritamap/maps/:id — delete with lab scope check.
+  app.delete("/api/labs/:labId/veritamap/maps/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
+    const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
+    (db as any).$client.prepare(`
+      DELETE FROM veritamap_test_correlations
+      WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
+         OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
+    `).run(req.params.id, req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_analyte_values WHERE map_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE map_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // GET /api/labs/:labId/veritamap/maps/:id — single-map detail. Validates
+  // that the requested map belongs to the active lab, then returns the
+  // same joined payload as the legacy endpoint.
+  app.get("/api/labs/:labId/veritamap/maps/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
+    if (!map) return res.status(404).json({ error: "Map not found" });
+    const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
+    const instrByAnalyte = (db as any).$client.prepare(`
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number
+      FROM veritamap_instrument_tests it
+      JOIN veritamap_instruments i ON i.id = it.instrument_id
+      WHERE it.map_id = ? AND it.active = 1
+    `).all(req.params.id);
+    const instrMap: Record<string, any[]> = {};
+    for (const row of instrByAnalyte as any[]) {
+      if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
+      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null });
+    }
+    const testIds = (rawTests as any[]).map((t: any) => t.id);
+    const corrByTestId: Record<number, any[]> = {};
+    if (testIds.length > 0) {
+      const placeholders = testIds.map(() => "?").join(",");
+      const correlations = (db as any).$client.prepare(`
+        SELECT
+          c.id, c.test_a_id, c.test_b_id, c.correlation_group_id, c.correlation_method,
+          c.acceptable_criteria, c.actual_bias_or_sd, c.pass_fail, c.work_performed_date,
+          c.signoff_date, c.signoff_by_user_id, c.signoff_by_name, c.next_due, c.notes,
+          partner.id AS partner_test_id, partner.analyte AS partner_analyte,
+          partner.map_id AS partner_map_id, partner_map.name AS partner_map_name,
+          partner.instrument_source AS partner_instrument,
+          CASE WHEN c.test_a_id = c.test_b_id THEN 1 ELSE 0 END AS is_self_pair
+        FROM veritamap_test_correlations c
+        JOIN veritamap_tests partner
+          ON partner.id = CASE WHEN c.test_a_id IN (${placeholders}) THEN c.test_b_id ELSE c.test_a_id END
+        JOIN veritamap_maps partner_map ON partner_map.id = partner.map_id
+        WHERE c.test_a_id IN (${placeholders}) OR c.test_b_id IN (${placeholders})
+      `).all(...testIds, ...testIds, ...testIds);
+      for (const corr of correlations as any[]) {
+        const localTestId = testIds.includes(corr.test_a_id) ? corr.test_a_id : corr.test_b_id;
+        if (!corrByTestId[localTestId]) corrByTestId[localTestId] = [];
+        corrByTestId[localTestId].push(corr);
+      }
+    }
+    const tests = (rawTests as any[]).map((t: any) => ({
+      ...t,
+      instruments: instrMap[t.analyte] ?? [],
+      correlations: corrByTestId[t.id] ?? []
+    }));
+    res.json({ ...map, tests });
+  });
+
   // Bulk upsert tests (used when building from instrument or updating)
   app.put("/api/veritamap/maps/:id/tests", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;

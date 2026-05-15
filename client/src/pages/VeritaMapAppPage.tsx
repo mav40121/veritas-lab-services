@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -115,16 +116,28 @@ export default function VeritaMapAppPage() {
   const hasPlanAccess =
     !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
+  // Multi-Lab Tier 2 Phase 3.3b: lab-scope reads/writes through the lab in
+  // the URL. Inner map endpoints (called from VeritaMapMapPage) stay on
+  // legacy URLs in this PR; they scope by map_id which is globally unique.
+  const activeLabId = useActiveLabId();
+  const mapsListUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/maps`
+    : `/api/veritamap/maps`;
+  const mapDeleteUrl = (id: number | string) =>
+    activeLabId
+      ? `/api/labs/${activeLabId}/veritamap/maps/${id}`
+      : `/api/veritamap/maps/${id}`;
+
   // Fetch maps
   const { data: maps, isLoading } = useQuery<MapSummary[]>({
-    queryKey: ["/api/veritamap/maps"],
+    queryKey: [mapsListUrl],
     enabled: isLoggedIn,
   });
 
   // Create map
   const createMap = useMutation({
     mutationFn: async (name: string) => {
-      const res = await fetch(`${API_BASE}/api/veritamap/maps`, {
+      const res = await fetch(`${API_BASE}${mapsListUrl}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ name }),
@@ -136,10 +149,13 @@ export default function VeritaMapAppPage() {
       return res.json() as Promise<MapSummary>;
     },
     onSuccess: (newMap) => {
-      qc.invalidateQueries({ queryKey: ["/api/veritamap/maps"] });
+      qc.invalidateQueries({ queryKey: [mapsListUrl] });
       setDialogOpen(false);
       setNewMapName("");
-      navigate(`/veritamap-app/${newMap.id}/build`);
+      // Preserve lab context across the navigation to the Build page.
+      navigate(activeLabId
+        ? `/labs/${activeLabId}/veritamap-app/${newMap.id}/build`
+        : `/veritamap-app/${newMap.id}/build`);
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -149,14 +165,14 @@ export default function VeritaMapAppPage() {
   // Delete map
   const deleteMap = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE}/api/veritamap/maps/${id}`, {
+      const res = await fetch(`${API_BASE}${mapDeleteUrl(id)}`, {
         method: "DELETE",
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/veritamap/maps"] });
+      qc.invalidateQueries({ queryKey: [mapsListUrl] });
       toast({ title: "Map deleted" });
     },
     onError: () => {
