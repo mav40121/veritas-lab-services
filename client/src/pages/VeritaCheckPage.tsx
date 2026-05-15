@@ -23,6 +23,7 @@ import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import type { InsertStudy } from "@shared/schema";
 import fdaData from "@/lib/fdaInstrumentData.json";
 
@@ -987,6 +988,12 @@ export default function VeritaCheckPage() {
     ? dataPoints.filter(dp => instrumentNames.filter(n => dp.instrumentValues[n] !== null).length >= 2).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
 
+  // Multi-Lab Tier 2 Phase 3: post to lab-scoped endpoint when we are on a
+  // /labs/:labId/study/new URL. Legacy /api/studies POST is dual-write
+  // (server backfills lab_id from the user's record), so unprefixed POSTs
+  // still land on the right lab.
+  const activeLabId = useActiveLabId();
+
   const saveMutation = useMutation({
     mutationFn: async (study: InsertStudy) => {
       // Attach linked VeritaMap instrument metadata
@@ -1001,18 +1008,30 @@ export default function VeritaCheckPage() {
         study = { ...study, instrumentMeta: JSON.stringify(meta) };
       }
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
-      return fetch(`${API_BASE}/api/studies`, { method: "POST", headers, body: JSON.stringify(study) });
+      const url = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/studies`
+        : `${API_BASE}/api/studies`;
+      return fetch(url, { method: "POST", headers, body: JSON.stringify(study) });
     },
     onSuccess: async (res) => {
       const data = await res.json();
       queryClient.invalidateQueries({ queryKey: ["/api/studies"] });
+      if (activeLabId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/studies`] });
+      }
       const verificationId = prePopParams.get("verificationId");
       const verificationElement = prePopParams.get("element");
       const verificationSlot = prePopParams.get("slotId");
+      // Preserve active-lab context across the navigation so a user creating
+      // a study in /labs/15/study/new lands on /labs/15/study/:id/results,
+      // not bounced to their primary lab by LegacyWorkspaceRedirect.
+      const resultsBase = activeLabId
+        ? `/labs/${activeLabId}/study/${data.id}/results`
+        : `/study/${data.id}/results`;
       if (verificationId && verificationElement && verificationSlot) {
-        navigate(`/study/${data.id}/results?verificationId=${verificationId}&element=${verificationElement}&slotId=${verificationSlot}&studyPassed=${data.status === "pass" ? "1" : "0"}`);
+        navigate(`${resultsBase}?verificationId=${verificationId}&element=${verificationElement}&slotId=${verificationSlot}&studyPassed=${data.status === "pass" ? "1" : "0"}`);
       } else {
-        navigate(`/study/${data.id}/results`);
+        navigate(resultsBase);
       }
     },
     onError: () => toast({ title: "Failed to save study", variant: "destructive" }),

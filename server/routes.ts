@@ -2444,6 +2444,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId, createdByUserId });
 
+    // Multi-Lab Tier 2 Phase 3 dual-write: stamp lab_id on every new row so
+    // the transition window does not accumulate NULL lab_id studies. Pulls
+    // the lab from the owning user's lab_id (seat-aware via the Tier 1
+    // backfill). Best-effort; skip silently if the user has no lab yet.
+    if (userId) {
+      try {
+        (db as any).$client.prepare(
+          "UPDATE studies SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+        ).run(userId, study.id);
+      } catch {}
+    }
+
     // VeritaCheck → VeritaScan integration bridge
     try {
       autoCompleteVeritaScanItems({
@@ -2471,6 +2483,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(403).json({ error: "Access denied" });
     }
     logAudit({ userId: req.userId, ownerUserId: callerOwnerId, module: "veritacheck", action: "delete", entityType: "study", entityId: req.params.id, entityLabel: delStudy ? `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})` : undefined, before: delStudy, ipAddress: req.ip });
+    storage.deleteStudy(studyId);
+    res.json({ success: true });
+  });
+
+  // ── MULTI-LAB Tier 2 — Phase 3.1: lab-scoped studies endpoints ─────────────
+  // Doc: docs/scoping-multi-lab-tier2.md Section 5 Phase 3.
+  // These coexist with the legacy /api/studies endpoints. Frontend pages flip
+  // to the lab-scoped form in this same PR; the legacy endpoints stay alive
+  // for one release as a safety net for any stale cached bundle, then get
+  // removed in a Phase 3 cleanup PR.
+
+  // GET /api/labs/:labId/studies — list studies for a specific lab.
+  app.get("/api/labs/:labId/studies", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE lab_id = ? ORDER BY id DESC"
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+
+  // GET /api/labs/:labId/studies/:id — single study, lab-scoped.
+  app.get("/api/labs/:labId/studies/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const study = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(parseInt(req.params.id), req.scope.labId) as any;
+    if (!study) return res.status(404).json({ error: "Study not found" });
+    res.json(study);
+  });
+
+  // POST /api/labs/:labId/studies — create a study scoped to this lab.
+  // Sets lab_id from the URL (validated by middleware) and user_id from the
+  // authenticated user. created_by_user_id captures the actual analyst.
+  app.post("/api/labs/:labId/studies", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const parsed = insertStudySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const verifiedStatus = computeStudyStatus(
+      parsed.data.studyType,
+      parsed.data.dataPoints,
+      parsed.data.instruments,
+      parsed.data.cliaAllowableError,
+      (parsed.data as any).teaIsPercentage !== 0,
+      (parsed.data as any).cliaAbsoluteFloor ?? null
+    );
+    // Determine the owning user_id: for seat users this is the owner; for
+    // owners it is their own id. Lab membership already established by
+    // labScopeMiddleware; the user_id field stays denormalized for audit.
+    const ownerUserId = req.ownerUserId ?? req.userId;
+    const study = storage.createStudy({
+      ...parsed.data,
+      status: verifiedStatus,
+      userId: ownerUserId,
+      createdByUserId: req.userId,
+    } as any);
+    // Dual-write lab_id (drizzle schema may not yet include the column).
+    (db as any).$client.prepare("UPDATE studies SET lab_id = ? WHERE id = ?").run(req.scope.labId, study.id);
+    try {
+      autoCompleteVeritaScanItems({
+        id: study.id, userId: ownerUserId, testName: study.testName,
+        studyType: study.studyType, instruments: study.instruments,
+      });
+    } catch (err: any) {
+      console.warn('[veritascan-bridge] auto-complete failed:', err?.message);
+    }
+    res.json({ ...study, lab_id: req.scope.labId });
+  });
+
+  // DELETE /api/labs/:labId/studies/:id — lab-scoped delete.
+  app.delete("/api/labs/:labId/studies/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const delStudy = (db as any).$client.prepare(
+      "SELECT id, lab_id, user_id, test_name, study_type, analyst, date FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    if (!delStudy) return res.status(404).json({ error: "Study not found" });
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritacheck", action: "delete", entityType: "study",
+      entityId: req.params.id,
+      entityLabel: `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})`,
+      before: delStudy, ipAddress: req.ip,
+    });
     storage.deleteStudy(studyId);
     res.json({ success: true });
   });
