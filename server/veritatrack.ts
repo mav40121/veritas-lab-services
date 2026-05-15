@@ -112,6 +112,10 @@ export function registerVeritaTrackRoutes(
     const r = sqlite.prepare(
       "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
     ).run(userId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, now, now);
+    // Phase 3.7 dual-write lab_id.
+    try {
+      sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(userId, r.lastInsertRowid);
+    } catch {}
     res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
   });
 
@@ -148,6 +152,10 @@ export function registerVeritaTrackRoutes(
     const r = sqlite.prepare(
       "INSERT INTO veritatrack_signoffs (task_id,user_id,completed_date,initials,performed_by,notes) VALUES (?,?,?,?,?,?)"
     ).run(task.id, userId, completed_date, initials || null, performed_by || null, notes || null);
+    // Phase 3.7 dual-write lab_id.
+    try {
+      sqlite.prepare("UPDATE veritatrack_signoffs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(userId, r.lastInsertRowid);
+    } catch {}
     // If linked to a VeritaMap field, update it there too
     if (task.map_analyte && task.map_field) {
       try {
