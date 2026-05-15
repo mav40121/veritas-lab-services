@@ -4544,6 +4544,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
     ).run(dataUserId, name.trim(), now, now);
+    // Phase 3.4 dual-write lab_id from the owning user's lab.
+    try {
+      (db as any).$client.prepare(
+        "UPDATE veritascan_scans SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(dataUserId, result.lastInsertRowid);
+    } catch {}
     res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
   });
 
@@ -4552,6 +4558,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
+    const delScanItems = (db as any).$client.prepare("SELECT item_id, status, notes FROM veritascan_items WHERE scan_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritascan", action: "delete", entityType: "scan", entityId: req.params.id, entityLabel: delScan?.name, before: { scan: delScan, items: delScanItems }, ipAddress: req.ip });
+    (db as any).$client.prepare("DELETE FROM veritascan_items WHERE scan_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM veritascan_scans WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // \u2500\u2500 MULTI-LAB Tier 2 \u2014 Phase 3.4: lab-scoped VeritaScan entry endpoints \u2500\u2500\u2500\u2500
+  // Doc: docs/scoping-multi-lab-tier2.md Section 5 Phase 3.
+  // Variants of /api/veritascan/scans* that read/write by lab_id. Covers
+  // VeritaScanAppPage list/create/delete. Inner /api/veritascan/scans/:id/*
+  // endpoints (items GET/PUT, excel POST, pdf POST) stay on legacy URLs;
+  // they scope by scan_id which is globally unique, and the existing
+  // ownership check via req.ownerUserId resolves correctly in single-lab.
+
+  app.get("/api/labs/:labId/veritascan/scans", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scans = (db as any).$client.prepare(
+      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(req.scope.labId);
+    const result = scans.map((s: any) => {
+      const items = (db as any).$client.prepare(
+        "SELECT status FROM veritascan_items WHERE scan_id = ?"
+      ).all(s.id);
+      const total = items.length || 168;
+      const notAssessed = items.filter((i: any) => i.status === 'Not Assessed').length;
+      const assessed = items.length - notAssessed;
+      const compliant = items.filter((i: any) => i.status === 'Compliant').length;
+      const needsAttention = items.filter((i: any) => i.status === 'Needs Attention').length;
+      const immediateAction = items.filter((i: any) => i.status === 'Immediate Action').length;
+      const na = items.filter((i: any) => i.status === 'N/A').length;
+      const issues = needsAttention + immediateAction;
+      return {
+        ...s, createdAt: s.created_at, updatedAt: s.updated_at,
+        total, totalItems: total,
+        assessed, assessedCount: assessed,
+        compliant, compliantCount: compliant,
+        needsAttention, needsAttentionCount: needsAttention,
+        immediateAction, immediateActionCount: immediateAction,
+        na, naCount: na,
+        notAssessed, notAssessedCount: notAssessed,
+        issues,
+      };
+    });
+    res.json(result);
+  });
+
+  app.post("/api/labs/:labId/veritascan/scans", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
+    const now = new Date().toISOString();
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO veritascan_scans (user_id, lab_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(userIdForRow, req.scope.labId, name.trim(), now, now);
+    res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
+  });
+
+  app.delete("/api/labs/:labId/veritascan/scans/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
     const delScanItems = (db as any).$client.prepare("SELECT item_id, status, notes FROM veritascan_items WHERE scan_id = ?").all(req.params.id);
