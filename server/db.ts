@@ -1682,6 +1682,43 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.10 (VeritaResponse module):
+// findings (user_id) is the parent; finding_attachments scopes through
+// finding_id and inherits lab scope. Add lab_id to findings only.
+{
+  const cols = (sqlite.prepare(`PRAGMA table_info(findings)`).all() as any[]).map(c => c.name);
+  if (!cols.includes("lab_id")) {
+    try { sqlite.exec(`ALTER TABLE findings ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
+  }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_lab ON findings(lab_id, due_date)`); } catch {}
+  const sb = sqlite.prepare(`
+    UPDATE findings
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = findings.user_id)
+    WHERE lab_id IS NULL AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = findings.user_id) IS NOT NULL
+  `).run();
+  if (sb.changes > 0) console.log(`[migration] Multi-lab Phase 3.10 (findings): backfilled lab_id on ${sb.changes} row(s)`);
+}
+
+// Multi-Lab Tier 2 — Phase 3.11 (VeritaStock module):
+// inventory_items uses account_id (which is the owner_user_id, named
+// differently because operations modules predate the user/owner pattern).
+// Backfill maps account_id → users.lab_id.
+{
+  const cols = (sqlite.prepare(`PRAGMA table_info(inventory_items)`).all() as any[]).map(c => c.name);
+  if (!cols.includes("lab_id")) {
+    try { sqlite.exec(`ALTER TABLE inventory_items ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
+  }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_lab ON inventory_items(lab_id)`); } catch {}
+  const sb = sqlite.prepare(`
+    UPDATE inventory_items
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = inventory_items.account_id)
+    WHERE lab_id IS NULL AND account_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = inventory_items.account_id) IS NOT NULL
+  `).run();
+  if (sb.changes > 0) console.log(`[migration] Multi-lab Phase 3.11 (inventory_items): backfilled lab_id on ${sb.changes} row(s)`);
+}
+
 // Multi-Lab Tier 2 — Phase 3.9 (VeritaStaff module):
 // staff_labs / staff_employees / staff_roles already carry a lab_id column
 // but it references staff_labs(id), NOT the new multi-lab labs(id). Add a

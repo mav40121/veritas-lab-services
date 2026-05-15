@@ -448,6 +448,10 @@ export function registerVeritaBenchRoutes(
         INSERT INTO inventory_items (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(accountId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, now, now);
+      // Phase 3.11 dual-write lab_id from the owning user's lab.
+      try {
+        sqlite.prepare("UPDATE inventory_items SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(accountId, result.lastInsertRowid);
+      } catch {}
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(Number(result.lastInsertRowid));
       res.json(row);
     } catch (err: any) {
@@ -934,4 +938,49 @@ export function registerVeritaBenchRoutes(
 
     res.json({ metrics: result });
   });
+
+  // ── MULTI-LAB Tier 2 — Phase 3.11b: lab-scoped VeritaStock endpoints ───────
+  const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
+  if (labScopeMiddleware) {
+    app.get("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+      ).all(req.scope.labId);
+      const items = (rows as any[]).map((item: any) => {
+        const burnRate = item.burn_rate || 0;
+        const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
+        const orderToQty = burnRate * (item.desired_days_of_stock || 0);
+        const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
+        const needsReorder = item.quantity_on_hand <= reorderPoint;
+        return {
+          ...item,
+          reorder_point: Math.round(reorderPoint),
+          order_to_qty: Math.round(orderToQty),
+          days_remaining: daysRemaining,
+          needs_reorder: needsReorder,
+        };
+      });
+      res.json(items);
+    });
+
+    app.post("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+      if (!hasOpsAccess(req.user)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date } = req.body;
+      if (!item_name) return res.status(400).json({ error: "item_name is required" });
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const accountId = ownerRow?.owner_user_id ?? req.userId;
+      const now = new Date().toISOString();
+      try {
+        const result = sqlite.prepare(`
+          INSERT INTO inventory_items (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(accountId, req.scope.labId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, now, now);
+        const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(Number(result.lastInsertRowid));
+        res.json(row);
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+  }
 }
