@@ -11368,6 +11368,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         accreditation_body = excluded.accreditation_body,
         updated_at = excluded.updated_at
     `).run(userId, is_independent?1:0, setup_complete?1:0, accreditation_body || 'tjc');
+    // Multi-Lab Tier 2 Phase 3.2 dual-write: stamp lab_id from the user's
+    // lab so the row is reachable by lab-scoped queries (Phase 3.2b).
+    try {
+      sqlite.prepare(
+        "UPDATE veritapolicy_settings SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND lab_id IS NULL"
+      ).run(userId, userId);
+    } catch {}
     res.json({ ok: true });
   });
 
@@ -11438,6 +11445,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         notes = COALESCE(excluded.notes, notes),
         updated_at = excluded.updated_at
     `).run(userId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, policy_name || null, notes || null);
+    // Phase 3.2 dual-write lab_id (see schema block in db.ts).
+    try {
+      sqlite.prepare(
+        "UPDATE veritapolicy_requirement_status SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND requirement_id = ? AND lab_id IS NULL"
+      ).run(userId, userId, reqId);
+    } catch {}
     res.json({ ok: true });
   });
 
@@ -11461,6 +11474,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       INSERT INTO veritapolicy_lab_policies (user_id, policy_number, policy_name, owner, status, last_reviewed, next_review, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(req.ownerUserId, policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null) as any;
+    // Phase 3.2 dual-write lab_id.
+    try {
+      sqlite.prepare(
+        "UPDATE veritapolicy_lab_policies SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ? AND lab_id IS NULL"
+      ).run(req.ownerUserId, result.lastInsertRowid);
+    } catch {}
     res.json({ ok: true, id: result.lastInsertRowid });
   });
 
@@ -11670,6 +11689,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       our_policy_name ?? null,
       notes ?? null,
     );
+    // Phase 3.2 dual-write lab_id.
+    try {
+      sqlite.prepare(
+        "UPDATE veritapolicy_master_status SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND policy_id = ? AND lab_id IS NULL"
+      ).run(userId, userId, policyId);
+    } catch {}
     res.json({ ok: true });
   });
 

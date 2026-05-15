@@ -1588,6 +1588,38 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON ve
   }
 }
 
+// Multi-Lab Tier 2 — Phase 3.2 (VeritaPolicy module):
+// Add lab_id to all four veritapolicy_* tables and backfill from each row's
+// user_id → users.lab_id. user_id columns stay (with their UNIQUE constraints)
+// as audit-trail + transitional uniqueness; lab_id becomes the routing key
+// for reads/writes. When multi-lab actually activates (parking-lot #11/#12),
+// a follow-up will recreate these tables with UNIQUE(lab_id, ...) constraints.
+{
+  const tables = [
+    "veritapolicy_settings",
+    "veritapolicy_lab_policies",
+    "veritapolicy_requirement_status",
+    "veritapolicy_master_status",
+  ];
+  for (const t of tables) {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map(c => c.name);
+    if (!cols.includes("lab_id")) {
+      try { sqlite.exec(`ALTER TABLE ${t} ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
+    }
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_lab ON ${t}(lab_id)`); } catch {}
+    const backfilled = sqlite.prepare(`
+      UPDATE ${t}
+      SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id)
+      WHERE lab_id IS NULL
+        AND user_id IS NOT NULL
+        AND (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id) IS NOT NULL
+    `).run();
+    if (backfilled.changes > 0) {
+      console.log(`[migration] Multi-lab Phase 3.2 (${t}): backfilled lab_id on ${backfilled.changes} row(s)`);
+    }
+  }
+}
+
 // VeritaTrack -- regulatory compliance calendar
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritatrack_tasks (
