@@ -11954,6 +11954,159 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── MULTI-LAB Tier 2 — Phase 3.2b: lab-scoped VeritaPolicy endpoints ───────
+  // Doc: docs/scoping-multi-lab-tier2.md Section 5 Phase 3.
+  // Variants of the legacy /api/veritapolicy/* endpoints that read/write by
+  // lab_id (validated by labScopeMiddleware) instead of by req.ownerUserId.
+  // Covers the 5 endpoints VeritaPolicyAppPage.tsx hits in the in-app flow.
+  // The export endpoints (excel, pdf) stay legacy-scoped for this PR; they
+  // are infrequent download paths whose lab-scoped variants land in cleanup
+  // once a multi-lab user actually requests them.
+
+  // GET /api/labs/:labId/veritapolicy/settings
+  app.get('/api/labs/:labId/veritapolicy/settings', authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    let settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(labId) as any;
+    if (!settings) {
+      const ownerRow = sqlite.prepare('SELECT owner_user_id FROM labs WHERE id = ?').get(labId) as any;
+      sqlite.prepare('INSERT INTO veritapolicy_settings (user_id, lab_id) VALUES (?, ?)')
+        .run(ownerRow?.owner_user_id ?? req.userId, labId);
+      settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(labId);
+    }
+    const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any;
+    const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
+      + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
+    let accreditationChoice = 'CLIA';
+    if (accCount === 1 && lab?.accreditation_tjc) accreditationChoice = 'TJC';
+    else if (accCount === 1 && lab?.accreditation_cap) accreditationChoice = 'CAP';
+    else if (accCount === 1 && lab?.accreditation_aabb) accreditationChoice = 'AABB';
+    else if (accCount === 1 && lab?.accreditation_cola) accreditationChoice = 'COLA';
+    else if (accCount === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) accreditationChoice = 'CAP+AABB';
+    res.json({ ...settings, accreditation_choice: accreditationChoice });
+  });
+
+  // PUT /api/labs/:labId/veritapolicy/settings
+  app.put('/api/labs/:labId/veritapolicy/settings', authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const ownerRow = sqlite.prepare('SELECT owner_user_id FROM labs WHERE id = ?').get(labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const { is_independent, setup_complete, accreditation_body } = req.body;
+    sqlite.prepare(`
+      INSERT INTO veritapolicy_settings (user_id, lab_id, is_independent, setup_complete, accreditation_body, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id) DO UPDATE SET
+        lab_id = excluded.lab_id,
+        is_independent = excluded.is_independent,
+        setup_complete = excluded.setup_complete,
+        accreditation_body = excluded.accreditation_body,
+        updated_at = excluded.updated_at
+    `).run(userIdForRow, labId, is_independent?1:0, setup_complete?1:0, accreditation_body || 'tjc');
+    res.json({ ok: true });
+  });
+
+  // GET /api/labs/:labId/veritapolicy/master-list
+  app.get('/api/labs/:labId/veritapolicy/master-list', authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const labId = req.scope.labId;
+      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any;
+      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
+      const aoCols: AoCol[] = [];
+      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC' });
+      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP' });
+      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA' });
+      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB' });
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
+      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE lab_id = ?').all(labId) as any[];
+      const sm: Record<string, any> = {};
+      for (const s of statuses) sm[s.policy_id] = s;
+      const rows = VERITAPOLICY_MASTER_LIST.map(p => {
+        const us = sm[p.policy_id];
+        const isNa = !!(us?.is_na);
+        const status = isNa ? 'na' : (us?.status || 'not_started');
+        return {
+          policy_id: p.policy_id, policy_name: p.policy_name, section: p.section,
+          subspecialty: p.subspecialty, service_line: p.service_line, description: p.description,
+          cfr_citations: p.cfr_citations,
+          ao_citations: aoCols.map(a => ({ label: a.label, value: (p as any)[a.key] || '' })),
+          notes: p.notes || '', status, is_na: isNa,
+          na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
+          user_notes: us?.notes || null, updated_at: us?.updated_at || null,
+        };
+      });
+      const ao_label = aoCols.length === 0 ? 'CLIA only' : aoCols.map(a => a.label).join(', ');
+      res.json({ rows, ao_label, ao_columns: aoCols.map(a => a.label) });
+    } catch (err: any) {
+      console.error('VeritaPolicy master-list (lab-scoped) error:', err);
+      res.status(500).json({ error: err.message || 'Failed to load master list' });
+    }
+  });
+
+  // PATCH /api/labs/:labId/veritapolicy/master-list/:policyId
+  app.patch('/api/labs/:labId/veritapolicy/master-list/:policyId', authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const ownerRow = sqlite.prepare('SELECT owner_user_id FROM labs WHERE id = ?').get(labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const policyId = String(req.params.policyId);
+    const { status, is_na, na_reason, our_policy_name, notes } = req.body || {};
+    sqlite.prepare(`
+      INSERT INTO veritapolicy_master_status (user_id, lab_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(user_id, policy_id) DO UPDATE SET
+        lab_id          = excluded.lab_id,
+        status          = COALESCE(excluded.status, status),
+        is_na           = COALESCE(excluded.is_na, is_na),
+        na_reason       = COALESCE(excluded.na_reason, na_reason),
+        our_policy_name = COALESCE(excluded.our_policy_name, our_policy_name),
+        notes           = COALESCE(excluded.notes, notes),
+        updated_at      = excluded.updated_at
+    `).run(
+      userIdForRow, labId, policyId,
+      status || 'not_started',
+      typeof is_na === 'boolean' ? (is_na ? 1 : 0) : 0,
+      na_reason ?? null, our_policy_name ?? null, notes ?? null,
+    );
+    res.json({ ok: true });
+  });
+
+  // GET /api/labs/:labId/veritapolicy/master-list/summary
+  app.get('/api/labs/:labId/veritapolicy/master-list/summary', authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const labId = req.scope.labId;
+      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any;
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
+      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE lab_id = ?').all(labId) as any[];
+      const sm: Record<string, any> = {};
+      for (const s of statuses) sm[s.policy_id] = s;
+      let complete = 0, in_progress = 0, not_started = 0, na = 0;
+      for (const p of VERITAPOLICY_MASTER_LIST) {
+        const us = sm[p.policy_id];
+        if (us?.is_na) { na += 1; continue; }
+        const st = us?.status || 'not_started';
+        if (st === 'complete') complete += 1;
+        else if (st === 'in_progress') in_progress += 1;
+        else not_started += 1;
+      }
+      const total = VERITAPOLICY_MASTER_LIST.length;
+      const applicable = total - na;
+      const score = applicable > 0 ? Math.round((complete / applicable) * 100) : 0;
+      const aoParts: string[] = [];
+      if (lab?.accreditation_tjc)  aoParts.push('TJC');
+      if (lab?.accreditation_cap)  aoParts.push('CAP');
+      if (lab?.accreditation_cola) aoParts.push('COLA');
+      if (lab?.accreditation_aabb) aoParts.push('AABB');
+      res.json({ total, complete, in_progress, not_started, na, applicable, score,
+        ao_label: aoParts.length === 0 ? 'CLIA only' : aoParts.join(', ') });
+    } catch (err: any) {
+      console.error('VeritaPolicy master-list summary (lab-scoped) error:', err);
+      res.status(500).json({ error: err.message || 'Failed to load summary' });
+    }
+  });
+
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');
   registerVeritaTrackRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PolicySettings {
@@ -108,6 +109,15 @@ export default function VeritaPolicyAppPage() {
   const isReadOnly = useIsReadOnly('veritapolicy');
   const { toast } = useToast();
 
+  // Multi-Lab Tier 2 Phase 3.2b: route the in-app reads/writes to the
+  // lab-scoped variants when on /labs/:labId/veritapolicy-app. Excel and
+  // PDF downloads stay on the legacy URL for now; they will flip in a
+  // follow-up once a multi-lab user requests per-lab exports.
+  const activeLabId = useActiveLabId();
+  const policyApi = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/veritapolicy`
+    : `${API_BASE}/api/veritapolicy`;
+
   const hasPlanAccess = !!user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   const [settings, setSettings] = useState<PolicySettings>(DEFAULT_SETTINGS);
@@ -136,9 +146,9 @@ export default function VeritaPolicyAppPage() {
     setLoading(true);
     try {
       const [settingsRes, summaryRes, listRes] = await Promise.all([
-        fetch(`${API_BASE}/api/veritapolicy/settings`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/veritapolicy/master-list/summary`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/veritapolicy/master-list`, { headers: authHeaders() }),
+        fetch(`${policyApi}/settings`, { headers: authHeaders() }),
+        fetch(`${policyApi}/master-list/summary`, { headers: authHeaders() }),
+        fetch(`${policyApi}/master-list`, { headers: authHeaders() }),
       ]);
       const [s, sum, list] = await Promise.all([settingsRes.json(), summaryRes.json(), listRes.json()]);
       setSettings({ ...DEFAULT_SETTINGS, ...s });
@@ -162,15 +172,15 @@ export default function VeritaPolicyAppPage() {
     if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current);
     settingsSaveTimer.current = setTimeout(async () => {
       try {
-        await fetch(`${API_BASE}/api/veritapolicy/settings`, {
+        await fetch(`${policyApi}/settings`, {
           method: "PUT",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ ...updated, setup_complete: true }),
         });
         // Reload list + summary -- accreditor change affects AO columns shown.
         const [sumRes, listRes] = await Promise.all([
-          fetch(`${API_BASE}/api/veritapolicy/master-list/summary`, { headers: authHeaders() }),
-          fetch(`${API_BASE}/api/veritapolicy/master-list`, { headers: authHeaders() }),
+          fetch(`${policyApi}/master-list/summary`, { headers: authHeaders() }),
+          fetch(`${policyApi}/master-list`, { headers: authHeaders() }),
         ]);
         const [sum, list] = await Promise.all([sumRes.json(), listRes.json()]);
         setSummary(sum);
@@ -192,7 +202,7 @@ export default function VeritaPolicyAppPage() {
   async function updatePolicy(p: MasterPolicy, patch: Partial<MasterPolicy>) {
     setPolicies(prev => prev.map(r => r.policy_id === p.policy_id ? { ...r, ...patch } : r));
     try {
-      await fetch(`${API_BASE}/api/veritapolicy/master-list/${encodeURIComponent(p.policy_id)}`, {
+      await fetch(`${policyApi}/master-list/${encodeURIComponent(p.policy_id)}`, {
         method: "PATCH",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -203,7 +213,7 @@ export default function VeritaPolicyAppPage() {
           notes: patch.user_notes ?? p.user_notes,
         }),
       });
-      const sum = await fetch(`${API_BASE}/api/veritapolicy/master-list/summary`, { headers: authHeaders() }).then(r => r.json());
+      const sum = await fetch(`${policyApi}/master-list/summary`, { headers: authHeaders() }).then(r => r.json());
       setSummary(sum);
     } catch {
       toast({ title: "Error saving", variant: "destructive" });
@@ -268,7 +278,7 @@ export default function VeritaPolicyAppPage() {
     }));
     for (const p of target) {
       try {
-        await fetch(`${API_BASE}/api/veritapolicy/master-list/${encodeURIComponent(p.policy_id)}`, {
+        await fetch(`${policyApi}/master-list/${encodeURIComponent(p.policy_id)}`, {
           method: "PATCH",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -282,7 +292,7 @@ export default function VeritaPolicyAppPage() {
       } catch { failed++; }
     }
     try {
-      const sum = await fetch(`${API_BASE}/api/veritapolicy/master-list/summary`, { headers: authHeaders() }).then(r => r.json());
+      const sum = await fetch(`${policyApi}/master-list/summary`, { headers: authHeaders() }).then(r => r.json());
       setSummary(sum);
     } catch {}
     setBulkApplying(false);
