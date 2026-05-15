@@ -31,6 +31,7 @@ import {
   Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { getUser } from "@/lib/auth";
 import {
   Dialog,
@@ -805,7 +806,7 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
         return;
       }
       toast({ title: isEdit ? "Correlation updated" : "Correlation added" });
-      if (mapId != null) qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+      if (mapId != null) qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith(`/veritamap/maps/${mapId}`) });
       onSaved();
       onClose();
     } catch {
@@ -830,7 +831,7 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
         return;
       }
       toast({ title: "Correlation removed" });
-      if (mapId != null) qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+      if (mapId != null) qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith(`/veritamap/maps/${mapId}`) });
       onSaved();
       onClose();
     } catch {
@@ -1498,9 +1499,20 @@ export default function VeritaMapMapPage() {
     new Map()
   );
 
+  // Multi-Lab Tier 2 Phase 3.3b: lab-scope the single-map fetch when on
+  // /labs/:labId/veritamap-app/:id. The endpoint validates that the map
+  // belongs to the active lab (404 otherwise) before returning data.
+  // Inner endpoints (tests, instruments, correlations, etc.) keep their
+  // legacy /api/veritamap/maps/:id/* URLs in this PR; their ownership
+  // check via req.ownerUserId resolves correctly in single-lab today.
+  const activeLabId = useActiveLabId();
+  const mapDetailUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/maps/${mapId}`
+    : `/api/veritamap/maps/${mapId}`;
+
   // Fetch map detail
   const { data: mapDetail, isLoading } = useQuery<MapDetail>({
-    queryKey: [`/api/veritamap/maps/${mapId}`],
+    queryKey: [mapDetailUrl],
     enabled: !!mapId,
     staleTime: 0,
     refetchOnMount: true,
@@ -1577,7 +1589,7 @@ export default function VeritaMapMapPage() {
         toast({ title: 'Copy failed', description: data.error, variant: 'destructive' });
       } else {
         toast({ title: 'Test menu copied', description: data.message });
-        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+        qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith(`/veritamap/maps/${mapId}`) });
         qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
         qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
       }
@@ -2123,7 +2135,7 @@ export default function VeritaMapMapPage() {
                         toast({ title: 'Copy failed', description: data.error, variant: 'destructive' });
                       } else {
                         toast({ title: 'Test menu copied', description: data.message });
-                        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+                        qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith(`/veritamap/maps/${mapId}`) });
                         qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
                         qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
                       }
