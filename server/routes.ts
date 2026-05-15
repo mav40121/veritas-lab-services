@@ -7850,6 +7850,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).run(dataUserId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
       const programId = Number(result.lastInsertRowid);
+      // Phase 3.5 dual-write lab_id from the owning user's lab.
+      try {
+        (db as any).$client.prepare(
+          "UPDATE competency_programs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+        ).run(dataUserId, programId);
+      } catch {}
 
       // Insert method groups for technical type
       if (type === "technical" && Array.isArray(methodGroups)) {
@@ -7891,6 +7897,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).run(dataUserId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
       const programId = Number(result.lastInsertRowid);
+      // Phase 3.5 dual-write lab_id from the owning user's lab.
+      try {
+        (db as any).$client.prepare(
+          "UPDATE competency_programs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+        ).run(dataUserId, programId);
+      } catch {}
 
       if (type === "technical" && Array.isArray(methodGroups)) {
         const stmt = (db as any).$client.prepare(
@@ -8023,6 +8035,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
     ).run(dataUserId, name.trim(), title || "", hireDate || null, lisInitials || null, now);
+    // Phase 3.5 dual-write lab_id from the owning user's lab.
+    try {
+      (db as any).$client.prepare(
+        "UPDATE competency_employees SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(dataUserId, result.lastInsertRowid);
+    } catch {}
     res.json({ id: Number(result.lastInsertRowid), user_id: dataUserId, name: name.trim(), title: title || "", hire_date: hireDate || null, lis_initials: lisInitials || null, status: "active", created_at: now });
   });
 
@@ -8288,6 +8306,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, questions, created_at) VALUES (?, ?, ?, ?, ?, ?)"
     ).run(dataUserId, parseInt(req.params.id), methodGroupId || null, methodGroupName || null, JSON.stringify(questions), now);
+    // Phase 3.5 dual-write lab_id from the owning user's lab.
+    try {
+      (db as any).$client.prepare(
+        "UPDATE competency_quizzes SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(dataUserId, result.lastInsertRowid);
+    } catch {}
     res.json({ id: Number(result.lastInsertRowid), program_id: parseInt(req.params.id), method_group_id: methodGroupId, method_group_name: methodGroupName, created_at: now });
   });
 
