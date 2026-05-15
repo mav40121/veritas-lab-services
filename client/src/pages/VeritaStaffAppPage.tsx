@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { downloadPdfToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -145,15 +146,22 @@ export default function VeritaStaffAppPage() {
   // Auth + plan check
   const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
+  // Multi-Lab Tier 2 Phase 3.9b: entry-surface lab-scope. staff_labs uses
+  // tier2_lab_id (FK to labs) since the legacy lab_id column on
+  // staff_employees / staff_roles points at staff_labs(id), not labs(id).
+  const activeLabId = useActiveLabId();
+  const labKey = activeLabId ? `/api/labs/${activeLabId}/staff/lab` : `/api/staff/lab`;
+  const empKey = activeLabId ? `/api/labs/${activeLabId}/staff/employees` : `/api/staff/employees`;
+
   // Fetch lab
   const { data: lab, isLoading: labLoading } = useQuery<Lab | null>({
-    queryKey: ["/api/staff/lab"],
+    queryKey: [labKey],
     enabled: !!hasAccess,
   });
 
   // Fetch employees
   const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
-    queryKey: ["/api/staff/employees"],
+    queryKey: [empKey],
     enabled: !!hasAccess && !!lab,
   });
 
@@ -400,7 +408,7 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error(await res.text());
-      await queryClient.invalidateQueries({ queryKey: ["/api/staff/lab"] });
+      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/lab') });
       toast({ title: "Lab saved" });
       onOpenChange(false);
     } catch (err: any) {
@@ -580,7 +588,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
         body: JSON.stringify({ ...form, roles }),
       });
       if (!res.ok) throw new Error(await res.text());
-      await queryClient.invalidateQueries({ queryKey: ["/api/staff/employees"] });
+      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       toast({ title: isEdit ? "Employee updated" : "Employee added" });
       onOpenChange(false);
     } catch (err: any) {
@@ -753,7 +761,7 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error(await res.text());
-      await queryClient.invalidateQueries({ queryKey: ["/api/staff/employees"] });
+      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       toast({ title: "Competency schedule updated" });
       onOpenChange(false);
     } catch (err: any) {
@@ -866,7 +874,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error(await res.text());
-      await queryClient.invalidateQueries({ queryKey: ["/api/staff/employees"] });
+      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       toast({ title: "Employee removed" });
       onBack();
     } catch (err: any) {
@@ -1124,7 +1132,7 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
         title: "Import complete",
         description: `${data.inserted} added, ${data.updated} updated.`,
       });
-      qc.invalidateQueries({ queryKey: ["/api/staff/employees"] });
+      qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       onOpenChange(false);
     } catch (err: any) {
       toast({ title: "Import failed", description: err.message, variant: "destructive" });

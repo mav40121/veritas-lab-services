@@ -1682,6 +1682,48 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.9 (VeritaStaff module):
+// staff_labs / staff_employees / staff_roles already carry a lab_id column
+// but it references staff_labs(id), NOT the new multi-lab labs(id). Add a
+// separate tier2_lab_id column on all three tables to point at the right
+// labs row without renaming or repurposing the existing column. Backfill
+// from users.lab_id via staff_labs.user_id (the staff_labs row is the
+// parent identity for the staff employees/roles).
+{
+  const cols = (sqlite.prepare(`PRAGMA table_info(staff_labs)`).all() as any[]).map(c => c.name);
+  if (!cols.includes("tier2_lab_id")) {
+    try { sqlite.exec(`ALTER TABLE staff_labs ADD COLUMN tier2_lab_id INTEGER REFERENCES labs(id)`); } catch {}
+  }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staff_labs_tier2_lab ON staff_labs(tier2_lab_id)`); } catch {}
+  const sb = sqlite.prepare(`
+    UPDATE staff_labs
+    SET tier2_lab_id = (SELECT u.lab_id FROM users u WHERE u.id = staff_labs.user_id)
+    WHERE tier2_lab_id IS NULL
+      AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = staff_labs.user_id) IS NOT NULL
+  `).run();
+  if (sb.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3.9 (staff_labs): backfilled tier2_lab_id on ${sb.changes} row(s)`);
+  }
+}
+for (const t of ["staff_employees", "staff_roles"]) {
+  const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map(c => c.name);
+  if (!cols.includes("tier2_lab_id")) {
+    try { sqlite.exec(`ALTER TABLE ${t} ADD COLUMN tier2_lab_id INTEGER REFERENCES labs(id)`); } catch {}
+  }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_tier2_lab ON ${t}(tier2_lab_id)`); } catch {}
+  const sb = sqlite.prepare(`
+    UPDATE ${t}
+    SET tier2_lab_id = (SELECT sl.tier2_lab_id FROM staff_labs sl WHERE sl.id = ${t}.lab_id)
+    WHERE tier2_lab_id IS NULL
+      AND lab_id IS NOT NULL
+      AND (SELECT sl.tier2_lab_id FROM staff_labs sl WHERE sl.id = ${t}.lab_id) IS NOT NULL
+  `).run();
+  if (sb.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3.9 (${t}): backfilled tier2_lab_id on ${sb.changes} row(s)`);
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.8 (VeritaLab module):
 // Three user_id tables: lab_certificates (parent), lab_certificate_documents
 // and lab_certificate_reminders (children, both carry user_id for audit).
