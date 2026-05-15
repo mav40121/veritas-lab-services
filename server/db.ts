@@ -1259,6 +1259,92 @@ if (!colNames.includes("lab_id")) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────
+// Multi-Lab Tier 2 — Phase 0: schema only
+// Doc: docs/scoping-multi-lab-tier2.md (merged PR #133, 2026-05-15).
+// This block creates the lab_members join table and adds the columns that
+// will later carry plan / subscription / Stripe state from users to labs.
+// No backfill, no reader/writer changes — those are Phase 1 and beyond.
+// Idempotent: re-runs safely.
+// ─────────────────────────────────────────────────────────────────────────────────
+
+// lab_members — many-to-many between users and labs. The single source of
+// truth for "who can access which lab" once Tier 2 phases land. Today's
+// users.lab_id + user_seats remain authoritative through Phase 1; this
+// table is created empty in Phase 0 and backfilled in Phase 1.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'staff',
+    permissions_json TEXT DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'active',
+    is_primary_lab INTEGER NOT NULL DEFAULT 0,
+    invited_at TEXT,
+    accepted_at TEXT,
+    last_active_at TEXT,
+    invite_token TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(lab_id, user_id)
+  )
+`);
+
+// Defensive ALTER blocks for lab_members. If the table was created in a
+// past deploy with fewer columns (e.g., a partial Phase 0 ship), each
+// missing column is added without error. Mirrors the users-table pattern
+// elsewhere in this file. CLAUDE.md NEW DB TABLE RULE: every CREATE
+// TABLE must ship with PRAGMA-checked ALTERs in the same commit.
+{
+  const memberCols = (sqlite.prepare("PRAGMA table_info(lab_members)").all() as any[]).map(c => c.name);
+  const ensure = (col: string, sql: string) => {
+    if (!memberCols.includes(col)) { try { sqlite.exec(sql); memberCols.push(col); } catch {} }
+  };
+  ensure("role",             "ALTER TABLE lab_members ADD COLUMN role TEXT NOT NULL DEFAULT 'staff'");
+  ensure("permissions_json", "ALTER TABLE lab_members ADD COLUMN permissions_json TEXT DEFAULT '{}'");
+  ensure("status",           "ALTER TABLE lab_members ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensure("is_primary_lab",   "ALTER TABLE lab_members ADD COLUMN is_primary_lab INTEGER NOT NULL DEFAULT 0");
+  ensure("invited_at",       "ALTER TABLE lab_members ADD COLUMN invited_at TEXT");
+  ensure("accepted_at",      "ALTER TABLE lab_members ADD COLUMN accepted_at TEXT");
+  ensure("last_active_at",   "ALTER TABLE lab_members ADD COLUMN last_active_at TEXT");
+  ensure("invite_token",     "ALTER TABLE lab_members ADD COLUMN invite_token TEXT");
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_lab_members_user ON lab_members(user_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_lab_members_lab  ON lab_members(lab_id, status)`); } catch {}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON lab_members(invite_token) WHERE invite_token IS NOT NULL`); } catch {}
+
+// labs — add the columns that will carry plan / subscription / Stripe
+// state once Phase 4 moves billing identity from users to labs. Nullable
+// throughout so the column add is non-destructive on existing rows.
+{
+  const labCols = (sqlite.prepare("PRAGMA table_info(labs)").all() as any[]).map(c => c.name);
+  const ensure = (col: string, sql: string) => {
+    if (!labCols.includes(col)) { try { sqlite.exec(sql); labCols.push(col); } catch {} }
+  };
+  ensure("plan",                       "ALTER TABLE labs ADD COLUMN plan TEXT");
+  ensure("subscription_status",        "ALTER TABLE labs ADD COLUMN subscription_status TEXT");
+  ensure("subscription_expires_at",    "ALTER TABLE labs ADD COLUMN subscription_expires_at TEXT");
+  ensure("plan_expires_at",            "ALTER TABLE labs ADD COLUMN plan_expires_at TEXT");
+  ensure("stripe_customer_id",         "ALTER TABLE labs ADD COLUMN stripe_customer_id TEXT");
+  ensure("stripe_subscription_id",     "ALTER TABLE labs ADD COLUMN stripe_subscription_id TEXT");
+  ensure("study_credits",              "ALTER TABLE labs ADD COLUMN study_credits INTEGER DEFAULT 0");
+  ensure("has_completed_onboarding",   "ALTER TABLE labs ADD COLUMN has_completed_onboarding INTEGER DEFAULT 0");
+  ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
+}
+
+// users.default_lab_id — bare-route redirect target (per doc Section 4).
+// Updated on every authenticated page hit in Phase 2; not the source of
+// truth for scope. URL is. Nullable; FK to labs is informational only
+// (sqlite ALTER doesn't add real FK constraints post-hoc, matches the
+// pattern used for users.lab_id at db.ts:1183-1186).
+if (!colNames.includes("default_lab_id")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN default_lab_id INTEGER REFERENCES labs(id)"); } catch {}
+}
+
 // VeritaPolicy tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritapolicy_settings (
