@@ -4,7 +4,7 @@
  */
 import { db } from "./db";
 import bcrypt from "bcryptjs";
-import { DEMO_USER_EMAIL, OWNER_EMAIL } from "./constants";
+import { DEMO_USER_EMAIL, OWNER_CLIA } from "./constants";
 
 export async function seedDemoData() {
   const sqlite = (db as any).$client;
@@ -405,14 +405,23 @@ export async function seedDemoData() {
   // ─── Clean up PT v2 test entry ─────────────────────────────────────────────
   sqlite.prepare("DELETE FROM pt_enrollments_v2 WHERE user_id = ? AND program_name = 'TEST ENTRY'").run(demoUserId);
 
-  // ─── Copy 5 reference studies into operator account (for Pfizer / Daniela handoff) ──
-  // Operator's personal lab needs the 5 most recent VeritaCheck reference studies so
-  // they appear in "My Studies" when a partner is granted access. Studies were
-  // originally built under the demo fixture (Riverside Regional / 22D0999999);
-  // this block copies them verbatim to OWNER_EMAIL's user_id. Idempotent: scoped
-  // by test_name + study_type so re-running on every server startup is safe.
-  const ownerUser = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(OWNER_EMAIL);
-  if (ownerUser && ownerUser.id !== demoUserId) {
+  // ─── Copy 5 reference studies into operator's personal lab (Pfizer / Daniela handoff) ──
+  // The operator's personal lab needs the 5 most recent VeritaCheck reference studies
+  // so they appear in "My Studies" when a partner is granted seat access. Source rows
+  // were built under the demo fixture (Riverside Regional / 22D0999999); this block
+  // copies them verbatim into the row owned by OWNER_CLIA.
+  //
+  // Identity is by CLIA, NOT email: one email will own multiple labs once enterprise
+  // multi-lab rolls out, and `WHERE email = ?` would silently pick whichever row
+  // sqlite reaches first. CLIA is the natural primary key (CMS issues each certificate
+  // once) and is the only safe data-routing key here.
+  //
+  // Idempotent: scoped by test_name + study_type so re-running on every startup is
+  // safe; existing rows on the operator's lab are skipped.
+  const targetLab = sqlite.prepare(
+    "SELECT id FROM users WHERE clia_number = ? LIMIT 1"
+  ).get(OWNER_CLIA);
+  if (targetLab && targetLab.id !== demoUserId) {
     const studiesToCopy: Array<{ test_name: string; study_type: string }> = [
       { test_name: "Sodium",         study_type: "ref_interval" },
       { test_name: "Troponin I",     study_type: "method_comparison" },
@@ -423,10 +432,10 @@ export async function seedDemoData() {
     let copied = 0;
     let skipped = 0;
     for (const { test_name, study_type } of studiesToCopy) {
-      const existsForOwner = sqlite.prepare(
+      const existsOnTargetLab = sqlite.prepare(
         "SELECT id FROM studies WHERE user_id = ? AND test_name = ? AND study_type = ? LIMIT 1"
-      ).get(ownerUser.id, test_name, study_type);
-      if (existsForOwner) { skipped++; continue; }
+      ).get(targetLab.id, test_name, study_type);
+      if (existsOnTargetLab) { skipped++; continue; }
       const source = sqlite.prepare(
         "SELECT * FROM studies WHERE user_id = ? AND test_name = ? AND study_type = ? LIMIT 1"
       ).get(demoUserId, test_name, study_type);
@@ -438,7 +447,7 @@ export async function seedDemoData() {
           data_points, instruments, result, status, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        ownerUser.id,
+        targetLab.id,
         source.test_name,
         source.instrument,
         source.analyst,
@@ -455,9 +464,9 @@ export async function seedDemoData() {
       );
       copied++;
     }
-    console.log(`[seed] Operator account (id=${ownerUser.id}): copied ${copied} studies from demo, skipped ${skipped} already present`);
-  } else if (!ownerUser) {
-    console.warn(`[seed] OWNER_EMAIL=${OWNER_EMAIL} not found in users table; skipping owner-account study copy`);
+    console.log(`[seed] Operator lab CLIA=${OWNER_CLIA} (user_id=${targetLab.id}): copied ${copied} studies from demo, skipped ${skipped} already present`);
+  } else if (!targetLab) {
+    console.warn(`[seed] OWNER_CLIA=${OWNER_CLIA} not found on any users row; skipping operator-lab study copy`);
   }
 
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
