@@ -1682,6 +1682,34 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.5 (VeritaComp module):
+// Three top-level user_id tables: competency_programs, competency_employees,
+// competency_quizzes. All other competency_* tables scope through one of
+// these via program_id / employee_id / assessment_id / quiz_id and are
+// transitively lab-scoped via their parents. staff_competency_schedules
+// already carries lab_id (added earlier). Add lab_id to the three roots,
+// idempotent backfill from users.lab_id.
+{
+  const tables = ["competency_programs", "competency_employees", "competency_quizzes"];
+  for (const t of tables) {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map(c => c.name);
+    if (!cols.includes("lab_id")) {
+      try { sqlite.exec(`ALTER TABLE ${t} ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
+    }
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_lab ON ${t}(lab_id)`); } catch {}
+    const backfilled = sqlite.prepare(`
+      UPDATE ${t}
+      SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id)
+      WHERE lab_id IS NULL
+        AND user_id IS NOT NULL
+        AND (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id) IS NOT NULL
+    `).run();
+    if (backfilled.changes > 0) {
+      console.log(`[migration] Multi-lab Phase 3.5 (${t}): backfilled lab_id on ${backfilled.changes} row(s)`);
+    }
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.4 (VeritaScan module):
 // veritascan_scans carries user_id; veritascan_items scopes through scan_id
 // and is transitively lab-scoped via the parent. Add lab_id to scans only.
