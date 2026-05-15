@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
+import { LegacyWorkspaceRedirect } from "@/components/LegacyWorkspaceRedirect";
 import { NavBar } from "@/components/NavBar";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
@@ -242,6 +243,14 @@ function AppContent() {
     return <AdminReportPage />;
   }
 
+  // Phase 2c: wraps a legacy workspace page component so unauthenticated /
+  // single-lab / no-lab cases pass through untouched, while logged-in users
+  // with at least one membership get client-side redirected to the
+  // lab-scoped form. See client/src/components/LegacyWorkspaceRedirect.tsx.
+  const wrapLegacy = (Component: any) => () => (
+    <LegacyWorkspaceRedirect><Component /></LegacyWorkspaceRedirect>
+  );
+
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
@@ -257,10 +266,10 @@ function AppContent() {
           <Route path="/services" component={ServicesPage} />
           <Route path="/team" component={TeamPage} />
           <Route path="/veritacheck" component={VeritaCheckPage} />
-          <Route path="/study/new" component={VeritaCheckPage} />
-          <Route path="/study/:id/results" component={StudyResultsPage} />
-          <Route path="/dashboard" component={DashboardPage} />
-          <Route path="/dashboard/verifications" component={VeritaCheckVerificationPage} />
+          <Route path="/study/new">{wrapLegacy(VeritaCheckPage)}</Route>
+          <Route path="/study/:id/results">{wrapLegacy(StudyResultsPage)}</Route>
+          <Route path="/dashboard">{wrapLegacy(DashboardPage)}</Route>
+          <Route path="/dashboard/verifications">{wrapLegacy(VeritaCheckVerificationPage)}</Route>
           <Route path="/contact" component={ContactPage} />
           <Route path="/login" component={LoginPage} />
           <Route path="/register" component={LoginPage} />
@@ -289,30 +298,30 @@ function AppContent() {
           <Route path="/resources/laboratory-inventory-management" component={ArticleInventoryManagementPage} />
           <Route path="/resources/manual-logs-why-most-labs-should-stop" component={ArticleManualLogsPage} />
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
-          <Route path="/veritascan-app" component={VeritaScanAppPage} />
-          <Route path="/veritascan-app/:id" component={VeritaScanScanPage} />
-          <Route path="/veritamap-app" component={VeritaMapAppPage} />
-          <Route path="/veritamap-app/resources" component={VeritaMapResourcesPage} />
-          <Route path="/veritamap-app/labwide" component={VeritaMapLabwidePage} />
+          <Route path="/veritascan-app">{wrapLegacy(VeritaScanAppPage)}</Route>
+          <Route path="/veritascan-app/:id">{wrapLegacy(VeritaScanScanPage)}</Route>
+          <Route path="/veritamap-app">{wrapLegacy(VeritaMapAppPage)}</Route>
+          <Route path="/veritamap-app/resources">{wrapLegacy(VeritaMapResourcesPage)}</Route>
+          <Route path="/veritamap-app/labwide">{wrapLegacy(VeritaMapLabwidePage)}</Route>
           <Route path="/veritatrack" component={VeritaTrackPage} />
-          <Route path="/veritatrack-app" component={VeritaTrackAppPage} />
-          <Route path="/veritamap-app/:id/build" component={VeritaMapBuildPage} />
-          <Route path="/veritamap-app/:id" component={VeritaMapMapPage} />
+          <Route path="/veritatrack-app">{wrapLegacy(VeritaTrackAppPage)}</Route>
+          <Route path="/veritamap-app/:id/build">{wrapLegacy(VeritaMapBuildPage)}</Route>
+          <Route path="/veritamap-app/:id">{wrapLegacy(VeritaMapMapPage)}</Route>
           <Route path="/veritacomp" component={VeritaCompPage} />
-          <Route path="/veritacomp-app" component={VeritaCompAppPage} />
-          <Route path="/veritacomp-app/:programId" component={VeritaCompAppPage} />
+          <Route path="/veritacomp-app">{wrapLegacy(VeritaCompAppPage)}</Route>
+          <Route path="/veritacomp-app/:programId">{wrapLegacy(VeritaCompAppPage)}</Route>
           <Route path="/veritapt" component={VeritaPTPage} />
-          <Route path="/veritapt/app" component={VeritaPTAppPage} />
-          <Route path="/veritaresponse" component={VeritaResponseAppPage} />
-          <Route path="/veritaresponse/:id" component={VeritaResponseFindingPage} />
+          <Route path="/veritapt/app">{wrapLegacy(VeritaPTAppPage)}</Route>
+          <Route path="/veritaresponse">{wrapLegacy(VeritaResponseAppPage)}</Route>
+          <Route path="/veritaresponse/:id">{wrapLegacy(VeritaResponseFindingPage)}</Route>
           <Route path="/veritastaff" component={VeritaStaffPage} />
-          <Route path="/veritastaff-app" component={VeritaStaffAppPage} />
-          <Route path="/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
+          <Route path="/veritastaff-app">{wrapLegacy(VeritaStaffAppPage)}</Route>
+          <Route path="/veritastaff-app/:employeeId">{wrapLegacy(VeritaStaffAppPage)}</Route>
           <Route path="/veritalab" component={VeritaLabPage} />
-          <Route path="/veritalab-app" component={VeritaLabAppPage} />
-          <Route path="/veritapolicy-app" component={VeritaPolicyAppPage} />
+          <Route path="/veritalab-app">{wrapLegacy(VeritaLabAppPage)}</Route>
+          <Route path="/veritapolicy-app">{wrapLegacy(VeritaPolicyAppPage)}</Route>
           <Route path="/veritapolicy" component={VeritaPolicyPage} />
-          <Route path="/veritacheck/cumsum" component={CumsumPage} />
+          <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritabench" component={VeritaBenchPage} />
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
@@ -322,7 +331,7 @@ function AppContent() {
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/operations" component={OperationsPage} />
           <Route path="/getting-started" component={GettingStartedPage} />
-          <Route path="/account/settings" component={AccountSettingsPage} />
+          <Route path="/account/settings">{wrapLegacy(AccountSettingsPage)}</Route>
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
 
