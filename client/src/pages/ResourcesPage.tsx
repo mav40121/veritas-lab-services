@@ -8,6 +8,17 @@ import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const articles = [
   {
+    slug: "manual-logs-why-most-labs-should-stop",
+    title: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop",
+    summary: "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that 24-hour review was designed to catch. Here is when to retire it.",
+    category: "Lab Operations",
+    readTime: "6 min read",
+    author: "Michael Veri",
+    date: "May 2026",
+    tags: ["Manual Logs", "LIS", "Direct Entry", "Transcription Error", "24-Hour Review"],
+    featured: false,
+  },
+  {
     slug: "how-veritaassure-trains-lab-leaders",
     title: "How VeritaAssure™ Trains the Next Generation of Lab Leaders",
     summary: "Most lab directors learn compliance the hard way. VeritaAssure™ changes that. Here is how the modules work as a leadership development curriculum.",
