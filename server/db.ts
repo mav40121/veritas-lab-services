@@ -1345,6 +1345,124 @@ if (!colNames.includes("default_lab_id")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN default_lab_id INTEGER REFERENCES labs(id)"); } catch {}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────
+// Multi-Lab Tier 2 — Phase 1: backfill
+// Doc: docs/scoping-multi-lab-tier2.md, Section 5 Phase 1.
+// Populate lab_members from existing users + user_seats. Copy plan and
+// subscription state from each owner's users row to their primary labs
+// row. Set users.default_lab_id to each user's primary lab.
+// Idempotent: every step is skip-if-present. No reader/writer changes.
+// ─────────────────────────────────────────────────────────────────────────────────
+{
+  // Step 1: every user with a lab_id gets a membership row.
+  //   - role='owner' if labs.owner_user_id = user.id; else 'staff'
+  //   - permissions_json copied from user_seats.permissions for seat users
+  //   - is_primary_lab=1 only for owners on their earliest-id lab (the
+  //     primary-lab rule from parking-lot #12: owner is primary on owned
+  //     lab, seats are never primary)
+  const usersWithLab = sqlite.prepare(
+    "SELECT u.id AS user_id, u.lab_id, l.owner_user_id FROM users u JOIN labs l ON u.lab_id = l.id WHERE u.lab_id IS NOT NULL"
+  ).all() as any[];
+
+  let memberInserted = 0;
+  for (const row of usersWithLab) {
+    const exists = sqlite.prepare(
+      "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? LIMIT 1"
+    ).get(row.user_id, row.lab_id);
+    if (exists) continue;
+
+    const isOwner = Number(row.owner_user_id) === Number(row.user_id);
+    const role = isOwner ? "owner" : "staff";
+    let permissions = "{}";
+    if (!isOwner) {
+      const seatRow = sqlite.prepare(
+        "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.user_id) as any;
+      if (seatRow?.permissions) permissions = seatRow.permissions;
+    }
+
+    let isPrimary = 0;
+    if (isOwner) {
+      const earliest = sqlite.prepare(
+        "SELECT id FROM labs WHERE owner_user_id = ? ORDER BY id ASC LIMIT 1"
+      ).get(row.user_id) as any;
+      isPrimary = earliest && Number(earliest.id) === Number(row.lab_id) ? 1 : 0;
+    }
+
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+    `).run(row.lab_id, row.user_id, role, permissions, isPrimary, now, now, now);
+    memberInserted++;
+  }
+
+  // Step 2: copy plan / subscription / Stripe state from each owner's
+  // users row to their primary labs row, only if the labs column is
+  // currently NULL. This is a one-shot snapshot; Phase 4 will make
+  // labs the authoritative writer. Avoid overwriting in case a later
+  // Phase has already populated the labs row.
+  let subsCopied = 0;
+  const ownerUsers = sqlite.prepare(`
+    SELECT id AS user_id, plan, subscription_status, subscription_expires_at, plan_expires_at,
+           stripe_customer_id, stripe_subscription_id, study_credits, has_completed_onboarding,
+           preferred_pt_vendor
+    FROM users WHERE id IN (SELECT DISTINCT owner_user_id FROM labs)
+  `).all() as any[];
+
+  for (const u of ownerUsers) {
+    const primaryLab = sqlite.prepare(
+      "SELECT * FROM labs WHERE owner_user_id = ? ORDER BY id ASC LIMIT 1"
+    ).get(u.user_id) as any;
+    if (!primaryLab) continue;
+
+    const updates: string[] = [];
+    const values: any[] = [];
+    const maybe = (col: string, val: any) => {
+      if (primaryLab[col] == null && val != null) {
+        updates.push(`${col} = ?`);
+        values.push(val);
+      }
+    };
+    maybe("plan", u.plan);
+    maybe("subscription_status", u.subscription_status);
+    maybe("subscription_expires_at", u.subscription_expires_at);
+    maybe("plan_expires_at", u.plan_expires_at);
+    maybe("stripe_customer_id", u.stripe_customer_id);
+    maybe("stripe_subscription_id", u.stripe_subscription_id);
+    maybe("study_credits", u.study_credits);
+    maybe("has_completed_onboarding", u.has_completed_onboarding);
+    maybe("preferred_pt_vendor", u.preferred_pt_vendor);
+
+    if (updates.length) {
+      values.push(primaryLab.id);
+      sqlite.prepare(`UPDATE labs SET ${updates.join(", ")}, updated_at = (datetime('now')) WHERE id = ?`).run(...values);
+      subsCopied++;
+    }
+  }
+
+  // Step 3: set users.default_lab_id from each user's primary
+  // membership (or first active membership) if currently NULL. This
+  // is the bare-/dashboard redirect target per doc Section 4.
+  let defaultsSet = 0;
+  const usersNeedingDefault = sqlite.prepare(
+    "SELECT id FROM users WHERE default_lab_id IS NULL"
+  ).all() as any[];
+  for (const u of usersNeedingDefault) {
+    const m = sqlite.prepare(
+      "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY is_primary_lab DESC, id ASC LIMIT 1"
+    ).get(u.id) as any;
+    if (m) {
+      sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(m.lab_id, u.id);
+      defaultsSet++;
+    }
+  }
+
+  if (memberInserted > 0 || subsCopied > 0 || defaultsSet > 0) {
+    console.log(`[migration] Multi-lab Phase 1: ${memberInserted} member(s) inserted, ${subsCopied} primary lab(s) had subscription state copied, ${defaultsSet} user(s) got default_lab_id`);
+  }
+}
+
 // VeritaPolicy tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritapolicy_settings (
