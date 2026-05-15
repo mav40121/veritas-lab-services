@@ -64,6 +64,7 @@ import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, B
 import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { downloadCsv } from "@/lib/csvExport";
 import { studyToCsv, defaultCsvFilename } from "@/lib/studyCsvAdapter";
 
@@ -1614,10 +1615,15 @@ export default function StudyResults() {
   // Scroll to top whenever study ID changes
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [id]);
 
+  // Multi-Lab Tier 2 Phase 3: pull from lab-scoped endpoint when we are on
+  // /labs/:labId/study/:id/results; fall back to legacy /api/studies/:id so
+  // unauth flows and stale caches still resolve.
+  const labId = useActiveLabId();
+  const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
-    queryKey: ["/api/studies", id],
+    queryKey: [studyUrl],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/studies/${id}`);
+      const res = await apiRequest("GET", studyUrl);
       if (res.status === 403) {
         const data = await res.json();
         throw new Error(data.error || "Access denied");

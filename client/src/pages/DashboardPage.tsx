@@ -13,19 +13,27 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useState } from "react";
 import { getToken } from "@/lib/auth";
 import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const readOnly = useIsReadOnly('veritacheck');
+  // Multi-Lab Tier 2 Phase 3: studies are lab-scoped. labId comes from the
+  // /labs/:labId/dashboard URL (LegacyWorkspaceRedirect bounces bare
+  // /dashboard to this form). Falls back to legacy /api/studies when not
+  // in a lab-scoped URL so a stale cache or unauth flow still resolves.
+  const labId = useActiveLabId();
+  const studiesUrl = labId ? `/api/labs/${labId}/studies` : "/api/studies";
+  const deleteUrl = (id: number) => labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
 
   const { data: studies, isLoading } = useQuery<Study[]>({
-    queryKey: ["/api/studies"],
+    queryKey: [studiesUrl],
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/studies/${id}`),
+    mutationFn: (id: number) => apiRequest("DELETE", deleteUrl(id)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/studies"] });
+      queryClient.invalidateQueries({ queryKey: [studiesUrl] });
       toast({ title: "Study deleted" });
     },
     onError: () => toast({ title: "Failed to delete", variant: "destructive" }),

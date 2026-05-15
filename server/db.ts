@@ -1066,6 +1066,35 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catc
 // back to user_id in the report SQL.
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN created_by_user_id INTEGER"); } catch {}
 
+// Multi-Lab Tier 2 — Phase 3 (VeritaCheck / studies module):
+// lab_id is the data-routing key going forward (doc: scoping-multi-lab-tier2.md
+// Section 5 Phase 3). user_id stays as the audit-trail "creator" column.
+// Idempotent backfill below maps each studies row to its user's lab.
+{
+  const studyCols = (sqlite.prepare("PRAGMA table_info(studies)").all() as any[]).map(c => c.name);
+  if (!studyCols.includes("lab_id")) {
+    try { sqlite.exec("ALTER TABLE studies ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
+  }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_studies_lab_id ON studies(lab_id, id DESC)"); } catch {}
+
+// Backfill: studies.lab_id = the user's lab_id. Skip rows that already
+// have lab_id set (subsequent runs are no-ops). Studies created by seat
+// users inherit the owner's lab through users.lab_id, which the Tier 1
+// backfill (db.ts:1188-1260) already aligned.
+{
+  const backfilled = sqlite.prepare(`
+    UPDATE studies
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = studies.user_id)
+    WHERE lab_id IS NULL
+      AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = studies.user_id) IS NOT NULL
+  `).run();
+  if (backfilled.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3 (studies): backfilled lab_id on ${backfilled.changes} row(s)`);
+  }
+}
+
 // Plan/tier definitions: seat limits, pricing, bed ranges
 export const PLAN_SEATS: Record<string, number> = {
   clinic: 2,
