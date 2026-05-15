@@ -9806,6 +9806,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(req.userId, cert_type || "other", cert_name.trim(), cert_number || null, issuing_body || null, issued_date || null, expiration_date || null, lab_director || null, notes || null, now, now);
 
     const certId = Number(result.lastInsertRowid);
+    // Phase 3.8 dual-write lab_id from the owning user's lab.
+    try {
+      (db as any).$client.prepare(
+        "UPDATE lab_certificates SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(req.userId, certId);
+    } catch {}
     if (expiration_date) {
       scheduleReminders(certId, req.userId, expiration_date);
     }
@@ -9886,6 +9892,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO lab_certificate_documents (certificate_id, user_id, filename, original_filename, file_size, mime_type, file_data, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(req.params.id, req.userId, filename, req.file.originalname, req.file.size, req.file.mimetype, req.file.buffer, now);
+    // Phase 3.8 dual-write lab_id.
+    try {
+      (db as any).$client.prepare(
+        "UPDATE lab_certificate_documents SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(req.userId, result.lastInsertRowid);
+    } catch {}
 
     res.status(201).json({
       id: Number(result.lastInsertRowid),
