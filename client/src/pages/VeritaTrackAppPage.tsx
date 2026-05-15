@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -566,10 +567,22 @@ export default function VeritaTrackAppPage() {
 
   const hasPlanAccess = ["annual","professional","lab","complete","waived","community","hospital","large_hospital","enterprise"].includes(user?.plan || "");
 
+  // Multi-Lab Tier 2 Phase 3.7b: route reads/writes through the active lab.
+  const activeLabId = useActiveLabId();
+  const trackApi = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/veritatrack`
+    : `${API_BASE}/api/veritatrack`;
+  const tasksKey = activeLabId
+    ? `/api/labs/${activeLabId}/veritatrack/tasks`
+    : `/api/veritatrack/tasks`;
+  const dashKey = activeLabId
+    ? `/api/labs/${activeLabId}/veritatrack/dashboard`
+    : `/api/veritatrack/dashboard`;
+
   const { data: tasks = [], isLoading, refetch } = useQuery<Task[]>({
-    queryKey: ["/api/veritatrack/tasks"],
+    queryKey: [tasksKey],
     queryFn: async () => {
-      const r = await fetch(`${API_BASE}/api/veritatrack/tasks`, { headers: authHeaders() });
+      const r = await fetch(`${trackApi}/tasks`, { headers: authHeaders() });
       if (!r.ok) return [];
       return r.json();
     },
@@ -577,9 +590,9 @@ export default function VeritaTrackAppPage() {
   });
 
   const { data: dashboard } = useQuery<Dashboard>({
-    queryKey: ["/api/veritatrack/dashboard"],
+    queryKey: [dashKey],
     queryFn: async () => {
-      const r = await fetch(`${API_BASE}/api/veritatrack/dashboard`, { headers: authHeaders() });
+      const r = await fetch(`${trackApi}/dashboard`, { headers: authHeaders() });
       return r.json();
     },
     enabled: hasPlanAccess,

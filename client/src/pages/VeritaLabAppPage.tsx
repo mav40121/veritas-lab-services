@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { saveAs } from "file-saver";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -119,9 +120,17 @@ export default function VeritaLabAppPage() {
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
+  // Multi-Lab Tier 2 Phase 3.8b: route entry-surface reads/writes through
+  // the active lab. The list and POST flip; inner cert-id-keyed endpoints
+  // (edit, delete, documents) stay legacy since cert IDs are globally unique.
+  const activeLabId = useActiveLabId();
+  const certsListUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/veritalab/certificates`
+    : `${API_BASE}/api/veritalab/certificates`;
+
   async function loadCertificates() {
     try {
-      const res = await fetch(`${API_BASE}/api/veritalab/certificates`, { headers: authHeaders() });
+      const res = await fetch(certsListUrl, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setCertificates(data);
@@ -193,7 +202,7 @@ export default function VeritaLabAppPage() {
     try {
       const url = editCert
         ? `${API_BASE}/api/veritalab/certificates/${editCert.id}`
-        : `${API_BASE}/api/veritalab/certificates`;
+        : certsListUrl;
       const method = editCert ? "PUT" : "POST";
 
       const res = await fetch(url, {

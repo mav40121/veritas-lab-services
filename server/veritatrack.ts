@@ -512,4 +512,59 @@ export function registerVeritaTrackRoutes(
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(Buffer.from(buf));
   });
+
+  // ── MULTI-LAB Tier 2 — Phase 3.7b: lab-scoped VeritaTrack entry endpoints ──
+  const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
+  if (labScopeMiddleware) {
+    app.get("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      const tasks = sqlite.prepare(
+        "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
+      ).all(req.scope.labId) as any[];
+      const result = tasks.map((t: any) => {
+        const last = sqlite.prepare(
+          "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        ).get(t.id) as any;
+        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
+        const status = last ? taskStatus(nextDueDate!) : "not_started";
+        return { ...t, last_signoff: last || null, next_due: nextDueDate, status };
+      });
+      res.json(result);
+    });
+
+    app.post("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+      if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body || {};
+      if (!name?.trim()) return res.status(400).json({ error: "name required" });
+      const freqMonths = Number(frequency_months || 1);
+      const now = new Date().toISOString();
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+      const r = sqlite.prepare(
+        "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, now, now);
+      res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
+    });
+
+    app.get("/api/labs/:labId/veritatrack/dashboard", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasTrackAccess(req.user)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      const tasks = sqlite.prepare(
+        "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
+      ).all(req.scope.labId) as any[];
+      let overdue = 0, dueSoon = 0, current = 0, notStarted = 0;
+      const items = tasks.map((t: any) => {
+        const last = sqlite.prepare(
+          "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        ).get(t.id) as any;
+        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
+        const status = last ? taskStatus(nextDueDate!) : "not_started";
+        if (status === "overdue") overdue++;
+        else if (status === "due_soon") dueSoon++;
+        else if (status === "current") current++;
+        else notStarted++;
+        return { ...t, last_signoff: last || null, next_due: nextDueDate, status };
+      });
+      res.json({ overdue, due_soon: dueSoon, current, not_started: notStarted, total: tasks.length, tasks: items });
+    });
+  }
 }
