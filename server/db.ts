@@ -1682,6 +1682,30 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.3 (VeritaMap module):
+// Only veritamap_maps carries user_id directly; all child tables
+// (veritamap_instruments, _tests, _instrument_tests, _test_correlations,
+// _analyte_values, _amr_values) scope through map_id, so they are
+// transitively lab-scoped once veritamap_maps is. Add lab_id to maps,
+// idempotent backfill, index for the dashboard list query.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(veritamap_maps)").all() as any[]).map(c => c.name);
+  if (!cols.includes("lab_id")) {
+    try { sqlite.exec("ALTER TABLE veritamap_maps ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritamap_maps_lab ON veritamap_maps(lab_id, id DESC)"); } catch {}
+  const backfilled = sqlite.prepare(`
+    UPDATE veritamap_maps
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = veritamap_maps.user_id)
+    WHERE lab_id IS NULL
+      AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = veritamap_maps.user_id) IS NOT NULL
+  `).run();
+  if (backfilled.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3.3 (veritamap_maps): backfilled lab_id on ${backfilled.changes} row(s)`);
+  }
+}
+
 // VeritaCheck Instrument Verification packages
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritacheck_verifications (
