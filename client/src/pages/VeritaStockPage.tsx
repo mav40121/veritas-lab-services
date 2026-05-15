@@ -125,11 +125,31 @@ function DaysLeftDisplay({ item }: { item: InventoryItem }) {
 
 // ── Add/Edit Modal ───────────────────────────────────────────────────────────
 
-function ItemFormDialog({ open, onClose, onSave, editItem }: {
+// FIFO matches: same item name, on-hand quantity > 0, earlier expiration date,
+// not the same record being edited. Compares item_name case-insensitively.
+function findOlderLots(
+  form: Partial<InventoryItem>,
+  inventory: InventoryItem[],
+  editId: number | null,
+): InventoryItem[] {
+  const name = (form.item_name ?? "").trim().toLowerCase();
+  const newExp = form.expiration_date ?? "";
+  if (!name || !newExp) return [];
+  return inventory.filter((it) => {
+    if (it.id === editId) return false;
+    if ((it.item_name ?? "").trim().toLowerCase() !== name) return false;
+    if ((it.quantity_on_hand ?? 0) <= 0) return false;
+    if (!it.expiration_date) return false;
+    return it.expiration_date < newExp;
+  });
+}
+
+function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
   open: boolean;
   onClose: () => void;
   onSave: (data: Partial<InventoryItem>) => void;
   editItem: InventoryItem | null;
+  inventory: InventoryItem[];
 }) {
   const [form, setForm] = useState<Partial<InventoryItem>>({});
 
@@ -162,6 +182,13 @@ function ItemFormDialog({ open, onClose, onSave, editItem }: {
     }
   }, [editItem, open]);
 
+  // FIFO banner: when the lab adds a new lot of an item that already has older
+  // unexpired stock on hand, prompt the user to open older lots first.
+  const olderLots = useMemo(
+    () => findOlderLots(form, inventory, editItem?.id ?? null),
+    [form.item_name, form.expiration_date, inventory, editItem?.id],
+  );
+
   const handleSubmit = () => {
     if (!form.item_name?.trim()) return;
     onSave(form);
@@ -183,6 +210,29 @@ function ItemFormDialog({ open, onClose, onSave, editItem }: {
           <DialogTitle>{editItem ? "Edit Item" : "Add Inventory Item"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
+          {/* FIFO rotation prompt: shown when an older unexpired lot of the
+              same item already exists on hand. */}
+          {olderLots.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-3" data-testid="fifo-banner">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <div className="font-semibold text-amber-900 dark:text-amber-200">FIFO reminder: older lot(s) of {form.item_name} still on hand</div>
+                  <ul className="mt-1 space-y-0.5 text-amber-900/90 dark:text-amber-200/90">
+                    {olderLots.slice(0, 4).map((lot) => (
+                      <li key={lot.id}>
+                        Lot {lot.lot_number || "(no lot #)"} expires {lot.expiration_date}, {lot.quantity_on_hand} {lot.usage_unit ?? "unit"}{lot.quantity_on_hand === 1 ? "" : "s"} on hand
+                      </li>
+                    ))}
+                    {olderLots.length > 4 && (
+                      <li className="italic">and {olderLots.length - 4} more older lot(s)</li>
+                    )}
+                  </ul>
+                  <div className="mt-1 text-amber-800 dark:text-amber-300">Open older lots first before this new lot.</div>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Group 1: Item Details */}
           <div>
             <h4 className="text-sm font-semibold mb-3" style={{ color: "#01696F" }}>Item Details</h4>
@@ -772,6 +822,7 @@ export default function VeritaStockInventoryPage() {
         onClose={() => { setShowForm(false); setEditItem(null); }}
         onSave={handleSave}
         editItem={editItem}
+        inventory={items}
       />
 
       {/* Delete Confirmation */}
