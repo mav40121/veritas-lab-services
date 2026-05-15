@@ -1682,6 +1682,27 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.4 (VeritaScan module):
+// veritascan_scans carries user_id; veritascan_items scopes through scan_id
+// and is transitively lab-scoped via the parent. Add lab_id to scans only.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(veritascan_scans)").all() as any[]).map(c => c.name);
+  if (!cols.includes("lab_id")) {
+    try { sqlite.exec("ALTER TABLE veritascan_scans ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritascan_scans_lab ON veritascan_scans(lab_id, id DESC)"); } catch {}
+  const backfilled = sqlite.prepare(`
+    UPDATE veritascan_scans
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = veritascan_scans.user_id)
+    WHERE lab_id IS NULL
+      AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = veritascan_scans.user_id) IS NOT NULL
+  `).run();
+  if (backfilled.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3.4 (veritascan_scans): backfilled lab_id on ${backfilled.changes} row(s)`);
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.3 (VeritaMap module):
 // Only veritamap_maps carries user_id directly; all child tables
 // (veritamap_instruments, _tests, _instrument_tests, _test_correlations,

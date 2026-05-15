@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { SCAN_ITEMS } from "@/lib/veritaScanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,20 +143,32 @@ export default function VeritaScanAppPage() {
   // Access check
   const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
+  // Multi-Lab Tier 2 Phase 3.4: route entry-surface reads/writes through
+  // the active lab. Inner scan endpoints (items, excel, pdf) stay on
+  // legacy URLs since they're scan-id-keyed.
+  const activeLabId = useActiveLabId();
+  const scansUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritascan/scans`
+    : `/api/veritascan/scans`;
+  const scanDeleteUrl = (id: number | string) =>
+    activeLabId
+      ? `/api/labs/${activeLabId}/veritascan/scans/${id}`
+      : `/api/veritascan/scans/${id}`;
+
   // Fetch scans
   const {
     data: scans,
     isLoading,
     error,
   } = useQuery<ScanSummary[]>({
-    queryKey: ["/api/veritascan/scans"],
+    queryKey: [scansUrl],
     enabled: isLoggedIn && hasPlanAccess,
   });
 
   // Create scan
   const createScan = useMutation({
     mutationFn: async (name: string) => {
-      const res = await fetch(`${API_BASE}/api/veritascan/scans`, {
+      const res = await fetch(`${API_BASE}${scansUrl}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ name }),
@@ -167,24 +180,26 @@ export default function VeritaScanAppPage() {
       return res.json() as Promise<ScanSummary>;
     },
     onSuccess: (newScan) => {
-      qc.invalidateQueries({ queryKey: ["/api/veritascan/scans"] });
+      qc.invalidateQueries({ queryKey: [scansUrl] });
       setDialogOpen(false);
       setNewScanName("");
-      navigate(`/veritascan-app/${newScan.id}`);
+      navigate(activeLabId
+        ? `/labs/${activeLabId}/veritascan-app/${newScan.id}`
+        : `/veritascan-app/${newScan.id}`);
     },
   });
 
   // Delete scan
   const deleteScan = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE}/api/veritascan/scans/${id}`, {
+      const res = await fetch(`${API_BASE}${scanDeleteUrl(id)}`, {
         method: "DELETE",
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/veritascan/scans"] });
+      qc.invalidateQueries({ queryKey: [scansUrl] });
     },
   });
 
