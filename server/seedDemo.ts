@@ -4,7 +4,7 @@
  */
 import { db } from "./db";
 import bcrypt from "bcryptjs";
-import { DEMO_USER_EMAIL } from "./constants";
+import { DEMO_USER_EMAIL, OWNER_EMAIL } from "./constants";
 
 export async function seedDemoData() {
   const sqlite = (db as any).$client;
@@ -404,6 +404,61 @@ export async function seedDemoData() {
 
   // ─── Clean up PT v2 test entry ─────────────────────────────────────────────
   sqlite.prepare("DELETE FROM pt_enrollments_v2 WHERE user_id = ? AND program_name = 'TEST ENTRY'").run(demoUserId);
+
+  // ─── Copy 5 reference studies into operator account (for Pfizer / Daniela handoff) ──
+  // Operator's personal lab needs the 5 most recent VeritaCheck reference studies so
+  // they appear in "My Studies" when a partner is granted access. Studies were
+  // originally built under the demo fixture (Riverside Regional / 22D0999999);
+  // this block copies them verbatim to OWNER_EMAIL's user_id. Idempotent: scoped
+  // by test_name + study_type so re-running on every server startup is safe.
+  const ownerUser = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(OWNER_EMAIL);
+  if (ownerUser && ownerUser.id !== demoUserId) {
+    const studiesToCopy: Array<{ test_name: string; study_type: string }> = [
+      { test_name: "Sodium",         study_type: "ref_interval" },
+      { test_name: "Troponin I",     study_type: "method_comparison" },
+      { test_name: "Glucose",        study_type: "precision" },
+      { test_name: "Hemoglobin A1c", study_type: "lot_to_lot" },
+      { test_name: "Troponin I",     study_type: "sensitivity" },
+    ];
+    let copied = 0;
+    let skipped = 0;
+    for (const { test_name, study_type } of studiesToCopy) {
+      const existsForOwner = sqlite.prepare(
+        "SELECT id FROM studies WHERE user_id = ? AND test_name = ? AND study_type = ? LIMIT 1"
+      ).get(ownerUser.id, test_name, study_type);
+      if (existsForOwner) { skipped++; continue; }
+      const source = sqlite.prepare(
+        "SELECT * FROM studies WHERE user_id = ? AND test_name = ? AND study_type = ? LIMIT 1"
+      ).get(demoUserId, test_name, study_type);
+      if (!source) { skipped++; continue; }
+      sqlite.prepare(`
+        INSERT INTO studies (
+          user_id, test_name, instrument, analyst, date, study_type,
+          clia_allowable_error, tea_is_percentage, tea_unit,
+          data_points, instruments, result, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        ownerUser.id,
+        source.test_name,
+        source.instrument,
+        source.analyst,
+        source.date,
+        source.study_type,
+        source.clia_allowable_error,
+        source.tea_is_percentage,
+        source.tea_unit,
+        source.data_points,
+        source.instruments,
+        source.result,
+        source.status,
+        now
+      );
+      copied++;
+    }
+    console.log(`[seed] Operator account (id=${ownerUser.id}): copied ${copied} studies from demo, skipped ${skipped} already present`);
+  } else if (!ownerUser) {
+    console.warn(`[seed] OWNER_EMAIL=${OWNER_EMAIL} not found in users table; skipping owner-account study copy`);
+  }
 
   console.log(`[seed] Demo data seeded for user=${demoUserId}`);
 }
