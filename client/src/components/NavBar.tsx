@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { LabSwitcher } from "@/components/LabSwitcher";
 
 const allMobileLinks = [
   { href: "/", label: "Home" },
@@ -191,6 +192,7 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {isLoggedIn && <LabSwitcher />}
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="w-8 h-8" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
           </Button>

@@ -325,6 +325,37 @@ function AppContent() {
           <Route path="/account/settings" component={AccountSettingsPage} />
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
+
+          {/* Multi-Lab Tier 2 — Phase 2b: lab-scoped variants of every workspace page.
+              Doc: docs/scoping-multi-lab-tier2.md. The legacy unprefixed routes above
+              still resolve identically because Phase 2c has not yet flipped the API
+              routes from user-scoped to /api/labs/:labId/* . Adding these variants
+              now lets the NavBar LabSwitcher drive the URL contract and unblocks
+              shareable cross-lab links, with no behavior change for single-lab users. */}
+          <Route path="/labs/:labId/dashboard" component={DashboardPage} />
+          <Route path="/labs/:labId/dashboard/verifications" component={VeritaCheckVerificationPage} />
+          <Route path="/labs/:labId/study/new" component={VeritaCheckPage} />
+          <Route path="/labs/:labId/study/:id/results" component={StudyResultsPage} />
+          <Route path="/labs/:labId/veritascan-app" component={VeritaScanAppPage} />
+          <Route path="/labs/:labId/veritascan-app/:id" component={VeritaScanScanPage} />
+          <Route path="/labs/:labId/veritamap-app" component={VeritaMapAppPage} />
+          <Route path="/labs/:labId/veritamap-app/resources" component={VeritaMapResourcesPage} />
+          <Route path="/labs/:labId/veritamap-app/labwide" component={VeritaMapLabwidePage} />
+          <Route path="/labs/:labId/veritamap-app/:id/build" component={VeritaMapBuildPage} />
+          <Route path="/labs/:labId/veritamap-app/:id" component={VeritaMapMapPage} />
+          <Route path="/labs/:labId/veritatrack-app" component={VeritaTrackAppPage} />
+          <Route path="/labs/:labId/veritacomp-app" component={VeritaCompAppPage} />
+          <Route path="/labs/:labId/veritacomp-app/:programId" component={VeritaCompAppPage} />
+          <Route path="/labs/:labId/veritapt/app" component={VeritaPTAppPage} />
+          <Route path="/labs/:labId/veritaresponse" component={VeritaResponseAppPage} />
+          <Route path="/labs/:labId/veritaresponse/:id" component={VeritaResponseFindingPage} />
+          <Route path="/labs/:labId/veritastaff-app" component={VeritaStaffAppPage} />
+          <Route path="/labs/:labId/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
+          <Route path="/labs/:labId/veritalab-app" component={VeritaLabAppPage} />
+          <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
+          <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
+          <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
+
           <Route component={NotFound} />
         </Switch>
       </main>
