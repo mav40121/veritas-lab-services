@@ -8762,6 +8762,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, accreditation_body_other, includes_nys, complexity, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     ).run(dataUserId, labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
+    // Phase 3.9 dual-write tier2_lab_id.
+    try {
+      (db as any).$client.prepare("UPDATE staff_labs SET tier2_lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(result.lastInsertRowid);
     res.json(lab);
   });
@@ -8861,6 +8865,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
     ).run(lab.id, dataUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, hireDate || null, qualificationsText || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
     const empId = result.lastInsertRowid;
+    // Phase 3.9 dual-write tier2_lab_id on the employee row.
+    try {
+      (db as any).$client.prepare("UPDATE staff_employees SET tier2_lab_id = (SELECT tier2_lab_id FROM staff_labs WHERE id = ?) WHERE id = ?").run(lab.id, empId);
+    } catch {}
 
     // Insert roles
     if (roles && Array.isArray(roles)) {
@@ -8868,6 +8876,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const r of roles) {
         roleStmt.run(empId, lab.id, r.role, r.specialtyNumber || null);
       }
+      // Phase 3.9 dual-write tier2_lab_id on the newly inserted role rows.
+      try {
+        (db as any).$client.prepare("UPDATE staff_roles SET tier2_lab_id = (SELECT tier2_lab_id FROM staff_labs WHERE id = ?) WHERE employee_id = ? AND tier2_lab_id IS NULL").run(lab.id, empId);
+      } catch {}
     }
 
     // Create competency schedule if performs testing
@@ -8971,6 +8983,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
     res.json({ ok: true, deleted: req.params.id });
+  });
+
+  // ── MULTI-LAB Tier 2 — Phase 3.9b: lab-scoped VeritaStaff entry endpoints ──
+  // staff_labs / staff_employees / staff_roles carry an existing lab_id
+  // column that points at staff_labs(id), so the multi-lab routing key is
+  // tier2_lab_id (FK to labs). Lab-scoped variants scope by tier2_lab_id.
+  app.get("/api/labs/:labId/staff/lab", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId);
+    res.json(lab || null);
+  });
+  app.get("/api/labs/:labId/staff/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+    ).all(req.scope.labId) as any[];
+    const result = employees.map((emp: any) => {
+      const roles = (db as any).$client.prepare(
+        "SELECT * FROM staff_roles WHERE employee_id = ?"
+      ).all(emp.id);
+      return { ...emp, roles };
+    });
+    res.json(result);
   });
 
   // ── Bulk import: dry-run preview ──
