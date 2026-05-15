@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,9 @@ type FilterType = "all" | "gaps" | "covered" | "aaa" | "waived";
 
 export default function VeritaPTAppPage() {
   const { user } = useAuth();
+  // Multi-Lab Tier 2 Phase 3.6b: route PT reads/writes through the active lab.
+  const activeLabId = useActiveLabId();
+  const ptApi = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/pt` : `${API_BASE}/api/pt`;
   const [coverage, setCoverage] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [enrollments, setEnrollments] = useState<any[]>([]);
@@ -94,9 +98,9 @@ export default function VeritaPTAppPage() {
     setLoading(true);
     try {
       const [covRes, enrollRes, aaaRes] = await Promise.all([
-        fetch(`${API_BASE}/api/pt/coverage`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/pt/enrollments`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/pt/aa-records`, { headers: authHeaders() }),
+        fetch(`${ptApi}/coverage`, { headers: authHeaders() }),
+        fetch(`${ptApi}/enrollments`, { headers: authHeaders() }),
+        fetch(`${ptApi}/aa-records`, { headers: authHeaders() }),
       ]);
       const covData = await covRes.json();
       const enrollData = await enrollRes.json();
@@ -124,7 +128,7 @@ export default function VeritaPTAppPage() {
     if (!newVendor || !newProgramName.trim() || !newCategory || !newYear) return;
     setSaving(true);
     try {
-      await fetch(`${API_BASE}/api/pt/enrollments`, {
+      await fetch(`${ptApi}/enrollments`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -146,7 +150,7 @@ export default function VeritaPTAppPage() {
   };
 
   const handleRemoveEnrollment = async (id: number) => {
-    await fetch(`${API_BASE}/api/pt/enrollments/${id}`, {
+    await fetch(`${ptApi}/enrollments/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -159,7 +163,7 @@ export default function VeritaPTAppPage() {
     if (!Number.isFinite(freq) || freq < 2) return;
     setSaving(true);
     try {
-      await fetch(`${API_BASE}/api/pt/aa-records`, {
+      await fetch(`${ptApi}/aa-records`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -184,7 +188,7 @@ export default function VeritaPTAppPage() {
   };
 
   const handleRemoveAaaRecord = async (id: number) => {
-    await fetch(`${API_BASE}/api/pt/aa-records/${id}`, {
+    await fetch(`${ptApi}/aa-records/${id}`, {
       method: "DELETE",
       headers: authHeaders(),
     });

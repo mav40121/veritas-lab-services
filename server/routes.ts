@@ -7496,6 +7496,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── MULTI-LAB Tier 2 — Phase 3.6b: lab-scoped VeritaPT entry endpoints ─────
+  app.get("/api/labs/:labId/pt/coverage", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    try {
+      const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      res.json(computePTCoverage(ownerRow?.owner_user_id));
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to compute PT coverage", detail: err.message });
+    }
+  });
+  app.get("/api/labs/:labId/pt/enrollments", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM pt_enrollments_v2 WHERE lab_id = ? ORDER BY year_enrolled DESC, pt_category"
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+  app.post("/api/labs/:labId/pt/enrollments", authMiddleware, labScopeMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const { vendor, program_name, pt_category, year_enrolled } = req.body;
+    if (!vendor || !program_name || !pt_category || !year_enrolled) return res.status(400).json({ error: "vendor, program_name, pt_category, and year_enrolled are required" });
+    if (!["CAP", "API", "Other"].includes(vendor)) return res.status(400).json({ error: "vendor must be CAP, API, or Other" });
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO pt_enrollments_v2 (user_id, lab_id, vendor, program_name, pt_category, year_enrolled) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(ownerRow?.owner_user_id ?? req.userId, req.scope.labId, vendor, program_name, pt_category, Number(year_enrolled));
+    const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments_v2 WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.status(201).json(created);
+  });
+  app.delete("/api/labs/:labId/pt/enrollments/:id", authMiddleware, labScopeMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+    const existing = (db as any).$client.prepare(
+      "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
+    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+  app.get("/api/labs/:labId/pt/aa-records", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM aa_records WHERE lab_id = ? ORDER BY analyte"
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+
   // ── VERITARESPONSE — POST-SURVEY DEFICIENCY RESPONSE ───────────────────
   // Parking-lot #17. Phase 1 ships the data layer + CRUD + due-date
   // auto-computation. Renderers (CMS-2567, CAP per-checklist, TJC ESC) and
@@ -9872,6 +9913,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Remove pending reminders
     (db as any).$client.prepare("DELETE FROM lab_certificate_reminders WHERE certificate_id = ? AND is_sent = 0").run(req.params.id);
     res.json({ success: true });
+  });
+
+  // ── MULTI-LAB Tier 2 — Phase 3.8b: lab-scoped VeritaLab entry endpoints ────
+  app.get("/api/labs/:labId/veritalab/certificates", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab™ subscription required" });
+    const certs = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE lab_id = ? AND is_active = 1 ORDER BY created_at DESC"
+    ).all(req.scope.labId) as any[];
+    const result = certs.map((cert: any) => {
+      const docCount = (db as any).$client.prepare(
+        "SELECT COUNT(*) as cnt FROM lab_certificate_documents WHERE certificate_id = ?"
+      ).get(cert.id) as any;
+      return { ...cert, document_count: docCount?.cnt || 0 };
+    });
+    res.json(result);
+  });
+  app.post("/api/labs/:labId/veritalab/certificates", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
+    if (!hasLabCertAccess(req.user)) return res.status(403).json({ error: "VeritaLab™ subscription required" });
+    const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
+    if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
+    const now = new Date().toISOString();
+    const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    const result = (db as any).$client.prepare(
+      "INSERT INTO lab_certificates (user_id, lab_id, cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes, is_auto_populated, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)"
+    ).run(userIdForRow, req.scope.labId, cert_type || "other", cert_name.trim(), cert_number || null, issuing_body || null, issued_date || null, expiration_date || null, lab_director || null, notes || null, now, now);
+    const certId = Number(result.lastInsertRowid);
+    if (expiration_date) scheduleReminders(certId, userIdForRow, expiration_date);
+    const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(certId);
+    res.status(201).json(cert);
   });
 
   // POST /api/veritalab/certificates/:id/documents - upload document
