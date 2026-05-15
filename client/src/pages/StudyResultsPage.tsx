@@ -60,10 +60,12 @@ import {
   Line,
   ResponsiveContainer,
 } from "recharts";
-import { FileDown, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen } from "lucide-react";
+import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen } from "lucide-react";
 import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { downloadCsv } from "@/lib/csvExport";
+import { studyToCsv, defaultCsvFilename } from "@/lib/studyCsvAdapter";
 
 async function downloadPDF(study: Study, results: StudyResults) {
   const res = await fetch(`${API_BASE}/api/generate-pdf`, {
@@ -92,6 +94,14 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
     catch (e) { toast({ title: "PDF generation failed", description: "Please try again.", variant: "destructive" }); }
     finally { setPdfLoading(false); }
   }, [study, results, toast]);
+  const handleCsv = useCallback(() => {
+    const csv = studyToCsv(study);
+    if (!csv) {
+      toast({ title: "CSV export unavailable", description: "No source data found on this study.", variant: "destructive" });
+      return;
+    }
+    downloadCsv(csv, defaultCsvFilename(study));
+  }, [study, toast]);
 
   return (
     <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
@@ -125,6 +135,15 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
             <XCircle size={14} className="mr-1.5" />FAIL
           </Badge>
         )}
+        <Button
+          onClick={handleCsv}
+          variant="outline"
+          className="border-primary/30 text-primary hover:bg-primary/10"
+          data-testid="button-export-csv"
+        >
+          <FileSpreadsheet size={14} className="mr-1.5" />
+          Export CSV
+        </Button>
         <Button
           onClick={handlePDF}
           disabled={pdfLoading}
