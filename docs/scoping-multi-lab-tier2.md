@@ -10,7 +10,18 @@ Tier 2 is the data-layer cut for one user belonging to many labs. Tier 1 (the `l
 
 ## 1. Goal in one sentence
 
-Make `labs` the data-routing identity for every scoped table and let one authenticated user select which lab they are currently working in, so the same email can own and switch between multiple labs without the codebase guessing which lab a row belongs to.
+Make `labs` the data-routing identity for every scoped table and put the active lab in the URL of every scoped page, so the same email can hold parallel sessions in different labs (one tab per lab) without active-lab state silently corrupting another tab and without breaking shareable links.
+
+## 1a. UX shape: URL-routed, not active-lab-in-session
+
+Decided 2026-05-15: lab scope lives in the URL (`/labs/{labId}/studies/123`), not in the JWT or a server-side "active lab" pointer. The reasons specific to this product:
+
+- **Consultants need parallel tabs.** The operator is the first beta consultant for the platform. Active-lab-in-session breaks consultant workflows: switching in one tab silently re-scopes others. URL-routing is parallel-safe by construction.
+- **Shareable links.** "Look at this study" is only useful as a Slack message if the URL encodes the lab; otherwise the recipient sees wrong data or a 404 depending on their hidden active-lab state.
+- **Single-lab users are unaffected.** Bare `/dashboard` server-side-redirects to `/labs/{their_only_lab_id}/dashboard`. They never see a picker.
+- **Matches the regulatory model.** A CAP inspection IS lab-scoped. "You are in lab X" via URL is more legible during a screen-share than via hidden session state.
+
+Mental model: like GitHub orgs (`github.com/anthropic/...`), Linear workspaces (`linear.app/{workspace}/...`), and Notion teamspaces. Org-in-URL is the standard for B2B multi-tenant products precisely because the alternatives break under parallel work.
 
 ## 2. Why now
 
@@ -72,7 +83,10 @@ labs:                                 -- existing; add subscription columns
 
 users:                                -- existing; shrinks to auth + profile
   id, email UNIQUE, password_hash, name
-  last_active_lab_id    -- nullable convenience pointer for resume-where-left-off
+  default_lab_id        -- nullable; target for bare `/dashboard` redirect.
+                        --   Auto-updated to whichever lab the user last
+                        --   visited (`/labs/{id}/...` page hit). NOT the
+                        --   source of truth for scope — URL is.
   hipaa_acknowledged, hipaa_acknowledged_at   -- stays per-user
   created_at
   -- DEPRECATED for one release window, then dropped:
@@ -80,7 +94,9 @@ users:                                -- existing; shrinks to auth + profile
   --   has_completed_onboarding
 ```
 
-Every scoped table gets a `lab_id` column. Backfill from `user_id` via the user's `users.lab_id` (now seat-aware). Read queries shift from `WHERE user_id = ?` to `WHERE lab_id = ?` where `lab_id` resolves from the JWT's `active_lab_id`. Write paths set both `user_id` (the creator, audit-trail value) and `lab_id` (the owning lab) during the dual-write window.
+Every scoped table gets a `lab_id` column. Backfill from `user_id` via the user's `users.lab_id` (now seat-aware). Read queries shift from `WHERE user_id = ?` to `WHERE lab_id = ?` where `lab_id` is parsed from the URL params (`req.params.labId`) and validated against `lab_members` for the authenticated user on every request. Write paths set both `user_id` (the creator, audit-trail value) and `lab_id` (the owning lab) during the dual-write window. JWT carries `{ userId }` only — no active-lab claim; URL is the single source of truth for scope.
+
+URL shape decision: numeric `lab_id` in path, NOT CLIA. CLIA is regulated (locked once first study runs), but it is the lab's public identity and putting it in URLs leaks identity into browser history, screen-shares, and customer-support tickets. Internal `lab_id` is opaque, stable, shorter (4-5 digits vs 10), and decouples URL stability from any future CLIA-renumbering scenarios. Format: `/labs/42/studies/123`.
 
 ## 5. Migration phases
 
@@ -90,9 +106,9 @@ Each phase is a separate PR (or small cluster). The whole sequence is 12-15 PRs 
 |---|---|---|---|
 | **0. Schema** | Add `lab_members` table. Add new columns to `labs` (plan, subscription_*, stripe_*, study_credits, has_completed_onboarding, preferred_pt_vendor). No reader/writer changes yet. | 1 PR | 1-2 days |
 | **1. Backfill** | For every `users` row, ensure a `lab_members` row exists with role='owner' if the user has `lab_id`, status='active', is_primary_lab=true. For every `user_seats` row, insert a corresponding `lab_members` row inheriting the owner's lab. Copy plan / subscription / Stripe / study_credits / onboarding fields from users to the user's primary labs row. Idempotent, runs on every boot like the existing lab backfill. | 1 PR | 2-3 days |
-| **2. Auth surface** | Add `active_lab_id` to JWT payload. On login, resolve from `users.last_active_lab_id` or first active `lab_members` row. New endpoints: `GET /api/labs/me` (list memberships), `POST /api/labs/switch/:labId` (flip active lab, validate membership, update `last_active_lab_id`). NavBar lab-switcher dropdown behind a `enable_lab_switcher` feature flag. | 1 PR | 3-5 days |
-| **3. Read flip per module** | One PR per module (VeritaCheck, VeritaPolicy, VeritaMap, VeritaScan, VeritaComp, VeritaPT, VeritaLab, VeritaTrack, VeritaStock, VeritaBench/Pace/Shift/QA, VeritaResponse if it has landed). Each PR adds a `lab_id` column to its scoped tables, backfills from each row's `user_id` → that user's `lab_id`, and switches the read queries to `WHERE lab_id = ?` resolved from JWT. Tests included. | ~10 PRs | 7-10 days |
-| **4. Write flip + Stripe** | Per-module writes set `lab_id` from JWT's active_lab_id. Stripe webhook lookup changes from customer→user to customer→lab. Stripe checkout creates a new lab + membership for "add another lab" path. Subscription columns on `users` go read-only (still readable but no longer written). NavBar feature flag removed. | 2-3 PRs | 5-7 days |
+| **2. URL + auth surface** | Frontend router refactor: every scoped page moves from `/studies/123` to `/labs/:labId/studies/123` (and same for `/veritapolicy`, `/veritamap`, etc.). Server adds `labScopeMiddleware` that reads `req.params.labId`, asserts active membership, attaches `{ labId }` to the request. Bare `/dashboard` server-redirects to `/labs/{users.default_lab_id ?? first_membership.lab_id}/dashboard`. New endpoint `GET /api/labs/me` lists memberships (drives the NavBar switcher dropdown which rewrites the URL to `/labs/{new}/<same-current-path>`). Permanent 301 redirects for ~12 legacy root paths so old bookmarks/emails keep working. `default_lab_id` auto-updates on every page hit. | 1 PR | 4-6 days |
+| **3. Read flip per module** | One PR per module (VeritaCheck, VeritaPolicy, VeritaMap, VeritaScan, VeritaComp, VeritaPT, VeritaLab, VeritaTrack, VeritaStock, VeritaBench/Pace/Shift/QA, VeritaResponse if it has landed). Each PR adds a `lab_id` column to its scoped tables, backfills from each row's `user_id` → that user's `lab_id`, switches API routes to `/api/labs/:labId/<module>`, and switches the queries to `WHERE lab_id = ?` resolved from URL via `labScopeMiddleware`. Tests included. | ~10 PRs | 7-10 days |
+| **4. Write flip + Stripe** | Per-module writes set `lab_id` from URL scope. Stripe webhook lookup changes from customer→user to customer→lab. Stripe checkout creates a new lab + membership for "add another lab" path. Subscription columns on `users` go read-only (still readable but no longer written). | 2-3 PRs | 5-7 days |
 | **5. Cleanup** | Drop deprecated columns from `users` (`plan`, `subscription_*`, `stripe_*`, `study_credits`, `clia_*`, `has_completed_onboarding`, `lab_id`). Drop dual-write. Audit script gains a rule that flags any new `WHERE user_id = ?` in a scoped query. | 1 PR | 2-3 days |
 
 Dual-write window between phases 3 and 5: writers populate both `user_id` and `lab_id` so a rollback at any point is harmless.
@@ -101,29 +117,64 @@ Dual-write window between phases 3 and 5: writers populate both `user_id` and `l
 
 ```ts
 // server/lib/labScope.ts
-export function resolveLabScope(req: AuthedRequest): { labId: number; userId: number } {
-  const { userId, activeLabId } = req.jwt;
-  const membership = db.prepare(
-    "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
-  ).get(userId, activeLabId);
-  if (!membership) throw new HttpError(403, "No active membership for the requested lab");
-  return { labId: activeLabId, userId };
+export function labScopeMiddleware(req: AuthedRequest, res: Response, next: NextFunction) {
+  const labId = Number(req.params.labId);
+  if (!Number.isFinite(labId)) return res.status(400).json({ error: "Missing or invalid lab id" });
+  const { userId } = req.jwt;
+  const membership = sqlite.prepare(
+    "SELECT id, role FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+  ).get(userId, labId) as any;
+  if (!membership) return res.status(403).json({ error: "No active membership for this lab" });
+  req.scope = { labId, userId, role: membership.role };
+  sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
+  next();
 }
 
 // every scoped route
-app.get("/api/studies", auth, (req, res) => {
-  const { labId } = resolveLabScope(req);
-  res.json(db.prepare("SELECT * FROM studies WHERE lab_id = ? ORDER BY id DESC").all(labId));
+app.get("/api/labs/:labId/studies", auth, labScopeMiddleware, (req, res) => {
+  res.json(sqlite.prepare("SELECT * FROM studies WHERE lab_id = ? ORDER BY id DESC").all(req.scope.labId));
+});
+
+// frontend (wouter) route
+<Route path="/labs/:labId/studies" component={MyStudiesPage} />
+// inside the page: const { labId } = useParams(); useQuery(["studies", labId], () => fetch(`/api/labs/${labId}/studies`))
+```
+
+One middleware, one line per route. The `seatRow ? seatRow.owner_user_id : payload.userId` pattern (routes.ts:1907-1910 and ~25 other places) collapses to `req.scope.labId`. The `default_lab_id` auto-update means the next bare `/dashboard` visit lands on the same lab the user last worked in — invisible to single-lab users, useful resume-state for multi-lab consultants.
+
+Bare-route redirect:
+```ts
+// /dashboard → /labs/{default_or_first}/dashboard
+app.get("/dashboard", auth, (req, res) => {
+  const user = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(req.jwt.userId) as any;
+  const first = sqlite.prepare(
+    "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY is_primary_lab DESC, id ASC LIMIT 1"
+  ).get(req.jwt.userId) as any;
+  const target = user?.default_lab_id ?? first?.lab_id;
+  if (!target) return res.redirect("/onboarding");
+  return res.redirect(`/labs/${target}/dashboard`);
 });
 ```
 
-One helper, two lines per route. The `seatRow ? seatRow.owner_user_id : payload.userId` pattern (routes.ts:1907-1910 and ~25 other places) collapses to a single call.
+NavBar switcher:
+```tsx
+const { data: memberships } = useQuery(["my-labs"], () => fetch("/api/labs/me").then(r => r.json()));
+// dropdown shows memberships; clicking item navigates:
+const switchLab = (newLabId: number) => {
+  const newPath = location.replace(/^\/labs\/\d+/, `/labs/${newLabId}`);
+  setLocation(newPath);  // wouter setLocation; same logical page, different lab
+};
+```
+
+The switcher is hidden when `memberships.length <= 1`. Single-lab users never see it.
 
 ## 7. Risks
 
-1. **Sweep completeness.** Every `WHERE user_id = ?` outside auth must be reviewed. Audit script must enforce the rule after Phase 5. Likely 200+ touchpoints across `server/routes.ts` and module helpers; not all are scoped queries (some are legitimate "who created this" lookups), so the sweep is judgement-by-grep, not automated.
+1. **URL redirect surface.** Every existing user-scoped frontend route (`/dashboard`, `/study/:id/results`, `/veritapolicy-app`, `/veritamap`, `/veritascan`, etc.) needs a permanent 301 redirect to its lab-scoped form. Old bookmarks, customer-support screenshots, and email links must keep resolving. Implement as a small redirect table in `server/routes.ts`: for each legacy path, look up the user's default lab (or the resource's owning lab for resource-deep links like `/study/123`) and 301. ~12 root paths + ~6 resource-deep paths to handle. Test with curl that every legacy URL still resolves correctly during and after Phase 2.
 
-2. **Stripe state.** Today the Stripe customer carries `stripe_customer_id` on the user row. After Phase 4, it lives on the lab row. The owner switching labs does NOT switch Stripe identity, but each lab gets its own customer and its own subscription. Webhook handler in `server/routes.ts` (Stripe section) is the most delicate part of the cut.
+2. **Sweep completeness.** Every `WHERE user_id = ?` outside auth must be reviewed. Audit script must enforce the rule after Phase 5. Likely 200+ touchpoints across `server/routes.ts` and module helpers; not all are scoped queries (some are legitimate "who created this" lookups), so the sweep is judgement-by-grep, not automated.
+
+3. **Stripe state.** Today the Stripe customer carries `stripe_customer_id` on the user row. After Phase 4, it lives on the lab row. The owner switching labs does NOT switch Stripe identity, but each lab gets its own customer and its own subscription. Webhook handler in `server/routes.ts` (Stripe section) is the most delicate part of the cut.
 
 3. **db.ts owner-account block (line 866).** `SELECT plan FROM users WHERE email = OWNER_EMAIL` keeps the operator on permanent enterprise. After Phase 4, plan is on labs, not users. The block becomes: find the user by OWNER_EMAIL, find that user's primary lab via lab_members, force-upgrade the lab's plan to enterprise. OWNER_EMAIL stays auth-tied; OWNER_CLIA (already in place from PR #132) is the data-routing key.
 
@@ -150,8 +201,8 @@ One helper, two lines per route. The `seatRow ? seatRow.owner_user_id : payload.
 2. **Approve the 5-phase migration sequence** (Section 5) and the dual-write window between Phases 3 and 5.
 3. **Approve the subscription-on-labs move** (Section 4): plan / subscription / Stripe columns leave `users`, land on `labs`. This is what makes pricing #11 actually work in code.
 4. **Confirm role enumeration** (Section 4): `owner | director | technical_consultant | technical_supervisor | general_supervisor | staff | read_only`. Aligns with VeritaComp Element-1/4 observer rules and CLAUDE.md §6 evaluator-by-complexity tables.
-5. **NavBar UX:** dropdown picker (recommended, matches the "current lab" lock indicator in Account Settings) vs URL-based lab routing (`/labs/55D5555555/studies`). Recommendation: dropdown.
-6. **Feature-flag rollout:** flag-gated on the operator's account first for a week, then global; vs big-bang switch at end of Phase 5. Recommendation: flag-gated.
+5. **URL shape:** numeric `lab_id` in path (recommended; opaque, stable, short) vs CLIA in path (human-readable but leaks regulated lab identity into browser history, screen-shares, and customer-support tickets). Recommendation: numeric `lab_id`.
+6. **Legacy URL handling:** 301 every old user-scoped path to its new lab-scoped form (recommended; preserves bookmarks/emails/screenshots) vs return a friendly "URL changed" landing page that requires a click. Recommendation: 301.
 7. **Naming for the join table:** `lab_members` (parking lot convention) vs `lab_memberships` (more conventional). Existing parking-lot text uses `lab_members`; pick one and stick.
 8. **Sequencing against #17 VeritaResponse:** VeritaResponse scoping says "after multi-lab Tier 2 lands". Confirm Tier 2 ships first, or accept that VeritaResponse will get a one-helper swap later.
 
@@ -161,13 +212,13 @@ Total: **3-5 weeks** of focused implementation. Splits:
 
 - Phase 0 (schema): 1-2 days
 - Phase 1 (backfill, builds on existing Tier 1 backfill): 2-3 days
-- Phase 2 (auth surface + NavBar picker behind flag): 3-5 days
-- Phase 3 (read flip, ~10 modules): 7-10 days
+- Phase 2 (URL refactor + `labScopeMiddleware` + redirects + NavBar switcher): 4-6 days
+- Phase 3 (read flip, ~10 modules, routes move to `/api/labs/:labId/*`): 7-10 days
 - Phase 4 (write flip + Stripe webhook + checkout): 5-7 days
 - Phase 5 (cleanup + audit-script rule): 2-3 days
 
-Risk-weighted with Stripe ambiguity and the read-flip surface area: budget 5 weeks, not 3.
+Risk-weighted with Stripe ambiguity, the read-flip surface area, and the URL redirect work: budget 5 weeks, not 3.
 
 ## 11. The pitch (internal, not customer-facing)
 
-> "The seed bug we shipped on 2026-05-15 is the same shape as every other `WHERE user_id = ?` in the codebase. Tier 2 makes the lab the data identity instead of the user, so the next Daniela works on day one and the next operator who buys a second lab does not silently overwrite the first one's reference studies. Pricing decision #11 and seat-counting decision #12 stop being parking-lot notes and start being enforced in code."
+> "Tier 2 makes the lab the data identity instead of the user. Every scoped page lives at `/labs/{id}/...` so a consultant can hold Pfizer's lab in one tab and Michael's in another without either tab silently corrupting the other. Single-lab users never see the change — they sign in, get bounced to their lab's dashboard, and work as before. Multi-lab users get the GitHub-org / Linear-workspace pattern they already know. The 2026-05-15 seed bug stops being a class of risk; pricing decision #11 and seat-counting decision #12 stop being parking-lot notes and start being enforced in code."
