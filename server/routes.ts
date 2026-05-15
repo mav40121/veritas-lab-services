@@ -7354,6 +7354,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_enrollments_v2 (user_id, vendor, program_name, pt_category, year_enrolled) VALUES (?, ?, ?, ?, ?)"
     ).run(dataUserId, vendor, program_name, pt_category, Number(year_enrolled));
+    // Phase 3.6 dual-write lab_id.
+    try {
+      (db as any).$client.prepare("UPDATE pt_enrollments_v2 SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments_v2 WHERE id = ?").get(Number(result.lastInsertRowid));
     res.status(201).json(created);
   });
@@ -7422,6 +7426,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       last_result_summary ?? null, last_pass_fail ?? null, corrective_action_notes ?? null,
       director_reviewed_at ?? null, director_id ?? null, retention_through_date ?? null,
     );
+    // Phase 3.6 dual-write lab_id.
+    try {
+      (db as any).$client.prepare("UPDATE aa_records SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(Number(result.lastInsertRowid));
     res.status(201).json(created);
   });
@@ -10313,6 +10321,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(dataUserId, analyte.trim(), specialty.trim(), pt_provider.trim(), program_code || null, enrollment_year, enrollment_date, status || 'active', now, now);
+    // Phase 3.6 dual-write lab_id.
+    try {
+      (db as any).$client.prepare("UPDATE pt_enrollments SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
   });
@@ -10388,6 +10400,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(enrollment_id, dataUserId, event_id || null, event_name || null, event_date, analyte.trim(), your_result ?? null, your_method || null, peer_mean ?? null, peer_sd ?? null, peer_n ?? null, acceptable_low ?? null, acceptable_high ?? null, sdi, pass_fail || 'pending', notes || null, now, now);
+    // Phase 3.6 dual-write lab_id.
+    try {
+      (db as any).$client.prepare("UPDATE pt_events SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
   });
@@ -10465,6 +10481,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_corrective_actions (event_id, user_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(event_id, dataUserId, root_cause || null, corrective_action.trim(), preventive_action || null, responsible_person || null, date_initiated, date_completed || null, status || 'open', verified_by || null, verified_date || null, now, now);
+    // Phase 3.6 dual-write lab_id.
+    try {
+      (db as any).$client.prepare("UPDATE pt_corrective_actions SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+    } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
   });

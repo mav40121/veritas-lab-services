@@ -1682,6 +1682,32 @@ sqlite.exec(`
   );
 `);
 
+// Multi-Lab Tier 2 — Phase 3.6 (VeritaPT module):
+// Five user_id tables: pt_enrollments, pt_events, pt_corrective_actions,
+// pt_enrollments_v2, aa_records. Some are denormalized children that
+// carry user_id alongside their parent FK; all get lab_id directly for
+// query speed and to keep the dual-write simple.
+{
+  const tables = ["pt_enrollments", "pt_events", "pt_corrective_actions", "pt_enrollments_v2", "aa_records"];
+  for (const t of tables) {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map(c => c.name);
+    if (!cols.includes("lab_id")) {
+      try { sqlite.exec(`ALTER TABLE ${t} ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
+    }
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_lab ON ${t}(lab_id)`); } catch {}
+    const backfilled = sqlite.prepare(`
+      UPDATE ${t}
+      SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id)
+      WHERE lab_id IS NULL
+        AND user_id IS NOT NULL
+        AND (SELECT u.lab_id FROM users u WHERE u.id = ${t}.user_id) IS NOT NULL
+    `).run();
+    if (backfilled.changes > 0) {
+      console.log(`[migration] Multi-lab Phase 3.6 (${t}): backfilled lab_id on ${backfilled.changes} row(s)`);
+    }
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.5 (VeritaComp module):
 // Three top-level user_id tables: competency_programs, competency_employees,
 // competency_quizzes. All other competency_* tables scope through one of
