@@ -23,9 +23,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
 
 interface InventoryItem {
   id: number;
@@ -485,6 +486,42 @@ export default function VeritaStockInventoryPage() {
     }
   };
 
+  const handleExportCsv = useCallback(() => {
+    if (filteredItems.length === 0) {
+      toast({ title: "Nothing to export", description: "The filtered inventory list is empty.", variant: "destructive" });
+      return;
+    }
+    const cols: CsvColumn<InventoryItem>[] = [
+      { key: "item_name", header: "Item Name" },
+      { key: "catalog_number", header: "Catalog #" },
+      { key: "lot_number", header: "Lot #" },
+      { key: "department", header: "Department" },
+      { key: "category", header: "Category" },
+      { key: "vendor", header: "Vendor" },
+      { key: "storage_location", header: "Storage Location" },
+      { key: "quantity_on_hand", header: "Quantity On Hand" },
+      { key: "order_unit", header: "Order Unit" },
+      { key: "usage_unit", header: "Usage Unit" },
+      { key: "units_per_order_unit", header: "Units per Order Unit" },
+      { key: "burn_rate", header: "Burn Rate (per day)" },
+      { key: "lead_time_days", header: "Lead Time (days)" },
+      { key: "safety_stock_days", header: "Safety Stock (days)" },
+      { key: "desired_days_of_stock", header: "Desired Days of Stock" },
+      { key: "reorder_point", header: "Par Level (calculated)" },
+      { key: "order_to_qty", header: "Order-to Quantity" },
+      { key: "days_remaining", header: "Days Remaining", format: (r) => (r.days_remaining === null ? "" : r.days_remaining) },
+      { key: "needs_reorder", header: "Reorder Now", format: (r) => (r.needs_reorder ? "Yes" : "No") },
+      { key: "expiration_date", header: "Expiration Date" },
+      { key: "standing_order", header: "Standing Order", format: (r) => (r.standing_order ? "Yes" : "No") },
+      { key: "standing_order_review_date", header: "Next Standing Order Review" },
+      { key: "status", header: "Status" },
+      { key: "notes", header: "Notes" },
+    ];
+    const csv = toCsv(filteredItems as unknown as Record<string, unknown>[], cols as unknown as CsvColumn<Record<string, unknown>>[]);
+    const today = new Date().toISOString().split("T")[0];
+    downloadCsv(csv, `VeritaStock_Inventory_${today}.csv`);
+  }, [filteredItems, toast]);
+
   const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
     <th
       className={`text-left px-3 py-2 font-medium cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
@@ -683,6 +720,16 @@ export default function VeritaStockInventoryPage() {
             Clear Filters
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto border-primary/30 text-primary hover:bg-primary/10"
+          onClick={handleExportCsv}
+          data-testid="button-stock-export-csv"
+        >
+          <FileSpreadsheet size={14} className="mr-1.5" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Table */}
