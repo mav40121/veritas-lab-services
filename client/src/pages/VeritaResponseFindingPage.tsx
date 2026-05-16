@@ -86,6 +86,19 @@ function clientValidateCms2567(finding: any): { ok: boolean; missing: string[] }
   return { ok: missing.length === 0, missing };
 }
 
+// CAP completeness guard. CAP has no federal-equivalent of CMS's 5-elements
+// rule, but per operator's consulting judgment the minimum floor before
+// submitting through the CAP e-LAB Solutions Suite is description plus
+// corrective action. Mirrors server-side validateCapResponse so a direct
+// API call cannot bypass it.
+function clientValidateCap(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) return { ok: false, missing: ["finding"] };
+  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
+  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
+  return { ok: missing.length === 0, missing };
+}
+
 export default function VeritaResponseFindingPage() {
   const { user } = useAuth();
   const params = useParams<{ id?: string }>();
@@ -216,6 +229,34 @@ export default function VeritaResponseFindingPage() {
     setRenderError(null);
     try {
       const res = await fetch(`${API_BASE}/api/findings/${id}/cms-2567-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
+  const handleGenerateCap = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/cap-pdf`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -406,6 +447,63 @@ export default function VeritaResponseFindingPage() {
                 <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
               )}
               {!poc.ok && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Fill in the missing fields below, save, then generate the PDF.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* CAP response checklist + render (CAP findings only). CAP has no
+          equivalent of CMS's 5 POC elements rule; the minimum floor is
+          description + corrective action (consulting-judgment). Mirrors
+          the CMS-2567 card pattern so the UX is uniform per accreditor. */}
+      {finding.accreditor === "CAP" && (() => {
+        const cap = clientValidateCap(finding);
+        const elements = [
+          { key: "description", label: "Deficiency description" },
+          { key: "corrective_action", label: "Corrective action" },
+        ];
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base font-semibold">CAP Plan of Correction Response</CardTitle>
+                <Button
+                  size="sm"
+                  className="bg-[#006064] hover:bg-[#004d50] text-white"
+                  onClick={handleGenerateCap}
+                  disabled={!cap.ok || renderState === "rendering"}
+                >
+                  <Download size={14} className="mr-1.5" />
+                  {renderState === "rendering" ? "Rendering..." : "Generate CAP PDF"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="text-xs text-muted-foreground">
+                CAP submits one response per checklist item via the e-LAB Solutions Suite. Minimum required: a deficiency description and a corrective action. Optional fields (root cause, preventive action, monitoring, completion date) strengthen the response and are recommended.
+              </div>
+              <ul className="space-y-1">
+                {elements.map((el) => {
+                  const val = finding[el.key];
+                  const present = !!(val && String(val).trim());
+                  return (
+                    <li key={el.key} className="flex items-center gap-2 text-sm">
+                      {present
+                        ? <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        : <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />}
+                      <span className={present ? "" : "text-muted-foreground"}>{el.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {renderState === "error" && renderError && (
+                <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
+              )}
+              {!cap.ok && (
                 <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
                   Fill in the missing fields below, save, then generate the PDF.
                 </div>
