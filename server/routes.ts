@@ -1991,7 +1991,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.lab_name,
         l.plan,
         l.subscription_status,
-        l.subscription_expires_at
+        l.subscription_expires_at,
+        l.accreditation_cap,
+        l.accreditation_tjc,
+        l.accreditation_cola,
+        l.accreditation_aabb
       FROM lab_members lm
       JOIN labs l ON lm.lab_id = l.id
       WHERE lm.user_id = ? AND lm.status = 'active'
@@ -2006,6 +2010,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       role: m.role,
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
+      accreditationCap: !!m.accreditation_cap,
+      accreditationTjc: !!m.accreditation_tjc,
+      accreditationCola: !!m.accreditation_cola,
+      accreditationAabb: !!m.accreditation_aabb,
       lastActiveAt: m.last_active_at,
       plan: m.plan,
       subscriptionStatus: m.subscription_status,
@@ -7919,6 +7927,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const VALID_ACCREDITORS = ['CAP','TJC','COLA','CMS','AABB','Other'];
   const VALID_FINDING_STATUSES = ['open','drafting','submitted','accepted','rejected_resubmit','closed'];
 
+  // Resolve the set of accreditors a given lab is allowed to file findings
+  // under. CMS is always included because every lab holds CLIA. "Other" is
+  // always included as the escape hatch for any accreditor not represented
+  // by a labs.accreditation_* flag. CAP / TJC / COLA / AABB only appear if
+  // the lab's corresponding flag is set. Used by the finding create/edit
+  // endpoints (defense-in-depth) and by the per-accreditor renderer
+  // endpoints to refuse work that doesn't apply to this lab.
+  function getLabAllowedAccreditors(labId: number | null | undefined): Set<string> {
+    const allowed = new Set<string>(['CMS', 'Other']);
+    if (!labId) return allowed;
+    const row = (db as any).$client.prepare(
+      "SELECT accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb FROM labs WHERE id = ?"
+    ).get(Number(labId)) as any;
+    if (!row) return allowed;
+    if (row.accreditation_cap)  allowed.add('CAP');
+    if (row.accreditation_tjc)  allowed.add('TJC');
+    if (row.accreditation_cola) allowed.add('COLA');
+    if (row.accreditation_aabb) allowed.add('AABB');
+    return allowed;
+  }
+
+  // For legacy (non-lab-scoped) finding endpoints, resolve the user's
+  // primary lab so we can gate the accreditor against that lab's flags.
+  // Falls back to users.lab_id (the dual-write legacy column) if the user
+  // has no active primary lab_members row.
+  function getUserPrimaryLabId(userId: number | null | undefined): number | null {
+    if (!userId) return null;
+    const lm = (db as any).$client.prepare(
+      "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+    ).get(Number(userId)) as any;
+    if (lm?.lab_id) return Number(lm.lab_id);
+    const u = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(Number(userId)) as any;
+    return u?.lab_id ? Number(u.lab_id) : null;
+  }
+
   // Auto-compute due date from accreditor + anchor date.
   // Anchor semantics per accreditor:
   //   CAP   anchor = inspection date,        due = anchor + 30 days
@@ -7979,6 +8022,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (status && !VALID_FINDING_STATUSES.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
     }
+    // Gate against the user's primary lab's accreditation flags so a lab
+    // can't file a CAP/TJC/COLA/AABB finding when it's not flagged for that
+    // body. CMS and Other always allowed. Mirrors the per-lab filter the
+    // frontend applies to the dropdown.
+    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const allowed = getLabAllowedAccreditors(labIdForGate);
+    if (!allowed.has(accreditor)) {
+      return res.status(400).json({
+        error: `This lab is not flagged as ${accreditor}-accredited. Update the lab's accreditation settings or pick an allowed accreditor.`,
+        allowed: Array.from(allowed),
+      });
+    }
     const due_date = dueDateForFinding(accreditor, anchor_date ?? null);
     const result = (db as any).$client.prepare(
       `INSERT INTO findings (
@@ -8025,6 +8080,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     if (body.status && !VALID_FINDING_STATUSES.includes(body.status)) {
       return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
+    }
+    // Only gate accreditor changes against the lab's allowed set. Existing
+    // findings whose accreditor isn't currently allowed (lab dropped the
+    // flag after the fact) stay readable and editable in OTHER fields;
+    // only attempts to switch TO a disallowed accreditor are blocked.
+    if (body.accreditor && body.accreditor !== existing.accreditor) {
+      const labIdForGate = getUserPrimaryLabId(dataUserId);
+      const allowed = getLabAllowedAccreditors(labIdForGate);
+      if (!allowed.has(body.accreditor)) {
+        return res.status(400).json({
+          error: `This lab is not flagged as ${body.accreditor}-accredited. Update the lab's accreditation settings or pick an allowed accreditor.`,
+          allowed: Array.from(allowed),
+        });
+      }
     }
     // Recompute due_date when accreditor or anchor_date changes
     const nextAccreditor = body.accreditor ?? existing.accreditor;
@@ -8168,7 +8237,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(result);
   });
 
-  // GET CAP response PDF token for a finding. CAP findings only.
+  // GET CAP response PDF token for a finding. CAP findings only, and only
+  // for labs flagged as CAP-accredited (labs.accreditation_cap). The latter
+  // mirrors the lab-aware accreditor gating elsewhere in this module: if a
+  // lab dropped its CAP flag after the finding was created, the renderer
+  // refuses with a clear error so the user updates accreditation settings
+  // before generating a submission packet for a body they don't claim.
   app.get("/api/findings/:id/cap-pdf", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const finding = (db as any).$client.prepare(
@@ -8177,6 +8251,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     if (finding.accreditor !== "CAP") {
       return res.status(400).json({ error: `CAP renderer only applies to CAP-accreditor findings; this finding is ${finding.accreditor}.` });
+    }
+    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const allowed = getLabAllowedAccreditors(labIdForGate);
+    if (!allowed.has('CAP')) {
+      return res.status(400).json({
+        error: "This lab is not flagged as CAP-accredited. Update the lab's accreditation settings before generating a CAP response PDF.",
+      });
     }
     const validation = validateCapResponse(finding);
     if (!validation.ok) {
@@ -8312,6 +8393,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     if (status && !VALID_FINDING_STATUSES.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
+    }
+    // Gate against the scoped lab's accreditation flags. labScopeMiddleware
+    // already validated this user has membership on req.scope.labId, so
+    // using that labId directly (instead of the user's primary) is correct
+    // for the lab-scoped variant.
+    const allowed = getLabAllowedAccreditors(req.scope.labId);
+    if (!allowed.has(accreditor)) {
+      return res.status(400).json({
+        error: `This lab is not flagged as ${accreditor}-accredited. Update the lab's accreditation settings or pick an allowed accreditor.`,
+        allowed: Array.from(allowed),
+      });
     }
     const due_date = dueDateForFinding(accreditor, anchor_date ?? null);
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
