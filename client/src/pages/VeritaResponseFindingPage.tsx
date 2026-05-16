@@ -123,6 +123,18 @@ function clientValidateCola(finding: any): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
+// AABB NER guard. AABB uses risk levels 1-5 (stored in phase_or_severity)
+// plus a CAPA expectation. Minimum floor: nonconformance description plus
+// risk level plus corrective action. Mirrors server-side validateAabbNer.
+function clientValidateAabb(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) return { ok: false, missing: ["finding"] };
+  if (!finding.description || !String(finding.description).trim()) missing.push("Nonconformance description");
+  if (!finding.phase_or_severity || !String(finding.phase_or_severity).trim()) missing.push("Risk level (1 through 5)");
+  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
+  return { ok: missing.length === 0, missing };
+}
+
 export default function VeritaResponseFindingPage() {
   const { user } = useAuth();
   const params = useParams<{ id?: string }>();
@@ -346,6 +358,34 @@ export default function VeritaResponseFindingPage() {
     setRenderError(null);
     try {
       const res = await fetch(`${API_BASE}/api/findings/${id}/cola-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
+  const handleGenerateAabb = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/aabb-pdf`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -714,6 +754,65 @@ export default function VeritaResponseFindingPage() {
               {!cola.ok && (
                 <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
                   Fill in the missing field below, save, then generate the PDF.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* AABB NER working-draft checklist + render. AABB findings only,
+          on a lab flagged for AABB. AABB has structured Sections A-M in
+          the official form; this PDF is framed as a working draft for
+          transcription. Required minimum: nonconformance description,
+          risk level (1-5), corrective action. */}
+      {finding.accreditor === "AABB" && labAllowedAccreditors.has("AABB") && (() => {
+        const aabb = clientValidateAabb(finding);
+        const elements = [
+          { key: "description", label: "Nonconformance description" },
+          { key: "phase_or_severity", label: "Risk level (1 through 5)" },
+          { key: "corrective_action", label: "Corrective action (CAPA)" },
+        ];
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base font-semibold">AABB Nonconforming Event Report</CardTitle>
+                <Button
+                  size="sm"
+                  className="bg-[#006064] hover:bg-[#004d50] text-white"
+                  onClick={handleGenerateAabb}
+                  disabled={!aabb.ok || renderState === "rendering"}
+                >
+                  <Download size={14} className="mr-1.5" />
+                  {renderState === "rendering" ? "Rendering..." : "Generate AABB NER PDF"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="text-xs text-muted-foreground">
+                AABB uses a Nonconforming Event Report with Sections A through M. This PDF is a working draft of the response content for transcription into AABB's official form per your facility's procedure. If the event meets FDA reportable-event criteria, separate FDA notification is required within 45 days of discovery.
+              </div>
+              <ul className="space-y-1">
+                {elements.map((el) => {
+                  const val = finding[el.key];
+                  const present = !!(val && String(val).trim());
+                  return (
+                    <li key={el.key} className="flex items-center gap-2 text-sm">
+                      {present
+                        ? <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        : <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />}
+                      <span className={present ? "" : "text-muted-foreground"}>{el.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {renderState === "error" && renderError && (
+                <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
+              )}
+              {!aabb.ok && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Fill in the missing fields below, save, then generate the PDF.
                 </div>
               )}
             </CardContent>

@@ -10,7 +10,7 @@ import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } fro
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -8405,6 +8405,69 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
       console.error("[cola-pdf] render failed:", err);
+      res.status(500).json({ error: err?.message || "PDF render failed" });
+    }
+  });
+
+  // Per-accreditor completeness check for AABB findings. AABB uses risk
+  // levels 1-5 (stored in phase_or_severity) plus a CAPA expectation.
+  // Minimum floor: description + phase_or_severity + corrective_action.
+  // Lead-staff review and FDA reportable-event notification are parallel
+  // process obligations not enforced in-PDF; the footer surfaces the
+  // 45-day FDA notification window as a reminder.
+  app.get("/api/findings/:id/aabb-completeness", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!row) return res.status(404).json({ error: "Finding not found" });
+    const result = validateAabbNer(row);
+    res.json(result);
+  });
+
+  // GET AABB NER PDF token for a finding. AABB findings only, and only
+  // for labs flagged as AABB-accredited (labs.accreditation_aabb). The
+  // PDF is framed as a working draft for transcription into AABB's
+  // official Nonconforming Event Report form (Sections A through M).
+  app.get("/api/findings/:id/aabb-pdf", authMiddleware, async (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    if (finding.accreditor !== "AABB") {
+      return res.status(400).json({ error: `AABB renderer only applies to AABB-accreditor findings; this finding is ${finding.accreditor}.` });
+    }
+    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const allowed = getLabAllowedAccreditors(labIdForGate);
+    if (!allowed.has('AABB')) {
+      return res.status(400).json({
+        error: "This lab is not flagged as AABB-accredited. Update the lab's accreditation settings before generating an AABB NER response PDF.",
+      });
+    }
+    const validation = validateAabbNer(finding);
+    if (!validation.ok) {
+      return res.status(400).json({
+        error: "AABB NER response is incomplete; cannot render PDF",
+        missing: validation.missing,
+      });
+    }
+    try {
+      const user = await storage.getUserById(dataUserId);
+      const pdfBuffer = await generateAabbNerPDF(
+        { finding, user },
+        licenseCtxFromReq(req, "VeritaResponse™"),
+      );
+      const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
+      const filename = `AABB_NER_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      try {
+        (db as any).$client.prepare(
+          `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+        ).run(Number(req.params.id), 'aabb_rendered', req.user?.userId ?? null, JSON.stringify({}));
+      } catch {}
+      res.json({ token: storePdfToken(pdfBuffer, filename) });
+    } catch (err: any) {
+      console.error("[aabb-pdf] render failed:", err);
       res.status(500).json({ error: err?.message || "PDF render failed" });
     }
   });
