@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -109,6 +110,15 @@ export default function VeritaResponseFindingPage() {
   const findingUrl = activeLabId
     ? `${API_BASE}/api/labs/${activeLabId}/findings/${id}`
     : findingUrl;
+
+  // Lab-aware accreditor gating: filter the dropdown to bodies the active
+  // lab claims, plus always-allowed CMS/Other, plus the finding's current
+  // value (so legacy findings whose accreditor is no longer in the lab's
+  // set remain readable and editable in other fields). Same allowedSet
+  // also gates whether the CAP renderer card appears.
+  const { data: memberships } = useMemberships();
+  const activeMembership = memberships?.find(m => m.labId === activeLabId) ?? null;
+  const labAllowedAccreditors = allowedAccreditorsForMembership(activeMembership);
 
   const [finding, setFinding] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -456,11 +466,13 @@ export default function VeritaResponseFindingPage() {
         );
       })()}
 
-      {/* CAP response checklist + render (CAP findings only). CAP has no
-          equivalent of CMS's 5 POC elements rule; the minimum floor is
-          description + corrective action (consulting-judgment). Mirrors
-          the CMS-2567 card pattern so the UX is uniform per accreditor. */}
-      {finding.accreditor === "CAP" && (() => {
+      {/* CAP response checklist + render (CAP findings only, on a lab
+          flagged for CAP). CAP has no equivalent of CMS's 5 POC elements
+          rule; the minimum floor is description + corrective action
+          (consulting-judgment). Mirrors the CMS-2567 card pattern so the
+          UX is uniform per accreditor. Hidden when the lab isn't flagged
+          for CAP, even if the finding's accreditor is CAP (legacy data). */}
+      {finding.accreditor === "CAP" && labAllowedAccreditors.has("CAP") && (() => {
         const cap = clientValidateCap(finding);
         const elements = [
           { key: "description", label: "Deficiency description" },
@@ -584,7 +596,16 @@ export default function VeritaResponseFindingPage() {
             <Select value={finding.accreditor} onValueChange={(v) => setField("accreditor", v)}>
               <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ACCREDITORS.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                {ACCREDITORS
+                  .filter(a => labAllowedAccreditors.has(a.value) || a.value === finding.accreditor)
+                  .map((a) => {
+                    const isLegacy = !labAllowedAccreditors.has(a.value);
+                    return (
+                      <SelectItem key={a.value} value={a.value}>
+                        {a.label}{isLegacy ? " (legacy, lab no longer flagged)" : ""}
+                      </SelectItem>
+                    );
+                  })}
               </SelectContent>
             </Select>
           </div>

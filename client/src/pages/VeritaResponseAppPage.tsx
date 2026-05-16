@@ -3,6 +3,7 @@ import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -85,7 +86,10 @@ export default function VeritaResponseAppPage() {
   const [saving, setSaving] = useState(false);
 
   // New finding form state
-  const [newAccreditor, setNewAccreditor] = useState<Accreditor>("CAP");
+  // Default to CMS because every lab holds CLIA so CMS is always in the
+  // allowed set. The dropdown filters to the active lab's accreditors;
+  // if the lab claims CAP/TJC/COLA/AABB, the user can pick those there.
+  const [newAccreditor, setNewAccreditor] = useState<Accreditor>("CMS");
   const [newFindingNumber, setNewFindingNumber] = useState("");
   const [newStandardRef, setNewStandardRef] = useState("");
   const [newPhaseOrSeverity, setNewPhaseOrSeverity] = useState("");
@@ -97,6 +101,14 @@ export default function VeritaResponseAppPage() {
 
   // Multi-Lab Tier 2 Phase 3.10b: lab-scope reads/writes.
   const activeLabId = useActiveLabId();
+
+  // Filter the accreditor picker against the active lab's accreditation flags
+  // so a user can only file findings for bodies the lab actually claims. CMS
+  // and Other are always available; CAP/TJC/COLA/AABB only if flagged.
+  const { data: memberships } = useMemberships();
+  const activeMembership = memberships?.find(m => m.labId === activeLabId) ?? null;
+  const allowedAccreditorSet = allowedAccreditorsForMembership(activeMembership);
+  const visibleAccreditors = ACCREDITORS.filter(a => allowedAccreditorSet.has(a.value));
   const findingsApi = activeLabId
     ? `${API_BASE}/api/labs/${activeLabId}/findings`
     : `${findingsApi}`;
@@ -144,7 +156,7 @@ export default function VeritaResponseAppPage() {
           status: "open",
         }),
       });
-      setNewAccreditor("CAP");
+      setNewAccreditor("CMS");
       setNewFindingNumber("");
       setNewStandardRef("");
       setNewPhaseOrSeverity("");
@@ -384,7 +396,7 @@ export default function VeritaResponseAppPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ACCREDITORS.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                    {visibleAccreditors.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
