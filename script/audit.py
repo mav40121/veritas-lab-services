@@ -412,6 +412,45 @@ def check_tier_monotonicity():
             prev_col = col
 
 
+def check_users_deprecated_writes():
+    """Phase 4.5: warn on writes to users.* columns that are now lab-authoritative.
+    docs/scoping-phase4-stripe-flip.md Section 6 Phase 4.5.
+
+    Allowlist mechanism: a line ending with `// PHASE5-OK` is exempt. Add this
+    comment to a write that is genuinely legacy/auth/onboarding-rooted and
+    should NOT be flipped to labs.
+    """
+    deprecated_cols = [
+        "plan",
+        "subscription_status",
+        "subscription_expires_at",
+        "plan_expires_at",
+        "stripe_customer_id",
+        "stripe_subscription_id",
+        "study_credits",
+    ]
+    pattern = re.compile(
+        r"UPDATE\s+users\s+SET\s+(?:[^=]*?,\s*)?("
+        + "|".join(deprecated_cols)
+        + r")\s*=",
+        re.IGNORECASE,
+    )
+    routes_path = os.path.join(ROOT, "server", "routes.ts")
+    if not os.path.exists(routes_path):
+        return
+    with open(routes_path) as f:
+        for lineno, line in enumerate(f, 1):
+            m = pattern.search(line)
+            if not m:
+                continue
+            if "PHASE5-OK" in line:
+                continue
+            WARNINGS.append(
+                f"[server/routes.ts:{lineno}] Phase 4.5: writes to deprecated users.{m.group(1)} "
+                f"- prefer labs.{m.group(1)}. Add `// PHASE5-OK` if this is auth/onboarding."
+            )
+
+
 def main():
     files = collect_files()
     print(f"Scanning {len(files)} files from {ROOT}\n")
@@ -428,6 +467,9 @@ def main():
     print("Checking Compare Plans table truth + tier monotonicity...")
     check_pricing_truth()
     check_tier_monotonicity()
+
+    # Phase 4.5: deprecated users.* writes regression check
+    check_users_deprecated_writes()
 
     print("=" * 60)
 
