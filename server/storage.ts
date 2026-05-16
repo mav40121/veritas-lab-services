@@ -58,6 +58,9 @@ export interface IStorage {
   updateUserPlan(id: number, plan: string, credits: number): void;
   updateUserStripe(id: number, data: { stripeCustomerId?: string; stripeSubscriptionId?: string | null; plan?: string }): void;
   getUserByStripeCustomerId(customerId: string): User | undefined;
+  // Multi-Lab Tier 2 Phase 4.1: lab-keyed Stripe lookup. labs is not in the
+  // drizzle schema, so this returns the raw row shape.
+  getLabByStripeCustomerId(customerId: string): any;
   addStudyCredits(id: number, credits: number): void;
   deleteUser(id: number): void;
   // Studies
@@ -98,6 +101,9 @@ class DatabaseStorage implements IStorage {
   }
   getUserByStripeCustomerId(customerId: string): User | undefined {
     return db.select().from(users).where(eq(users.stripeCustomerId, customerId)).get();
+  }
+  getLabByStripeCustomerId(customerId: string): any {
+    return (db as any).$client.prepare("SELECT * FROM labs WHERE stripe_customer_id = ?").get(customerId);
   }
   addStudyCredits(id: number, credits: number): void {
     const user = this.getUserById(id);
