@@ -6,6 +6,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { downloadPdfToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -152,6 +153,20 @@ export default function VeritaStaffAppPage() {
   const activeLabId = useActiveLabId();
   const labKey = activeLabId ? `/api/labs/${activeLabId}/staff/lab` : `/api/staff/lab`;
   const empKey = activeLabId ? `/api/labs/${activeLabId}/staff/employees` : `/api/staff/employees`;
+
+  // Lab-aware accreditor gating: filter the staff_labs accreditation dropdown
+  // to the bodies the master labs record is flagged for, plus always-allowed
+  // CLIA_ONLY (every lab holds CLIA) and OTHER (escape hatch). The helper
+  // returns CMS/Other in its always-allowed set; translate to this module's
+  // value names (CLIA_ONLY/OTHER). VeritaStaff has no AABB option, so AABB
+  // from the flag set is simply ignored here.
+  const { data: memberships } = useMemberships();
+  const activeMembership = memberships?.find(m => m.labId === activeLabId) ?? null;
+  const labFlagAllowed = allowedAccreditorsForMembership(activeMembership);
+  const isStaffAccreditorAllowed = (value: string): boolean => {
+    if (value === 'CLIA_ONLY' || value === 'OTHER') return true;
+    return labFlagAllowed.has(value); // CAP, TJC, COLA matched 1:1
+  };
 
   // Fetch lab
   const { data: lab, isLoading: labLoading } = useQuery<Lab | null>({
@@ -462,7 +477,16 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
             <Select value={form.accreditationBody} onValueChange={(v) => setForm({ ...form, accreditationBody: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ACCREDITORS.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                {ACCREDITORS
+                  .filter(a => isStaffAccreditorAllowed(a.value) || a.value === form.accreditationBody)
+                  .map((a) => {
+                    const isLegacy = !isStaffAccreditorAllowed(a.value);
+                    return (
+                      <SelectItem key={a.value} value={a.value}>
+                        {a.label}{isLegacy ? " (legacy, lab no longer flagged)" : ""}
+                      </SelectItem>
+                    );
+                  })}
               </SelectContent>
             </Select>
           </div>
