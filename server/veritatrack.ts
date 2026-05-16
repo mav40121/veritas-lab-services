@@ -60,11 +60,12 @@ export function registerVeritaTrackRoutes(
 ) {
   const sqlite = (db as any).$client;
 
-  function hasTrackAccess(user: any) {
+  function hasTrackAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
     return [
       "annual","professional","lab","complete","waived",
       "community","hospital","large_hospital","enterprise",
-    ].includes(user?.plan);
+    ].includes(plan);
   }
 
   // GET all tasks with latest sign-off and computed status
