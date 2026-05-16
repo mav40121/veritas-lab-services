@@ -10,7 +10,7 @@ import { LabSwitcher } from "@/components/LabSwitcher";
 
 const allMobileLinks = [
   { href: "/", label: "Home" },
-  { href: "/services", label: "Services" },
+  { href: "/services", label: "Consulting" },
   { href: "/pricing", label: "Pricing" },
   { href: "/veritaassure", label: "VeritaAssure\u2122" },
   { href: "/team", label: "Our Team" },
@@ -71,10 +71,10 @@ export function NavBar() {
             Home
           </Link>
 
-          {/* Services */}
+          {/* Consulting (route stays /services; only the displayed label changes) */}
           <Link href="/services" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/services") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
-            Services
+            Consulting
           </Link>
 
           {/* Pricing */}
@@ -220,14 +220,10 @@ export function NavBar() {
             </Button>
           )}
 
-          {isLoggedIn && (
-            <Button asChild size="sm" variant="outline" className={cn(
-              "hidden lg:flex gap-1.5 font-medium",
-              location === "/dashboard" && "bg-secondary text-foreground border-border"
-            )}>
-              <Link href="/dashboard"><LayoutDashboard size={13} />My Studies</Link>
-            </Button>
-          )}
+          {/* Standalone "My Studies" button removed to reclaim horizontal space
+              for "Run a Study" on standard viewports. My Studies is still
+              accessible via the User dropdown above (DropdownMenuItem
+              -> /dashboard). */}
 
           <Button asChild size="sm" className="hidden lg:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
