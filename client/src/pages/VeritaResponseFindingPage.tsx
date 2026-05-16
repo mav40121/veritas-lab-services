@@ -100,6 +100,19 @@ function clientValidateCap(finding: any): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
+// TJC Evidence of Standards Compliance guard. The May 2024 TJC update
+// requires documenting patient-impact factors found during root-cause
+// analysis; the findings schema folds that into root_cause. Mirrors
+// server-side validateTjcEsc.
+function clientValidateTjc(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) return { ok: false, missing: ["finding"] };
+  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
+  if (!finding.root_cause || !String(finding.root_cause).trim()) missing.push("Root cause analysis (including patient-impact factors)");
+  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
+  return { ok: missing.length === 0, missing };
+}
+
 export default function VeritaResponseFindingPage() {
   const { user } = useAuth();
   const params = useParams<{ id?: string }>();
@@ -267,6 +280,34 @@ export default function VeritaResponseFindingPage() {
     setRenderError(null);
     try {
       const res = await fetch(`${API_BASE}/api/findings/${id}/cap-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
+  const handleGenerateTjc = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/tjc-pdf`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -516,6 +557,65 @@ export default function VeritaResponseFindingPage() {
                 <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
               )}
               {!cap.ok && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Fill in the missing fields below, save, then generate the PDF.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* TJC Evidence of Standards Compliance checklist + render. TJC
+          findings only, on a lab flagged for TJC. The May 2024 TJC update
+          requires patient-impact factor documentation; the checklist
+          labels root_cause accordingly. Pattern mirrors the CMS-2567 and
+          CAP cards so the UX is uniform per accreditor. */}
+      {finding.accreditor === "TJC" && labAllowedAccreditors.has("TJC") && (() => {
+        const tjc = clientValidateTjc(finding);
+        const elements = [
+          { key: "description", label: "Deficiency description" },
+          { key: "root_cause", label: "Root cause analysis (including patient-impact factors per TJC May 2024 update)" },
+          { key: "corrective_action", label: "Corrective action" },
+        ];
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base font-semibold">TJC Evidence of Standards Compliance</CardTitle>
+                <Button
+                  size="sm"
+                  className="bg-[#006064] hover:bg-[#004d50] text-white"
+                  onClick={handleGenerateTjc}
+                  disabled={!tjc.ok || renderState === "rendering"}
+                >
+                  <Download size={14} className="mr-1.5" />
+                  {renderState === "rendering" ? "Rendering..." : "Generate TJC ESC PDF"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="text-xs text-muted-foreground">
+                TJC submits one ESC per Requirement for Improvement through Joint Commission Connect under the Survey Process post-survey workflow. Required minimum: deficiency description, root cause analysis with patient-impact factors, and a corrective action. Optional fields (immediate action, preventive action, monitoring, completion date) strengthen the response and are recommended.
+              </div>
+              <ul className="space-y-1">
+                {elements.map((el) => {
+                  const val = finding[el.key];
+                  const present = !!(val && String(val).trim());
+                  return (
+                    <li key={el.key} className="flex items-center gap-2 text-sm">
+                      {present
+                        ? <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        : <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />}
+                      <span className={present ? "" : "text-muted-foreground"}>{el.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {renderState === "error" && renderError && (
+                <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
+              )}
+              {!tjc.ok && (
                 <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
                   Fill in the missing fields below, save, then generate the PDF.
                 </div>

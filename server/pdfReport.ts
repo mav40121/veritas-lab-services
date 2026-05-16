@@ -4542,3 +4542,195 @@ export async function generateCapResponsePDF(input: Cms2567Input, licenseCtx?: P
     await page.close();
   }
 }
+
+// TJC Evidence of Standards Compliance (ESC) renderer. Per the May 2024
+// TJC update, ESC documentation must include factors impacting patient
+// care found during root-cause analysis; the findings schema's common
+// spine has no dedicated patient-impact column, so root_cause is the
+// catch-all and the PDF labels that section to prompt the user. Minimum
+// floor for TJC: description + root_cause + corrective_action.
+export function validateTjcEsc(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) {
+    return { ok: false, missing: ["finding"] };
+  }
+  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
+  if (!finding.root_cause || !String(finding.root_cause).trim()) missing.push("Root cause analysis (including patient-impact factors)");
+  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
+  return { ok: missing.length === 0, missing };
+}
+
+function buildTjcEscHTML(input: Cms2567Input): string {
+  const { finding, user } = input;
+  const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
+  const cliaRaw = user?.clia_number || user?.cliaNumber || "";
+  const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file, enter in account settings";
+  const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const findingNum = escHtml(finding.finding_number || `#${finding.id}`);
+  const standardRef = escHtml(finding.standard_ref || "Not recorded");
+  const phase = escHtml(finding.phase_or_severity || "Not classified");
+  const anchor = escHtml(finding.anchor_date || "Not set");
+  const due = escHtml(finding.due_date || "Not computed");
+  const inspectionId = escHtml(finding.inspection_id || "");
+
+  const description = escHtml(finding.description || "").replace(/\n/g, "<br>");
+  const surveyorNotes = escHtml(finding.surveyor_notes || "").replace(/\n/g, "<br>");
+
+  const immediateAction = escHtml(finding.immediate_action || "").replace(/\n/g, "<br>");
+  const containment = escHtml(finding.containment || "").replace(/\n/g, "<br>");
+  const rootCause = escHtml(finding.root_cause || "").replace(/\n/g, "<br>");
+  const correctiveAction = escHtml(finding.corrective_action || "").replace(/\n/g, "<br>");
+  const preventiveAction = escHtml(finding.preventive_action || "").replace(/\n/g, "<br>");
+  const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
+  const completionDate = escHtml(finding.completion_date || "");
+  const signedBy = escHtml(finding.signed_by || "");
+  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>TJC Evidence of Standards Compliance - ${findingNum}</title>
+<style>
+  @page { size: Letter; margin: 14mm 15mm 16mm 15mm; }
+  body { font-family: 'Calibri', 'Helvetica Neue', Arial, sans-serif; color: #28251D; font-size: 9pt; line-height: 1.4; margin: 0; }
+  .header { border-bottom: 2px solid #01696F; padding-bottom: 8px; margin-bottom: 10px; }
+  .header-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .form-id { font-size: 7.5pt; color: #7A7974; letter-spacing: 0.05em; }
+  .title { font-size: 14pt; font-weight: 700; color: #01696F; margin-top: 4px; }
+  .subtitle { font-size: 9pt; color: #28251D; margin-top: 2px; }
+  .lab-row { display: flex; justify-content: space-between; font-size: 8.5pt; margin-top: 6px; color: #0A3A3D; font-weight: 600; }
+
+  .ident-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px 12px; margin-bottom: 10px; font-size: 8pt; }
+  .ident-grid .label { color: #7A7974; text-transform: uppercase; letter-spacing: 0.04em; font-size: 7pt; }
+  .ident-grid .value { color: #28251D; font-weight: 600; }
+
+  .section { margin-top: 10px; }
+  .section-head { background: #01696F; color: #FFFFFF; font-weight: 700; font-size: 9pt; padding: 5px 8px; letter-spacing: 0.03em; }
+  .section-sub { font-size: 7.5pt; font-weight: 500; opacity: 0.85; margin-top: 1px; }
+  .section-body { border: 1px solid #D4D1CA; border-top: none; padding: 8px 10px; font-size: 8.5pt; }
+
+  .resp-element { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #D4D1CA; }
+  .resp-element:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .resp-label { font-size: 7pt; color: #01696F; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 2px; }
+  .resp-content { font-size: 8.5pt; color: #28251D; }
+  .resp-content em { color: #7A7974; font-style: italic; }
+  .resp-hint { font-size: 7pt; color: #7A7974; font-style: italic; margin-top: 2px; margin-bottom: 4px; }
+
+  .director-block { margin-top: 14px; border: 1.5px solid #01696F; padding: 10px 12px; background: #F7F6F2; }
+  .director-title { font-size: 8pt; font-weight: 700; color: #01696F; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+  .director-checkbox { display: inline-block; margin-right: 14px; font-size: 8.5pt; }
+  .director-checkbox .box { display: inline-block; width: 10px; height: 10px; border: 1.5px solid #28251D; margin-right: 4px; vertical-align: middle; }
+  .director-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-top: 8px; font-size: 8pt; }
+  .director-field-label { color: #7A7974; font-size: 7pt; text-transform: uppercase; letter-spacing: 0.04em; }
+  .director-field-value { border-bottom: 1px solid #28251D; min-height: 16px; padding: 2px 0; font-weight: 600; }
+  .director-attestation { margin-top: 8px; font-size: 7.5pt; color: #28251D; font-style: italic; }
+
+  .footer-note { margin-top: 12px; font-size: 7pt; color: #7A7974; border-top: 1px dashed #D4D1CA; padding-top: 6px; }
+</style></head><body>
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="form-id">TJC EVIDENCE OF STANDARDS COMPLIANCE</div>
+        <div class="title">TJC ESC Response</div>
+        <div class="subtitle">Submitted per TJC standard for the cited Requirement for Improvement</div>
+      </div>
+      <div style="text-align:right;font-size:7.5pt;color:#7A7974;">
+        Generated ${escHtml(dateGen)}<br>
+        Finding ${findingNum}
+      </div>
+    </div>
+    <div class="lab-row"><span>${labName}</span><span>${clia}</span></div>
+  </div>
+
+  <div class="ident-grid">
+    <div><div class="label">RFI / Standard</div><div class="value">${standardRef}</div></div>
+    <div><div class="label">Phase / Severity</div><div class="value">${phase}</div></div>
+    <div><div class="label">Final Report Posted</div><div class="value">${anchor}</div></div>
+    <div><div class="label">Response Due</div><div class="value">${due}</div></div>
+    ${inspectionId ? `<div style="grid-column: 1 / span 4;"><div class="label">Inspection / Survey Reference</div><div class="value">${inspectionId}</div></div>` : ""}
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      Requirement for Improvement
+      <div class="section-sub">(Surveyor narrative for the cited standard)</div>
+    </div>
+    <div class="section-body">
+      ${description || "<em>No deficiency description recorded.</em>"}
+      ${surveyorNotes ? `<div style="margin-top:10px;padding-top:6px;border-top:1px dashed #D4D1CA;"><div class="resp-label">Surveyor Notes</div><div class="resp-content">${surveyorNotes}</div></div>` : ""}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      Evidence of Standards Compliance
+      <div class="section-sub">(Required minimum: description, root cause with patient-impact factors, corrective action)</div>
+    </div>
+    <div class="section-body">
+      ${immediateAction ? `<div class="resp-element"><div class="resp-label">Immediate Action</div><div class="resp-content">${immediateAction}</div></div>` : ""}
+      ${containment ? `<div class="resp-element"><div class="resp-label">Containment</div><div class="resp-content">${containment}</div></div>` : ""}
+      <div class="resp-element">
+        <div class="resp-label">Root Cause Analysis</div>
+        <div class="resp-hint">Per the May 2024 TJC ESC update, document factors impacting patient care found during root-cause analysis.</div>
+        <div class="resp-content">${rootCause || "<em>Not recorded.</em>"}</div>
+      </div>
+      <div class="resp-element"><div class="resp-label">Corrective Action</div><div class="resp-content">${correctiveAction || "<em>Not recorded.</em>"}</div></div>
+      ${preventiveAction ? `<div class="resp-element"><div class="resp-label">Preventive / System-Level Action</div><div class="resp-content">${preventiveAction}</div></div>` : ""}
+      ${monitoringPlan ? `<div class="resp-element"><div class="resp-label">Effectiveness Monitoring</div><div class="resp-content">${monitoringPlan}</div></div>` : ""}
+      ${completionDate ? `<div class="resp-element"><div class="resp-label">Completion Date</div><div class="resp-content">${completionDate}</div></div>` : ""}
+    </div>
+  </div>
+
+  <div class="director-block">
+    <div class="director-title">Laboratory Director or Designee Review</div>
+    <div>
+      <span class="director-checkbox"><span class="box"></span>Accepted</span>
+      <span class="director-checkbox"><span class="box"></span>Not accepted, returned for revision</span>
+    </div>
+    <div class="director-fields">
+      <div>
+        <div class="director-field-label">Print Name / Initials</div>
+        <div class="director-field-value">${signedBy || "&nbsp;"}</div>
+      </div>
+      <div>
+        <div class="director-field-label">Signature</div>
+        <div class="director-field-value">&nbsp;</div>
+      </div>
+      <div>
+        <div class="director-field-label">Date</div>
+        <div class="director-field-value">${signedAt || "&nbsp;"}</div>
+      </div>
+    </div>
+    <div class="director-attestation">
+      Final approval and clinical determination of the Evidence of Standards Compliance rests with the laboratory director or designee. The signature above attests that the corrective and preventive actions described are accurate and will be implemented as documented.
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Generated by VeritaResponse&trade; from VeritaAssure&trade;. This document captures the laboratory's Evidence of Standards Compliance for a TJC Requirement for Improvement. Submit through Joint Commission Connect under the Survey Process post-survey workflow per your facility's standard procedure. TJC deadline is 60 days from posted final report.
+  </div>
+</body></html>`;
+}
+
+export async function generateTjcEscPDF(input: Cms2567Input, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  const validation = validateTjcEsc(input.finding);
+  if (!validation.ok) {
+    throw new Error(`TJC ESC cannot be rendered: missing ${validation.missing.join(", ")}`);
+  }
+  const html = buildTjcEscHTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}

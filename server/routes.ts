@@ -10,7 +10,7 @@ import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } fro
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc } from "./pdfReport";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -8282,6 +8282,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
       console.error("[cap-pdf] render failed:", err);
+      res.status(500).json({ error: err?.message || "PDF render failed" });
+    }
+  });
+
+  // Per-accreditor completeness check for TJC findings. Mirrors the
+  // poc-completeness / cap-completeness shape so the frontend gating UX
+  // is uniform across renderers. TJC's May 2024 ESC update requires
+  // documenting patient-impact factors from root-cause analysis; the
+  // minimum floor enforced here is description + root_cause +
+  // corrective_action (patient-impact folds into root_cause narrative).
+  app.get("/api/findings/:id/tjc-completeness", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!row) return res.status(404).json({ error: "Finding not found" });
+    const result = validateTjcEsc(row);
+    res.json(result);
+  });
+
+  // GET TJC ESC PDF token for a finding. TJC findings only, and only
+  // for labs flagged as TJC-accredited (labs.accreditation_tjc). Same
+  // lab-aware gating as the CAP endpoint.
+  app.get("/api/findings/:id/tjc-pdf", authMiddleware, async (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    if (finding.accreditor !== "TJC") {
+      return res.status(400).json({ error: `TJC renderer only applies to TJC-accreditor findings; this finding is ${finding.accreditor}.` });
+    }
+    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const allowed = getLabAllowedAccreditors(labIdForGate);
+    if (!allowed.has('TJC')) {
+      return res.status(400).json({
+        error: "This lab is not flagged as TJC-accredited. Update the lab's accreditation settings before generating a TJC ESC response PDF.",
+      });
+    }
+    const validation = validateTjcEsc(finding);
+    if (!validation.ok) {
+      return res.status(400).json({
+        error: "TJC ESC response is incomplete; cannot render PDF",
+        missing: validation.missing,
+      });
+    }
+    try {
+      const user = await storage.getUserById(dataUserId);
+      const pdfBuffer = await generateTjcEscPDF(
+        { finding, user },
+        licenseCtxFromReq(req, "VeritaResponse™"),
+      );
+      const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
+      const filename = `TJC_ESC_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      try {
+        (db as any).$client.prepare(
+          `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+        ).run(Number(req.params.id), 'tjc_rendered', req.user?.userId ?? null, JSON.stringify({}));
+      } catch {}
+      res.json({ token: storePdfToken(pdfBuffer, filename) });
+    } catch (err: any) {
+      console.error("[tjc-pdf] render failed:", err);
       res.status(500).json({ error: err?.message || "PDF render failed" });
     }
   });
