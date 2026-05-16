@@ -815,6 +815,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, user: { id: row?.id, email: row?.email, name: row?.name, seatCount: row?.seat_count } });
   });
 
+  // Admin: grant an existing user a membership on an existing lab. Used to
+  // manually wire enterprise multi-lab testers (e.g., give the operator a
+  // second membership so the NavBar lab switcher renders). Idempotent:
+  // returns the existing membership row if one already exists for the
+  // (lab_id, user_id) pair.
+  app.post("/api/admin/add-lab-membership", (req, res) => {
+    const { secret, userId, labId, role, isPrimaryLab } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!userId || !labId) return res.status(400).json({ error: "userId and labId required" });
+    const sqlite = (db as any).$client;
+    const user = sqlite.prepare("SELECT id, email FROM users WHERE id = ?").get(Number(userId)) as any;
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const lab = sqlite.prepare("SELECT id, name FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const existing = sqlite.prepare(
+      "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+    ).get(Number(labId), Number(userId)) as any;
+    if (existing) {
+      return res.json({ ok: true, created: false, membership: existing, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.name } });
+    }
+    const now = new Date().toISOString();
+    const resolvedRole = role || "staff";
+    const primaryFlag = isPrimaryLab ? 1 : 0;
+    sqlite.prepare(`
+      INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+      VALUES (?, ?, ?, '{}', 'active', ?, ?, ?, ?)
+    `).run(Number(labId), Number(userId), resolvedRole, primaryFlag, now, now, now);
+    const membership = sqlite.prepare(
+      "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+    ).get(Number(labId), Number(userId));
+    res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.name } });
+  });
+
   // Admin: list all seat records (used by audit script to verify seat integrity)
   app.post("/api/admin/seats", (req, res) => {
     const { secret } = req.body;
