@@ -1723,9 +1723,14 @@ sqlite.exec(`
 // Multi-Lab Tier 2 — Phase 3.10 (VeritaResponse module):
 // findings (user_id) is the parent; finding_attachments scopes through
 // finding_id and inherits lab scope. Add lab_id to findings only.
-{
+//
+// Wrapped in try-catch: `findings` is created later in db.ts (~line 2424).
+// On a fresh build-container DB the table does not exist yet, so prepare()
+// crashes. Production volume DB has the table, so on next boot the
+// backfill runs idempotently. See PR #163 reorder for the same fix shape.
+try {
   const cols = (sqlite.prepare(`PRAGMA table_info(findings)`).all() as any[]).map(c => c.name);
-  if (!cols.includes("lab_id")) {
+  if (!cols.includes("lab_id") && cols.length > 0) {
     try { sqlite.exec(`ALTER TABLE findings ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
   }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_lab ON findings(lab_id, due_date)`); } catch {}
@@ -1736,15 +1741,20 @@ sqlite.exec(`
       AND (SELECT u.lab_id FROM users u WHERE u.id = findings.user_id) IS NOT NULL
   `).run();
   if (sb.changes > 0) console.log(`[migration] Multi-lab Phase 3.10 (findings): backfilled lab_id on ${sb.changes} row(s)`);
+} catch (err: any) {
+  console.warn(`[migration] Phase 3.10 (findings) skipped (table not yet created on fresh DB):`, err?.message);
 }
 
 // Multi-Lab Tier 2 — Phase 3.11 (VeritaStock module):
 // inventory_items uses account_id (which is the owner_user_id, named
 // differently because operations modules predate the user/owner pattern).
 // Backfill maps account_id → users.lab_id.
-{
+//
+// Wrapped in try-catch: `inventory_items` is created later in db.ts
+// (~line 2149). Same fresh-DB-build crash mode as Phase 3.10.
+try {
   const cols = (sqlite.prepare(`PRAGMA table_info(inventory_items)`).all() as any[]).map(c => c.name);
-  if (!cols.includes("lab_id")) {
+  if (!cols.includes("lab_id") && cols.length > 0) {
     try { sqlite.exec(`ALTER TABLE inventory_items ADD COLUMN lab_id INTEGER REFERENCES labs(id)`); } catch {}
   }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_lab ON inventory_items(lab_id)`); } catch {}
@@ -1755,6 +1765,8 @@ sqlite.exec(`
       AND (SELECT u.lab_id FROM users u WHERE u.id = inventory_items.account_id) IS NOT NULL
   `).run();
   if (sb.changes > 0) console.log(`[migration] Multi-lab Phase 3.11 (inventory_items): backfilled lab_id on ${sb.changes} row(s)`);
+} catch (err: any) {
+  console.warn(`[migration] Phase 3.11 (inventory_items) skipped (table not yet created on fresh DB):`, err?.message);
 }
 
 // Multi-Lab Tier 2 — Phase 3.9 (VeritaStaff module):
