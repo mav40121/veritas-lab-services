@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@shared/schema";
-import { OWNER_EMAIL } from "./constants";
+import { OWNER_EMAIL, OWNER_CLIA } from "./constants";
 import { existsSync as _dbExistsSync } from "fs";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
@@ -1490,6 +1490,33 @@ if (!colNames.includes("default_lab_id")) {
   if (memberInserted > 0 || subsCopied > 0 || defaultsSet > 0) {
     console.log(`[migration] Multi-lab Phase 1: ${memberInserted} member(s) inserted, ${subsCopied} primary lab(s) had subscription state copied, ${defaultsSet} user(s) got default_lab_id`);
   }
+}
+
+// Multi-Lab Tier 2 — Phase 4.4: operator's lab gets permanent enterprise.
+// Mirrors the user-row update at db.ts:866 but on the LAB row. After Phase
+// 4.x ships, lab.plan is the authoritative source for subscription gates
+// (Phase 4.3a/b/c), so this UPDATE is what actually keeps the operator on
+// enterprise. The line 866 user update stays for the dual-write window.
+//
+// Identity is by CLIA (OWNER_CLIA constant from server/constants.ts), not
+// email. Reason: feedback_target_lab_not_email.md — emails are auth
+// identity, CLIA is data identity. Per parking-lot #11 once multi-lab
+// activates the operator email may own more than one lab; only the one
+// matching OWNER_CLIA gets the permanent-enterprise force-upgrade.
+try {
+  const opLabRow = sqlite.prepare("SELECT id, plan FROM labs WHERE clia_number = ? LIMIT 1").get(OWNER_CLIA) as any;
+  if (opLabRow) {
+    const PLAN_RANK_FOR_OP: Record<string, number> = { free: 0, per_study: 1, veritacheck_only: 2, community: 3, lab: 4, hospital: 5, large_hospital: 6, enterprise: 7, waived: 7 };
+    const currentRank = PLAN_RANK_FOR_OP[opLabRow?.plan] ?? 0;
+    const targetRank = PLAN_RANK_FOR_OP["enterprise"] ?? 7;
+    if (currentRank <= targetRank) {
+      sqlite.prepare(
+        "UPDATE labs SET plan = 'enterprise', subscription_status = 'active', subscription_expires_at = '2099-12-31T00:00:00.000Z', plan_expires_at = '2099-12-31T00:00:00.000Z', study_credits = 99999, updated_at = ? WHERE id = ?"
+      ).run(new Date().toISOString(), opLabRow.id);
+    }
+  }
+} catch (err: any) {
+  console.warn("[multi-lab] Phase 4.4 operator-lab permanent-enterprise force-upgrade failed:", err?.message);
 }
 
 // VeritaPolicy tables

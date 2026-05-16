@@ -779,12 +779,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/admin/set-plan", (req, res) => {
-    const { secret, userId, plan, credits } = req.body;
+    const { secret, userId, labId, plan, credits } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const planCredits = ["annual", "starter", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
-    storage.updateUserPlan(Number(userId), plan, planCredits);
-    const user = storage.getUserById(Number(userId));
-    res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
+    // Phase 4.4 dual-write: update the lab (authoritative) and the user
+    // (legacy safety net). If labId is provided, target that lab directly;
+    // otherwise resolve via the user's primary membership.
+    let targetLabId: number | null = null;
+    if (labId) {
+      targetLabId = Number(labId);
+    } else if (userId) {
+      const lm = (db as any).$client.prepare(
+        "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+      ).get(Number(userId)) as any;
+      targetLabId = lm?.lab_id ?? null;
+    }
+    if (targetLabId) {
+      (db as any).$client.prepare(
+        "UPDATE labs SET plan = ?, study_credits = ?, updated_at = ? WHERE id = ?"
+      ).run(plan, planCredits, new Date().toISOString(), targetLabId);
+    }
+    if (userId) {
+      storage.updateUserPlan(Number(userId), plan, planCredits);
+    }
+    const user = userId ? storage.getUserById(Number(userId)) : null;
+    res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
   app.post("/api/admin/set-seats", (req, res) => {
@@ -11596,21 +11615,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const secret = req.headers["x-admin-secret"] as string;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
 
-    const { userId, plan } = req.body;
-    if (!userId || !plan) return res.status(400).json({ error: "userId and plan required" });
+    const { userId, labId, plan } = req.body;
+    if ((!userId && !labId) || !plan) return res.status(400).json({ error: "userId or labId, and plan, required" });
 
     const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
     if (!validPlans.includes(plan)) return res.status(400).json({ error: "Invalid plan" });
 
     const planCredits = plan === "free" || plan === "per_study" ? 0 : 99999;
-    storage.updateUserPlan(Number(userId), plan, planCredits);
-
-    // Also update seat_count to match plan defaults
     const seats = PLAN_SEATS[plan] || 1;
-    (db as any).$client.prepare("UPDATE users SET seat_count = ? WHERE id = ?").run(seats, Number(userId));
 
-    const user = storage.getUserById(Number(userId));
-    res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits, seatCount: seats } });
+    // Phase 4.4 dual-write: lab is authoritative; user is legacy safety net.
+    let targetLabId: number | null = labId ? Number(labId) : null;
+    if (!targetLabId && userId) {
+      const lm = (db as any).$client.prepare(
+        "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+      ).get(Number(userId)) as any;
+      targetLabId = lm?.lab_id ?? null;
+    }
+    if (targetLabId) {
+      (db as any).$client.prepare(
+        "UPDATE labs SET plan = ?, study_credits = ?, updated_at = ? WHERE id = ?"
+      ).run(plan, planCredits, new Date().toISOString(), targetLabId);
+    }
+    if (userId) {
+      storage.updateUserPlan(Number(userId), plan, planCredits);
+      (db as any).$client.prepare("UPDATE users SET seat_count = ? WHERE id = ?").run(seats, Number(userId));
+    }
+
+    const user = userId ? storage.getUserById(Number(userId)) : null;
+    res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits, seatCount: seats } });
   });
 
   // ── ADMIN: Audit log viewer ────────────────────────────────────────────────────────
