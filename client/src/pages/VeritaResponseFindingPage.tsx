@@ -113,6 +113,16 @@ function clientValidateTjc(finding: any): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
+// COLA consultative-narrative guard. COLA has no hard regulatory minimum
+// (scoping doc section 4); the only gate is a description floor so the
+// PDF doesn't render fully empty. Mirrors server-side validateColaResponse.
+function clientValidateCola(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding) return { ok: false, missing: ["finding"] };
+  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
+  return { ok: missing.length === 0, missing };
+}
+
 export default function VeritaResponseFindingPage() {
   const { user } = useAuth();
   const params = useParams<{ id?: string }>();
@@ -308,6 +318,34 @@ export default function VeritaResponseFindingPage() {
     setRenderError(null);
     try {
       const res = await fetch(`${API_BASE}/api/findings/${id}/tjc-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
+  const handleGenerateCola = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/cola-pdf`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -618,6 +656,64 @@ export default function VeritaResponseFindingPage() {
               {!tjc.ok && (
                 <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
                   Fill in the missing fields below, save, then generate the PDF.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* COLA consultative-narrative checklist + render. COLA findings only,
+          on a lab flagged for COLA. COLA is consultative with no hard
+          deadline; the gate is just description (sanity check, not a
+          regulatory floor). Body copy explains the "why over what" emphasis
+          so users know to draft Root cause / lessons learned before final
+          submission to COLA tech support. */}
+      {finding.accreditor === "COLA" && labAllowedAccreditors.has("COLA") && (() => {
+        const cola = clientValidateCola(finding);
+        const elements = [
+          { key: "description", label: "Deficiency description" },
+        ];
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base font-semibold">COLA Consultative Response</CardTitle>
+                <Button
+                  size="sm"
+                  className="bg-[#006064] hover:bg-[#004d50] text-white"
+                  onClick={handleGenerateCola}
+                  disabled={!cola.ok || renderState === "rendering"}
+                >
+                  <Download size={14} className="mr-1.5" />
+                  {renderState === "rendering" ? "Rendering..." : "Generate COLA PDF"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="text-xs text-muted-foreground">
+                COLA uses a consultative accreditation model with no hard deadline. Free technical support is available while you develop the plan. COLA reviewers emphasize "why this happened and what we learned" over a rigid POC template; drafting the Root cause section before sharing with COLA is recommended.
+              </div>
+              <ul className="space-y-1">
+                {elements.map((el) => {
+                  const val = finding[el.key];
+                  const present = !!(val && String(val).trim());
+                  return (
+                    <li key={el.key} className="flex items-center gap-2 text-sm">
+                      {present
+                        ? <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        : <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />}
+                      <span className={present ? "" : "text-muted-foreground"}>{el.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {renderState === "error" && renderError && (
+                <div className="text-xs text-red-700 dark:text-red-400 mt-2">{renderError}</div>
+              )}
+              {!cola.ok && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Fill in the missing field below, save, then generate the PDF.
                 </div>
               )}
             </CardContent>
