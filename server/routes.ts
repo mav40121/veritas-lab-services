@@ -12177,6 +12177,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Manually trigger VeritaResponse due-date reminder dispatch ────
+  // Same code path the midnight cron uses (server/index.ts). Useful for
+  // verifying the dispatch logic without waiting until midnight UTC.
+  // Returns the run summary (checked / sent / skipped / errors + per-finding
+  // details). UNIQUE constraint on finding_reminder_log makes this safe to
+  // call repeatedly; already-sent reminders for today are reported as
+  // skipped, not double-sent.
+  app.post("/api/admin/run-finding-reminders", async (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string || req.body?.secret);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const { runFindingReminders } = await import("./audit");
+      const summary = await runFindingReminders();
+      res.json({ ok: true, summary });
+    } catch (err: any) {
+      console.error("[finding-reminder] Manual trigger failed:", err);
+      res.status(500).json({ error: err?.message || "Run failed" });
+    }
+  });
+
   // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
   app.get("/api/admin/backup-db", (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);

@@ -224,3 +224,146 @@ export function getSnapshot(snapshotId: number): any | null {
   if (!row) return null;
   return { ...row, data: JSON.parse(row.modules_json) };
 }
+
+// ── VeritaResponse due-date reminders ──────────────────────────────────
+// Last Tier-1 gap from docs/scoping-veritaresponse.md: email reminders at
+// T-14 / T-7 / T-3 / T-1 days before a finding's due_date. Dispatched by
+// the daily scheduler in server/index.ts and also callable via the admin
+// trigger endpoint for manual verification. UNIQUE(finding_id,
+// reminder_type) on finding_reminder_log prevents double-sends across
+// server restarts and manual + scheduled invocations.
+
+const REMINDER_WINDOWS = [14, 7, 3, 1] as const;
+
+function utcDateOnly(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBetweenUtc(fromIso: string, toIso: string): number | null {
+  if (!fromIso || !toIso) return null;
+  const from = new Date(fromIso + "T00:00:00Z").getTime();
+  const to = new Date(toIso + "T00:00:00Z").getTime();
+  if (isNaN(from) || isNaN(to)) return null;
+  return Math.round((to - from) / (24 * 60 * 60 * 1000));
+}
+
+export interface ReminderRunSummary {
+  checked: number;
+  sent: number;
+  skipped: number;
+  errors: number;
+  details: Array<{ findingId: number; reminderType: string; status: 'sent' | 'skipped' | 'error'; reason?: string }>;
+}
+
+/**
+ * Scan open VeritaResponse findings and dispatch any due reminders.
+ * Skips COLA (consultative, no hard deadline) and already-resolved
+ * findings (status accepted or closed). Returns a summary for the
+ * caller to inspect or log.
+ */
+export async function runFindingReminders(): Promise<ReminderRunSummary> {
+  const summary: ReminderRunSummary = { checked: 0, sent: 0, skipped: 0, errors: 0, details: [] };
+  const sqlite = (db as any).$client;
+  const today = utcDateOnly(new Date());
+
+  // Pull resend at call time so an env without RESEND_API_KEY doesn't
+  // crash the module on import; we just log-and-skip the actual send.
+  let resend: any = null;
+  try {
+    if (process.env.RESEND_API_KEY) {
+      const { Resend } = await import("resend");
+      resend = new Resend(process.env.RESEND_API_KEY);
+    }
+  } catch (err: any) {
+    console.error("[finding-reminder] Resend init failed:", err.message);
+  }
+
+  let candidates: any[] = [];
+  try {
+    candidates = sqlite.prepare(`
+      SELECT f.id, f.user_id, f.accreditor, f.due_date, f.status,
+             f.finding_number, f.standard_ref,
+             u.email AS recipient_email, u.name AS recipient_name,
+             l.lab_name, l.clia_number
+      FROM findings f
+      JOIN users u ON u.id = f.user_id
+      LEFT JOIN labs l ON l.id = f.lab_id
+      WHERE f.status NOT IN ('accepted', 'closed')
+        AND f.due_date IS NOT NULL
+        AND f.accreditor != 'COLA'
+    `).all() as any[];
+  } catch (err: any) {
+    console.error("[finding-reminder] Query failed:", err.message);
+    return summary;
+  }
+
+  for (const c of candidates) {
+    const days = daysBetweenUtc(today, String(c.due_date).slice(0, 10));
+    if (days === null) continue;
+    if (!REMINDER_WINDOWS.includes(days as any)) continue;
+    summary.checked++;
+
+    const reminderType = `T-${days}`;
+    const existing = sqlite.prepare(
+      "SELECT id FROM finding_reminder_log WHERE finding_id = ? AND reminder_type = ? LIMIT 1"
+    ).get(c.id, reminderType);
+    if (existing) {
+      summary.skipped++;
+      summary.details.push({ findingId: c.id, reminderType, status: 'skipped', reason: 'already sent' });
+      continue;
+    }
+
+    if (!c.recipient_email) {
+      summary.skipped++;
+      summary.details.push({ findingId: c.id, reminderType, status: 'skipped', reason: 'no recipient email' });
+      continue;
+    }
+
+    if (!resend) {
+      summary.skipped++;
+      summary.details.push({ findingId: c.id, reminderType, status: 'skipped', reason: 'RESEND_API_KEY unset' });
+      continue;
+    }
+
+    const labLabel = c.lab_name || c.clia_number || "your lab";
+    const findingLabel = c.finding_number || `#${c.id}`;
+    const standardLabel = c.standard_ref || "(no standard cited)";
+    const subject = `VeritaResponse reminder: finding ${findingLabel} due in ${days} day${days === 1 ? '' : 's'}`;
+    const text = [
+      `Hello,`,
+      ``,
+      `This is an automated reminder from VeritaResponse for ${labLabel}.`,
+      ``,
+      `Finding: ${findingLabel}`,
+      `Standard cited: ${standardLabel}`,
+      `Accreditor: ${c.accreditor}`,
+      `Due date: ${String(c.due_date).slice(0, 10)} (${days} day${days === 1 ? '' : 's'} from today)`,
+      `Status: ${c.status}`,
+      ``,
+      `Sign in to VeritaAssure to update the response before the due date.`,
+      ``,
+      `Sent automatically by VeritaResponse from VeritaAssure. To stop these reminders, mark the finding as accepted or closed.`,
+    ].join("\n");
+
+    try {
+      await resend.emails.send({
+        from: "VeritaAssure <noreply@veritaslabservices.com>",
+        to: [c.recipient_email],
+        subject,
+        text,
+      });
+      sqlite.prepare(
+        "INSERT INTO finding_reminder_log (finding_id, reminder_type, sent_at, recipient_email) VALUES (?, ?, ?, ?)"
+      ).run(c.id, reminderType, new Date().toISOString(), c.recipient_email);
+      summary.sent++;
+      summary.details.push({ findingId: c.id, reminderType, status: 'sent' });
+    } catch (err: any) {
+      console.error(`[finding-reminder] Send failed for finding ${c.id} ${reminderType}:`, err?.message || err);
+      summary.errors++;
+      summary.details.push({ findingId: c.id, reminderType, status: 'error', reason: err?.message || 'unknown' });
+    }
+  }
+
+  console.log(`[finding-reminder] Run complete: checked=${summary.checked} sent=${summary.sent} skipped=${summary.skipped} errors=${summary.errors}`);
+  return summary;
+}
