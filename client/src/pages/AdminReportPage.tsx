@@ -43,8 +43,9 @@ interface UserRecord {
   last_login: string | null;
   session_count: number;
   study_count: number;
-  // Per-lab fields (parking-lot #14): present when the row joins to a labs
-  // record; null for users with no labs row yet.
+  // Per-lab fields: present when the row joins to a labs record via an
+  // active lab_members row; null for users with no active memberships
+  // (legacy pre-Phase-3 accounts and seat users).
   lab_id: number | null;
   lab_clia_number: string | null;
   lab_name: string | null;
@@ -55,6 +56,13 @@ interface UserRecord {
   lab_clia_locked: number | null;
   lab_name_locked: number | null;
   lab_created_at: string | null;
+  // Membership fields (Multi-Lab Tier 2): role and primary flag on the
+  // lab_members row that joined this user to this lab. A user with N active
+  // memberships expands into N rows; non-primary rows are read-only to
+  // avoid an admin clicking the plan dropdown on a secondary row and
+  // unintentionally retargeting the user's primary lab.
+  lab_role: string | null;
+  is_primary_lab: number | null;
   // Effective identity computed server-side: lab fields when present, user
   // fields otherwise. Use these in the UI to render lab name + CLIA so a
   // multi-lab owner shows correctly per row.
@@ -270,16 +278,24 @@ export default function AdminReportPage() {
   }, [data, search, planFilter, statusFilter, sortKey, sortDir]);
 
   // Group: owners first, then their seats nested underneath
-  // Seat users are excluded from the top-level list and appended after their owner
+  // Seat users are excluded from the top-level list and appended after their owner.
+  // Multi-Lab Tier 2: a user with N active memberships appears in N owner rows
+  // (one per lab). Seats only nest under that user's PRIMARY lab row (or the
+  // first occurrence if no primary survives the active filter) so seats don't
+  // duplicate across the user's secondary lab rows.
   const grouped = useMemo(() => {
     const owners = filtered.filter(u => !u.seat_owner_id);
     const seats  = filtered.filter(u =>  u.seat_owner_id);
     const result: (UserRecord & { _isSeat?: boolean })[] = [];
+    const seatsAttachedFor = new Set<number>();
     for (const owner of owners) {
       result.push(owner);
       const ownerSeats = seats.filter(s => s.seat_owner_id === owner.id);
-      for (const seat of ownerSeats) {
-        result.push({ ...seat, _isSeat: true });
+      const isPrimaryOrFirstForUser =
+        (owner.is_primary_lab === 1) || (!seatsAttachedFor.has(owner.id) && !owners.some(o => o.id === owner.id && o.is_primary_lab === 1));
+      if (ownerSeats.length > 0 && isPrimaryOrFirstForUser) {
+        for (const seat of ownerSeats) result.push({ ...seat, _isSeat: true });
+        seatsAttachedFor.add(owner.id);
       }
     }
     // Any seat whose owner isn't in the filtered list (e.g. filtered out)
@@ -638,12 +654,16 @@ export default function AdminReportPage() {
               </tr>
             </thead>
             <tbody>
-              {grouped.map((u, i) => (
+              {grouped.map((u, i) => {
+                const isSecondaryMembership = u.lab_id != null && u.is_primary_lab !== 1 && !u._isSeat;
+                return (
                 <tr
-                  key={u.lab_id != null ? `lab-${u.lab_id}` : `user-${u.id}`}
+                  key={`${u.id}-${u.lab_id != null ? `lab-${u.lab_id}` : 'nolab'}-${u._isSeat ? 'seat' : 'owner'}`}
                   className={`text-foreground ${
                     u._isSeat
                       ? "bg-blue-50/40 dark:bg-blue-950/20 border-l-4 border-l-blue-400"
+                      : isSecondaryMembership
+                      ? "bg-amber-50/30 dark:bg-amber-950/10 border-l-4 border-l-amber-400"
                       : i % 2 === 0 ? "bg-background" : "bg-muted/30"
                   }`}
                 >
@@ -655,7 +675,12 @@ export default function AdminReportPage() {
                         : (u.effective_lab_name || u.clia_lab_name || <span className="text-muted-foreground font-normal">Not set</span>)
                       }
                     </span>
-                    {!u._isSeat && u.seat_count > 0 && (
+                    {isSecondaryMembership && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700" title={`This user has an additional ${u.lab_role || 'member'} role on this lab. Their primary lab is shown elsewhere.`}>
+                        Secondary lab ({u.lab_role || 'member'})
+                      </span>
+                    )}
+                    {!u._isSeat && !isSecondaryMembership && u.seat_count > 0 && (
                       <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
                         u.active_seats >= u.seat_count
                           ? "bg-red-100 text-red-700"
@@ -685,6 +710,10 @@ export default function AdminReportPage() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u.seat_owner_id ? (
                       <span className="text-xs font-medium text-blue-500">Seat</span>
+                    ) : isSecondaryMembership ? (
+                      <span className="text-xs text-muted-foreground" title="Plan is set on the user's primary lab. Edit it from the primary row.">
+                        {u.planDisplayName}
+                      </span>
                     ) : (
                       <>
                         <select
@@ -724,7 +753,8 @@ export default function AdminReportPage() {
                     {formatDate(u.created_at)}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {grouped.length === 0 && (
                 <tr>
                   <td colSpan={16} className="px-3 py-8 text-center text-muted-foreground">

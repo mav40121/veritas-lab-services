@@ -633,20 +633,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { plan, status } = req.query as { plan?: string; status?: string };
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
-    // Per parking-lot #14: report renders one row per LAB instead of one row
-    // per user, so a user who owns multiple labs (Lisa Veri's case) shows one
-    // row per lab instead of two CLIAs concatenated in a single cell.
-    //
-    // Implementation: LEFT JOIN users -> labs on owner_user_id. Users with
-    // multiple labs expand into multiple rows; users with zero labs (legacy
-    // pre-migration accounts) get one row with NULL lab fields and the UI
-    // falls back to user.clia_number / user.clia_lab_name. Seat users keep
-    // their single row (they own zero labs); the existing UI grouping in
+    // Multi-Lab Tier 2: report renders one row per (user, lab membership) pair.
+    // A user with active memberships on N labs appears in N rows (one per lab
+    // group); a user with zero memberships (legacy pre-Phase-3 accounts and
+    // seat users) appears in one row with NULL lab fields, and the UI falls
+    // back to user.clia_number / user.clia_lab_name in that case. Seat users
+    // are excluded from lab_members by design; the seat-grouping in
     // AdminReportPage still nests them under their owner correctly.
     //
+    // Pre-Tier-2 this query joined `labs l ON l.owner_user_id = u.id` and
+    // missed every membership where the user wasn't the lab's owner — so a
+    // user invited as a non-primary owner on a second lab was invisible to
+    // this report. Joining through lab_members fixes that.
+    //
     // Seat counts (active/pending), session/login, and study counts remain
-    // owner-scoped (user-level aggregates). For Lisa with 2 labs, she shows
-    // identical seat/session/study figures on each row — that is the correct
+    // owner-scoped (user-level aggregates). For a multi-membership user they
+    // show identical seat/session/study figures on each row — the correct
     // interpretation under the current data model since seats are scoped to
     // owner_user_id, not to lab_id. Per-lab seat counting is parking-lot
     // #12, deferred until that lands.
@@ -663,6 +665,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.clia_locked as lab_clia_locked,
         l.lab_name_locked as lab_name_locked,
         l.created_at as lab_created_at,
+        lm.role as lab_role,
+        lm.is_primary_lab as is_primary_lab,
         COALESCE(s.active_seats, 0) + (CASE WHEN u.seat_count > 1 THEN 1 ELSE 0 END) as active_seats,
         COALESCE(s.pending_seats, 0) as pending_seats,
         seat_link.owner_user_id as seat_owner_id,
@@ -674,7 +678,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         COALESCE(sess.session_count, 0) as session_count,
         COALESCE(st.study_count, 0) as study_count
       FROM users u
-      LEFT JOIN labs l ON l.owner_user_id = u.id
+      LEFT JOIN lab_members lm ON lm.user_id = u.id AND lm.status = 'active'
+      LEFT JOIN labs l ON l.id = lm.lab_id
       LEFT JOIN (
         SELECT
           owner_user_id,
@@ -719,9 +724,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     // Order by user created_at so seat-user grouping in the UI still works
-    // (owner appears before their seats), with lab id as a tiebreaker so
-    // multiple labs from the same owner appear adjacent in stable order.
-    sql += " ORDER BY u.created_at DESC, l.id ASC";
+    // (owner appears before their seats). For a user with multiple
+    // memberships, the primary lab row sorts first so the seat hierarchy
+    // attaches to it; secondary memberships follow. lab id is a final
+    // tiebreaker for stable ordering across deploys.
+    sql += " ORDER BY u.created_at DESC, lm.is_primary_lab DESC, l.id ASC";
 
     try {
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
