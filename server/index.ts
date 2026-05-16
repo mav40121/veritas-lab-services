@@ -172,6 +172,32 @@ app.use((req, res, next) => {
     console.error("[snapshot] Scheduler setup error:", err.message);
   }
 
+  // Schedule VeritaResponse due-date reminder dispatch at midnight UTC.
+  // Mirrors the snapshot scheduler shape so both daily jobs share their
+  // failure semantics. Reminder dispatch is idempotent (UNIQUE constraint
+  // on finding_reminder_log) so multiple invocations are safe.
+  try {
+    const { runFindingReminders } = await import("./audit");
+    const scheduleFindingReminders = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[finding-reminder] Running due-date reminder dispatch...");
+        runFindingReminders().catch((err) => console.error("[finding-reminder] Run failed:", err?.message || err));
+        setInterval(() => {
+          console.log("[finding-reminder] Running due-date reminder dispatch...");
+          runFindingReminders().catch((err) => console.error("[finding-reminder] Run failed:", err?.message || err));
+        }, 24 * 60 * 60 * 1000);
+      }, msUntilMidnight);
+      console.log(`[finding-reminder] Due-date reminder dispatch scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`);
+    };
+    scheduleFindingReminders();
+  } catch (err: any) {
+    console.error("[finding-reminder] Scheduler setup error:", err.message);
+  }
+
   try {
     await registerRoutes(httpServer, app);
     console.log('[startup] registerRoutes completed successfully');

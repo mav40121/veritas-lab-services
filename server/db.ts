@@ -2488,7 +2488,26 @@ sqlite.exec(`
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  -- Due-date email reminder dispatch log. Last Tier-1 gap from
+  -- docs/scoping-veritaresponse.md. One row per (finding, reminder window
+  -- T-14 / T-7 / T-3 / T-1) actually sent. UNIQUE constraint protects
+  -- against double-fires across server restarts and across the manual
+  -- admin trigger + scheduled nightly job. COLA findings are skipped
+  -- upstream (no hard deadline per scoping doc) so no rows appear for
+  -- them here.
+  CREATE TABLE IF NOT EXISTS finding_reminder_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id INTEGER NOT NULL,
+    reminder_type TEXT NOT NULL,
+    sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+    recipient_email TEXT,
+    UNIQUE(finding_id, reminder_type),
+    FOREIGN KEY (finding_id) REFERENCES findings(id)
+  );
 `);
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_reminder_log_finding ON finding_reminder_log(finding_id)`); } catch {}
 
 // VeritaResponse migration blocks (idempotent). Per New DB Table Rule
 // (CLAUDE.md §8): every new CREATE TABLE ships with a PRAGMA-guarded ALTER
@@ -2525,6 +2544,14 @@ sqlite.exec(`
     const cols = sqlite.prepare("PRAGMA table_info(finding_extension_requests)").all() as { name: string }[];
     if (cols.length > 0) {
       // Future ALTER TABLE finding_extension_requests ADD COLUMN ... blocks go here.
+    }
+  } catch {}
+}
+{
+  try {
+    const cols = sqlite.prepare("PRAGMA table_info(finding_reminder_log)").all() as { name: string }[];
+    if (cols.length > 0) {
+      // Future ALTER TABLE finding_reminder_log ADD COLUMN ... blocks go here.
     }
   } catch {}
 }
