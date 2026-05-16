@@ -10,7 +10,7 @@ import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } fro
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse } from "./pdfReport";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -8142,6 +8142,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
       console.error("[cms-2567-pdf] render failed:", err);
+      res.status(500).json({ error: err?.message || "PDF render failed" });
+    }
+  });
+
+  // Per-accreditor completeness check for CAP findings. Mirrors the
+  // poc-completeness shape (used by CMS) so the frontend gating UX is
+  // uniform across renderers. CAP has no federal-equivalent of CMS's
+  // 5 POC elements rule; the validator enforces a consulting-judgment
+  // floor of description + corrective_action before allowing render.
+  app.get("/api/findings/:id/cap-completeness", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId);
+    if (!row) return res.status(404).json({ error: "Finding not found" });
+    const result = validateCapResponse(row);
+    res.json(result);
+  });
+
+  // GET CAP response PDF token for a finding. CAP findings only.
+  app.get("/api/findings/:id/cap-pdf", authMiddleware, async (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
+    ).get(req.params.id, dataUserId) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    if (finding.accreditor !== "CAP") {
+      return res.status(400).json({ error: `CAP renderer only applies to CAP-accreditor findings; this finding is ${finding.accreditor}.` });
+    }
+    const validation = validateCapResponse(finding);
+    if (!validation.ok) {
+      return res.status(400).json({
+        error: "CAP response is incomplete; cannot render PDF",
+        missing: validation.missing,
+      });
+    }
+    try {
+      const user = await storage.getUserById(dataUserId);
+      const pdfBuffer = await generateCapResponsePDF(
+        { finding, user },
+        licenseCtxFromReq(req, "VeritaResponse™"),
+      );
+      const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
+      const filename = `CAP_Response_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      try {
+        (db as any).$client.prepare(
+          `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+        ).run(Number(req.params.id), 'cap_rendered', req.user?.userId ?? null, JSON.stringify({}));
+      } catch {}
+      res.json({ token: storePdfToken(pdfBuffer, filename) });
+    } catch (err: any) {
+      console.error("[cap-pdf] render failed:", err);
       res.status(500).json({ error: err?.message || "PDF render failed" });
     }
   });
