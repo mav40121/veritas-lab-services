@@ -9331,7 +9331,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const dataUserId = req.ownerUserId ?? req.user.userId;
 
-    const existing = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId);
+    const existing = (db as any).$client.prepare("SELECT id, accreditation_body FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+
+    // Lab-aware accreditor gate (defense-in-depth, mirrors client filter).
+    // CLIA_ONLY and OTHER always allowed. CAP/TJC/COLA only when the master
+    // labs row has the matching flag. Only blocks CHANGES to a disallowed
+    // value; existing records whose body is no longer flagged stay editable
+    // in other fields without forcing reaccreditation paperwork.
+    if (accreditationBody && accreditationBody !== 'CLIA_ONLY' && accreditationBody !== 'OTHER') {
+      const isChange = !existing || existing.accreditation_body !== accreditationBody;
+      if (isChange) {
+        const labIdForGate = getUserPrimaryLabId(dataUserId);
+        const allowed = getLabAllowedAccreditors(labIdForGate);
+        if (!allowed.has(accreditationBody)) {
+          return res.status(400).json({
+            error: `This lab is not flagged as ${accreditationBody}-accredited. Update the lab's accreditation settings or pick an allowed accreditor.`,
+            allowed: Array.from(allowed),
+          });
+        }
+      }
+    }
     if (existing) {
       (db as any).$client.prepare(
         "UPDATE staff_labs SET lab_name=?, clia_number=?, lab_address_street=?, lab_address_city=?, lab_address_state=?, lab_address_zip=?, lab_phone=?, certificate_type=?, accreditation_body=?, accreditation_body_other=?, includes_nys=?, complexity=?, updated_at=? WHERE id=?"
