@@ -1,11 +1,14 @@
 import { useAuth } from "./AuthContext";
 import { AlertTriangle, Lock, ArrowRight } from "lucide-react";
 import { resolveSeatPermission } from "@shared/schema";
+import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 
+// Multi-Lab Tier 2 Phase 4.3c: accessLevel and subscription dates source
+// from the active lab's membership (via useActiveSubscription). Falls back
+// to user-level state when no lab is active. Same shape as the legacy
+// hook; callers do not need to change.
 export function useAccessLevel() {
-  const { user } = useAuth();
-  if (!user) return 'free' as const;
-  return (user.accessLevel || 'free') as 'full' | 'read_only' | 'locked' | 'free';
+  return useActiveSubscription().accessLevel;
 }
 
 export function useIsReadOnly(module?: string): boolean {
@@ -27,14 +30,15 @@ export function useIsReadOnly(module?: string): boolean {
 }
 
 export function SubscriptionBanner() {
-  const { user, isLoggedIn } = useAuth();
-  if (!isLoggedIn || !user) return null;
+  const { isLoggedIn } = useAuth();
+  const sub = useActiveSubscription();
+  if (!isLoggedIn) return null;
 
-  const accessLevel = user.accessLevel || 'free';
+  const accessLevel = sub.accessLevel;
   if (accessLevel === 'full' || accessLevel === 'free') return null;
 
   if (accessLevel === 'read_only') {
-    const expiresAt = user.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) : null;
+    const expiresAt = sub.subscriptionExpiresAt ? new Date(sub.subscriptionExpiresAt) : null;
     const retentionEnd = expiresAt ? new Date(expiresAt) : null;
     if (retentionEnd) retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
     const dateStr = retentionEnd ? retentionEnd.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
@@ -58,7 +62,7 @@ export function SubscriptionBanner() {
   }
 
   if (accessLevel === 'locked') {
-    const expiresAt = user.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) : null;
+    const expiresAt = sub.subscriptionExpiresAt ? new Date(sub.subscriptionExpiresAt) : null;
     const retentionEnd = expiresAt ? new Date(expiresAt) : null;
     if (retentionEnd) retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
     const dateStr = retentionEnd ? retentionEnd.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
