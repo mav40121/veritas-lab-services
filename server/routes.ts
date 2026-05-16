@@ -676,10 +676,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         owner.clia_number as seat_owner_clia_number,
         sess.last_login,
         COALESCE(sess.session_count, 0) as session_count,
-        COALESCE(st.study_count, 0) as study_count
+        COALESCE(st.study_count, 0) as study_count,
+        lab_owner.seat_count as lab_owner_seat_count,
+        lab_owner.subscription_expires_at as lab_owner_subscription_expires_at,
+        lab_owner.plan_expires_at as lab_owner_plan_expires_at,
+        COALESCE(lo_seats.active_seats, 0) + (CASE WHEN lab_owner.seat_count > 1 THEN 1 ELSE 0 END) as lab_owner_active_seats,
+        COALESCE(lo_seats.pending_seats, 0) as lab_owner_pending_seats
       FROM users u
       LEFT JOIN lab_members lm ON lm.user_id = u.id AND lm.status = 'active'
       LEFT JOIN labs l ON l.id = lm.lab_id
+      LEFT JOIN users lab_owner ON lab_owner.id = l.owner_user_id
       LEFT JOIN (
         SELECT
           owner_user_id,
@@ -688,6 +694,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         FROM user_seats
         GROUP BY owner_user_id
       ) s ON s.owner_user_id = u.id
+      LEFT JOIN (
+        SELECT
+          owner_user_id,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_seats,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_seats
+        FROM user_seats
+        GROUP BY owner_user_id
+      ) lo_seats ON lo_seats.owner_user_id = lab_owner.id
       LEFT JOIN user_seats seat_link ON seat_link.seat_user_id = u.id AND seat_link.status = 'active'
       LEFT JOIN users owner ON owner.id = seat_link.owner_user_id
       LEFT JOIN (
@@ -734,10 +748,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
       const labs = rows.map((row: any) => {
         const { password_hash, ...rest } = row;
+        // On secondary-lab rows (this user is a member, not the lab's primary
+        // owner), the user-level seat_count / active_seats / pending_seats /
+        // expiry columns describe the MEMBER's primary lab, not the lab this
+        // row groups under. That makes secondary rows misleading: a member
+        // of a 1-seat demo lab would show 25/5/2 because the member is on
+        // a 25-seat enterprise plan elsewhere. Override these with the lab
+        // owner's aggregates so the row reflects the lab the row is under.
+        const isSecondaryRow = rest.lab_id != null && rest.is_primary_lab !== 1;
+        const overrides = isSecondaryRow ? {
+          seat_count: rest.lab_owner_seat_count ?? 0,
+          active_seats: rest.lab_owner_active_seats ?? 0,
+          pending_seats: rest.lab_owner_pending_seats ?? 0,
+          subscription_expires_at: rest.lab_owner_subscription_expires_at ?? null,
+          plan_expires_at: rest.lab_owner_plan_expires_at ?? null,
+        } : {};
         // Prefer lab-level identity when available; fall back to user-level
         // for legacy users who never got a labs row (pre-migration accounts).
         return {
           ...rest,
+          ...overrides,
           planDisplayName: PLAN_DISPLAY_NAMES[rest.plan] || rest.plan || "Unknown",
           // Effective lab identity for the UI to render. Prefer lab fields.
           effective_clia_number: rest.lab_clia_number || rest.clia_number || null,
