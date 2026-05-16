@@ -8198,7 +8198,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM finding_attachments WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM finding_history WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM finding_extension_requests WHERE finding_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM finding_reminder_log WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
+  // Lab-scoped DELETE — the frontend (VeritaResponseAppPage) builds its
+  // delete URL from findingsApi = /api/labs/:labId/findings, so DELETE
+  // calls land at /api/labs/:labId/findings/:id. Phase 3.10 lab-scoped
+  // GET/POST but the DELETE companion was never added; the legacy
+  // /api/findings/:id route 404'd lab-scoped requests silently, which
+  // is why the trash button on the lab-scoped UI appeared to do nothing.
+  // Mirrors the legacy DELETE handler above, but scopes the existence
+  // check to (id, lab_id) instead of (id, user_id) and trusts
+  // labScopeMiddleware to have validated this user's active membership.
+  app.delete("/api/labs/:labId/findings/:id", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare(
+      "SELECT id FROM findings WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!existing) return res.status(404).json({ error: "Finding not found" });
+    sqlite.prepare("DELETE FROM finding_attachments WHERE finding_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM finding_history WHERE finding_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM finding_extension_requests WHERE finding_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM finding_reminder_log WHERE finding_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
 
