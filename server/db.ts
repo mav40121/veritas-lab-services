@@ -1066,111 +1066,17 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catc
 // back to user_id in the report SQL.
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN created_by_user_id INTEGER"); } catch {}
 
-// Multi-Lab Tier 2 — Phase 3 (VeritaCheck / studies module):
-// lab_id is the data-routing key going forward (doc: scoping-multi-lab-tier2.md
-// Section 5 Phase 3). user_id stays as the audit-trail "creator" column.
-// Idempotent backfill below maps each studies row to its user's lab.
-{
-  const studyCols = (sqlite.prepare("PRAGMA table_info(studies)").all() as any[]).map(c => c.name);
-  if (!studyCols.includes("lab_id")) {
-    try { sqlite.exec("ALTER TABLE studies ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
-  }
-}
-try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_studies_lab_id ON studies(lab_id, id DESC)"); } catch {}
-
-// Backfill: studies.lab_id = the user's lab_id. Skip rows that already
-// have lab_id set (subsequent runs are no-ops). Studies created by seat
-// users inherit the owner's lab through users.lab_id, which the Tier 1
-// backfill (db.ts:1188-1260) already aligned.
-{
-  const backfilled = sqlite.prepare(`
-    UPDATE studies
-    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = studies.user_id)
-    WHERE lab_id IS NULL
-      AND user_id IS NOT NULL
-      AND (SELECT u.lab_id FROM users u WHERE u.id = studies.user_id) IS NOT NULL
-  `).run();
-  if (backfilled.changes > 0) {
-    console.log(`[migration] Multi-lab Phase 3 (studies): backfilled lab_id on ${backfilled.changes} row(s)`);
-  }
-}
-
-// Plan/tier definitions: seat limits, pricing, bed ranges
-export const PLAN_SEATS: Record<string, number> = {
-  clinic: 2,
-  community: 5,
-  hospital: 15,
-  enterprise: 25,
-  free: 1,
-  per_study: 1,
-  waived: 1,
-  veritacheck_only: 1,
-  large_hospital: 25,
-  lab: 25,
-};
-
-export const PLAN_PRICES: Record<string, number> = {
-  clinic: 499,
-  community: 999,
-  hospital: 1999,
-  enterprise: 2999,
-};
-
-export const PLAN_BED_RANGES: Record<string, [number, number]> = {
-  clinic: [0, 25],
-  community: [26, 100],
-  hospital: [101, 300],
-  enterprise: [301, Infinity],
-};
-
-export function suggestTierFromBeds(beds: number): { tier: string; label: string; price: number; seats: number } {
-  if (beds <= 25) return { tier: 'clinic', label: 'Clinic', price: 499, seats: 2 };
-  if (beds <= 100) return { tier: 'community', label: 'Community', price: 999, seats: 5 };
-  if (beds <= 300) return { tier: 'hospital', label: 'Hospital', price: 1999, seats: 15 };
-  return { tier: 'enterprise', label: 'Enterprise', price: 2999, seats: 25 };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────────
-// Audit log table - records before/after state for all destructive operations
-// ─────────────────────────────────────────────────────────────────────────────────
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    owner_user_id INTEGER,
-    module TEXT NOT NULL,
-    action TEXT NOT NULL,
-    entity_type TEXT NOT NULL,
-    entity_id TEXT,
-    entity_label TEXT,
-    before_json TEXT,
-    after_json TEXT,
-    ip_address TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
-
-// Nightly snapshots table - full data dump per user, kept 30 days
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS nightly_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    snapshot_date TEXT NOT NULL,
-    modules_json TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(user_id, snapshot_date)
-  )
-`);
-
-// Index for fast audit log queries
-try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(owner_user_id, created_at DESC)`); } catch {}
-try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_module ON audit_log(module, entity_type, entity_id)`); } catch {}
-try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_user ON nightly_snapshots(user_id, snapshot_date DESC)`); } catch {}
-
 // ─────────────────────────────────────────────────────────────────────────────────
 // Labs table — normalized lab identity (CLIA, name, accreditation flags)
 // Migrated from per-user columns to shared lab entity so seats inherit and
 // fields can be locked once reports are generated.
+//
+// MOVED 2026-05-16: this block (and the Phase 0 + Phase 1 blocks below)
+// previously lived AFTER the per-module Phase 3 backfills. That meant
+// Phase 3 backfills referencing `u.lab_id` (added at line 1212 of the old
+// layout) crashed at build time on a fresh container DB because the
+// column did not exist yet in source order. Moved up so users.lab_id +
+// labs table exist before any Phase 3+ backfill runs. See PR #163 fix.
 // ─────────────────────────────────────────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS labs (
@@ -1369,7 +1275,7 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
 // Updated on every authenticated page hit in Phase 2; not the source of
 // truth for scope. URL is. Nullable; FK to labs is informational only
 // (sqlite ALTER doesn't add real FK constraints post-hoc, matches the
-// pattern used for users.lab_id at db.ts:1183-1186).
+// pattern used for users.lab_id above).
 if (!colNames.includes("default_lab_id")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN default_lab_id INTEGER REFERENCES labs(id)"); } catch {}
 }
@@ -1491,6 +1397,111 @@ if (!colNames.includes("default_lab_id")) {
     console.log(`[migration] Multi-lab Phase 1: ${memberInserted} member(s) inserted, ${subsCopied} primary lab(s) had subscription state copied, ${defaultsSet} user(s) got default_lab_id`);
   }
 }
+
+// Multi-Lab Tier 2 — Phase 3 (VeritaCheck / studies module):
+// lab_id is the data-routing key going forward (doc: scoping-multi-lab-tier2.md
+// Section 5 Phase 3). user_id stays as the audit-trail "creator" column.
+// Idempotent backfill below maps each studies row to its user's lab.
+{
+  const studyCols = (sqlite.prepare("PRAGMA table_info(studies)").all() as any[]).map(c => c.name);
+  if (!studyCols.includes("lab_id")) {
+    try { sqlite.exec("ALTER TABLE studies ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
+  }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_studies_lab_id ON studies(lab_id, id DESC)"); } catch {}
+
+// Backfill: studies.lab_id = the user's lab_id. Skip rows that already
+// have lab_id set (subsequent runs are no-ops). Studies created by seat
+// users inherit the owner's lab through users.lab_id, which the Tier 1
+// backfill (db.ts:1188-1260) already aligned.
+{
+  const backfilled = sqlite.prepare(`
+    UPDATE studies
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = studies.user_id)
+    WHERE lab_id IS NULL
+      AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = studies.user_id) IS NOT NULL
+  `).run();
+  if (backfilled.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3 (studies): backfilled lab_id on ${backfilled.changes} row(s)`);
+  }
+}
+
+// Plan/tier definitions: seat limits, pricing, bed ranges
+export const PLAN_SEATS: Record<string, number> = {
+  clinic: 2,
+  community: 5,
+  hospital: 15,
+  enterprise: 25,
+  free: 1,
+  per_study: 1,
+  waived: 1,
+  veritacheck_only: 1,
+  large_hospital: 25,
+  lab: 25,
+};
+
+export const PLAN_PRICES: Record<string, number> = {
+  clinic: 499,
+  community: 999,
+  hospital: 1999,
+  enterprise: 2999,
+};
+
+export const PLAN_BED_RANGES: Record<string, [number, number]> = {
+  clinic: [0, 25],
+  community: [26, 100],
+  hospital: [101, 300],
+  enterprise: [301, Infinity],
+};
+
+export function suggestTierFromBeds(beds: number): { tier: string; label: string; price: number; seats: number } {
+  if (beds <= 25) return { tier: 'clinic', label: 'Clinic', price: 499, seats: 2 };
+  if (beds <= 100) return { tier: 'community', label: 'Community', price: 999, seats: 5 };
+  if (beds <= 300) return { tier: 'hospital', label: 'Hospital', price: 1999, seats: 15 };
+  return { tier: 'enterprise', label: 'Enterprise', price: 2999, seats: 25 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// Audit log table - records before/after state for all destructive operations
+// ─────────────────────────────────────────────────────────────────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    owner_user_id INTEGER,
+    module TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT,
+    entity_label TEXT,
+    before_json TEXT,
+    after_json TEXT,
+    ip_address TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
+// Nightly snapshots table - full data dump per user, kept 30 days
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS nightly_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    modules_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, snapshot_date)
+  )
+`);
+
+// Index for fast audit log queries
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(owner_user_id, created_at DESC)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_module ON audit_log(module, entity_type, entity_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_user ON nightly_snapshots(user_id, snapshot_date DESC)`); } catch {}
+
+// (Labs schema + Phase 0/1 backfill blocks moved up in source order to
+// before the Phase 3.1 studies.lab_id backfill so a fresh build-container
+// DB does not crash on `no such column: u.lab_id`. See top of file.)
 
 // Multi-Lab Tier 2 — Phase 4.4: operator's lab gets permanent enterprise.
 // Mirrors the user-row update at db.ts:866 but on the LAB row. After Phase
