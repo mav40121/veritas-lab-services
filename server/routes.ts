@@ -827,13 +827,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const user = sqlite.prepare("SELECT id, email FROM users WHERE id = ?").get(Number(userId)) as any;
     if (!user) return res.status(404).json({ error: "User not found" });
-    const lab = sqlite.prepare("SELECT id, name FROM labs WHERE id = ?").get(Number(labId)) as any;
+    const lab = sqlite.prepare("SELECT id, lab_name FROM labs WHERE id = ?").get(Number(labId)) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const existing = sqlite.prepare(
       "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
     ).get(Number(labId), Number(userId)) as any;
     if (existing) {
-      return res.json({ ok: true, created: false, membership: existing, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.name } });
+      return res.json({ ok: true, created: false, membership: existing, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
     }
     const now = new Date().toISOString();
     const resolvedRole = role || "staff";
@@ -845,7 +845,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const membership = sqlite.prepare(
       "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
     ).get(Number(labId), Number(userId));
-    res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.name } });
+    res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
   });
 
   // Admin: list all seat records (used by audit script to verify seat integrity)
