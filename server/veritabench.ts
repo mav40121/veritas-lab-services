@@ -37,8 +37,9 @@ function bencheLicenseCtx(req: any): LicenseContext {
 
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"];
 
-function hasOpsAccess(user: any) {
-  return SUITE_PLANS.includes(user?.plan);
+function hasOpsAccess(user: any, lab?: any) {
+  const plan = lab?.plan ?? user?.plan;
+  return SUITE_PLANS.includes(plan);
 }
 
 export function registerVeritaBenchRoutes(

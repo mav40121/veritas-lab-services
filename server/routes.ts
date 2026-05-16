@@ -389,11 +389,16 @@ function signToken(userId: number) {
 }
 
 // ── SUBSCRIPTION ACCESS LEVEL ──────────────────────────────────────────
-function getAccessLevel(user: any): 'full' | 'read_only' | 'locked' | 'free' {
-  if (!user.subscription_expires_at && !user.subscriptionExpiresAt) return 'free';
+// Phase 4.3a: optional `lab` second arg. When given, uses lab's
+// subscription_expires_at instead of user's. Existing callers that pass
+// only (user) keep their current behavior.
+function getAccessLevel(user: any, lab?: any): 'full' | 'read_only' | 'locked' | 'free' {
+  const expiryStr = lab?.subscription_expires_at
+    ?? user?.subscription_expires_at ?? user?.subscriptionExpiresAt;
+  if (!expiryStr) return 'free';
 
   const now = new Date();
-  const expiry = new Date(user.subscription_expires_at || user.subscriptionExpiresAt);
+  const expiry = new Date(expiryStr);
   const twoYearsAfterExpiry = new Date(expiry);
   twoYearsAfterExpiry.setFullYear(twoYearsAfterExpiry.getFullYear() + 2);
 
@@ -406,9 +411,14 @@ function requireWriteAccess(req: any, res: any, next: any) {
   const fullUser = storage.getUserById(req.userId);
   if (!fullUser) return res.status(401).json({ error: "User not found" });
 
-  const accessLevel = getAccessLevel(fullUser);
+  // Phase 4.3a: prefer req.scope.lab when present (lab-scoped routes
+  // that ran labScopeMiddleware first). Falls back to user-level state
+  // for legacy unprefixed routes.
+  const lab = req.scope?.lab;
+  const accessLevel = getAccessLevel(fullUser, lab);
   if (accessLevel === 'read_only') {
-    const expiry = new Date(fullUser.subscriptionExpiresAt!);
+    const expiryStr = lab?.subscription_expires_at ?? fullUser.subscriptionExpiresAt;
+    const expiry = new Date(expiryStr!);
     const retentionEnd = new Date(expiry);
     retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
     return res.status(403).json({
@@ -2098,20 +2108,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Number.isFinite(labId)) return res.status(400).json({ error: "Missing or invalid labId in URL" });
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const membership = (db as any).$client.prepare(
-      "SELECT id, role, permissions_json FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
-    ).get(userId, labId) as any;
-    if (!membership) return res.status(403).json({ error: "No active membership for this lab" });
+    // Phase 4.3a: JOIN labs so req.scope.lab carries plan + subscription
+    // state. Lets has*Access helpers prefer lab.plan over user.plan
+    // without a second DB round-trip per request.
+    const row = (db as any).$client.prepare(`
+      SELECT lm.id AS membership_id, lm.role AS role, lm.permissions_json AS permissions_json,
+             l.id AS lab_id, l.plan AS plan, l.subscription_status AS subscription_status,
+             l.subscription_expires_at AS subscription_expires_at,
+             l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id
+      FROM lab_members lm
+      LEFT JOIN labs l ON l.id = lm.lab_id
+      WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active' LIMIT 1
+    `).get(userId, labId) as any;
+    if (!row) return res.status(403).json({ error: "No active membership for this lab" });
 
     let permissions: Record<string, any> = {};
-    try { permissions = JSON.parse(membership.permissions_json || '{}'); } catch {}
+    try { permissions = JSON.parse(row.permissions_json || '{}'); } catch {}
 
-    req.scope = { labId, userId, role: membership.role, permissions, membershipId: membership.id };
+    req.scope = {
+      labId,
+      userId,
+      role: row.role,
+      permissions,
+      membershipId: row.membership_id,
+      lab: {
+        id: row.lab_id,
+        plan: row.plan,
+        subscription_status: row.subscription_status,
+        subscription_expires_at: row.subscription_expires_at,
+        plan_expires_at: row.plan_expires_at,
+        stripe_customer_id: row.stripe_customer_id,
+      },
+    };
 
     // Refresh last_active_at + auto-update users.default_lab_id so the
     // bare-/dashboard redirect (Phase 2b) resumes here next time.
     const nowIso = new Date().toISOString();
-    (db as any).$client.prepare("UPDATE lab_members SET last_active_at = ? WHERE id = ?").run(nowIso, membership.id);
+    (db as any).$client.prepare("UPDATE lab_members SET last_active_at = ? WHERE id = ?").run(nowIso, row.membership_id);
     (db as any).$client.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
 
     next();
@@ -2817,9 +2850,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // existed before May 2026). Seat users have already inherited the owner's
   // subscriptionStatus + grandfathered flag in authMiddleware, so this works
   // for both owners and seats.
-  function hasMapAccess(user: any) {
+  // Phase 4.3a: optional `lab` second arg. When given, prefers lab plan +
+  // subscription_status over user-level state.
+  function hasMapAccess(user: any, lab?: any) {
     if (!user) return false;
-    if (user.subscriptionStatus === 'active') return true;
+    const status = lab?.subscription_status ?? user.subscriptionStatus;
+    if (status === 'active') return true;
     if (user.grandfathered === true) return true;
     return false;
   }
@@ -4615,8 +4651,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITASCAN ───────────────────────────────────────────────────────────
 
   // Check access: annual, lab, or veritascan plan
-  function hasScanAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
+  function hasScanAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // List scans for current user
@@ -5773,8 +5810,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
-  function hasCheckAccess(user: any) {
-    return ["annual", "starter", "professional", "lab", "complete", "per_study", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(user?.plan) || (user?.userId && user.userId <= 11);
+  function hasCheckAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "starter", "professional", "lab", "complete", "per_study", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) || (user?.userId && user.userId <= 11);
   }
 
   // List trackers for user
@@ -8184,8 +8222,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
-  function hasCompetencyAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
+  function hasCompetencyAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // List programs
@@ -9041,8 +9080,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VERITASTAFF ──────────────────────────────────────────────────────────
 
-  function hasStaffAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
+  function hasStaffAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // CMS specialty list (for validation and labels)
@@ -10122,8 +10162,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── VERITALAB ──────────────────────────────────────────────────────────
 
-  function hasLabCertAccess(user: any) {
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user?.plan);
+  function hasLabCertAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   function scheduleReminders(certId: number, userId: number, expirationDate: string) {
@@ -10740,8 +10781,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── VERITAPT - Proficiency Testing Tracker ─────────────────────────────
-  function hasPTAccess(user: any) {
-    return ["annual", "professional", "lab", "complete"].includes(user?.plan);
+  function hasPTAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete"].includes(plan);
   }
 
   // List enrollments for user
