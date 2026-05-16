@@ -5441,63 +5441,169 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       console.log("[webhook] Processing event:", event.type, event.id);
 
+      // Multi-Lab Tier 2 Phase 4.1: lab-keyed Stripe handling.
+      //
+      // Doc: docs/scoping-phase4-stripe-flip.md (PR #154).
+      //
+      // Decision #1 (locked): dual-write to BOTH labs and users for one
+      // release. Lab is authoritative; user write is the legacy safety net.
+      // Phase 5 cleanup drops the user write.
+      //
+      // Decision #2 (locked): for checkout.session.completed, read
+      // metadata.labId. If missing (pre-cutover subscription), fall back to
+      // userId → owner's primary lab via lab_members.is_primary_lab=1.
+      //
+      // For customer-id-keyed events (subscription.deleted/.updated and
+      // invoice.payment_failed), look up the lab via storage.getLabByStripe
+      // CustomerId. The Phase 1 backfill aligned labs.stripe_customer_id
+      // with users.stripe_customer_id so this lookup matches the legacy
+      // user lookup row-for-row.
+      //
+      // Defensive handlers added for customer.subscription.created (mirrors
+      // .updated) and customer.deleted (clears the stripe_customer_id on
+      // the orphaned lab).
+
+      // Helper: resolve labId for a checkout session. Reads metadata.labId
+      // first (post-cutover); falls back to userId → primary lab.
+      const resolveCheckoutLabId = (session: any): { labId: number | null; userId: number } => {
+        const labId = parseInt(session.metadata?.labId || "0") || null;
+        const userId = parseInt(session.metadata?.userId || "0");
+        if (labId) return { labId, userId };
+        if (!userId) return { labId: null, userId: 0 };
+        const lm = (db as any).$client.prepare(
+          "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+        ).get(userId) as any;
+        return { labId: lm?.lab_id ?? null, userId };
+      };
+
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as any;
-        const userId = parseInt(session.metadata?.userId || "0");
+        const { labId, userId } = resolveCheckoutLabId(session);
         const priceType = session.metadata?.priceType;
         const totalSeats = parseInt(session.metadata?.totalSeats || "1");
-        if (userId) {
+        if (!labId && !userId) {
+          console.warn("[webhook] checkout.session.completed missing both labId and userId metadata; event", event.id);
+        } else {
           const expiresAt = new Date();
           expiresAt.setFullYear(expiresAt.getFullYear() + 1);
           const expiresAtISO = expiresAt.toISOString();
 
           if (priceType === "perStudy") {
-            storage.addStudyCredits(userId, 1);
-            console.log("[webhook] Added study credit for user", userId);
+            if (labId) {
+              (db as any).$client.prepare(
+                "UPDATE labs SET study_credits = COALESCE(study_credits, 0) + 1 WHERE id = ?"
+              ).run(labId);
+            }
+            if (userId) storage.addStudyCredits(userId, 1);
+            console.log("[webhook] Added study credit", { labId, userId });
           } else if (["waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(priceType) && session.subscription) {
-            storage.updateUserStripe(userId, {
-              stripeSubscriptionId: session.subscription,
-              plan: priceType,
-            });
-            (db as any).$client.prepare(
-              "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active', plan_expires_at = ?, seat_count = ? WHERE id = ?"
-            ).run(expiresAtISO, expiresAtISO, totalSeats, userId);
-            console.log("[webhook] Activated plan", priceType, "for user", userId);
+            if (labId) {
+              (db as any).$client.prepare(
+                "UPDATE labs SET plan = ?, stripe_subscription_id = ?, subscription_status = 'active', subscription_expires_at = ?, plan_expires_at = ? WHERE id = ?"
+              ).run(priceType, session.subscription, expiresAtISO, expiresAtISO, labId);
+            }
+            if (userId) {
+              storage.updateUserStripe(userId, { stripeSubscriptionId: session.subscription, plan: priceType });
+              (db as any).$client.prepare(
+                "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active', plan_expires_at = ?, seat_count = ? WHERE id = ?"
+              ).run(expiresAtISO, expiresAtISO, totalSeats, userId);
+            }
+            console.log("[webhook] Activated plan", priceType, { labId, userId });
           } else if (["starter", "professional", "lab", "complete", "annual"].includes(priceType) && session.subscription) {
-            storage.updateUserStripe(userId, {
-              stripeSubscriptionId: session.subscription,
-              plan: priceType === "complete" ? "lab" : priceType,
-            });
-            (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(expiresAtISO, userId);
-            console.log("[webhook] Activated legacy plan", priceType, "for user", userId);
+            const planForRow = priceType === "complete" ? "lab" : priceType;
+            if (labId) {
+              (db as any).$client.prepare(
+                "UPDATE labs SET plan = ?, stripe_subscription_id = ?, subscription_status = 'active', subscription_expires_at = ? WHERE id = ?"
+              ).run(planForRow, session.subscription, expiresAtISO, labId);
+            }
+            if (userId) {
+              storage.updateUserStripe(userId, { stripeSubscriptionId: session.subscription, plan: planForRow });
+              (db as any).$client.prepare(
+                "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?"
+              ).run(expiresAtISO, userId);
+            }
+            console.log("[webhook] Activated legacy plan", priceType, { labId, userId });
           }
         }
       } else if (event.type === "customer.subscription.deleted") {
         const sub = event.data.object as any;
+        const lab = storage.getLabByStripeCustomerId(sub.customer);
         const user = storage.getUserByStripeCustomerId(sub.customer);
+        const nowISO = new Date().toISOString();
+        if (lab) {
+          (db as any).$client.prepare(
+            "UPDATE labs SET plan = 'free', stripe_subscription_id = NULL, subscription_status = 'expired', subscription_expires_at = ? WHERE id = ?"
+          ).run(nowISO, lab.id);
+        }
         if (user) {
           storage.updateUserStripe(user.id, { stripeSubscriptionId: null, plan: "free" });
-          const nowISO = new Date().toISOString();
-          (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'expired' WHERE id = ?").run(nowISO, user.id);
-          console.log("[webhook] Subscription deleted for user", user.id);
+          (db as any).$client.prepare(
+            "UPDATE users SET subscription_expires_at = ?, subscription_status = 'expired' WHERE id = ?"
+          ).run(nowISO, user.id);
         }
-      } else if (event.type === "customer.subscription.updated") {
+        if (!lab && !user) {
+          console.warn("[webhook] customer.subscription.deleted: no lab or user found for customer", sub.customer, "event", event.id);
+        } else {
+          console.log("[webhook] Subscription deleted", { labId: lab?.id, userId: user?.id });
+        }
+      } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.created") {
+        // 4.1 defensive: handle .created the same as .updated. Stripe sends
+        // .created right alongside checkout.session.completed; if metadata
+        // routing in checkout already updated the lab, this is a no-op
+        // overwrite with the same expiry.
         const sub = event.data.object as any;
-        const user = storage.getUserByStripeCustomerId(sub.customer);
-        if (user && sub.current_period_end) {
+        if (sub.current_period_end) {
           const newExpiry = new Date(sub.current_period_end * 1000).toISOString();
-          (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?").run(newExpiry, user.id);
-          console.log("[webhook] Subscription updated for user", user.id);
+          const lab = storage.getLabByStripeCustomerId(sub.customer);
+          const user = storage.getUserByStripeCustomerId(sub.customer);
+          if (lab) {
+            (db as any).$client.prepare(
+              "UPDATE labs SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?"
+            ).run(newExpiry, lab.id);
+          }
+          if (user) {
+            (db as any).$client.prepare(
+              "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?"
+            ).run(newExpiry, user.id);
+          }
+          if (!lab && !user) {
+            console.warn("[webhook]", event.type, ": no lab or user found for customer", sub.customer, "event", event.id);
+          } else {
+            console.log("[webhook]", event.type, "applied", { labId: lab?.id, userId: user?.id });
+          }
         }
       } else if (event.type === "invoice.payment_failed") {
         const invoice = event.data.object as any;
         console.warn("[webhook] Payment failed for customer:", invoice.customer);
+        const lab = storage.getLabByStripeCustomerId(invoice.customer);
         const user = storage.getUserByStripeCustomerId(invoice.customer);
-        if (user) {
-          const gracePeriod = new Date();
-          gracePeriod.setDate(gracePeriod.getDate() + 7);
-          (db as any).$client.prepare("UPDATE users SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?").run(gracePeriod.toISOString(), user.id);
+        const gracePeriod = new Date();
+        gracePeriod.setDate(gracePeriod.getDate() + 7);
+        const graceISO = gracePeriod.toISOString();
+        if (lab) {
+          (db as any).$client.prepare(
+            "UPDATE labs SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?"
+          ).run(graceISO, lab.id);
         }
+        if (user) {
+          (db as any).$client.prepare(
+            "UPDATE users SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?"
+          ).run(graceISO, user.id);
+        }
+      } else if (event.type === "customer.deleted") {
+        // 4.1 defensive: clear stripe_customer_id on the orphaned lab and
+        // user so a future stripe.customers.create for the same email does
+        // not auto-route to the wrong record.
+        const cust = event.data.object as any;
+        const lab = storage.getLabByStripeCustomerId(cust.id);
+        const user = storage.getUserByStripeCustomerId(cust.id);
+        if (lab) {
+          (db as any).$client.prepare("UPDATE labs SET stripe_customer_id = NULL WHERE id = ?").run(lab.id);
+        }
+        if (user) {
+          (db as any).$client.prepare("UPDATE users SET stripe_customer_id = NULL WHERE id = ?").run(user.id);
+        }
+        console.log("[webhook] customer.deleted cleared stripe_customer_id", { labId: lab?.id, userId: user?.id });
       }
     } catch (err: any) {
       // Log but do NOT return 500 - Stripe would retry endlessly
