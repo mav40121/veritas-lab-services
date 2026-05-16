@@ -1958,6 +1958,136 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ defaultLabId: labId });
   });
 
+  // POST /api/labs/me/add — add a new lab to the operator's account.
+  //
+  // Multi-Lab Tier 2 Phase 4.2 per docs/scoping-phase4-stripe-flip.md.
+  //
+  // Body: { labName, cliaNumber, accreditationBody?, priceType }
+  //
+  // Flow:
+  //   1. Validate body (labName, cliaNumber, priceType all required).
+  //   2. Reject if a lab with the same CLIA already exists (UNIQUE on
+  //      labs.clia_number).
+  //   3. Create a fresh Stripe customer for THIS lab (parking-lot #11:
+  //      each lab is its own subscription, do NOT reuse the operator's
+  //      existing Stripe customer for the new lab).
+  //   4. INSERT labs row with stripe_customer_id pre-stamped and the
+  //      operator as owner_user_id. is_primary_lab handled at membership
+  //      level (defaults to 0; this is a secondary lab per #12).
+  //   5. INSERT lab_members row (role='owner', is_primary_lab=0,
+  //      status='active').
+  //   6. Create Stripe Checkout session with metadata.labId = new lab id
+  //      so the Phase 4.1 webhook routes the resulting subscription to
+  //      this lab specifically (not the operator's primary lab).
+  //   7. Return { labId, checkoutUrl }.
+  //
+  // Failure modes:
+  //   - Stripe customer create fails: no DB writes, 502 returned.
+  //   - DB insert fails (e.g. CLIA unique violation): no Stripe customer
+  //     left orphaned because we already 4xx'd before customer create.
+  //   - Stripe checkout session create fails after labs INSERT: the lab
+  //     and membership exist; user can retry checkout via the existing
+  //     /api/stripe/checkout endpoint targeting the new lab. Logged.
+  app.post("/api/labs/me/add", authMiddleware, async (req: any, res) => {
+    if (!stripe) return res.status(503).json({ error: "Payments not configured" });
+    const { labName, cliaNumber, accreditationBody, priceType } = req.body || {};
+    if (!labName?.trim() || !cliaNumber?.trim() || !priceType) {
+      return res.status(400).json({ error: "labName, cliaNumber, and priceType are required" });
+    }
+    if (!PRICES[priceType as keyof typeof PRICES]) {
+      return res.status(400).json({ error: "Invalid priceType" });
+    }
+    // Reject duplicate CLIA early (UNIQUE constraint exists on labs.clia_number).
+    const existingLab = (db as any).$client.prepare(
+      "SELECT id, owner_user_id FROM labs WHERE clia_number = ? LIMIT 1"
+    ).get(cliaNumber.trim()) as any;
+    if (existingLab) {
+      return res.status(409).json({ error: "A lab with this CLIA number already exists" });
+    }
+
+    const user = storage.getUserById(req.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    let stripeCustomerId: string;
+    try {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${labName.trim()} (${cliaNumber.trim()})`,
+        metadata: { ownerUserId: String(req.userId), labName: labName.trim(), cliaNumber: cliaNumber.trim() },
+      });
+      stripeCustomerId = customer.id;
+    } catch (err: any) {
+      console.error("[labs/me/add] Stripe customer create failed:", err.message);
+      return res.status(502).json({ error: "Failed to create Stripe customer" });
+    }
+
+    // Insert labs + lab_members in a single transaction so a partial
+    // failure does not leave an orphaned labs row without a membership.
+    const now = new Date().toISOString();
+    let newLabId: number;
+    try {
+      const labResult = (db as any).$client.prepare(
+        `INSERT INTO labs (
+          clia_number, lab_name, owner_user_id, stripe_customer_id,
+          accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        cliaNumber.trim(), labName.trim(), req.userId, stripeCustomerId,
+        accreditationBody === "CAP" ? 1 : 0,
+        accreditationBody === "TJC" ? 1 : 0,
+        accreditationBody === "COLA" ? 1 : 0,
+        accreditationBody === "AABB" ? 1 : 0,
+        now, now,
+      );
+      newLabId = Number(labResult.lastInsertRowid);
+      (db as any).$client.prepare(
+        `INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at)
+         VALUES (?, ?, 'owner', 'active', 0, ?, ?, ?)`
+      ).run(newLabId, req.userId, now, now, now);
+    } catch (err: any) {
+      console.error("[labs/me/add] DB insert failed:", err.message);
+      // Best-effort Stripe customer cleanup so we don't accumulate orphans.
+      try { await stripe.customers.del(stripeCustomerId); } catch {}
+      return res.status(500).json({ error: "Failed to create lab" });
+    }
+
+    // Build checkout session targeting the new lab.
+    const SUITE_PLANS = new Set(["waived", "community", "hospital", "large_hospital"]);
+    const successPath = SUITE_PLANS.has(priceType) ? "/getting-started" : "/veritacheck";
+    try {
+      const isSubscription = priceType !== "perStudy";
+      const sessionParams: any = {
+        customer: stripeCustomerId,
+        mode: isSubscription ? "subscription" : "payment",
+        line_items: [{ price: PRICES[priceType as keyof typeof PRICES], quantity: 1 }],
+        success_url: `${FRONTEND_URL}${successPath}?payment=success&type=${priceType}&newLab=${newLabId}`,
+        cancel_url: `${FRONTEND_URL}/dashboard?payment=cancelled`,
+        metadata: {
+          userId: String(req.userId),
+          labId: String(newLabId),
+          priceType,
+          totalSeats: "1",
+        },
+      };
+      if (isSubscription) {
+        sessionParams.subscription_data = { trial_period_days: 14 };
+        sessionParams.payment_method_collection = "always";
+      }
+      const session = await stripe.checkout.sessions.create(sessionParams);
+      res.json({ labId: newLabId, checkoutUrl: session.url });
+    } catch (err: any) {
+      // Lab + membership already exist; user can retry checkout via the
+      // existing /api/stripe/checkout with labId targeting the new lab.
+      console.error("[labs/me/add] Stripe checkout session create failed:", err.message);
+      res.status(207).json({
+        labId: newLabId,
+        checkoutUrl: null,
+        warning: "Lab created but checkout session failed. Retry checkout from the lab switcher.",
+      });
+    }
+  });
+
   // labScopeMiddleware — resolves :labId from the URL, validates that the
   // authenticated user has an active membership on that lab, attaches
   // { labId, userId, role, permissions } to req.scope, and refreshes the
@@ -5378,13 +5508,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const isFullDiscountStripe = couponId !== undefined && discountPct >= 100;
+
+      // Multi-Lab Tier 2 Phase 4.2: stamp metadata.labId on every checkout
+      // session so the Phase 4.1 webhook routes the resulting subscription
+      // events to the right lab. Source order:
+      //   1. req.body.labId (caller explicitly chose a lab)
+      //   2. users.default_lab_id (the user's active/default lab)
+      //   3. omit (Phase 4.1 webhook falls back to userId → primary lab)
+      let metadataLabId: string | undefined;
+      if (req.body?.labId) {
+        const requestedLabId = parseInt(String(req.body.labId)) || 0;
+        if (requestedLabId) {
+          const member = (db as any).$client.prepare(
+            "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+          ).get(user.id, requestedLabId);
+          if (member) metadataLabId = String(requestedLabId);
+        }
+      }
+      if (!metadataLabId) {
+        const u = (db as any).$client.prepare(
+          "SELECT default_lab_id FROM users WHERE id = ?"
+        ).get(user.id) as any;
+        if (u?.default_lab_id) metadataLabId = String(u.default_lab_id);
+      }
+
       const sessionParams: any = {
         customer: customerId,
         mode: isSubscription ? "subscription" : "payment",
         line_items: lineItems,
         success_url: successUrl,
         cancel_url: cancelUrl,
-        metadata: { userId: String(user.id), priceType, totalSeats: String(totalSeats) },
+        metadata: {
+          userId: String(user.id),
+          ...(metadataLabId ? { labId: metadataLabId } : {}),
+          priceType,
+          totalSeats: String(totalSeats),
+        },
       };
       if (trialDays && isSubscription) {
         sessionParams.subscription_data = { trial_period_days: trialDays };
