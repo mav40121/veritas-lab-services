@@ -840,7 +840,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Give the seat user the owner's actual plan (not hardcoded community)
     const ownerUser = sqlite.prepare("SELECT plan FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
     const inheritedPlan = ownerUser?.plan || 'community';
-    sqlite.prepare("UPDATE users SET plan = ?, study_credits = 99999 WHERE id = ?").run(inheritedPlan, Number(seatUserId));
+    sqlite.prepare("UPDATE users SET plan = ?, study_credits = 99999 WHERE id = ?").run(inheritedPlan, Number(seatUserId)); // PHASE5-OK seat-user inherits owner plan during onboarding
     const seat = sqlite.prepare("SELECT * FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").get(Number(ownerUserId), seatEmail) as any;
     res.json({ ok: true, seat });
   });
@@ -967,7 +967,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "UPDATE user_seats SET seat_user_id = ?, status = 'active', accepted_at = ? WHERE id = ?"
       ).run(Number(userId), now, Number(seatId));
       sqlite.prepare(
-        "UPDATE users SET plan = ?, seat_count = 1, lab_id = ?, hospital_name = NULL, hospital_state = NULL, bed_count = NULL, has_completed_onboarding = 1 WHERE id = ?"
+        "UPDATE users SET plan = ?, seat_count = 1, lab_id = ?, hospital_name = NULL, hospital_state = NULL, bed_count = NULL, has_completed_onboarding = 1 WHERE id = ?" // PHASE5-OK signup onboarding
       ).run(owner.plan, owner.lab_id || null, Number(userId));
       // Keep in-memory storage consistent so the next /api/auth/me reflects the change.
       try {
@@ -1297,7 +1297,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userId = existingUser.id;
         // Only set pending_invoice if they are on free/null plan
         if (!existingUser.plan || existingUser.plan === "free") {
-          db.$client.prepare("UPDATE users SET plan = 'pending_invoice' WHERE id = ?").run(userId);
+          db.$client.prepare("UPDATE users SET plan = 'pending_invoice' WHERE id = ?").run(userId); // PHASE5-OK pending-invoice onboarding state
         }
       } else {
         // Create user with placeholder password
@@ -1305,7 +1305,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const newUser = storage.createUser(normalizedEmail, placeholderHash, billing_contact_name);
         userId = newUser.id;
         db.$client.prepare(
-          "UPDATE users SET plan = 'pending_invoice', hipaa_acknowledged = 1, hipaa_acknowledged_at = ? WHERE id = ?"
+          "UPDATE users SET plan = 'pending_invoice', hipaa_acknowledged = 1, hipaa_acknowledged_at = ? WHERE id = ?" // PHASE5-OK pending-invoice onboarding state
         ).run(new Date().toISOString(), userId);
       }
 
@@ -1616,7 +1616,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Force seat_count=1 and clear hospital fields defensively in case any
       // upstream code path wrote owner-shaped values onto this seat user.
       try {
-        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id); // PHASE5-OK seat-accept onboarding
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     } else if (activeSeat) {
@@ -1631,7 +1631,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "UPDATE user_seats SET seat_user_id = ? WHERE id = ?"
       ).run(user.id, activeSeat.id);
       try {
-        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id);
+        (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id); // PHASE5-OK seat-accept onboarding
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
     }
@@ -5522,7 +5522,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           // Stale customer ID (e.g. test mode ID in live mode) - create a fresh one
           console.log(`[checkout] Stale customer ID ${customerId} - creating new customer`);
           customerId = undefined;
-          db.$client.prepare("UPDATE users SET stripe_customer_id = NULL WHERE id = ?").run(user.id);
+          db.$client.prepare("UPDATE users SET stripe_customer_id = NULL WHERE id = ?").run(user.id); // PHASE5-OK defensive: clears stale stripe customer in checkout reuse path
         }
       }
       if (!customerId) {
@@ -5703,24 +5703,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           expiresAt.setFullYear(expiresAt.getFullYear() + 1);
           const expiresAtISO = expiresAt.toISOString();
 
+          // Phase 4.5: user-side dual-write retired. lab is the authoritative
+          // store for plan/subscription/credits. Phase 5 cleanup drops the
+          // deprecated users columns entirely. user-side seat_count remains
+          // until labs.seat_count is added (separate concern).
           if (priceType === "perStudy") {
             if (labId) {
               (db as any).$client.prepare(
                 "UPDATE labs SET study_credits = COALESCE(study_credits, 0) + 1 WHERE id = ?"
               ).run(labId);
+            } else if (userId) {
+              // Fallback for pre-cutover sessions with no labId mapping.
+              storage.addStudyCredits(userId, 1);
             }
-            if (userId) storage.addStudyCredits(userId, 1);
             console.log("[webhook] Added study credit", { labId, userId });
           } else if (["waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(priceType) && session.subscription) {
             if (labId) {
               (db as any).$client.prepare(
                 "UPDATE labs SET plan = ?, stripe_subscription_id = ?, subscription_status = 'active', subscription_expires_at = ?, plan_expires_at = ? WHERE id = ?"
               ).run(priceType, session.subscription, expiresAtISO, expiresAtISO, labId);
-            }
-            if (userId) {
+              // seat_count still lives on users until labs.seat_count is added.
+              if (userId) {
+                (db as any).$client.prepare("UPDATE users SET seat_count = ? WHERE id = ?").run(totalSeats, userId);
+              }
+            } else if (userId) {
+              // Fallback for pre-cutover sessions with no labId mapping.
               storage.updateUserStripe(userId, { stripeSubscriptionId: session.subscription, plan: priceType });
               (db as any).$client.prepare(
-                "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active', plan_expires_at = ?, seat_count = ? WHERE id = ?"
+                "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active', plan_expires_at = ?, seat_count = ? WHERE id = ?" // PHASE5-OK 4.5 fallback for pre-cutover customers with no lab mapping
               ).run(expiresAtISO, expiresAtISO, totalSeats, userId);
             }
             console.log("[webhook] Activated plan", priceType, { labId, userId });
@@ -5730,11 +5740,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               (db as any).$client.prepare(
                 "UPDATE labs SET plan = ?, stripe_subscription_id = ?, subscription_status = 'active', subscription_expires_at = ? WHERE id = ?"
               ).run(planForRow, session.subscription, expiresAtISO, labId);
-            }
-            if (userId) {
+            } else if (userId) {
+              // Fallback for pre-cutover sessions with no labId mapping.
               storage.updateUserStripe(userId, { stripeSubscriptionId: session.subscription, plan: planForRow });
               (db as any).$client.prepare(
-                "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?"
+                "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?" // PHASE5-OK 4.5 fallback for pre-cutover customers with no lab mapping
               ).run(expiresAtISO, userId);
             }
             console.log("[webhook] Activated legacy plan", priceType, { labId, userId });
@@ -5749,11 +5759,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           (db as any).$client.prepare(
             "UPDATE labs SET plan = 'free', stripe_subscription_id = NULL, subscription_status = 'expired', subscription_expires_at = ? WHERE id = ?"
           ).run(nowISO, lab.id);
-        }
-        if (user) {
+        } else if (user) {
+          // Phase 4.5 fallback: pre-cutover customer never got a lab
+          // mapping. Keep the user-side write so legacy state stays correct.
           storage.updateUserStripe(user.id, { stripeSubscriptionId: null, plan: "free" });
           (db as any).$client.prepare(
-            "UPDATE users SET subscription_expires_at = ?, subscription_status = 'expired' WHERE id = ?"
+            "UPDATE users SET subscription_expires_at = ?, subscription_status = 'expired' WHERE id = ?" // PHASE5-OK 4.5 fallback for pre-cutover customers with no lab mapping
           ).run(nowISO, user.id);
         }
         if (!lab && !user) {
@@ -5775,10 +5786,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             (db as any).$client.prepare(
               "UPDATE labs SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?"
             ).run(newExpiry, lab.id);
-          }
-          if (user) {
+          } else if (user) {
+            // Phase 4.5 fallback for unmapped customer.
             (db as any).$client.prepare(
-              "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?"
+              "UPDATE users SET subscription_expires_at = ?, subscription_status = 'active' WHERE id = ?" // PHASE5-OK 4.5 fallback for pre-cutover customers with no lab mapping
             ).run(newExpiry, user.id);
           }
           if (!lab && !user) {
@@ -5799,10 +5810,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           (db as any).$client.prepare(
             "UPDATE labs SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?"
           ).run(graceISO, lab.id);
-        }
-        if (user) {
+        } else if (user) {
+          // Phase 4.5 fallback for unmapped customer.
           (db as any).$client.prepare(
-            "UPDATE users SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?"
+            "UPDATE users SET subscription_expires_at = ?, subscription_status = 'payment_failed' WHERE id = ?" // PHASE5-OK 4.5 fallback for pre-cutover customers with no lab mapping
           ).run(graceISO, user.id);
         }
       } else if (event.type === "customer.deleted") {
@@ -5816,7 +5827,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           (db as any).$client.prepare("UPDATE labs SET stripe_customer_id = NULL WHERE id = ?").run(lab.id);
         }
         if (user) {
-          (db as any).$client.prepare("UPDATE users SET stripe_customer_id = NULL WHERE id = ?").run(user.id);
+          (db as any).$client.prepare("UPDATE users SET stripe_customer_id = NULL WHERE id = ?").run(user.id); // PHASE5-OK customer.deleted defensive clear, preserves checkout reuse contract
         }
         console.log("[webhook] customer.deleted cleared stripe_customer_id", { labId: lab?.id, userId: user?.id });
       }
