@@ -10975,8 +10975,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Attach document count for each certificate
     const result = certs.map((cert: any) => {
       const docCount = (db as any).$client.prepare(
-        "SELECT COUNT(*) as cnt FROM lab_certificate_documents WHERE certificate_id = ? AND user_id = ?"
-      ).get(cert.id, req.userId) as any;
+        "SELECT COUNT(*) as cnt FROM lab_certificate_documents WHERE certificate_id = ?"
+      ).get(cert.id) as any;
       return { ...cert, document_count: docCount?.cnt || 0 };
     });
 
@@ -11130,17 +11130,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!cert) return res.status(404).json({ error: "Certificate not found" });
 
     const docs = (db as any).$client.prepare(
-      "SELECT id, certificate_id, filename, original_filename, file_size, mime_type, uploaded_at FROM lab_certificate_documents WHERE certificate_id = ? AND user_id = ? ORDER BY uploaded_at DESC"
-    ).all(req.params.id, req.userId);
+      "SELECT id, certificate_id, filename, original_filename, file_size, mime_type, uploaded_at FROM lab_certificate_documents WHERE certificate_id = ? ORDER BY uploaded_at DESC"
+    ).all(req.params.id);
     res.json(docs);
   });
 
   // GET /api/veritalab/certificates/:id/documents/:docId - download document
   app.get("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
+    const cert = userCanAccessCertificate(req.params.id, req);
+    if (!cert) return res.status(404).json({ error: "Certificate not found" });
     const doc = (db as any).$client.prepare(
-      "SELECT * FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
-    ).get(req.params.docId, req.params.id, req.userId) as any;
+      "SELECT * FROM lab_certificate_documents WHERE id = ? AND certificate_id = ?"
+    ).get(req.params.docId, req.params.id) as any;
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
     res.setHeader("Content-Type", doc.mime_type || "application/octet-stream");
@@ -11152,9 +11154,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE /api/veritalab/certificates/:id/documents/:docId - delete document
   app.delete("/api/veritalab/certificates/:id/documents/:docId", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
+    const cert = userCanAccessCertificate(req.params.id, req);
+    if (!cert) return res.status(404).json({ error: "Certificate not found" });
     const doc = (db as any).$client.prepare(
-      "SELECT id FROM lab_certificate_documents WHERE id = ? AND certificate_id = ? AND user_id = ?"
-    ).get(req.params.docId, req.params.id, req.userId);
+      "SELECT id FROM lab_certificate_documents WHERE id = ? AND certificate_id = ?"
+    ).get(req.params.docId, req.params.id);
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
     (db as any).$client.prepare("DELETE FROM lab_certificate_documents WHERE id = ?").run(req.params.docId);
