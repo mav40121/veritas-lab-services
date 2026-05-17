@@ -218,7 +218,13 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // Old /m/* URLs from a previous site version -- tell Google they're permanently gone
+  // Old /m/* URLs from a previous site version. Paths with current
+  // canonical equivalents 301-redirect (preserves SEO link equity);
+  // anything else under /m/* 410s so Google deindexes it. Order matters:
+  // specific app.get(...) registrations win over the catch-all below.
+  app.get('/m/login', (_req, res) => res.redirect(301, '/login'));
+  app.get('/m/create-account', (_req, res) => res.redirect(301, '/register'));
+  app.get('/m/reset', (_req, res) => res.redirect(301, '/reset-password'));
   app.get('/m', (_req, res) => res.status(410).send('Gone'));
   app.use('/m/{*path}', (_req, res) => res.status(410).send('Gone'));
 
