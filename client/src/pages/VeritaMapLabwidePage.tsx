@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,10 @@ function formatDate(iso: string | null | undefined): string {
 export default function VeritaMapLabwidePage() {
   const { isLoggedIn } = useAuth();
   const [, navigate] = useLocation();
+  // Preserve active lab in navigation so clicking a row on the labwide
+  // page doesn't bounce the user to their default lab via the legacy
+  // /veritamap-app redirect.
+  const activeLabId = useActiveLabId();
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [mapFilter, setMapFilter] = useState<string>("all");
@@ -327,7 +332,9 @@ export default function VeritaMapLabwidePage() {
                     <tr
                       key={`${a.map_id}:${a.test_id}`}
                       className="border-t border-border hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/veritamap-app/${a.map_id}`)}
+                      onClick={() => navigate(activeLabId
+                        ? `/labs/${activeLabId}/veritamap-app/${a.map_id}`
+                        : `/veritamap-app/${a.map_id}`)}
                     >
                       <td className="px-3 py-2 font-medium">
                         <div className="flex items-center gap-1.5">

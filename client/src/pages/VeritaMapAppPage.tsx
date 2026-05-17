@@ -388,7 +388,9 @@ export default function VeritaMapAppPage() {
                       size="sm"
                       variant="outline"
                       className="h-8 text-xs gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
-                      onClick={() => navigate(`/veritamap-app/${map.id}`)}
+                      onClick={() => navigate(activeLabId
+                        ? `/labs/${activeLabId}/veritamap-app/${map.id}`
+                        : `/veritamap-app/${map.id}`)}
                     >
                       Open Map
                       <ChevronRight size={12} />
