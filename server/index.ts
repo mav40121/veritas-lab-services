@@ -1,3 +1,16 @@
+// Sentry must be initialized BEFORE any other imports that might throw at
+// load time so it can capture early-startup errors. Guarded by env var so
+// the app boots without Sentry when SENTRY_DSN is unset (e.g. local dev).
+import * as Sentry from "@sentry/node";
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "production",
+    tracesSampleRate: 0,
+    sendDefaultPii: false,
+  });
+}
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -203,6 +216,12 @@ app.use((req, res, next) => {
     console.log('[startup] registerRoutes completed successfully');
   } catch (err: any) {
     console.error('[startup] CRITICAL: registerRoutes FAILED:', err.message, err.stack);
+  }
+
+  // Sentry's Express error handler must run BEFORE our own error responder
+  // so it can capture the error before we serialize it to JSON.
+  if (process.env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
   }
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

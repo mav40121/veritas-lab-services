@@ -38,8 +38,14 @@ WORKDIR /app
 # Copy package files first for dependency caching
 COPY package.json package-lock.json ./
 
-# Install all dependencies (including Puppeteer's Chromium binary)
-RUN npm ci
+# Install all dependencies (including Puppeteer's Chromium binary).
+# Using `npm install` instead of `npm ci` so deploys aren't blocked when
+# the operator adds a new dependency to package.json without being able
+# to regenerate package-lock.json locally (no local node toolchain). The
+# trade-off: minor/patch versions of unrelated transitive deps may drift
+# between deploys. Acceptable for this stage; revisit if reproducibility
+# becomes a concern.
+RUN npm install --no-audit --no-fund
 
 # Copy source code
 COPY . .
