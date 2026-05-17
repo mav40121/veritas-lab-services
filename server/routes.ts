@@ -10623,12 +10623,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Logout (mark session inactive)
+  // Sign-out: invalidate active session rows so the next login does not
+  // hit the active-session conflict check around line 1853. Honors an
+  // optional session_token in the body for callers that still track it
+  // per-device; falls through to user-scoped invalidation when absent,
+  // marking every active session for the authenticated user inactive.
+  // The "logout anywhere logs out everywhere for this user" semantic is
+  // the right trade-off vs the more complex per-device model since the
+  // JWT does not carry device info.
   app.post("/api/auth/logout", authMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
     const { session_token } = req.body || {};
     if (session_token) {
-      (db as any).$client.prepare(
+      sqlite.prepare(
         "UPDATE user_sessions SET is_active = 0 WHERE session_token = ?"
       ).run(session_token);
+    } else if (req.userId) {
+      sqlite.prepare(
+        "UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1"
+      ).run(req.userId);
     }
     res.json({ ok: true });
   });
