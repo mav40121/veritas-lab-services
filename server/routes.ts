@@ -596,13 +596,6 @@ function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: s
 const BOOT_TIMESTAMP = new Date().toISOString();
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // Temporary debug route to verify @sentry/node SDK is firing in production.
-  // Hit GET /api/__sentry-test to force an uncaught Error that should land
-  // in the node-express Sentry project. Remove once verified.
-  app.get('/api/__sentry-test', () => {
-    throw new Error("Sentry server-side test at " + new Date().toISOString());
-  });
-
   // ── DEMO COMPETENCY DATA BACKFILL (runs once on startup) ────────────────
   try {
     (db as any).$client.prepare(`UPDATE competency_assessment_items SET el1_specimen_id = '0326:C147', el1_observer_initials = 'MV' WHERE el1_specimen_id IS NULL OR el1_specimen_id = ''`).run();
