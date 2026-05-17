@@ -141,7 +141,7 @@ export default function VeritaPolicyPage() {
               <p className="text-muted-foreground mb-8 leading-relaxed">
                 Track all {profile.count} policies required by {profile.full} for laboratory accreditation.
                 Build your policy library, link documents to requirements, and generate an
-                inspector-ready compliance report with one click.
+                inspector-ready compliance report with one click. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link href="/veritapolicy-app">

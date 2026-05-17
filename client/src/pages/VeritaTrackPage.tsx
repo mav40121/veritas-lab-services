@@ -39,7 +39,7 @@ export default function VeritaTrackPage() {
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                VeritaTrack{"\u2122"} replaces the binders and clipboards your lab uses to document daily, weekly, and monthly QC. Configure recurring tasks across instruments and departments, capture sign-offs with timestamps and analyst initials, and export the full history to Excel for inspection prep.
+                VeritaTrack{"\u2122"} replaces the binders and clipboards your lab uses to document daily, weekly, and monthly QC. Configure recurring tasks across instruments and departments, capture sign-offs with timestamps and analyst initials, and export the full history to Excel for inspection prep. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
               <ul className="space-y-2 mb-6 text-sm">
                 <li className="flex items-start gap-2"><ListChecks size={16} className="text-primary mt-0.5 shrink-0" /><span>Recurring daily, weekly, monthly, and custom-cadence tasks</span></li>

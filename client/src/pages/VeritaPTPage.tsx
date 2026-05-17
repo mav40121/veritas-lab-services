@@ -47,7 +47,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-8">
-                Track PT enrollment, survey results, and corrective actions by analyte. Monitor unacceptable results, close the loop with documented corrective actions, and generate surveyor-ready reports in seconds.
+                Track PT enrollment, survey results, and corrective actions by analyte. Monitor unacceptable results, close the loop with documented corrective actions, and generate surveyor-ready reports in seconds. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
               <div className="flex flex-wrap gap-3">
                 {isLoggedIn ? (

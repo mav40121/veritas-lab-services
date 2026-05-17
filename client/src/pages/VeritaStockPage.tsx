@@ -616,7 +616,7 @@ export default function VeritaStockInventoryPage() {
                   </p>
                 </div>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  VeritaStock{"\u2122"} replaces the spreadsheet your lead tech maintains by hand. Track reagents, controls, calibrators, consumables, and supplies across every department with calculated burn rates, lead-time-aware reorder points, and expiration alerts that fire before you have a problem.
+                  VeritaStock{"\u2122"} replaces the spreadsheet your lead tech maintains by hand. Track reagents, controls, calibrators, consumables, and supplies across every department with calculated burn rates, lead-time-aware reorder points, and expiration alerts that fire before you have a problem. Built by a former TJC laboratory surveyor with 200+ facility inspections.
                 </p>
                 <ul className="space-y-2 mb-6 text-sm">
                   <li className="flex items-start gap-2"><BellRing size={16} className="text-primary mt-0.5 shrink-0" /><span>Color-coded status: Reorder Now, Expiring Soon, OK, Standing Order</span></li>

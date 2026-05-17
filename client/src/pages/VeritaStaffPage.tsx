@@ -65,7 +65,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"™"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation.
+                Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"™"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {!isLoggedIn && (
