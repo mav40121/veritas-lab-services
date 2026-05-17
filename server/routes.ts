@@ -7999,6 +7999,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         for (const e of seedEnrollments) {
           stmt.run(userId, e.vendor, e.program_name, e.pt_category, e.year);
         }
+        // Dual-write lab_id on the rows we just seeded so they're visible to
+        // every lab member, not just whoever ran the seed endpoint.
+        try {
+          (db as any).$client.prepare(
+            "UPDATE pt_enrollments_v2 SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND lab_id IS NULL"
+          ).run(userId, userId);
+        } catch {}
       }
 
       const result = computePTCoverage(userId);
@@ -10536,7 +10543,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.userId);
 
     if (!existingCert) {
-      (db as any).$client.prepare(`
+      const certResult = (db as any).$client.prepare(`
         INSERT INTO lab_certificates
         (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at)
         VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, ?, ?, ?)
@@ -10548,6 +10555,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         now,
         now
       );
+      // Dual-write lab_id so the auto-created CLIA cert is visible cross-member.
+      try {
+        (db as any).$client.prepare(
+          "UPDATE lab_certificates SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+        ).run(req.userId, Number(certResult.lastInsertRowid));
+      } catch {}
     }
 
     res.json({ ok: true, tier });
@@ -10943,9 +10956,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(req.userId);
       if (!existingClia) {
         const now = new Date().toISOString();
-        (db as any).$client.prepare(
+        const cliaResult = (db as any).$client.prepare(
           "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.', ?, ?)"
         ).run(req.userId, userRow.clia_number, userRow.clia_director || null, now, now);
+        // Dual-write lab_id so the auto-created CLIA cert is visible cross-member.
+        try {
+          (db as any).$client.prepare(
+            "UPDATE lab_certificates SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+          ).run(req.userId, Number(cliaResult.lastInsertRowid));
+        } catch {}
       }
     }
 
