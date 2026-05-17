@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
-import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download } from "lucide-react";
+import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -170,12 +170,16 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-2">
-          {studies.map((study) => (
+          {studies.map((study) => {
+            const isDraft = study.status === "draft";
+            const editPath = labId ? `/labs/${labId}/study/${study.id}/edit` : `/study/${study.id}/edit`;
+            const viewPath = labId ? `/labs/${labId}/study/${study.id}/results` : `/study/${study.id}/results`;
+            return (
             <Card key={study.id} className="hover:border-primary/30 transition-colors group" data-testid={`card-study-${study.id}`}>
               <CardContent className="p-4 flex items-center gap-4">
-                {/* Pass/Fail icon */}
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${study.status === "pass" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
-                  {study.status === "pass" ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                {/* Status icon: pass / fail / draft */}
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isDraft ? "bg-amber-500/10 text-amber-400" : study.status === "pass" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                  {isDraft ? <FileEdit size={18} /> : study.status === "pass" ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
                 </div>
 
                 {/* Study info */}
@@ -185,29 +189,37 @@ export default function Dashboard() {
                     <Badge variant="outline" className="text-xs shrink-0">
                       {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "pt_coag" ? "PT/Coag" : study.studyType === "qc_range" ? "QC Range" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"}
                     </Badge>
-                    <span className={`text-xs font-semibold ${study.status === "pass" ? "pass-badge" : "fail-badge"}`}>
-                      {study.status.toUpperCase()}
+                    <span className={`text-xs font-semibold ${isDraft ? "text-amber-500" : study.status === "pass" ? "pass-badge" : "fail-badge"}`}>
+                      {(study.status || "").toUpperCase()}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 flex gap-3 flex-wrap">
-                    <span>{study.instrument}</span>
+                    <span>{study.instrument || (isDraft ? "(no instrument yet)" : "-")}</span>
                     <span>·</span>
                     <span>{study.date}</span>
                     <span>·</span>
-                    <span>Analyst: {study.analyst}</span>
-                    <span>·</span>
-                    <span>TEa: ±{(study as any).teaIsPercentage === 0 ? `${study.cliaAllowableError} ${(study as any).teaUnit || ''}` : `${(study.cliaAllowableError * 100).toFixed(1)}%`}</span>
+                    <span>Analyst: {study.analyst || (isDraft ? "(unassigned)" : "-")}</span>
+                    {!isDraft && <>
+                      <span>·</span>
+                      <span>TEa: ±{(study as any).teaIsPercentage === 0 ? `${study.cliaAllowableError} ${(study as any).teaUnit || ''}` : `${(study.cliaAllowableError * 100).toFixed(1)}%`}</span>
+                    </>}
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Actions: drafts get an Edit (continue) button; completed studies get View (results) + Edit. */}
                 <div className="flex items-center gap-2 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                  <Button asChild variant="outline" size="sm" data-testid={`button-view-${study.id}`}>
-                    <Link href={`/study/${study.id}/results`}>
-                      <FileText size={13} className="mr-1" />
-                      View
+                  <Button asChild variant={isDraft ? "default" : "outline"} size="sm" className={isDraft ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""} data-testid={`button-${isDraft ? "edit" : "view"}-${study.id}`}>
+                    <Link href={isDraft ? editPath : viewPath}>
+                      {isDraft ? <><Edit2 size={13} className="mr-1" />Continue</> : <><FileText size={13} className="mr-1" />View</>}
                     </Link>
                   </Button>
+                  {!isDraft && (
+                    <Button asChild variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-edit-${study.id}`} title="Edit study">
+                      <Link href={editPath}>
+                        <Edit2 size={13} />
+                      </Link>
+                    </Button>
+                  )}
                   <ConfirmDialog
                     title="Delete Study?"
                     message={`Delete the "${study.testName}" study? All results will be permanently removed.`}
@@ -226,7 +238,8 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
