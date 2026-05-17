@@ -13007,26 +13007,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT lab policy
   app.put('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const policyId = parseInt(req.params.id);
+    const policy = userCanAccessPolicy(policyId, req);
+    if (!policy) return res.status(404).json({ error: 'Policy not found' });
     const sqlite = db.$client;
-    const userId = req.ownerUserId;
     const { policy_number, policy_name, owner, status, last_reviewed, next_review, notes } = req.body;
     sqlite.prepare(`
       UPDATE veritapolicy_lab_policies SET
         policy_number = ?, policy_name = ?, owner = ?, status = ?,
         last_reviewed = ?, next_review = ?, notes = ?, updated_at = datetime('now')
-      WHERE id = ? AND user_id = ?
-    `).run(policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null, parseInt(req.params.id), userId);
+      WHERE id = ?
+    `).run(policy_number || null, policy_name, owner || null, status || 'not_started', last_reviewed || null, next_review || null, notes || null, policyId);
     res.json({ ok: true });
   });
 
   // DELETE lab policy
   app.delete('/api/veritapolicy/policies/:id', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
-    const sqlite = db.$client;
-    const userId = req.ownerUserId;
     const policyId = parseInt(req.params.id);
-    // Unlink from requirements
-    sqlite.prepare('UPDATE veritapolicy_requirement_status SET lab_policy_id = NULL WHERE user_id = ? AND lab_policy_id = ?').run(userId, policyId);
-    sqlite.prepare('DELETE FROM veritapolicy_lab_policies WHERE id = ? AND user_id = ?').run(policyId, userId);
+    const policy = userCanAccessPolicy(policyId, req);
+    if (!policy) return res.status(404).json({ error: 'Policy not found' });
+    const sqlite = db.$client;
+    // Clear references in every lab member's requirement_status, not just the
+    // caller's: requirement_status is per-user (UNIQUE on user_id +
+    // requirement_id), so each member of the lab that owns this policy has
+    // their own rows pointing at it. Filtering by the caller's user_id leaves
+    // the other members' rows dangling after the policy is deleted.
+    sqlite.prepare('UPDATE veritapolicy_requirement_status SET lab_policy_id = NULL WHERE lab_policy_id = ?').run(policyId);
+    sqlite.prepare('DELETE FROM veritapolicy_lab_policies WHERE id = ?').run(policyId);
     res.json({ ok: true });
   });
 
@@ -13046,8 +13053,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const uploadDir = path.join(process.cwd(), 'uploads', 'policies');
       await fs.promises.mkdir(uploadDir, { recursive: true });
       await fs.promises.writeFile(path.join(uploadDir, fname), buf);
-      sqlite.prepare('UPDATE veritapolicy_lab_policies SET document_name = ?, document_path = ?, updated_at = datetime(\'now\') WHERE id = ? AND user_id = ?')
-        .run(data.filename, fname, policyId, userId);
+      sqlite.prepare('UPDATE veritapolicy_lab_policies SET document_name = ?, document_path = ?, updated_at = datetime(\'now\') WHERE id = ?')
+        .run(data.filename, fname, policyId);
       res.json({ ok: true, document_name: data.filename, document_path: fname });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
