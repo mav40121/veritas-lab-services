@@ -7915,7 +7915,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST /api/pt/enrollments
-  app.post("/api/pt/enrollments", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.post("/api/pt/enrollments", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const { vendor, program_name, pt_category, year_enrolled } = req.body;
     if (!vendor || !program_name || !pt_category || !year_enrolled) {
@@ -7936,7 +7936,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE /api/pt/enrollments/:id
-  app.delete("/api/pt/enrollments/:id", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/pt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = (db as any).$client.prepare(
       "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND user_id = ?"
@@ -7968,7 +7968,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST a new AAA record
-  app.post("/api/pt/aa-records", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.post("/api/pt/aa-records", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const {
       analyte, method, method_notes, frequency_per_year,
@@ -8008,7 +8008,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT update an AAA record
-  app.put("/api/pt/aa-records/:id", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.put("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = (db as any).$client.prepare(
       "SELECT id FROM aa_records WHERE id = ? AND user_id = ?"
@@ -8059,7 +8059,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE an AAA record
-  app.delete("/api/pt/aa-records/:id", authMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = (db as any).$client.prepare(
       "SELECT id FROM aa_records WHERE id = ? AND user_id = ?"
@@ -8084,7 +8084,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).all(req.scope.labId);
     res.json(rows);
   });
-  app.post("/api/labs/:labId/pt/enrollments", authMiddleware, labScopeMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.post("/api/labs/:labId/pt/enrollments", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const { vendor, program_name, pt_category, year_enrolled } = req.body;
     if (!vendor || !program_name || !pt_category || !year_enrolled) return res.status(400).json({ error: "vendor, program_name, pt_category, and year_enrolled are required" });
     if (!["CAP", "API", "Other"].includes(vendor)) return res.status(400).json({ error: "vendor must be CAP, API, or Other" });
@@ -8095,7 +8095,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments_v2 WHERE id = ?").get(Number(result.lastInsertRowid));
     res.status(201).json(created);
   });
-  app.delete("/api/labs/:labId/pt/enrollments/:id", authMiddleware, labScopeMiddleware, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/labs/:labId/pt/enrollments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const existing = (db as any).$client.prepare(
       "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
@@ -8198,7 +8198,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST new finding
-  app.post("/api/findings", authMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.post("/api/findings", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const {
       accreditor, inspection_id, finding_number, standard_ref,
@@ -8259,7 +8259,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT update finding
-  app.put("/api/findings/:id", authMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.put("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = (db as any).$client.prepare(
       "SELECT * FROM findings WHERE id = ? AND user_id = ?"
@@ -8351,7 +8351,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // DELETE finding
-  app.delete("/api/findings/:id", authMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.delete("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = (db as any).$client.prepare(
       "SELECT id FROM findings WHERE id = ? AND user_id = ?"
@@ -8374,7 +8374,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Mirrors the legacy DELETE handler above, but scopes the existence
   // check to (id, lab_id) instead of (id, user_id) and trusts
   // labScopeMiddleware to have validated this user's active membership.
-  app.delete("/api/labs/:labId/findings/:id", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.delete("/api/labs/:labId/findings/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
       "SELECT id FROM findings WHERE id = ? AND lab_id = ?"
@@ -8781,7 +8781,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!row) return res.status(404).json({ error: "Finding not found" });
     res.json(row);
   });
-  app.post("/api/labs/:labId/findings", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.post("/api/labs/:labId/findings", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const {
       accreditor, inspection_id, finding_number, standard_ref,
       phase_or_severity, description, surveyor_notes,
