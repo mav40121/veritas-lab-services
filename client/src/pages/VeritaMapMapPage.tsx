@@ -1009,6 +1009,10 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
   const [localAv, setLocalAv] = React.useState<AnalyteValues>(analyteValues || {});
   const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrValues || {});
   const [saving, setSaving] = React.useState(false);
+  // For the "Reference literature" link below: preserve active lab in URL so
+  // opening it in a new tab doesn't bounce the user to their default lab via
+  // the LegacyWorkspaceRedirect middleware (last follow-up from PR #182).
+  const testRowActiveLabId = useActiveLabId();
 
   React.useEffect(() => { setLocalAv(analyteValues || {}); }, [analyteValues]);
   React.useEffect(() => { setLocalAmr(amrValues || {}); }, [amrValues]);
@@ -1313,7 +1317,7 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
             Lab-Established Values for {test.analyte}
             <a
-              href="/veritamap-app/resources"
+              href={testRowActiveLabId ? `/labs/${testRowActiveLabId}/veritamap-app/resources` : "/veritamap-app/resources"}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary underline font-normal normal-case tracking-normal"
