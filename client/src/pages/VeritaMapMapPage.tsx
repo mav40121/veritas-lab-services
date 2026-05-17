@@ -1012,6 +1012,77 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
 
   React.useEffect(() => { setLocalAv(analyteValues || {}); }, [analyteValues]);
   React.useEffect(() => { setLocalAmr(amrValues || {}); }, [amrValues]);
+
+  // Autosave for the analyte-values and AMR-values dialogs. Debounced 1.5s
+  // after the user stops typing; mirrors the field-edit autosave pattern at
+  // VeritaMapMapPage.tsx:1728. Initial hydration (props arrive after mount,
+  // or the user expands a row) sets localAv/localAmr via the effects above;
+  // a hydration ref keeps that initial write from triggering an autosave.
+  // The explicit "Save values" button still works (forces an immediate save).
+  const avAutosaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const amrAutosaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avHydratedRef = React.useRef(false);
+  const amrHydratedRef = React.useRef(false);
+  const [autosaveStatus, setAutosaveStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const savedFadeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashSaved = React.useCallback(() => {
+    setAutosaveStatus("saved");
+    if (savedFadeTimer.current) clearTimeout(savedFadeTimer.current);
+    savedFadeTimer.current = setTimeout(() => setAutosaveStatus("idle"), 1500);
+  }, []);
+
+  React.useEffect(() => {
+    if (!avHydratedRef.current) { avHydratedRef.current = true; return; }
+    if (!onSaveAnalyteValues) return;
+    if (avAutosaveTimer.current) clearTimeout(avAutosaveTimer.current);
+    avAutosaveTimer.current = setTimeout(async () => {
+      setAutosaveStatus("saving");
+      try {
+        await onSaveAnalyteValues(test.analyte, localAv);
+        flashSaved();
+      } catch (err) {
+        console.warn("[veritamap analyte autosave]", err);
+        setAutosaveStatus("error");
+      }
+    }, 1500);
+    return () => { if (avAutosaveTimer.current) clearTimeout(avAutosaveTimer.current); };
+  }, [localAv, onSaveAnalyteValues, test.analyte, flashSaved]);
+
+  // Resolve current instrument id set so autosave only fires PUTs for
+  // instruments the user actually has on this map (instruments is computed
+  // below; capture via a closure reference to avoid an ordering issue).
+  const amrInstrumentsForEffect = test.instruments ?? [];
+  React.useEffect(() => {
+    if (!amrHydratedRef.current) { amrHydratedRef.current = true; return; }
+    if (!onSaveAmrValues) return;
+    if (amrAutosaveTimer.current) clearTimeout(amrAutosaveTimer.current);
+    amrAutosaveTimer.current = setTimeout(async () => {
+      setAutosaveStatus("saving");
+      try {
+        for (const inst of amrInstrumentsForEffect) {
+          if (localAmr[inst.id]) {
+            await onSaveAmrValues(test.analyte, inst.id, {
+              amr_low: localAmr[inst.id].amr_low || "",
+              amr_high: localAmr[inst.id].amr_high || "",
+            });
+          }
+        }
+        flashSaved();
+      } catch (err) {
+        console.warn("[veritamap AMR autosave]", err);
+        setAutosaveStatus("error");
+      }
+    }, 1500);
+    return () => { if (amrAutosaveTimer.current) clearTimeout(amrAutosaveTimer.current); };
+  }, [localAmr, onSaveAmrValues, test.analyte, flashSaved]);
+
+  React.useEffect(() => () => {
+    if (savedFadeTimer.current) clearTimeout(savedFadeTimer.current);
+    if (avAutosaveTimer.current) clearTimeout(avAutosaveTimer.current);
+    if (amrAutosaveTimer.current) clearTimeout(amrAutosaveTimer.current);
+  }, []);
+
   const isWaived = test.complexity === "WAIVED";
   const specialtyStyle = getSpecialtyStyle(test.specialty);
   const instruments = test.instruments ?? [];
@@ -1356,6 +1427,15 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setExpanded(false)}>
               Close
             </Button>
+            {autosaveStatus === "saving" && (
+              <span className="text-xs text-muted-foreground ml-1">Autosaving...</span>
+            )}
+            {autosaveStatus === "saved" && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-1">Saved</span>
+            )}
+            {autosaveStatus === "error" && (
+              <span className="text-xs text-red-600 dark:text-red-400 ml-1">Save failed (will retry on next change)</span>
+            )}
           </div>
         </td>
       </tr>
