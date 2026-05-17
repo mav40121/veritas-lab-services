@@ -181,7 +181,7 @@ export default function VeritaPolicyPage() {
                 </div>
                 <div className="pt-2 border-t border-border">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Method Validation</span>
+                    <span className="text-muted-foreground">Performance Verification</span>
                     <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">Complete</Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm mt-2">

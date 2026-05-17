@@ -20,7 +20,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/services": {
     title: "Services | Veritas Lab Services Laboratory Consulting",
-    description: "Laboratory consulting services including compliance assessments, accreditation preparation, method validation support, and staff education by Michael Veri, MLS(ASCP), CPHQ.",
+    description: "Laboratory consulting services including compliance assessments, accreditation preparation, performance verification support, and staff education by Michael Veri, MLS(ASCP), CPHQ.",
   },
   "/contact": {
     title: "Contact | Veritas Lab Services",
@@ -32,7 +32,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/faq": {
     title: "FAQ | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Frequently asked questions about VeritaAssure\u2122, CLIA compliance software, method validation, and laboratory inspection readiness tools.",
+    description: "Frequently asked questions about VeritaAssure\u2122, CLIA compliance software, performance verification, and laboratory inspection readiness tools.",
   },
   "/getting-started": {
     title: "Getting Started | VeritaAssure\u2122 Lab Compliance Software",
@@ -44,7 +44,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/demo": {
     title: "Demo | VeritaAssure\u2122 Lab Compliance & Operations Software",
-    description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method validation, inspection readiness, competency tracking).",
+    description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (performance verification, inspection readiness, competency tracking).",
   },
   "/demo/operations": {
     title: "VeritaBench\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u2122",
@@ -52,7 +52,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/demo/compliance": {
     title: "Compliance Suite Demo | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Try the VeritaAssure\u2122 compliance demo. Explore VeritaCheck™ method validation, VeritaScan™ inspection readiness, VeritaMap™ reportable ranges, and VeritaComp™ competency tracking.",
+    description: "Try the VeritaAssure\u2122 compliance demo. Explore VeritaCheck™ performance verification, VeritaScan™ inspection readiness, VeritaMap™ reportable ranges, and VeritaComp™ competency tracking.",
   },
   "/roadmap": {
     title: "Product Roadmap | VeritaAssure\u2122 Lab Compliance Software",
@@ -92,7 +92,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources": {
     title: "Resources | CLIA Compliance Guides for Clinical Laboratories",
-    description: "Free guides and articles on CLIA compliance, method validation, calibration verification, proficiency testing, and laboratory inspection preparation.",
+    description: "Free guides and articles on CLIA compliance, performance verification, calibration verification, proficiency testing, and laboratory inspection preparation.",
   },
   "/resources/clia-calibration-verification-method-comparison": {
     title: "CLIA Calibration Verification and Method Comparison Guide | Veritas Lab Services",
@@ -100,7 +100,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/clia-tea-what-lab-directors-dont-know": {
     title: "CLIA Total Allowable Error: What Lab Directors Don't Know | Veritas Lab Services",
-    description: "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to method validation studies and what surveyors look for in your documentation.",
+    description: "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to performance verification studies and what surveyors look for in your documentation.",
   },
   "/resources/how-veritaassure-trains-lab-leaders": {
     title: "How VeritaAssure\u2122 Trains Lab Leaders | Veritas Lab Services",
@@ -160,7 +160,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/study-guide": {
     title: "Study Guide | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Comprehensive guide to running studies in VeritaAssure\u2122. Step-by-step instructions for method validation, calibration verification, and EP studies.",
+    description: "Comprehensive guide to running studies in VeritaAssure\u2122. Step-by-step instructions for performance verification, calibration verification, and EP studies.",
   },
   "/terms": {
     title: "Terms of Service | Veritas Lab Services",

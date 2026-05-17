@@ -1178,7 +1178,7 @@ function seedPolicyData(sqlite: any, demoUserId: number, now: string) {
     { num: "POL-002", name: "Critical Value Reporting Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-15", next: "2027-01-15" },
     { num: "POL-003", name: "Quality Control Plan (IQCP)", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-02-01", next: "2027-02-01" },
     { num: "POL-004", name: "Staff Competency Assessment Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-20", next: "2027-01-20" },
-    { num: "POL-005", name: "Method Validation Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-20", next: "2027-01-20" },
+    { num: "POL-005", name: "Performance Verification Policy", owner: "Michael Veri, MLS(ASCP)", status: "complete", last: "2026-01-20", next: "2027-01-20" },
     { num: "POL-006", name: "Record Retention Policy", owner: "Michael Veri, MLS(ASCP)", status: "in_progress", last: null, next: null },
     { num: "POL-007", name: "Infection Prevention and Control Program", owner: "Infection Control Officer", status: "complete", last: "2026-01-10", next: "2027-01-10" },
     { num: "POL-008", name: "Health Information Privacy Policy", owner: "Compliance Officer", status: "in_progress", last: null, next: null },
