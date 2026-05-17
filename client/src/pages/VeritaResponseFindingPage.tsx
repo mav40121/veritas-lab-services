@@ -242,7 +242,7 @@ export default function VeritaResponseFindingPage() {
       method: "DELETE",
       headers: authHeaders(),
     });
-    navigate("/veritaresponse");
+    navigate(activeLabId ? `/labs/${activeLabId}/veritaresponse` : "/veritaresponse");
   };
 
   const [renderState, setRenderState] = useState<"idle" | "rendering" | "error">("idle");
@@ -440,7 +440,7 @@ export default function VeritaResponseFindingPage() {
           This finding may have been deleted, or you do not have access to it.
         </p>
         <Button asChild variant="outline">
-          <Link href="/veritaresponse"><ArrowLeft size={14} className="mr-1.5" />Back to all findings</Link>
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritaresponse` : "/veritaresponse"}><ArrowLeft size={14} className="mr-1.5" />Back to all findings</Link>
         </Button>
       </div>
     );
@@ -459,7 +459,7 @@ export default function VeritaResponseFindingPage() {
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/veritaresponse"><ArrowLeft size={14} className="mr-1.5" />All findings</Link>
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritaresponse` : "/veritaresponse"}><ArrowLeft size={14} className="mr-1.5" />All findings</Link>
         </Button>
         <ConfirmDialog
           title="Delete Finding?"

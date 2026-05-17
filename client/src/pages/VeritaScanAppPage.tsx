@@ -454,7 +454,9 @@ export default function VeritaScanAppPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => navigate(`/veritascan-app/${scan.id}`)}
+                        onClick={() => navigate(activeLabId
+                          ? `/labs/${activeLabId}/veritascan-app/${scan.id}`
+                          : `/veritascan-app/${scan.id}`)}
                         className="gap-1"
                       >
                         Open

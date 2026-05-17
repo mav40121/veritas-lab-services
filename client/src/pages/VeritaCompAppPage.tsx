@@ -816,6 +816,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
 
 function ProgramDetailView({ programId }: { programId: number }) {
   const [, navigate] = useLocation();
+  const activeLabId = useActiveLabId();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings">("overview");
   const [newAssessmentOpen, setNewAssessmentOpen] = useState(false);
@@ -836,7 +837,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 text-center">
         <p className="text-muted-foreground">Program not found.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/veritacomp-app")}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(activeLabId ? `/labs/${activeLabId}/veritacomp-app` : "/veritacomp-app")}>
           <ChevronLeft className="h-4 w-4 mr-1" /> Back to Programs
         </Button>
       </div>
@@ -853,7 +854,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       {/* Back + Header */}
-      <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate("/veritacomp-app")}>
+      <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate(activeLabId ? `/labs/${activeLabId}/veritacomp-app` : "/veritacomp-app")}>
         <ChevronLeft className="h-4 w-4 mr-1" /> All Programs
       </Button>
       <div className="flex items-start justify-between gap-4 mb-6">

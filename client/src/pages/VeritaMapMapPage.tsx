@@ -1806,7 +1806,7 @@ export default function VeritaMapMapPage() {
       <div className="flex items-center justify-center min-h-[40vh] flex-col gap-3">
         <p className="text-muted-foreground text-sm">Map not found.</p>
         <Button asChild variant="outline" size="sm">
-          <Link href="/veritamap-app">
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app"}>
             <ArrowLeft size={13} className="mr-1" />
             Back to Maps
           </Link>
@@ -1848,7 +1848,9 @@ export default function VeritaMapMapPage() {
               This map has no tests yet.
             </p>
             <Button
-              onClick={() => navigate(`/veritamap-app/${mapId}/build`)}
+              onClick={() => navigate(activeLabId
+                ? `/labs/${activeLabId}/veritamap-app/${mapId}/build`
+                : `/veritamap-app/${mapId}/build`)}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Build Test Menu
@@ -1894,7 +1896,7 @@ export default function VeritaMapMapPage() {
             asChild
             className="justify-start -ml-1 text-muted-foreground h-8 text-xs px-2"
           >
-            <Link href="/veritamap-app">
+            <Link href={activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app"}>
               <ArrowLeft size={12} className="mr-1" /> All Maps
             </Link>
           </Button>
@@ -1913,7 +1915,9 @@ export default function VeritaMapMapPage() {
                 size="sm"
                 variant="ghost"
                 className="flex-1 h-7 text-[11px] px-2"
-                onClick={() => navigate("/veritamap-app/labwide")}
+                onClick={() => navigate(activeLabId
+                  ? `/labs/${activeLabId}/veritamap-app/labwide`
+                  : "/veritamap-app/labwide")}
               >
                 Whole lab
               </Button>
@@ -1978,7 +1982,9 @@ export default function VeritaMapMapPage() {
             variant="outline"
             size="sm"
             className="h-8 text-xs justify-start"
-            onClick={() => navigate(`/veritamap-app/${mapId}/build`)}
+            onClick={() => navigate(activeLabId
+              ? `/labs/${activeLabId}/veritamap-app/${mapId}/build`
+              : `/veritamap-app/${mapId}/build`)}
           >
             <Edit size={11} className="mr-1.5" />
             Edit Instruments

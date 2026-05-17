@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -881,6 +882,7 @@ export default function VeritaMapBuildPage() {
   const [, legacyParams] = useRoute("/veritamap-app/:id/build");
   const [, labScopedParams] = useRoute("/labs/:labId/veritamap-app/:id/build");
   const mapId = labScopedParams?.id ?? legacyParams?.id;
+  const activeLabId = useActiveLabId();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -1242,7 +1244,9 @@ export default function VeritaMapBuildPage() {
       qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
       qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
       qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
-      navigate(`/veritamap-app/${mapId}`);
+      navigate(activeLabId
+        ? `/labs/${activeLabId}/veritamap-app/${mapId}`
+        : `/veritamap-app/${mapId}`);
     },
     onError: (err: any) => {
       if (err.limitReached) {
@@ -1381,7 +1385,7 @@ export default function VeritaMapBuildPage() {
           asChild
           className="mb-5 -ml-2 text-muted-foreground"
         >
-          <Link href="/veritamap-app">
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app"}>
             <ArrowLeft size={14} className="mr-1" /> Back to Maps
           </Link>
         </Button>
