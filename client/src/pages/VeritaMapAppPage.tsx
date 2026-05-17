@@ -237,14 +237,16 @@ export default function VeritaMapAppPage() {
                 size="sm"
                 variant="ghost"
                 className="h-7 text-xs px-3"
-                onClick={() => navigate("/veritamap-app/labwide")}
+                onClick={() => navigate(activeLabId
+                  ? `/labs/${activeLabId}/veritamap-app/labwide`
+                  : "/veritamap-app/labwide")}
               >
                 Whole lab
               </Button>
             </div>
           )}
           <a
-            href="/veritamap-app/resources"
+            href={activeLabId ? `/labs/${activeLabId}/veritamap-app/resources` : "/veritamap-app/resources"}
             className="text-xs text-muted-foreground hover:text-primary underline transition-colors"
           >
             Reference literature

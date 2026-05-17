@@ -220,7 +220,7 @@ export default function VeritaStaffAppPage() {
       <EmployeeDetailView
         employee={selectedEmployee}
         lab={lab!}
-        onBack={() => navigate("/veritastaff-app")}
+        onBack={() => navigate(activeLabId ? `/labs/${activeLabId}/veritastaff-app` : "/veritastaff-app")}
         onEdit={() => setEditingEmployee(selectedEmployee)}
         onCompetency={() => setShowCompetency(selectedEmployee)}
       />

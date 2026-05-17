@@ -153,7 +153,7 @@ export default function VeritaMapLabwidePage() {
             asChild
             className="justify-start -ml-2 text-muted-foreground h-7 text-xs px-2 mb-2"
           >
-            <Link href="/veritamap-app">
+            <Link href={activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app"}>
               <ArrowLeft size={12} className="mr-1" /> All Maps
             </Link>
           </Button>
@@ -175,7 +175,7 @@ export default function VeritaMapLabwidePage() {
             size="sm"
             variant="ghost"
             className="h-7 text-xs px-3"
-            onClick={() => navigate("/veritamap-app")}
+            onClick={() => navigate(activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app")}
           >
             This map
           </Button>
@@ -294,7 +294,7 @@ export default function VeritaMapLabwidePage() {
             Create a map to start tracking your test menu.
           </p>
           <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href="/veritamap-app">Go to All Maps</Link>
+            <Link href={activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app"}>Go to All Maps</Link>
           </Button>
         </div>
       )}

@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Shield, ArrowRight, Check, MapPin, FlaskConical, ChevronRight } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 
@@ -19,6 +20,7 @@ const ROLE_OPTIONS = ["Primary", "Backup", "Satellite", "POC"];
 export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
   const [, navigate] = useLocation();
+  const activeLabId = useActiveLabId();
 
   // Step 2 state
   const [labName, setLabName] = useState("");
@@ -86,7 +88,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
 
   const handleFinish = () => {
     completeOnboarding();
-    navigate("/veritamap-app");
+    navigate(activeLabId ? `/labs/${activeLabId}/veritamap-app` : "/veritamap-app");
   };
 
   return (
