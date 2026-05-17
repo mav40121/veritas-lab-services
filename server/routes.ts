@@ -6215,12 +6215,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO cumsum_trackers (user_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?)"
     ).run(req.user.userId, instrumentName.trim(), analyte || "PTT", now);
-    res.json({ id: Number(result.lastInsertRowid), user_id: req.user.userId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
+    const trackerId = Number(result.lastInsertRowid);
+    // Phase 3.12 dual-write lab_id from the owning user's lab so a freshly
+    // created tracker is immediately visible to other members of the same
+    // lab (otherwise they'd 404 until the next startup backfill).
+    try {
+      (db as any).$client.prepare(
+        "UPDATE cumsum_trackers SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(req.user.userId, trackerId);
+    } catch {}
+    res.json({ id: trackerId, user_id: req.user.userId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
   });
 
   // Delete tracker
   app.delete("/api/veritacheck/cumsum/trackers/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
-    const tracker = (db as any).$client.prepare("SELECT id FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     (db as any).$client.prepare("DELETE FROM cumsum_entries WHERE tracker_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM cumsum_trackers WHERE id = ?").run(req.params.id);
@@ -6229,7 +6238,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Get tracker with all entries
   app.get("/api/veritacheck/cumsum/trackers/:id", authMiddleware, (req: any, res) => {
-    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare(
       "SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC"
@@ -6240,7 +6249,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Add entry to tracker
   app.post("/api/veritacheck/cumsum/trackers/:id/entries", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
-    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const { year, lotLabel, oldLotNumber, newLotNumber, oldLotGeomean, newLotGeomean, difference, cumsum, verdict, specimenData, notes } = req.body;
     const now = new Date().toISOString();
@@ -6264,7 +6273,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // CUMSUM Excel export
   app.get("/api/veritacheck/cumsum/trackers/:id/excel", authMiddleware, async (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
-    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     try {
@@ -9735,7 +9744,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // CUMSUM PDF export
   app.post("/api/veritacheck/cumsum/trackers/:id/pdf", authMiddleware, async (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
-    const tracker = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE id = ? AND user_id = ?").get(req.params.id, req.user.userId);
+    const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     const { currentSpecimens } = req.body || {};

@@ -1959,6 +1959,28 @@ for (const t of ["staff_employees", "staff_roles"]) {
   }
 }
 
+// Multi-Lab Tier 2 — Phase 3.12 (CUMSUM, sub-feature of VeritaCheck):
+// cumsum_trackers carries user_id; cumsum_entries scopes through tracker_id
+// (FOREIGN KEY) and is transitively lab-scoped via the parent. Add lab_id
+// to trackers only. Final remaining table from the original multi-lab sweep.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(cumsum_trackers)").all() as any[]).map(c => c.name);
+  if (!cols.includes("lab_id")) {
+    try { sqlite.exec("ALTER TABLE cumsum_trackers ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cumsum_trackers_lab ON cumsum_trackers(lab_id)"); } catch {}
+  const backfilled = sqlite.prepare(`
+    UPDATE cumsum_trackers
+    SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = cumsum_trackers.user_id)
+    WHERE lab_id IS NULL
+      AND user_id IS NOT NULL
+      AND (SELECT u.lab_id FROM users u WHERE u.id = cumsum_trackers.user_id) IS NOT NULL
+  `).run();
+  if (backfilled.changes > 0) {
+    console.log(`[migration] Multi-lab Phase 3.12 (cumsum_trackers): backfilled lab_id on ${backfilled.changes} row(s)`);
+  }
+}
+
 // VeritaCheck Instrument Verification packages
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritacheck_verifications (
