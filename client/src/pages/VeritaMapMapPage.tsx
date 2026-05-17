@@ -1464,8 +1464,15 @@ function CopyFromBannerInline({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function VeritaMapMapPage() {
-  const [, params] = useRoute("/veritamap-app/:id");
-  const mapId = params?.id;
+  // This component is mounted from BOTH the legacy /veritamap-app/:id route
+  // and the lab-scoped /labs/:labId/veritamap-app/:id route (see App.tsx
+  // Phase 3.3b). Match both patterns so mapId resolves correctly on either
+  // URL shape. Without the second match, lab-scoped URLs leave mapId
+  // undefined, the detail query gates off, and the page silently renders
+  // "Map not found" without ever calling the server.
+  const [, legacyParams] = useRoute("/veritamap-app/:id");
+  const [, labScopedParams] = useRoute("/labs/:labId/veritamap-app/:id");
+  const mapId = labScopedParams?.id ?? legacyParams?.id;
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
