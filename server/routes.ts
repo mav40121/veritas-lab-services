@@ -2652,8 +2652,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/studies", (req, res) => {
-    const parsed = insertStudySchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    // Drafts skip strict insertStudySchema validation since the user may not
+    // have filled all required fields yet (data_points, instruments, etc.).
+    // Minimum bar: a test_name + study_type so the row is identifiable in the
+    // Dashboard. Completed studies use the existing strict path + pass/fail
+    // calc. Draft status is just a stored string; no schema change needed.
+    const isDraft = req.body?.status === 'draft';
+    let parsed: any;
+    if (isDraft) {
+      if (!req.body?.testName || !req.body?.studyType) {
+        return res.status(400).json({ error: "Drafts require at least testName and studyType" });
+      }
+      parsed = { success: true, data: {
+        testName: req.body.testName,
+        instrument: req.body.instrument ?? '',
+        analyst: req.body.analyst ?? '',
+        date: req.body.date ?? new Date().toISOString().slice(0, 10),
+        studyType: req.body.studyType,
+        cliaAllowableError: Number(req.body.cliaAllowableError) || 0,
+        dataPoints: req.body.dataPoints ?? [],
+        instruments: req.body.instruments ?? [],
+        teaIsPercentage: req.body.teaIsPercentage,
+        teaUnit: req.body.teaUnit,
+        cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
+        cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
+        instrumentMeta: req.body.instrumentMeta,
+      } };
+    } else {
+      parsed = insertStudySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    }
     // Attach userId if authenticated
     let userId: number | null = null;
     let createdByUserId: number | null = null;
@@ -2693,8 +2721,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
     }
 
-    // Server-side pass/fail verification: recompute from data instead of trusting the client
-    const verifiedStatus = computeStudyStatus(
+    // Server-side pass/fail verification: recompute from data instead of trusting the client.
+    // For drafts, status is literally 'draft' (no calc performed).
+    const verifiedStatus = isDraft ? 'draft' : computeStudyStatus(
       parsed.data.studyType,
       parsed.data.dataPoints,
       parsed.data.instruments,
@@ -2730,6 +2759,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     res.status(201).json(study);
+  });
+
+  // PUT /api/studies/:id — update an existing study. Used by the edit-existing
+  // flow (drafts and completed studies). Drafts skip strict validation; a
+  // status transition to 'completed' triggers the same pass/fail recompute as
+  // the POST handler. Ownership enforced via user_id match (legacy non-lab
+  // scope). Lab-scoped variant below.
+  app.put("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND user_id = ?"
+    ).get(studyId, dataUserId) as any;
+    if (!existing) return res.status(404).json({ error: "Study not found" });
+
+    const isDraft = req.body?.status === 'draft';
+    let payload: any;
+    if (isDraft) {
+      payload = {
+        testName: req.body.testName ?? existing.test_name,
+        instrument: req.body.instrument ?? existing.instrument ?? '',
+        analyst: req.body.analyst ?? existing.analyst ?? '',
+        date: req.body.date ?? existing.date,
+        studyType: req.body.studyType ?? existing.study_type,
+        cliaAllowableError: Number(req.body.cliaAllowableError ?? existing.clia_allowable_error) || 0,
+        dataPoints: req.body.dataPoints ?? JSON.parse(existing.data_points || '[]'),
+        instruments: req.body.instruments ?? JSON.parse(existing.instruments || '[]'),
+      };
+    } else {
+      const parsed = insertStudySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+      payload = parsed.data;
+    }
+
+    const verifiedStatus = isDraft ? 'draft' : computeStudyStatus(
+      payload.studyType,
+      payload.dataPoints,
+      payload.instruments,
+      payload.cliaAllowableError,
+      (payload as any).teaIsPercentage !== 0,
+      (payload as any).cliaAbsoluteFloor ?? null
+    );
+
+    (db as any).$client.prepare(`
+      UPDATE studies SET
+        test_name = ?, instrument = ?, analyst = ?, date = ?, study_type = ?,
+        clia_allowable_error = ?, data_points = ?, instruments = ?, status = ?
+      WHERE id = ?
+    `).run(
+      payload.testName, payload.instrument, payload.analyst, payload.date, payload.studyType,
+      payload.cliaAllowableError, JSON.stringify(payload.dataPoints), JSON.stringify(payload.instruments),
+      verifiedStatus, studyId,
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
+    res.json(updated);
   });
 
   app.delete("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
@@ -2775,9 +2859,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Sets lab_id from the URL (validated by middleware) and user_id from the
   // authenticated user. created_by_user_id captures the actual analyst.
   app.post("/api/labs/:labId/studies", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
-    const parsed = insertStudySchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const verifiedStatus = computeStudyStatus(
+    // Drafts skip strict insertStudySchema validation; see notes on the
+    // legacy POST /api/studies handler for the rationale and minimum bar.
+    const isDraft = req.body?.status === 'draft';
+    let parsed: any;
+    if (isDraft) {
+      if (!req.body?.testName || !req.body?.studyType) {
+        return res.status(400).json({ error: "Drafts require at least testName and studyType" });
+      }
+      parsed = { success: true, data: {
+        testName: req.body.testName,
+        instrument: req.body.instrument ?? '',
+        analyst: req.body.analyst ?? '',
+        date: req.body.date ?? new Date().toISOString().slice(0, 10),
+        studyType: req.body.studyType,
+        cliaAllowableError: Number(req.body.cliaAllowableError) || 0,
+        dataPoints: req.body.dataPoints ?? [],
+        instruments: req.body.instruments ?? [],
+        teaIsPercentage: req.body.teaIsPercentage,
+        teaUnit: req.body.teaUnit,
+        cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
+        cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
+        instrumentMeta: req.body.instrumentMeta,
+      } };
+    } else {
+      parsed = insertStudySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    const verifiedStatus = isDraft ? 'draft' : computeStudyStatus(
       parsed.data.studyType,
       parsed.data.dataPoints,
       parsed.data.instruments,
@@ -2806,6 +2915,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.warn('[veritascan-bridge] auto-complete failed:', err?.message);
     }
     res.json({ ...study, lab_id: req.scope.labId });
+  });
+
+  // PUT /api/labs/:labId/studies/:id — lab-scoped update for the edit-existing
+  // flow. Scopes the SELECT by lab_id (not user_id) since labScopeMiddleware
+  // already verified active membership. Same draft/completed branching as the
+  // legacy PUT handler above.
+  app.put("/api/labs/:labId/studies/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Study not found" });
+
+    const isDraft = req.body?.status === 'draft';
+    let payload: any;
+    if (isDraft) {
+      payload = {
+        testName: req.body.testName ?? existing.test_name,
+        instrument: req.body.instrument ?? existing.instrument ?? '',
+        analyst: req.body.analyst ?? existing.analyst ?? '',
+        date: req.body.date ?? existing.date,
+        studyType: req.body.studyType ?? existing.study_type,
+        cliaAllowableError: Number(req.body.cliaAllowableError ?? existing.clia_allowable_error) || 0,
+        dataPoints: req.body.dataPoints ?? JSON.parse(existing.data_points || '[]'),
+        instruments: req.body.instruments ?? JSON.parse(existing.instruments || '[]'),
+      };
+    } else {
+      const parsed = insertStudySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+      payload = parsed.data;
+    }
+
+    const verifiedStatus = isDraft ? 'draft' : computeStudyStatus(
+      payload.studyType,
+      payload.dataPoints,
+      payload.instruments,
+      payload.cliaAllowableError,
+      (payload as any).teaIsPercentage !== 0,
+      (payload as any).cliaAbsoluteFloor ?? null
+    );
+
+    (db as any).$client.prepare(`
+      UPDATE studies SET
+        test_name = ?, instrument = ?, analyst = ?, date = ?, study_type = ?,
+        clia_allowable_error = ?, data_points = ?, instruments = ?, status = ?
+      WHERE id = ?
+    `).run(
+      payload.testName, payload.instrument, payload.analyst, payload.date, payload.studyType,
+      payload.cliaAllowableError, JSON.stringify(payload.dataPoints), JSON.stringify(payload.instruments),
+      verifiedStatus, studyId,
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
+    res.json(updated);
   });
 
   // DELETE /api/labs/:labId/studies/:id — lab-scoped delete.

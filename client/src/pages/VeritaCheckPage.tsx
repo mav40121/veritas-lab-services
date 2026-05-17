@@ -1,7 +1,7 @@
 import { useSEO } from "@/hooks/useSEO";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { useLocation, useSearch, Link } from "wouter";
+import { useLocation, useSearch, useRoute, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import CLIALookupModal from "@/components/CLIALookupModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR } from "@/lib/calculations";
@@ -203,6 +203,25 @@ const plans = [
 export default function VeritaCheckPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
+  // Edit-existing-study mode. The page is mounted from both legacy
+  // /study/:id/edit and lab-scoped /labs/:labId/study/:id/edit; match
+  // either so editId resolves on any URL shape (parallel to the
+  // VeritaMapMapPage Phase 3.3b dual-useRoute fix).
+  const [, legacyEditParams] = useRoute("/study/:id/edit");
+  const [, labScopedEditParams] = useRoute("/labs/:labId/study/:id/edit");
+  const editId = labScopedEditParams?.id ?? legacyEditParams?.id ?? null;
+  const isEditing = !!editId;
+  // useActiveLabId is also called below at the saveMutation site (line ~1003)
+  // and pulls from the URL; declaring once at the top for use by both the
+  // pre-populate fetch (below) and the saveMutation (below).
+  const editingLabId = useActiveLabId();
+  const editStudyUrl = isEditing
+    ? (editingLabId ? `/api/labs/${editingLabId}/studies/${editId}` : `/api/studies/${editId}`)
+    : null;
+  const { data: editStudy } = useQuery<any>({
+    queryKey: editStudyUrl ? [editStudyUrl] : ["__skip_edit_fetch__"],
+    enabled: !!editStudyUrl,
+  });
   const { toast } = useToast();
   const { isLoggedIn, user } = useAuth();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
@@ -444,6 +463,37 @@ export default function VeritaCheckPage() {
   const [customClia, setCustomClia] = useState(0.15);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
+
+  // When editing, pre-populate form state from the fetched study. Runs once
+  // when editStudy first resolves. Uses a hydrated ref so editing toggles
+  // don't keep resetting state if the user changes values after load.
+  const editHydratedRef = useRef(false);
+  useEffect(() => {
+    if (!editStudy || editHydratedRef.current) return;
+    try {
+      setTestName(editStudy.test_name ?? editStudy.testName ?? "");
+      setAnalyst(editStudy.analyst ?? "");
+      if (editStudy.date) setDate(String(editStudy.date).slice(0, 10));
+      if (editStudy.study_type ?? editStudy.studyType) {
+        setStudyType((editStudy.study_type ?? editStudy.studyType) as any);
+      }
+      const instrumentsRaw = editStudy.instruments;
+      const instrumentsParsed = typeof instrumentsRaw === "string" ? JSON.parse(instrumentsRaw || "[]") : (instrumentsRaw ?? []);
+      if (Array.isArray(instrumentsParsed) && instrumentsParsed.length > 0) {
+        setInstrumentNames(instrumentsParsed);
+      }
+      const dpRaw = editStudy.data_points ?? editStudy.dataPoints;
+      const dpParsed = typeof dpRaw === "string" ? JSON.parse(dpRaw || "[]") : (dpRaw ?? []);
+      if (Array.isArray(dpParsed) && dpParsed.length > 0) {
+        setDataPoints(dpParsed);
+      }
+      const tea = editStudy.clia_allowable_error ?? editStudy.cliaAllowableError;
+      if (typeof tea === "number") setCustomClia(tea);
+      editHydratedRef.current = true;
+    } catch (err) {
+      console.warn("[veritacheck edit] hydrate failed", err);
+    }
+  }, [editStudy]);
 
   // Qualitative / Semi-Quantitative assay type state
   type AssayType = "quantitative" | "qualitative" | "semi_quantitative";
@@ -1008,16 +1058,29 @@ export default function VeritaCheckPage() {
         study = { ...study, instrumentMeta: JSON.stringify(meta) };
       }
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
-      const url = activeLabId
-        ? `${API_BASE}/api/labs/${activeLabId}/studies`
-        : `${API_BASE}/api/studies`;
-      return fetch(url, { method: "POST", headers, body: JSON.stringify(study) });
+      // PUT when editing an existing study (draft or completed) so we update
+      // the row instead of creating a duplicate. POST when new.
+      const url = isEditing
+        ? (activeLabId
+            ? `${API_BASE}/api/labs/${activeLabId}/studies/${editId}`
+            : `${API_BASE}/api/studies/${editId}`)
+        : (activeLabId
+            ? `${API_BASE}/api/labs/${activeLabId}/studies`
+            : `${API_BASE}/api/studies`);
+      return fetch(url, { method: isEditing ? "PUT" : "POST", headers, body: JSON.stringify(study) });
     },
     onSuccess: async (res) => {
       const data = await res.json();
       queryClient.invalidateQueries({ queryKey: ["/api/studies"] });
       if (activeLabId) {
         queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/studies`] });
+      }
+      // Drafts skip navigation to results; return to the dashboard so the
+      // user sees the draft listed and can resume later.
+      if (data.status === "draft") {
+        toast({ title: "Draft saved" });
+        navigate(activeLabId ? `/labs/${activeLabId}/dashboard` : "/dashboard");
+        return;
       }
       const verificationId = prePopParams.get("verificationId");
       const verificationElement = prePopParams.get("element");
@@ -1036,6 +1099,30 @@ export default function VeritaCheckPage() {
     },
     onError: () => toast({ title: "Failed to save study", variant: "destructive" }),
   });
+
+  // Save as draft: bypass the strict client validation in handleSubmit and
+  // send the current form state to the server marked as a draft. Requires
+  // at least a test name. Server-side mirrors the same minimum-fields gate.
+  const handleSaveDraft = () => {
+    if (!testName.trim()) {
+      toast({ title: "Add a test name before saving a draft", variant: "destructive" });
+      return;
+    }
+    const draft: any = {
+      testName: testName.trim(),
+      instrument: instrumentNames[0] || "",
+      analyst: analyst.trim() || "",
+      date,
+      studyType,
+      cliaAllowableError: cliaValue,
+      dataPoints,
+      instruments: instrumentNames,
+      teaIsPercentage: 1,
+      teaUnit: "%",
+      status: "draft",
+    };
+    saveMutation.mutate(draft as InsertStudy);
+  };
 
   const handleSubmit = () => {
     if (!testName.trim()) { toast({ title: "Please enter a test name", variant: "destructive" }); return; }
@@ -2646,9 +2733,21 @@ return (
             <div className="text-sm text-muted-foreground">
               {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "sensitivity" ? "blank replicate" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3} minimum filled</span>}
             </div>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
-              {saveMutation.isPending ? "Calculating…" : "Run Study & Generate Report"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSaveDraft}
+                disabled={saveMutation.isPending || !testName.trim()}
+                size="lg"
+                variant="outline"
+                data-testid="button-save-draft"
+                title="Save what you have so far and finish later. Skips pass/fail calculation."
+              >
+                {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
+              </Button>
+              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+                {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
+              </Button>
+            </div>
           </div>
         </div>
       </section>

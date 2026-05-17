@@ -267,6 +267,7 @@ function AppContent() {
           <Route path="/team" component={TeamPage} />
           <Route path="/veritacheck" component={VeritaCheckPage} />
           <Route path="/study/new">{wrapLegacy(VeritaCheckPage)}</Route>
+          <Route path="/study/:id/edit">{wrapLegacy(VeritaCheckPage)}</Route>
           <Route path="/study/:id/results">{wrapLegacy(StudyResultsPage)}</Route>
           <Route path="/dashboard">{wrapLegacy(DashboardPage)}</Route>
           <Route path="/dashboard/verifications">{wrapLegacy(VeritaCheckVerificationPage)}</Route>
@@ -344,6 +345,7 @@ function AppContent() {
           <Route path="/labs/:labId/dashboard" component={DashboardPage} />
           <Route path="/labs/:labId/dashboard/verifications" component={VeritaCheckVerificationPage} />
           <Route path="/labs/:labId/study/new" component={VeritaCheckPage} />
+          <Route path="/labs/:labId/study/:id/edit" component={VeritaCheckPage} />
           <Route path="/labs/:labId/study/:id/results" component={StudyResultsPage} />
           <Route path="/labs/:labId/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/labs/:labId/veritascan-app/:id" component={VeritaScanScanPage} />
