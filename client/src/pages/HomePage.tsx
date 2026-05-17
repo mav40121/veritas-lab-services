@@ -17,7 +17,7 @@ const services = [
 
 const stats = [
   { value: "200+", label: "Facilities surveyed" },
-  { value: "6", label: "Software Products" },
+  { value: "12", label: "Software Modules" },
   { value: "168", label: "Compliance items tracked" },
   { value: "22 yrs", label: "Industry experience" },
 ];
@@ -91,8 +91,13 @@ return (
               { name: "VeritaMap™", href: "/veritamap" },
               { name: "VeritaScan™", href: "/veritascan" },
               { name: "VeritaComp™", href: "/veritacomp" },
+              { name: "VeritaPolicy™", href: "/veritapolicy" },
               { name: "VeritaStaff™", href: "/veritastaff" },
               { name: "VeritaLab™", href: "/veritalab" },
+              { name: "VeritaPT™", href: "/veritapt" },
+              { name: "VeritaTrack™", href: "/veritatrack" },
+              { name: "VeritaStock™", href: "/veritastock" },
+              { name: "VeritaBench™", href: "/veritabench" },
             ].map(({ name, href }) => (
               <Link key={name} href={href}>
                 <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-primary/30 text-primary text-xs font-medium bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
@@ -131,10 +136,10 @@ return (
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure™</h2>
             <p className="text-lg text-foreground leading-relaxed max-w-[750px] mx-auto mb-6">
-              VeritaAssure™ is a suite of six purpose-built compliance tools covering every regulatory requirement a clinical laboratory faces - from EP performance verification studies and inspection readiness to competency management, test menu mapping, personnel credentialing, and certificate tracking.
+              VeritaAssure™ is a suite of twelve purpose-built modules covering every regulatory requirement a clinical laboratory faces, from performance verification and inspection readiness to competency, policy management, test menu mapping, personnel credentialing, certificate tracking, proficiency testing, QC task sign-off, inventory, productivity analytics, and post-survey deficiency response.
             </p>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              VeritaAssure™ is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools (VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™) to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure™ brings the expertise and the tools together so your team isn't scrambling before the next inspection.
+              VeritaAssure™ is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with a twelve-module software suite to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure™ brings the expertise and the tools together so your team isn't scrambling before the next inspection.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -145,7 +150,7 @@ return (
                 </div>
                 <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Tools</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™ are the 6 software products of the VeritaAssure™ suite, built for lab directors who want data-driven compliance without waiting on a consultant.
+                  The twelve VeritaAssure™ modules (VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaStock™, VeritaBench™, and VeritaResponse™) are built for lab directors who want data-driven compliance without waiting on a consultant.
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/veritacheck">Explore the Tools →</Link>

@@ -128,7 +128,7 @@ return (
                 Every laboratory director knows the feeling: degrees earned, certifications passed, years logged, and still unprepared for the actual job. The regulations read like a foreign language. The C-suite speaks finance, not science. Accreditors are coming. There is no manual.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure™ and VeritaCheck™, VeritaMap™, VeritaScan™, and VeritaComp™ compliance software suite. The same knowledge that built the software is in this book.
+                <em>Lab Management 101</em> is that manual. Written by Michael Veri, the founder of VeritaAssure™, the twelve-module clinical laboratory compliance software suite. The same knowledge that built the software is in this book.
               </p>
 
               <div className="flex items-center gap-3 mb-8">
