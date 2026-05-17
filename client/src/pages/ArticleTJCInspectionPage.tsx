@@ -63,7 +63,7 @@ return (
             <ul className="space-y-2">
               {[
                 "TJC surveys follow a tracer methodology, starting at the patient and working backward through your system",
-                "Five areas are traced most consistently: method validation, proficiency testing, competency, instrument documentation, and procedures",
+                "Five areas are traced most consistently: performance verification, proficiency testing, competency, instrument documentation, and procedures",
                 "Documentation is not paperwork, it is the evidence that your quality practices exist",
                 "Conduct a mock survey ninety days before your anticipated survey window",
               ].map(t => (
@@ -85,7 +85,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The Five Areas Surveyors Trace Most Consistently</h2>
 
-          <h3 className="font-semibold text-lg mt-8 mb-2">Method Validation Records</h3>
+          <h3 className="font-semibold text-lg mt-8 mb-2">Performance Verification Records</h3>
           <p>
             For every quantitative test you report, there must be a record on file confirming the method performs acceptably in your hands. Calibration verification at least every six months. Method comparison when a new instrument was added. Precision when a new method was implemented. These records must be current, signed by the medical director or designee, and immediately retrievable.
           </p>

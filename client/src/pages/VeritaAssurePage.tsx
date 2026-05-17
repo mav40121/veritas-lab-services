@@ -125,7 +125,7 @@ const MODULES = [
 
 const PRICING = [
   { tier: "Per Study", price: "$25", note: "One-time, VeritaCheck™ only" },
-  { tier: "VeritaCheck™ Unlimited", price: "$299/yr", note: "Single user, method validation only" },
+  { tier: "VeritaCheck™ Unlimited", price: "$299/yr", note: "Single user, performance verification only" },
   { tier: "Clinic", price: "$499/yr", note: "2 seats, small clinics and CoW labs" },
   { tier: "Community", price: "$999/yr", note: "5 seats, community hospitals" },
   { tier: "Hospital", price: "$1,999/yr", note: "15 seats, regional hospital labs" },
@@ -188,7 +188,7 @@ return (
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
             VeritaAssure&#8482; is the integrated lab compliance suite from Veritas Lab Services, LLC.
-            It unites method validation, inspection readiness, test menu mapping, competency management,
+            It unites performance verification, inspection readiness, test menu mapping, competency management,
             personnel tracking, and certificate monitoring into one platform built by a working lab professional.
             Browser-based. No desktop software. No installation.
           </p>

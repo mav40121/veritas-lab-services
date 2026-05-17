@@ -131,7 +131,7 @@ return (
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure™</h2>
             <p className="text-lg text-foreground leading-relaxed max-w-[750px] mx-auto mb-6">
-              VeritaAssure™ is a suite of six purpose-built compliance tools covering every regulatory requirement a clinical laboratory faces - from EP method validation studies and inspection readiness to competency management, test menu mapping, personnel credentialing, and certificate tracking.
+              VeritaAssure™ is a suite of six purpose-built compliance tools covering every regulatory requirement a clinical laboratory faces - from EP performance verification studies and inspection readiness to competency management, test menu mapping, personnel credentialing, and certificate tracking.
             </p>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               VeritaAssure™ is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with purpose-built software tools (VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, and VeritaLab™) to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure™ brings the expertise and the tools together so your team isn't scrambling before the next inspection.

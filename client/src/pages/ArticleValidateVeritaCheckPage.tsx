@@ -90,7 +90,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Validating VeritaCheck™ Actually Means</h2>
           <p>
-            This is not a full 21 CFR Part 11 pharmaceutical validation exercise. VeritaCheck™ is a cloud-based method validation tool, and the appropriate framework is an IQ/OQ/PQ process: Installation Qualification, Operational Qualification, and Performance Qualification. Each step is brief and practical. You are not rewriting software, you are confirming it works correctly in your lab's hands.
+            This is not a full 21 CFR Part 11 pharmaceutical validation exercise. VeritaCheck™ is a cloud-based performance verification tool, and the appropriate framework is an IQ/OQ/PQ process: Installation Qualification, Operational Qualification, and Performance Qualification. Each step is brief and practical. You are not rewriting software, you are confirming it works correctly in your lab's hands.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Step-by-Step Validation Process</h2>
@@ -130,7 +130,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What to Keep on File</h2>
           <p>
-            Store the completed, dated, and signed Software Validation Record with your other method validation documentation. The medical director or designee signature is required. Retain the record in accordance with your lab's document control policy, with a minimum of two years recommended to align with standard CLIA retention expectations. The record should be retrievable during inspection.
+            Store the completed, dated, and signed Software Validation Record with your other performance verification documentation. The medical director or designee signature is required. Retain the record in accordance with your lab's document control policy, with a minimum of two years recommended to align with standard CLIA retention expectations. The record should be retrievable during inspection.
           </p>
 
           {/* VeritaCheck CTA */}

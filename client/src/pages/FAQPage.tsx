@@ -13,7 +13,7 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What is VeritaAssure\u2122?",
-        a: "VeritaAssure\u2122 is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes VeritaCheck\u2122 for method validation, calibration verification, and EP15 precision studies; VeritaTrack\u2122 for QC task tracking and sign-off; VeritaStock\u2122 for reagent and inventory management; VeritaBench\u2122 for productivity and staffing analytics; plus inspection readiness, test menu regulatory mapping, staff competency documentation, personnel tracking, certificate monitoring, and proficiency testing guidance. Every report includes regulatory citations and a laboratory director or designee review block.",
+        a: "VeritaAssure\u2122 is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes VeritaCheck\u2122 for performance verification, calibration verification, and EP15 precision studies; VeritaTrack\u2122 for QC task tracking and sign-off; VeritaStock\u2122 for reagent and inventory management; VeritaBench\u2122 for productivity and staffing analytics; plus inspection readiness, test menu regulatory mapping, staff competency documentation, personnel tracking, certificate monitoring, and proficiency testing guidance. Every report includes regulatory citations and a laboratory director or designee review block.",
       },
       {
         q: "Who built VeritaAssure\u2122?",
@@ -34,11 +34,11 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What's included in the VeritaAssure\u2122 suite?",
-        a: "The suite includes twelve production modules: VeritaCheck\u2122 (method validation, calibration verification, EP15 precision), VeritaTrack\u2122 (QC task tracking and sign-off), VeritaStock\u2122 (reagent and inventory management), VeritaBench\u2122 (productivity and staffing analytics), VeritaScan\u2122 (inspection readiness self-assessment with the AAA sub-block for unregulated analytes), VeritaPT\u2122 (proficiency testing tracker covering CAP, API, and WSLH plus alternative assessment records), VeritaMap\u2122 (test menu regulatory mapping), VeritaLab\u2122 (CLIA certificate and accreditation tracking), VeritaComp\u2122 (competency assessment), VeritaPolicy\u2122 (TJC policy compliance), VeritaStaff\u2122 (personnel credentialing), and VeritaResponse\u2122 (post-survey deficiency response with the federal CMS-2567 renderer and a cross-link to your VeritaCheck history). See the roadmap for what's coming next.",
+        a: "The suite includes twelve production modules: VeritaCheck\u2122 (performance verification, calibration verification, EP15 precision), VeritaTrack\u2122 (QC task tracking and sign-off), VeritaStock\u2122 (reagent and inventory management), VeritaBench\u2122 (productivity and staffing analytics), VeritaScan\u2122 (inspection readiness self-assessment with the AAA sub-block for unregulated analytes), VeritaPT\u2122 (proficiency testing tracker covering CAP, API, and WSLH plus alternative assessment records), VeritaMap\u2122 (test menu regulatory mapping), VeritaLab\u2122 (CLIA certificate and accreditation tracking), VeritaComp\u2122 (competency assessment), VeritaPolicy\u2122 (TJC policy compliance), VeritaStaff\u2122 (personnel credentialing), and VeritaResponse\u2122 (post-survey deficiency response with the federal CMS-2567 renderer and a cross-link to your VeritaCheck history). See the roadmap for what's coming next.",
       },
       {
         q: "What is VeritaCheck\u2122?",
-        a: "VeritaCheck\u2122 is the method validation and calibration verification module. It supports CLIA TEa-based pass/fail with automated lookup, EP15 precision, EP9 method comparison, and reportable range studies. Every report includes regulatory citations, statistics, and a director review block, exported as a signed PDF.",
+        a: "VeritaCheck\u2122 is the performance verification and calibration verification module. It supports CLIA TEa-based pass/fail with automated lookup, EP15 precision, EP9 method comparison, and reportable range studies. Every report includes regulatory citations, statistics, and a director review block, exported as a signed PDF.",
       },
       {
         q: "What is VeritaScan\u2122?",
@@ -241,7 +241,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Do you offer consulting services beyond software?",
-        a: "Yes. Veritas Lab Services offers laboratory consulting at /services, including mock inspections, method validation strategy, quality management system buildouts, and CLIA application support. Consulting and software are sold separately.",
+        a: "Yes. Veritas Lab Services offers laboratory consulting at /services, including mock inspections, performance verification strategy, quality management system buildouts, and CLIA application support. Consulting and software are sold separately.",
       },
       {
         q: "How do I schedule a live walkthrough?",

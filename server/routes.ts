@@ -1743,7 +1743,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             <div style="background: #f9fafb; padding: 28px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
               <p style="font-size: 15px; color: #1B2B2B; margin: 0 0 16px;">Hi ${name},</p>
               <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
-                Your VeritaAssure&#8482; account is active. The platform includes VeritaCheck&#8482; for EP method validation studies, VeritaMap&#8482; for test menu regulatory mapping, VeritaScan&#8482; for inspection readiness, VeritaComp&#8482; for competency management, VeritaStaff&#8482; for personnel tracking, and VeritaLab&#8482; for certificate monitoring.
+                Your VeritaAssure&#8482; account is active. The platform includes VeritaCheck&#8482; for EP performance verification studies, VeritaMap&#8482; for test menu regulatory mapping, VeritaScan&#8482; for inspection readiness, VeritaComp&#8482; for competency management, VeritaStaff&#8482; for personnel tracking, and VeritaLab&#8482; for certificate monitoring.
               </p>
               <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 20px;">
                 Start with the Getting Started guide to configure your lab in under an hour.
