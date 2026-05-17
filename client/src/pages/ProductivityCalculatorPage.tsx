@@ -10,6 +10,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Calculator, TrendingDown, DollarSign, ArrowRight, Users, BookOpen, ExternalLink } from "lucide-react";
 import { useSEO } from "@/hooks/useSEO";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const BENCHMARKS: Record<string, { label: string; low: number; high: number }> = {
   community: { label: "Community Hospital (200K-500K billables/yr)", low: 0.15, high: 0.22 },
@@ -135,7 +136,7 @@ export default function ProductivityCalculatorPage() {
           <ExternalLink size={16} style={{ color: "#01696F" }} />
         </a>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
           {/* Input Card */}
           <Card>
             <CardHeader>
@@ -314,6 +315,15 @@ export default function ProductivityCalculatorPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Email capture: only shown after the user has a result. Wires
+            into the existing /api/newsletter/subscribe endpoint with a
+            calculator-specific source tag so leads can be segmented. */}
+        {result && (
+          <div className="max-w-2xl mx-auto">
+            <NewsletterSignup variant="card" source="calculator-veritabench" />
+          </div>
+        )}
       </div>
     </div>
   );
