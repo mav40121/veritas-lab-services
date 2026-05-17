@@ -2769,9 +2769,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
     const studyId = parseInt(req.params.id);
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = (db as any).$client.prepare(
-      "SELECT * FROM studies WHERE id = ? AND user_id = ?"
-    ).get(studyId, dataUserId) as any;
+    const existing = userCanAccessStudy(studyId, req) as any;
     if (!existing) return res.status(404).json({ error: "Study not found" });
 
     const isDraft = req.body?.status === 'draft';
@@ -3163,6 +3161,65 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
       ).get(map.lab_id, req.userId);
       if (member) return map;
+    }
+    return null;
+  }
+
+  // Same shape as userCanAccessMap, applied per resource type. Each accepts
+  // the row's id, returns the full row when the user owns it directly OR is
+  // an active lab_members member of the lab that owns it.
+  function userCanAccessFinding(id: number | string, req: any): any | null {
+    const row = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(id) as any;
+    if (!row) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (row.user_id === dataUserId) return row;
+    if (row.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.lab_id, req.userId);
+      if (member) return row;
+    }
+    return null;
+  }
+
+  function userCanAccessScan(id: number | string, req: any): any | null {
+    const row = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(id) as any;
+    if (!row) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (row.user_id === dataUserId) return row;
+    if (row.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.lab_id, req.userId);
+      if (member) return row;
+    }
+    return null;
+  }
+
+  function userCanAccessPolicy(id: number | string, req: any): any | null {
+    const row = (db as any).$client.prepare("SELECT * FROM veritapolicy_lab_policies WHERE id = ?").get(id) as any;
+    if (!row) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (row.user_id === dataUserId) return row;
+    if (row.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.lab_id, req.userId);
+      if (member) return row;
+    }
+    return null;
+  }
+
+  function userCanAccessStudy(id: number | string, req: any): any | null {
+    const row = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(id) as any;
+    if (!row) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (row.user_id === dataUserId) return row;
+    if (row.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.lab_id, req.userId);
+      if (member) return row;
     }
     return null;
   }
@@ -4995,7 +5052,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/veritascan/scans/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
     const delScanItems = (db as any).$client.prepare("SELECT item_id, status, notes FROM veritascan_items WHERE scan_id = ?").all(req.params.id);
@@ -5074,7 +5131,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const items = (db as any).$client.prepare(
       "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
@@ -5086,7 +5143,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritascan/scans/:id/items/:itemId", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const { status, notes, owner, due_date } = req.body;
     const now = new Date().toISOString();
@@ -5109,7 +5166,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritascan/scans/:id/items", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const { items } = req.body; // Array of { item_id, status, notes, owner, due_date }
     if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
@@ -5140,7 +5197,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const scanId = req.params.scanId;
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const scan = (db as any).$client.prepare("SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE id = ? AND user_id = ?").get(scanId, dataUserId);
+    const scan = userCanAccessScan(scanId, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
 
     // Get saved items from DB
@@ -5417,9 +5474,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (type !== "executive" && type !== "full") return res.status(400).json({ error: "type must be 'executive' or 'full'" });
 
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const scan = (db as any).$client.prepare(
-      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE id = ? AND user_id = ?"
-    ).get(scanId, dataUserId);
+    const scan = userCanAccessScan(scanId, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
 
     // Get saved items from DB
@@ -8202,9 +8257,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET single finding
   app.get("/api/findings/:id", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const row = userCanAccessFinding(req.params.id, req);
     if (!row) return res.status(404).json({ error: "Finding not found" });
     res.json(row);
   });
@@ -8273,9 +8326,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PUT update finding
   app.put("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const existing = userCanAccessFinding(req.params.id, req) as any;
     if (!existing) return res.status(404).json({ error: "Finding not found" });
 
     const body = req.body || {};
@@ -8365,9 +8416,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE finding
   app.delete("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = (db as any).$client.prepare(
-      "SELECT id FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const existing = userCanAccessFinding(req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Finding not found" });
     (db as any).$client.prepare("DELETE FROM finding_attachments WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM finding_history WHERE finding_id = ?").run(req.params.id);
@@ -8403,9 +8452,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET POC completeness for a finding (read-only; used by the UI tile).
   app.get("/api/findings/:id/poc-completeness", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const row = userCanAccessFinding(req.params.id, req);
     if (!row) return res.status(404).json({ error: "Finding not found" });
     const result = validateCms2567POC(row);
     res.json(result);
@@ -8415,9 +8462,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // would render to their own form shape in a later phase.
   app.get("/api/findings/:id/cms-2567-pdf", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const finding = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     if (finding.accreditor !== "CMS") {
       return res.status(400).json({ error: `CMS-2567 renderer only applies to CMS-accreditor findings; this finding is ${finding.accreditor}.` });
@@ -8457,9 +8502,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // floor of description + corrective_action before allowing render.
   app.get("/api/findings/:id/cap-completeness", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const row = userCanAccessFinding(req.params.id, req);
     if (!row) return res.status(404).json({ error: "Finding not found" });
     const result = validateCapResponse(row);
     res.json(result);
@@ -8473,9 +8516,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // before generating a submission packet for a body they don't claim.
   app.get("/api/findings/:id/cap-pdf", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const finding = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     if (finding.accreditor !== "CAP") {
       return res.status(400).json({ error: `CAP renderer only applies to CAP-accreditor findings; this finding is ${finding.accreditor}.` });
@@ -8522,9 +8563,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // corrective_action (patient-impact folds into root_cause narrative).
   app.get("/api/findings/:id/tjc-completeness", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const row = userCanAccessFinding(req.params.id, req);
     if (!row) return res.status(404).json({ error: "Finding not found" });
     const result = validateTjcEsc(row);
     res.json(result);
@@ -8535,9 +8574,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab-aware gating as the CAP endpoint.
   app.get("/api/findings/:id/tjc-pdf", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const finding = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     if (finding.accreditor !== "TJC") {
       return res.status(400).json({ error: `TJC renderer only applies to TJC-accreditor findings; this finding is ${finding.accreditor}.` });
@@ -8583,9 +8620,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // other accreditor renderers even though the bar is intentionally low.
   app.get("/api/findings/:id/cola-completeness", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const row = userCanAccessFinding(req.params.id, req);
     if (!row) return res.status(404).json({ error: "Finding not found" });
     const result = validateColaResponse(row);
     res.json(result);
@@ -8596,9 +8631,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Same lab-aware gating shape as the CAP and TJC endpoints.
   app.get("/api/findings/:id/cola-pdf", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const finding = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     if (finding.accreditor !== "COLA") {
       return res.status(400).json({ error: `COLA renderer only applies to COLA-accreditor findings; this finding is ${finding.accreditor}.` });
@@ -8645,9 +8678,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // 45-day FDA notification window as a reminder.
   app.get("/api/findings/:id/aabb-completeness", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const row = userCanAccessFinding(req.params.id, req);
     if (!row) return res.status(404).json({ error: "Finding not found" });
     const result = validateAabbNer(row);
     res.json(result);
@@ -8659,9 +8690,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // official Nonconforming Event Report form (Sections A through M).
   app.get("/api/findings/:id/aabb-pdf", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const finding = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     if (finding.accreditor !== "AABB") {
       return res.status(400).json({ error: `AABB renderer only applies to AABB-accreditor findings; this finding is ${finding.accreditor}.` });
@@ -8724,9 +8753,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/findings/:id/veritacheck-link", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const finding = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId) as any;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found" });
 
     const normalized = normalizeStandardRef(finding.standard_ref);
@@ -13009,7 +13036,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = db.$client;
       const userId = req.ownerUserId;
       const policyId = parseInt(req.params.id);
-      const policy = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE id = ? AND user_id = ?').get(policyId, userId) as any;
+      const policy = userCanAccessPolicy(policyId, req) as any;
       if (!policy) return res.status(404).json({ error: 'Policy not found' });
       const data = await req.file();
       if (!data) return res.status(400).json({ error: 'No file' });
