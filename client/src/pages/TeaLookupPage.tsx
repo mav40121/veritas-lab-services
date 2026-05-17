@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search, FlaskConical, ExternalLink, Info, ChevronRight, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { teaData, specialties, searchTea, type TeaSpecialty } from "@/lib/cliaTeaData";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const specialtyColors: Record<string, string> = {
   "Routine Chemistry": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300",
@@ -251,6 +252,13 @@ export default function TeaLookupPage() {
               The Association for Diagnostics & Laboratory Medicine (ADLM) recommends using half of the CLIA TEa as internal quality goals, providing a safety margin that keeps results well within acceptable performance even under normal analytical variation.
             </p>
           </div>
+        </div>
+
+        {/* Newsletter signup: same The Lab Director's Briefing CTA used on
+            article pages, tagged with a source so leads from the TEa tool
+            can be segmented from generic newsletter signups. */}
+        <div className="mt-8 max-w-2xl mx-auto">
+          <NewsletterSignup variant="card" source="tealookup" />
         </div>
 
         {/* Read the article CTA */}
