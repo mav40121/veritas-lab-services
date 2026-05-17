@@ -189,7 +189,7 @@ return (
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
             VeritaAssure&#8482; is the integrated lab compliance suite from Veritas Lab Services, LLC.
             It unites performance verification, inspection readiness, test menu mapping, competency management,
-            personnel tracking, and certificate monitoring into one platform built by a working lab professional.
+            personnel tracking, and certificate monitoring into one platform built by a former TJC laboratory surveyor with 200+ facility inspections.
             Browser-based. No desktop software. No installation.
           </p>
           {!isLoggedIn && (

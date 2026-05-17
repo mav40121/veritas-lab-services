@@ -90,7 +90,7 @@ return (
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Every non-waived laboratory must demonstrate staff competency using the 6 CLIA-required methods. Every facility performing waived testing must document 2-of-4 methods per test. And every lab must assess non-technical duties at orientation and biennially.
-                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"™"} for automatic instrument and method group setup.
+                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"™"} for automatic instrument and method group setup. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {/* Pricing - public visitors only */}

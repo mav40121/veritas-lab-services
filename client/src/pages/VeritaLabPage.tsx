@@ -63,7 +63,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Every laboratory inspection begins with a review of your certificates and accreditations. Surveyors check CLIA certificates, state licenses, accreditation status, and lab director credentials before they even walk through the door. VeritaLab{"™"} keeps all of these records organized, sends you reminders well before anything expires, and stores your actual certificate documents so you can retrieve them in seconds.
+                Every laboratory inspection begins with a review of your certificates and accreditations. Surveyors check CLIA certificates, state licenses, accreditation status, and lab director credentials before they even walk through the door. VeritaLab{"™"} keeps all of these records organized, sends you reminders well before anything expires, and stores your actual certificate documents so you can retrieve them in seconds. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-8">

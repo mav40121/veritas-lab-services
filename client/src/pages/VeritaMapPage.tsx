@@ -62,7 +62,7 @@ return (
                 VeritaMap™ is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap™ documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standards that require it.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Most laboratories discover regulatory gaps during inspections. VeritaMap™ finds them first.
+                Most laboratories discover regulatory gaps during inspections. VeritaMap™ finds them first. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {!isLoggedIn && (

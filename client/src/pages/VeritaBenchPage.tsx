@@ -259,7 +259,7 @@ export default function VeritaBenchPage() {
                   </p>
                 </div>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  VeritaPace{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups.
+                  VeritaPace{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups. Built by a former TJC laboratory surveyor with 200+ facility inspections.
                 </p>
                 <ul className="space-y-2 mb-6 text-sm">
                   <li className="flex items-start gap-2"><TrendingUp size={16} className="text-primary mt-0.5 shrink-0" /><span>Monthly productivity tracking with year-over-year trend analysis</span></li>
