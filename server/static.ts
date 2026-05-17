@@ -70,6 +70,25 @@ export function serveStatic(app: Express) {
     );
   }
 
+  // Legacy URL 301 redirects. Google Search Console still has these old
+  // URLs indexed and returns 404 on each. Server-side 301 preserves SEO
+  // link equity (a client-side wouter redirect would render the page and
+  // lose the 301 signal Google needs). Add new entries here as old
+  // marketing or auth URLs are renamed.
+  const LEGACY_REDIRECTS: Record<string, string> = {
+    "/meet-our-team": "/team",
+    "/m/login": "/login",
+    "/m/create-account": "/register",
+    "/m/reset": "/reset-password",
+  };
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next();
+    const normalized = req.path.replace(/\/$/, "") || "/";
+    const target = LEGACY_REDIRECTS[normalized];
+    if (target) return res.redirect(301, target);
+    next();
+  });
+
   // Serve static assets with proper MIME types and long cache
   app.use("/assets", express.static(path.join(distPath, "assets"), {
     maxAge: "1y",
