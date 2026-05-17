@@ -875,8 +875,12 @@ function InstrumentTestSection({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function VeritaMapBuildPage() {
-  const [, params] = useRoute("/veritamap-app/:id/build");
-  const mapId = params?.id;
+  // Mounted from BOTH legacy /veritamap-app/:id/build and lab-scoped
+  // /labs/:labId/veritamap-app/:id/build (see App.tsx Phase 3.3b).
+  // Match both patterns so mapId resolves correctly on either URL.
+  const [, legacyParams] = useRoute("/veritamap-app/:id/build");
+  const [, labScopedParams] = useRoute("/labs/:labId/veritamap-app/:id/build");
+  const mapId = labScopedParams?.id ?? legacyParams?.id;
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
