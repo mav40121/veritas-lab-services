@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
@@ -1258,6 +1258,59 @@ export default function VeritaMapBuildPage() {
     },
   });
 
+  // Autosave — debounced 1.5s after the last testsByInstrument change so a
+  // user who navigates away mid-flow doesn't lose toggle state. Mirrors the
+  // Map-page autosave pattern (VeritaMapMapPage.tsx:1728). Per-instrument
+  // PUTs to the same endpoint saveAllMutation uses; idempotent so a manual
+  // "Build My Map" click after autosave is a safe no-op + navigate.
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialHydrationRef = useRef(true);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const savedFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Skip the first run (hydration from the instruments query). Only
+    // user-driven changes after that trigger autosave.
+    if (initialHydrationRef.current) {
+      if (Object.keys(testsByInstrument).length > 0) initialHydrationRef.current = false;
+      return;
+    }
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(async () => {
+      if (!mapId) return;
+      setAutosaveStatus("saving");
+      try {
+        for (const instr of instruments) {
+          if (!(instr.id in testsByInstrument)) continue;
+          const tests = testsByInstrument[instr.id];
+          const res = await fetch(
+            `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json", ...authHeaders() },
+              body: JSON.stringify({ tests }),
+            }
+          );
+          if (!res.ok) throw new Error(`autosave failed for ${instr.instrument_name}`);
+        }
+        setAutosaveStatus("saved");
+        if (savedFadeTimerRef.current) clearTimeout(savedFadeTimerRef.current);
+        savedFadeTimerRef.current = setTimeout(() => setAutosaveStatus("idle"), 1500);
+      } catch (err: any) {
+        console.warn("[veritamap-build autosave]", err?.message || err);
+        setAutosaveStatus("error");
+      }
+    }, 1500);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [testsByInstrument, instruments, mapId]);
+
+  // Clear the fade timer on unmount so it can't fire after the component is gone.
+  useEffect(() => () => {
+    if (savedFadeTimerRef.current) clearTimeout(savedFadeTimerRef.current);
+  }, []);
+
   // Build cascade lookup: departments → vendors → instruments
   const cascade = useMemo(() => {
     const deptVendorInstr: Record<string, Record<string, string[]>> = {};
@@ -1809,6 +1862,15 @@ export default function VeritaMapBuildPage() {
           across <span className="font-semibold text-foreground">{instruments.length}</span>{" "}
           instruments
         </span>
+        {autosaveStatus === "saving" && (
+          <span className="text-xs text-muted-foreground ml-auto">Saving...</span>
+        )}
+        {autosaveStatus === "saved" && (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-auto">Saved</span>
+        )}
+        {autosaveStatus === "error" && (
+          <span className="text-xs text-red-600 dark:text-red-400 ml-auto">Save failed (will retry on next change)</span>
+        )}
       </div>
 
       {/* Instruments for current role group */}
