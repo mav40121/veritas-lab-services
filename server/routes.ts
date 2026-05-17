@@ -3147,6 +3147,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return `Free plan limit reached (${FREE_INSTRUMENT_LIMIT} instruments / ${FREE_ANALYTE_LIMIT} analytes lab-wide). Upgrade at ${CAP_MESSAGE_PRICING_URL} or contact ${CAP_MESSAGE_CONTACT} to unlock more.`;
   }
 
+  // Allow access if the user owns the map directly OR is an active
+  // lab_members member of the lab that owns it. Replaces the legacy
+  // `WHERE id = ? AND user_id = ?` check on veritamap_maps which 404'd
+  // for lab_members members of multi-lab labs they don't own.
+  function userCanAccessMap(mapId: number | string, req: any): any | null {
+    const map = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_maps WHERE id = ?"
+    ).get(mapId) as any;
+    if (!map) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (map.user_id === dataUserId) return map;
+    if (map.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(map.lab_id, req.userId);
+      if (member) return map;
+    }
+    return null;
+  }
+
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -3306,7 +3326,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Delete map
   app.delete("/api/veritamap/maps/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
     const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
@@ -3325,7 +3345,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Get map with all tests
   app.get("/api/veritamap/maps/:id", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     // Fetch tests with per-analyte instrument list (needed for intelligence/correlation)
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
@@ -3396,11 +3416,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Covers the 4 entry-surface endpoints VeritaMapAppPage hits (list, create,
   // delete) plus the single-map GET that VeritaMapMapPage calls. Inner
   // endpoints (/api/veritamap/maps/:id/tests, /instruments, /correlations,
-  // /excel, etc.) deliberately stay on legacy URLs in this PR — they scope
-  // by map_id which is globally unique, and their ownership check via
-  // req.ownerUserId still resolves correctly today. They will get a
-  // membership-aware ownership check upgrade in a future cleanup once a
-  // multi-lab user demands it.
+  // /excel, etc.) stay on legacy URLs and gate access through the shared
+  // userCanAccessMap() helper, which accepts direct ownership OR an active
+  // lab_members membership in the lab that owns the map.
 
   // GET /api/labs/:labId/veritamap/maps — list maps for the active lab.
   app.get("/api/labs/:labId/veritamap/maps", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -3509,7 +3527,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Bulk upsert tests (used when building from instrument or updating)
   app.put("/api/veritamap/maps/:id/tests", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { tests } = req.body;
     if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
@@ -3561,7 +3579,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Get all instruments for a map
   app.get("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const instruments = (db as any).$client.prepare(
       "SELECT * FROM veritamap_instruments WHERE map_id = ? ORDER BY role, instrument_name"
@@ -3579,7 +3597,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Add instrument to map
   app.post("/api/veritamap/maps/:id/instruments", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     // Freemium limit: 4 instruments LAB-WIDE (across owner + all seats) for
     // unpaid, non-grandfathered accounts. Lab-wide pool means a clinic with
@@ -3610,7 +3628,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Update instrument role/name
   app.put("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { instrument_name, role, category, serial_number, nickname } = req.body;
     (db as any).$client.prepare(
@@ -3622,7 +3640,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Delete instrument (cascades to its tests)
   app.delete("/api/veritamap/maps/:id/instruments/:instId", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const delInstr = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id) as any;
     const delInstTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
@@ -3652,9 +3670,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const sourceInstId = parseInt(req.params.sourceInstId);
 
         // Verify map belongs to user
-        const map = (db as any).$client.prepare(
-          "SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?"
-        ).get(mapId, dataUserId);
+        const map = userCanAccessMap(mapId, req);
         if (!map) return res.status(404).json({ error: "Map not found" });
 
         // Verify both instruments belong to this map
@@ -3716,7 +3732,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritamap/maps/:id/instruments/:instId/tests", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     try {
       const dataUserId = req.ownerUserId ?? req.user.userId;
-      const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+      const map = userCanAccessMap(req.params.id, req);
       if (!map) return res.status(404).json({ error: "Map not found" });
       const { tests } = req.body; // [{ analyte, specialty, complexity, active }]
       if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
@@ -3795,7 +3811,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Intelligence endpoint: compute correlation + cal ver requirements
   app.get("/api/veritamap/maps/:id/intelligence", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
 
     // Get all active instrument-test pairs
@@ -3846,7 +3862,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // across your lab" rather than misleading per-map numbers.
   app.get("/api/veritamap/maps/:id/limits", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const isFree = !hasMapAccess(req.user, req.scope?.lab);
     const usage = getLabPoolUsage(dataUserId);
@@ -3936,7 +3952,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Update single test
   app.put("/api/veritamap/maps/:id/tests/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
     const active = typeof rawActive === 'boolean' ? (rawActive ? 1 : 0) : rawActive;
@@ -4372,7 +4388,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITAMAP EXCEL EXPORT ──────────────────────────────────────────────────
   app.post("/api/veritamap/maps/:id/excel", authMiddleware, async (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
 
@@ -4847,9 +4863,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mapId = Number(req.params.id);
     const analyte = decodeURIComponent(req.params.analyte);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare(
-      "SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?"
-    ).get(mapId, dataUserId);
+    const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
@@ -4887,9 +4901,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const instrumentId = Number(req.params.instId);
     const analyte = decodeURIComponent(req.params.analyte);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare(
-      "SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?"
-    ).get(mapId, dataUserId);
+    const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
@@ -9540,7 +9552,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/competency/map-instruments/:mapId", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE id = ? AND user_id = ?").get(req.params.mapId, dataUserId);
+    const map = userCanAccessMap(req.params.mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const instruments = (db as any).$client.prepare(
       "SELECT id, instrument_name, role, category FROM veritamap_instruments WHERE map_id = ?"
