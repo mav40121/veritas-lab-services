@@ -170,6 +170,14 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "Privacy Policy | Veritas Lab Services",
     description: "Privacy policy for Veritas Lab Services and the VeritaAssure\u2122 laboratory compliance software platform.",
   },
+  "/trust": {
+    title: "Trust & Security | Veritas Lab Services",
+    description: "How VeritaAssure\u2122 protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
+  },
+  "/security": {
+    title: "Trust & Security | Veritas Lab Services",
+    description: "How VeritaAssure\u2122 protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
+  },
 };
 
 export function getBaseUrl(): string {
