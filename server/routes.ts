@@ -3224,6 +3224,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return null;
   }
 
+  // Generic membership-aware lookup for any per-user table that carries
+  // user_id + lab_id (the Phase 3.x backfill pattern). Table name comes
+  // from a hardcoded callsite, never user input. Use the per-resource
+  // named helpers above when a table needs extra column filtering
+  // (e.g. lab_certificates has `is_active = 1`).
+  function userCanAccessLabRow(table: string, id: number | string, req: any): any | null {
+    const row = (db as any).$client.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as any;
+    if (!row) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (row.user_id === dataUserId) return row;
+    if (row.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.lab_id, req.userId);
+      if (member) return row;
+    }
+    return null;
+  }
+
+  // lab_certificates additionally has an is_active soft-delete column.
+  // Inline the filter into the SELECT so we don't return tombstoned rows
+  // even when the caller has access via direct ownership or lab membership.
+  function userCanAccessCertificate(id: number | string, req: any): any | null {
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE id = ? AND is_active = 1"
+    ).get(id) as any;
+    if (!row) return null;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (row.user_id === dataUserId) return row;
+    if (row.lab_id) {
+      const member = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(row.lab_id, req.userId);
+      if (member) return row;
+    }
+    return null;
+  }
+
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -8005,9 +8043,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE /api/pt/enrollments/:id
   app.delete("/api/pt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = (db as any).$client.prepare(
-      "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('pt_enrollments_v2', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
     (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
     res.json({ success: true });
@@ -8077,9 +8113,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PUT update an AAA record
   app.put("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = (db as any).$client.prepare(
-      "SELECT id FROM aa_records WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('aa_records', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "AAA record not found" });
     const {
       analyte, method, method_notes, frequency_per_year,
@@ -8128,9 +8162,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE an AAA record
   app.delete("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = (db as any).$client.prepare(
-      "SELECT id FROM aa_records WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('aa_records', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "AAA record not found" });
     (db as any).$client.prepare("DELETE FROM aa_records WHERE id = ?").run(req.params.id);
     res.json({ success: true });
@@ -9003,9 +9035,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare(
-      "SELECT * FROM competency_programs WHERE id = ? AND user_id = ?"
-    ).get(req.params.id, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const methodGroups = (db as any).$client.prepare(
       "SELECT * FROM competency_method_groups WHERE program_id = ?"
@@ -9037,7 +9067,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     // Cascade delete
     const assessments = (db as any).$client.prepare("SELECT id FROM competency_assessments WHERE program_id = ?").all(req.params.id);
@@ -9055,7 +9085,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare("SELECT * FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const { name, department, methodGroups, checklistItems } = req.body;
     const now = new Date().toISOString();
@@ -9117,7 +9147,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/competency/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const emp = userCanAccessLabRow('competency_employees', req.params.id, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const { name, title, hireDate, lisInitials, status } = req.body;
     const sets: string[] = [];
@@ -9137,7 +9167,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/competency/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const emp = userCanAccessLabRow('competency_employees', req.params.id, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     (db as any).$client.prepare("UPDATE competency_employees SET status = 'inactive' WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -9224,9 +9254,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
     // Verify program and employee belong to user
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(programId, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', programId, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    const emp = (db as any).$client.prepare("SELECT id FROM competency_employees WHERE id = ? AND user_id = ?").get(employeeId, dataUserId);
+    const emp = userCanAccessLabRow('competency_employees', employeeId, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
@@ -9411,7 +9441,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/veritacomp/programs/:id/assessments", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const assessments = (db as any).$client.prepare(
       `SELECT a.*, e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date
@@ -9429,7 +9459,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/veritacomp/programs/:id/quizzes", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     // Get user quizzes for this program + system quizzes (user_id = 0)
     const quizzes = (db as any).$client.prepare(
@@ -9442,7 +9472,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/veritacomp/programs/:id/quizzes", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = (db as any).$client.prepare("SELECT id FROM competency_programs WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const { methodGroupId, methodGroupName, questions } = req.body;
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
@@ -10955,9 +10985,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
-    const existing = (db as any).$client.prepare(
-      "SELECT * FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
-    ).get(req.params.id, req.userId) as any;
+    const existing = userCanAccessCertificate(req.params.id, req) as any;
     if (!existing) return res.status(404).json({ error: "Certificate not found" });
 
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
@@ -10991,9 +11019,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE /api/veritalab/certificates/:id - soft delete
   app.delete("/api/veritalab/certificates/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
-    const existing = (db as any).$client.prepare(
-      "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
-    ).get(req.params.id, req.userId);
+    const existing = userCanAccessCertificate(req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Certificate not found" });
 
     const delCertRow = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id) as any;
@@ -11041,9 +11067,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), upload.single("file"), (req: any, res: any) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
-    const cert = (db as any).$client.prepare(
-      "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
-    ).get(req.params.id, req.userId);
+    const cert = userCanAccessCertificate(req.params.id, req);
     if (!cert) return res.status(404).json({ error: "Certificate not found" });
 
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
@@ -11074,9 +11098,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/veritalab/certificates/:id/documents - list documents
   app.get("/api/veritalab/certificates/:id/documents", authMiddleware, (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
-    const cert = (db as any).$client.prepare(
-      "SELECT id FROM lab_certificates WHERE id = ? AND user_id = ? AND is_active = 1"
-    ).get(req.params.id, req.userId);
+    const cert = userCanAccessCertificate(req.params.id, req);
     if (!cert) return res.status(404).json({ error: "Certificate not found" });
 
     const docs = (db as any).$client.prepare(
@@ -11507,7 +11529,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('pt_enrollments', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
     const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
     const now = new Date().toISOString();
@@ -11527,7 +11549,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = (db as any).$client.prepare("SELECT id FROM pt_enrollments WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('pt_enrollments', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
     // Get event IDs for cascade delete
     const events = (db as any).$client.prepare("SELECT id FROM pt_events WHERE enrollment_id = ?").all(req.params.id) as any[];
@@ -11586,7 +11608,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
     const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes } = req.body;
     const finalResult = your_result !== undefined ? your_result : existing.your_result;
@@ -11616,7 +11638,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = (db as any).$client.prepare("SELECT id FROM pt_events WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
     (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(req.params.id);
@@ -11636,10 +11658,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Get corrective action for specific event
   app.get("/api/veritapt/corrective-actions/event/:eventId", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Gate access through the parent event so lab members see the corrective
+    // action for events owned by any member of the lab, not just their own
+    // user_id. The corrective action itself is unscoped on the SELECT
+    // because the parent event check already authorizes the read.
+    const event = userCanAccessLabRow('pt_events', req.params.eventId, req);
+    if (!event) return res.json(null);
     const row = (db as any).$client.prepare(
-      "SELECT * FROM pt_corrective_actions WHERE event_id = ? AND user_id = ?"
-    ).get(req.params.eventId, dataUserId);
+      "SELECT * FROM pt_corrective_actions WHERE event_id = ?"
+    ).get(req.params.eventId);
     res.json(row || null);
   });
 
@@ -11667,7 +11694,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritapt/corrective-actions/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ? AND user_id = ?").get(req.params.id, dataUserId);
+    const existing = userCanAccessLabRow('pt_corrective_actions', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Corrective action not found" });
     const { root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
     const now = new Date().toISOString();
