@@ -13,7 +13,7 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What is VeritaAssure\u2122?",
-        a: "VeritaAssure\u2122 is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes VeritaCheck\u2122 for performance verification, calibration verification, and EP15 precision studies; VeritaTrack\u2122 for QC task tracking and sign-off; VeritaStock\u2122 for reagent and inventory management; VeritaBench\u2122 for productivity and staffing analytics; plus inspection readiness, test menu regulatory mapping, staff competency documentation, personnel tracking, certificate monitoring, and proficiency testing guidance. Every report includes regulatory citations and a laboratory director or designee review block.",
+        a: "VeritaAssure\u2122 is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes twelve modules covering performance verification, inspection readiness, competency, policy management, test menu mapping, personnel records, certificate tracking, proficiency testing, post-survey deficiency response, QC task sign-off, inventory, and productivity analytics. See What's included in the VeritaAssure\u2122 suite below for each module by name. Every report includes regulatory citations and a laboratory director or designee review block.",
       },
       {
         q: "Who built VeritaAssure\u2122?",
@@ -42,7 +42,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "What is VeritaScan\u2122?",
-        a: "VeritaScan\u2122 is a 168-item inspection readiness self-assessment across 10 compliance domains, triple-mapped to The Joint Commission standards, CAP checklists, and 42 CFR Part 493. Studies completed in VeritaCheck\u2122 automatically check off corresponding items, so your inspection readiness is always current. Includes 200+ surveys and an executive summary export.",
+        a: "VeritaScan\u2122 is a 168-item inspection readiness self-assessment across 10 compliance domains, triple-mapped to The Joint Commission standards, CAP checklists, and 42 CFR Part 493. Studies completed in VeritaCheck\u2122 automatically check off corresponding items, so your inspection readiness is always current. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
       },
       {
         q: "What is VeritaTrack\u2122?",
@@ -54,7 +54,35 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "What is VeritaBench\u2122?",
-        a: "VeritaBench\u2122 provides productivity and staffing analytics for laboratory operations: workload by section, performance indicators (PI dashboards), and staffing planning data. Built for hospital and enterprise labs that need to defend headcount and budget decisions.",
+        a: "VeritaBench\u2122 is the productivity and staffing analytics suite for laboratory operations. It includes VeritaBench\u2122 (free billable-tests-per-hour calculator at /calculator), VeritaPace\u2122 (monthly productivity tracker with year-over-year trend analysis at /veritabench), VeritaShift\u2122 (by-hour staffing analyzer at /veritabench/staffing), and VeritaQA\u2122 (quality indicators dashboard at /veritabench/pi). Built for hospital and enterprise labs that need to defend headcount and budget decisions.",
+      },
+      {
+        q: "What is VeritaMap\u2122?",
+        a: "VeritaMap\u2122 is the test menu regulatory mapping module. One row per test, one column per regulatory obligation (CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, SOP location). Every cell maps to the exact 42 CFR section and TJC standard that mandates it, so your obligations are visible and auditable across the entire test menu.",
+      },
+      {
+        q: "What is VeritaComp\u2122?",
+        a: "VeritaComp\u2122 manages staff competency assessments across the six CLIA-required methods, the 2-of-4 waived testing requirements, and non-technical duties. Integrates with VeritaMap\u2122 for automatic instrument and method group setup. Generates the documentation framework surveyors expect across TJC, CAP, COLA, and CLIA-only accreditation.",
+      },
+      {
+        q: "What is VeritaLab\u2122?",
+        a: "VeritaLab\u2122 tracks your laboratory's certificates and accreditations: CLIA certificates, state licenses, accreditation status, and lab director credentials. Reminder alerts fire well before anything expires, and the actual certificate documents are stored so you can retrieve them in seconds during a survey.",
+      },
+      {
+        q: "What is VeritaPolicy\u2122?",
+        a: "VeritaPolicy\u2122 is a policy and procedure tracker for TJC, CAP, COLA, and CMS-required policies. Pre-loaded with the requirements for each accreditor, with per-requirement N/A controls so you can mark policies that don't apply to your lab. Build your policy library, link documents to requirements, and generate an inspector-ready compliance report.",
+      },
+      {
+        q: "What is VeritaStaff\u2122?",
+        a: "VeritaStaff\u2122 manages laboratory personnel records: staff roster, CLIA role assignments, qualifications, hire-date onboarding, competency milestone tracking, and CMS 209 report generation.",
+      },
+      {
+        q: "What is VeritaPT\u2122?",
+        a: "VeritaPT\u2122 tracks proficiency testing enrollment, survey results, and corrective actions by analyte. Monitor unacceptable results, close the loop with documented corrective actions, and generate surveyor-ready reports covering all enrollments, events, and corrective actions across CAP, API, WSLH, and alternative assessment records.",
+      },
+      {
+        q: "What is VeritaResponse\u2122?",
+        a: "VeritaResponse\u2122 manages post-survey deficiency response. When you get cited, VeritaResponse\u2122 turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled, plus dedicated CAP, TJC ESC, COLA, and AABB renderers. Cross-links to your most recent VeritaCheck\u2122 study for the cited standard so you can show the surveyor what you had already done.",
       },
       {
         q: "Do modules work together, or are they separate?",
@@ -81,6 +109,10 @@ const FAQ_CATEGORIES = [
         q: "Can I add more seats later?",
         a: "Each plan tier includes a fixed number of seats. To get more seats, upgrade to the next tier (Clinic to Community, Community to Hospital, or Hospital to Enterprise) from your Account Settings. Tier upgrades are prorated against your current billing period.",
       },
+      {
+        q: "Can I belong to multiple labs?",
+        a: "Yes. VeritaAssure™ supports multi-lab access. A user who is added as a member of more than one lab can switch between them from the navigation bar; data is scoped to whichever lab is currently active. Each lab maintains its own test menu, accreditation flags, policies, and member list. Membership is checked on every read and every write, so a member of Lab A cannot read or modify records belonging to Lab B.",
+      },
     ],
   },
   {
@@ -102,6 +134,10 @@ const FAQ_CATEGORIES = [
         q: "Can a non-laboratorian use VeritaAssure\u2122?",
         a: "Yes, but every report still requires a laboratory director or designee review block. VeritaAssure\u2122 is built so a quality manager, lab supervisor, or technologist can complete the work, while the director retains final approval responsibility.",
       },
+      {
+        q: "How often is the regulatory data updated?",
+        a: "The 42 CFR Part 493 TEa values are sourced from the 2025 CLIA Final Rule effective July 11, 2024 and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS checklists are mapped to the current published standards; updates are pushed to the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
+      },
     ],
   },
   {
@@ -113,7 +149,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Why isn't VeritaAssure\u2122 a HIPAA-covered platform?",
-        a: "Method validation studies, calibration verification, proficiency testing documentation, inspection readiness checklists, and staff competency records do not require patient data. QC work is performed on controls and reference materials, not patient specimens. Compliance documentation references regulatory standards, not patient outcomes. There is no legitimate need for PHI in any function VeritaAssure\u2122 performs.",
+        a: "Performance verification studies, calibration verification, proficiency testing documentation, inspection readiness checklists, and staff competency records do not require patient data. QC work is performed on controls and reference materials, not patient specimens. Compliance documentation references regulatory standards, not patient outcomes. There is no legitimate need for PHI in any function VeritaAssure\u2122 performs.",
       },
       {
         q: "Will you sign a Business Associate Agreement (BAA)?",
@@ -138,7 +174,11 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Where is my data hosted?",
-        a: "Data is hosted on US-based cloud infrastructure with industry-standard physical and network security controls. The application server runs on Railway (US-East region); backups go to off-site cold storage. Contact info@veritaslabservices.com for a security questionnaire if your IT team requires one.",
+        a: "Data is hosted on US-based cloud infrastructure with industry-standard physical and network security controls. The application server runs on Railway (US-West region); nightly backups go to an independent off-site storage provider. See /trust for the complete security and privacy posture. Contact info@veritaslabservices.com for a security questionnaire if your IT team requires one.",
+      },
+      {
+        q: "Where can I read your full security and privacy posture?",
+        a: "See /trust for the complete write-up: hosting, encryption, multi-lab data isolation, subprocessors (Railway, Stripe, Resend, Sentry), HIPAA BAA availability, vulnerability reporting, and SOC 2 status. The page is updated as policies change.",
       },
       {
         q: "Do you back up my data?",
@@ -230,6 +270,10 @@ const FAQ_CATEGORIES = [
       {
         q: "Is there a mobile app?",
         a: "Not currently. VeritaAssure\u2122 is a web-based platform accessible from any device with a browser, but it is optimized for desktop use.",
+      },
+      {
+        q: "Does VeritaAssure\u2122 integrate with my LIS?",
+        a: "Not today. VeritaAssure\u2122 is a standalone compliance and operations platform; you enter QC data, study results, and competency records directly. LIS integration is on the roadmap. For most labs the categories of data VeritaAssure\u2122 tracks (performance verification, QC events, competency, instrument metadata, inspection readiness, PT, certificates, policies) live outside the LIS anyway, so the duplicate-entry burden is smaller than it first appears.",
       },
       {
         q: "Is software validation documentation available?",
