@@ -25,6 +25,7 @@ import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/not-found";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
+import TrustPage from "@/pages/TrustPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import StudyGuidePage from "@/pages/StudyGuidePage";
 import BookPage from "@/pages/BookPage";
@@ -277,6 +278,8 @@ function AppContent() {
           <Route path="/join" component={JoinPage} />
           <Route path="/terms" component={TermsPage} />
           <Route path="/privacy" component={PrivacyPage} />
+          <Route path="/trust" component={TrustPage} />
+          <Route path="/security" component={TrustPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/study-guide" component={StudyGuidePage} />
           <Route path="/book" component={BookPage} />
