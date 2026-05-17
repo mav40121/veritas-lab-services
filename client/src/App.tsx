@@ -153,6 +153,7 @@ function SiteFooter() {
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
           <p className="text-xs text-muted-foreground">© 2026 Veritas Lab Services, LLC. All Rights Reserved</p>
+          <a href="/trust" className="text-xs text-muted-foreground hover:text-primary transition-colors">Trust & Security</a>
         </div>
       </div>
     </footer>
