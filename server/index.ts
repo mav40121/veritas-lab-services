@@ -211,6 +211,33 @@ app.use((req, res, next) => {
     console.error("[finding-reminder] Scheduler setup error:", err.message);
   }
 
+  // Schedule nightly off-site database backup at 04:00 UTC. Env-gated:
+  // if GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID is unset
+  // the run is a no-op. 04:00 chosen to clear the midnight UTC snapshot
+  // and reminder jobs above.
+  try {
+    const { runNightlyBackup } = await import("./backup");
+    const scheduleNightlyBackup = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setUTCHours(4, 0, 0, 0);
+      if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+      const msUntil = next.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[backup] Running nightly off-site backup...");
+        runNightlyBackup().catch((err) => console.error("[backup] Run failed:", err?.message || err));
+        setInterval(() => {
+          console.log("[backup] Running nightly off-site backup...");
+          runNightlyBackup().catch((err) => console.error("[backup] Run failed:", err?.message || err));
+        }, 24 * 60 * 60 * 1000);
+      }, msUntil);
+      console.log(`[backup] Nightly off-site backup scheduled in ${Math.round(msUntil / 60000)} minutes`);
+    };
+    scheduleNightlyBackup();
+  } catch (err: any) {
+    console.error("[backup] Scheduler setup error:", err.message);
+  }
+
   try {
     await registerRoutes(httpServer, app);
     console.log('[startup] registerRoutes completed successfully');
