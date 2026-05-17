@@ -50,6 +50,13 @@ RUN npm install --no-audit --no-fund
 # Copy source code
 COPY . .
 
+# Vite bakes VITE_* vars into the client bundle at build time. Railway exposes
+# service env vars to Docker builds only via build args, so the Dockerfile must
+# ARG them explicitly — otherwise the bundle ships without them and the
+# corresponding client features (e.g. Sentry) silently no-op in production.
+ARG VITE_SENTRY_DSN
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+
 # Build the application
 RUN npm run build
 
