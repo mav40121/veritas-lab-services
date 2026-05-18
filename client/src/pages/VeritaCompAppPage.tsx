@@ -14,6 +14,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +50,8 @@ import {
   List,
   BarChart3,
   X,
+  ClipboardList,
+  Upload,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -91,6 +96,26 @@ interface Employee {
   hire_date: string | null;
   lis_initials: string | null;
   status: string;
+  created_at: string;
+}
+
+interface QuizQuestion {
+  id: string;
+  question: string;
+  type?: string;
+  options: string[];
+  correct_answer: string;
+  explanation?: string;
+}
+
+interface QuizListItem {
+  id: number;
+  user_id: number;
+  program_id: number | null;
+  method_group_id: number | null;
+  method_group_name: string | null;
+  title: string | null;
+  method_group_ids: string | null;
   created_at: string;
 }
 
@@ -818,7 +843,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
   const [, navigate] = useLocation();
   const activeLabId = useActiveLabId();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">("overview");
   const [newAssessmentOpen, setNewAssessmentOpen] = useState(false);
 
   const { data: program, isLoading } = useQuery<Program & { employees: Employee[]; assessments: Assessment[] }>({
@@ -848,6 +873,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
     { key: "overview", label: "Overview", icon: BarChart3 },
     { key: "assessments", label: "Assessments", icon: ClipboardCheck },
     { key: "employees", label: "Employees", icon: Users },
+    { key: "quizzes", label: "Quizzes", icon: ClipboardList },
     { key: "settings", label: "Settings", icon: Settings },
   ] as const;
 
@@ -896,6 +922,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
       {activeTab === "overview" && <OverviewTab program={program} />}
       {activeTab === "assessments" && <AssessmentsTab program={program} onNewAssessment={() => setNewAssessmentOpen(true)} />}
       {activeTab === "employees" && <EmployeesTab employees={program.employees || []} />}
+      {activeTab === "quizzes" && <QuizzesTab program={program} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
       {newAssessmentOpen && (
@@ -1487,13 +1514,25 @@ function NewAssessmentDialog({
     }
   }, [program]);
 
-  // Find quiz for a method group
+  // Find quiz for a method group.
+  // Match order:
+  //   1. Exact match on legacy single method_group_id (covers seeded
+  //      system quizzes that target one specific group).
+  //   2. method_group_ids JSON array contains this mgId (covers
+  //      cross-specialty quizzes authored via the Quizzes tab).
+  //   3. Fuzzy match on method_group_name as a final fallback.
   function findQuizForMg(mgId: number, mgName: string): any | null {
     if (!quizzes) return null;
-    // First: exact match by method_group_id
     const byId = quizzes.find(q => q.method_group_id === mgId);
     if (byId) return byId;
-    // Second: fuzzy match on method_group_name
+    const byArray = quizzes.find(q => {
+      if (!q.method_group_ids) return false;
+      try {
+        const ids: number[] = JSON.parse(q.method_group_ids);
+        return Array.isArray(ids) && ids.includes(mgId);
+      } catch { return false; }
+    });
+    if (byArray) return byArray;
     const byName = quizzes.find(q => {
       if (!q.method_group_name) return false;
       const qn = q.method_group_name.toLowerCase();
@@ -2287,6 +2326,470 @@ function NewAssessmentDialog({
               onClick={handleCreate}
             >
               {creating ? "Saving..." : "Save Assessment"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Quizzes Tab ─────────────────────────────────────────────────────────
+
+function QuizzesTab({ program }: { program: Program }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const isReadOnly = useIsReadOnly();
+  const [newQuizOpen, setNewQuizOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<QuizListItem | null>(null);
+
+  const { data: quizzes, isLoading } = useQuery<QuizListItem[]>({
+    queryKey: ["/api/veritacomp/programs", program.id, "quizzes"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/veritacomp/programs/${program.id}/quizzes`, { headers: authHeaders() });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (quizId: number) => {
+      const res = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Delete failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/programs", program.id, "quizzes"] });
+      toast({ title: "Quiz deleted" });
+      setConfirmDelete(null);
+    },
+    onError: (e: any) => {
+      toast({ title: "Cannot delete", description: e.message, variant: "destructive" });
+      setConfirmDelete(null);
+    },
+  });
+
+  function methodGroupNames(q: QuizListItem): string {
+    const groups = program.methodGroups || [];
+    if (q.method_group_ids) {
+      try {
+        const ids: number[] = JSON.parse(q.method_group_ids);
+        const names = groups.filter(g => ids.includes(g.id)).map(g => g.name);
+        if (names.length) return names.join(", ");
+      } catch {}
+    }
+    if (q.method_group_id) {
+      const g = groups.find(g => g.id === q.method_group_id);
+      if (g) return g.name;
+    }
+    return q.method_group_name || "All method groups";
+  }
+
+  const programQuizzes = (quizzes || []).filter(q => q.program_id === program.id);
+  const systemQuizzes = (quizzes || []).filter(q => q.user_id === 0 && q.program_id !== program.id);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">Element 6: Problem-Solving Quizzes</h3>
+          <p className="text-xs text-muted-foreground">
+            Written quizzes used as Element 6 evidence on competency assessments. Per 42 CFR 493.1235, Element 6 assesses problem-solving skills.
+          </p>
+        </div>
+        {!isReadOnly && (
+          <Button size="sm" onClick={() => setNewQuizOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" /> New Quiz
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="h-32 rounded-lg bg-muted/40 animate-pulse" />
+      ) : (
+        <>
+          <div>
+            <div className="text-xs font-semibold text-muted-foreground mb-2">This Program ({programQuizzes.length})</div>
+            {programQuizzes.length === 0 ? (
+              <Card>
+                <CardContent className="py-6 text-center text-xs text-muted-foreground">
+                  No quizzes yet. Click "New Quiz" to author one or upload a JSON file.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {programQuizzes.map(q => (
+                  <Card key={q.id}>
+                    <CardContent className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{q.title || q.method_group_name || `Quiz #${q.id}`}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {methodGroupNames(q)} &middot; created {q.created_at.split("T")[0]}
+                        </div>
+                      </div>
+                      {!isReadOnly && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setConfirmDelete(q)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {systemQuizzes.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground mb-2">System Defaults ({systemQuizzes.length})</div>
+              <div className="space-y-2">
+                {systemQuizzes.map(q => (
+                  <Card key={q.id} className="bg-muted/30">
+                    <CardContent className="py-3">
+                      <div className="text-sm font-medium">{q.title || q.method_group_name || `Quiz #${q.id}`}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Built-in &middot; available to all programs
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {newQuizOpen && (
+        <NewQuizDialog
+          program={program}
+          onClose={() => setNewQuizOpen(false)}
+          onCreated={() => {
+            setNewQuizOpen(false);
+            qc.invalidateQueries({ queryKey: ["/api/veritacomp/programs", program.id, "quizzes"] });
+          }}
+        />
+      )}
+
+      {confirmDelete && (
+        <Dialog open onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete quiz?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              This will remove "{confirmDelete.title || confirmDelete.method_group_name || `Quiz #${confirmDelete.id}`}" from this program. Quizzes that already have recorded results cannot be deleted.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => deleteMutation.mutate(confirmDelete.id)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+// ── New Quiz Dialog ────────────────────────────────────────────────────
+
+function emptyQuestion(idx: number): QuizQuestion {
+  return {
+    id: `q${idx}`,
+    question: "",
+    type: "multiple_choice",
+    options: ["A. ", "B. ", "C. ", "D. "],
+    correct_answer: "A",
+    explanation: "",
+  };
+}
+
+function NewQuizDialog({
+  program,
+  onClose,
+  onCreated,
+}: {
+  program: Program;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { toast } = useToast();
+  const groups = program.methodGroups || [];
+  const [title, setTitle] = useState("");
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>(groups.map(g => g.id));
+  const [source, setSource] = useState<"author" | "upload">("author");
+  const [questions, setQuestions] = useState<QuizQuestion[]>([emptyQuestion(1)]);
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+
+  function toggleGroup(id: number) {
+    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  function addQuestion() {
+    setQuestions(prev => [...prev, emptyQuestion(prev.length + 1)]);
+  }
+
+  function removeQuestion(idx: number) {
+    setQuestions(prev => prev.filter((_, i) => i !== idx).map((q, i) => ({ ...q, id: `q${i + 1}` })));
+  }
+
+  function updateQuestion(idx: number, patch: Partial<QuizQuestion>) {
+    setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, ...patch } : q));
+  }
+
+  function updateOption(qIdx: number, oIdx: number, value: string) {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i !== qIdx) return q;
+      const opts = [...q.options];
+      opts[oIdx] = value;
+      return { ...q, options: opts };
+    }));
+  }
+
+  async function handleUpload(file: File) {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const raw = Array.isArray(parsed) ? parsed : (parsed.questions || []);
+      if (!Array.isArray(raw) || raw.length === 0) {
+        toast({ title: "No questions found", description: "Expected an array of questions, or {questions:[...]}", variant: "destructive" });
+        return;
+      }
+      const normalized: QuizQuestion[] = raw.map((q: any, i: number) => ({
+        id: typeof q.id === "string" ? q.id : `q${i + 1}`,
+        question: String(q.question || ""),
+        type: q.type || "multiple_choice",
+        options: Array.isArray(q.options) ? q.options.map((o: any) => String(o)) : [],
+        correct_answer: String(q.correct_answer || "A"),
+        explanation: q.explanation ? String(q.explanation) : "",
+      }));
+      // Inherit title from meta block if present and the title field is empty.
+      if (!title && parsed.meta && typeof parsed.meta.title === "string") {
+        setTitle(parsed.meta.title);
+      }
+      setQuestions(normalized);
+      setUploadedFileName(file.name);
+      toast({ title: `Loaded ${normalized.length} questions`, description: file.name });
+    } catch (e: any) {
+      toast({ title: "Invalid JSON", description: e.message, variant: "destructive" });
+    }
+  }
+
+  function validate(): string | null {
+    if (!title.trim()) return "Title is required";
+    if (selectedGroupIds.length === 0) return "Select at least one method group";
+    if (questions.length === 0) return "Add at least one question";
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!q.question.trim()) return `Question ${i + 1} is empty`;
+      if (q.options.length < 2) return `Question ${i + 1} needs at least 2 options`;
+      if (!q.correct_answer.trim()) return `Question ${i + 1} is missing a correct answer`;
+    }
+    return null;
+  }
+
+  async function submit() {
+    const err = validate();
+    if (err) {
+      toast({ title: "Cannot save quiz", description: err, variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/veritacomp/programs/${program.id}/quizzes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          title: title.trim(),
+          methodGroupIds: selectedGroupIds,
+          methodGroupName: selectedGroupIds.length === 1
+            ? (groups.find(g => g.id === selectedGroupIds[0])?.name || null)
+            : null,
+          methodGroupId: selectedGroupIds.length === 1 ? selectedGroupIds[0] : null,
+          questions,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Save failed");
+      }
+      toast({ title: "Quiz created" });
+      onCreated();
+    } catch (e: any) {
+      toast({ title: "Cannot save quiz", description: e.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>New Quiz</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-5">
+          {/* Title */}
+          <div className="space-y-1.5">
+            <Label htmlFor="quiz-title" className="text-xs">Quiz Title</Label>
+            <Input
+              id="quiz-title"
+              placeholder="e.g., 2026 Chemistry Knowledge Check"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+
+          {/* Method Groups */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Method Groups Covered ({selectedGroupIds.length} of {groups.length})</Label>
+            <p className="text-[11px] text-muted-foreground">
+              When an assessment is filled out, the Element 6 picker matches against the groups checked here.
+            </p>
+            {groups.length === 0 ? (
+              <div className="text-xs text-muted-foreground italic">
+                This program has no method groups yet. Add them in Settings first.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-border rounded-md p-2">
+                {groups.map(g => (
+                  <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
+                    <Checkbox
+                      checked={selectedGroupIds.includes(g.id)}
+                      onCheckedChange={() => toggleGroup(g.id)}
+                    />
+                    <span className="truncate">{g.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Source picker */}
+          <div className="space-y-2">
+            <Label className="text-xs">Question Source</Label>
+            <RadioGroup value={source} onValueChange={(v) => setSource(v as "author" | "upload")} className="flex gap-4">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <RadioGroupItem value="author" /> Hand-author questions
+              </label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <RadioGroupItem value="upload" /> Upload JSON
+              </label>
+            </RadioGroup>
+          </div>
+
+          {source === "upload" && (
+            <div className="space-y-2 border border-dashed border-border rounded-md p-3">
+              <div className="flex items-center gap-2">
+                <Upload className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="quiz-upload" className="text-xs cursor-pointer underline">
+                  Choose JSON file
+                </Label>
+                <input
+                  id="quiz-upload"
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleUpload(f);
+                  }}
+                />
+                {uploadedFileName && (
+                  <span className="text-[11px] text-muted-foreground">Loaded: {uploadedFileName}</span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Shape: an array of {`{id, question, type, options[], correct_answer, explanation}`}, or {`{meta:{...}, questions:[...]}`}.
+              </p>
+              {questions.length > 0 && uploadedFileName && (
+                <div className="text-[11px] text-muted-foreground">
+                  Preview: {questions.length} question{questions.length === 1 ? "" : "s"} loaded. Switch to "Hand-author" to edit.
+                </div>
+              )}
+            </div>
+          )}
+
+          {source === "author" && (
+            <div className="space-y-3">
+              {questions.map((q, qIdx) => (
+                <Card key={qIdx}>
+                  <CardContent className="py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-semibold text-muted-foreground">Question {qIdx + 1}</div>
+                      {questions.length > 1 && (
+                        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-destructive" onClick={() => removeQuestion(qIdx)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea
+                      placeholder="Question text"
+                      value={q.question}
+                      onChange={e => updateQuestion(qIdx, { question: e.target.value })}
+                      className="text-xs min-h-[60px]"
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {q.options.map((opt, oIdx) => {
+                        const letter = String.fromCharCode(65 + oIdx);
+                        return (
+                          <div key={oIdx} className="flex items-center gap-1.5">
+                            <input
+                              type="radio"
+                              name={`correct-${qIdx}`}
+                              checked={q.correct_answer === letter}
+                              onChange={() => updateQuestion(qIdx, { correct_answer: letter })}
+                              className="h-3.5 w-3.5"
+                              aria-label={`Correct answer ${letter}`}
+                            />
+                            <Input
+                              placeholder={`${letter}. option text`}
+                              value={opt}
+                              onChange={e => updateOption(qIdx, oIdx, e.target.value)}
+                              className="text-xs h-7"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <Textarea
+                      placeholder="Explanation (shown after the question is answered)"
+                      value={q.explanation}
+                      onChange={e => updateQuestion(qIdx, { explanation: e.target.value })}
+                      className="text-xs min-h-[40px]"
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+              <Button variant="outline" size="sm" onClick={addQuestion}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Question
+              </Button>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={submit} disabled={submitting}>
+              {submitting ? "Saving..." : "Save Quiz"}
             </Button>
           </div>
         </div>
