@@ -55,8 +55,9 @@ export default function TrustPage() {
           <h2 className="font-semibold text-base mb-2">6. Subprocessors</h2>
           <p>We use the following third-party services. Each operates under their own published security and privacy policies.</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Railway</strong> : Application hosting and database storage. <a href="https://railway.app/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway Privacy Policy</a></li>
-            <li><strong>Stripe</strong> : Payment processing. PCI DSS Level 1. <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Stripe Privacy Policy</a></li>
+            <li><strong>Railway</strong> : Application hosting and database storage. SOC 2 Type II + SOC 3 certified. <a href="https://railway.app/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway Privacy Policy</a> / <a href="https://trust.railway.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Railway Trust Center</a></li>
+            <li><strong>Cloudflare R2</strong> : Off-site database backup storage. SOC 2 Type II certified. <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Cloudflare Privacy Policy</a></li>
+            <li><strong>Stripe</strong> : Payment processing. PCI DSS Level 1 certified. <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Stripe Privacy Policy</a></li>
             <li><strong>Resend</strong> : Transactional email (password reset, billing receipts). <a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Resend Privacy Policy</a></li>
             <li><strong>Sentry</strong> : Application error monitoring. PII is redacted before transmission (<code>sendDefaultPii: false</code>). <a href="https://sentry.io/privacy/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Sentry Privacy Policy</a></li>
           </ul>
@@ -69,13 +70,14 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">8. Backups and Disaster Recovery</h2>
-          <p>The production database is backed up nightly to an independent S3-compatible object storage provider (Cloudflare R2) in a different vendor than the application host. Backups are gzip-compressed, retained for 30 days, and pruned automatically. The backup destination is access-controlled with a bucket-scoped credential that cannot read or modify anything else in the operator's account.</p>
+          <p>The production database is backed up nightly to an independent S3-compatible object storage provider (Cloudflare R2) in a different vendor than the application host. Backups are gzip-compressed, retained for two years (730 days), and pruned automatically. Each backup run is validated against a five-point integrity check (file size, SQLite structural integrity, user count, study count, table count); anomalies trigger an email alert. The backup destination is access-controlled with a bucket-scoped credential that cannot read or modify anything else in the operator's account.</p>
           <p>Customer database snapshots are also available on request. Send a request to <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> and we will provide a current snapshot within five business days.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-base mb-2">9. Compliance Certifications</h2>
           <p>Veritas Lab Services is not currently SOC 2 certified. We do not have a formal roadmap date for pursuing a SOC 2 attestation; this page will be updated if and when that changes. We assess this honestly because most early-stage clinical lab compliance tools do not hold SOC 2, and we would rather state that plainly than imply otherwise.</p>
+          <p>That said, our application runs on infrastructure provided by vendors that do hold relevant certifications: <strong>Railway</strong> (SOC 2 Type II + SOC 3 for hosting and database storage), <strong>Cloudflare</strong> (SOC 2 Type II for backup storage), and <strong>Stripe</strong> (PCI DSS Level 1 for payment processing). When a customer security questionnaire asks about specific controls in those layers, we point to those upstream attestations rather than restating them ourselves.</p>
           <p>The application is designed to operate under CLIA, TJC, CAP, and COLA documentation requirements that customers themselves are subject to. We do not represent that our software is certified by any of those accreditors; rather, the outputs (PDFs, audit trails, reports) are designed to satisfy their documentation requirements when generated and reviewed by a qualified laboratory professional.</p>
         </section>
 
