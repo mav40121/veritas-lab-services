@@ -12495,23 +12495,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
-  // Manual trigger for the nightly Drive backup. Runs the same code path
-  // the 04:00 UTC scheduler hits. Used to verify the GOOGLE_DRIVE_SA_JSON
-  // + GOOGLE_DRIVE_BACKUP_FOLDER_ID config without waiting for midnight.
-  // Same admin-secret gate as the other /api/admin/* endpoints.
-  app.post("/api/admin/run-backup-now", async (req, res) => {
-    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    try {
-      const { runNightlyBackup } = await import("./backup");
-      await runNightlyBackup();
-      res.json({ ok: true, message: "Backup run complete. Check Railway logs for the upload result, and check the Drive folder for the new file." });
-    } catch (err: any) {
-      console.error("[admin/run-backup-now] FAILED:", err?.message || err);
-      res.status(500).json({ ok: false, error: err?.message || String(err) });
-    }
-  });
-
   app.get("/api/admin/backup-db", (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
