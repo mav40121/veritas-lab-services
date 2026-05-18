@@ -4,11 +4,13 @@ import { useSEO } from "@/hooks/useSEO";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+import { useLabRoute } from "@/hooks/useLabRoute";
   ClipboardCheck, ChevronRight, CalendarClock, FileSpreadsheet,
   History, BellRing, ListChecks,
 } from "lucide-react";
 
 export default function VeritaTrackPage() {
+  const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
 
   useSEO({
@@ -66,7 +68,7 @@ export default function VeritaTrackPage() {
               <div className="flex flex-col sm:flex-row gap-3">
                 {isLoggedIn ? (
                   <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                    <Link href="/veritatrack-app">Open VeritaTrack{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                    <Link href={labRoute("/veritatrack-app")}>Open VeritaTrack{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
                   </Button>
                 ) : (
                   <>

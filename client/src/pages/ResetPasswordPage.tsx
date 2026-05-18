@@ -6,10 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/AuthContext";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const API_BASE = "https://www.veritaslabservices.com";
 
 export default function ResetPasswordPage() {
+  const labRoute = useLabRoute();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const token = params.get("token");
@@ -80,7 +82,7 @@ export default function ResetPasswordPage() {
             <h2 className="font-semibold text-lg mb-2">Password updated</h2>
             <p className="text-sm text-muted-foreground mb-4">You're now logged in.</p>
             <Button asChild className="w-full bg-primary text-primary-foreground">
-              <Link href="/dashboard">Go to My Studies</Link>
+              <Link href={labRoute("/dashboard")}>Go to My Studies</Link>
             </Button>
           </CardContent>
         </Card>

@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, AlertTriangle } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 interface InviteInfo {
   valid: boolean;
@@ -19,6 +20,7 @@ interface InviteInfo {
 }
 
 export default function JoinPage() {
+  const labRoute = useLabRoute();
   const { login } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -85,7 +87,7 @@ export default function JoinPage() {
       }
       trackEvent('sign_up', { method: 'email' });
       login(data.token, data.user);
-      navigate("/dashboard");
+      navigate(labRoute("/dashboard"));
     } catch {
       toast({ title: "Registration failed", variant: "destructive" });
     } finally {

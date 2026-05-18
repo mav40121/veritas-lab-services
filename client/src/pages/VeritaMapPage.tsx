@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Map, ChevronRight, FlaskConical, Shield, ExternalLink } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const COLUMNS = [
   { col: "Test Name",              reg: "42 CFR §493.1251",      desc: "Every test on the menu requires a written procedure and regulatory documentation." },
@@ -35,6 +36,7 @@ const FEATURES = [
 ];
 
 export default function VeritaMapPage() {
+  const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
 return (
@@ -79,7 +81,7 @@ return (
               )}
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link href="/veritamap-app" className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
+                <Link href={labRoute("/veritamap-app")} className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
                   Launch VeritaMap™ →
                 </Link>
                 <Link href="/login" className="inline-flex items-center justify-center gap-2 border border-border hover:bg-secondary text-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
@@ -225,7 +227,7 @@ return (
                     </li>
                   ))}
                 </ul>
-                <Link href="/veritamap-app" className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
+                <Link href={labRoute("/veritamap-app")} className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
                   Launch VeritaMap™
                 </Link>
               </CardContent>
@@ -329,7 +331,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritamap-app">Launch VeritaMap™ <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritamap-app")}>Launch VeritaMap™ <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

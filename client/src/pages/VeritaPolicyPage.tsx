@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { CheckCircle2, Shield, ChevronRight, FileText, ToggleLeft, BarChart2, BookOpen } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
 import { useQuery } from "@tanstack/react-query";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 // Accreditor display profiles. Counts and chapters are sourced from the server
 // requirement files which are auto-generated from the master citation index.
@@ -60,6 +61,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
 const DEFAULT_PROFILE = ACCREDITOR_PROFILES.TJC;
 
 export default function VeritaPolicyPage() {
+  const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
   useSEO({
     title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software",
@@ -144,7 +146,7 @@ export default function VeritaPolicyPage() {
                 inspector-ready compliance report with one click. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link href="/veritapolicy-app">
+                <Link href={labRoute("/veritapolicy-app")}>
                   <Button size="lg" className="gap-2">
                     Open VeritaPolicy&#8482; <ChevronRight size={16} />
                   </Button>
@@ -255,7 +257,7 @@ export default function VeritaPolicyPage() {
             VeritaPolicy&#8482; is included with all paid VeritaAssure&#8482; plans. No additional cost.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
-            <Link href="/veritapolicy-app">
+            <Link href={labRoute("/veritapolicy-app")}>
               <Button size="lg" className="gap-2">
                 Open VeritaPolicy&#8482; <ChevronRight size={16} />
               </Button>

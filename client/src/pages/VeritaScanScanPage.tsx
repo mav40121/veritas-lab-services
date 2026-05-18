@@ -39,6 +39,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -583,6 +584,7 @@ function SidebarDomainRow({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function VeritaScanScanPage() {
+  const labRoute = useLabRoute();
   const params = useParams<{ id: string }>();
   const scanId = Number(params.id);
   useAuth();
@@ -830,7 +832,7 @@ export default function VeritaScanScanPage() {
         <div className="px-3 mb-4">
           {/* Back */}
           <Link
-            href="/veritascan-app"
+            href={labRoute("/veritascan-app")}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -959,7 +961,7 @@ export default function VeritaScanScanPage() {
         <div className="flex items-center justify-between gap-3 mb-6 lg:hidden">
           <div className="flex items-center gap-2">
             <Link
-              href="/veritascan-app"
+              href={labRoute("/veritascan-app")}
               className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />

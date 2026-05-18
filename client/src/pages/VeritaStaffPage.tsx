@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ChevronRight, Users, FileText, UserCheck, Building2, AlertTriangle } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const FEATURES = [
   "Complete staff roster with credentials, hire dates, and qualification tracking",
@@ -41,6 +42,7 @@ const FEATURE_CARDS = [
 ];
 
 export default function VeritaStaffPage() {
+  const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaStaff\u2122 | Laboratory Staff Roster and HR Compliance Software", description: "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys." });
 return (
@@ -79,7 +81,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritastaff-app">Launch VeritaStaff{"™"} <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritastaff-app")}>Launch VeritaStaff{"™"} <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -225,7 +227,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritastaff-app">Launch VeritaStaff{"™"} <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritastaff-app")}>Launch VeritaStaff{"™"} <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 // Hospital result from /api/lookup/hospital
 interface HospitalResult {
@@ -50,6 +51,7 @@ const US_STATES = [
 ];
 
 export default function LoginPage() {
+  const labRoute = useLabRoute();
   const { login } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -176,7 +178,7 @@ export default function LoginPage() {
         localStorage.setItem("veritas_session_token", data.session_token);
       }
       login(data.token, data.user);
-      navigate("/dashboard");
+      navigate(labRoute("/dashboard"));
     } catch { toast({ title: "Login failed", variant: "destructive" }); }
     finally { setLoading(false); }
   }
@@ -193,7 +195,7 @@ export default function LoginPage() {
       if (data.ok) {
         if (data.session_token) localStorage.setItem("veritas_session_token", data.session_token);
         login(conflictData.token, conflictData.user);
-        navigate("/dashboard");
+        navigate(labRoute("/dashboard"));
       }
     } catch {
       toast({ title: "Force logout failed", variant: "destructive" });
@@ -232,7 +234,7 @@ export default function LoginPage() {
       }
 
       login(data.token, data.user);
-      navigate("/dashboard");
+      navigate(labRoute("/dashboard"));
     } catch { toast({ title: "Registration failed", variant: "destructive" }); }
     finally { setLoading(false); }
   }
