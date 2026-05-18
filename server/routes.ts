@@ -676,8 +676,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         owner.clia_number as seat_owner_clia_number,
         sess.last_login,
         COALESCE(sess.session_count, 0) as session_count,
-        COALESCE(act.audit_action_count, 0) as audit_action_count,
-        act.last_action_at,
         COALESCE(st.study_count, 0) as study_count,
         lab_owner.seat_count as lab_owner_seat_count,
         lab_owner.subscription_expires_at as lab_owner_subscription_expires_at,
@@ -711,14 +709,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         FROM user_sessions
         GROUP BY user_id
       ) sess ON sess.user_id = u.id
-      LEFT JOIN (
-        -- Engagement proxy: audit_log entries authored BY this user (NOT events
-        -- created on their behalf by admin actions, which set user_id=0).
-        SELECT user_id, COUNT(*) as audit_action_count, MAX(created_at) as last_action_at
-        FROM audit_log
-        WHERE user_id > 0
-        GROUP BY user_id
-      ) act ON act.user_id = u.id
       LEFT JOIN (
         -- Attribute studies to whoever actually ran them (created_by_user_id),
         -- falling back to user_id for legacy rows from before that column
@@ -798,42 +788,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("Admin report error:", err.message);
       res.status(500).json({ error: "Failed to generate report" });
     }
-  });
-
-  // Admin: per-user engagement detail.
-  // Returns recent sessions + recent audit-log entries for the user, so the
-  // operator can see at a glance whether someone they granted a seat has
-  // actually engaged with the platform or just logged in once and walked away.
-  // Read-only. Auth: x-admin-secret header or ?secret= query param.
-  app.get("/api/admin/users/:userId/activity", (req, res) => {
-    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const userId = parseInt(req.params.userId);
-    if (!Number.isFinite(userId)) return res.status(400).json({ error: "Invalid userId" });
-    const sqlite = (db as any).$client;
-    const user = sqlite.prepare("SELECT id, email, name, created_at FROM users WHERE id = ?").get(userId) as any;
-    if (!user) return res.status(404).json({ error: "User not found" });
-    const sessions = sqlite.prepare(
-      "SELECT id, created_at, last_active, is_active, device_info FROM user_sessions WHERE user_id = ? ORDER BY id DESC LIMIT 20"
-    ).all(userId);
-    const audit = sqlite.prepare(
-      "SELECT id, module, action, entity_type, entity_label, entity_id, ip_address, created_at FROM audit_log WHERE user_id = ? ORDER BY id DESC LIMIT 50"
-    ).all(userId);
-    const sessionCount = sqlite.prepare("SELECT COUNT(*) AS n FROM user_sessions WHERE user_id = ?").get(userId) as any;
-    const auditCount = sqlite.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE user_id = ?").get(userId) as any;
-    const lastSession = sqlite.prepare("SELECT MAX(last_active) AS t FROM user_sessions WHERE user_id = ?").get(userId) as any;
-    const lastAudit = sqlite.prepare("SELECT MAX(created_at) AS t FROM audit_log WHERE user_id = ?").get(userId) as any;
-    res.json({
-      user,
-      summary: {
-        session_count: sessionCount?.n ?? 0,
-        last_session_at: lastSession?.t ?? null,
-        audit_action_count: auditCount?.n ?? 0,
-        last_action_at: lastAudit?.t ?? null,
-      },
-      sessions,
-      audit,
-    });
   });
 
   // Admin: list raw studies for a given user (full payload incl. data_points)
