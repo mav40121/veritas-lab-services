@@ -7,6 +7,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { downloadPdfToken } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -367,6 +368,7 @@ function ProgramListView() {
   // legacy URLs — their ownership check via user_id resolves correctly
   // in single-lab today.
   const activeLabId = useActiveLabId();
+  const labRoute = useLabRoute();
   const programsListUrl = activeLabId
     ? `/api/labs/${activeLabId}/competency/programs`
     : `/api/competency/programs`;
@@ -470,7 +472,7 @@ function ProgramListView() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => navigate(`/veritacomp-app/${p.id}`)}
+                      onClick={() => navigate(labRoute(`/veritacomp-app/${p.id}`))}
                       className="gap-1"
                     >
                       Open
@@ -490,7 +492,7 @@ function ProgramListView() {
           onCreated={(id) => {
             setWizardOpen(false);
             qc.invalidateQueries({ queryKey: ["/api/competency/programs"] });
-            navigate(`/veritacomp-app/${id}`);
+            navigate(labRoute(`/veritacomp-app/${id}`));
           }}
         />
       )}

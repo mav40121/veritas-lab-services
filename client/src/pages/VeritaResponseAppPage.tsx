@@ -3,6 +3,7 @@ import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -101,6 +102,7 @@ export default function VeritaResponseAppPage() {
 
   // Multi-Lab Tier 2 Phase 3.10b: lab-scope reads/writes.
   const activeLabId = useActiveLabId();
+  const labRoute = useLabRoute();
 
   // Filter the accreditor picker against the active lab's accreditation flags
   // so a user can only file findings for bodies the lab actually claims. CMS
@@ -335,7 +337,7 @@ export default function VeritaResponseAppPage() {
                     <tr
                       key={f.id}
                       className="border-b border-border/50 hover:bg-muted/20 cursor-pointer"
-                      onClick={() => navigate(`/veritaresponse/${f.id}`)}
+                      onClick={() => navigate(labRoute(`/veritaresponse/${f.id}`))}
                     >
                       <td className="py-3 px-4 font-medium">{f.accreditor}</td>
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
