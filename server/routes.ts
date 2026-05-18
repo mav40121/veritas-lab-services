@@ -12807,6 +12807,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ── ADMIN: Update an existing competency quiz on behalf of a customer ──
+  // Companion to /api/admin/competency-quizzes/upload. PUT-shaped update
+  // for the same use case (operator-side data fixes on customer quizzes
+  // without needing their session). Same gate (admin secret), same
+  // validation, same lab_id dual-write. Refuses to touch system-default
+  // quizzes (user_id=0).
+  app.put("/api/admin/competency-quizzes/:id", (req, res) => {
+    const { secret, title, methodGroupId, methodGroupName, methodGroupIds, questions } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot update a system-default quiz" });
+    if (!questions || !Array.isArray(questions) || questions.length === 0) return res.status(400).json({ error: "questions array required" });
+    for (const q of questions) {
+      if (!q || typeof q.id !== "string" || typeof q.question !== "string" ||
+          !Array.isArray(q.options) || q.options.length < 2 ||
+          typeof q.correct_answer !== "string") {
+        return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
+      }
+      if (q.method_group_id != null && typeof q.method_group_id !== "number") {
+        return res.status(400).json({ error: "question.method_group_id must be a number when present" });
+      }
+      if (q.method_group_name != null && typeof q.method_group_name !== "string") {
+        return res.status(400).json({ error: "question.method_group_name must be a string when present" });
+      }
+    }
+    const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
+      ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
+      : null;
+    (db as any).$client.prepare(
+      "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ? WHERE id = ?"
+    ).run(
+      title || null,
+      methodGroupId || null,
+      methodGroupName || null,
+      mgIdsJson,
+      JSON.stringify(questions),
+      req.params.id,
+    );
+    logAudit({
+      userId: 0,
+      module: "account",
+      action: "update",
+      entityType: "admin.competency_quiz_update",
+      entityId: Number(req.params.id),
+      entityLabel: title || `Quiz ${req.params.id}`,
+      ipAddress: req.ip,
+    });
+    res.json({
+      id: Number(req.params.id),
+      title: title || null,
+      method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
+      question_count: questions.length,
+    });
+  });
+
   // ── ADMIN: One-shot seed for Michael's Lab demo data (COLA conf 2026-05-06) ──
   // Runs scripts/seed/michaels_lab_2026_05_03.sql against the live DB.
   // Idempotent: refuses to run if [SEED-2026-05-03] markers already present.
