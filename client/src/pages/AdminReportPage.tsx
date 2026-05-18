@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { applyLicenseToExcelJS } from "@/lib/licenseStamp";
@@ -43,6 +43,8 @@ interface UserRecord {
   last_login: string | null;
   session_count: number;
   study_count: number;
+  audit_action_count: number;
+  last_action_at: string | null;
   // Per-lab fields: present when the row joins to a labs record via an
   // active lab_members row; null for users with no active memberships
   // (legacy pre-Phase-3 accounts and seat users).
@@ -95,6 +97,7 @@ type SortKey =
   | "hipaa_acknowledged"
   | "last_login"
   | "session_count"
+  | "audit_action_count"
   | "study_count"
   | "created_at";
 
@@ -167,6 +170,9 @@ export default function AdminReportPage() {
   // Sort
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  // When set, opens the per-user activity modal showing recent sessions +
+  // recent audit-log entries. Click count in the Actions column to open.
+  const [activityUserId, setActivityUserId] = useState<number | null>(null);
 
   async function handleSetPlan(userId: number, plan: string) {
     setSetPlanLoading(userId);
@@ -460,6 +466,7 @@ export default function AdminReportPage() {
         u.hipaa_acknowledged ? "Yes" : "No",
         u.last_login ? formatRelative(u.last_login) : "Never",
         u.session_count || 0,
+        u.audit_action_count || 0,
         u.study_count || 0,
         formatDate(u.created_at),
       ]);
@@ -556,6 +563,7 @@ export default function AdminReportPage() {
     { label: "HIPAA Ack", key: "hipaa_acknowledged" },
     { label: "Last Login", key: "last_login" },
     { label: "Sessions", key: "session_count" },
+    { label: "Actions", key: "audit_action_count" },
     { label: "Studies", key: "study_count" },
     { label: "Joined", key: "created_at" },
   ];
@@ -748,6 +756,17 @@ export default function AdminReportPage() {
                     {u.last_login ? formatRelative(u.last_login) : <span className="text-muted-foreground">Never</span>}
                   </td>
                   <td className="px-3 py-2 text-center">{u.session_count || 0}</td>
+                  <td className="px-3 py-2 text-center">
+                    <button
+                      type="button"
+                      className="font-medium hover:underline text-primary disabled:text-muted-foreground disabled:no-underline disabled:cursor-default"
+                      disabled={(u.audit_action_count || 0) === 0}
+                      onClick={() => setActivityUserId(u.id)}
+                      title={u.last_action_at ? `Last action ${formatRelative(u.last_action_at)}` : "No actions recorded"}
+                    >
+                      {u.audit_action_count || 0}
+                    </button>
+                  </td>
                   <td className="px-3 py-2 text-center">{u.study_count || 0}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatDate(u.created_at)}
@@ -757,7 +776,7 @@ export default function AdminReportPage() {
               })}
               {grouped.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={17} className="px-3 py-8 text-center text-muted-foreground">
                     No users found
                   </td>
                 </tr>
@@ -772,6 +791,18 @@ export default function AdminReportPage() {
 
         {/* Audit Log Viewer */}
         <AuditLogPanel secret={secret} />
+
+        {/* Per-user engagement modal. Opens when the operator clicks an
+            "Actions" count cell in the report table above. The state lives
+            in this top-level component because the modal sits outside the
+            AuditLogPanel sub-tree. */}
+        {activityUserId !== null && (
+          <UserActivityModal
+            userId={activityUserId}
+            secret={secret}
+            onClose={() => setActivityUserId(null)}
+          />
+        )}
       </div>
     </div>
   );
@@ -904,6 +935,156 @@ function AuditLogPanel({ secret }: { secret: string }) {
           ) : null}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Per-user engagement detail modal ──────────────────────────────────
+//
+// Opens from the Actions column in the main table. Shows the latest
+// sessions and audit-log entries for one user so the operator can tell
+// the difference between "logged in once and left" and "actively using
+// the platform."
+
+interface UserActivityResponse {
+  user: { id: number; email: string; name: string | null; created_at: string };
+  summary: {
+    session_count: number;
+    last_session_at: string | null;
+    audit_action_count: number;
+    last_action_at: string | null;
+  };
+  sessions: Array<{ id: number; created_at: string; last_active: string; is_active: number; device_info: string | null }>;
+  audit: Array<{ id: number; module: string; action: string; entity_type: string; entity_label: string | null; entity_id: string | null; ip_address: string | null; created_at: string }>;
+}
+
+function UserActivityModal({ userId, secret, onClose }: { userId: number; secret: string; onClose: () => void }) {
+  const [data, setData] = useState<UserActivityResponse | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/users/${userId}/activity`, { headers: { "x-admin-secret": secret } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!cancelled) setData(json);
+      } catch (e: any) {
+        if (!cancelled) setErr(e.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, secret]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center p-6 overflow-y-auto" onClick={onClose}>
+      <div className="bg-background border border-border rounded-lg shadow-lg max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-border flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">User Activity</h2>
+            {data && (
+              <p className="text-xs text-muted-foreground">
+                {data.user.name || data.user.email} &middot; user id {data.user.id} &middot; joined {new Date(data.user.created_at).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+          <button className="text-muted-foreground hover:text-foreground" onClick={onClose}>x</button>
+        </div>
+        <div className="p-4 space-y-4">
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : err ? (
+            <div className="text-sm text-destructive">{err}</div>
+          ) : data ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="rounded-md border border-border p-2">
+                  <div className="text-muted-foreground">Sessions</div>
+                  <div className="text-base font-semibold">{data.summary.session_count}</div>
+                </div>
+                <div className="rounded-md border border-border p-2">
+                  <div className="text-muted-foreground">Last login</div>
+                  <div className="text-base font-semibold">{data.summary.last_session_at ? new Date(data.summary.last_session_at).toLocaleString() : "Never"}</div>
+                </div>
+                <div className="rounded-md border border-border p-2">
+                  <div className="text-muted-foreground">Audit actions</div>
+                  <div className="text-base font-semibold">{data.summary.audit_action_count}</div>
+                </div>
+                <div className="rounded-md border border-border p-2">
+                  <div className="text-muted-foreground">Last action</div>
+                  <div className="text-base font-semibold">{data.summary.last_action_at ? new Date(data.summary.last_action_at).toLocaleString() : "None"}</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Recent actions ({data.audit.length})</h3>
+                {data.audit.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No audit entries. User has logged in but not created, edited, or deleted anything.</p>
+                ) : (
+                  <div className="border border-border rounded-md overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted">
+                        <tr className="text-left">
+                          <th className="px-2 py-1">When</th>
+                          <th className="px-2 py-1">Module</th>
+                          <th className="px-2 py-1">Action</th>
+                          <th className="px-2 py-1">Entity</th>
+                          <th className="px-2 py-1">Label</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.audit.map(a => (
+                          <tr key={a.id} className="border-t border-border">
+                            <td className="px-2 py-1 whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</td>
+                            <td className="px-2 py-1">{a.module}</td>
+                            <td className="px-2 py-1">{a.action}</td>
+                            <td className="px-2 py-1">{a.entity_type}{a.entity_id ? ` #${a.entity_id}` : ""}</td>
+                            <td className="px-2 py-1 truncate max-w-[200px]" title={a.entity_label || ""}>{a.entity_label || ""}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Recent sessions ({data.sessions.length})</h3>
+                {data.sessions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No sessions on record.</p>
+                ) : (
+                  <div className="border border-border rounded-md overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted">
+                        <tr className="text-left">
+                          <th className="px-2 py-1">Started</th>
+                          <th className="px-2 py-1">Last active</th>
+                          <th className="px-2 py-1">Active?</th>
+                          <th className="px-2 py-1">Device</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.sessions.map(s => (
+                          <tr key={s.id} className="border-t border-border">
+                            <td className="px-2 py-1 whitespace-nowrap">{new Date(s.created_at).toLocaleString()}</td>
+                            <td className="px-2 py-1 whitespace-nowrap">{new Date(s.last_active).toLocaleString()}</td>
+                            <td className="px-2 py-1">{s.is_active ? "Yes" : "No"}</td>
+                            <td className="px-2 py-1 truncate max-w-[280px]" title={s.device_info || ""}>{(s.device_info || "").slice(0, 80)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
