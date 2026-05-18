@@ -2342,6 +2342,7 @@ function QuizzesTab({ program }: { program: Program }) {
   const isReadOnly = useIsReadOnly();
   const [newQuizOpen, setNewQuizOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<QuizListItem | null>(null);
+  const [previewQuizId, setPreviewQuizId] = useState<number | null>(null);
 
   const { data: quizzes, isLoading } = useQuery<QuizListItem[]>({
     queryKey: ["/api/veritacomp/programs", program.id, "quizzes"],
@@ -2425,7 +2426,11 @@ function QuizzesTab({ program }: { program: Program }) {
             ) : (
               <div className="space-y-2">
                 {programQuizzes.map(q => (
-                  <Card key={q.id}>
+                  <Card
+                    key={q.id}
+                    className="cursor-pointer hover:bg-muted/40 transition-colors"
+                    onClick={() => setPreviewQuizId(q.id)}
+                  >
                     <CardContent className="py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">{q.title || q.method_group_name || `Quiz #${q.id}`}</div>
@@ -2438,7 +2443,7 @@ function QuizzesTab({ program }: { program: Program }) {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => setConfirmDelete(q)}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(q); }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -2455,7 +2460,11 @@ function QuizzesTab({ program }: { program: Program }) {
               <div className="text-xs font-semibold text-muted-foreground mb-2">System Defaults ({systemQuizzes.length})</div>
               <div className="space-y-2">
                 {systemQuizzes.map(q => (
-                  <Card key={q.id} className="bg-muted/30">
+                  <Card
+                    key={q.id}
+                    className="bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setPreviewQuizId(q.id)}
+                  >
                     <CardContent className="py-3">
                       <div className="text-sm font-medium">{q.title || q.method_group_name || `Quiz #${q.id}`}</div>
                       <div className="text-[11px] text-muted-foreground">
@@ -2478,6 +2487,13 @@ function QuizzesTab({ program }: { program: Program }) {
             setNewQuizOpen(false);
             qc.invalidateQueries({ queryKey: ["/api/veritacomp/programs", program.id, "quizzes"] });
           }}
+        />
+      )}
+
+      {previewQuizId !== null && (
+        <QuizPreviewDialog
+          quizId={previewQuizId}
+          onClose={() => setPreviewQuizId(null)}
         />
       )}
 
@@ -2792,6 +2808,181 @@ function NewQuizDialog({
               {submitting ? "Saving..." : "Save Quiz"}
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Quiz Preview Dialog ─────────────────────────────────────────────────
+//
+// Dual-view modal: "Clean Copy" (no answers, blank name/date fields, for the
+// employee to take on paper or screen) and "Answer Key" (correct option
+// highlighted + explanation per question, for the leader to grade against).
+// Both views are print-friendly so the user can browser-print to PDF.
+
+interface FullQuiz {
+  id: number;
+  title: string | null;
+  method_group_name: string | null;
+  questions: QuizQuestion[];
+}
+
+function QuizPreviewDialog({ quizId, onClose }: { quizId: number; onClose: () => void }) {
+  const [view, setView] = useState<"clean" | "key">("clean");
+
+  const { data: quiz, isLoading, error } = useQuery<FullQuiz>({
+    queryKey: ["/api/veritacomp/quizzes", quizId, "withAnswers"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}?withAnswers=1`, { headers: authHeaders() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to load quiz");
+      }
+      return res.json();
+    },
+  });
+
+  // Render the quiz into a clean popup window for printing / save-as-PDF.
+  // Avoids the Radix Dialog portal + app chrome print-CSS issues.
+  function printIt() {
+    if (!quiz) return;
+    const w = window.open("", "_blank", "width=900,height=1100");
+    if (!w) return;
+    const esc = (s: string) => String(s ?? "").replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    } as Record<string,string>)[c] || c);
+    const title = quiz.title || quiz.method_group_name || `Quiz ${quizId}`;
+    const header = view === "clean" ? "Employee Copy" : "ANSWER KEY (instructor use only)";
+    const blanks = view === "clean"
+      ? `<div class="blanks">
+           <div>Employee Name: ____________________________</div>
+           <div>Date: ______________</div>
+           <div>Title: ____________________________</div>
+           <div>Score: _____ / ${quiz.questions.length}</div>
+         </div>`
+      : "";
+    const items = quiz.questions.map((q, qIdx) => {
+      const options = q.options.map((opt, oIdx) => {
+        const letter = String.fromCharCode(65 + oIdx);
+        const isCorrect = view === "key" && q.correct_answer === letter;
+        const display = opt.startsWith(`${letter}.`) ? opt : `${letter}. ${opt}`;
+        const mark = isCorrect ? "&#x2713;" : "&#9675;";
+        return `<li class="${isCorrect ? "correct" : ""}"><span class="mark">${mark}</span>${esc(display)}</li>`;
+      }).join("");
+      const explanation = view === "key" && q.explanation
+        ? `<div class="exp"><b>Explanation:</b> ${esc(q.explanation)}</div>` : "";
+      return `<li class="q">
+                <div class="qtext">${esc(q.question)}</div>
+                <ul class="opts">${options}</ul>
+                ${explanation}
+              </li>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+      <style>
+        body { font: 12pt/1.5 -apple-system, Segoe UI, Roboto, sans-serif; color: #111; max-width: 7.5in; margin: 0.5in auto; padding: 0 0.25in; }
+        h1 { font-size: 16pt; margin: 0 0 0.1in 0; }
+        .sub { font-size: 10pt; color: #555; margin-bottom: 0.2in; }
+        .blanks { display: grid; grid-template-columns: 1fr 1fr; gap: 0.04in 0.4in; font-size: 11pt; padding: 0.1in 0; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; margin-bottom: 0.2in; }
+        ol.qs { padding-left: 1.2em; }
+        li.q { margin-bottom: 0.18in; page-break-inside: avoid; }
+        .qtext { font-weight: 600; margin-bottom: 0.05in; }
+        ul.opts { list-style: none; padding-left: 1.2em; margin: 0.04in 0; }
+        ul.opts li { margin: 0.02in 0; }
+        ul.opts li.correct { font-weight: 700; color: #15803d; }
+        .mark { display: inline-block; width: 1em; }
+        .exp { margin: 0.05in 0 0 1.2em; font-size: 10.5pt; color: #444; font-style: italic; }
+        .footer { margin-top: 0.4in; padding-top: 0.1in; border-top: 1px solid #ccc; font-size: 9pt; color: #666; }
+        @media print { body { margin: 0.4in; } }
+      </style></head><body>
+      <h1>${esc(title)}</h1>
+      <div class="sub">${header}</div>
+      ${blanks}
+      <ol class="qs">${items}</ol>
+      <div class="footer">VeritaAssure&trade; | VeritaComp&trade; | Confidential, For Internal Lab Use Only</div>
+      <script>window.onload = function(){ window.print(); };<\/script>
+      </body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{quiz?.title || quiz?.method_group_name || `Quiz #${quizId}`}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+          <div className="flex gap-1">
+            <Button size="sm" variant={view === "clean" ? "default" : "outline"} onClick={() => setView("clean")}>
+              Clean Copy
+            </Button>
+            <Button size="sm" variant={view === "key" ? "default" : "outline"} onClick={() => setView("key")}>
+              Answer Key
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={printIt} disabled={!quiz}>
+              Print / Save as PDF
+            </Button>
+            <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {isLoading ? (
+            <div className="h-32 rounded-lg bg-muted/40 animate-pulse" />
+          ) : error ? (
+            <div className="text-sm text-destructive">{(error as Error).message}</div>
+          ) : quiz ? (
+            <>
+              <div className="text-xs text-muted-foreground">
+                {view === "clean"
+                  ? "What an employee will be handed. Print and have them complete on paper, then switch to Answer Key to grade."
+                  : "Instructor view. The correct option is highlighted; explanation is shown for every question."}
+              </div>
+
+              {view === "clean" && (
+                <div className="text-xs grid grid-cols-2 gap-x-6 gap-y-1 border border-border rounded-md p-2 bg-muted/30">
+                  <div>Employee Name: ____________________________</div>
+                  <div>Date: ______________</div>
+                  <div>Title: ____________________________</div>
+                  <div>Score: _____ / {quiz.questions.length}</div>
+                </div>
+              )}
+
+              <ol className="space-y-4 list-decimal list-inside">
+                {quiz.questions.map((q) => (
+                  <li key={q.id} className="text-sm leading-relaxed">
+                    <span className="font-medium">{q.question}</span>
+                    <ul className="mt-1 ml-6 space-y-0.5 list-none">
+                      {q.options.map((opt, oIdx) => {
+                        const letter = String.fromCharCode(65 + oIdx);
+                        const isCorrect = view === "key" && q.correct_answer === letter;
+                        const display = opt.startsWith(`${letter}.`) ? opt : `${letter}. ${opt}`;
+                        return (
+                          <li
+                            key={oIdx}
+                            className={`text-xs ${isCorrect ? "font-semibold text-green-700 dark:text-green-400" : ""}`}
+                          >
+                            <span className="inline-block w-4">{isCorrect ? "✓" : "○"}</span>
+                            {display}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {view === "key" && q.explanation && (
+                      <div className="mt-1 ml-6 text-[11px] text-muted-foreground italic">
+                        <span className="font-semibold not-italic">Explanation:</span> {q.explanation}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
