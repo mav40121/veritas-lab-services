@@ -1,57 +1,55 @@
-// Nightly off-site backup of the production SQLite database to a
-// Google Drive folder owned by the operator. Env-gated: when
-// GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID is unset,
-// runNightlyBackup() logs a skip and returns without throwing.
+// Nightly off-site backup of the production SQLite database to an
+// S3-compatible bucket. Env-gated: when any of the four BACKUP_S3_*
+// vars is missing, runNightlyBackup() logs a skip and returns without
+// throwing.
 //
-// Operator setup (Michael):
-//   1. Create a Google Cloud project, enable the Drive API
-//   2. Create a service account, download its JSON key
-//   3. Create a Drive folder named "VeritaAssure Backups"
-//   4. Share the folder with the service account email (Editor access)
-//   5. Set GOOGLE_DRIVE_SA_JSON to the JSON key contents (single line)
-//      and GOOGLE_DRIVE_BACKUP_FOLDER_ID to the folder ID from the URL
+// Today's target is Cloudflare R2 (S3-compatible, free 10 GB tier),
+// but any S3-compatible endpoint works: AWS S3, Backblaze B2, Wasabi,
+// MinIO, etc. The code only depends on the standard PutObject /
+// ListObjectsV2 / DeleteObject calls.
 //
-// Schedule: server/index.ts wires runNightlyBackup() into the same
-// 24-hour scheduler shape as the existing snapshot + reminder jobs,
-// at 04:00 UTC (clear of the midnight-UTC snapshot work).
+// Operator setup (Cloudflare R2):
+//   1. Sign up at cloudflare.com, subscribe to R2 (free tier)
+//   2. Create a bucket (default storage class, automatic region)
+//   3. Create an R2 API token scoped to the bucket with Object
+//      Read & Write permission
+//   4. Note the S3 endpoint (https://<account-id>.r2.cloudflarestorage.com)
+//      and the bucket name, Access Key ID, Secret Access Key
+//   5. Set 4 env vars in Railway:
+//        BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET,
+//        BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY
+//
+// Schedule: server/index.ts wires runNightlyBackup() at 04:00 UTC.
 
-import { google } from "googleapis";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as fs from "fs";
 import * as zlib from "zlib";
 import { Resend } from "resend";
 import { db } from "./db";
 
-const BACKUP_FOLDER_ID = process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID;
-const SA_JSON = process.env.GOOGLE_DRIVE_SA_JSON;
+const S3_ENDPOINT = process.env.BACKUP_S3_ENDPOINT;
+const S3_BUCKET = process.env.BACKUP_S3_BUCKET;
+const S3_ACCESS_KEY_ID = process.env.BACKUP_S3_ACCESS_KEY_ID;
+const S3_SECRET_ACCESS_KEY = process.env.BACKUP_S3_SECRET_ACCESS_KEY;
 const RETENTION_DAYS = 30;
 const FAILURE_NOTIFY_TO = "info@veritaslabservices.com";
 
-let driveClient: ReturnType<typeof google.drive> | null = null;
+let s3Client: S3Client | null = null;
 
-function getDriveClient() {
-  if (driveClient) return driveClient;
-  if (!SA_JSON || !BACKUP_FOLDER_ID) return null;
-
-  let creds: { client_email: string; private_key: string };
-  try {
-    creds = JSON.parse(SA_JSON);
-  } catch {
-    console.error("[backup] GOOGLE_DRIVE_SA_JSON is not valid JSON; backups disabled until fixed");
+function getS3Client() {
+  if (s3Client) return s3Client;
+  if (!S3_ENDPOINT || !S3_BUCKET || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
     return null;
   }
-  if (!creds.client_email || !creds.private_key) {
-    console.error("[backup] GOOGLE_DRIVE_SA_JSON missing client_email or private_key; backups disabled");
-    return null;
-  }
-
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
+  s3Client = new S3Client({
+    region: "auto",
+    endpoint: S3_ENDPOINT,
+    credentials: {
+      accessKeyId: S3_ACCESS_KEY_ID,
+      secretAccessKey: S3_SECRET_ACCESS_KEY,
+    },
   });
-
-  driveClient = google.drive({ version: "v3", auth });
-  return driveClient;
+  return s3Client;
 }
 
 async function notifyFailure(err: Error) {
@@ -65,7 +63,7 @@ async function notifyFailure(err: Error) {
       html: `<p>The nightly off-site backup job failed at ${new Date().toISOString()}.</p>
              <p><strong>Error:</strong> ${err.message}</p>
              <pre style="background:#f4f4f4;padding:12px;border-radius:6px;font-size:11px;overflow:auto;">${err.stack || "no stack"}</pre>
-             <p>Check Railway logs and the Drive folder. The on-demand <code>/api/admin/backup-db</code> endpoint is unaffected and can be used as a fallback.</p>`,
+             <p>Check Railway logs and the R2 bucket. The on-demand <code>/api/admin/backup-db</code> endpoint is unaffected and can be used as a fallback.</p>`,
     });
   } catch (emailErr: any) {
     console.error("[backup] Failure notification email also failed:", emailErr?.message || emailErr);
@@ -73,14 +71,14 @@ async function notifyFailure(err: Error) {
 }
 
 export async function runNightlyBackup() {
-  const drive = getDriveClient();
-  if (!drive) {
-    console.log("[backup] Skipped: GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID not set");
+  const client = getS3Client();
+  if (!client) {
+    console.log("[backup] Skipped: one or more of BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY is not set");
     return;
   }
 
   const startedAt = Date.now();
-  console.log("[backup] Starting nightly off-site backup to Google Drive");
+  console.log(`[backup] Starting nightly off-site backup to S3 bucket ${S3_BUCKET}`);
 
   try {
     const sqlite = (db as any).$client;
@@ -93,8 +91,8 @@ export async function runNightlyBackup() {
     const filename = `veritas-backup-${timestamp}.db.gz`;
     const tmpPath = `/tmp/${filename}`;
 
-    // Gzip the SQLite file to /tmp so the network upload is smaller and so
-    // we can stream from disk rather than holding the whole DB in memory.
+    // Gzip the SQLite file to /tmp so the upload is smaller and so we can
+    // stream from disk rather than holding the whole DB in memory.
     await new Promise<void>((resolve, reject) => {
       const source = fs.createReadStream(dbPath);
       const dest = fs.createWriteStream(tmpPath);
@@ -108,42 +106,38 @@ export async function runNightlyBackup() {
 
     const compressedBytes = fs.statSync(tmpPath).size;
 
-    const uploadResult = await drive.files.create({
-      requestBody: {
-        name: filename,
-        parents: [BACKUP_FOLDER_ID!],
-      },
-      media: {
-        mimeType: "application/gzip",
-        body: fs.createReadStream(tmpPath),
-      },
-      fields: "id, name, size, createdTime",
-    });
+    await client.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: filename,
+      Body: fs.createReadStream(tmpPath),
+      ContentType: "application/gzip",
+      ContentLength: compressedBytes,
+    }));
 
     try { fs.unlinkSync(tmpPath); } catch {}
 
     const elapsedMs = Date.now() - startedAt;
-    console.log(`[backup] Uploaded ${uploadResult.data.name} (${compressedBytes} bytes gzipped) to Drive in ${elapsedMs}ms`);
+    console.log(`[backup] Uploaded ${filename} (${compressedBytes} bytes gzipped) to ${S3_BUCKET} in ${elapsedMs}ms`);
 
-    // Retention: delete files older than RETENTION_DAYS from the backup
-    // folder. Uses drive.files.list query with a createdTime filter, then
-    // issues delete calls per stale file. drive.file scope only sees files
-    // the service account created, so this never touches anything else
-    // the operator stores in Drive.
-    const cutoffIso = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const oldFiles = await drive.files.list({
-      q: `'${BACKUP_FOLDER_ID}' in parents and createdTime < '${cutoffIso}' and trashed = false`,
-      fields: "files(id, name, createdTime)",
-      pageSize: 100,
-    });
+    // Retention: list all backups in the bucket, delete ones older than
+    // RETENTION_DAYS. The API token is bucket-scoped so this only sees
+    // files in this bucket, not anything else in the operator's account.
+    const cutoffMs = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const listed = await client.send(new ListObjectsV2Command({
+      Bucket: S3_BUCKET,
+      MaxKeys: 1000,
+    }));
 
     let pruned = 0;
-    for (const file of oldFiles.data.files || []) {
-      try {
-        await drive.files.delete({ fileId: file.id! });
-        pruned++;
-      } catch (err: any) {
-        console.error(`[backup] Failed to prune ${file.name}: ${err?.message || err}`);
+    for (const obj of listed.Contents || []) {
+      if (!obj.Key || !obj.LastModified) continue;
+      if (obj.LastModified.getTime() < cutoffMs) {
+        try {
+          await client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: obj.Key }));
+          pruned++;
+        } catch (err: any) {
+          console.error(`[backup] Failed to prune ${obj.Key}: ${err?.message || err}`);
+        }
       }
     }
     if (pruned > 0) console.log(`[backup] Pruned ${pruned} backup(s) older than ${RETENTION_DAYS} days`);
