@@ -9518,7 +9518,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!program) return res.status(404).json({ error: "Program not found" });
     // Get user quizzes for this program + system quizzes (user_id = 0)
     const quizzes = (db as any).$client.prepare(
-      "SELECT id, user_id, program_id, method_group_id, method_group_name, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0 OR user_id = ?"
+      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0 OR user_id = ?"
     ).all(req.params.id, dataUserId);
     res.json(quizzes);
   });
@@ -9529,34 +9529,107 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    const { methodGroupId, methodGroupName, questions } = req.body;
+    const { methodGroupId, methodGroupName, methodGroupIds, title, questions } = req.body;
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
+    // Validate question shape so we fail fast at the boundary instead of
+    // exploding later in the scoring path (POST /quiz-results expects
+    // every question to have id, options[], correct_answer).
+    for (const q of questions) {
+      if (!q || typeof q.id !== "string" || typeof q.question !== "string" ||
+          !Array.isArray(q.options) || q.options.length < 2 ||
+          typeof q.correct_answer !== "string") {
+        return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
+      }
+    }
+    const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
+      ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
+      : null;
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, questions, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(dataUserId, parseInt(req.params.id), methodGroupId || null, methodGroupName || null, JSON.stringify(questions), now);
+      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_by_user_id, questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      dataUserId,
+      parseInt(req.params.id),
+      methodGroupId || null,
+      methodGroupName || null,
+      title || null,
+      mgIdsJson,
+      req.user.userId,
+      JSON.stringify(questions),
+      now,
+    );
     // Phase 3.5 dual-write lab_id from the owning user's lab.
     try {
       (db as any).$client.prepare(
         "UPDATE competency_quizzes SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
       ).run(dataUserId, result.lastInsertRowid);
     } catch {}
-    res.json({ id: Number(result.lastInsertRowid), program_id: parseInt(req.params.id), method_group_id: methodGroupId, method_group_name: methodGroupName, created_at: now });
+    res.json({
+      id: Number(result.lastInsertRowid),
+      program_id: parseInt(req.params.id),
+      method_group_id: methodGroupId,
+      method_group_name: methodGroupName,
+      method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
+      title: title || null,
+      created_at: now,
+    });
   });
 
-  // GET /api/veritacomp/quizzes/:id (without revealing correct answers)
+  // GET /api/veritacomp/quizzes/:id
+  // Default: answer key stripped (employee-take view).
+  // ?withAnswers=1: includes correct_answer + explanation. Requires write access
+  // and lab-scoped row access. Used by the quiz builder / edit screen.
   app.get("/api/veritacomp/quizzes/:id", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
-    // Strip correct_answer and explanation from questions
-    const questions = JSON.parse(quiz.questions || "[]").map((q: any) => ({
+    const wantAnswers = req.query.withAnswers === "1" || req.query.withAnswers === "true";
+    const parsedQuestions = JSON.parse(quiz.questions || "[]");
+    if (wantAnswers) {
+      // Builder view: requires full access (matches requireWriteAccess gate)
+      // AND either system-default quiz (user_id=0) or a quiz owned by a lab
+      // the user can access.
+      const fullUser = storage.getUserById(req.userId);
+      if (!fullUser) return res.status(401).json({ error: "User not found" });
+      const accessLevel = getAccessLevel(fullUser, req.scope?.lab);
+      if (accessLevel !== 'full') {
+        return res.status(403).json({ error: "Write access required" });
+      }
+      if (quiz.user_id !== 0) {
+        const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
+        if (!owned) return res.status(404).json({ error: "Quiz not found" });
+      }
+      return res.json({ ...quiz, questions: parsedQuestions });
+    }
+    // Employee-take view: strip answer key.
+    const questions = parsedQuestions.map((q: any) => ({
       id: q.id,
       question: q.question,
       type: q.type,
       options: q.options,
     }));
     res.json({ ...quiz, questions });
+  });
+
+  // DELETE /api/veritacomp/quizzes/:id
+  // Lab-scoped: cannot delete system-default quizzes (user_id=0) or quizzes
+  // belonging to a lab the caller does not have access to.
+  app.delete("/api/veritacomp/quizzes/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot delete a system-default quiz" });
+    const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
+    if (!owned) return res.status(404).json({ error: "Quiz not found" });
+    // Block delete if any results reference it; the audit trail must survive.
+    const refCount = (db as any).$client.prepare(
+      "SELECT COUNT(*) AS n FROM competency_quiz_results WHERE quiz_id = ?"
+    ).get(req.params.id) as any;
+    if (refCount && refCount.n > 0) {
+      return res.status(409).json({ error: "Cannot delete: quiz has recorded results", result_count: refCount.n });
+    }
+    (db as any).$client.prepare("DELETE FROM competency_quizzes WHERE id = ?").run(req.params.id);
+    res.json({ ok: true, id: Number(req.params.id) });
   });
 
   // POST /api/veritacomp/quiz-results - submit quiz, auto-score
