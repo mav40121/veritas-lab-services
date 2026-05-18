@@ -200,6 +200,18 @@ sqlite.exec(`
     active INTEGER NOT NULL DEFAULT 1
   );
 
+  CREATE TABLE IF NOT EXISTS backup_integrity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_at TEXT NOT NULL DEFAULT (datetime('now')),
+    file_size_bytes INTEGER,
+    sqlite_integrity_check TEXT,
+    user_count INTEGER,
+    study_count INTEGER,
+    table_count INTEGER,
+    all_ok INTEGER NOT NULL,
+    details_json TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS cumsum_trackers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
