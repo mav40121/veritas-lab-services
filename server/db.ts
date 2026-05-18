@@ -997,6 +997,25 @@ sqlite.exec(`
   );
 `);
 
+// Phase 4 (quiz builder) columns: title for human-readable quiz name,
+// method_group_ids for a quiz that covers multiple method groups in the
+// same program (Element 6 picker matches mgId against this array).
+// lab_id was added in Phase 3.5 multi-lab migration via dual-write from
+// the owning user's record (see routes.ts POST handler).
+const compQuizCols = sqlite.prepare("PRAGMA table_info(competency_quizzes)").all() as { name: string }[];
+const compQuizColNames = compQuizCols.map((c) => c.name);
+const compQuizNewCols: [string, string][] = [
+  ["title", "TEXT"],
+  ["method_group_ids", "TEXT"],
+  ["lab_id", "INTEGER"],
+  ["created_by_user_id", "INTEGER"],
+];
+for (const [col, colType] of compQuizNewCols) {
+  if (!compQuizColNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE competency_quizzes ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
 // Create competency_quiz_results table
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS competency_quiz_results (
