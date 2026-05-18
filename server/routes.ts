@@ -840,6 +840,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       storage.updateUserPlan(Number(userId), plan, planCredits);
     }
     const user = userId ? storage.getUserById(Number(userId)) : null;
+    if (user) {
+      logAudit({
+        userId: user.id,
+        module: "account",
+        action: "update",
+        entityType: "admin.plan_change",
+        entityLabel: `${user.email} -> ${plan}`,
+        after: { plan, credits: planCredits, labId: targetLabId },
+        ipAddress: req.ip,
+      });
+    }
     res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
@@ -1074,6 +1085,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
     const newHash = await bcrypt.hash(String(newPassword), 10);
     sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, req.userId);
+    logAudit({
+      userId: req.userId,
+      module: "account",
+      action: "update",
+      entityType: "password",
+      ipAddress: req.ip,
+    });
     res.json({ ok: true });
   });
 
@@ -1839,6 +1857,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user) return res.status(401).json({ error: "Invalid email or password" });
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
+
+    // Account audit trail: log every successful password authentication.
+    // Captures even the "session conflict" path below, which still
+    // represents a verified credential. Best-effort: a write failure here
+    // never blocks login (logAudit itself swallows errors).
+    logAudit({
+      userId: user.id,
+      module: "account",
+      action: "create",
+      entityType: "session",
+      entityLabel: email.toLowerCase(),
+      ipAddress: req.ip,
+    });
 
     const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count, onboarding_seen FROM users WHERE id = ?").get(user.id) as any;
     const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
@@ -5770,6 +5801,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const passwordHash = await bcrypt.hash(password, 10);
     db.$client.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
     db.$client.prepare("UPDATE reset_tokens SET used_at = ? WHERE token = ?").run(new Date().toISOString(), token);
+
+    logAudit({
+      userId: row.user_id,
+      module: "account",
+      action: "update",
+      entityType: "password.reset_via_email",
+      ipAddress: req.ip,
+    });
 
     const user = storage.getUserById(row.user_id);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -12504,6 +12543,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.pragma('wal_checkpoint(TRUNCATE)');
       const dbPath = sqlite.name;
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      // Audit: admin downloaded the full database. userId=0 indicates the
+      // request used the admin secret rather than a user session.
+      logAudit({
+        userId: 0,
+        module: "account",
+        action: "create",
+        entityType: "admin.backup_db_download",
+        entityLabel: `manual snapshot ${timestamp}`,
+        ipAddress: req.ip,
+      });
       res.setHeader('Content-Type', 'application/x-sqlite3');
       res.setHeader('Content-Disposition', `attachment; filename="veritas-backup-${timestamp}.db"`);
       const fileStream = fs.createReadStream(dbPath);
