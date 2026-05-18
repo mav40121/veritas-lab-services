@@ -69,8 +69,8 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">8. Backups and Disaster Recovery</h2>
-          <p>Customer database snapshots are available on request. Send a request to <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> and we will provide a current snapshot within five business days.</p>
-          <p>We are in the process of implementing nightly off-site backups to an independent storage provider. This page will be updated when that work ships, with the backup retention window and recovery time objective stated explicitly.</p>
+          <p>The production database is backed up nightly to an independent S3-compatible object storage provider (Cloudflare R2) in a different vendor than the application host. Backups are gzip-compressed, retained for 30 days, and pruned automatically. The backup destination is access-controlled with a bucket-scoped credential that cannot read or modify anything else in the operator's account.</p>
+          <p>Customer database snapshots are also available on request. Send a request to <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> and we will provide a current snapshot within five business days.</p>
         </section>
 
         <section>
