@@ -44,6 +44,14 @@ function getS3Client() {
   s3Client = new S3Client({
     region: "auto",
     endpoint: S3_ENDPOINT,
+    // Use path-style addressing (account-id.r2.cloudflarestorage.com/bucket/key)
+    // rather than the SDK's default virtual-hosted style
+    // (bucket.account-id.r2.cloudflarestorage.com). Cloudflare R2's TLS cert
+    // doesn't always cover the virtual-hosted subdomain pattern, causing
+    // sslv3 handshake failures. Path-style matches R2's documented endpoint
+    // shape and works across all S3-compatible providers we'd realistically
+    // swap to (AWS S3, Backblaze B2, MinIO, Wasabi).
+    forcePathStyle: true,
     credentials: {
       accessKeyId: S3_ACCESS_KEY_ID,
       secretAccessKey: S3_SECRET_ACCESS_KEY,
