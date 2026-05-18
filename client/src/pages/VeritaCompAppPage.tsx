@@ -3099,15 +3099,43 @@ function EditQuizDialog({
   );
   // Per-question "include" flag, used only by the Save-as-New-Quiz path.
   // Untouched by Save Changes (which always persists every question on the
-  // source quiz). Default: all included.
-  const [included, setIncluded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(quiz.questions.map((q, i) => [q.id || `q${i + 1}`, true])),
-  );
+  // source quiz). Initial state: questions tagged to a NOT-selected method
+  // group default to excluded; everything else included. This way the
+  // Include column reflects current method-group scope on first render.
+  const [included, setIncluded] = useState<Record<string, boolean>>(() => {
+    const inc: Record<string, boolean> = {};
+    quiz.questions.forEach((q, i) => {
+      const qid = q.id || `q${i + 1}`;
+      if (q.method_group_id == null) {
+        inc[qid] = true;
+      } else {
+        inc[qid] = initialGroupIds.includes(q.method_group_id);
+      }
+    });
+    return inc;
+  });
   const [variantTitle, setVariantTitle] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   function toggleGroup(id: number) {
-    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setSelectedGroupIds(prev => {
+      const wasSelected = prev.includes(id);
+      const next = wasSelected ? prev.filter(x => x !== id) : [...prev, id];
+      // Cascade to per-question Include: questions tagged to this method
+      // group follow the group's checked state. Untagged questions and
+      // questions tagged to other groups are unaffected. The user can
+      // still toggle individual question Include boxes for fine-tuning.
+      setIncluded(prevInc => {
+        const updated = { ...prevInc };
+        for (const q of questions) {
+          if (q.method_group_id === id) {
+            updated[q.id] = !wasSelected;
+          }
+        }
+        return updated;
+      });
+      return next;
+    });
   }
   function addQuestion() {
     setQuestions(prev => [...prev, emptyQuestion(prev.length + 1)]);
@@ -3379,7 +3407,7 @@ function EditQuizDialog({
               onChange={e => setVariantTitle(e.target.value)}
             />
             <p className="text-[11px] text-muted-foreground">
-              Uncheck the questions you do not want in the new quiz, type a title above, then click "Save as New Quiz" below. The source quiz is unaffected. {Object.values(included).filter(Boolean).length} of {questions.length} questions checked.
+              Unchecking a method group above auto-deselects every question tagged to that group. Untagged questions and questions in still-checked groups stay included by default; toggle the per-question boxes for fine-tuning. Click "Save as New Quiz" below to create a variant. The source quiz is unaffected. {Object.values(included).filter(Boolean).length} of {questions.length} questions checked.
             </p>
           </div>
 
