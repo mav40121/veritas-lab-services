@@ -4,10 +4,10 @@ import { useSEO } from "@/hooks/useSEO";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-import { useLabRoute } from "@/hooks/useLabRoute";
   ClipboardCheck, ChevronRight, CalendarClock, FileSpreadsheet,
   History, BellRing, ListChecks,
 } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 export default function VeritaTrackPage() {
   const labRoute = useLabRoute();
