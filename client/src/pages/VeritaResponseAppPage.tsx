@@ -113,7 +113,7 @@ export default function VeritaResponseAppPage() {
   const visibleAccreditors = ACCREDITORS.filter(a => allowedAccreditorSet.has(a.value));
   const findingsApi = activeLabId
     ? `${API_BASE}/api/labs/${activeLabId}/findings`
-    : `${findingsApi}`;
+    : `${API_BASE}/api/findings`;
   const findingItemUrl = (id: number | string) =>
     activeLabId
       ? `${API_BASE}/api/labs/${activeLabId}/findings/${id}`

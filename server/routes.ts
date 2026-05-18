@@ -2085,6 +2085,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // POST /api/labs/me/default { labId } — set the user's default_lab_id.
   // Called by the NavBar switcher (Phase 2b) when a user picks a lab.
   // Validates active membership before updating; returns the new value.
+  //
+  // Also flips lab_members.is_primary_lab to match: clear the flag on every
+  // membership the user holds, then set it on the chosen one. Without this,
+  // is_primary_lab drifts out of sync with default_lab_id and downstream
+  // readers (getUserPrimaryLabId, the chip's isPrimaryLab fallback on
+  // public pages, the /api/findings POST accreditor allowlist, etc.) keep
+  // returning the user's original lab regardless of what they switch to.
   app.post("/api/labs/me/default", authMiddleware, (req: any, res) => {
     const labId = Number(req.body?.labId);
     if (!Number.isFinite(labId)) return res.status(400).json({ error: "labId required" });
@@ -2092,7 +2099,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
     ).get(req.userId, labId);
     if (!membership) return res.status(403).json({ error: "No active membership for this lab" });
-    (db as any).$client.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, req.userId);
+    const tx = (db as any).$client.transaction((uid: number, lid: number) => {
+      (db as any).$client.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(lid, uid);
+      (db as any).$client.prepare("UPDATE lab_members SET is_primary_lab = 0 WHERE user_id = ?").run(uid);
+      (db as any).$client.prepare("UPDATE lab_members SET is_primary_lab = 1 WHERE user_id = ? AND lab_id = ?").run(uid, lid);
+    });
+    tx(req.userId, labId);
     res.json({ defaultLabId: labId });
   });
 
