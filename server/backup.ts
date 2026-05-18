@@ -20,6 +20,10 @@
 //        BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY
 //
 // Schedule: server/index.ts wires runNightlyBackup() at 04:00 UTC.
+//
+// Integrity verification: each run records a 5-point health check on the
+// production DB to backup_integrity_log. Resend alert fires on any
+// failed check. See checkBackupIntegrity() below.
 
 import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as fs from "fs";
@@ -31,8 +35,15 @@ const S3_ENDPOINT = process.env.BACKUP_S3_ENDPOINT;
 const S3_BUCKET = process.env.BACKUP_S3_BUCKET;
 const S3_ACCESS_KEY_ID = process.env.BACKUP_S3_ACCESS_KEY_ID;
 const S3_SECRET_ACCESS_KEY = process.env.BACKUP_S3_SECRET_ACCESS_KEY;
-const RETENTION_DAYS = 30;
+const RETENTION_DAYS = 730;
 const FAILURE_NOTIFY_TO = "info@veritaslabservices.com";
+
+// Integrity verification thresholds. These are conservative floors,
+// not exact-match expectations. The schema can add tables without
+// alerting; what we catch is "this backup is structurally broken"
+// or "the database lost a meaningful amount of data".
+const MIN_BACKUP_FILE_SIZE_BYTES = 100 * 1024;  // 100 KB compressed; anything smaller is suspect
+const MIN_TABLE_COUNT = 40;                     // floor; the live schema has well over this
 
 let s3Client: S3Client | null = null;
 
@@ -76,6 +87,91 @@ async function notifyFailure(err: Error) {
   } catch (emailErr: any) {
     console.error("[backup] Failure notification email also failed:", emailErr?.message || emailErr);
   }
+}
+
+async function notifyIntegrityIssue(checks: Record<string, any>, filename: string) {
+  if (!process.env.RESEND_API_KEY) return;
+  const failed = Object.entries(checks).filter(([_, c]: [string, any]) => !c.ok);
+  if (failed.length === 0) return;
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const rows = failed
+      .map(
+        ([name, c]: [string, any]) =>
+          `<tr><td style="padding:6px 12px;border:1px solid #ddd"><strong>${name}</strong></td><td style="padding:6px 12px;border:1px solid #ddd"><code>${JSON.stringify(c)}</code></td></tr>`,
+      )
+      .join("");
+    await resend.emails.send({
+      from: "VeritaAssure System <info@veritaslabservices.com>",
+      to: FAILURE_NOTIFY_TO,
+      subject: "[VeritaAssure] Backup integrity check ANOMALY",
+      html: `<p>The nightly off-site backup uploaded successfully (${filename}), but one or more integrity checks did not pass at ${new Date().toISOString()}.</p>
+             <p>The backup file is in R2 and recoverable. This alert is so you can investigate whether the anomaly reflects a real data issue or an expected operational change (e.g., a test account intentionally deleted).</p>
+             <table style="border-collapse:collapse;font-size:12px">
+               <tr style="background:#f0f0f0"><th style="padding:6px 12px;border:1px solid #ddd;text-align:left">Check</th><th style="padding:6px 12px;border:1px solid #ddd;text-align:left">Detail</th></tr>
+               ${rows}
+             </table>
+             <p style="margin-top:16px;color:#666">Full results logged to the <code>backup_integrity_log</code> table.</p>`,
+    });
+  } catch (emailErr: any) {
+    console.error("[backup] Integrity anomaly email failed:", emailErr?.message || emailErr);
+  }
+}
+
+// Runs the 5-point integrity check against the live production database,
+// records the result in backup_integrity_log, and returns the per-check
+// breakdown. Does NOT throw on failure (backup upload continues regardless;
+// integrity issues alert separately via notifyIntegrityIssue).
+function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: Record<string, any> } {
+  const sqlite = (db as any).$client;
+  const prior = sqlite
+    .prepare(
+      "SELECT user_count, study_count, table_count FROM backup_integrity_log WHERE all_ok = 1 ORDER BY id DESC LIMIT 1",
+    )
+    .get() as any;
+
+  // 1. File size: catches corrupt/empty uploads
+  const fileSizeOk = gzippedFileBytes >= MIN_BACKUP_FILE_SIZE_BYTES;
+
+  // 2. SQLite structural integrity: PRAGMA integrity_check returns 'ok' or a list of errors
+  let integrityResult: string;
+  try {
+    integrityResult = String(sqlite.pragma("integrity_check", { simple: true }) ?? "");
+  } catch (err: any) {
+    integrityResult = `error: ${err?.message ?? err}`;
+  }
+  const integrityOk = integrityResult === "ok";
+
+  // 3. User count: stable or increasing vs prior successful run
+  const userCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM users").get() as any).cnt as number;
+  const userCountOk = userCount > 0 && (!prior || userCount >= prior.user_count);
+
+  // 4. Study count: stable or increasing vs prior successful run
+  const studyCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM studies").get() as any).cnt as number;
+  const studyCountOk = studyCount >= 0 && (!prior || studyCount >= prior.study_count);
+
+  // 5. Table count: matches expected schema floor
+  const tableCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table'").get() as any).cnt as number;
+  const tableCountOk = tableCount >= MIN_TABLE_COUNT;
+
+  const checks: Record<string, any> = {
+    fileSize: { value: gzippedFileBytes, threshold: MIN_BACKUP_FILE_SIZE_BYTES, ok: fileSizeOk },
+    sqliteIntegrity: { value: integrityResult, ok: integrityOk },
+    userCount: { value: userCount, prior: prior?.user_count ?? null, ok: userCountOk },
+    studyCount: { value: studyCount, prior: prior?.study_count ?? null, ok: studyCountOk },
+    tableCount: { value: tableCount, threshold: MIN_TABLE_COUNT, prior: prior?.table_count ?? null, ok: tableCountOk },
+  };
+
+  const allOk = Object.values(checks).every((c: any) => c.ok);
+
+  sqlite
+    .prepare(
+      `INSERT INTO backup_integrity_log (file_size_bytes, sqlite_integrity_check, user_count, study_count, table_count, all_ok, details_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(gzippedFileBytes, integrityResult, userCount, studyCount, tableCount, allOk ? 1 : 0, JSON.stringify(checks));
+
+  return { ok: allOk, checks };
 }
 
 export async function runNightlyBackup() {
@@ -126,6 +222,23 @@ export async function runNightlyBackup() {
 
     const elapsedMs = Date.now() - startedAt;
     console.log(`[backup] Uploaded ${filename} (${compressedBytes} bytes gzipped) to ${S3_BUCKET} in ${elapsedMs}ms`);
+
+    // Integrity verification: 5-point check on the production DB, logged
+    // to backup_integrity_log, alert on any failure. The upload above is
+    // unaffected; integrity issues do not block the backup, they surface
+    // it so the operator can investigate.
+    try {
+      const integrity = checkBackupIntegrity(compressedBytes);
+      if (integrity.ok) {
+        console.log("[backup] Integrity check passed: 5/5");
+      } else {
+        const failed = Object.entries(integrity.checks).filter(([_, c]: [string, any]) => !c.ok).map(([k]) => k);
+        console.error(`[backup] Integrity check ANOMALY: ${failed.join(", ")} failed. See backup_integrity_log.`);
+        await notifyIntegrityIssue(integrity.checks, filename);
+      }
+    } catch (intErr: any) {
+      console.error("[backup] Integrity check itself threw:", intErr?.message || intErr);
+    }
 
     // Retention: list all backups in the bucket, delete ones older than
     // RETENTION_DAYS. The API token is bucket-scoped so this only sees
