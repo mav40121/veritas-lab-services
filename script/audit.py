@@ -197,6 +197,46 @@ def check_file(rel, fpath):
             if sig_pattern.search(fn_body):
                 WARNINGS.append(f"[{rel}] Director signature block found in VeritaScan PDF function -- VeritaScan is internal use only")
 
+    # ── 7. LAB-SCOPABLE PATHS BYPASSING useLabRoute ──────────────────────────
+    # Hardcoded navigate(`/dashboard…`), setLocation("/study/…"),
+    # href="/veritacomp-app/…", etc. strip the active lab segment so the
+    # destination page renders with activeLabId = null. Use useLabRoute()
+    # to compute the path. Mirror LAB_SCOPABLE_PATHS in useActiveLabId.ts.
+    LAB_SCOPABLE_PREFIXES = (
+        "dashboard", "study", "veritascan-app", "veritamap-app",
+        "veritatrack-app", "veritacomp-app", "veritapt/app",
+        "veritaresponse", "veritastaff-app", "veritalab-app",
+        "veritapolicy-app", "veritacheck/cumsum", "account/settings",
+    )
+    SKIP_NAV_FILES = {
+        "client/src/App.tsx",
+        "client/src/components/LabSwitcher.tsx",
+        "client/src/hooks/useActiveLabId.ts",
+        "client/src/hooks/useLabRoute.ts",
+    }
+    rel_norm = rel.replace("\\", "/")
+    # is_client uses the OS-native path separator on Windows so we re-derive
+    # from the normalized rel here. Same fix would benefit rule #4 (plan
+    # gate) but that is out of scope for this audit-rule addition.
+    is_client_norm = rel_norm.startswith("client/")
+    if is_checkable and is_client_norm and rel_norm not in SKIP_NAV_FILES:
+        for prefix in LAB_SCOPABLE_PREFIXES:
+            esc = re.escape(prefix)
+            nav_re = re.compile(rf'(?:navigate|setLocation)\s*\(\s*[`"\']/{esc}(?:[/`"\']|$)')
+            href_re = re.compile(rf'href\s*=\s*[{{`"\']/{esc}(?:[/`"\'}}]|$)')
+            for i, line in enumerate(lines, 1):
+                if "labRoute(" in line:
+                    # Pragmatic skip: if labRoute is used somewhere on this
+                    # line, assume the hit is the inner literal arg (e.g.
+                    # navigate(labRoute("/dashboard"))) and not a bypass.
+                    continue
+                if nav_re.search(line):
+                    ERRORS.append(f"[{rel_norm}:{i}] Hardcoded navigate to lab-scopable path '/{prefix}' -- wrap with useLabRoute()")
+                    ERRORS.append(f"  >> {line.strip()[:140]}")
+                if href_re.search(line):
+                    ERRORS.append(f"[{rel_norm}:{i}] Hardcoded href to lab-scopable path '/{prefix}' -- wrap with useLabRoute()")
+                    ERRORS.append(f"  >> {line.strip()[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE
@@ -452,6 +492,14 @@ def check_users_deprecated_writes():
 
 
 def main():
+    # Force stdout to UTF-8 so audit output lines containing arrows, em-dashes,
+    # or other non-ASCII characters from source-line echoes do not crash the
+    # Windows default cp1252 encoder.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     files = collect_files()
     print(f"Scanning {len(files)} files from {ROOT}\n")
 

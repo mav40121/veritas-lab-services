@@ -65,6 +65,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { downloadCsv } from "@/lib/csvExport";
 import { studyToCsv, defaultCsvFilename } from "@/lib/studyCsvAdapter";
 
@@ -1619,6 +1620,7 @@ export default function StudyResults() {
   // /labs/:labId/study/:id/results; fall back to legacy /api/studies/:id so
   // unauth flows and stale caches still resolve.
   const labId = useActiveLabId();
+  const labRoute = useLabRoute();
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
     queryKey: [studyUrl],
@@ -1791,7 +1793,7 @@ export default function StudyResults() {
         <Card className="mt-6">
           <CardHeader className="pb-3"><CardTitle className="text-base">Related Tools</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Button asChild variant="outline" size="sm"><Link href="/veritacheck/cumsum">Run CUMSUM Tracker →</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href={labRoute("/veritacheck/cumsum")}>Run CUMSUM Tracker →</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/veritacheck">Establish QC Ranges →</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/veritacheck">Run Multi-Analyte Comparison →</Link></Button>
           </CardContent>

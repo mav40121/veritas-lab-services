@@ -7,6 +7,7 @@ import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher } from "@/components/LabSwitcher";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const allMobileLinks = [
   { href: "/", label: "Home" },
@@ -42,6 +43,7 @@ export function NavBar() {
   const { user, logout, isLoggedIn } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const labRoute = useLabRoute();
 
   const isActive = (href: string) => location === href;
 
@@ -207,8 +209,8 @@ export function NavBar() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild><Link href="/dashboard">My Studies</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/account/settings">Account</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href={labRoute("/dashboard")}>My Studies</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href={labRoute("/account/settings")}>Account</Link></DropdownMenuItem>
                 <DropdownMenuItem onClick={logout} className="text-destructive">
                   <LogOut size={13} className="mr-2" /> Sign out
                 </DropdownMenuItem>
@@ -240,7 +242,7 @@ export function NavBar() {
       {mobileOpen && (
         <div className="lg:hidden border-t border-border bg-card px-4 py-3 flex flex-col gap-1">
           {allMobileLinks.map(({ href, label }) => (
-            <Link key={href} href={href} onClick={() => setMobileOpen(false)}
+            <Link key={href} href={labRoute(href)} onClick={() => setMobileOpen(false)}
               className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
               {label}
             </Link>
@@ -248,7 +250,7 @@ export function NavBar() {
           <div className="pt-2 border-t border-border mt-2 flex gap-2">
             {isLoggedIn ? (
               <>
-                <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/dashboard" onClick={() => setMobileOpen(false)}><LayoutDashboard size={13} className="mr-1" />My Studies</Link></Button>
+                <Button asChild variant="outline" size="sm" className="flex-1"><Link href={labRoute("/dashboard")} onClick={() => setMobileOpen(false)}><LayoutDashboard size={13} className="mr-1" />My Studies</Link></Button>
                 <Button variant="outline" size="sm" onClick={logout} className="flex-1">Sign out</Button>
               </>
             ) : (
