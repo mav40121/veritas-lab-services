@@ -12636,6 +12636,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Upload a competency quiz into a customer's program ──────────
+  // For onboarding-help cases where the operator needs to load a quiz on
+  // behalf of a customer (no impersonation API exists). Same insert path
+  // and lab_id dual-write as POST /api/veritacomp/programs/:id/quizzes,
+  // but gated by admin secret instead of session auth. Attributes
+  // ownership to the program's owning user so scoping checks pass.
+  app.post("/api/admin/competency-quizzes/upload", (req, res) => {
+    const { secret, programId, title, methodGroupId, methodGroupName, methodGroupIds, questions } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!programId || typeof programId !== "number") return res.status(400).json({ error: "programId (number) required" });
+    if (!questions || !Array.isArray(questions) || questions.length === 0) return res.status(400).json({ error: "questions array required" });
+    for (const q of questions) {
+      if (!q || typeof q.id !== "string" || typeof q.question !== "string" ||
+          !Array.isArray(q.options) || q.options.length < 2 ||
+          typeof q.correct_answer !== "string") {
+        return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
+      }
+    }
+    const program = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_programs WHERE id = ?").get(programId) as any;
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
+      ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
+      : null;
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_by_user_id, questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      program.user_id,
+      programId,
+      methodGroupId || null,
+      methodGroupName || null,
+      title || null,
+      mgIdsJson,
+      0, // 0 = uploaded by admin (no specific user session)
+      JSON.stringify(questions),
+      now,
+    );
+    try {
+      (db as any).$client.prepare(
+        "UPDATE competency_quizzes SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
+      ).run(program.user_id, result.lastInsertRowid);
+    } catch {}
+    logAudit({
+      userId: 0,
+      module: "account",
+      action: "create",
+      entityType: "admin.competency_quiz_upload",
+      entityId: Number(result.lastInsertRowid),
+      entityLabel: title || `Quiz for program ${programId}`,
+      ipAddress: req.ip,
+    });
+    res.json({
+      id: Number(result.lastInsertRowid),
+      program_id: programId,
+      program_owner_user_id: program.user_id,
+      title: title || null,
+      method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
+      question_count: questions.length,
+      created_at: now,
+    });
+  });
+
   // ── ADMIN: One-shot seed for Michael's Lab demo data (COLA conf 2026-05-06) ──
   // Runs scripts/seed/michaels_lab_2026_05_03.sql against the live DB.
   // Idempotent: refuses to run if [SEED-2026-05-03] markers already present.
