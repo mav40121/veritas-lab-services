@@ -9552,6 +9552,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           typeof q.correct_answer !== "string") {
         return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
       }
+      // Optional per-question competency-module tag. method_group_id binds
+      // the question to a row in this program's competency_method_groups
+      // table; method_group_name is a denormalized snapshot so the tag
+      // survives if the question is later copied to another lab (parked
+      // shared-library plan). Both are optional and validated as type-only.
+      if (q.method_group_id != null && typeof q.method_group_id !== "number") {
+        return res.status(400).json({ error: "question.method_group_id must be a number when present" });
+      }
+      if (q.method_group_name != null && typeof q.method_group_name !== "string") {
+        return res.status(400).json({ error: "question.method_group_name must be a string when present" });
+      }
     }
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
@@ -9683,6 +9694,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           !Array.isArray(q.options) || q.options.length < 2 ||
           typeof q.correct_answer !== "string") {
         return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
+      }
+      // Optional per-question competency-module tag. method_group_id binds
+      // the question to a row in this program's competency_method_groups
+      // table; method_group_name is a denormalized snapshot so the tag
+      // survives if the question is later copied to another lab (parked
+      // shared-library plan). Both are optional and validated as type-only.
+      if (q.method_group_id != null && typeof q.method_group_id !== "number") {
+        return res.status(400).json({ error: "question.method_group_id must be a number when present" });
+      }
+      if (q.method_group_name != null && typeof q.method_group_name !== "string") {
+        return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
@@ -12728,6 +12750,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           !Array.isArray(q.options) || q.options.length < 2 ||
           typeof q.correct_answer !== "string") {
         return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
+      }
+      // Optional per-question competency-module tag. method_group_id binds
+      // the question to a row in this program's competency_method_groups
+      // table; method_group_name is a denormalized snapshot so the tag
+      // survives if the question is later copied to another lab (parked
+      // shared-library plan). Both are optional and validated as type-only.
+      if (q.method_group_id != null && typeof q.method_group_id !== "number") {
+        return res.status(400).json({ error: "question.method_group_id must be a number when present" });
+      }
+      if (q.method_group_name != null && typeof q.method_group_name !== "string") {
+        return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
     const program = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_programs WHERE id = ?").get(programId) as any;
