@@ -3093,8 +3093,17 @@ function EditQuizDialog({
       options: Array.isArray(q.options) ? q.options.map(String) : [],
       correct_answer: q.correct_answer || "A",
       explanation: q.explanation || "",
+      method_group_id: q.method_group_id ?? null,
+      method_group_name: q.method_group_name ?? null,
     }))
   );
+  // Per-question "include" flag, used only by the Save-as-New-Quiz path.
+  // Untouched by Save Changes (which always persists every question on the
+  // source quiz). Default: all included.
+  const [included, setIncluded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(quiz.questions.map((q, i) => [q.id || `q${i + 1}`, true])),
+  );
+  const [variantTitle, setVariantTitle] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   function toggleGroup(id: number) {
@@ -3169,6 +3178,74 @@ function EditQuizDialog({
     }
   }
 
+  // Save the current edit state as a NEW quiz, filtered to only the
+  // questions whose "Include" checkbox is checked. The source quiz is
+  // NOT updated by this path. Use case: derive a role-specific variant
+  // (e.g. MLA) from a fuller technical-staff quiz without manually
+  // duplicating + retyping.
+  async function saveAsNew() {
+    if (!variantTitle.trim()) {
+      toast({ title: "New quiz title required", description: "Type a title for the new quiz first", variant: "destructive" });
+      return;
+    }
+    if (selectedGroupIds.length === 0) {
+      toast({ title: "Method groups required", description: "Select at least one method group", variant: "destructive" });
+      return;
+    }
+    const subset = questions.filter(q => included[q.id] !== false);
+    if (subset.length === 0) {
+      toast({ title: "At least one question required", description: "Check the questions to include in the new quiz", variant: "destructive" });
+      return;
+    }
+    // Reuse the same field validation as the source save path.
+    for (let i = 0; i < subset.length; i++) {
+      const q = subset[i];
+      if (!q.question.trim()) {
+        toast({ title: "Cannot save", description: `Question ${i + 1} of the new quiz is empty`, variant: "destructive" });
+        return;
+      }
+      if (q.options.length < 2) {
+        toast({ title: "Cannot save", description: `Question ${i + 1} of the new quiz needs at least 2 options`, variant: "destructive" });
+        return;
+      }
+      if (!q.correct_answer.trim()) {
+        toast({ title: "Cannot save", description: `Question ${i + 1} of the new quiz is missing a correct answer`, variant: "destructive" });
+        return;
+      }
+    }
+    setSubmitting(true);
+    try {
+      // Renumber the subset's question ids so they are sequential in the
+      // new quiz (q1, q2, ...). Keeps the scorer happy and matches what
+      // the user sees in the rendered preview.
+      const renumbered = subset.map((q, i) => ({ ...q, id: `q${i + 1}` }));
+      const res = await fetch(`${API_BASE}/api/veritacomp/programs/${program.id}/quizzes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          title: variantTitle.trim(),
+          methodGroupIds: selectedGroupIds,
+          methodGroupName: selectedGroupIds.length === 1
+            ? (groups.find(g => g.id === selectedGroupIds[0])?.name || null)
+            : null,
+          methodGroupId: selectedGroupIds.length === 1 ? selectedGroupIds[0] : null,
+          questions: renumbered,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Save failed");
+      }
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/programs", program.id, "quizzes"] });
+      toast({ title: "New quiz created", description: `${renumbered.length} question${renumbered.length === 1 ? "" : "s"} saved as "${variantTitle.trim()}"` });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Cannot save", description: e.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -3208,11 +3285,21 @@ function EditQuizDialog({
           </div>
 
           <div className="space-y-3">
-            {questions.map((q, qIdx) => (
-              <Card key={qIdx}>
+            {questions.map((q, qIdx) => {
+              const isIncluded = included[q.id] !== false;
+              return (
+              <Card key={qIdx} className={isIncluded ? "" : "opacity-50"}>
                 <CardContent className="py-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[11px] font-semibold text-muted-foreground">Question {qIdx + 1}</div>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" title="Include in 'Save as New Quiz'">
+                        <Checkbox
+                          checked={isIncluded}
+                          onCheckedChange={() => setIncluded(prev => ({ ...prev, [q.id]: !isIncluded }))}
+                        />
+                        <span className="font-semibold text-muted-foreground">Question {qIdx + 1}</span>
+                      </label>
+                    </div>
                     {questions.length > 1 && (
                       <Button variant="ghost" size="sm" className="h-6 px-1.5 text-destructive" onClick={() => removeQuestion(qIdx)}>
                         <X className="h-3.5 w-3.5" />
@@ -3271,14 +3358,36 @@ function EditQuizDialog({
                   />
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
             <Button variant="outline" size="sm" onClick={addQuestion}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Question
             </Button>
           </div>
 
+          {/* Save subset as a new quiz: lets the director derive a role-
+              specific variant (e.g. MLA) without duplicating manually.
+              Source quiz stays untouched by this path. */}
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <Label htmlFor="variant-title" className="text-xs">
+              Save as New Quiz, title for the new quiz:
+            </Label>
+            <Input
+              id="variant-title"
+              placeholder='e.g. "John Hall Lab MLA Competency Quiz"'
+              value={variantTitle}
+              onChange={e => setVariantTitle(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Uncheck the questions you do not want in the new quiz, type a title above, then click "Save as New Quiz" below. The source quiz is unaffected. {Object.values(included).filter(Boolean).length} of {questions.length} questions checked.
+            </p>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" size="sm" onClick={saveAsNew} disabled={submitting || !variantTitle.trim()}>
+              {submitting ? "Saving..." : "Save as New Quiz"}
+            </Button>
             <Button size="sm" onClick={save} disabled={submitting}>
               {submitting ? "Saving..." : "Save Changes"}
             </Button>
