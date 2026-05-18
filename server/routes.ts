@@ -9663,6 +9663,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, id: Number(req.params.id) });
   });
 
+  // PUT /api/veritacomp/quizzes/:id
+  // Edit-in-place for lab-owned quizzes. Updates title, method-group
+  // coverage, and questions JSON. System-default quizzes (user_id=0) are
+  // rejected with 403; the seeded library stays read-only. Quizzes with
+  // recorded results CAN be edited (you may want to fix a bad question
+  // post-hoc), only DELETE is blocked.
+  app.put("/api/veritacomp/quizzes/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot edit a system-default quiz" });
+    const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
+    if (!owned) return res.status(404).json({ error: "Quiz not found" });
+    const { title, methodGroupId, methodGroupName, methodGroupIds, questions } = req.body || {};
+    if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
+    for (const q of questions) {
+      if (!q || typeof q.id !== "string" || typeof q.question !== "string" ||
+          !Array.isArray(q.options) || q.options.length < 2 ||
+          typeof q.correct_answer !== "string") {
+        return res.status(400).json({ error: "each question requires id, question, options[], correct_answer" });
+      }
+    }
+    const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
+      ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
+      : null;
+    (db as any).$client.prepare(
+      "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ? WHERE id = ?"
+    ).run(
+      title || null,
+      methodGroupId || null,
+      methodGroupName || null,
+      mgIdsJson,
+      JSON.stringify(questions),
+      req.params.id,
+    );
+    res.json({
+      id: Number(req.params.id),
+      title: title || null,
+      method_group_id: methodGroupId || null,
+      method_group_name: methodGroupName || null,
+      method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
+      question_count: questions.length,
+    });
+  });
+
   // POST /api/veritacomp/quiz-results - submit quiz, auto-score
   app.post("/api/veritacomp/quiz-results", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });

@@ -2494,7 +2494,9 @@ function QuizzesTab({ program }: { program: Program }) {
 
       {previewQuizId !== null && (
         <QuizPreviewDialog
+          program={program}
           quizId={previewQuizId}
+          readOnly={isReadOnly}
           onClose={() => setPreviewQuizId(null)}
         />
       )}
@@ -2830,10 +2832,21 @@ interface FullQuiz {
   questions: QuizQuestion[];
 }
 
-function QuizPreviewDialog({ quizId, onClose }: { quizId: number; onClose: () => void }) {
+function QuizPreviewDialog({
+  program,
+  quizId,
+  readOnly,
+  onClose,
+}: {
+  program: Program;
+  quizId: number;
+  readOnly: boolean;
+  onClose: () => void;
+}) {
   const [view, setView] = useState<"clean" | "key">("clean");
+  const [editOpen, setEditOpen] = useState(false);
 
-  const { data: quiz, isLoading, error } = useQuery<FullQuiz>({
+  const { data: quiz, isLoading, error } = useQuery<FullQuiz & { user_id: number; method_group_id?: number | null; method_group_ids?: string | null }>({
     queryKey: ["/api/veritacomp/quizzes", quizId, "withAnswers"],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}?withAnswers=1`, { headers: authHeaders() });
@@ -2844,6 +2857,8 @@ function QuizPreviewDialog({ quizId, onClose }: { quizId: number; onClose: () =>
       return res.json();
     },
   });
+
+  const canEdit = !!quiz && quiz.user_id !== 0 && !readOnly;
 
   // Render the quiz into a clean popup window for printing / save-as-PDF.
   // Avoids the Radix Dialog portal + app chrome print-CSS issues.
@@ -2926,6 +2941,11 @@ function QuizPreviewDialog({ quizId, onClose }: { quizId: number; onClose: () =>
             </Button>
           </div>
           <div className="flex gap-2">
+            {canEdit && (
+              <Button size="sm" onClick={() => setEditOpen(true)} disabled={!quiz}>
+                Edit Quiz
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={printIt} disabled={!quiz}>
               Print / Save as PDF
             </Button>
@@ -2985,6 +3005,239 @@ function QuizPreviewDialog({ quizId, onClose }: { quizId: number; onClose: () =>
               </ol>
             </>
           ) : null}
+        </div>
+      </DialogContent>
+
+      {editOpen && quiz && (
+        <EditQuizDialog
+          program={program}
+          quiz={quiz}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+// ── Edit Quiz Dialog ────────────────────────────────────────────────────
+//
+// Edit-in-place for lab-owned quizzes. Reuses the row-editor pattern from
+// NewQuizDialog (title, method-group checkboxes, hand-author question
+// rows) but PUTs to /api/veritacomp/quizzes/:id and prefills from the
+// existing quiz. System-default quizzes never reach this dialog (Edit
+// Quiz button is hidden when quiz.user_id === 0).
+
+function EditQuizDialog({
+  program,
+  quiz,
+  onClose,
+}: {
+  program: Program;
+  quiz: FullQuiz & { user_id: number; method_group_id?: number | null; method_group_ids?: string | null };
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const groups = program.methodGroups || [];
+
+  // Resolve initial method-group selection from quiz.method_group_ids array,
+  // falling back to legacy method_group_id if present.
+  const initialGroupIds: number[] = (() => {
+    if (quiz.method_group_ids) {
+      try {
+        const ids = JSON.parse(quiz.method_group_ids);
+        if (Array.isArray(ids) && ids.length) return ids.map(Number).filter(Number.isFinite);
+      } catch {}
+    }
+    if (quiz.method_group_id) return [quiz.method_group_id];
+    return groups.map(g => g.id);
+  })();
+
+  const [title, setTitle] = useState<string>(quiz.title || quiz.method_group_name || "");
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>(initialGroupIds);
+  const [questions, setQuestions] = useState<QuizQuestion[]>(
+    quiz.questions.map((q, i) => ({
+      id: q.id || `q${i + 1}`,
+      question: q.question,
+      type: q.type || "multiple_choice",
+      options: Array.isArray(q.options) ? q.options.map(String) : [],
+      correct_answer: q.correct_answer || "A",
+      explanation: q.explanation || "",
+    }))
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  function toggleGroup(id: number) {
+    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+  function addQuestion() {
+    setQuestions(prev => [...prev, emptyQuestion(prev.length + 1)]);
+  }
+  function removeQuestion(idx: number) {
+    setQuestions(prev => prev.filter((_, i) => i !== idx).map((q, i) => ({ ...q, id: `q${i + 1}` })));
+  }
+  function updateQuestion(idx: number, patch: Partial<QuizQuestion>) {
+    setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, ...patch } : q));
+  }
+  function updateOption(qIdx: number, oIdx: number, value: string) {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i !== qIdx) return q;
+      const opts = [...q.options];
+      opts[oIdx] = value;
+      return { ...q, options: opts };
+    }));
+  }
+
+  function validate(): string | null {
+    if (!title.trim()) return "Title is required";
+    if (selectedGroupIds.length === 0) return "Select at least one method group";
+    if (questions.length === 0) return "Add at least one question";
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!q.question.trim()) return `Question ${i + 1} is empty`;
+      if (q.options.length < 2) return `Question ${i + 1} needs at least 2 options`;
+      if (!q.correct_answer.trim()) return `Question ${i + 1} is missing a correct answer`;
+    }
+    return null;
+  }
+
+  async function save() {
+    const err = validate();
+    if (err) {
+      toast({ title: "Cannot save", description: err, variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quiz.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          title: title.trim(),
+          methodGroupIds: selectedGroupIds,
+          methodGroupName: selectedGroupIds.length === 1
+            ? (groups.find(g => g.id === selectedGroupIds[0])?.name || null)
+            : null,
+          methodGroupId: selectedGroupIds.length === 1 ? selectedGroupIds[0] : null,
+          questions,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Save failed");
+      }
+      // Refresh both the list and the withAnswers preview cache so the
+      // dialog underneath reflects the edits immediately.
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/programs", program.id, "quizzes"] });
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", quiz.id, "withAnswers"] });
+      toast({ title: "Quiz saved" });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Cannot save", description: e.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Quiz</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-quiz-title" className="text-xs">Quiz Title</Label>
+            <Input
+              id="edit-quiz-title"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Method Groups Covered ({selectedGroupIds.length} of {groups.length})</Label>
+            {groups.length === 0 ? (
+              <div className="text-xs text-muted-foreground italic">
+                This program has no method groups; cannot scope the quiz.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-border rounded-md p-2">
+                {groups.map(g => (
+                  <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
+                    <Checkbox
+                      checked={selectedGroupIds.includes(g.id)}
+                      onCheckedChange={() => toggleGroup(g.id)}
+                    />
+                    <span className="truncate">{g.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {questions.map((q, qIdx) => (
+              <Card key={qIdx}>
+                <CardContent className="py-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] font-semibold text-muted-foreground">Question {qIdx + 1}</div>
+                    {questions.length > 1 && (
+                      <Button variant="ghost" size="sm" className="h-6 px-1.5 text-destructive" onClick={() => removeQuestion(qIdx)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <Textarea
+                    placeholder="Question text"
+                    value={q.question}
+                    onChange={e => updateQuestion(qIdx, { question: e.target.value })}
+                    className="text-xs min-h-[60px]"
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {q.options.map((opt, oIdx) => {
+                      const letter = String.fromCharCode(65 + oIdx);
+                      return (
+                        <div key={oIdx} className="flex items-center gap-1.5">
+                          <input
+                            type="radio"
+                            name={`edit-correct-${qIdx}`}
+                            checked={q.correct_answer === letter}
+                            onChange={() => updateQuestion(qIdx, { correct_answer: letter })}
+                            className="h-3.5 w-3.5"
+                            aria-label={`Correct answer ${letter}`}
+                          />
+                          <Input
+                            placeholder={`${letter}. option text`}
+                            value={opt}
+                            onChange={e => updateOption(qIdx, oIdx, e.target.value)}
+                            className="text-xs h-7"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Textarea
+                    placeholder="Explanation (shown after the question is answered)"
+                    value={q.explanation}
+                    onChange={e => updateQuestion(qIdx, { explanation: e.target.value })}
+                    className="text-xs min-h-[40px]"
+                  />
+                </CardContent>
+              </Card>
+            ))}
+            <Button variant="outline" size="sm" onClick={addQuestion}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Question
+            </Button>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={save} disabled={submitting}>
+              {submitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
