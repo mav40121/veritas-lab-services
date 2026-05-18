@@ -69,7 +69,7 @@ const inProgressItems: RoadmapItem[] = [
   {
     title: "VeritaComp™ - Competency Assessment Management (Phase 1)",
     description:
-      "Manages all three CLIA competency types: technical (6-element assessment per method group), waived (2-of-4 method selection), and non-technical (supervisor checklist). Generates compliant PDF records with per-element documentation fields. Problem-solving quiz engine in active development, requires 100% score and appends full quiz record to the competency PDF.",
+      "Manages all three CLIA competency types: technical (6-element assessment per method group), waived (2-of-4 method selection), and non-technical (supervisor checklist). Generates compliant PDF records with per-element documentation fields. Element 6 problem-solving quiz engine is live: directors author quizzes in-app or upload JSON, edit questions in place, and attach a quiz to any method groups in their program. Each quiz requires a 100% score to pass; the full quiz and graded answers append to the competency PDF.",
   },
   {
     title: "VeritaStaff™ - Personnel and Credentialing Management",
@@ -80,9 +80,9 @@ const inProgressItems: RoadmapItem[] = [
 
 const comingSoonItems: RoadmapItem[] = [
   {
-    title: "VeritaComp™ - Expanded Question Banks (Phase 2)",
+    title: "VeritaComp™ - Shared Question Library (Phase 2)",
     description:
-      "Pre-built problem-solving questions for every major instrument and specialty. Chemistry, hematology, coagulation, blood bank, microbiology, urinalysis, and point-of-care. Required to fully activate Element 6 across all method groups.",
+      "Community-sourced library of Element 6 problem-solving questions, customer-built. Directors who author a quiz can opt in to contribute questions to a cross-lab library matched by instrument, analyte, specialty, and complexity. Other directors browse, upvote and downvote, and import library questions into their own quizzes (each import is a deep copy so local edits do not affect the library entry). All sharing is opt-in and anonymized at the lab level. The library is an optional accelerator; Element 6 is fully functional today via director-authored quizzes.",
   },
   {
     title: "VeritaLab™ - Director and Staff Credential Tracking",
