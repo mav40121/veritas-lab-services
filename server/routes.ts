@@ -9586,18 +9586,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const wantAnswers = req.query.withAnswers === "1" || req.query.withAnswers === "true";
     const parsedQuestions = JSON.parse(quiz.questions || "[]");
     if (wantAnswers) {
-      // Builder view: requires full access (matches requireWriteAccess gate)
-      // AND either system-default quiz (user_id=0) or a quiz owned by a lab
-      // the user can access.
+      // Builder / preview view: requires full access, evaluated against the
+      // quiz's owning lab (not the caller's own subscription) so lab members
+      // who flow through lab_members can see the answer key for any quiz in
+      // a lab they belong to. /api/veritacomp/quizzes/:id is unprefixed, so
+      // req.scope.lab is not populated by labScopeMiddleware; we resolve the
+      // lab from the quiz row itself.
       const fullUser = storage.getUserById(req.userId);
       if (!fullUser) return res.status(401).json({ error: "User not found" });
-      const accessLevel = getAccessLevel(fullUser, req.scope?.lab);
+
+      if (quiz.user_id === 0) {
+        // System-default quiz. Use user-level access (no specific lab to
+        // bind to). Active lab membership grants implicit full access via
+        // any lab they belong to that has a current subscription.
+        const accessLevel = getAccessLevel(fullUser, req.scope?.lab);
+        if (accessLevel !== 'full') {
+          return res.status(403).json({ error: "Write access required" });
+        }
+        return res.json({ ...quiz, questions: parsedQuestions });
+      }
+
+      // Lab-owned quiz. The caller must be an active member of the quiz's
+      // lab, and the lab's subscription must be in 'full' state.
+      const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
+      if (!owned) return res.status(404).json({ error: "Quiz not found" });
+      let quizLab: any = null;
+      if (quiz.lab_id) {
+        quizLab = (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(quiz.lab_id);
+      }
+      const accessLevel = getAccessLevel(fullUser, quizLab);
       if (accessLevel !== 'full') {
         return res.status(403).json({ error: "Write access required" });
-      }
-      if (quiz.user_id !== 0) {
-        const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
-        if (!owned) return res.status(404).json({ error: "Quiz not found" });
       }
       return res.json({ ...quiz, questions: parsedQuestions });
     }
