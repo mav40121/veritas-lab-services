@@ -6,6 +6,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { downloadPdfToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -151,6 +152,7 @@ export default function VeritaStaffAppPage() {
   // tier2_lab_id (FK to labs) since the legacy lab_id column on
   // staff_employees / staff_roles points at staff_labs(id), not labs(id).
   const activeLabId = useActiveLabId();
+  const labRoute = useLabRoute();
   const labKey = activeLabId ? `/api/labs/${activeLabId}/staff/lab` : `/api/staff/lab`;
   const empKey = activeLabId ? `/api/labs/${activeLabId}/staff/employees` : `/api/staff/employees`;
 
@@ -280,7 +282,7 @@ export default function VeritaStaffAppPage() {
             const compStatus = getCompetencyStatus(emp.competencySchedule);
             const roleNames = Array.from(new Set(emp.roles.map((r) => r.role)));
             return (
-              <Card key={emp.id} className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(`/veritastaff-app/${emp.id}`)}>
+              <Card key={emp.id} className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(labRoute(`/veritastaff-app/${emp.id}`))}>
                 <CardContent className="py-4 px-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">

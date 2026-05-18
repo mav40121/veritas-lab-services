@@ -19,6 +19,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders, getUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 interface DueSoonRow {
   id: number;
@@ -111,6 +112,7 @@ export function CorrelationsDueSoonWidget({
   const { toast } = useToast();
   const qc = useQueryClient();
   const readOnly = useIsReadOnly("veritamap");
+  const labRoute = useLabRoute();
 
   const { data: rows = [], isLoading } = useQuery<DueSoonRow[]>({
     queryKey: [`/api/veritamap/correlations/due-soon`, windowDays],
@@ -357,13 +359,13 @@ export function CorrelationsDueSoonWidget({
                           )}
                         </div>
                         <div className="mt-1.5 space-y-0.5 text-xs">
-                          <Link href={`/veritamap-app/${headRow.test_a_map_id}`} className="hover:text-primary">
+                          <Link href={labRoute(`/veritamap-app/${headRow.test_a_map_id}`)} className="hover:text-primary">
                             <span className="font-medium">{headRow.test_a_analyte}</span>
                             <span className="text-muted-foreground"> on {headRow.test_a_map_name}</span>
                           </Link>
                           <div className="text-muted-foreground flex items-center gap-1">
                             <ChevronRight size={11} />
-                            <Link href={`/veritamap-app/${headRow.test_b_map_id}`} className="hover:text-primary">
+                            <Link href={labRoute(`/veritamap-app/${headRow.test_b_map_id}`)} className="hover:text-primary">
                               <span className="font-medium text-foreground">{headRow.test_b_analyte}</span>
                               <span> on {headRow.test_b_map_name}</span>
                             </Link>
