@@ -9,7 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Tag, Loader2, CheckCircle2 } from "lucide-react";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
+import { Save, Tag, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
 
@@ -78,6 +80,23 @@ const PRICE_TYPE_GA4: Record<string, { item_name: string; price: number }> = {
 export default function AccountSettingsPage() {
   const { isLoggedIn, user } = useAuth();
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const { data: memberships } = useMemberships();
+  // The /api/account/seats endpoint dates to the platform's original single-
+  // lab era (initial commit 2026-03-26) and filters strictly by
+  // owner_user_id. It does NOT respect the active lab from the NavBar
+  // switcher. So if the operator is viewing this page while switched into
+  // a non-primary lab, the Team Members list still shows seats they invited
+  // under their OWN account, not seats for the currently active lab.
+  //
+  // Until seats become lab-scoped (parking-lot: lab_id column on
+  // user_seats + UI rework), we surface a banner and hide the invite UI
+  // when the active lab is not the user's primary, so the operator does
+  // not accidentally manage account-level seats while thinking they are
+  // managing a different lab's team.
+  const primaryLab = memberships?.find(m => m.isPrimaryLab) ?? null;
+  const isViewingNonPrimaryLab = !!activeLabId && primaryLab != null && primaryLab.labId !== activeLabId;
+  const activeLab = memberships?.find(m => m.labId === activeLabId) ?? null;
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
   const [accreditationChoice, setAccreditationChoice] = useState<AccreditationChoice>("CLIA");
@@ -612,6 +631,14 @@ export default function AccountSettingsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Team Members</CardTitle>
+            {isViewingNonPrimaryLab && (
+              <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 flex items-start gap-2">
+                <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-900 dark:text-amber-200">
+                  These are seats on your account ({user?.email}). They are not tied to the lab you have selected above ({activeLab?.labName || "this lab"}). To manage team members for that lab, switch back to your primary lab or contact its owner.
+                </div>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
               Invite staff to access your VeritaAssure™ account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
             </p>
@@ -792,7 +819,7 @@ export default function AccountSettingsPage() {
             {activeSeats.length === 0 && (
               <p className="text-sm text-muted-foreground">No team members added yet.</p>
             )}
-            {usedSeats < seatCount ? (
+            {usedSeats < seatCount && !isViewingNonPrimaryLab ? (
               <form onSubmit={handleInviteSeat} className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-foreground mb-2">Invite a team member</p>
