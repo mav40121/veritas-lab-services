@@ -107,6 +107,13 @@ interface QuizQuestion {
   options: string[];
   correct_answer: string;
   explanation?: string;
+  // Optional per-question competency-module tag. Rendered inline as a
+  // parenthetical prefix on the question text in preview, print, and the
+  // employee-take view. method_group_id binds to the program's method
+  // group; method_group_name is denormalized so the tag survives if the
+  // question is copied across labs (parked shared-library plan).
+  method_group_id?: number | null;
+  method_group_name?: string | null;
 }
 
 interface QuizListItem {
@@ -2767,6 +2774,21 @@ function NewQuizDialog({
                       onChange={e => updateQuestion(qIdx, { question: e.target.value })}
                       className="text-xs min-h-[60px]"
                     />
+                    <select
+                      aria-label="Method group this question tests"
+                      value={q.method_group_id ?? ""}
+                      onChange={e => {
+                        const id = e.target.value ? Number(e.target.value) : null;
+                        const name = id ? (groups.find(g => g.id === id)?.name || null) : null;
+                        updateQuestion(qIdx, { method_group_id: id, method_group_name: name });
+                      }}
+                      className="text-xs h-7 w-full rounded-md border border-input bg-background px-2"
+                    >
+                      <option value="">Tests knowledge of: (not specified)</option>
+                      {groups.map(g => (
+                        <option key={g.id} value={g.id}>Tests knowledge of: {g.name}</option>
+                      ))}
+                    </select>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {q.options.map((opt, oIdx) => {
                         const letter = String.fromCharCode(65 + oIdx);
@@ -2889,8 +2911,10 @@ function QuizPreviewDialog({
       }).join("");
       const explanation = view === "key" && q.explanation
         ? `<div class="exp"><b>Explanation:</b> ${esc(q.explanation)}</div>` : "";
+      const tag = q.method_group_name
+        ? `<span class="tag">(${esc(q.method_group_name)}) </span>` : "";
       return `<li class="q">
-                <div class="qtext">${esc(q.question)}</div>
+                <div class="qtext">${tag}${esc(q.question)}</div>
                 <ul class="opts">${options}</ul>
                 ${explanation}
               </li>`;
@@ -2904,6 +2928,7 @@ function QuizPreviewDialog({
         ol.qs { padding-left: 1.2em; }
         li.q { margin-bottom: 0.18in; page-break-inside: avoid; }
         .qtext { font-weight: 600; margin-bottom: 0.05in; }
+        .qtext .tag { font-weight: 400; color: #555; }
         ul.opts { list-style: none; padding-left: 1.2em; margin: 0.04in 0; }
         ul.opts li { margin: 0.02in 0; }
         ul.opts li.correct { font-weight: 700; color: #15803d; }
@@ -2978,7 +3003,12 @@ function QuizPreviewDialog({
               <ol className="space-y-4 list-decimal list-inside">
                 {quiz.questions.map((q) => (
                   <li key={q.id} className="text-sm leading-relaxed">
-                    <span className="font-medium">{q.question}</span>
+                    <span className="font-medium">
+                      {q.method_group_name && (
+                        <span className="font-normal text-muted-foreground">({q.method_group_name}) </span>
+                      )}
+                      {q.question}
+                    </span>
                     <ul className="mt-1 ml-6 space-y-0.5 list-none">
                       {q.options.map((opt, oIdx) => {
                         const letter = String.fromCharCode(65 + oIdx);
@@ -3195,6 +3225,21 @@ function EditQuizDialog({
                     onChange={e => updateQuestion(qIdx, { question: e.target.value })}
                     className="text-xs min-h-[60px]"
                   />
+                  <select
+                    aria-label="Method group this question tests"
+                    value={q.method_group_id ?? ""}
+                    onChange={e => {
+                      const id = e.target.value ? Number(e.target.value) : null;
+                      const name = id ? (groups.find(g => g.id === id)?.name || null) : null;
+                      updateQuestion(qIdx, { method_group_id: id, method_group_name: name });
+                    }}
+                    className="text-xs h-7 w-full rounded-md border border-input bg-background px-2"
+                  >
+                    <option value="">Tests knowledge of: (not specified)</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>Tests knowledge of: {g.name}</option>
+                    ))}
+                  </select>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {q.options.map((opt, oIdx) => {
                       const letter = String.fromCharCode(65 + oIdx);
