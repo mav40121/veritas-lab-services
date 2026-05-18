@@ -29,7 +29,10 @@ export function LabSwitcher() {
     try {
       await apiRequest("POST", "/api/labs/me/default", { labId: m.labId });
     } catch {}
-    queryClient.setQueryData(["/api/labs/me"], (old: Membership[] | undefined) => old);
+    // Refresh memberships so isPrimaryLab reflects the new default; the
+    // chip and any downstream consumer that picks the active lab via
+    // memberships.find(m => m.isPrimaryLab) will pick up the change.
+    queryClient.invalidateQueries({ queryKey: ["/api/labs/me"] });
     setLocation(withLabPrefix(location, m.labId));
   };
 
