@@ -34,6 +34,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Link } from "wouter";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const PT_CATEGORIES = [
   "General Chemistry",
@@ -64,6 +65,7 @@ const AAA_METHODS: { value: string; label: string }[] = [
 type FilterType = "all" | "gaps" | "covered" | "aaa" | "waived";
 
 export default function VeritaPTAppPage() {
+  const labRoute = useLabRoute();
   const { user } = useAuth();
   // Multi-Lab Tier 2 Phase 3.6b: route PT reads/writes through the active lab.
   const activeLabId = useActiveLabId();
@@ -215,7 +217,7 @@ export default function VeritaPTAppPage() {
           PT coverage analysis is available on all paid plans. Upgrade to see your proficiency testing gaps and program recommendations.
         </p>
         <Button asChild className="bg-[#006064] hover:bg-[#004d50] text-white">
-          <Link href="/account/settings">Upgrade Plan</Link>
+          <Link href={labRoute("/account/settings")}>Upgrade Plan</Link>
         </Button>
       </div>
     );

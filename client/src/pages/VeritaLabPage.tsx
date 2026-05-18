@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ChevronRight, FileText, Bell, Archive, Award, AlertTriangle } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const FEATURE_CARDS = [
   {
@@ -40,6 +41,7 @@ const FEATURES = [
 ];
 
 export default function VeritaLabPage() {
+    const labRoute = useLabRoute();
     useSEO({ title: "VeritaLab\u2122 | Laboratory Certificate and Document Storage Software", description: "Centralized storage for laboratory accreditation certificates, licenses, and compliance documents. Never scramble for paperwork during a survey again." });
 return (
     <div>
@@ -75,7 +77,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritalab-app">Open VeritaLab{"™"} <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritalab-app")}>Open VeritaLab{"™"} <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -189,7 +191,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritalab-app">Open VeritaLab{"™"} <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritalab-app")}>Open VeritaLab{"™"} <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

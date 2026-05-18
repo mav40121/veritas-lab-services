@@ -26,6 +26,7 @@ import { trackEvent } from "@/lib/analytics";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import type { InsertStudy } from "@shared/schema";
 import fdaData from "@/lib/fdaInstrumentData.json";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const API_BASE = "https://www.veritaslabservices.com";
 // Retained for potential future use; VeritaCheck picker no longer renders this catalog.
@@ -201,6 +202,7 @@ const plans = [
 ];
 
 export default function VeritaCheckPage() {
+  const labRoute = useLabRoute();
   const [, navigate] = useLocation();
   const search = useSearch();
   // Edit-existing-study mode. The page is mounted from both legacy
@@ -1527,13 +1529,13 @@ return (
               <span className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium bg-background text-foreground shadow">
                 New Study
               </span>
-              <Link href="/dashboard" className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
+              <Link href={labRoute("/dashboard")} className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
                 <LayoutDashboard size={13} />My Studies
               </Link>
-              <Link href="/dashboard/verifications" className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
+              <Link href={labRoute("/dashboard/verifications")} className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
                 <ClipboardCheck size={13} />Instrument Verification
               </Link>
-              <Link href="/veritacheck/cumsum" className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
+              <Link href={labRoute("/veritacheck/cumsum")} className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium gap-1.5 hover:bg-background/60 transition-colors">
                 <Activity size={13} />CUMSUM Monitoring
               </Link>
             </div>

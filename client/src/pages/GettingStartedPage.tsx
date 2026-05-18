@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
+import { useLabRoute } from "@/hooks/useLabRoute";
   CheckCircle2, Clock, Circle, ArrowRight, Settings, Map,
   FlaskConical, ClipboardCheck, Users, Award, FileText, Mail, Download, Shield,
 } from "lucide-react";
@@ -118,6 +119,7 @@ function StepStatusBadge({ complete }: { complete: boolean }) {
 }
 
 export default function GettingStartedPage() {
+  const labRoute = useLabRoute();
   const { isLoggedIn, user } = useAuth();
 
   // Onboarding duration depends on plan: Clinic/Community 1hr, Hospital 2hrs, Enterprise custom
@@ -232,7 +234,7 @@ export default function GettingStartedPage() {
             <p className="text-sm text-amber-200">
               Add your CLIA number to unlock official reports and seat management.
             </p>
-            <Link href="/account/settings" className="text-xs text-amber-400 hover:underline mt-1 inline-block">
+            <Link href={labRoute("/account/settings")} className="text-xs text-amber-400 hover:underline mt-1 inline-block">
               Go to Account Settings
             </Link>
           </div>

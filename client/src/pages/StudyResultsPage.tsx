@@ -88,6 +88,7 @@ const CHART_COLORS = ["#2ecbc7", "#4f9ef5", "#67d967", "#f5a623", "#a78bfa"];
 
 // ─── Shared header / pass-fail ────────────────────────────────────────────────
 function StudyHeader({ study, results }: { study: Study; results: StudyResults }) {
+  const labRoute = useLabRoute();
   const [pdfLoading, setPdfLoading] = useState(false);
   const { toast } = useToast();
   const handlePDF = useCallback(async () => {
@@ -110,7 +111,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground -ml-2">
-            <Link href="/dashboard">
+            <Link href={labRoute("/dashboard")}>
               <ArrowLeft size={14} className="mr-1" />Dashboard
             </Link>
           </Button>
@@ -1663,7 +1664,7 @@ export default function StudyResults() {
               Sign In
             </Button>
           )}
-          <Button variant="outline" asChild><Link href="/dashboard">My Studies</Link></Button>
+          <Button variant="outline" asChild><Link href={labRoute("/dashboard")}>My Studies</Link></Button>
         </div>
       </div>
     );
@@ -1674,7 +1675,7 @@ export default function StudyResults() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center">
         <p className="text-muted-foreground">Study not found.</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/dashboard">Back to Dashboard</Link>
+          <Link href={labRoute("/dashboard")}>Back to Dashboard</Link>
         </Button>
       </div>
     );
@@ -1768,7 +1769,7 @@ export default function StudyResults() {
         <div className="mb-4 flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
           <span className="text-sm text-primary font-medium">Study linked to your Instrument Verification Package</span>
           <button
-            onClick={() => navigate("/dashboard/verifications")}
+            onClick={() => navigate(labRoute("/dashboard/verifications"))}
             className="text-sm text-primary underline font-semibold"
           >
             Back to Verification Package
@@ -1805,7 +1806,7 @@ export default function StudyResults() {
 
       <div className="mt-6 flex gap-3 justify-end">
         <Button asChild variant="outline">
-          <Link href="/study/new">Run Another Study</Link>
+          <Link href={labRoute("/study/new")}>Run Another Study</Link>
         </Button>
         <BottomPDFButton study={study} results={results} />
       </div>

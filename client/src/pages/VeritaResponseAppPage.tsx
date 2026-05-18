@@ -190,7 +190,7 @@ export default function VeritaResponseAppPage() {
           Post-survey deficiency response is available on all paid plans. Upgrade to manage findings, due-date clocks, and corrective-action drafting.
         </p>
         <Button asChild className="bg-[#006064] hover:bg-[#004d50] text-white">
-          <Link href="/account/settings">Upgrade Plan</Link>
+          <Link href={labRoute("/account/settings")}>Upgrade Plan</Link>
         </Button>
       </div>
     );

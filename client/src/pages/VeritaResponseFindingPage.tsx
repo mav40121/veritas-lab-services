@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+import { useLabRoute } from "@/hooks/useLabRoute";
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
@@ -136,6 +137,7 @@ function clientValidateAabb(finding: any): { ok: boolean; missing: string[] } {
 }
 
 export default function VeritaResponseFindingPage() {
+  const labRoute = useLabRoute();
   const { user } = useAuth();
   const params = useParams<{ id?: string }>();
   const [, navigate] = useLocation();
@@ -417,7 +419,7 @@ export default function VeritaResponseFindingPage() {
           Upgrade to a paid plan to manage findings.
         </p>
         <Button asChild className="bg-[#006064] hover:bg-[#004d50] text-white">
-          <Link href="/account/settings">Upgrade Plan</Link>
+          <Link href={labRoute("/account/settings")}>Upgrade Plan</Link>
         </Button>
       </div>
     );

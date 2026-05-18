@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, FlaskConical, ChevronRight, ClipboardList, AlertTriangle, Shield } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const FEATURES = [
   "Track PT enrollment by analyte, specialty, and PT provider",
@@ -22,6 +23,7 @@ const HOW_IT_WORKS = [
 ];
 
 export default function VeritaPTPage() {
+  const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
 
     useSEO({ title: "VeritaPT™ | Proficiency Testing Gap Analyzer for Clinical Labs", description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements." });
@@ -52,7 +54,7 @@ return (
               <div className="flex flex-wrap gap-3">
                 {isLoggedIn ? (
                   <Button asChild size="lg">
-                    <Link href="/veritapt/app">Start Tracking PT <ChevronRight size={16} className="ml-1" /></Link>
+                    <Link href={labRoute("/veritapt/app")}>Start Tracking PT <ChevronRight size={16} className="ml-1" /></Link>
                   </Button>
                 ) : (
                   <Button asChild size="lg">
@@ -186,7 +188,7 @@ return (
           </p>
           {isLoggedIn ? (
             <Button asChild size="lg">
-              <Link href="/veritapt/app">Open VeritaPT™ <ChevronRight size={16} className="ml-1" /></Link>
+              <Link href={labRoute("/veritapt/app")}>Open VeritaPT™ <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
           ) : (
             <div className="flex justify-center gap-3 flex-wrap">

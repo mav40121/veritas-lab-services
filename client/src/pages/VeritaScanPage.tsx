@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ExternalLink, ChevronRight, ClipboardList, AlertTriangle, FlaskConical } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const DOMAINS = [
   { num: "I",    label: "Lab Administration",         items: 16, desc: "CLIA certificate, director qualifications, personnel files, org structure, delegation" },
@@ -39,6 +40,7 @@ const FEATURES = [
 
 
 export default function VeritaScanPage() {
+    const labRoute = useLabRoute();
     const { isLoggedIn } = useAuth();
     useSEO({ title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software", description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared." });
 return (
@@ -78,7 +80,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritascan-app">Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritascan-app")}>Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -245,7 +247,7 @@ return (
                     </li>
                   ))}
                 </ul>
-                <Link href="/veritascan-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
+                <Link href={labRoute("/veritascan-app")} className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
                   Launch VeritaScan™ →
                 </Link>
               </CardContent>
@@ -314,7 +316,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritascan-app">Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritascan-app")}>Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ChevronRight, Users, ClipboardCheck, FlaskConical, BookOpen, Stethoscope, AlertTriangle } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const COMPETENCY_TYPES = [
   {
@@ -65,6 +66,7 @@ const FEATURES = [
 ];
 
 export default function VeritaCompPage() {
+    const labRoute = useLabRoute();
     useSEO({ title: "VeritaComp\u2122 | Laboratory Competency Assessment Software", description: "Manage the six CLIA competency elements for every lab employee. Track assessments, generate PDF documentation, and stay survey-ready year-round." });
     const { isLoggedIn } = useAuth();
 return (
@@ -105,7 +107,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/veritacomp-app">Launch VeritaComp{"™"} <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritacomp-app")}>Launch VeritaComp{"™"} <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -276,7 +278,7 @@ return (
                     </li>
                   ))}
                 </ul>
-                <Link href="/veritacomp-app" className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
+                <Link href={labRoute("/veritacomp-app")} className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
                   Launch VeritaComp{"™"} {"\u2192"}
                 </Link>
               </CardContent>
@@ -337,7 +339,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritacomp-app">Launch VeritaComp{"™"} <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritacomp-app")}>Launch VeritaComp{"™"} <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>

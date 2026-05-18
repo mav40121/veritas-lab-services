@@ -14,8 +14,10 @@ import { useState } from "react";
 import { getToken } from "@/lib/auth";
 import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 export default function Dashboard() {
+  const labRoute = useLabRoute();
   const { toast } = useToast();
   const readOnly = useIsReadOnly('veritacheck');
   // Multi-Lab Tier 2 Phase 3: studies are lab-scoped. labId comes from the
@@ -106,7 +108,7 @@ export default function Dashboard() {
             </Button>
           )}
           <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
-            <Link href="/dashboard/verifications">
+            <Link href={labRoute("/dashboard/verifications")}>
               <FileText size={13} />
               Instrument Verification Packages
             </Link>
@@ -118,7 +120,7 @@ export default function Dashboard() {
             </Button>
           ) : (
             <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Link href="/study/new">
+              <Link href={labRoute("/study/new")}>
                 <PlusCircle size={14} className="mr-1.5" />
                 New Study
               </Link>
@@ -165,7 +167,7 @@ export default function Dashboard() {
             Run your first study to get started.
           </p>
           <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href="/study/new">Start a Study</Link>
+            <Link href={labRoute("/study/new")}>Start a Study</Link>
           </Button>
         </div>
       ) : (
