@@ -65,6 +65,10 @@ const FAQ_CATEGORIES = [
         a: "VeritaComp\u2122 manages staff competency assessments across the six CLIA-required methods, the 2-of-4 waived testing requirements, and non-technical duties. Integrates with VeritaMap\u2122 for automatic instrument and method group setup. Generates the documentation framework surveyors expect across TJC, CAP, COLA, and CLIA-only accreditation.",
       },
       {
+        q: "Where do the Element 6 problem-solving quiz questions come from?",
+        a: "Directors author Element 6 quizzes themselves, in-app. The Quizzes tab on every competency program lets you write questions row by row (question, four options, correct answer, explanation), upload a JSON file you wrote elsewhere, edit any existing quiz, and attach a quiz to any method group in the program. Each quiz requires a 100% score to pass; the full quiz and graded answers append to the competency PDF. Director authorship is intentional: Element 6 is the director's signoff on what their staff need to know, and surveyors expect that ownership to be visible. A planned future enhancement (parked, no timeline yet) is a shared, opt-in question library where directors who want to contribute can publish their questions for other labs with the same instruments to browse and upvote.",
+      },
+      {
         q: "What is VeritaLab\u2122?",
         a: "VeritaLab\u2122 tracks your laboratory's certificates and accreditations: CLIA certificates, state licenses, accreditation status, and lab director credentials. Reminder alerts fire well before anything expires, and the actual certificate documents are stored so you can retrieve them in seconds during a survey.",
       },
