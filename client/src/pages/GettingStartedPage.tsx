@@ -9,10 +9,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-import { useLabRoute } from "@/hooks/useLabRoute";
   CheckCircle2, Clock, Circle, ArrowRight, Settings, Map,
   FlaskConical, ClipboardCheck, Users, Award, FileText, Mail, Download, Shield,
 } from "lucide-react";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 interface OnboardingStatus {
   onboarding_seen: boolean;
