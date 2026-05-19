@@ -424,7 +424,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Reagent Lot Verification (CLSI EP26-A)",
     ref_interval: "Reference Range Verification",
-    pt_coag: "PT/Coag New Lot Verification",
+    pt_coag: "PT/INR Geometric Mean Calculator (CLSI H47)",
     qc_range: "QC Lot Verification (CLSI C24-Ed4)",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
     sensitivity: "Sensitivity Verification (EP17)",
@@ -2185,7 +2185,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const ptCompactM2Pass = module2.pass ? "PASS" : "FAIL";
   const ptCompactM3Pass = module3 ? (module3.pass ? "PASS" : "FAIL") : "N/A";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT Coag New Lot Verification - ${study.testName}</title><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT/INR Geometric Mean Calculator (H47) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}
