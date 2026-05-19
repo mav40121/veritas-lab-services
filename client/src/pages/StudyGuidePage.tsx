@@ -276,7 +276,7 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4">CLSI EP28-A3c</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
-                  <td className="py-3 px-4 font-medium text-primary">Lot-to-Lot Verification</td>
+                  <td className="py-3 px-4 font-medium text-primary">Reagent Lot Verification (EP26-A)</td>
                   <td className="py-3 px-4 text-muted-foreground">Does the new reagent lot perform equivalently to the current lot?</td>
                   <td className="py-3 px-4">When changing reagent lots for select analytes</td>
                   <td className="py-3 px-4">42 CFR §493.1255</td>
@@ -432,7 +432,7 @@ export default function StudyGuidePage() {
             icon={<Repeat size={22} className="text-white" />}
             color="bg-[#d97706]"
             badge="Reagent Change"
-            title="Lot-to-Lot Verification"
+            title="Reagent Lot Verification (CLSI EP26-A)"
             subtitle="Confirm new reagent lot performs equivalently to the current lot"
             what="Lot-to-lot verification compares the performance of a new reagent lot against the current lot to confirm analytical equivalence before the new lot is placed into routine use. This is required for select analytes where reagent lot changes can affect calibration, measurement bias, or reportable range."
             howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck™ calculates the bias between lots and evaluates it against the lot-to-lot acceptance criterion adopted by your lab for each analyte (typically the §493 PT TEa, with medical director or designee approval)."
