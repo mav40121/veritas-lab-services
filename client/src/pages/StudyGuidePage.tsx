@@ -256,7 +256,13 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4 font-medium text-primary">Precision</td>
                   <td className="py-3 px-4 text-muted-foreground">Is my instrument producing consistent, reproducible results?</td>
                   <td className="py-3 px-4">When introducing a new method; after major maintenance</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(i)</a>; allowable imprecision adopted from analyte PT criterion</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(ii)</a>; allowable imprecision adopted from analyte PT criterion</td>
+                </tr>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Sensitivity Verification (EP17-A2)</td>
+                  <td className="py-3 px-4 text-muted-foreground">What is the lowest concentration my method can detect (LoB / LoD) and quantify (LoQ) reliably?</td>
+                  <td className="py-3 px-4">Verification: when introducing an FDA-cleared method. Establishment: for any modified or in-house (LDT) method.</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(2)(iii)</a> for establishment; <a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)</a> for verification. CLSI EP17-A2.</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Reference Range Verification</td>
@@ -356,7 +362,7 @@ export default function StudyGuidePage() {
               "Any time imprecision is suspected based on QC patterns",
             ]}
             frequency="At method introduction; after major maintenance"
-            regulation="42 CFR §493.1253(b)(1)(i)"
+            regulation="42 CFR §493.1253(b)(1)(ii)"
             passFail="Each control level must have a CV% at or below the allowable imprecision adopted by your lab for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck™ reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than against the §493 PT TEa for the analyte. VeritaCheck™ uses §493 PT TEa as the precision benchmark when your lab adopts that approach (typical and recommended); this is the more conservative and easier-to-defend choice. Your medical director or designee approves the criterion in either case."
             refs={[
               REFS.cliaVerificationBrochure,
