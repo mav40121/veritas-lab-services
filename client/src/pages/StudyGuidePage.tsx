@@ -69,6 +69,16 @@ const REFS = {
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep17/",
     source: "CLSI",
   },
+  clsiEP26: {
+    label: "CLSI EP26-A - User Evaluation of Between-Reagent Lot Variation",
+    url: "https://clsi.org/standards/products/method-evaluation/documents/ep26/",
+    source: "CLSI",
+  },
+  clsiC24: {
+    label: "CLSI C24-Ed4 - Statistical Quality Control for Quantitative Measurement Procedures: Principles and Definitions",
+    url: "https://clsi.org/standards/products/quality-management/documents/c24/",
+    source: "CLSI",
+  },
   clsiOverview: {
     label: "CLSI EP Documents - Verifying Performance Claims (Overview)",
     url: "https://clsi.org/resources/insights-blog/verifying-performance-claims-for-medical-laboratory-tests/",
@@ -277,9 +287,15 @@ export default function StudyGuidePage() {
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Reagent Lot Verification (EP26-A)</td>
-                  <td className="py-3 px-4 text-muted-foreground">Does the new reagent lot perform equivalently to the current lot?</td>
-                  <td className="py-3 px-4">When changing reagent lots for select analytes</td>
-                  <td className="py-3 px-4">42 CFR §493.1255</td>
+                  <td className="py-3 px-4 text-muted-foreground">Does the new reagent lot perform equivalently to the current lot on patient samples?</td>
+                  <td className="py-3 px-4">At each qualifying reagent lot change</td>
+                  <td className="py-3 px-4">42 CFR §493.1253(b)(3), §493.1255; CLSI EP26-A</td>
+                </tr>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">QC Lot Verification (C24-Ed4)</td>
+                  <td className="py-3 px-4 text-muted-foreground">What are the lab's calculated mean and SD for this new QC lot, and did the changeover introduce any analytical drift?</td>
+                  <td className="py-3 px-4">When introducing a new QC lot; optional crossover bias check vs prior lot; optional vendor SDI comparison</td>
+                  <td className="py-3 px-4">42 CFR §493.1256; CLSI C24-Ed4</td>
                 </tr>
                 <tr className="hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Multi-Analyte Coagulation Verification</td>
@@ -433,19 +449,20 @@ export default function StudyGuidePage() {
             color="bg-[#d97706]"
             badge="Reagent Change"
             title="Reagent Lot Verification (CLSI EP26-A)"
-            subtitle="Confirm new reagent lot performs equivalently to the current lot"
-            what="Lot-to-lot verification compares the performance of a new reagent lot against the current lot to confirm analytical equivalence before the new lot is placed into routine use. This is required for select analytes where reagent lot changes can affect calibration, measurement bias, or reportable range."
-            howIt="You test a set of patient specimens or control materials on both the current reagent lot and the new reagent lot. Results are compared for bias, and the difference is evaluated against your laboratory's acceptance criteria. VeritaCheck™ calculates the bias between lots and evaluates it against the lot-to-lot acceptance criterion adopted by your lab for each analyte (typically the §493 PT TEa, with medical director or designee approval)."
+            subtitle="Confirm new reagent lot performs equivalently to the current lot, using patient samples"
+            what="Reagent Lot Verification confirms that a new reagent lot produces patient results consistent with the current lot, before the new lot is placed into routine clinical use. The study is governed by CLSI EP26-A (User Evaluation of Between-Reagent Lot Variation), which establishes that the comparison should use real patient specimens rather than QC material because QC matrices may not reflect how a reagent lot performs on the actual patient sample matrix."
+            howIt="Patient specimens spanning the analytical measurement range are tested in parallel on both the current reagent lot and the new reagent lot. VeritaCheck™ computes per-specimen percent difference and applies a two-part TEa-based pass rule: (1) the mean absolute percent difference must be within the adopted total allowable error, AND (2) at least 90 percent of paired specimens must fall within the TEa criterion. This TEa-based variant of EP26-A is the rule most working clinical labs apply; the formal critical-difference protocol described in the full EP26-A document is impractical for routine chemistry and has been flagged as such in peer-reviewed evaluations (Thompson 2017, Loh 2020)."
             when={[
-              "When changing to a new reagent lot for select analytes (manufacturer-specified)",
-              "When the manufacturer recommends lot-to-lot verification in its instructions for use",
-              "When QC results after a lot change suggest a shift in performance",
-              "As a best practice for high-volume or clinically sensitive analytes",
+              "Every time a new reagent lot is brought into clinical use, including coag, chemistry, hematology, and immunoassay reagents",
+              "When the manufacturer's instructions for use (IFU) require verification at a lot change",
+              "When QC drift after a lot change suggests a performance shift",
+              "Recommended for high-volume or clinically sensitive analytes as standard practice",
             ]}
             frequency="At each qualifying reagent lot change"
-            regulation="42 CFR §493.1255"
-            passFail="The bias between lots must fall within the lot-to-lot acceptance criterion adopted by your lab for each analyte (typically the §493 PT TEa). VeritaCheck™ evaluates measured bias against the adopted criterion and reports pass or fail per analyte. Your laboratory director or designee reviews and approves results before the new lot enters service."
+            regulation="42 CFR §493.1253(b)(3) (manufacturer's instructions) and §493.1255 (calibration verification). CLSI EP26-A is the methodology standard."
+            passFail="The mean absolute percent difference between current and new lot must be within the adopted TEa, AND at least 90 percent of paired specimens must fall within TEa. Per-specimen results outside TEa on a passing study are documented in the per-sample table. Your laboratory director or designee reviews and approves results before the new lot enters service."
             refs={[
+              REFS.clsiEP26,
               REFS.cliaCalVerBrochure,
               REFS.cfr493931,
             ]}
