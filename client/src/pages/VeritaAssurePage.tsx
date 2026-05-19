@@ -16,7 +16,7 @@ const MODULES = [
     label: "VeritaCheck™",
     desc: "EP Study Analysis",
     detail:
-      "Calibration Verification / Linearity, Correlation / Method Comparison, Precision, Lot-to-Lot Reagent Verification, QC Range Establishment, and Coagulation New Lot studies. CLIA-compliant PDF reports with signature block on page 1.",
+      "Calibration Verification / Linearity, Correlation / Method Comparison, Precision, Reagent Lot Verification (EP26-A), QC Lot Verification (C24-Ed4), and Coagulation New Lot studies. CLIA-compliant PDF reports with signature block on page 1.",
     badge: "Live",
     badgeColor: "emerald",
     icon: FlaskConical,

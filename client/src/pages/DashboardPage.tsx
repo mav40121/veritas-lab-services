@@ -189,7 +189,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm truncate">{study.testName}</span>
                     <Badge variant="outline" className="text-xs shrink-0">
-                      {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/Coag" : study.studyType === "qc_range" ? "QC Range" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"}
+                      {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/Coag" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"}
                     </Badge>
                     <span className={`text-xs font-semibold ${isDraft ? "text-amber-500" : study.status === "pass" ? "pass-badge" : "fail-badge"}`}>
                       {(study.status || "").toUpperCase()}

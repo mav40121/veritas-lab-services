@@ -425,7 +425,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     lot_to_lot: "Reagent Lot Verification (CLSI EP26-A)",
     ref_interval: "Reference Range Verification",
     pt_coag: "PT/Coag New Lot Verification",
-    qc_range: "QC Range Establishment",
+    qc_range: "QC Lot Verification (CLSI C24-Ed4)",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
     sensitivity: "Sensitivity Verification (EP17)",
   };
@@ -2286,7 +2286,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
     (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`) +
     ` ${qcCliaStatement}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - QC Range Establishment - ${study.testName}</title><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - QC Lot Verification (C24-Ed4) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   body { counter-reset: page; }
   </style></head><body>
