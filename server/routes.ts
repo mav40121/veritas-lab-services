@@ -2969,11 +2969,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // removed in a Phase 3 cleanup PR.
 
   // GET /api/labs/:labId/studies — list studies for a specific lab.
+  // snake_case -> camelCase mapper. The lab-scoped study reads use raw
+  // better-sqlite3 SELECT * because drizzle's studies schema does not yet
+  // include lab_id. The raw rows come back with snake_case keys, but the
+  // entire client reads camelCase (study.cliaAllowableError,
+  // study.dataPoints, study.teaIsPercentage, etc.) — without this map the
+  // dashboard renders "TEa: ±NaN%" and StudyResultsPage throws inside
+  // JSON.parse(undefined dataPoints), tripping the ErrorBoundary.
+  const studyRowToClient = (row: any): any => {
+    if (!row) return row;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      createdByUserId: row.created_by_user_id,
+      testName: row.test_name,
+      instrument: row.instrument,
+      analyst: row.analyst,
+      date: row.date,
+      studyType: row.study_type,
+      cliaAllowableError: row.clia_allowable_error,
+      dataPoints: row.data_points,
+      instruments: row.instruments,
+      status: row.status,
+      teaIsPercentage: row.tea_is_percentage,
+      teaUnit: row.tea_unit,
+      cliaAbsoluteFloor: row.clia_absolute_floor,
+      cliaAbsoluteUnit: row.clia_absolute_unit,
+      instrumentMeta: row.instrument_meta,
+      createdAt: row.created_at,
+      lab_id: row.lab_id,
+    };
+  };
+
   app.get("/api/labs/:labId/studies", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const rows = (db as any).$client.prepare(
       "SELECT * FROM studies WHERE lab_id = ? ORDER BY id DESC"
     ).all(req.scope.labId);
-    res.json(rows);
+    res.json(rows.map(studyRowToClient));
   });
 
   // GET /api/labs/:labId/studies/:id — single study, lab-scoped.
@@ -2982,7 +3014,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
     ).get(parseInt(req.params.id), req.scope.labId) as any;
     if (!study) return res.status(404).json({ error: "Study not found" });
-    res.json(study);
+    res.json(studyRowToClient(study));
   });
 
   // POST /api/labs/:labId/studies — create a study scoped to this lab.
