@@ -22,9 +22,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, Columns3,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
@@ -66,6 +67,33 @@ const USAGE_UNITS = ["each", "test", "cartridge", "strip", "slide", "tube", "via
 
 type SortField = "item_name" | "category" | "department" | "quantity_on_hand" | "burn_rate" | "reorder_point" | "days_remaining" | "expiration_date" | "vendor";
 type SortDir = "asc" | "desc";
+
+// Per-user column visibility (Pfizer demo follow-up 2026-05-19).
+// Item Name and Actions always show; everything else is user-toggleable.
+// Hidden columns are persisted as ui_preferences.veritastock_hidden_columns
+// (array of these keys) on the user record.
+type ToggleableColumnKey =
+  | "category"
+  | "department"
+  | "quantity_on_hand"
+  | "burn_rate"
+  | "reorder_point"
+  | "days_remaining"
+  | "stock_status"
+  | "expiration_date"
+  | "vendor";
+
+const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
+  { key: "category",           label: "Category" },
+  { key: "department",         label: "Dept" },
+  { key: "quantity_on_hand",   label: "On Hand" },
+  { key: "burn_rate",          label: "Burn Rate" },
+  { key: "reorder_point",      label: "Par Level" },
+  { key: "days_remaining",     label: "Days Left" },
+  { key: "stock_status",       label: "Stock Status" },
+  { key: "expiration_date",    label: "Expiration" },
+  { key: "vendor",             label: "Vendor" },
+];
 
 function getExpirationStatus(expDate: string | null): { label: string; color: string; priority: number } {
   if (!expDate) return { label: "N/A", color: "gray", priority: 5 };
@@ -404,6 +432,46 @@ export default function VeritaStockInventoryPage() {
   // Sort - default: needs_reorder first, then days_remaining ascending
   const [sortField, setSortField] = useState<SortField>("days_remaining");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // Per-user column visibility. Default to all-visible; hydrate from the
+  // server-side ui_preferences blob on mount. Toggling persists immediately
+  // so a refresh restores the user's view. Item Name and Actions are not
+  // toggleable here (they are required for the table to be usable at all).
+  const [hiddenColumns, setHiddenColumns] = useState<Set<ToggleableColumnKey>>(new Set());
+  const [columnsPanelOpen, setColumnsPanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetch(`${API_BASE}/api/account/ui-preferences`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((prefs) => {
+        const hidden = (prefs && Array.isArray(prefs.veritastock_hidden_columns))
+          ? prefs.veritastock_hidden_columns
+          : [];
+        setHiddenColumns(new Set(hidden));
+      })
+      .catch(() => { /* default to all-visible on any failure */ });
+  }, [isLoggedIn]);
+
+  const persistHiddenColumns = useCallback((next: Set<ToggleableColumnKey>) => {
+    fetch(`${API_BASE}/api/account/ui-preferences`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ veritastock_hidden_columns: Array.from(next) }),
+    }).catch(() => { /* best-effort; local state already reflects the change */ });
+  }, []);
+
+  const toggleColumn = useCallback((key: ToggleableColumnKey) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      persistHiddenColumns(next);
+      return next;
+    });
+  }, [persistHiddenColumns]);
+
+  const isColumnVisible = (key: ToggleableColumnKey): boolean => !hiddenColumns.has(key);
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
@@ -781,6 +849,20 @@ export default function VeritaStockInventoryPage() {
           variant="outline"
           size="sm"
           className="ml-auto border-primary/30 text-primary hover:bg-primary/10"
+          onClick={() => setColumnsPanelOpen((v) => !v)}
+          data-testid="button-stock-columns-toggle"
+          aria-expanded={columnsPanelOpen}
+        >
+          <Columns3 size={14} className="mr-1.5" />
+          Columns
+          {hiddenColumns.size > 0 && (
+            <span className="ml-1.5 text-xs text-muted-foreground">({TOGGLEABLE_COLUMNS.length - hiddenColumns.size}/{TOGGLEABLE_COLUMNS.length})</span>
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-primary/30 text-primary hover:bg-primary/10"
           onClick={handleExportCsv}
           data-testid="button-stock-export-csv"
         >
@@ -788,6 +870,46 @@ export default function VeritaStockInventoryPage() {
           Export CSV
         </Button>
       </div>
+
+      {/* Column visibility panel (Pfizer demo follow-up 2026-05-19).
+          Selections persist per user via /api/account/ui-preferences so
+          inventory leads who only need a subset of columns see a calmer
+          table on every visit. Item Name and Actions are always shown. */}
+      {columnsPanelOpen && (
+        <div className="mb-4 p-3 border rounded-lg bg-card/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-muted-foreground">
+              Show or hide columns. Your selection is saved to your account.
+            </div>
+            {hiddenColumns.size > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setHiddenColumns(new Set());
+                  persistHiddenColumns(new Set());
+                }}
+                data-testid="button-stock-columns-reset"
+              >
+                Show all
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {TOGGLEABLE_COLUMNS.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <Checkbox
+                  checked={!hiddenColumns.has(key)}
+                  onCheckedChange={() => toggleColumn(key)}
+                  data-testid={`checkbox-stock-column-${key}`}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {loading ? (
@@ -810,15 +932,15 @@ export default function VeritaStockInventoryPage() {
             <thead>
               <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
                 <SortHeader field="item_name">Item Name</SortHeader>
-                <SortHeader field="category">Category</SortHeader>
-                <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>
-                <SortHeader field="quantity_on_hand">On Hand</SortHeader>
-                <SortHeader field="burn_rate">Burn Rate</SortHeader>
-                <SortHeader field="reorder_point">Par Level</SortHeader>
-                <SortHeader field="days_remaining">Days Left</SortHeader>
-                <th className="text-left px-3 py-2 font-medium">Stock Status</th>
-                <SortHeader field="expiration_date">Expiration</SortHeader>
-                <SortHeader field="vendor" className="hidden lg:table-cell">Vendor</SortHeader>
+                {isColumnVisible("category") && <SortHeader field="category">Category</SortHeader>}
+                {isColumnVisible("department") && <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>}
+                {isColumnVisible("quantity_on_hand") && <SortHeader field="quantity_on_hand">On Hand</SortHeader>}
+                {isColumnVisible("burn_rate") && <SortHeader field="burn_rate">Burn Rate</SortHeader>}
+                {isColumnVisible("reorder_point") && <SortHeader field="reorder_point">Par Level</SortHeader>}
+                {isColumnVisible("days_remaining") && <SortHeader field="days_remaining">Days Left</SortHeader>}
+                {isColumnVisible("stock_status") && <th className="text-left px-3 py-2 font-medium">Stock Status</th>}
+                {isColumnVisible("expiration_date") && <SortHeader field="expiration_date">Expiration</SortHeader>}
+                {isColumnVisible("vendor") && <SortHeader field="vendor" className="hidden lg:table-cell">Vendor</SortHeader>}
                 <th className="text-center px-3 py-2 font-medium w-[80px]">Actions</th>
               </tr>
             </thead>
@@ -829,23 +951,41 @@ export default function VeritaStockInventoryPage() {
                     <div>{item.item_name}</div>
                     <div className="text-xs text-muted-foreground">{item.usage_unit}</div>
                   </td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline" className="text-xs">{item.category}</Badge>
-                  </td>
-                  <td className="px-3 py-2 text-xs hidden md:table-cell">{item.department}</td>
-                  <td className="px-3 py-2 font-mono text-sm">
-                    {item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
-                  </td>
-                  <td className="px-3 py-2 font-mono text-sm">
-                    {item.burn_rate > 0 ? `${item.burn_rate}/day` : <span className="text-muted-foreground">-</span>}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-sm text-center">{item.reorder_point > 0 ? item.reorder_point.toLocaleString() : <span className="text-muted-foreground">-</span>}</td>
-                  <td className="px-3 py-2 text-center"><DaysLeftDisplay item={item} /></td>
-                  <td className="px-3 py-2"><StockStatusBadge item={item} /></td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <ExpirationBadge expDate={item.expiration_date} />
-                  </td>
-                  <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
+                  {isColumnVisible("category") && (
+                    <td className="px-3 py-2">
+                      <Badge variant="outline" className="text-xs">{item.category}</Badge>
+                    </td>
+                  )}
+                  {isColumnVisible("department") && (
+                    <td className="px-3 py-2 text-xs hidden md:table-cell">{item.department}</td>
+                  )}
+                  {isColumnVisible("quantity_on_hand") && (
+                    <td className="px-3 py-2 font-mono text-sm">
+                      {item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
+                    </td>
+                  )}
+                  {isColumnVisible("burn_rate") && (
+                    <td className="px-3 py-2 font-mono text-sm">
+                      {item.burn_rate > 0 ? `${item.burn_rate}/day` : <span className="text-muted-foreground">-</span>}
+                    </td>
+                  )}
+                  {isColumnVisible("reorder_point") && (
+                    <td className="px-3 py-2 font-mono text-sm text-center">{item.reorder_point > 0 ? item.reorder_point.toLocaleString() : <span className="text-muted-foreground">-</span>}</td>
+                  )}
+                  {isColumnVisible("days_remaining") && (
+                    <td className="px-3 py-2 text-center"><DaysLeftDisplay item={item} /></td>
+                  )}
+                  {isColumnVisible("stock_status") && (
+                    <td className="px-3 py-2"><StockStatusBadge item={item} /></td>
+                  )}
+                  {isColumnVisible("expiration_date") && (
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <ExpirationBadge expDate={item.expiration_date} />
+                    </td>
+                  )}
+                  {isColumnVisible("vendor") && (
+                    <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
+                  )}
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setShowForm(true); }} disabled={readOnly}>
