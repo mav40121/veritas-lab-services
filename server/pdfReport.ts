@@ -867,8 +867,16 @@ function narrativeHTML(
     const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)");
     const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
     const prLabel = criterionLabel(analyteName);
+    // Methodology note prepended to both pass and fail narratives so the
+    // printed report names the path (Simple aggregate CV vs Advanced EP15
+    // ANOVA) and surfaces the CV formula. Cites CLSI EP15-A3 alongside
+    // the existing 42 CFR §493.1253 reference.
+    const methodologyNote = isAdvanced
+      ? `Methodology: CLSI EP15-A3 Advanced (ANOVA-decomposed precision). The study estimates within-run, between-day, and total CV across multiple days, runs, and replicates per run. `
+      : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
     if (results.overallPass) {
-      narrative = `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
+      narrative = methodologyNote;
+      narrative += `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
       if (meetsAdlm) {
         narrative += `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the ${prAdj} acceptance criterion. `;
       } else {
@@ -882,7 +890,8 @@ function narrativeHTML(
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
       narrative += `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
-      narrative = `The precision study for ${analyteName} did not meet the ${prAdj} acceptance criterion. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
+      narrative = methodologyNote;
+      narrative += `The precision study for ${analyteName} did not meet the ${prAdj} acceptance criterion. The maximum observed CV of ${sf(maxCV, 2)}% exceeds the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
       narrative += `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
