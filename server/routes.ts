@@ -12360,6 +12360,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── UI PREFERENCES ──────────────────────────────────────────────────────
+  // Per-user front-end settings persisted across sessions/devices. Lives on
+  // users.ui_preferences (JSON text). First consumer is VeritaStock column
+  // visibility (Pfizer demo follow-up). Adding new preference keys does not
+  // require a schema bump; readers should treat missing keys as defaults.
+  // Seat users get their own preferences row (it lives on their user record,
+  // not the owner's), which is the correct UX since column visibility is a
+  // personal display choice rather than a lab policy.
+  app.get("/api/account/ui-preferences", authMiddleware, (req: any, res) => {
+    try {
+      const row = (db as any).$client.prepare(
+        "SELECT ui_preferences FROM users WHERE id = ?"
+      ).get(req.userId) as any;
+      let prefs: Record<string, any> = {};
+      if (row?.ui_preferences) {
+        try { prefs = JSON.parse(row.ui_preferences); } catch {}
+      }
+      res.json(prefs);
+    } catch (err: any) {
+      console.error("[ui-preferences GET]", err?.message);
+      res.status(500).json({ error: "Failed to load preferences" });
+    }
+  });
+
+  // PATCH merges the provided keys into the stored JSON. Pass null on a key
+  // to remove it. The full payload after merge is returned for client cache
+  // hydration.
+  app.patch("/api/account/ui-preferences", authMiddleware, (req: any, res) => {
+    try {
+      const incoming = req.body && typeof req.body === "object" ? req.body : {};
+      const row = (db as any).$client.prepare(
+        "SELECT ui_preferences FROM users WHERE id = ?"
+      ).get(req.userId) as any;
+      let current: Record<string, any> = {};
+      if (row?.ui_preferences) {
+        try { current = JSON.parse(row.ui_preferences); } catch {}
+      }
+      const merged: Record<string, any> = { ...current };
+      for (const [k, v] of Object.entries(incoming)) {
+        if (v === null) delete merged[k];
+        else merged[k] = v;
+      }
+      (db as any).$client.prepare(
+        "UPDATE users SET ui_preferences = ? WHERE id = ?"
+      ).run(JSON.stringify(merged), req.userId);
+      res.json(merged);
+    } catch (err: any) {
+      console.error("[ui-preferences PATCH]", err?.message);
+      res.status(500).json({ error: "Failed to save preferences" });
+    }
+  });
+
   // ── ACCOUNT SETTINGS ────────────────────────────────────────────────────
   // Reads lab identity from labs table (via user.lab_id), includes seat/owner
   // role context and lock state for the UI.

@@ -914,6 +914,15 @@ if (!colNames.includes("preferred_pt_vendor")) {
   try { sqlite.exec("ALTER TABLE users ADD COLUMN preferred_pt_vendor TEXT DEFAULT 'none'"); } catch {}
 }
 
+// UI preferences (JSON) — per-user front-end settings that need persistence
+// across sessions and devices. First consumer: VeritaStock column visibility
+// (Pfizer demo follow-up 2026-05-19). Stored as JSON text rather than
+// individual columns so new preference keys can land without a schema bump.
+// Shape: { veritastock_hidden_columns?: string[], ... }
+if (!colNames.includes("ui_preferences")) {
+  try { sqlite.exec("ALTER TABLE users ADD COLUMN ui_preferences TEXT DEFAULT '{}'"); } catch {}
+}
+
 // Add permissions column to user_seats for per-module view/edit permissions
 try {
   sqlite.prepare(`ALTER TABLE user_seats ADD COLUMN permissions TEXT DEFAULT '{}'`).run();
