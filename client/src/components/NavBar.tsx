@@ -12,7 +12,7 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 const allMobileLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Consulting" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/pricing", label: "Plans" },
   { href: "/veritaassure", label: "VeritaAssure\u2122" },
   { href: "/team", label: "Our Team" },
   { href: "/veritacheck", label: "VeritaCheck™" },
@@ -79,10 +79,10 @@ export function NavBar() {
             Consulting
           </Link>
 
-          {/* Pricing */}
+          {/* Plans (route stays /pricing; only the displayed label changes) */}
           <Link href="/pricing" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/pricing") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
-            Pricing
+            Plans
           </Link>
 
           {/* VeritaAssure — direct link to all-modules suite page */}
