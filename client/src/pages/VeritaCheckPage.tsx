@@ -631,7 +631,22 @@ export default function VeritaCheckPage() {
   const [qcDateStart, setQcDateStart] = useState("");
   const [qcDateEnd, setQcDateEnd] = useState("");
   const [qcRunData, setQcRunData] = useState<Record<string, number[]>>({});
+  // Legacy summary-style prior-lot fields. Kept in state so studies saved
+  // before the prior-lot replicate grid landed continue to round-trip
+  // cleanly. New studies use qcPriorLotRuns instead and leave this map
+  // empty.
   const [qcOldLotData, setQcOldLotData] = useState<Record<string, { mean: number | null; sd: number | null }>>({});
+  // Prior-lot replicate grid keyed identically to qcRunData
+  // ("${analyte}|${level}|${analyzer}" -> number[]). Parallel runs collected
+  // during the crossover establishment window. Empty until the user opts in.
+  const [qcPriorLotRuns, setQcPriorLotRuns] = useState<Record<string, number[]>>({});
+  // Vendor (package-insert assayed) values per analyte+level. Method-agnostic
+  // by industry convention, so keyed without the analyzer.
+  const [qcVendorValues, setQcVendorValues] = useState<Record<string, { mean: number | null; sd: number | null }>>({});
+  // Section toggles: the crossover bias check and the vendor SDI are
+  // opt-in. Range establishment (the run grid above) is always required.
+  const [qcShowPriorLot, setQcShowPriorLot] = useState(false);
+  const [qcShowVendor, setQcShowVendor] = useState(false);
   const [qcNumRuns, setQcNumRuns] = useState(15);
 
   // Multi-Analyte Lot Comparison state
@@ -1196,7 +1211,23 @@ export default function VeritaCheckPage() {
             const runs = (qcRunData[key] || []).filter(v => !isNaN(v));
             if (runs.length === 0) continue;
             const old = qcOldLotData[key];
-            dataPoints.push({ analyte, level, analyzer, runs, oldMean: old?.mean, oldSD: old?.sd });
+            // Crossover bias check: parallel prior-lot replicates keyed
+            // identically to the new-lot grid; only attached when the
+            // section is opted in and the grid has values.
+            const priorRuns = qcShowPriorLot
+              ? (qcPriorLotRuns[key] || []).filter(v => !isNaN(v))
+              : [];
+            // Vendor SDI: method-agnostic key (analyte+level only) so
+            // the same vendor mean/SD applies across all analyzers.
+            const vendorKey = `${analyte}|${level}`;
+            const vendor = qcShowVendor ? qcVendorValues[vendorKey] : undefined;
+            dataPoints.push({
+              analyte, level, analyzer, runs,
+              oldMean: old?.mean, oldSD: old?.sd,
+              priorLotRuns: priorRuns.length > 0 ? priorRuns : undefined,
+              vendorMean: vendor?.mean ?? undefined,
+              vendorSD: vendor?.sd ?? undefined,
+            });
           }
         }
       }
@@ -1206,9 +1237,16 @@ export default function VeritaCheckPage() {
         testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "-",
         date, studyType: "qc_range", cliaAllowableError: 0.10,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
-        dataPoints: JSON.stringify({ dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels, dateRange: { start: qcDateStart, end: qcDateEnd }, oldLotData: qcOldLotData }),
+        dataPoints: JSON.stringify({
+          dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels,
+          dateRange: { start: qcDateStart, end: qcDateEnd },
+          oldLotData: qcOldLotData,
+          priorLotRuns: qcPriorLotRuns,
+          vendorValues: qcVendorValues,
+          showPriorLot: qcShowPriorLot, showVendor: qcShowVendor,
+        }),
         instruments: JSON.stringify(qcAnalyzers),
-        status: results.overallShiftCount === 0 ? "pass" : "fail",
+        status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
       };
       saveMutation.mutate(study);
@@ -2220,6 +2258,37 @@ return (
                         <div className="space-y-1.5"><Label>Date Range End</Label><Input type="date" value={qcDateEnd} onChange={e => setQcDateEnd(e.target.value)} /></div>
                         <div className="space-y-1.5"><Label>Runs per Level</Label><Input type="number" min={5} max={30} value={qcNumRuns} onChange={e => setQcNumRuns(Math.max(5, Math.min(30, parseInt(e.target.value) || 15)))} /></div>
                       </div>
+                      {/* Opt-in sections per the lot-change family redesign:
+                          crossover bias check (CLSI C24-Ed4 accelerated path)
+                          and vendor SDI comparison (Westgard convention,
+                          informational only per CLIA §493.1256). */}
+                      <div className="space-y-2 pt-3 border-t border-border">
+                        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Optional sections</div>
+                        <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+                          <Checkbox
+                            checked={qcShowPriorLot}
+                            onCheckedChange={v => setQcShowPriorLot(!!v)}
+                            data-testid="checkbox-qc-prior-lot"
+                            className="mt-0.5"
+                          />
+                          <div className="space-y-0.5">
+                            <div>Include crossover bias check (parallel prior-lot replicates)</div>
+                            <div className="text-xs text-muted-foreground">Enter the retiring lot's replicate runs alongside the new lot to detect any analytical drift during the changeover. Bias verdict uses pooled SD: accept &lt; 1 SD, caution 1 to 2 SD, fail at or above 2 SD.</div>
+                          </div>
+                        </label>
+                        <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+                          <Checkbox
+                            checked={qcShowVendor}
+                            onCheckedChange={v => setQcShowVendor(!!v)}
+                            data-testid="checkbox-qc-vendor"
+                            className="mt-0.5"
+                          />
+                          <div className="space-y-0.5">
+                            <div>Include vendor SDI comparison (assayed QC only)</div>
+                            <div className="text-xs text-muted-foreground">Enter the package-insert mean and SD per level for an assayed QC product. Computes Standard Deviation Index per Westgard. Informational only; the lab uses its own calculated SD on the chart per CLIA §493.1256.</div>
+                          </div>
+                        </label>
+                      </div>
                     </CardContent>
                   </Card>
 
@@ -2228,51 +2297,106 @@ return (
                     <Card key={analyte}>
                       <CardHeader className="pb-3"><CardTitle className="text-base">{analyte}: QC Run Data</CardTitle></CardHeader>
                       <CardContent className="space-y-4">
-                        {qcLevels.map(level => (
+                        {qcLevels.map(level => {
+                          const vendorKey = `${analyte}|${level}`;
+                          const vendor = qcVendorValues[vendorKey];
+                          return (
                           <div key={level} className="space-y-2">
                             <div className="text-sm font-medium">{level}</div>
+                            {qcShowVendor && (
+                              <div className="flex items-center gap-3 p-2 rounded bg-muted/30 border border-border/50">
+                                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Vendor (package insert)</div>
+                                <Label className="text-xs">Mean:</Label>
+                                <Input
+                                  type="number" step="any" placeholder="-"
+                                  value={vendor?.mean ?? ""}
+                                  onChange={e => setQcVendorValues({
+                                    ...qcVendorValues,
+                                    [vendorKey]: {
+                                      mean: e.target.value === "" ? null : parseFloat(e.target.value),
+                                      sd: vendor?.sd ?? null,
+                                    },
+                                  })}
+                                  className="h-7 text-xs w-24"
+                                />
+                                <Label className="text-xs">SD:</Label>
+                                <Input
+                                  type="number" step="any" placeholder="-"
+                                  value={vendor?.sd ?? ""}
+                                  onChange={e => setQcVendorValues({
+                                    ...qcVendorValues,
+                                    [vendorKey]: {
+                                      mean: vendor?.mean ?? null,
+                                      sd: e.target.value === "" ? null : parseFloat(e.target.value),
+                                    },
+                                  })}
+                                  className="h-7 text-xs w-24"
+                                />
+                                <span className="text-xs text-muted-foreground italic">applied across all analyzers for this level</span>
+                              </div>
+                            )}
                             {qcAnalyzers.map(analyzer => {
                               const key = `${analyte}|${level}|${analyzer}`;
                               const runs = qcRunData[key] || Array(qcNumRuns).fill(NaN);
+                              const priorRuns = qcPriorLotRuns[key] || Array(qcNumRuns).fill(NaN);
+                              const legacyOld = qcOldLotData[key];
+                              const hasLegacy = legacyOld && (legacyOld.mean != null || legacyOld.sd != null);
                               return (
                                 <div key={analyzer} className="space-y-1">
                                   <div className="text-xs text-muted-foreground">{analyzer}</div>
-                                  <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
-                                    {Array.from({ length: qcNumRuns }).map((_, ri) => (
-                                      <Input key={ri} type="number" step="any" placeholder="-"
-                                        value={!isNaN(runs[ri]) ? runs[ri] : ""}
-                                        onChange={e => {
-                                          const updated = [...(qcRunData[key] || Array(qcNumRuns).fill(NaN))];
-                                          updated[ri] = e.target.value === "" ? NaN : parseFloat(e.target.value);
-                                          setQcRunData({ ...qcRunData, [key]: updated });
-                                        }}
-                                        className="h-7 text-xs text-center" />
-                                    ))}
+                                  <div className="space-y-0.5">
+                                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">New lot</div>
+                                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
+                                      {Array.from({ length: qcNumRuns }).map((_, ri) => (
+                                        <Input key={ri} type="number" step="any" placeholder="-"
+                                          value={!isNaN(runs[ri]) ? runs[ri] : ""}
+                                          onChange={e => {
+                                            const updated = [...(qcRunData[key] || Array(qcNumRuns).fill(NaN))];
+                                            updated[ri] = e.target.value === "" ? NaN : parseFloat(e.target.value);
+                                            setQcRunData({ ...qcRunData, [key]: updated });
+                                          }}
+                                          className="h-7 text-xs text-center" />
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-4 mt-1">
-                                    <div className="text-xs text-muted-foreground">Old lot mean:</div>
-                                    <Input type="number" step="any" placeholder="-"
-                                      value={qcOldLotData[key]?.mean ?? ""}
-                                      onChange={e => setQcOldLotData({ ...qcOldLotData, [key]: { ...qcOldLotData[key], mean: e.target.value === "" ? null : parseFloat(e.target.value), sd: qcOldLotData[key]?.sd ?? null } })}
-                                      className="h-7 text-xs w-24" />
-                                    <div className="text-xs text-muted-foreground">Old lot SD:</div>
-                                    <Input type="number" step="any" placeholder="-"
-                                      value={qcOldLotData[key]?.sd ?? ""}
-                                      onChange={e => setQcOldLotData({ ...qcOldLotData, [key]: { ...qcOldLotData[key], sd: e.target.value === "" ? null : parseFloat(e.target.value), mean: qcOldLotData[key]?.mean ?? null } })}
-                                      className="h-7 text-xs w-24" />
-                                  </div>
+                                  {qcShowPriorLot && (
+                                    <div className="space-y-0.5 pt-1">
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Prior lot (crossover)</div>
+                                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
+                                        {Array.from({ length: qcNumRuns }).map((_, ri) => (
+                                          <Input key={ri} type="number" step="any" placeholder="-"
+                                            value={!isNaN(priorRuns[ri]) ? priorRuns[ri] : ""}
+                                            onChange={e => {
+                                              const updated = [...(qcPriorLotRuns[key] || Array(qcNumRuns).fill(NaN))];
+                                              updated[ri] = e.target.value === "" ? NaN : parseFloat(e.target.value);
+                                              setQcPriorLotRuns({ ...qcPriorLotRuns, [key]: updated });
+                                            }}
+                                            className="h-7 text-xs text-center bg-muted/20" />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {hasLegacy && !qcShowPriorLot && (
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground italic">
+                                      <span>Legacy prior-lot summary:</span>
+                                      <span>mean {legacyOld!.mean ?? "-"}</span>
+                                      <span>SD {legacyOld!.sd ?? "-"}</span>
+                                      <span className="text-[10px]">(enable crossover bias check above to enter parallel replicates)</span>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
                           </div>
-                        ))}
+                          );
+                        })}
                         {qcNumRuns < 10 && <p className="text-xs text-amber-500">Minimum 10 runs recommended per level</p>}
                       </CardContent>
                     </Card>
                   ))}
                   <Alert>
                     <Shield size={14} />
-                    <AlertDescription className="text-xs">Per policy, SD does not change lot to lot. Use the historical/peer-derived SD for control limits, not the SD calculated here unless it represents a significant change.</AlertDescription>
+                    <AlertDescription className="text-xs">Per CLIA 42 CFR §493.1256, the laboratory must determine its own mean and SD for the QC materials it uses. The lab's calculated mean and SD from this study become the operating values on the Levey-Jennings chart. Vendor (package-insert) SD is reference only.</AlertDescription>
                   </Alert>
                 </div>
               ) : studyType === "multi_analyte_coag" ? (
