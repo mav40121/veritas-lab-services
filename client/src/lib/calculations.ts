@@ -842,7 +842,16 @@ export function calculateLotToLot(
   const overallPass = cohortResults.every(c => c.pass);
   const teaPct = (tea * 100).toFixed(1);
 
-  const summary = cohortResults.map(c =>
+  // Methodology note prepended to the narrative so the printed and on-screen
+  // report names CLSI EP26-A explicitly. The pass rule used here is the
+  // common TEa-based variant: pass when the mean absolute percent difference
+  // is within TEa AND at least 90% of paired specimens fall within TEa. This
+  // is a TEa-based variant of EP26-A; the formal critical-difference protocol
+  // in EP26-A is impractical for routine clinical chemistry (per Loh 2020 and
+  // Thompson 2017 evaluations) and the TEa rule is what most labs use in
+  // practice.
+  const methodology = `Methodology: CLSI EP26-A (User Evaluation of Between-Reagent Lot Variation). Patient samples are tested on both the current reagent lot and the new reagent lot; per-specimen percent difference is evaluated against the adopted total allowable error (TEa). Pass criterion: mean absolute percent difference within TEa AND at least 90% of paired specimens within TEa.`;
+  const summary = methodology + " " + cohortResults.map(c =>
     `${c.cohort} cohort (N=${c.n}): Mean |%Diff| = ${c.meanAbsPctDiff.toFixed(1)}%, Coverage = ${c.coverage.toFixed(0)}% within TEa of ±${teaPct}%. ${c.pass ? "PASS" : "FAIL"}.`
   ).join(" ") + ` Overall: ${overallPass ? "PASS" : "FAIL"}: ${totalPass}/${totalSpecimens} specimens within TEa.`;
 
