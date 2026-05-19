@@ -13,6 +13,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
 import { saveAs } from "file-saver";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
+import { SampleReportsSection } from "@/components/SampleReportsSection";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, ReferenceLine, Legend, Tooltip as RechartsTooltip
@@ -657,6 +658,21 @@ export default function DemoLabPage() {
                   ))}
                 </div>
               )}
+
+              {/* Sample reports (Pfizer demo follow-up 2026-05-19). Lives at the
+                  bottom of the VeritaCheck tab so a prospect reviewing the
+                  Riverside studies can also download representative PDFs for
+                  the EP study families not represented in the seed (QC Lot
+                  Verification with three sections, PT/INR Geometric Mean
+                  Calculator, Simple Precision, etc.). Each PDF runs through
+                  the production generator with realistic fixture data. */}
+              <div className="pt-6">
+                <div className="h-px mb-6" style={{ background: "linear-gradient(to right, transparent, #01696F30, transparent)" }} />
+                <SampleReportsSection
+                  heading="VeritaCheck™ Sample Reports"
+                  subheading="Download a real, generated PDF for each EP study type. Same production code path that signs the customer reports above."
+                />
+              </div>
             </div>
             );
           })()}

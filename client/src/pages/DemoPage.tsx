@@ -10,13 +10,10 @@ import { Switch } from "@/components/ui/switch";
 import {
   Calculator, TrendingDown, TrendingUp, DollarSign,
   Users, BarChart3, Grid3X3, Activity, ChevronDown, Package,
-  FileDown, Loader2,
+  FileDown,
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { DEMO_SAMPLES } from "@/lib/demoSampleReports";
-import { downloadPdfToken } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { SampleReportsSection } from "@/components/SampleReportsSection";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, Tooltip as RechartsTooltip, ReferenceArea, Legend,
@@ -191,77 +188,6 @@ function DemoHeatmap({ data, title }: { data: number[][]; title: string }) {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// SECTION 0: VeritaCheck Sample Reports (Pfizer demo follow-up 2026-05-19)
-// ══════════════════════════════════════════════════════════════════════════════
-
-function SampleReportsSection() {
-  const { toast } = useToast();
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
-
-  const handleDownload = async (sample: typeof DEMO_SAMPLES[number]) => {
-    setLoadingKey(sample.key);
-    try {
-      const { study, results } = sample.build();
-      const res = await fetch(`${API_BASE}/api/generate-pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ study, results }),
-      });
-      if (!res.ok) {
-        throw new Error(await res.text() || `HTTP ${res.status}`);
-      }
-      const { token } = await res.json();
-      downloadPdfToken(token, sample.filename);
-    } catch (err: any) {
-      toast({
-        title: "Could not generate sample report",
-        description: "Please try again. If the problem persists, contact info@veritaslabservices.com.",
-        variant: "destructive",
-      });
-      console.error("[demo sample report]", err);
-    } finally {
-      setLoadingKey(null);
-    }
-  };
-
-  return (
-    <div className="grid sm:grid-cols-2 gap-4">
-      {DEMO_SAMPLES.map(sample => (
-        <Card key={sample.key} className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{sample.label}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
-                {sample.clsi}
-              </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
-                {sample.cfr}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">{sample.blurb}</p>
-            <Button
-              onClick={() => handleDownload(sample)}
-              disabled={loadingKey === sample.key}
-              className="w-full"
-              style={{ backgroundColor: "#01696F" }}
-              data-testid={`button-sample-${sample.key}`}
-            >
-              {loadingKey === sample.key ? (
-                <><Loader2 size={14} className="mr-1.5 animate-spin" />Generating PDF…</>
-              ) : (
-                <><FileDown size={14} className="mr-1.5" />Download sample PDF</>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
     </div>
   );
 }

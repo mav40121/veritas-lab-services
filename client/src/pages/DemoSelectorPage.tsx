@@ -1,4 +1,5 @@
 import { useLocation } from "wouter";
+import { SampleReportsSection } from "@/components/SampleReportsSection";
 
 const modules = [
   {
@@ -229,6 +230,17 @@ export default function DemoSelectorPage() {
 
           </div>
         ))}
+      </div>
+
+      {/* Sample reports — visible on the selector landing so prospects can
+          download real PDFs immediately without picking a demo path first.
+          Shared component sourced from /components/SampleReportsSection. */}
+      <div style={{ maxWidth: "960px", margin: "0 auto", padding: "8px 20px 48px" }}>
+        <div style={{ height: "1px", background: "linear-gradient(to right, transparent, #01696F30, transparent)", marginBottom: "40px" }} />
+        <SampleReportsSection
+          heading="VeritaCheck™ Sample Reports"
+          subheading="Download a real, generated PDF for each EP study type. Demo lab identity is Riverside Regional Medical Center (CLIA 22D0999999), a fixture for demonstration only."
+        />
       </div>
 
       {/* Bottom note */}
