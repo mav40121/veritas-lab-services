@@ -619,10 +619,14 @@ export default function VeritaCheckPage() {
     Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null, y: null }))
   );
 
-  // QC Range Establishment state
-  const [qcAnalytes, setQcAnalytes] = useState<string[]>(["PT", "APTT"]);
+  // QC Lot Verification state. Default to empty so a fresh study reads as
+  // analyte-agnostic; the user adds whatever analyte(s) apply (chemistry,
+  // hematology, immunoassay, coagulation, urinalysis). Default analyzer
+  // label is generic ("Instrument 1") rather than the prior Stago-coag-
+  // specific "TOP 351" to match the broadened scope.
+  const [qcAnalytes, setQcAnalytes] = useState<string[]>([]);
   const [qcAnalyteCustom, setQcAnalyteCustom] = useState("");
-  const [qcAnalyzers, setQcAnalyzers] = useState<string[]>(["TOP 351"]);
+  const [qcAnalyzers, setQcAnalyzers] = useState<string[]>(["Instrument 1"]);
   const [qcLevels, setQcLevels] = useState<string[]>(["Normal", "Abnormal"]);
   const [qcDateStart, setQcDateStart] = useState("");
   const [qcDateEnd, setQcDateEnd] = useState("");
@@ -2142,23 +2146,52 @@ return (
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label>Analytes</Label>
-                        <div className="flex flex-wrap gap-3">
-                          {["PT", "APTT", "Fibrinogen"].map(a => (
-                            <label key={a} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                              <input type="checkbox" checked={qcAnalytes.includes(a)} onChange={e => {
-                                setQcAnalytes(prev => e.target.checked ? [...prev, a] : prev.filter(x => x !== a));
-                              }} className="rounded" />{a}
-                            </label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {qcAnalytes.map(a => (
+                            <Badge key={a} variant="outline" className="text-xs flex items-center gap-1.5 py-1 px-2">
+                              {a}
+                              <button
+                                type="button"
+                                onClick={() => setQcAnalytes(qcAnalytes.filter(x => x !== a))}
+                                className="text-muted-foreground hover:text-destructive ml-0.5"
+                                aria-label={`Remove ${a}`}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </Badge>
                           ))}
                           <div className="flex items-center gap-1.5">
-                            <Input placeholder="Other analyte" value={qcAnalyteCustom} onChange={e => setQcAnalyteCustom(e.target.value)} className="h-7 text-xs w-32" />
-                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
-                              if (qcAnalyteCustom.trim() && !qcAnalytes.includes(qcAnalyteCustom.trim())) {
-                                setQcAnalytes([...qcAnalytes, qcAnalyteCustom.trim()]); setQcAnalyteCustom("");
-                              }
-                            }}>Add</Button>
+                            <Input
+                              placeholder="Analyte name (e.g. Glucose, Hemoglobin A1c, PT)"
+                              value={qcAnalyteCustom}
+                              onChange={e => setQcAnalyteCustom(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter" && qcAnalyteCustom.trim() && !qcAnalytes.includes(qcAnalyteCustom.trim())) {
+                                  e.preventDefault();
+                                  setQcAnalytes([...qcAnalytes, qcAnalyteCustom.trim()]);
+                                  setQcAnalyteCustom("");
+                                }
+                              }}
+                              className="h-7 text-xs w-72"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                if (qcAnalyteCustom.trim() && !qcAnalytes.includes(qcAnalyteCustom.trim())) {
+                                  setQcAnalytes([...qcAnalytes, qcAnalyteCustom.trim()]);
+                                  setQcAnalyteCustom("");
+                                }
+                              }}
+                            >
+                              Add
+                            </Button>
                           </div>
                         </div>
+                        {qcAnalytes.length === 0 && (
+                          <p className="text-xs text-muted-foreground">Add at least one analyte to begin. This study works for any quantitative test (chemistry, hematology, immunoassay, coagulation, urinalysis).</p>
+                        )}
                       </div>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
@@ -2169,7 +2202,7 @@ return (
                               {qcAnalyzers.length > 1 && <Button variant="ghost" size="icon" onClick={() => setQcAnalyzers(qcAnalyzers.filter((_, j) => j !== i))} className="w-7 h-7"><Trash2 size={12} /></Button>}
                             </div>
                           ))}
-                          {qcAnalyzers.length < 4 && <Button variant="outline" size="sm" onClick={() => setQcAnalyzers([...qcAnalyzers, `TOP ${qcAnalyzers.length + 351}`])}><PlusCircle size={12} className="mr-1" />Add Analyzer</Button>}
+                          {qcAnalyzers.length < 4 && <Button variant="outline" size="sm" onClick={() => setQcAnalyzers([...qcAnalyzers, `Instrument ${qcAnalyzers.length + 1}`])}><PlusCircle size={12} className="mr-1" />Add Analyzer</Button>}
                         </div>
                         <div className="space-y-1.5">
                           <Label>Control Levels</Label>
