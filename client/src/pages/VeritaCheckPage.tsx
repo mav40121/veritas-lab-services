@@ -1569,7 +1569,7 @@ return (
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
                           <SelectItem value="pt_coag">PT/Coag New Lot Verification (CLSI H47)</SelectItem>
-                          <SelectItem value="qc_range">QC Range Establishment (CLSI C24-Ed4)</SelectItem>
+                          <SelectItem value="qc_range">QC Lot Verification (CLSI C24-Ed4)</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison, Coag (CLSI EP26-A)</SelectItem>
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
@@ -2138,7 +2138,7 @@ return (
               ) : studyType === "qc_range" ? (
                 <div className="space-y-6">
                   <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-base">QC Range Establishment Setup</CardTitle></CardHeader>
+                    <CardHeader className="pb-3"><CardTitle className="text-base">QC Lot Verification (CLSI C24-Ed4) Setup</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label>Analytes</Label>
