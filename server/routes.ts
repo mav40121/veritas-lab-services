@@ -2442,7 +2442,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         case "precision": return "Precision (EP15)";
         case "ref_interval": return "Reference Interval Verification";
         case "pt_coag": return "PT/Coag New Lot Validation";
-        case "lot_to_lot": return "Lot-to-Lot Verification";
+        case "lot_to_lot": return "Reagent Lot Verification (EP26-A)";
         case "qc_range": return "QC Range";
         case "multi_analyte_coag": return "Multi-Analyte Lot Comparison";
         case "cumsum": return "CUMSUM";

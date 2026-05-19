@@ -422,7 +422,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     cal_ver: "Calibration Verification / Linearity",
     precision: "Precision Verification (EP15)",
     method_comparison: "Correlation / Method Comparison",
-    lot_to_lot: "Lot-to-Lot Verification",
+    lot_to_lot: "Reagent Lot Verification (CLSI EP26-A)",
     ref_interval: "Reference Range Verification",
     pt_coag: "PT/Coag New Lot Verification",
     qc_range: "QC Range Establishment",
@@ -464,7 +464,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
     ? `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`
     : "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I.";
   const specs = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Lot-to-Lot Verification" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26-A)" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     [criterionRowLabel, teaStr],
     [cfrReferenceLabel, cfrReferenceValue],
@@ -1982,7 +1982,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary} ${cliaStatement}</p>
   </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Lot-to-Lot Verification - ${study.testName}</title><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reagent Lot Verification (EP26-A) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}

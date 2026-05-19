@@ -1490,7 +1490,7 @@ return (
                         <div>Calibration Verification / Linearity</div>
                         <div>Correlation / Method Comparison</div>
                         <div>Accuracy and Precision</div>
-                        <div>Lot-to-Lot Verification</div>
+                        <div>Reagent Lot Verification (EP26-A)</div>
                         <div>PT/Coag New Lot Validation</div>
                       </div>
                       <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -1564,15 +1564,15 @@ return (
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cal_ver">Calibration Verification / Linearity</SelectItem>
-                          <SelectItem value="method_comparison">Correlation / Method Comparison</SelectItem>
-                          <SelectItem value="precision">Precision Verification (EP15)</SelectItem>
-                          <SelectItem value="lot_to_lot">Lot-to-Lot Verification</SelectItem>
-                          <SelectItem value="pt_coag">PT/Coag New Lot Verification</SelectItem>
-                          <SelectItem value="qc_range">QC Range Establishment</SelectItem>
-                          <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison (Coag)</SelectItem>
-                          <SelectItem value="ref_interval">Reference Range Verification</SelectItem>
-                          <SelectItem value="sensitivity">Sensitivity Verification (EP17)</SelectItem>
+                          <SelectItem value="cal_ver">Calibration Verification / Linearity (CLSI EP06)</SelectItem>
+                          <SelectItem value="method_comparison">Correlation / Method Comparison (CLSI EP09)</SelectItem>
+                          <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
+                          <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
+                          <SelectItem value="pt_coag">PT/Coag New Lot Verification (CLSI H47)</SelectItem>
+                          <SelectItem value="qc_range">QC Range Establishment (CLSI C24-Ed4)</SelectItem>
+                          <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison, Coag (CLSI EP26-A)</SelectItem>
+                          <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
+                          <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -1948,7 +1948,7 @@ return (
               </div>
               {studyType === "lot_to_lot" ? (
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Lot-to-Lot Verification Data Entry</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Reagent Lot Verification (CLSI EP26-A) Data Entry</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Fibrinogen" value={lotAnalyte} onChange={e => setLotAnalyte(e.target.value)} /></div>
