@@ -1273,9 +1273,12 @@ export function isRefInterval(r: StudyResults | RefIntervalResults): r is RefInt
 //
 // Modes:
 //   Establishment — full CLSI EP17-A2 study (~60 blank reps, ~60 low-level reps,
-//     4-5 LoQ levels). For modified / LDT / in-house tests. CFR §493.1253(b)(1)(iii).
+//     4-5 LoQ levels). For modified / LDT / in-house tests. CFR §493.1253(b)(2)(iii)
+//     (analytical sensitivity establishment).
 //   Verification — confirm manufacturer's published claims with smaller study.
-//     For FDA-cleared assays. CFR §493.1253(b)(2)(i) (implicit in accuracy).
+//     For FDA-cleared assays. CFR §493.1253(b)(1) (verification of FDA-cleared
+//     performance specs; sensitivity verification is implicit, the (b)(1) list
+//     enumerates accuracy, precision, and reportable range only).
 
 export interface SensitivityReplicate {
   value: number;

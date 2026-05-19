@@ -291,6 +291,7 @@ const CFR_URLS: Record<string, string> = {
   "42 CFR §493.1253(b)(2)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(2)(i)": "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(2)(ii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
+  "42 CFR §493.1253(b)(2)(iii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(1)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(1)(iii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1255":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
@@ -625,7 +626,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.021"],
     aabb: ["5.6.1"],
     clsi: ["EP17-A2"],
-    cfr:  ["42 CFR §493.1253(b)(1)(iii)", "42 CFR §493.1253(b)(2)(i)"],
+    cfr:  ["42 CFR §493.1253(b)(2)(iii)", "42 CFR §493.1253(b)(1)"],
   },
 };
 
@@ -1800,8 +1801,8 @@ function buildSensitivityHTML(study: Study, results: any): string {
   const mfg = results.manufacturerClaim || {};
 
   const cfrCite = mode === "establishment"
-    ? "42 CFR §493.1253(b)(1)(iii)"
-    : "42 CFR §493.1253(b)(2)(i)";
+    ? "42 CFR §493.1253(b)(2)(iii)"
+    : "42 CFR §493.1253(b)(1)";
 
   const cliaStatement = overallPass
     ? (mode === "establishment"

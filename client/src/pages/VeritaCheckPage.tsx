@@ -1807,7 +1807,7 @@ return (
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
-                      <span>EP17-A2 establishes Limit of Blank, Limit of Detection, and Limit of Quantitation. Establishment mode is used for modified or in-house tests (42 CFR {"§"}493.1253(b)(1)(iii)). Verification mode confirms a manufacturer's published claim (42 CFR {"§"}493.1253(b)(2)). Establishment requires ~60 blank and ~60 low-level replicates across multiple reagent lots and days for full EP17-A2 compliance.</span>
+                      <span>EP17-A2 establishes Limit of Blank, Limit of Detection, and Limit of Quantitation. Establishment mode is used for modified or in-house tests (42 CFR {"§"}493.1253(b)(2)(iii)). Verification mode confirms a manufacturer's published claim (42 CFR {"§"}493.1253(b)(1)). Establishment requires ~60 blank and ~60 low-level replicates across multiple reagent lots and days for full EP17-A2 compliance.</span>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Study Mode</Label>
