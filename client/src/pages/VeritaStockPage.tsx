@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, Columns3,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
@@ -65,7 +65,7 @@ const DEPARTMENTS = ["Core Lab", "Chemistry", "Hematology", "Blood Bank", "Micro
 const ORDER_UNITS = ["each", "box", "case", "kit", "pack", "bottle", "bag"];
 const USAGE_UNITS = ["each", "test", "cartridge", "strip", "slide", "tube", "vial", "tip", "glove", "bottle", "mL", "roll", "set"];
 
-type SortField = "item_name" | "category" | "department" | "quantity_on_hand" | "burn_rate" | "reorder_point" | "days_remaining" | "expiration_date" | "vendor";
+type SortField = "item_name" | "category" | "department" | "quantity_on_hand" | "burn_rate" | "reorder_point" | "days_remaining" | "stock_status" | "expiration_date" | "vendor";
 type SortDir = "asc" | "desc";
 
 // Per-user column visibility (Pfizer demo follow-up 2026-05-19).
@@ -438,7 +438,6 @@ export default function VeritaStockInventoryPage() {
   // so a refresh restores the user's view. Item Name and Actions are not
   // toggleable here (they are required for the table to be usable at all).
   const [hiddenColumns, setHiddenColumns] = useState<Set<ToggleableColumnKey>>(new Set());
-  const [columnsPanelOpen, setColumnsPanelOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -590,6 +589,11 @@ export default function VeritaStockInventoryPage() {
       } else if (sortField === "quantity_on_hand" || sortField === "reorder_point" || sortField === "burn_rate") {
         aVal = a[sortField] ?? 0;
         bVal = b[sortField] ?? 0;
+      } else if (sortField === "stock_status") {
+        // Reorder Now (needs_reorder=true) before OK (false) on ascending,
+        // matching the show-problems-first intent of the rest of the page.
+        aVal = a.needs_reorder ? 0 : 1;
+        bVal = b.needs_reorder ? 0 : 1;
       } else {
         aVal = (a[sortField] ?? "").toString().toLowerCase();
         bVal = (b[sortField] ?? "").toString().toLowerCase();
@@ -647,17 +651,28 @@ export default function VeritaStockInventoryPage() {
     downloadCsv(csv, `VeritaStock_Inventory_${today}.csv`);
   }, [filteredItems, toast]);
 
-  const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
-    <th
-      className={`text-left px-3 py-2 font-medium cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
-      onClick={() => handleSort(field)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {children}
-        {sortField === field && <span className="text-xs">{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>}
-      </span>
-    </th>
-  );
+  // Sort indicator is shown on every column header at all times so users can
+  // see which columns are sortable without having to click each one to find
+  // out. Inactive columns get a muted up/down arrow; the active column gets
+  // a solid directional arrow.
+  const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => {
+    const isActive = sortField === field;
+    return (
+      <th
+        className={`text-left px-3 py-2 font-medium cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
+        onClick={() => handleSort(field)}
+      >
+        <span className="inline-flex items-center gap-1">
+          {children}
+          {isActive ? (
+            <span className="text-xs text-[#01696F]">{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground/40">\u2195</span>
+          )}
+        </span>
+      </th>
+    );
+  };
 
   useSEO({ title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
 
@@ -849,20 +864,6 @@ export default function VeritaStockInventoryPage() {
           variant="outline"
           size="sm"
           className="ml-auto border-primary/30 text-primary hover:bg-primary/10"
-          onClick={() => setColumnsPanelOpen((v) => !v)}
-          data-testid="button-stock-columns-toggle"
-          aria-expanded={columnsPanelOpen}
-        >
-          <Columns3 size={14} className="mr-1.5" />
-          Columns
-          {hiddenColumns.size > 0 && (
-            <span className="ml-1.5 text-xs text-muted-foreground">({TOGGLEABLE_COLUMNS.length - hiddenColumns.size}/{TOGGLEABLE_COLUMNS.length})</span>
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-primary/30 text-primary hover:bg-primary/10"
           onClick={handleExportCsv}
           data-testid="button-stock-export-csv"
         >
@@ -872,11 +873,12 @@ export default function VeritaStockInventoryPage() {
       </div>
 
       {/* Column visibility panel (Pfizer demo follow-up 2026-05-19).
-          Selections persist per user via /api/account/ui-preferences so
-          inventory leads who only need a subset of columns see a calmer
-          table on every visit. Item Name and Actions are always shown. */}
-      {columnsPanelOpen && (
-        <div className="mb-4 p-3 border rounded-lg bg-card/50">
+          Always visible per Louise's preference: the checkboxes sit above
+          the table at all times so column control is a one-click action,
+          not a hidden-behind-a-button workflow. Selections persist per
+          user via /api/account/ui-preferences. Item Name and Actions are
+          always shown. */}
+      <div className="mb-4 p-3 border rounded-lg bg-card/50">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs text-muted-foreground">
               Show or hide columns. Your selection is saved to your account.
@@ -909,7 +911,6 @@ export default function VeritaStockInventoryPage() {
             ))}
           </div>
         </div>
-      )}
 
       {/* Table */}
       {loading ? (
@@ -938,7 +939,7 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("burn_rate") && <SortHeader field="burn_rate">Burn Rate</SortHeader>}
                 {isColumnVisible("reorder_point") && <SortHeader field="reorder_point">Par Level</SortHeader>}
                 {isColumnVisible("days_remaining") && <SortHeader field="days_remaining">Days Left</SortHeader>}
-                {isColumnVisible("stock_status") && <th className="text-left px-3 py-2 font-medium">Stock Status</th>}
+                {isColumnVisible("stock_status") && <SortHeader field="stock_status">Stock Status</SortHeader>}
                 {isColumnVisible("expiration_date") && <SortHeader field="expiration_date">Expiration</SortHeader>}
                 {isColumnVisible("vendor") && <SortHeader field="vendor" className="hidden lg:table-cell">Vendor</SortHeader>}
                 <th className="text-center px-3 py-2 font-medium w-[80px]">Actions</th>
