@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets } from "lucide-react";
+import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets, Sigma } from "lucide-react";
 
 // ─── External reference links ─────────────────────────────────────────────────
 const REFS = {
@@ -62,6 +62,11 @@ const REFS = {
   clsiEP15: {
     label: "CLSI EP15-A3 - User Verification of Precision and Estimation of Bias",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep15/",
+    source: "CLSI",
+  },
+  clsiEP17: {
+    label: "CLSI EP17-A2 - Evaluation of Detection Capability for Clinical Laboratory Measurement Procedures",
+    url: "https://clsi.org/standards/products/method-evaluation/documents/ep17/",
     source: "CLSI",
   },
   clsiOverview: {
@@ -371,6 +376,32 @@ export default function StudyGuidePage() {
               REFS.clsiOverview,
             ]}
             ctaStudyType="precision"
+          />
+
+          <StudyCard
+            icon={<Sigma size={22} className="text-white" />}
+            color="bg-[#7c3aed]"
+            badge="Detection & Quantitation"
+            title="Sensitivity Verification (CLSI EP17-A2)"
+            subtitle="Confirm the lowest concentration you can detect and reliably report"
+            what="Sensitivity verification quantifies three thresholds at the low end of an assay's measuring range. The Limit of Blank (LoB) is the highest value expected from a blank specimen at 95 percent confidence (mean + 1.645 standard deviations of the blanks). The Limit of Detection (LoD) is the lowest true concentration that can be reliably distinguished from a blank (LoB plus a confidence-weighted SD at low concentration). The Limit of Quantitation (LoQ) is the lowest concentration where the result is both precise enough and accurate enough to release as a quantitative number. Below LoQ, labs report 'detected, not quantifiable' or '< LoQ' rather than a numeric value."
+            howIt="VeritaCheck supports two modes per CLSI EP17-A2. Verification mode confirms a manufacturer's published LoB / LoD / LoQ claims with a small study (typically 5 to 7 blank and low-level replicates) and is the path for an FDA-cleared, unmodified assay. Establishment mode is the full study for modified or laboratory-developed methods: approximately 60 blank and 60 low-level replicates across multiple reagent lots and multiple days, plus optional LoQ concentration levels with multiple replicates at each. Per-reagent-lot LoB breakdown is included in the report when lot labels are tagged on the entered replicates. The director-adopted CV and absolute bias thresholds for LoQ default to the EP17-A2 starting points of 20 percent and 25 percent respectively, and are editable per-study so they can match the clinical decision point of the assay (e.g., tighter for therapeutic drug monitoring)."
+            when={[
+              "At method introduction for an FDA-cleared assay (Verification mode)",
+              "When modifying a manufacturer's procedure (specimen type, reagents, calibration steps): the method converts to Establishment mode",
+              "For laboratory-developed tests (LDTs) without manufacturer-published sensitivity claims",
+              "When changing reagent lots if the manufacturer's IFU requires re-verification of sensitivity",
+              "Whenever the clinical decision point falls near the assay detection limit and confirmation of the floor is warranted",
+            ]}
+            frequency="Verification: at method introduction. Establishment: at method introduction for any LDT or modified method."
+            regulation="42 CFR §493.1253(b)(2)(iii) (Establishment); §493.1253(b)(1) (Verification)"
+            passFail="LoB is the calculated 95th-percentile blank value. LoD is the lowest concentration reliably distinguishable from a blank. LoQ requires BOTH a CV at or below the director-adopted precision threshold AND an absolute bias at or below the director-adopted accuracy threshold at the lowest tested concentration. In Verification mode, the lab confirms its calculated values fall at or below the manufacturer's published claims. In Establishment mode, the lab adopts its calculated values as the official performance specs, subject to medical director or designee approval. The VeritaCheck PDF includes per-lot LoB breakdown when lot labels are supplied."
+            refs={[
+              REFS.clsiEP17,
+              REFS.cliaVerificationBrochure,
+              REFS.clsiOverview,
+            ]}
+            ctaStudyType="sensitivity"
           />
 
           <StudyCard
