@@ -10,8 +10,13 @@ import { Switch } from "@/components/ui/switch";
 import {
   Calculator, TrendingDown, TrendingUp, DollarSign,
   Users, BarChart3, Grid3X3, Activity, ChevronDown, Package,
+  FileDown, Loader2,
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { DEMO_SAMPLES } from "@/lib/demoSampleReports";
+import { downloadPdfToken } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, Tooltip as RechartsTooltip, ReferenceArea, Legend,
@@ -63,6 +68,7 @@ interface StaffingStudy {
 // ── Section navigation ────────────────────────────────────────────────────────
 
 const SECTIONS = [
+  { id: "sample-reports", label: "Sample Reports" },
   { id: "calculator", label: "Calculator" },
   { id: "tracker", label: "Tracker" },
   { id: "staffing", label: "Staffing" },
@@ -185,6 +191,77 @@ function DemoHeatmap({ data, title }: { data: number[][]; title: string }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SECTION 0: VeritaCheck Sample Reports (Pfizer demo follow-up 2026-05-19)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function SampleReportsSection() {
+  const { toast } = useToast();
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+
+  const handleDownload = async (sample: typeof DEMO_SAMPLES[number]) => {
+    setLoadingKey(sample.key);
+    try {
+      const { study, results } = sample.build();
+      const res = await fetch(`${API_BASE}/api/generate-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ study, results }),
+      });
+      if (!res.ok) {
+        throw new Error(await res.text() || `HTTP ${res.status}`);
+      }
+      const { token } = await res.json();
+      downloadPdfToken(token, sample.filename);
+    } catch (err: any) {
+      toast({
+        title: "Could not generate sample report",
+        description: "Please try again. If the problem persists, contact info@veritaslabservices.com.",
+        variant: "destructive",
+      });
+      console.error("[demo sample report]", err);
+    } finally {
+      setLoadingKey(null);
+    }
+  };
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-4">
+      {DEMO_SAMPLES.map(sample => (
+        <Card key={sample.key} className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{sample.label}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
+                {sample.clsi}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                {sample.cfr}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">{sample.blurb}</p>
+            <Button
+              onClick={() => handleDownload(sample)}
+              disabled={loadingKey === sample.key}
+              className="w-full"
+              style={{ backgroundColor: "#01696F" }}
+              data-testid={`button-sample-${sample.key}`}
+            >
+              {loadingKey === sample.key ? (
+                <><Loader2 size={14} className="mr-1.5 animate-spin" />Generating PDF…</>
+              ) : (
+                <><FileDown size={14} className="mr-1.5" />Download sample PDF</>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -1075,6 +1152,7 @@ export default function DemoPage() {
                 onClick={() => document.getElementById(`section-${s.id}`)?.scrollIntoView({ behavior: "smooth" })}
                 className="px-4 py-2 rounded-full text-sm font-medium bg-white/15 text-white hover:bg-white/25 transition-colors"
               >
+                {s.id === "sample-reports" && <FileDown size={14} className="inline mr-1.5" />}
                 {s.id === "calculator" && <Calculator size={14} className="inline mr-1.5" />}
                 {s.id === "tracker" && <BarChart3 size={14} className="inline mr-1.5" />}
                 {s.id === "staffing" && <Grid3X3 size={14} className="inline mr-1.5" />}
@@ -1103,6 +1181,29 @@ export default function DemoPage() {
           ))}
         </div>
       </div>
+
+      {/* Section: VeritaCheck™ Sample Reports (Pfizer demo follow-up 2026-05-19).
+          Five downloadable sample PDFs covering the EP-study families
+          customers most often evaluate. Each fixture is hand-tuned realistic
+          data and runs through the actual production PDF generator so a
+          prospect sees the real report format, not a screenshot. */}
+      <section id="section-sample-reports" className="py-12 sm:py-16 px-4" style={{ backgroundColor: "#01696F08" }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
+              <FileDown size={14} />
+              VeritaCheck{"™"} Sample Reports
+            </div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">See the actual PDF output before you sign up</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Each link below generates a real VeritaCheck{"™"} report from a realistic data fixture, using the same production code that signs off on customer studies. The demo lab identity (Riverside Regional Medical Center, CLIA 22D0999999) is a fixture for demonstration only.
+            </p>
+          </div>
+          <SampleReportsSection />
+        </div>
+      </section>
+
+      <div className="h-px mx-auto max-w-5xl" style={{ background: "linear-gradient(to right, transparent, #01696F30, transparent)" }} />
 
       {/* Section 1: Calculator */}
       <section id="section-calculator" className="py-12 sm:py-16 px-4">
