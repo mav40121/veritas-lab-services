@@ -573,12 +573,13 @@ export default function VeritaStockInventoryPage() {
       });
     }
 
-    // Sort: needs_reorder first, then by selected field
+    // Sort by the user's selected column. The earlier short-circuit that
+    // forced needs_reorder items to the top regardless of sort field was
+    // removed 2026-05-19: it overrode the column header click, so picking
+    // "Item Name" ascending still left Reorder Now items pinned to the top.
+    // Users who want to see Reorder Now first can click the Stock Status
+    // header, which sorts on needs_reorder explicitly.
     result.sort((a, b) => {
-      // Primary: needs_reorder items first
-      if (a.needs_reorder && !b.needs_reorder) return -1;
-      if (!a.needs_reorder && b.needs_reorder) return 1;
-
       let aVal: any, bVal: any;
       if (sortField === "days_remaining") {
         aVal = a.days_remaining ?? 99999;
@@ -667,7 +668,7 @@ export default function VeritaStockInventoryPage() {
           {isActive ? (
             <span className="text-xs text-[#01696F]">{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>
           ) : (
-            <span className="text-xs text-muted-foreground/40">\u2195</span>
+            <span className="text-xs text-muted-foreground/40">{"\u2195"}</span>
           )}
         </span>
       </th>
