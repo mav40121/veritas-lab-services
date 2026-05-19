@@ -470,6 +470,29 @@ export default function StudyGuidePage() {
           />
 
           <StudyCard
+            icon={<BarChart2 size={22} className="text-white" />}
+            color="bg-[#0891b2]"
+            badge="QC Material Change"
+            title="QC Lot Verification (CLSI C24-Ed4)"
+            subtitle="Establish the lab's mean and SD for a new QC lot, with optional crossover bias check and vendor SDI comparison"
+            what="QC Lot Verification is the study you run when a new lot of QC material arrives. It produces the lab's own calculated mean and standard deviation for the new lot, which become the operating values on the Levey-Jennings chart per 42 CFR §493.1256. The study supports three sections that can be used together or separately: (1) new lot range establishment, always required; (2) crossover bias check vs the prior lot, optional; (3) vendor SDI comparison against package-insert assigned values, optional and informational only. CLIA requires the laboratory to determine its own mean and SD; vendor values are reference points, not the operating values."
+            howIt="The default replicate grid is 2 measurements per day for 10 days (20 points per level per analyzer), which is the CLSI C24-Ed4 accelerated path and matches what most working clinical labs actually run. Configurable to 1 per day for 20 days (gold standard) or 4 per day for 5 days (short cycle). When the crossover bias check is enabled, the lab enters a parallel grid of prior-lot replicates collected in the same window; VeritaCheck™ computes the prior lot's mean and SD from those replicates and runs a pooled-SD bias verdict (Accept under 1 SD, Caution 1 to 2 SD, Fail at or above 2 SD). When the vendor section is enabled, the lab enters the package-insert mean and SD per analyte+level; VeritaCheck™ computes the Standard Deviation Index per Westgard and color-codes the result. The PDF stitches whichever sections were used and cites only the standards that actually applied."
+            when={[
+              "At every new lot of QC material, before the lot is placed into routine clinical use",
+              "Crossover bias check (opt-in) recommended when the lot change is happening on a high-volume or clinically sensitive analyte to detect any analytical drift during the changeover",
+              "Vendor SDI comparison (opt-in) when the QC material is assayed and the package insert provides method-specific or method-agnostic assigned values",
+            ]}
+            frequency="At each new QC lot change. Sections 2 and 3 are opt-in per study."
+            regulation="42 CFR §493.1256 (QC requirements: lab must determine its own mean and SD). CLSI C24-Ed4 is the methodology standard."
+            passFail="Section 1 (range establishment) always succeeds in producing the lab's calculated mean and SD; the director adopts these as the new operating values. Section 2 (crossover bias check) returns Accept / Caution / Fail per pooled SD between new and prior lot. Section 3 (vendor SDI) returns a Westgard color-coded classification (excellent / acceptable / investigate / unacceptable) but does NOT gate the study pass; vendor SD is reference only per CLIA. Director or designee reviews and signs the report before the new lot enters service."
+            refs={[
+              REFS.clsiC24,
+              REFS.cfr493931,
+            ]}
+            ctaStudyType="qc_range"
+          />
+
+          <StudyCard
             icon={<Droplets size={22} className="text-white" />}
             color="bg-[#dc2626]"
             badge="Coagulation Panel"
