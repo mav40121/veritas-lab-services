@@ -34,14 +34,14 @@ function buildQCLotSample() {
   const dateRange = { start: "2026-04-15", end: "2026-04-26" };
 
   // Realistic 20-point grids per level (2 measurements per day for 10 days,
-  // CLSI C24-Ed4 accelerated path). Tight CV around the target mean.
-  const newNormal = [94.2, 95.1, 94.8, 95.6, 94.9, 95.3, 94.5, 95.0, 95.4, 94.7, 95.2, 94.8, 95.5, 94.6, 95.1, 94.9, 95.3, 94.8, 95.0, 95.2];
-  const newHigh   = [248.5, 249.2, 247.8, 249.6, 248.3, 249.1, 248.7, 249.4, 248.9, 247.5, 249.8, 248.2, 249.3, 248.6, 249.0, 248.4, 249.5, 248.1, 248.8, 249.7];
-
-  // Prior lot replicates: slight downward offset to show non-zero but
-  // Accept-classified bias (SDI < 1.0 pooled).
-  const priorNormal = [93.8, 94.1, 93.6, 94.4, 93.9, 94.2, 93.5, 94.0, 94.3, 93.7, 94.1, 93.8, 94.5, 93.6, 94.0, 93.9, 94.3, 93.8, 94.0, 94.2];
-  const priorHigh   = [247.1, 247.8, 246.5, 248.2, 247.0, 247.7, 247.4, 248.0, 247.5, 246.2, 248.3, 246.9, 247.9, 247.3, 247.6, 247.1, 248.1, 246.8, 247.4, 248.2];
+  // CLSI C24-Ed4 accelerated path). Tight CV around the target mean. Prior
+  // lot values are intentionally close to new-lot values so the pooled-SD
+  // bias check returns Accept (|SDI| < 1 pooled SD), which is the typical
+  // clean lot-changeover outcome a director would expect to see.
+  const newNormal   = [94.9, 95.2, 95.0, 95.1, 94.8, 95.3, 95.0, 95.1, 94.9, 95.2, 95.0, 94.9, 95.1, 95.0, 94.8, 95.2, 95.0, 94.9, 95.1, 95.0];
+  const priorNormal = [94.8, 95.1, 95.0, 95.0, 94.9, 95.2, 95.0, 95.0, 94.9, 95.1, 95.0, 94.9, 95.0, 94.9, 94.8, 95.1, 94.9, 95.0, 95.0, 94.9];
+  const newHigh     = [248.7, 249.2, 248.9, 249.1, 248.8, 249.3, 249.0, 248.9, 249.1, 248.7, 249.2, 248.8, 249.0, 248.9, 249.1, 249.0, 248.8, 249.2, 248.9, 249.0];
+  const priorHigh   = [248.5, 249.0, 248.7, 248.9, 248.8, 249.1, 248.9, 248.8, 248.9, 248.6, 249.0, 248.7, 248.8, 248.9, 249.0, 248.8, 248.7, 249.1, 248.8, 248.9];
 
   const dpKey = (analyte: string, level: string, analyzer: string) =>
     `${analyte}|${level}|${analyzer}`;
@@ -233,30 +233,37 @@ function buildPTINRSample() {
 // ─── Sample 4: Simple Precision Verification (Sodium, EP15-A3) ──────────────
 
 function buildSimplePrecisionSample() {
-  // Single level (Normal QC ~140 mmol/L), 20 replicates. CV well under
-  // the §493 PT TEa absolute floor of 4 mmol/L. Demonstrates the EP15-A3
-  // simple aggregate path.
-  const naValues = [
-    139.8, 140.2, 139.6, 140.4, 139.9, 140.1, 139.7, 140.3, 139.8, 140.2,
-    140.0, 139.9, 140.1, 139.8, 140.0, 140.2, 139.7, 140.3, 139.9, 140.1,
+  // Creatinine, 15% TEa per §493.931. Single level (Normal QC ~1.0 mg/dL),
+  // 20 replicates. CV well under the 15% adopted criterion. Demonstrates
+  // the EP15-A3 simple aggregate path.
+  //
+  // Why Creatinine and not Sodium: calculatePrecision treats its TEa input
+  // as a fraction (0.15 = 15%) and computes allowableCV = TEa × 100, so an
+  // absolute-only analyte like Sodium (±4 mmol/L) would render an allowable
+  // CV of 400 percent on the PDF, which is meaningless. Picking a
+  // percentage-TEa analyte avoids that pre-existing rendering quirk for
+  // the demo without changing any calculation logic.
+  const creatValues = [
+    1.02, 1.04, 1.01, 1.03, 1.05, 1.02, 1.04, 1.03, 1.02, 1.04,
+    1.03, 1.02, 1.04, 1.03, 1.02, 1.05, 1.03, 1.02, 1.04, 1.03,
   ];
   const dataPoints: PrecisionDataPoint[] = [
-    { level: 1, levelName: "Normal QC", values: naValues } as PrecisionDataPoint,
+    { level: 1, levelName: "Normal QC", values: creatValues } as PrecisionDataPoint,
   ];
-  const tea = 4; // absolute floor in mmol/L per CLIA §493 for Na+
+  const tea = 0.15; // 15% TEa per §493.931 for Creatinine
 
   const results = calculatePrecision(dataPoints, tea, "simple");
 
   const study = {
     id: -4, userId: -1, createdByUserId: -1,
-    testName: "Sodium (Na+) Simple Precision Verification",
+    testName: "Creatinine Simple Precision Verification",
     instrument: "Roche Cobas 8000",
     analyst: "J. Hall, MLS(ASCP)",
     date: "2026-04-12",
     studyType: "precision",
     cliaAllowableError: tea,
-    teaIsPercentage: 0,
-    teaUnit: "mmol/L",
+    teaIsPercentage: 1,
+    teaUnit: "%",
     cliaAbsoluteFloor: null,
     cliaAbsoluteUnit: null,
     dataPoints: JSON.stringify(dataPoints),
