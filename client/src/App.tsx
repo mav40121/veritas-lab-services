@@ -331,7 +331,7 @@ function AppContent() {
           <Route path="/veritabench" component={VeritaBenchPage} />
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
           <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
-          <Route path="/veritastock" component={VeritaStockPage} />
+          <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/operations" component={OperationsPage} />
@@ -369,6 +369,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritalab-app" component={VeritaLabAppPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
+          <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
 
           <Route component={NotFound} />
