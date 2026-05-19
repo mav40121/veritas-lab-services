@@ -10,10 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import {
   Calculator, TrendingDown, TrendingUp, DollarSign,
   Users, BarChart3, Grid3X3, Activity, ChevronDown, Package,
-  FileDown,
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
-import { SampleReportsSection } from "@/components/SampleReportsSection";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, Tooltip as RechartsTooltip, ReferenceArea, Legend,
@@ -65,7 +63,6 @@ interface StaffingStudy {
 // ── Section navigation ────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: "sample-reports", label: "Sample Reports" },
   { id: "calculator", label: "Calculator" },
   { id: "tracker", label: "Tracker" },
   { id: "staffing", label: "Staffing" },
@@ -1078,7 +1075,6 @@ export default function DemoPage() {
                 onClick={() => document.getElementById(`section-${s.id}`)?.scrollIntoView({ behavior: "smooth" })}
                 className="px-4 py-2 rounded-full text-sm font-medium bg-white/15 text-white hover:bg-white/25 transition-colors"
               >
-                {s.id === "sample-reports" && <FileDown size={14} className="inline mr-1.5" />}
                 {s.id === "calculator" && <Calculator size={14} className="inline mr-1.5" />}
                 {s.id === "tracker" && <BarChart3 size={14} className="inline mr-1.5" />}
                 {s.id === "staffing" && <Grid3X3 size={14} className="inline mr-1.5" />}
@@ -1107,29 +1103,6 @@ export default function DemoPage() {
           ))}
         </div>
       </div>
-
-      {/* Section: VeritaCheck™ Sample Reports (Pfizer demo follow-up 2026-05-19).
-          Five downloadable sample PDFs covering the EP-study families
-          customers most often evaluate. Each fixture is hand-tuned realistic
-          data and runs through the actual production PDF generator so a
-          prospect sees the real report format, not a screenshot. */}
-      <section id="section-sample-reports" className="py-12 sm:py-16 px-4" style={{ backgroundColor: "#01696F08" }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
-              <FileDown size={14} />
-              VeritaCheck{"™"} Sample Reports
-            </div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">See the actual PDF output before you sign up</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Each link below generates a real VeritaCheck{"™"} report from a realistic data fixture, using the same production code that signs off on customer studies. The demo lab identity (Riverside Regional Medical Center, CLIA 22D0999999) is a fixture for demonstration only.
-            </p>
-          </div>
-          <SampleReportsSection />
-        </div>
-      </section>
-
-      <div className="h-px mx-auto max-w-5xl" style={{ background: "linear-gradient(to right, transparent, #01696F30, transparent)" }} />
 
       {/* Section 1: Calculator */}
       <section id="section-calculator" className="py-12 sm:py-16 px-4">
