@@ -246,8 +246,16 @@ function generateNarrative(results: StudyResults, study: Study): string {
     const maxCV = Math.max(...pr.levelResults.map(r => (r as any).totalCV ?? r.cv ?? 0));
     const meetsAdlm = maxCV <= study.cliaAllowableError * 50;
     const isAdvanced = (pr as any).mode === "advanced";
+    // Methodology note shared between pass and fail narratives. Names the
+    // path (Simple vs Advanced EP15), cites EP15-A3 alongside the existing
+    // §493 cite, and surfaces the CV formula so the reader does not have
+    // to consult a separate document to interpret the result.
+    const methodologyNote = isAdvanced
+      ? `Methodology: CLSI EP15-A3 Advanced (ANOVA-decomposed precision). The study estimates within-run, between-day, and total CV across multiple days, runs, and replicates per run. `
+      : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
     if (pr.overallPass) {
-      narrative = `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)). `;
+      narrative = methodologyNote;
+      narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(ii)). `;
       narrative += meetsAdlm
         ? `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
         : `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
@@ -258,7 +266,8 @@ function generateNarrative(results: StudyResults, study: Study): string {
       }
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
     } else {
-      narrative = `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative = methodologyNote;
+      narrative += `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(ii)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
   // Append dual-criterion methodology note when applicable

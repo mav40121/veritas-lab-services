@@ -2523,15 +2523,29 @@ return (
                       </div>
                     )}
                     {precisionMode === "simple" && (
-                      <div className="flex items-center gap-3">
-                        <Label className="text-xs whitespace-nowrap">Replicates per level:</Label>
-                        <Select value={String(precisionReps)} onValueChange={v => setPrecisionReps(parseInt(v))}>
-                          <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {[5,10,15,20,25,30,35,40].map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <>
+                        <div className="rounded-md bg-muted/50 border p-3 space-y-2">
+                          <p className="text-xs font-medium">Simple: aggregate precision (CV) per level</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Verifies the manufacturer's precision claim for an FDA-cleared, unmodified assay by computing the coefficient of variation (CV) at each level. For each level, the calculation is: mean of replicates, standard deviation (SD, n-1 denominator), and CV = (SD divided by mean) times 100. CLSI EP15-A3 recommends a minimum of 5 days at 5 replicates per day for full verification; the simple path treats all replicates as a single pool and is appropriate when the data is collected within one run or one day.
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Acceptance criterion: the observed CV at each level must be at or below the adopted precision acceptance criterion (typically half of the §493 PT total allowable error per the ADLM recommendation, or the manufacturer's published CV claim, whichever applies). When an absolute floor is set, the dual-criterion rule under 42 CFR §493.1253(b)(1)(ii) applies: pass if the observed difference is within the greater of the percent or the absolute allowance.
+                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            What this path does not do: it does not decompose variance into within-run and between-day components. For that, use Advanced (EP15) mode, which is the right path for laboratory-developed tests and modified procedures.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Label className="text-xs whitespace-nowrap">Replicates per level:</Label>
+                          <Select value={String(precisionReps)} onValueChange={v => setPrecisionReps(parseInt(v))}>
+                            <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {[5,10,15,20,25,30,35,40].map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
                     )}
 
                     {Array.from({ length: precisionLevels }).map((_, li) => (
