@@ -49,9 +49,9 @@ const completedItems: RoadmapItem[] = [
       "Mock inspections, regulatory gap analysis, laboratory director services, and policy and procedure development. Available as a standalone engagement or alongside the software suite.",
   },
   {
-    title: "VeritaCheck™ - PT/Coag New Lot Validation",
+    title: "VeritaCheck™ - PT/INR Geometric Mean Calculator",
     description:
-      "Validates new reagent lots for PT and coagulation testing using Deming regression, geometric mean analysis, and INR comparison. Generates a compliant PDF with full statistical tables. Laboratory director or designee review and approval required.",
+      "Re-establishes the Mean Normal PT (MNPT) from a cohort of healthy normal patients when the PT reagent lot changes, then verifies the new INR equation against the prior lot on patient samples. Generates a compliant PDF with full statistical tables and the new geometric mean for instrument and LIS programming. Laboratory director or designee review and approval required.",
   },
   {
     title: "VeritaPT™ - Proficiency Testing Tracker",

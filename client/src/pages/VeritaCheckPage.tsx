@@ -1533,7 +1533,7 @@ return (
                         <div>Correlation / Method Comparison</div>
                         <div>Accuracy and Precision</div>
                         <div>Reagent Lot Verification (EP26-A)</div>
-                        <div>PT/Coag New Lot Validation</div>
+                        <div>PT/INR Geometric Mean Calculator</div>
                       </div>
                       <div className="w-12 h-0.5 bg-white/40 mb-4" />
                       <div className="text-xs text-white/60 text-center">42 CFR {"\u00A7"}493 {"\u00B7"} TJC {"\u00B7"} CAP</div>
@@ -1610,7 +1610,7 @@ return (
                           <SelectItem value="method_comparison">Correlation / Method Comparison (CLSI EP09)</SelectItem>
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
-                          <SelectItem value="pt_coag">PT/Coag New Lot Verification (CLSI H47)</SelectItem>
+                          <SelectItem value="pt_coag">PT/INR Geometric Mean Calculator (CLSI H47)</SelectItem>
                           <SelectItem value="qc_range">QC Lot Verification (CLSI C24-Ed4)</SelectItem>
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison, Coag (CLSI EP26-A)</SelectItem>
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
