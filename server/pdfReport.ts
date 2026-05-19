@@ -2266,25 +2266,57 @@ const FOOTER_TEMPLATE = `
 function buildQCRangeHTML(study: Study, results: any): string {
   const r = results;
   const analytes = Array.from(new Set((r.levelResults || []).map((lr: any) => lr.analyte)));
-  const tableRows = (r.levelResults || []).map((lr: any) => `
-    <tr style="${lr.flagShift ? 'background:#fef2f2;' : ''}">
+  const anyBias = (r.levelResults || []).some((lr: any) => lr.biasCheck);
+  const anyVendor = (r.levelResults || []).some((lr: any) => lr.vendorComparison);
+
+  // Section 1 — new lot range establishment
+  const rangeRows = (r.levelResults || []).map((lr: any) => `
+    <tr>
       <td>${lr.analyzer}</td><td>${lr.analyte}</td><td>${lr.level}</td>
       <td style="text-align:right">${lr.n}</td>
-      <td style="text-align:right">${lr.newMean.toFixed(2)}</td>
+      <td style="text-align:right">${lr.newMean.toFixed(3)}</td>
       <td style="text-align:right">${lr.newSD.toFixed(3)}</td>
-      <td style="text-align:right">${lr.cv.toFixed(1)}%</td>
-      <td style="text-align:right">${lr.oldMean != null ? lr.oldMean.toFixed(2) : '-'}</td>
-      <td style="text-align:right;${lr.flagShift ? 'color:#dc2626;font-weight:600;' : ''}">${lr.pctDiffFromOld != null ? lr.pctDiffFromOld.toFixed(1) + '%' : '-'}${lr.flagShift ? ' ⚠' : ''}</td>
+      <td style="text-align:right">${lr.cv.toFixed(2)}%</td>
     </tr>`).join("");
 
-  const qcCfr = (study as any).cfr || "42 CFR \u00A7493.931";
+  // Section 2 — crossover bias check (Accept / Caution / Fail per pooled SD)
+  const biasCellStyle = (cls: string): string => {
+    if (cls === "accept") return "color:#16a34a;";
+    if (cls === "caution") return "color:#d97706;font-weight:600;";
+    return "color:#dc2626;font-weight:600;";
+  };
+  const biasLabel = (cls: string): string => cls === "accept" ? "Accept" : cls === "caution" ? "Caution" : "Fail";
+  const biasRows = anyBias ? (r.levelResults || []).map((lr: any) => `
+    <tr>
+      <td>${lr.analyzer}</td><td>${lr.analyte}</td><td>${lr.level}</td>
+      <td style="text-align:right">${lr.priorLot ? lr.priorLot.mean.toFixed(3) : '-'}</td>
+      <td style="text-align:right">${lr.priorLot ? lr.priorLot.sd.toFixed(3) : '-'}</td>
+      <td style="text-align:right">${lr.biasCheck ? (lr.biasCheck.deltaMean >= 0 ? '+' : '') + lr.biasCheck.deltaMean.toFixed(3) : '-'}</td>
+      <td style="text-align:right">${lr.biasCheck ? lr.biasCheck.pctDiffFromPrior.toFixed(2) + '%' : '-'}</td>
+      <td style="text-align:right">${lr.biasCheck ? lr.biasCheck.pooledSD.toFixed(3) : '-'}</td>
+      <td style="text-align:right">${lr.biasCheck ? lr.biasCheck.sdiVsPriorLot.toFixed(2) : '-'}</td>
+      <td style="${lr.biasCheck ? biasCellStyle(lr.biasCheck.classification) : ''}">${lr.biasCheck ? biasLabel(lr.biasCheck.classification) : '-'}</td>
+    </tr>`).join("") : "";
+
+  // Section 3 — vendor SDI comparison (Westgard, informational only)
+  const vendorCellStyle = (cls: string): string => {
+    if (cls === "excellent" || cls === "acceptable") return "color:#16a34a;";
+    if (cls === "investigate") return "color:#d97706;font-weight:600;";
+    return "color:#dc2626;font-weight:600;";
+  };
+  const vendorRows = anyVendor ? (r.levelResults || []).map((lr: any) => `
+    <tr>
+      <td>${lr.analyzer}</td><td>${lr.analyte}</td><td>${lr.level}</td>
+      <td style="text-align:right">${lr.vendorComparison ? lr.vendorComparison.vendorMean.toFixed(3) : '-'}</td>
+      <td style="text-align:right">${lr.vendorComparison ? lr.vendorComparison.vendorSD.toFixed(3) : '-'}</td>
+      <td style="text-align:right">${lr.vendorComparison ? (lr.vendorComparison.sdi >= 0 ? '+' : '') + lr.vendorComparison.sdi.toFixed(2) : '-'}</td>
+      <td style="${lr.vendorComparison ? vendorCellStyle(lr.vendorComparison.classification) : ''}">${lr.vendorComparison ? lr.vendorComparison.classification.charAt(0).toUpperCase() + lr.vendorComparison.classification.slice(1) : '-'}</td>
+    </tr>`).join("") : "";
+
   const qcCliaStatement = r.overallPass
-    ? `<b>Each analyte-level combination was individually evaluated per ${qcCfr}. All combinations satisfied the acceptance criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each analyte-level combination was individually evaluated per ${qcCfr}. One or more combinations did not satisfy the acceptance criterion; see the results table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
-  const narrative = `New QC ranges have been established for ${analytes.join(", ")}. ` +
-    `Runs were performed across ${r.dateRange?.start || ''} to ${r.dateRange?.end || ''} on ${study.instrument}. ` +
-    (r.overallShiftCount > 0 ? `${r.overallShiftCount} of ${r.totalLevels} analyte-level combinations showed >10% shift from previous lot.` : `All means are within 10% of previous lot values.`) +
-    ` ${qcCliaStatement}`;
+    ? `<b>The lab's calculated mean and SD become the operating values on the Levey-Jennings chart, per 42 CFR \u00A7493.1256.${anyBias ? " The crossover bias check accepted all analyte-level combinations." : ""}</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The lab's calculated mean and SD become the operating values on the Levey-Jennings chart, per 42 CFR \u00A7493.1256. ${anyBias ? "One or more analyte-level combinations failed the crossover bias check; see the bias check table." : "One or more analyte-level combinations exceeded the legacy 10% shift heuristic; see the table."}</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+  const narrative = (r.summary || `New QC ranges have been established for ${analytes.join(", ")} per CLSI C24-Ed4.`) + ` ${qcCliaStatement}`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - QC Lot Verification (C24-Ed4) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -2300,13 +2332,37 @@ function buildQCRangeHTML(study: Study, results: any): string {
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+
+    <div style="font-size:8pt;font-weight:600;color:#01696F;margin:8px 0 4px;text-transform:uppercase;letter-spacing:0.04em;">New lot range establishment (CLSI C24-Ed4)</div>
     <table class="data-table"><thead><tr>
       <th>Analyzer</th><th>Analyte</th><th>Level</th><th style="text-align:right">N</th>
       <th style="text-align:right">New Mean</th><th style="text-align:right">New SD</th><th style="text-align:right">CV%</th>
-      <th style="text-align:right">Old Mean</th><th style="text-align:right">% Diff</th>
-    </tr></thead><tbody>${tableRows}</tbody></table>
+    </tr></thead><tbody>${rangeRows}</tbody></table>
+
+    ${anyBias ? `
+    <div style="font-size:8pt;font-weight:600;color:#01696F;margin:12px 0 4px;text-transform:uppercase;letter-spacing:0.04em;">Crossover bias check vs prior lot</div>
+    <table class="data-table"><thead><tr>
+      <th>Analyzer</th><th>Analyte</th><th>Level</th>
+      <th style="text-align:right">Prior Mean</th><th style="text-align:right">Prior SD</th>
+      <th style="text-align:right">Delta Mean</th><th style="text-align:right">% Diff</th>
+      <th style="text-align:right">Pooled SD</th><th style="text-align:right">SDI</th>
+      <th>Verdict</th>
+    </tr></thead><tbody>${biasRows}</tbody></table>
+    <div class="eval-text" style="font-size:7.5px;color:#666;margin:4px 0;font-style:italic">Verdict thresholds: |Delta| within 1 pooled SD = Accept; 1 to 2 SD = Caution; greater than or equal to 2 SD = Fail.</div>
+    ` : ""}
+
+    ${anyVendor ? `
+    <div style="font-size:8pt;font-weight:600;color:#01696F;margin:12px 0 4px;text-transform:uppercase;letter-spacing:0.04em;">Vendor SDI comparison (informational only)</div>
+    <table class="data-table"><thead><tr>
+      <th>Analyzer</th><th>Analyte</th><th>Level</th>
+      <th style="text-align:right">Vendor Mean</th><th style="text-align:right">Vendor SD</th>
+      <th style="text-align:right">SDI</th><th>Westgard</th>
+    </tr></thead><tbody>${vendorRows}</tbody></table>
+    <div class="eval-text" style="font-size:7.5px;color:#666;margin:4px 0;font-style:italic">SDI = (lab mean minus vendor mean) divided by vendor SD. Westgard thresholds: |SDI| less than 1 excellent, less than 2 acceptable, less than 3 investigate, 3 or greater unacceptable. Vendor SD is reference only; the lab uses its own calculated SD on the Levey-Jennings chart per 42 CFR §493.1256.</div>
+    ` : ""}
+
     ${evalHTML(r.summary, r.overallPass, r.passCount, r.totalCount, study.cliaAllowableError)}
-    <div class="eval-text" style="font-size:7.5px;color:#888;margin:8px 0;font-style:italic">Per policy, SD does not change lot to lot - the historical/peer-derived SD should be used for control limits.</div>
+    <div class="eval-text" style="font-size:7.5px;color:#666;margin:8px 0;font-style:italic">Per 42 CFR §493.1256, the laboratory must determine its own mean and SD for the QC materials it uses. The lab's calculated values from this study become the operating mean and SD on the Levey-Jennings chart. Vendor (package-insert) SD is reference only.</div>
     ${supportingPageHTML(study, safeJsonParse(study.instruments))}
   </body></html>`;
 }

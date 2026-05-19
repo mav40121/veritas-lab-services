@@ -1000,6 +1000,46 @@ export function calculatePTCoag(
 
 // ─── QC RANGE ESTABLISHMENT ─────────────────────────────────────────────────
 
+// Prior-lot crossover bias classification, computed when prior-lot
+// replicate data is provided. Thresholds locked 2026-05-19 per the
+// VeritaCheck lot-change family redesign:
+//   |Δ| within 1 pooled SD  -> accept
+//   1 to 2 pooled SD        -> caution (investigate)
+//   2 or more pooled SD     -> fail
+export type BiasCheckClassification = "accept" | "caution" | "fail";
+
+export interface QCPriorLotStats {
+  mean: number;
+  sd: number;
+  cv: number;
+  n: number;
+}
+
+export interface QCBiasCheck {
+  deltaMean: number;          // newMean - priorMean
+  pctDiffFromPrior: number;   // (newMean - priorMean) / priorMean * 100
+  pooledSD: number;
+  sdiVsPriorLot: number;      // |deltaMean| / pooledSD
+  classification: BiasCheckClassification;
+}
+
+// Vendor (package-insert assayed) comparison, computed when vendor
+// values are supplied. Westgard SDI convention:
+//   |SDI| < 1   -> excellent
+//   |SDI| < 2   -> acceptable
+//   |SDI| < 3   -> investigate
+//   |SDI| >= 3  -> unacceptable
+// Display only. CLIA §493.1256 still requires the lab to use its own
+// calculated SD on the Levey-Jennings chart, not the vendor's.
+export type VendorSDIClassification = "excellent" | "acceptable" | "investigate" | "unacceptable";
+
+export interface QCVendorComparison {
+  vendorMean: number;
+  vendorSD: number;
+  sdi: number;                // (newMean - vendorMean) / vendorSD
+  classification: VendorSDIClassification;
+}
+
 export interface QCRangeLevelResult {
   analyte: string;
   level: string;
@@ -1011,7 +1051,12 @@ export interface QCRangeLevelResult {
   oldMean: number | null;
   oldSD: number | null;
   pctDiffFromOld: number | null;
-  flagShift: boolean; // >10% shift
+  flagShift: boolean; // >10% shift (legacy heuristic, retained for backward compat)
+  // New crossover bias check, populated when priorLotRuns provided.
+  priorLot?: QCPriorLotStats;
+  biasCheck?: QCBiasCheck;
+  // Vendor SDI comparison, populated when vendor values provided.
+  vendorComparison?: QCVendorComparison;
 }
 
 export interface QCRangeResults {
@@ -1031,8 +1076,45 @@ export interface QCRangeDataPoint {
   level: string;
   analyzer: string;
   runs: number[];
+  // Legacy summary fields, kept for backward compatibility with studies
+  // saved before the prior-lot replicate grid landed. Newly created
+  // studies populate priorLotRuns instead.
   oldMean?: number | null;
   oldSD?: number | null;
+  // New: prior lot's replicate data (parallel grid to runs). When present
+  // and containing >=2 valid replicates, the calculation derives the prior
+  // lot's mean/SD/CV from this directly rather than trusting summary.
+  priorLotRuns?: number[];
+  // New: vendor (package insert) values for SDI comparison. Vendor values
+  // are typically method-agnostic on the package insert so they attach at
+  // analyte+level rather than per analyzer; the entry side dedups across
+  // analyzers and forwards the same value here for each row.
+  vendorMean?: number | null;
+  vendorSD?: number | null;
+}
+
+// Pooled SD from two samples per the standard two-sample variance pool.
+// sqrt( ((n1-1)*sd1^2 + (n2-1)*sd2^2) / (n1+n2-2) )
+// Falls back to whichever side has data when one side is degenerate (n<=1),
+// since we still want a meaningful bias check rather than a divide-by-zero.
+function pooledSDTwoSamples(sd1: number, n1: number, sd2: number, n2: number): number {
+  const df = n1 + n2 - 2;
+  if (df <= 0) return Math.max(sd1, sd2);
+  const num = (Math.max(n1 - 1, 0)) * sd1 * sd1 + (Math.max(n2 - 1, 0)) * sd2 * sd2;
+  return Math.sqrt(num / df);
+}
+
+function classifyBias(absSDI: number): BiasCheckClassification {
+  if (absSDI < 1) return "accept";
+  if (absSDI < 2) return "caution";
+  return "fail";
+}
+
+function classifyVendorSDI(absSDI: number): VendorSDIClassification {
+  if (absSDI < 1) return "excellent";
+  if (absSDI < 2) return "acceptable";
+  if (absSDI < 3) return "investigate";
+  return "unacceptable";
 }
 
 export function calculateQCRange(dataPoints: QCRangeDataPoint[], dateRange: { start: string; end: string }): QCRangeResults {
@@ -1042,33 +1124,112 @@ export function calculateQCRange(dataPoints: QCRangeDataPoint[], dateRange: { st
     const newMean = n > 0 ? mean(valid) : 0;
     const newSD = n > 1 ? stddev(valid) : 0;
     const cv = newMean !== 0 ? (newSD / newMean) * 100 : 0;
-    const pctDiffFromOld = dp.oldMean != null && dp.oldMean !== 0
+
+    // Prior-lot crossover bias check: when priorLotRuns has at least 2
+    // valid replicates, compute the prior lot's stats from the grid and
+    // run a pooled-SD-normalized bias check. Otherwise fall back to the
+    // legacy summary fields (oldMean/oldSD) for backward compatibility,
+    // which still drives the existing pctDiffFromOld surface but does
+    // not populate the new biasCheck object (no SD => no pooled SD).
+    const priorRuns = (dp.priorLotRuns || []).filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[];
+    let priorLot: QCPriorLotStats | undefined;
+    let biasCheck: QCBiasCheck | undefined;
+    if (priorRuns.length >= 2) {
+      const priorN = priorRuns.length;
+      const priorMean = mean(priorRuns);
+      const priorSD = stddev(priorRuns);
+      const priorCV = priorMean !== 0 ? (priorSD / priorMean) * 100 : 0;
+      priorLot = { mean: priorMean, sd: priorSD, cv: priorCV, n: priorN };
+      if (n >= 2) {
+        const pooled = pooledSDTwoSamples(newSD, n, priorSD, priorN);
+        const delta = newMean - priorMean;
+        const pctDiff = priorMean !== 0 ? (delta / priorMean) * 100 : 0;
+        const sdi = pooled > 0 ? Math.abs(delta) / pooled : 0;
+        biasCheck = {
+          deltaMean: delta,
+          pctDiffFromPrior: pctDiff,
+          pooledSD: pooled,
+          sdiVsPriorLot: sdi,
+          classification: classifyBias(sdi),
+        };
+      }
+    }
+
+    // Legacy summary-based shift surface (kept for backward compat with
+    // studies saved before the prior-lot grid). When priorLot is present
+    // we prefer the new pctDiffFromPrior in biasCheck.
+    const legacyPctDiff = dp.oldMean != null && dp.oldMean !== 0
       ? ((newMean - dp.oldMean) / dp.oldMean) * 100
       : null;
+    const pctDiffFromOld = biasCheck ? biasCheck.pctDiffFromPrior : legacyPctDiff;
     const flagShift = pctDiffFromOld !== null ? Math.abs(pctDiffFromOld) > 10 : false;
+
+    // Vendor SDI comparison: when both vendorMean and a positive vendorSD
+    // are supplied, compute the SDI per Westgard.
+    let vendorComparison: QCVendorComparison | undefined;
+    if (
+      dp.vendorMean != null && !isNaN(dp.vendorMean) &&
+      dp.vendorSD != null && !isNaN(dp.vendorSD) && dp.vendorSD > 0 &&
+      n >= 1
+    ) {
+      const sdi = (newMean - dp.vendorMean) / dp.vendorSD;
+      vendorComparison = {
+        vendorMean: dp.vendorMean,
+        vendorSD: dp.vendorSD,
+        sdi,
+        classification: classifyVendorSDI(Math.abs(sdi)),
+      };
+    }
+
     return {
       analyte: dp.analyte, level: dp.level, analyzer: dp.analyzer,
       n, newMean, newSD, cv,
-      oldMean: dp.oldMean ?? null, oldSD: dp.oldSD ?? null,
+      oldMean: priorLot ? priorLot.mean : (dp.oldMean ?? null),
+      oldSD: priorLot ? priorLot.sd : (dp.oldSD ?? null),
       pctDiffFromOld, flagShift,
+      priorLot, biasCheck, vendorComparison,
     };
   });
 
   const overallShiftCount = levelResults.filter(r => r.flagShift).length;
   const totalLevels = levelResults.length;
 
+  // New crossover bias-check tally (only counts rows that ran the new
+  // pooled-SD bias check, i.e. had prior-lot replicate data).
+  const withBias = levelResults.filter(r => r.biasCheck);
+  const biasFailCount = withBias.filter(r => r.biasCheck!.classification === "fail").length;
+  const biasCautionCount = withBias.filter(r => r.biasCheck!.classification === "caution").length;
+
+  // Vendor SDI tally
+  const withVendor = levelResults.filter(r => r.vendorComparison);
+  const vendorInvestigateCount = withVendor.filter(r => r.vendorComparison!.classification === "investigate").length;
+  const vendorUnacceptableCount = withVendor.filter(r => r.vendorComparison!.classification === "unacceptable").length;
+
   const analytes = Array.from(new Set(levelResults.map(r => r.analyte)));
   const analyzers = Array.from(new Set(levelResults.map(r => r.analyzer)));
-  const summary = `New QC ranges have been established for ${analytes.join(", ")}. ` +
+
+  let summary = `New QC ranges have been established for ${analytes.join(", ")} per CLSI C24-Ed4. ` +
     `${levelResults.reduce((max, r) => Math.max(max, r.n), 0)} runs were performed across ${dateRange.start} to ${dateRange.end} ` +
     `on ${analyzers.join(", ")}. ` +
-    (overallShiftCount > 0
-      ? `${overallShiftCount} of ${totalLevels} analyte-level combinations showed >10% shift from previous lot.`
-      : `All means are within 10% of previous lot values.`) +
-    ` Per policy, SD should not change lot to lot. The historical/peer-derived SD should be used for control limits.`;
+    `The lab's calculated mean and SD become the operating values on the Levey-Jennings chart, per 42 CFR §493.1256. `;
 
-  const passCount = totalLevels - overallShiftCount;
-  const overallPass = overallShiftCount === 0;
+  if (withBias.length > 0) {
+    summary += `Crossover bias check vs prior lot: ${withBias.length - biasFailCount - biasCautionCount} of ${withBias.length} analyte-level combinations within 1 pooled SD (accept), ${biasCautionCount} between 1 and 2 SD (caution), ${biasFailCount} at or above 2 SD (fail). `;
+  } else if (overallShiftCount > 0) {
+    summary += `${overallShiftCount} of ${totalLevels} analyte-level combinations showed >10% shift from previous lot (legacy summary heuristic). `;
+  }
+
+  if (withVendor.length > 0) {
+    summary += `Vendor SDI comparison (informational, per Westgard): ${withVendor.length - vendorInvestigateCount - vendorUnacceptableCount} of ${withVendor.length} levels within ±2 SDI of the vendor-assigned mean. Vendor SD is reference only; the lab uses its own calculated SD on the chart.`;
+  }
+
+  // Overall pass: prefer the new bias-check verdict when prior-lot data
+  // is present (any "fail" classification fails overall). Fall back to the
+  // legacy >10% shift heuristic when no prior-lot data was provided.
+  const overallPass = withBias.length > 0 ? biasFailCount === 0 : overallShiftCount === 0;
+  const passCount = withBias.length > 0
+    ? withBias.length - biasFailCount
+    : totalLevels - overallShiftCount;
   return { type: "qc_range", levelResults, overallShiftCount, totalLevels, dateRange, overallPass, passCount, totalCount: totalLevels, summary };
 }
 

@@ -280,54 +280,157 @@ function generateNarrative(results: StudyResults, study: Study): string {
 
 function QCRangeReport({ study, results }: { study: Study; results: QCRangeResults }) {
   const analytes = Array.from(new Set(results.levelResults.map(r => r.analyte)));
+  const anyBiasCheck = results.levelResults.some(r => r.biasCheck);
+  const anyVendor = results.levelResults.some(r => r.vendorComparison);
+
+  // Bias-check classification visual styling. Accept reads as neutral
+  // green, caution as amber, fail as red.
+  const biasBadge = (cls: "accept" | "caution" | "fail") => {
+    if (cls === "accept") return "text-emerald-600 dark:text-emerald-400";
+    if (cls === "caution") return "text-amber-600 dark:text-amber-400 font-semibold";
+    return "text-red-600 dark:text-red-400 font-semibold";
+  };
+  const biasLabel = (cls: "accept" | "caution" | "fail") => {
+    if (cls === "accept") return "Accept";
+    if (cls === "caution") return "Caution";
+    return "Fail";
+  };
+
+  // Westgard SDI classification for vendor comparison.
+  const vendorBadge = (cls: "excellent" | "acceptable" | "investigate" | "unacceptable") => {
+    if (cls === "excellent") return "text-emerald-600 dark:text-emerald-400";
+    if (cls === "acceptable") return "text-emerald-600 dark:text-emerald-400";
+    if (cls === "investigate") return "text-amber-600 dark:text-amber-400 font-semibold";
+    return "text-red-600 dark:text-red-400 font-semibold";
+  };
+
   return (
     <div className="space-y-6">
       {analytes.map(analyte => {
         const rows = results.levelResults.filter(r => r.analyte === analyte);
         return (
           <Card key={analyte}>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">{analyte} - QC Range Summary</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Analyzer</th>
-                      <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Level</th>
-                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">N</th>
-                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">New Mean</th>
-                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">New SD</th>
-                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">CV%</th>
-                      <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Old Mean</th>
-                      <th className="text-right py-2 text-xs text-muted-foreground font-medium">% Diff</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, i) => (
-                      <tr key={i} className={`border-b border-border/50 ${r.flagShift ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
-                        <td className="py-1.5 pr-3">{r.analyzer}</td>
-                        <td className="py-1.5 pr-3">{r.level}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">{r.newMean.toFixed(2)}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">{r.newSD.toFixed(3)}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">{r.cv.toFixed(1)}%</td>
-                        <td className="py-1.5 pr-3 text-right font-mono">{r.oldMean != null ? r.oldMean.toFixed(2) : "-"}</td>
-                        <td className={`py-1.5 text-right font-mono ${r.flagShift ? "text-red-500 font-semibold" : ""}`}>
-                          {r.pctDiffFromOld != null ? r.pctDiffFromOld.toFixed(1) + "%" : "-"}
-                          {r.flagShift && " ⚠"}
-                        </td>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">{analyte} - QC Lot Verification Summary</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {/* Section 1: New lot range establishment (always shown) */}
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">New lot range (CLSI C24-Ed4)</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Analyzer</th>
+                        <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Level</th>
+                        <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">N</th>
+                        <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">New Mean</th>
+                        <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">New SD</th>
+                        <th className="text-right py-2 text-xs text-muted-foreground font-medium">CV%</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i} className="border-b border-border/50">
+                          <td className="py-1.5 pr-3">{r.analyzer}</td>
+                          <td className="py-1.5 pr-3">{r.level}</td>
+                          <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
+                          <td className="py-1.5 pr-3 text-right font-mono">{r.newMean.toFixed(3)}</td>
+                          <td className="py-1.5 pr-3 text-right font-mono">{r.newSD.toFixed(3)}</td>
+                          <td className="py-1.5 text-right font-mono">{r.cv.toFixed(2)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rows.some(r => r.n < 10) && <p className="text-xs text-amber-500 mt-2">Some levels have fewer than 10 runs.</p>}
               </div>
-              {rows.some(r => r.n < 10) && <p className="text-xs text-amber-500 mt-2">Some levels have fewer than 10 runs.</p>}
+
+              {/* Section 2: Crossover bias check (only when prior lot data present) */}
+              {rows.some(r => r.biasCheck || r.priorLot) && (
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Crossover bias check vs prior lot</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Analyzer</th>
+                          <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Level</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Prior Mean</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Prior SD</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Δ Mean</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">% Diff</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Pooled SD</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">SDI</th>
+                          <th className="text-left py-2 text-xs text-muted-foreground font-medium">Verdict</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-1.5 pr-3">{r.analyzer}</td>
+                            <td className="py-1.5 pr-3">{r.level}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.priorLot ? r.priorLot.mean.toFixed(3) : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.priorLot ? r.priorLot.sd.toFixed(3) : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.biasCheck ? (r.biasCheck.deltaMean >= 0 ? "+" : "") + r.biasCheck.deltaMean.toFixed(3) : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.biasCheck ? r.biasCheck.pctDiffFromPrior.toFixed(2) + "%" : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.biasCheck ? r.biasCheck.pooledSD.toFixed(3) : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.biasCheck ? r.biasCheck.sdiVsPriorLot.toFixed(2) : "-"}</td>
+                            <td className={`py-1.5 text-left font-mono ${r.biasCheck ? biasBadge(r.biasCheck.classification) : ""}`}>
+                              {r.biasCheck ? biasLabel(r.biasCheck.classification) : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground italic mt-2">Verdict thresholds: |Δ| within 1 pooled SD = Accept; 1 to 2 SD = Caution; ≥ 2 SD = Fail.</p>
+                </div>
+              )}
+
+              {/* Section 3: Vendor SDI comparison (only when vendor values present) */}
+              {rows.some(r => r.vendorComparison) && (
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Vendor SDI comparison (informational only)</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Analyzer</th>
+                          <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Level</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Vendor Mean</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">Vendor SD</th>
+                          <th className="text-right py-2 pr-3 text-xs text-muted-foreground font-medium">SDI</th>
+                          <th className="text-left py-2 text-xs text-muted-foreground font-medium">Westgard</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-1.5 pr-3">{r.analyzer}</td>
+                            <td className="py-1.5 pr-3">{r.level}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.vendorComparison ? r.vendorComparison.vendorMean.toFixed(3) : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.vendorComparison ? r.vendorComparison.vendorSD.toFixed(3) : "-"}</td>
+                            <td className="py-1.5 pr-3 text-right font-mono">{r.vendorComparison ? (r.vendorComparison.sdi >= 0 ? "+" : "") + r.vendorComparison.sdi.toFixed(2) : "-"}</td>
+                            <td className={`py-1.5 text-left ${r.vendorComparison ? vendorBadge(r.vendorComparison.classification) : ""}`}>
+                              {r.vendorComparison ? r.vendorComparison.classification.charAt(0).toUpperCase() + r.vendorComparison.classification.slice(1) : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground italic mt-2">SDI = (lab mean − vendor mean) / vendor SD. Westgard thresholds: |SDI| &lt; 1 excellent, &lt; 2 acceptable, &lt; 3 investigate, ≥ 3 unacceptable. Vendor SD is reference only; the lab uses its own calculated SD on the Levey-Jennings chart per CLIA §493.1256.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         );
       })}
       <div className="rounded-md bg-muted/50 border p-3">
-        <p className="text-xs text-muted-foreground italic">Per policy, SD should not change lot to lot. The historical/peer-derived SD should be used for control limits, not the SD calculated here unless it represents a significant change.</p>
+        <p className="text-xs text-muted-foreground italic">
+          Per 42 CFR §493.1256, the laboratory must determine its own mean and SD for the QC materials it uses. The lab's calculated values from this study become the operating mean and SD on the Levey-Jennings chart.
+          {anyBiasCheck && " The crossover bias check verifies analytical performance remained stable during the lot changeover and follows the CLSI C24-Ed4 parallel-testing pattern."}
+          {anyVendor && " Vendor (package-insert) values are informational only."}
+        </p>
       </div>
     </div>
   );
