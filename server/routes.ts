@@ -848,6 +848,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ userId, count: studies.length, studies });
   });
 
+  // POST /api/admin/relocate-study — move a study to a different lab_id.
+  // Used to back-patch studies created via the legacy /api/studies path
+  // before the lab_members-primary dual-write fix, when the row landed on
+  // a stale users.lab_id and the lab-scoped GET returns 404. Read-then-
+  // verify pattern: requires {studyId, newLabId} and returns the before
+  // / after row so the caller can confirm the change.
+  app.post("/api/admin/relocate-study", (req, res) => {
+    const { secret, studyId, newLabId } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sid = parseInt(studyId);
+    const lid = parseInt(newLabId);
+    if (!Number.isFinite(sid) || !Number.isFinite(lid)) {
+      return res.status(400).json({ error: "Invalid studyId or newLabId" });
+    }
+    const before = (db as any).$client.prepare(
+      "SELECT id, user_id, lab_id, test_name, study_type, status, created_at FROM studies WHERE id = ?"
+    ).get(sid) as any;
+    if (!before) return res.status(404).json({ error: "Study not found" });
+    (db as any).$client.prepare("UPDATE studies SET lab_id = ? WHERE id = ?").run(lid, sid);
+    const after = (db as any).$client.prepare(
+      "SELECT id, user_id, lab_id, test_name, study_type, status, created_at FROM studies WHERE id = ?"
+    ).get(sid) as any;
+    res.json({ before, after });
+  });
+
   app.post("/api/admin/users", (req, res) => {
     const { secret, maxId } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
@@ -2823,14 +2848,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId, createdByUserId });
 
     // Multi-Lab Tier 2 Phase 3 dual-write: stamp lab_id on every new row so
-    // the transition window does not accumulate NULL lab_id studies. Pulls
-    // the lab from the owning user's lab_id (seat-aware via the Tier 1
-    // backfill). Best-effort; skip silently if the user has no lab yet.
+    // the transition window does not accumulate NULL lab_id studies. Picks
+    // the user's PRIMARY active lab_members membership (is_primary_lab DESC,
+    // id ASC) to match the ordering /api/labs/me returns and that
+    // LegacyWorkspaceRedirect uses to choose the destination lab. Falls
+    // back to users.lab_id if no active membership exists (legacy single-
+    // lab accounts pre-Phase 2). Best-effort; skip silently on error.
+    //
+    // Before this change, dual-write used users.lab_id directly. That
+    // column was stamped at signup and never re-synced when an owner of
+    // multiple labs changed their primary lab, so a study created via the
+    // legacy /api/studies path (URL had no /labs/:labId prefix) landed
+    // on the stale lab while the post-save redirect sent the user to the
+    // new primary lab. The lab-scoped GET then 404'd ("Study not found"
+    // after Run Study).
     if (userId) {
       try {
-        (db as any).$client.prepare(
-          "UPDATE studies SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-        ).run(userId, study.id);
+        (db as any).$client.prepare(`
+          UPDATE studies
+          SET lab_id = COALESCE(
+            (SELECT lab_id FROM lab_members
+             WHERE user_id = ? AND status = 'active'
+             ORDER BY is_primary_lab DESC, id ASC LIMIT 1),
+            (SELECT lab_id FROM users WHERE id = ?)
+          )
+          WHERE id = ?
+        `).run(userId, userId, study.id);
       } catch {}
     }
 
