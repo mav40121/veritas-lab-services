@@ -106,6 +106,16 @@ const _canonicalAliasSet: Set<string> = (() => {
   return s;
 })();
 
+// Escape regex metacharacters in an alias before embedding it in a RegExp.
+// Earlier version had two bugs: the character class was malformed (closed
+// prematurely on the first \\] so almost no chars got escaped) and the
+// replacement string had four backslashes instead of two (which inserted a
+// literal "\\" prefix before each metachar instead of the single backslash
+// the regex engine expects). Fixed and unit-tested 2026-05-20.
+function escapeRegexAlias(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function hasCanonicalTea(analyte: string | null | undefined): boolean {
   if (!analyte) return false;
   const needle = String(analyte).trim().toLowerCase();
@@ -114,11 +124,11 @@ export function hasCanonicalTea(analyte: string | null | undefined): boolean {
   // Fall back to substring match for free-text test names that embed a
   // canonical alias inside extra annotation (e.g. "ALT (Pfizer side-by-side)"
   // or "Glucose - QC Run 3"). Check each indexed alias against the needle.
-  // Word-boundary check to avoid false positives like "saline" matching
-  // "alt" inside "saltern" (which has no analyte semantics anyway).
+  // Word-boundary check to avoid false positives like "alt" matching inside
+  // a word that incidentally contains the letters.
   for (const alias of _canonicalAliasSet) {
     if (alias.length < 3) continue; // skip ultra-short aliases to avoid noise
-    const re = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\b`, "i");
+    const re = new RegExp(`\\b${escapeRegexAlias(alias)}\\b`, "i");
     if (re.test(needle)) return true;
   }
   return false;
