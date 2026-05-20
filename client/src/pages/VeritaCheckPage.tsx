@@ -550,6 +550,14 @@ export default function VeritaCheckPage() {
   const [precisionRunsPerDay, setPrecisionRunsPerDay] = useState(1);
   const [precisionReplicatesPerRun, setPrecisionReplicatesPerRun] = useState(2);
   const [precisionAdvancedData, setPrecisionAdvancedData] = useState<number[][][]>([[], [], []]);
+  // Phase 3 simple-precision parity (2026-05-20): optional EE-style inputs.
+  // All four are stored as strings (text inputs) and parsed at save time so
+  // an empty box stays "" rather than NaN. The calculator + PDF only render
+  // related fields when these are non-empty + numeric.
+  const [precisionVendorSd, setPrecisionVendorSd] = useState("");
+  const [precisionVendorSdConc, setPrecisionVendorSdConc] = useState("");
+  const [precisionTargetMean, setPrecisionTargetMean] = useState("");
+  const [precisionTargetCv, setPrecisionTargetCv] = useState("");
 
   // Sensitivity (EP17) state. Two paste-friendly textareas hold the blank and low-level
   // replicate values respectively; one value per line, optional ",lot" suffix per line for
@@ -1374,7 +1382,23 @@ export default function VeritaCheckPage() {
           };
         }
       });
-      const results = calculatePrecision(precDataPoints, cliaValue, precisionMode);
+      // Phase 3 simple-precision parity: parse optional EE-style inputs from
+      // text state, omit any empty / non-numeric field so the calculator
+      // skips that branch (e.g. no targetMean -> no bias / %bias output).
+      const numOrNull = (s: string) => {
+        const n = parseFloat(s);
+        return Number.isFinite(n) ? n : null;
+      };
+      const vendorSdNum = numOrNull(precisionVendorSd);
+      const vendorSdConcNum = numOrNull(precisionVendorSdConc);
+      const targetMeanNum = numOrNull(precisionTargetMean);
+      const targetCvNum = numOrNull(precisionTargetCv);
+      const results = calculatePrecision(precDataPoints, cliaValue, precisionMode, {
+        vendorSD: vendorSdNum ?? undefined,
+        vendorSDConcentration: vendorSdConcNum ?? undefined,
+        targetMean: targetMeanNum ?? undefined,
+        targetCV: targetCvNum ?? undefined,
+      });
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "precision", cliaAllowableError: cliaValue,
@@ -1383,7 +1407,14 @@ export default function VeritaCheckPage() {
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
-      };
+        // Persist the optional simple-precision inputs alongside the study so
+        // the server-side PDF builder can render User's Specifications and
+        // the on-screen view can re-derive CIs / bias / vendor verdict.
+        vendorSd: vendorSdNum,
+        vendorSdConcentration: vendorSdConcNum,
+        targetMean: targetMeanNum,
+        targetCv: targetCvNum,
+      } as InsertStudy;
       saveMutation.mutate(study);
       return;
     }
@@ -2702,6 +2733,51 @@ return (
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {/* Phase 3 simple-precision parity (2026-05-20):
+                            Optional EE-style inputs. Leave any field blank
+                            to skip the related output (vendor verdict,
+                            bias, target plot centering). All four are
+                            persisted on the study record and surface in
+                            the PDF + on-screen result view. */}
+                        <details className="rounded-md border bg-muted/30 p-3 text-xs">
+                          <summary className="cursor-pointer font-medium select-none">
+                            Optional precision parameters (vendor claim, target)
+                          </summary>
+                          <p className="text-muted-foreground mt-2 leading-relaxed">
+                            Add a vendor SD claim from the package insert to surface a Pass / Fail / Uncertain verdict against the 95% confidence interval of your observed SD. Add a target mean and target CV from the QC control insert to surface bias / % bias and center the Precision Plot on the target. All fields optional.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                            <div>
+                              <Label className="text-[11px]">Vendor Within-Run SD</Label>
+                              <Input type="number" step="any" placeholder="e.g. 1.57"
+                                value={precisionVendorSd}
+                                onChange={e => setPrecisionVendorSd(e.target.value)}
+                                className="h-7 text-xs mt-1" />
+                            </div>
+                            <div>
+                              <Label className="text-[11px]">Concentration at Vendor SD (optional)</Label>
+                              <Input type="number" step="any" placeholder="e.g. 25"
+                                value={precisionVendorSdConc}
+                                onChange={e => setPrecisionVendorSdConc(e.target.value)}
+                                className="h-7 text-xs mt-1" />
+                            </div>
+                            <div>
+                              <Label className="text-[11px]">Target Mean</Label>
+                              <Input type="number" step="any" placeholder="e.g. 23.6"
+                                value={precisionTargetMean}
+                                onChange={e => setPrecisionTargetMean(e.target.value)}
+                                className="h-7 text-xs mt-1" />
+                            </div>
+                            <div>
+                              <Label className="text-[11px]">Target CV (%)</Label>
+                              <Input type="number" step="any" placeholder="e.g. 7.5"
+                                value={precisionTargetCv}
+                                onChange={e => setPrecisionTargetCv(e.target.value)}
+                                className="h-7 text-xs mt-1" />
+                            </div>
+                          </div>
+                        </details>
                       </>
                     )}
 
