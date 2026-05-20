@@ -406,13 +406,17 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const mapApiBase = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/maps/${mapId}`
+    : `/api/veritamap/maps/${mapId}`;
 
   const fdaInstr = INSTRUMENT_DATA[instrument.instrument_name];
   const vendor = fdaInstr?.vendor || "";
 
   const editMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instrument.id}`, {
+      const res = await fetch(`${API_BASE}${mapApiBase}/instruments/${instrument.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
@@ -427,8 +431,8 @@ function EditInstrumentDialog({ instrument, mapId, onSaved }: EditInstrumentDial
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+      queryClient.invalidateQueries({ queryKey: [`${mapApiBase}`] });
+      queryClient.invalidateQueries({ queryKey: [`${mapApiBase}/instruments`] });
       toast({ title: "Instrument updated" });
       onSaved();
       setOpen(false);
@@ -883,6 +887,12 @@ export default function VeritaMapBuildPage() {
   const [, labScopedParams] = useRoute("/labs/:labId/veritamap-app/:id/build");
   const mapId = labScopedParams?.id ?? legacyParams?.id;
   const activeLabId = useActiveLabId();
+  // Multi-Lab Tier 2: when on /labs/:labId/veritamap-app/:id/build, route
+  // every sub-resource fetch + mutation through the lab-scoped variant so
+  // a stale URL from another lab the user is a member of returns 404.
+  const mapApiBase = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/maps/${mapId}`
+    : `/api/veritamap/maps/${mapId}`;
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -922,10 +932,10 @@ export default function VeritaMapBuildPage() {
     instrumentLimit: number | null;
     analyteLimit: number | null;
   }>({
-    queryKey: [`/api/veritamap/maps/${mapId}/limits`],
+    queryKey: [`${mapApiBase}/limits`],
     enabled: !!mapId,
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/limits`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${mapApiBase}/limits`, { headers: authHeaders() });
       if (!res.ok) return { isFree: false, instrumentCount: 0, analyteCount: 0, instrumentLimit: null, analyteLimit: null };
       return res.json();
     },
@@ -935,11 +945,11 @@ export default function VeritaMapBuildPage() {
   const { data: instruments = [], isLoading: loadingInstruments } = useQuery<
     InstrumentEntry[]
   >({
-    queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+    queryKey: [`${mapApiBase}/instruments`],
     enabled: !!mapId,
     queryFn: async () => {
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+        `${API_BASE}${mapApiBase}/instruments`,
         { headers: authHeaders() }
       );
       if (!res.ok) return [];
@@ -1061,7 +1071,7 @@ export default function VeritaMapBuildPage() {
       const fdaInstr = INSTRUMENT_DATA[name];
       const category = fdaInstr?.category ?? effectiveCategory;
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+        `${API_BASE}${mapApiBase}/instruments`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1085,9 +1095,9 @@ export default function VeritaMapBuildPage() {
     },
     onSuccess: (newInstr) => {
       qc.invalidateQueries({
-        queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+        queryKey: [`${mapApiBase}/instruments`],
       });
-      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/limits`] });
+      qc.invalidateQueries({ queryKey: [`${mapApiBase}/limits`] });
       setInstrumentName("");
       setSelectedVendor("");
       setManualInstrumentName("");
@@ -1134,16 +1144,16 @@ export default function VeritaMapBuildPage() {
   const deleteInstrumentMutation = useMutation({
     mutationFn: async (instId: number) => {
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instId}`,
+        `${API_BASE}${mapApiBase}/instruments/${instId}`,
         { method: "DELETE", headers: authHeaders() }
       );
       if (!res.ok) throw new Error("Failed to delete instrument");
     },
     onSuccess: (_, instId) => {
       qc.invalidateQueries({
-        queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+        queryKey: [`${mapApiBase}/instruments`],
       });
-      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/limits`] });
+      qc.invalidateQueries({ queryKey: [`${mapApiBase}/limits`] });
       setTestsByInstrument((prev) => {
         const next = { ...prev };
         delete next[instId];
@@ -1164,7 +1174,7 @@ export default function VeritaMapBuildPage() {
     setIsCopying(true);
     try {
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${targetInstId}/copy-from/${sourceInstId}`,
+        `${API_BASE}${mapApiBase}/instruments/${targetInstId}/copy-from/${sourceInstId}`,
         { method: 'POST', headers: authHeaders() }
       );
       const data = await res.json();
@@ -1177,7 +1187,7 @@ export default function VeritaMapBuildPage() {
         // a window where testsByInstrument[targetInstId] is empty, showing the wrong empty state.
         try {
           const testsRes = await fetch(
-            `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+            `${API_BASE}${mapApiBase}/instruments`,
             { headers: authHeaders() }
           );
           if (testsRes.ok) {
@@ -1204,8 +1214,8 @@ export default function VeritaMapBuildPage() {
           });
         }
         // Also invalidate so the instruments query stays in sync
-        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
-        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
+        qc.invalidateQueries({ queryKey: [`${mapApiBase}/instruments`] });
+        qc.invalidateQueries({ queryKey: [`${mapApiBase}`] });
       }
     } catch {
       toast({ title: 'Copy failed', description: 'Network error. Please try again.', variant: 'destructive' });
@@ -1224,7 +1234,7 @@ export default function VeritaMapBuildPage() {
         const tests = testsByInstrument[instr.id];
         // Save all tests (active and inactive) so user can re-activate deselected tests later
         const res = await fetch(
-          `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
+          `${API_BASE}${mapApiBase}/instruments/${instr.id}/tests`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1241,9 +1251,9 @@ export default function VeritaMapBuildPage() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}`] });
-      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
-      qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
+      qc.invalidateQueries({ queryKey: [`${mapApiBase}`] });
+      qc.invalidateQueries({ queryKey: [`${mapApiBase}/intelligence`] });
+      qc.invalidateQueries({ queryKey: [`${mapApiBase}/instruments`] });
       navigate(activeLabId
         ? `/labs/${activeLabId}/veritamap-app/${mapId}`
         : `/veritamap-app/${mapId}`);
@@ -1284,7 +1294,7 @@ export default function VeritaMapBuildPage() {
           if (!(instr.id in testsByInstrument)) continue;
           const tests = testsByInstrument[instr.id];
           const res = await fetch(
-            `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${instr.id}/tests`,
+            `${API_BASE}${mapApiBase}/instruments/${instr.id}/tests`,
             {
               method: "PUT",
               headers: { "Content-Type": "application/json", ...authHeaders() },
