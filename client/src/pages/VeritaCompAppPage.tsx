@@ -860,8 +860,14 @@ function ProgramDetailView({ programId }: { programId: number }) {
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">("overview");
   const [newAssessmentOpen, setNewAssessmentOpen] = useState(false);
 
+  // Lab-scoped program-detail when activeLabId is set. The legacy endpoint
+  // pulls embedded employees by user_id which leaks across labs for
+  // multi-lab owners; the lab-scoped variant scopes employees by lab_id.
+  const programDetailUrl = activeLabId
+    ? `/api/labs/${activeLabId}/competency/programs/${programId}`
+    : `/api/competency/programs/${programId}`;
   const { data: program, isLoading } = useQuery<Program & { employees: Employee[]; assessments: Assessment[] }>({
-    queryKey: ["/api/competency/programs", programId],
+    queryKey: [programDetailUrl],
   });
 
   if (isLoading) {
