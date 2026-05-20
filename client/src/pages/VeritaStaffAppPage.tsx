@@ -348,7 +348,10 @@ export default function VeritaStaffAppPage() {
   async function handleGenerate209() {
     setGenerating209(true);
     try {
-      const res = await fetch(`${API_BASE}/api/staff/cms209`, {
+      const cms209Url = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/cms209`
+        : `${API_BASE}/api/staff/cms209`;
+      const res = await fetch(cms209Url, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
       });
@@ -369,6 +372,7 @@ export default function VeritaStaffAppPage() {
 function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChange: (v: boolean) => void; lab: Lab | null }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
   const [form, setForm] = useState({
     labName: lab?.lab_name || "",
     cliaNumber: lab?.clia_number || "",
@@ -402,7 +406,10 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
 
   async function loadSuggestions() {
     try {
-      const res = await fetch(`${API_BASE}/api/staff/veritamap-suggestions`, { headers: authHeaders() });
+      const suggestionsUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/veritamap-suggestions`
+        : `${API_BASE}/api/staff/veritamap-suggestions`;
+      const res = await fetch(suggestionsUrl, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setSuggestions(data);
@@ -419,7 +426,10 @@ function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChan
     }
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/staff/lab`, {
+      const labUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/lab`
+        : `${API_BASE}/api/staff/lab`;
+      const res = await fetch(labUrl, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -545,6 +555,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
   const isEdit = !!employee;
 
   const [form, setForm] = useState({
@@ -606,7 +617,10 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
     }
     setSaving(true);
     try {
-      const url = isEdit ? `${API_BASE}/api/staff/employees/${employee!.id}` : `${API_BASE}/api/staff/employees`;
+      const baseUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/employees`
+        : `${API_BASE}/api/staff/employees`;
+      const url = isEdit ? `${baseUrl}/${employee!.id}` : baseUrl;
       const method = isEdit ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -762,6 +776,7 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
   const s = employee.competencySchedule;
   const includesTJCorCAP = ["TJC", "CAP"].includes(lab.accreditation_body);
 
@@ -781,7 +796,10 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/staff/competency/${employee.id}`, {
+      const competencyUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/competency/${employee.id}`
+        : `${API_BASE}/api/staff/competency/${employee.id}`;
+      const res = await fetch(competencyUrl, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -885,6 +903,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
   const readOnly = useIsReadOnly('veritastaff');
   const [showCompetency, setShowCompetency] = useState(false);
 
@@ -895,7 +914,10 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
 
   async function handleDelete() {
     try {
-      const res = await fetch(`${API_BASE}/api/staff/employees/${employee.id}`, {
+      const deleteUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/employees/${employee.id}`
+        : `${API_BASE}/api/staff/employees/${employee.id}`;
+      const res = await fetch(deleteUrl, {
         method: "DELETE",
         headers: authHeaders(),
       });
