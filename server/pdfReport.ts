@@ -184,6 +184,135 @@ function scatterSVG(
 </svg>`;
 }
 
+// ─── Precision plot (Levey-Jennings SDI vs specimen index) ───────────────────
+// Phase 2 simple-precision parity (2026-05-20). Matches the layout EP
+// Evaluator uses on the simple precision report: SDI on Y, specimen index on
+// X, horizontal reference bands at +/- 1, 2, 3 SDI. SDI = (value - center) /
+// scale, where center/scale defaults to observed mean/SD but switches to
+// target mean / target SD when the caller provides both (so zero on the Y
+// axis represents the target, as EE does when a target is supplied).
+function precisionPlotSVG(
+  values: number[], mean: number, sd: number,
+  targetMean: number | null, targetSD: number | null,
+  w = 320, h = 220
+): string {
+  if (!values.length || !(sd > 0)) return `<svg width="${w}" height="${h}"></svg>`;
+  const center = targetMean != null && targetSD != null && targetSD > 0 ? targetMean : mean;
+  const scale = targetMean != null && targetSD != null && targetSD > 0 ? targetSD : sd;
+  const sdi = values.map(v => (v - center) / scale);
+  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const yMin = Math.min(-3.2, Math.min(...sdi) - 0.2);
+  const yMax = Math.max(3.2, Math.max(...sdi) + 0.2);
+  const xMin = 0.5, xMax = values.length + 0.5;
+  const cx = (v: number) => ml + ((v - xMin) / (xMax - xMin)) * pw;
+  const cy = (v: number) => mt + ph - ((v - yMin) / (yMax - yMin)) * ph;
+  const refs = [-3, -2, -1, 0, 1, 2, 3].filter(y => y >= yMin && y <= yMax);
+  const refLines = refs.map(y => {
+    const color = y === 0 ? "#646e78" : Math.abs(y) === 3 ? "#dc5050" : Math.abs(y) === 2 ? "#c69b3f" : "#dde1e6";
+    const w2 = Math.abs(y) === 0 ? 1.2 : 0.8;
+    return `<line x1="${ml}" y1="${cy(y)}" x2="${ml + pw}" y2="${cy(y)}" stroke="${color}" stroke-width="${w2}"/>` +
+      `<text x="${ml - 4}" y="${cy(y) + 3}" text-anchor="end" font-size="7" fill="${MUTED}">${y >= 0 ? "+" : ""}${y}</text>`;
+  }).join("");
+  const dots = sdi.map((y, i) => `<circle cx="${cx(i + 1)}" cy="${cy(y)}" r="2.5" fill="#1e3a8a" opacity="0.85"/>`).join("");
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Precision Plot</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${refLines}${dots}
+  <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="${MUTED}">Specimen Index</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="${MUTED}" transform="rotate(-90,10,${mt + ph / 2})">SD Index (${targetMean != null ? "Target" : "Mean"})</text>
+</svg>`;
+}
+
+// ─── Histogram with normal curve overlay ─────────────────────────────────────
+// Counts each value into integer-rounded bins, overlays the Gaussian PDF
+// scaled to the bar height of the modal bin. Vertical lines mark observed
+// mean (blue) and target mean (red, when provided), matching EP Evaluator.
+function histogramSVG(
+  values: number[], mean: number, sd: number, targetMean: number | null,
+  w = 320, h = 220
+): string {
+  if (!values.length || !(sd > 0)) return `<svg width="${w}" height="${h}"></svg>`;
+  // Build integer bins centered on whole units (works well for the typical
+  // chemistry / hematology resolution; ALT in the Pfizer report is reported
+  // to whole U/L).
+  const lo = Math.floor(Math.min(...values));
+  const hi = Math.ceil(Math.max(...values));
+  const targetLo = targetMean != null ? Math.floor(targetMean) : lo;
+  const targetHi = targetMean != null ? Math.ceil(targetMean) : hi;
+  const binLo = Math.min(lo, targetLo) - 1;
+  const binHi = Math.max(hi, targetHi) + 1;
+  const counts: Record<number, number> = {};
+  for (let b = binLo; b <= binHi; b++) counts[b] = 0;
+  for (const v of values) {
+    const b = Math.round(v);
+    if (counts[b] != null) counts[b] += 1;
+  }
+  const bins = Object.keys(counts).map(Number).sort((a, b) => a - b);
+  const totalN = values.length;
+  const pct = bins.map(b => (counts[b] / totalN) * 100);
+  const maxPct = Math.max(...pct, 10);
+  const ml = 36, mr = 16, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const cx = (b: number) => ml + ((b - binLo) / (binHi - binLo)) * pw;
+  const cy = (p: number) => mt + ph - (p / maxPct) * ph;
+  const barWidth = pw / (binHi - binLo + 1) * 0.85;
+  const bars = bins.map((b, i) => {
+    if (pct[i] === 0) return "";
+    const x = cx(b) - barWidth / 2;
+    const y = cy(pct[i]);
+    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${mt + ph - y}" fill="#1e3a8a" opacity="0.85"/>`;
+  }).join("");
+  // Normal curve overlay: PDF height = (1 / (sd*sqrt(2*pi))) * exp(-((x-mean)^2)/(2*sd^2)).
+  // Scale so the peak matches the modal bar height visually.
+  const pdfAt = (x: number) => (1 / (sd * Math.sqrt(2 * Math.PI))) * Math.exp(-((x - mean) ** 2) / (2 * sd * sd));
+  const peakPdf = pdfAt(mean);
+  const peakBarPct = Math.max(...pct);
+  const pdfScale = peakBarPct > 0 ? peakBarPct / peakPdf : 0;
+  let curve = "";
+  const steps = 80;
+  for (let i = 0; i <= steps; i++) {
+    const x = binLo + (i / steps) * (binHi - binLo);
+    const yPct = pdfAt(x) * pdfScale;
+    const px = cx(x), py = cy(yPct);
+    curve += i === 0 ? `M ${px} ${py}` : ` L ${px} ${py}`;
+  }
+  const curvePath = `<path d="${curve}" fill="none" stroke="#646e78" stroke-width="1.2"/>`;
+  const obsMeanLine = `<line x1="${cx(mean)}" y1="${mt}" x2="${cx(mean)}" y2="${mt + ph}" stroke="#1e3a8a" stroke-width="1.4"/>`;
+  const targetLine = targetMean != null
+    ? `<line x1="${cx(targetMean)}" y1="${mt}" x2="${cx(targetMean)}" y2="${mt + ph}" stroke="#dc5050" stroke-width="1.4"/>`
+    : "";
+  // Y-axis ticks at 10% intervals up to maxPct
+  let yTicks = "";
+  for (let p = 0; p <= maxPct; p += 10) {
+    yTicks += `<line x1="${ml}" y1="${cy(p)}" x2="${ml + pw}" y2="${cy(p)}" stroke="#dde1e6" stroke-width="0.5"/>` +
+      `<text x="${ml - 4}" y="${cy(p) + 3}" text-anchor="end" font-size="7" fill="${MUTED}">${p}%</text>`;
+  }
+  // X-axis ticks at each integer bin
+  let xTicks = "";
+  for (const b of bins) {
+    if ((b - binLo) % Math.max(1, Math.floor((binHi - binLo) / 8)) === 0) {
+      xTicks += `<text x="${cx(b)}" y="${mt + ph + 12}" text-anchor="middle" font-size="7" fill="${MUTED}">${b}</text>`;
+    }
+  }
+  const legend = targetMean != null
+    ? `<g transform="translate(${ml + 6}, ${mt + 4})">
+        <line x1="0" y1="3" x2="12" y2="3" stroke="#dc5050" stroke-width="1.4"/>
+        <text x="16" y="6" font-size="7" fill="${MUTED}">Target Mean</text>
+        <line x1="0" y1="13" x2="12" y2="13" stroke="#1e3a8a" stroke-width="1.4"/>
+        <text x="16" y="16" font-size="7" fill="${MUTED}">Obs Mean</text>
+      </g>`
+    : `<g transform="translate(${ml + 6}, ${mt + 4})">
+        <line x1="0" y1="3" x2="12" y2="3" stroke="#1e3a8a" stroke-width="1.4"/>
+        <text x="16" y="6" font-size="7" fill="${MUTED}">Obs Mean</text>
+      </g>`;
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Histogram</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${yTicks}${bars}${curvePath}${obsMeanLine}${targetLine}${legend}${xTicks}
+</svg>`;
+}
+
 function recoveryPlotSVG(assignedVals: number[], recoveries: number[], cliaError: number, w = 320, h = 220): string {
   if (!recoveries.length) return `<svg width="${w}" height="${h}"></svg>`;
   const cliaP = cliaError * 100;
@@ -463,13 +592,29 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cfrReferenceValue = isCanonical
     ? `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`
     : "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I.";
-  const specs = [
+  const specs: any[][] = [
     ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26-A)" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     [criterionRowLabel, teaStr],
     [cfrReferenceLabel, cfrReferenceValue],
     ["Allowable Systematic Error", teaStr],
   ];
+  // Phase 2 parity: surface optional precision-study inputs in User
+  // Specifications so the supporting data table matches EE's panel when the
+  // operator entered a vendor SD goal or a target mean.
+  if (study.studyType === "precision") {
+    const vSD = (study as any).vendorSd ?? (study as any).vendor_sd;
+    const vConc = (study as any).vendorSdConcentration ?? (study as any).vendor_sd_concentration;
+    const tMean = (study as any).targetMean ?? (study as any).target_mean;
+    const tCV = (study as any).targetCv ?? (study as any).target_cv;
+    if (vSD != null) {
+      specs.push(["Precision Verification Goal", "Vendor SD"]);
+      specs.push(["Within-Run SD (Vendor)", String(vSD)]);
+      if (vConc != null) specs.push(["Concentration at Vendor SD", String(vConc)]);
+    }
+    if (tMean != null) specs.push(["Target Mean", String(tMean)]);
+    if (tCV != null) specs.push(["Target CV", `${tCV}%`]);
+  }
   const supporting = [
     ["Analyst", study.analyst],
     ["Date", study.date],
@@ -1578,11 +1723,110 @@ export function buildPrecisionHTML(study: Study, results: any): string {
       </div>`;
   }).join("");
 
+  // ─── Phase 2 parity: CIs, 2 SD range, vendor verdict, plots ────────────────
+  const studyAny = study as any;
+  const studyVendorSD = studyAny.vendorSd ?? studyAny.vendor_sd ?? results.vendorSD ?? null;
+  const studyTargetMean = studyAny.targetMean ?? studyAny.target_mean ?? results.targetMean ?? null;
+  const hasParityFields = levelResults.some((r: any) =>
+    r.sdCiLower != null || r.meanCiLower != null || r.twoSDRangeLower != null
+    || r.vendorVerdict != null || r.bias != null,
+  );
+  // Render the new statistical detail table only when the calculator has
+  // populated parity fields (n >= 2). For legacy studies that pre-date the
+  // Phase 1 backfill the levelResults won't carry these fields and the
+  // section stays hidden, matching prior behavior.
+  const ciSection = hasParityFields ? `
+    <hr class="divider" style="margin-top:8px">
+    <div class="section-label">Confidence Intervals and Distribution</div>
+    <table>
+      <thead><tr>
+        <th>Level</th>
+        <th class="text-right">95% CI for SD</th>
+        <th class="text-right">95% CI for Mean</th>
+        <th class="text-right">Obs 2 SD Range</th>
+        ${studyTargetMean != null ? `<th class="text-right">Bias</th><th class="text-right">% Bias</th>` : ``}
+        ${studyVendorSD != null ? `<th class="text-right">Vendor SD Goal</th><th class="text-right">Vendor Verdict</th>` : ``}
+      </tr></thead>
+      <tbody>${levelResults.map((r: any, i: number) => {
+        const ciSD = (r.sdCiLower != null && r.sdCiUpper != null)
+          ? `${sf(r.sdCiLower, 3)} to ${sf(r.sdCiUpper, 3)}` : "-";
+        const ciMean = (r.meanCiLower != null && r.meanCiUpper != null)
+          ? `${sf(r.meanCiLower, 3)} to ${sf(r.meanCiUpper, 3)}` : "-";
+        const twoSD = (r.twoSDRangeLower != null && r.twoSDRangeUpper != null)
+          ? `${sf(r.twoSDRangeLower, 3)} to ${sf(r.twoSDRangeUpper, 3)}` : "-";
+        const biasCol = studyTargetMean != null
+          ? `<td class="text-right">${r.bias != null ? sf(r.bias, 3) : "-"}</td>
+             <td class="text-right">${r.percentBias != null ? sf(r.percentBias, 2) + "%" : "-"}</td>` : ``;
+        let vendorCols = ``;
+        if (studyVendorSD != null) {
+          const verdict = r.vendorVerdict ?? "-";
+          const vColor = verdict === "Pass" ? "#437A22" : verdict === "Fail" ? "#A12C7B" : verdict === "Uncertain" ? "#964219" : MUTED;
+          vendorCols = `<td class="text-right">${sf(studyVendorSD, 3)}</td>
+            <td class="text-right" style="color:${vColor};font-weight:700">${verdict}</td>`;
+        }
+        return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+          <td>${r.levelName}</td>
+          <td class="text-right">${ciSD}</td>
+          <td class="text-right">${ciMean}</td>
+          <td class="text-right">${twoSD}</td>
+          ${biasCol}${vendorCols}
+        </tr>`;
+      }).join("")}</tbody>
+    </table>` : "";
+
+  // Embed Precision Plot + Histogram for the first level (matches EE which
+  // emits one of each per Sample / Level report). Both plots are skipped
+  // when n < 2 or SD == 0. Target SD derives from target CV when both target
+  // mean and target CV are populated; otherwise the Levey-Jennings uses the
+  // observed SD as the SDI scaling (matches EE default behavior).
+  const studyTargetCV = studyAny.targetCv ?? studyAny.target_cv ?? null;
+  const targetSDForPlot = (studyTargetMean != null && studyTargetCV != null && studyTargetCV > 0)
+    ? Number(studyTargetMean) * (Number(studyTargetCV) / 100) : null;
+  const firstLevel = levelResults[0];
+  const firstValues: number[] = (dataPoints[0]?.values || [])
+    .filter((v: any) => v != null && !isNaN(v));
+  const plotsSection = firstLevel && firstValues.length >= 2 && firstLevel.sd > 0 ? `
+    <hr class="divider" style="margin-top:8px">
+    <div class="section-label">Precision Plot and Histogram</div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:4px">
+      <div>${precisionPlotSVG(firstValues, firstLevel.mean, firstLevel.sd, studyTargetMean, targetSDForPlot ?? (studyTargetMean != null ? firstLevel.sd : null))}</div>
+      <div>${histogramSVG(firstValues, firstLevel.mean, firstLevel.sd, studyTargetMean)}</div>
+    </div>` : "";
+
   // Compact key stats for page 1
   const precMean = levelResults.length > 0 ? sf(levelResults[0].mean, 3) : "---";
   const precSD = levelResults.length > 0 ? sf(levelResults[0].sd, 3) : "---";
   const precMaxCV = levelResults.length > 0 ? sf(Math.max(...levelResults.map((r: any) => r.cv ?? 0)), 2) + "%" : "---";
   const precPassCount = `${results.passCount}/${results.totalCount}`;
+  // Phase 2 parity: optional rows that appear on page 1 only when the
+  // calculator has populated the corresponding fields.
+  const precL0 = levelResults[0] || {};
+  const precCiMeanStr = (precL0.meanCiLower != null && precL0.meanCiUpper != null)
+    ? `${sf(precL0.meanCiLower, 3)} to ${sf(precL0.meanCiUpper, 3)}` : null;
+  const precCiSdStr = (precL0.sdCiLower != null && precL0.sdCiUpper != null)
+    ? `${sf(precL0.sdCiLower, 3)} to ${sf(precL0.sdCiUpper, 3)}` : null;
+  const precTwoSDStr = (precL0.twoSDRangeLower != null && precL0.twoSDRangeUpper != null)
+    ? `${sf(precL0.twoSDRangeLower, 3)} to ${sf(precL0.twoSDRangeUpper, 3)}` : null;
+  const precVendorVerdict = precL0.vendorVerdict ?? null;
+  const precVendorColor = precVendorVerdict === "Pass" ? "#437A22"
+    : precVendorVerdict === "Fail" ? "#A12C7B"
+    : precVendorVerdict === "Uncertain" ? "#964219" : MUTED;
+  const precVendorSDVal = studyAny.vendorSd ?? studyAny.vendor_sd ?? null;
+  const precTargetMeanVal = studyAny.targetMean ?? studyAny.target_mean ?? null;
+  const precBiasStr = (precL0.bias != null && precL0.percentBias != null)
+    ? `${sf(precL0.bias, 3)} (${sf(precL0.percentBias, 2)}%)` : null;
+  const ciAndDistRows = (precCiMeanStr || precCiSdStr || precTwoSDStr) ? `
+      <tr><td style="color:${MUTED};font-weight:700">95% CI for Mean</td><td>${precCiMeanStr ?? "-"}</td>
+          <td style="color:${MUTED};font-weight:700">95% CI for SD</td><td>${precCiSdStr ?? "-"}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700">Obs 2 SD Range</td><td>${precTwoSDStr ?? "-"}</td>
+          <td style="color:${MUTED};font-weight:700">N</td><td>${precL0.n ?? "-"}</td></tr>` : ``;
+  const vendorRow = precVendorSDVal != null ? `
+      <tr><td style="color:${MUTED};font-weight:700">Vendor SD Goal</td><td>${sf(precVendorSDVal, 3)}</td>
+          <td style="color:${MUTED};font-weight:700">Vendor Verdict</td>
+          <td style="color:${precVendorColor};font-weight:700">${precVendorVerdict ?? "-"}</td></tr>` : ``;
+  const targetRow = precTargetMeanVal != null ? `
+      <tr><td style="color:${MUTED};font-weight:700">Target Mean</td><td>${sf(precTargetMeanVal, 3)}</td>
+          <td style="color:${MUTED};font-weight:700">Bias (% Bias)</td><td>${precBiasStr ?? "-"}</td></tr>` : ``;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Precision Verification (EP15) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1600,6 +1844,9 @@ export function buildPrecisionHTML(study: Study, results: any): string {
           <td style="color:${MUTED};font-weight:700">Allowable TEa</td><td>${teaStrFull}</td></tr>
       <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${precPassCount}</td>
           <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
+      ${ciAndDistRows}
+      ${vendorRow}
+      ${targetRow}
     </tbody>
   </table>
 
@@ -1623,6 +1870,10 @@ export function buildPrecisionHTML(study: Study, results: any): string {
     </table>
 
     ${anovaSection}
+
+    ${ciSection}
+
+    ${plotsSection}
 
     <hr class="divider" style="margin-top:8px">
     <div class="section-label">Individual Measurements</div>
