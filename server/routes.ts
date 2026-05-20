@@ -3001,6 +3001,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cliaAbsoluteFloor: row.clia_absolute_floor,
       cliaAbsoluteUnit: row.clia_absolute_unit,
       instrumentMeta: row.instrument_meta,
+      // Phase 1 simple-precision parity fields (added 2026-05-20). Mapped
+      // from snake_case DB columns to camelCase so the client + PDF
+      // builder see them on lab-scoped GETs (which use raw SQL rather
+      // than drizzle's auto-mapped Study type).
+      vendorSd: row.vendor_sd,
+      vendorSdConcentration: row.vendor_sd_concentration,
+      targetMean: row.target_mean,
+      targetCv: row.target_cv,
       createdAt: row.created_at,
       lab_id: row.lab_id,
     };
