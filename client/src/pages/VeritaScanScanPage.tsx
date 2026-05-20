@@ -736,8 +736,11 @@ export default function VeritaScanScanPage() {
         aabb: item.aabb,
         cola: item.cola,
       }));
+      const pdfUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritascan/pdf/${scanId}/${type}`
+        : `${API_BASE}/api/veritascan/pdf/${scanId}/${type}`;
       const res = await fetch(
-        `${API_BASE}/api/veritascan/pdf/${scanId}/${type}`,
+        pdfUrl,
         {
           method: "POST",
           headers: {
@@ -777,8 +780,11 @@ export default function VeritaScanScanPage() {
         aabb: item.aabb,
         cola: item.cola,
       }));
+      const excelUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritascan/excel/${scanId}`
+        : `${API_BASE}/api/veritascan/excel/${scanId}`;
       const res = await fetch(
-        `${API_BASE}/api/veritascan/excel/${scanId}`,
+        excelUrl,
         {
           method: "POST",
           headers: {
