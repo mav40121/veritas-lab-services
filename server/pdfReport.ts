@@ -313,6 +313,90 @@ function histogramSVG(
 </svg>`;
 }
 
+// ─── SD vs Goal verdict bar ──────────────────────────────────────────────────
+// At-a-glance verdict graphic for the vendor-SD comparison: vertical bar at
+// the observed SD height (colored by verdict), horizontal fence whiskers at
+// the 95% CI bounds, and a dashed goal line at the vendor SD. Conditional
+// render (only when a vendor SD goal is set). Visual design is our own; we
+// match the FUNCTIONAL pattern of an SD-vs-goal indicator (a generic concept)
+// not the pixel layout of any specific competitor tool. Built 2026-05-20 as
+// part of the EE-parity buildout.
+function vendorSDBarSVG(
+  sd: number, sdCiLower: number | null, sdCiUpper: number | null,
+  vendorSD: number, verdict: "Pass" | "Fail" | "Uncertain",
+  unitLabel: string = "",
+  w = 220, h = 230
+): string {
+  if (!(sd > 0) || !(vendorSD > 0)) return `<svg width="${w}" height="${h}"></svg>`;
+  const ml = 44, mr = 18, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  // Y-axis range: 0 to max(vendorSD, sdCiUpper, sd) * 1.3 to give headroom for
+  // the goal line label even when SD is well above goal.
+  const top = (sdCiUpper && sdCiUpper > 0 ? sdCiUpper : sd);
+  const yMax = Math.max(vendorSD, top, sd) * 1.3;
+  const yMin = 0;
+  const cy = (v: number) => mt + ph - ((v - yMin) / (yMax - yMin)) * ph;
+  // Color per CLAUDE.md status palette.
+  const fill = verdict === "Pass" ? "#437A22"
+    : verdict === "Fail" ? "#A12C7B"
+    : "#964219"; // Uncertain (amber)
+  const fillLight = verdict === "Pass" ? "#5e9b3a"
+    : verdict === "Fail" ? "#bf4a96"
+    : "#b35d33";
+  // Bar geometry: vertical bar centered horizontally, 56px wide.
+  const barW = 56;
+  const barX = ml + (pw - barW) / 2;
+  const barTopY = cy(sd);
+  const barBottomY = cy(0);
+  const barH = barBottomY - barTopY;
+  // CI fences: horizontal whiskers extending slightly beyond the bar edges.
+  const fenceW = barW + 18;
+  const fenceX = ml + (pw - fenceW) / 2;
+  const fences = (sdCiLower != null && sdCiUpper != null && sdCiLower > 0 && sdCiUpper > 0) ? `
+    <line x1="${fenceX}" y1="${cy(sdCiLower)}" x2="${fenceX + fenceW}" y2="${cy(sdCiLower)}" stroke="#28251D" stroke-width="1.1" stroke-linecap="round"/>
+    <line x1="${fenceX}" y1="${cy(sdCiUpper)}" x2="${fenceX + fenceW}" y2="${cy(sdCiUpper)}" stroke="#28251D" stroke-width="1.1" stroke-linecap="round"/>
+    <line x1="${ml + pw / 2}" y1="${cy(sdCiLower)}" x2="${ml + pw / 2}" y2="${cy(sdCiUpper)}" stroke="#28251D" stroke-width="0.9" stroke-dasharray="2,2" opacity="0.55"/>` : "";
+  // Goal line: dashed teal-grey horizontal line at vendor SD, labeled on right.
+  const goalY = cy(vendorSD);
+  const goalLine = `
+    <line x1="${ml - 4}" y1="${goalY}" x2="${ml + pw + 4}" y2="${goalY}" stroke="#0A3A3D" stroke-width="1.4" stroke-dasharray="5,3"/>
+    <text x="${ml + pw + 6}" y="${goalY - 3}" text-anchor="end" font-size="8" font-weight="700" fill="#0A3A3D">Goal: ${vendorSD.toFixed(2)}${unitLabel ? " " + unitLabel : ""}</text>`;
+  // Y-axis tick marks at 0, max/4, max/2, 3max/4 (rounded).
+  let yTicks = "";
+  for (let i = 0; i <= 4; i++) {
+    const v = (yMax / 4) * i;
+    const ty = cy(v);
+    yTicks += `<line x1="${ml - 3}" y1="${ty}" x2="${ml}" y2="${ty}" stroke="#646e78" stroke-width="0.7"/>` +
+      `<text x="${ml - 6}" y="${ty + 3}" text-anchor="end" font-size="7" fill="#646e78">${v.toFixed(2)}</text>`;
+  }
+  // Verdict label at top.
+  const verdictBadge = `
+    <text x="${ml + pw / 2}" y="${mt + ph + 22}" text-anchor="middle" font-size="9" font-weight="700" fill="${fill}">${verdict.toUpperCase()}</text>`;
+  // SD value label inside the bar (white) if bar tall enough, else above.
+  const labelText = `${sd.toFixed(2)}`;
+  const labelInside = barH > 28;
+  const sdLabel = labelInside
+    ? `<text x="${ml + pw / 2}" y="${barTopY + 14}" text-anchor="middle" font-size="9" font-weight="700" fill="white">${labelText}</text>`
+    : `<text x="${ml + pw / 2}" y="${barTopY - 4}" text-anchor="middle" font-size="9" font-weight="700" fill="${fill}">${labelText}</text>`;
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">SD vs Goal</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${yTicks}
+  <defs>
+    <linearGradient id="vsd-grad-${verdict}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="${fillLight}"/>
+      <stop offset="100%" stop-color="${fill}"/>
+    </linearGradient>
+  </defs>
+  <rect x="${barX}" y="${barTopY}" width="${barW}" height="${barH}" fill="url(#vsd-grad-${verdict})" stroke="${fill}" stroke-width="0.8"/>
+  ${fences}
+  ${goalLine}
+  ${sdLabel}
+  ${verdictBadge}
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="8" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">SD${unitLabel ? " (" + unitLabel + ")" : ""}</text>
+</svg>`;
+}
+
 function recoveryPlotSVG(assignedVals: number[], recoveries: number[], cliaError: number, w = 320, h = 220): string {
   if (!recoveries.length) return `<svg width="${w}" height="${h}"></svg>`;
   const cliaP = cliaError * 100;
@@ -1785,12 +1869,32 @@ export function buildPrecisionHTML(study: Study, results: any): string {
   const firstLevel = levelResults[0];
   const firstValues: number[] = (dataPoints[0]?.values || [])
     .filter((v: any) => v != null && !isNaN(v));
+  // Vendor-SD verdict bar: at-a-glance graphic showing observed SD with 95% CI
+  // fences against the vendor goal. Conditional — only when vendor SD set.
+  // Derive a display unit from teaUnit when it's an actual measurement unit
+  // (not "%"); fall back to empty string. Same units shown on the Goal label.
+  const vendorVerdictForBar = firstLevel?.vendorVerdict as ("Pass" | "Fail" | "Uncertain" | undefined);
+  const vendorSDForBar = studyAny.vendorSd ?? studyAny.vendor_sd ?? null;
+  const rawTeaUnit = (study as any).teaUnit ?? (study as any).tea_unit ?? "";
+  const unitForBar = rawTeaUnit && rawTeaUnit !== "%" ? rawTeaUnit : "";
+  const vendorBarSVG = (firstLevel && vendorSDForBar != null && vendorSDForBar > 0 && vendorVerdictForBar)
+    ? vendorSDBarSVG(
+        firstLevel.sd,
+        firstLevel.sdCiLower ?? null,
+        firstLevel.sdCiUpper ?? null,
+        Number(vendorSDForBar),
+        vendorVerdictForBar,
+        unitForBar,
+      )
+    : "";
+
   const plotsSection = firstLevel && firstValues.length >= 2 && firstLevel.sd > 0 ? `
     <hr class="divider" style="margin-top:8px">
-    <div class="section-label">Precision Plot and Histogram</div>
-    <div style="display:flex;gap:12px;justify-content:center;margin-top:4px">
+    <div class="section-label">${vendorBarSVG ? "Precision Plot, Histogram, and Vendor SD Verdict" : "Precision Plot and Histogram"}</div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:4px;flex-wrap:wrap">
       <div>${precisionPlotSVG(firstValues, firstLevel.mean, firstLevel.sd, studyTargetMean, targetSDForPlot ?? (studyTargetMean != null ? firstLevel.sd : null))}</div>
       <div>${histogramSVG(firstValues, firstLevel.mean, firstLevel.sd, studyTargetMean)}</div>
+      ${vendorBarSVG ? `<div>${vendorBarSVG}</div>` : ""}
     </div>` : "";
 
   // Compact key stats for page 1
