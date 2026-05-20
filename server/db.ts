@@ -1116,6 +1116,14 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN vendor_sd_concentration REAL")
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN target_mean REAL"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN target_cv REAL"); } catch {}
 
+// EE Day 2 QC traceability fields (2026-05-20): universal CLIA lot-tracking
+// columns surfaced in the Supporting Data panel when populated. All four are
+// nullable; legacy studies carry NULL.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN control_lot TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN reagent_lot TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN comment TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {}
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // Labs table — normalized lab identity (CLIA, name, accreditation flags)
 // Migrated from per-user columns to shared lab entity so seats inherit and

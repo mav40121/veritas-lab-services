@@ -5,6 +5,7 @@ import { useLocation, useSearch, useRoute, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -558,6 +559,11 @@ export default function VeritaCheckPage() {
   const [precisionVendorSdConc, setPrecisionVendorSdConc] = useState("");
   const [precisionTargetMean, setPrecisionTargetMean] = useState("");
   const [precisionTargetCv, setPrecisionTargetCv] = useState("");
+  // EE Day 2 QC traceability inputs (optional, stored as strings; empty -> null).
+  const [precisionControlLot, setPrecisionControlLot] = useState("");
+  const [precisionReagentLot, setPrecisionReagentLot] = useState("");
+  const [precisionComment, setPrecisionComment] = useState("");
+  const [precisionResultUnits, setPrecisionResultUnits] = useState("");
 
   // Sensitivity (EP17) state. Two paste-friendly textareas hold the blank and low-level
   // replicate values respectively; one value per line, optional ",lot" suffix per line for
@@ -1399,6 +1405,11 @@ export default function VeritaCheckPage() {
         targetMean: targetMeanNum ?? undefined,
         targetCV: targetCvNum ?? undefined,
       });
+      // EE Day 2 QC traceability: trim each, omit empties.
+      const trimOrNull = (s: string) => {
+        const t = s.trim();
+        return t.length > 0 ? t : null;
+      };
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "precision", cliaAllowableError: cliaValue,
@@ -1414,6 +1425,11 @@ export default function VeritaCheckPage() {
         vendorSdConcentration: vendorSdConcNum,
         targetMean: targetMeanNum,
         targetCv: targetCvNum,
+        // EE Day 2 QC traceability fields.
+        controlLot: trimOrNull(precisionControlLot),
+        reagentLot: trimOrNull(precisionReagentLot),
+        comment: trimOrNull(precisionComment),
+        resultUnits: trimOrNull(precisionResultUnits),
       } as InsertStudy;
       saveMutation.mutate(study);
       return;
@@ -2775,6 +2791,45 @@ return (
                                 value={precisionTargetCv}
                                 onChange={e => setPrecisionTargetCv(e.target.value)}
                                 className="h-7 text-xs mt-1" />
+                            </div>
+                          </div>
+
+                          {/* EE Day 2 QC traceability: four optional fields.
+                              These appear in the PDF Supporting Data panel when
+                              populated. Universal CLIA lot-tracking fields. */}
+                          <div className="mt-4 pt-3 border-t border-border/40">
+                            <div className="text-[11px] font-semibold text-muted-foreground mb-2">
+                              QC lot information (optional)
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-[11px]">Result Units</Label>
+                                <Input placeholder="e.g. U/L, mg/dL"
+                                  value={precisionResultUnits}
+                                  onChange={e => setPrecisionResultUnits(e.target.value)}
+                                  className="h-7 text-xs mt-1" />
+                              </div>
+                              <div>
+                                <Label className="text-[11px]">Control Lot</Label>
+                                <Input placeholder="e.g. Technopath 103506230 exp 31 Dec 2025"
+                                  value={precisionControlLot}
+                                  onChange={e => setPrecisionControlLot(e.target.value)}
+                                  className="h-7 text-xs mt-1" />
+                              </div>
+                              <div>
+                                <Label className="text-[11px]">Reagent Lot</Label>
+                                <Input placeholder="e.g. Abbott 64489UD00 exp 06 Apr 2025"
+                                  value={precisionReagentLot}
+                                  onChange={e => setPrecisionReagentLot(e.target.value)}
+                                  className="h-7 text-xs mt-1" />
+                              </div>
+                              <div className="sm:col-span-2">
+                                <Label className="text-[11px]">Comment</Label>
+                                <Textarea placeholder="e.g. Multichem S Precision Over Time"
+                                  value={precisionComment}
+                                  onChange={e => setPrecisionComment(e.target.value)}
+                                  className="text-xs mt-1 min-h-[42px]" />
+                              </div>
                             </div>
                           </div>
                         </details>
