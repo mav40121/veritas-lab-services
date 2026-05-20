@@ -2091,6 +2091,21 @@ try {
   if (!vcvCols.includes("remediation_notes")) sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN remediation_notes TEXT");
   if (!vcvCols.includes("map_instrument_id")) sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN map_instrument_id INTEGER");
   if (!vcvCols.includes("manufacturer"))     sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN manufacturer TEXT");
+  // Cross-lab leak fix 2026-05-20: lab_id needed so the verification list
+  // can be scoped by the active lab instead of user_id (which leaks across
+  // every lab the owner is a member of).
+  if (!vcvCols.includes("lab_id")) {
+    sqlite.exec("ALTER TABLE veritacheck_verifications ADD COLUMN lab_id INTEGER REFERENCES labs(id)");
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritacheck_verifications_lab ON veritacheck_verifications(lab_id)");
+    try {
+      const backfilled = sqlite.prepare(
+        "UPDATE veritacheck_verifications SET lab_id = (SELECT lab_id FROM users WHERE id = veritacheck_verifications.user_id) WHERE lab_id IS NULL"
+      ).run();
+      console.log(`[migration] veritacheck_verifications: backfilled lab_id on ${backfilled.changes} row(s)`);
+    } catch (err: any) {
+      console.warn("[migration] veritacheck_verifications lab_id backfill:", err.message);
+    }
+  }
 } catch (e) { console.warn("veritacheck_verifications migration:", e); }
 
 try {
