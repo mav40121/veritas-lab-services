@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -585,6 +586,7 @@ function SidebarDomainRow({
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function VeritaScanScanPage() {
   const labRoute = useLabRoute();
+  const activeLabId = useActiveLabId();
   const params = useParams<{ id: string }>();
   const scanId = Number(params.id);
   useAuth();
@@ -601,9 +603,19 @@ export default function VeritaScanScanPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
 
+  // Lab-scoped URLs for scan-by-id and items. When activeLabId is set, the
+  // server enforces "this scan belongs to this lab" via WHERE lab_id = ? so
+  // the page 404s instead of silently rendering a scan from another lab.
+  const scanMetaUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritascan/scans/${scanId}`
+    : `/api/veritascan/scans/${scanId}`;
+  const scanItemsUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritascan/scans/${scanId}/items`
+    : `/api/veritascan/scans/${scanId}/items`;
+
   // ── Fetch scan meta ─────────────────────────────────────────────────────
   const { data: scanMeta, isLoading: metaLoading } = useQuery<ScanMeta>({
-    queryKey: [`/api/veritascan/scans/${scanId}`],
+    queryKey: [scanMetaUrl],
     enabled: !isNaN(scanId),
   });
 
@@ -615,7 +627,7 @@ export default function VeritaScanScanPage() {
 
   // ── Fetch scan items ────────────────────────────────────────────────────
   const { isLoading: itemsLoading } = useQuery<ItemState[]>({
-    queryKey: [`/api/veritascan/scans/${scanId}/items`],
+    queryKey: [scanItemsUrl],
     enabled: !isNaN(scanId),
     staleTime: 0,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -624,9 +636,7 @@ export default function VeritaScanScanPage() {
   });
 
   // Watch the raw query data and merge into local state
-  const rawItemData = qc.getQueryData<ItemState[]>([
-    `/api/veritascan/scans/${scanId}/items`,
-  ]);
+  const rawItemData = qc.getQueryData<ItemState[]>([scanItemsUrl]);
   useEffect(() => {
     if (!rawItemData) return;
     setItems((prev) => {
@@ -653,7 +663,7 @@ export default function VeritaScanScanPage() {
   const saveMutation = useMutation({
     mutationFn: async (itemsToSave: ItemState[]) => {
       const res = await fetch(
-        `${API_BASE}/api/veritascan/scans/${scanId}/items`,
+        `${API_BASE}${scanItemsUrl}`,
         {
           method: "PUT",
           headers: {

@@ -5299,6 +5299,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // Lab-scoped GET scan-by-id (URL-hygiene fix 2026-05-20). The page at
+  // /labs/:labId/veritascan-app/:id should 404 when the scan is not in
+  // the URL's lab, instead of silently rendering a scan from a different
+  // lab the owner is also a member of. veritascan_scans.lab_id exists
+  // with backfill per db.ts:1963.
+  app.get("/api/labs/:labId/veritascan/scans/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT * FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    res.json(scan);
+  });
+
+  // Lab-scoped scan items list.
+  app.get("/api/labs/:labId/veritascan/scans/:id/items", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const items = (db as any).$client.prepare(
+      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+    ).all(req.params.id);
+    res.json(items);
+  });
+
+  // Lab-scoped per-item upsert.
+  app.put("/api/labs/:labId/veritascan/scans/:id/items/:itemId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const { status, notes, owner, due_date } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(scan_id, item_id) DO UPDATE SET
+        status = excluded.status,
+        notes = excluded.notes,
+        owner = excluded.owner,
+        due_date = excluded.due_date,
+        updated_at = excluded.updated_at
+    `).run(req.params.id, req.params.itemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, now);
+    (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Lab-scoped bulk item upsert (matches the auto-save PUT pattern).
+  app.put("/api/labs/:labId/veritascan/scans/:id/items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const { items } = req.body;
+    if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
+    const now = new Date().toISOString();
+    const stmt = (db as any).$client.prepare(`
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(scan_id, item_id) DO UPDATE SET
+        status = excluded.status,
+        notes = excluded.notes,
+        owner = excluded.owner,
+        due_date = excluded.due_date,
+        updated_at = excluded.updated_at
+    `);
+    const tx = (db as any).$client.transaction((rows: any[]) => {
+      for (const r of rows) stmt.run(req.params.id, r.item_id, r.status || 'Not Assessed', r.notes || null, r.owner || null, r.due_date || null, now);
+    });
+    tx(items);
+    (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true, count: items.length });
+  });
+
+  // Legacy GET scan-by-id (added for the existing page useQuery that was
+  // previously hitting 404). userCanAccessScan checks user_id OR lab_members.
+  app.get("/api/veritascan/scans/:id", authMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    const scan = userCanAccessScan(req.params.id, req);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    res.json(scan);
+  });
+
   // Get all items for a scan
   app.get("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
