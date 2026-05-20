@@ -52,6 +52,13 @@ export const studies = sqliteTable("studies", {
   vendorSdConcentration: real("vendor_sd_concentration"),
   targetMean: real("target_mean"),
   targetCv: real("target_cv"),
+  // EE Day 2 QC traceability fields (2026-05-20). Universal CLIA lot-
+  // tracking fields surfaced in the Supporting Data panel when set.
+  // All four are nullable; legacy studies carry NULL and the rows hide.
+  controlLot: text("control_lot"),
+  reagentLot: text("reagent_lot"),
+  comment: text("comment"),
+  resultUnits: text("result_units"),
   createdAt: text("created_at").notNull(),
 });
 

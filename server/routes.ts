@@ -2796,6 +2796,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         vendorSdConcentration: req.body.vendorSdConcentration,
         targetMean: req.body.targetMean,
         targetCv: req.body.targetCv,
+        // EE Day 2 QC traceability inputs (optional).
+        controlLot: req.body.controlLot,
+        reagentLot: req.body.reagentLot,
+        comment: req.body.comment,
+        resultUnits: req.body.resultUnits,
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);
@@ -3009,6 +3014,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       vendorSdConcentration: row.vendor_sd_concentration,
       targetMean: row.target_mean,
       targetCv: row.target_cv,
+      // EE Day 2 QC traceability fields (2026-05-20).
+      controlLot: row.control_lot,
+      reagentLot: row.reagent_lot,
+      comment: row.comment,
+      resultUnits: row.result_units,
       createdAt: row.created_at,
       lab_id: row.lab_id,
     };
@@ -3061,6 +3071,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         vendorSdConcentration: req.body.vendorSdConcentration,
         targetMean: req.body.targetMean,
         targetCv: req.body.targetCv,
+        // EE Day 2 QC traceability inputs (optional).
+        controlLot: req.body.controlLot,
+        reagentLot: req.body.reagentLot,
+        comment: req.body.comment,
+        resultUnits: req.body.resultUnits,
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);

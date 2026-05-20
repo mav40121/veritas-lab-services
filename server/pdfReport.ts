@@ -698,6 +698,15 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
     }
     if (tMean != null) specs.push(["Target Mean", String(tMean)]);
     if (tCV != null) specs.push(["Target CV", `${tCV}%`]);
+    // EE Day 2 QC traceability rows.
+    const controlLot = (study as any).controlLot ?? (study as any).control_lot;
+    const reagentLot = (study as any).reagentLot ?? (study as any).reagent_lot;
+    const comment = (study as any).comment;
+    const resultUnits = (study as any).resultUnits ?? (study as any).result_units;
+    if (resultUnits) specs.push(["Units", String(resultUnits)]);
+    if (controlLot) specs.push(["Control Lot", String(controlLot)]);
+    if (reagentLot) specs.push(["Reagent Lot", String(reagentLot)]);
+    if (comment) specs.push(["Comment", String(comment)]);
   }
   const supporting = [
     ["Analyst", study.analyst],
