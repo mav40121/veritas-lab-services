@@ -109,10 +109,31 @@ export default function VeritaMapLabwidePage() {
     return Array.from(set).sort();
   }, [data]);
 
+  // Per-column sortable headers. Default is Analyte ascending. Date columns
+  // use a "9999-12-31" sentinel for nulls so missing dates sort to the end
+  // on ascending order.
+  type LabwideSortField =
+    | "analyte"
+    | "department"
+    | "specialty"
+    | "complexity"
+    | "map_name"
+    | "instrument"
+    | "last_cal_ver"
+    | "last_method_comp"
+    | "last_precision"
+    | "last_sop_review";
+  const [sortField, setSortField] = useState<LabwideSortField>("analyte");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const handleSort = (field: LabwideSortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+  };
+
   const filtered = useMemo(() => {
     if (!data) return [] as LabwideAnalyte[];
     const q = search.trim().toLowerCase();
-    return data.analytes.filter((a) => {
+    const base = data.analytes.filter((a) => {
       if (departmentFilter !== "all" && (a.department ?? "") !== departmentFilter) return false;
       if (mapFilter !== "all" && String(a.map_id) !== mapFilter) return false;
       if (q) {
@@ -121,7 +142,47 @@ export default function VeritaMapLabwidePage() {
       }
       return true;
     });
-  }, [data, search, departmentFilter, mapFilter]);
+    const valueFor = (a: LabwideAnalyte, f: LabwideSortField): string => {
+      switch (f) {
+        case "analyte":          return (a.analyte ?? "").toLowerCase();
+        case "department":       return (a.department ?? "").toLowerCase();
+        case "specialty":        return (a.specialty ?? "").toLowerCase();
+        case "complexity":       return (a.complexity ?? "").toLowerCase();
+        case "map_name":         return (a.map_name ?? "").toLowerCase();
+        case "instrument":       return (a.instrument ?? "").toLowerCase();
+        case "last_cal_ver":     return a.last_cal_ver ?? "9999-12-31";
+        case "last_method_comp": return a.last_method_comp ?? "9999-12-31";
+        case "last_precision":   return a.last_precision ?? "9999-12-31";
+        case "last_sop_review":  return a.last_sop_review ?? "9999-12-31";
+      }
+    };
+    return [...base].sort((a, b) => {
+      const av = valueFor(a, sortField);
+      const bv = valueFor(b, sortField);
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, search, departmentFilter, mapFilter, sortField, sortDir]);
+
+  const LabwideSortHeader = ({ field, children, className }: { field: LabwideSortField; children: React.ReactNode; className?: string }) => {
+    const isActive = sortField === field;
+    return (
+      <th
+        className={`text-left font-medium px-3 py-2 cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
+        onClick={() => handleSort(field)}
+      >
+        <span className="inline-flex items-center gap-1">
+          {children}
+          {isActive ? (
+            <span className="text-xs text-[#01696F]">{sortDir === "asc" ? "▲" : "▼"}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground/40">{"↕"}</span>
+          )}
+        </span>
+      </th>
+    );
+  };
 
   if (!isLoggedIn) {
     return (
@@ -312,16 +373,16 @@ export default function VeritaMapLabwidePage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
-                  <th className="text-left font-medium px-3 py-2">Analyte</th>
-                  <th className="text-left font-medium px-3 py-2">Department</th>
-                  <th className="text-left font-medium px-3 py-2">Specialty</th>
-                  <th className="text-left font-medium px-3 py-2">Complexity</th>
-                  <th className="text-left font-medium px-3 py-2">Source map</th>
-                  <th className="text-left font-medium px-3 py-2">Instrument</th>
-                  <th className="text-left font-medium px-3 py-2">Last cal ver</th>
-                  <th className="text-left font-medium px-3 py-2">Last method comp</th>
-                  <th className="text-left font-medium px-3 py-2">Last precision</th>
-                  <th className="text-left font-medium px-3 py-2">Last SOP review</th>
+                  <LabwideSortHeader field="analyte">Analyte</LabwideSortHeader>
+                  <LabwideSortHeader field="department">Department</LabwideSortHeader>
+                  <LabwideSortHeader field="specialty">Specialty</LabwideSortHeader>
+                  <LabwideSortHeader field="complexity">Complexity</LabwideSortHeader>
+                  <LabwideSortHeader field="map_name">Source map</LabwideSortHeader>
+                  <LabwideSortHeader field="instrument">Instrument</LabwideSortHeader>
+                  <LabwideSortHeader field="last_cal_ver">Last cal ver</LabwideSortHeader>
+                  <LabwideSortHeader field="last_method_comp">Last method comp</LabwideSortHeader>
+                  <LabwideSortHeader field="last_precision">Last precision</LabwideSortHeader>
+                  <LabwideSortHeader field="last_sop_review">Last SOP review</LabwideSortHeader>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
