@@ -2949,7 +2949,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       WHERE id = ?
     `).run(
       payload.testName, payload.instrument, payload.analyst, payload.date, payload.studyType,
-      payload.cliaAllowableError, JSON.stringify(payload.dataPoints), JSON.stringify(payload.instruments),
+      // safeStringify guards against double-stringification: the draft branch
+      // hands payload.dataPoints/instruments through as an array/object, while
+      // the non-draft branch (insertStudySchema) hands them through as already-
+      // stringified JSON. The old code unconditionally JSON.stringify'd both,
+      // wrapping the already-string form in another set of quotes and
+      // corrupting the column. Surfaced 2026-05-20 during the Pfizer rename.
+      payload.cliaAllowableError,
+      typeof payload.dataPoints === 'string' ? payload.dataPoints : JSON.stringify(payload.dataPoints),
+      typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
     );
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
@@ -3158,7 +3166,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       WHERE id = ?
     `).run(
       payload.testName, payload.instrument, payload.analyst, payload.date, payload.studyType,
-      payload.cliaAllowableError, JSON.stringify(payload.dataPoints), JSON.stringify(payload.instruments),
+      // safeStringify guards against double-stringification: the draft branch
+      // hands payload.dataPoints/instruments through as an array/object, while
+      // the non-draft branch (insertStudySchema) hands them through as already-
+      // stringified JSON. The old code unconditionally JSON.stringify'd both,
+      // wrapping the already-string form in another set of quotes and
+      // corrupting the column. Surfaced 2026-05-20 during the Pfizer rename.
+      payload.cliaAllowableError,
+      typeof payload.dataPoints === 'string' ? payload.dataPoints : JSON.stringify(payload.dataPoints),
+      typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
     );
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
