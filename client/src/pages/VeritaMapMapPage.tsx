@@ -1590,16 +1590,16 @@ export default function VeritaMapMapPage() {
     new Map()
   );
 
-  // Multi-Lab Tier 2 Phase 3.3b: lab-scope the single-map fetch when on
-  // /labs/:labId/veritamap-app/:id. The endpoint validates that the map
-  // belongs to the active lab (404 otherwise) before returning data.
-  // Inner endpoints (tests, instruments, correlations, etc.) keep their
-  // legacy /api/veritamap/maps/:id/* URLs in this PR; their ownership
-  // check via req.ownerUserId resolves correctly in single-lab today.
+  // Multi-Lab Tier 2 Phase 3.3b: lab-scope the single-map fetch + every
+  // sub-resource (instruments, intelligence, analyte-values, amr-values,
+  // tests/:analyte, copy-from) when on /labs/:labId/veritamap-app/:id.
+  // The server enforces map.lab_id = activeLabId on each call, so a
+  // stale URL from another lab the user is a member of returns 404.
   const activeLabId = useActiveLabId();
-  const mapDetailUrl = activeLabId
+  const mapApiBase = activeLabId
     ? `/api/labs/${activeLabId}/veritamap/maps/${mapId}`
     : `/api/veritamap/maps/${mapId}`;
+  const mapDetailUrl = mapApiBase;
 
   // Fetch map detail
   const { data: mapDetail, isLoading } = useQuery<MapDetail>({
@@ -1623,11 +1623,11 @@ export default function VeritaMapMapPage() {
   const { data: allInstruments = [] } = useQuery<
     Array<{id: number, instrument_name: string, role: string, category: string, tests?: any[]}>
   >({
-    queryKey: [`/api/veritamap/maps/${mapId}/instruments`],
+    queryKey: [`${mapApiBase}/instruments`],
     enabled: !!mapId,
     queryFn: async () => {
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/instruments`,
+        `${API_BASE}${mapApiBase}/instruments`,
         { headers: authHeaders() }
       );
       if (!res.ok) return [];
@@ -1673,7 +1673,7 @@ export default function VeritaMapMapPage() {
     setIsCopying(true);
     try {
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${currentInstrumentId}/copy-from/${sourceInstId}`,
+        `${API_BASE}${mapApiBase}/instruments/${currentInstrumentId}/copy-from/${sourceInstId}`,
         {
           method: 'POST',
           headers: authHeaders(),
@@ -1685,8 +1685,8 @@ export default function VeritaMapMapPage() {
       } else {
         toast({ title: 'Test menu copied', description: data.message });
         qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith(`/veritamap/maps/${mapId}`) });
-        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
-        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
+        qc.invalidateQueries({ queryKey: [`${mapApiBase}/instruments`] });
+        qc.invalidateQueries({ queryKey: [`${mapApiBase}/intelligence`] });
       }
     } catch {
       toast({ title: 'Copy failed', description: 'Network error. Please try again.', variant: 'destructive' });
@@ -1697,13 +1697,13 @@ export default function VeritaMapMapPage() {
 
   // Fetch intelligence data
   const { data: intelligenceRaw } = useQuery<IntelligenceData | null>({
-    queryKey: [`/api/veritamap/maps/${mapId}/intelligence`],
+    queryKey: [`${mapApiBase}/intelligence`],
     enabled: !!mapId,
     staleTime: 0,
     refetchOnMount: true,
     queryFn: async () => {
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/intelligence`,
+        `${API_BASE}${mapApiBase}/intelligence`,
         { headers: authHeaders() }
       );
       if (!res.ok) return null;
@@ -1740,39 +1740,39 @@ export default function VeritaMapMapPage() {
   // Fetch lab-entered analyte values and AMR values
   useEffect(() => {
     if (!mapId) return;
-    fetch(`${API_BASE}/api/veritamap/maps/${mapId}/analyte-values`, { headers: authHeaders() })
+    fetch(`${API_BASE}${mapApiBase}/analyte-values`, { headers: authHeaders() })
       .then(r => r.json()).then((rows: any[]) => {
         const m: Record<string, AnalyteValues> = {};
         for (const row of rows) m[row.analyte] = row;
         setAnalyteValuesMap(m);
       }).catch(() => {});
-    fetch(`${API_BASE}/api/veritamap/maps/${mapId}/amr-values`, { headers: authHeaders() })
+    fetch(`${API_BASE}${mapApiBase}/amr-values`, { headers: authHeaders() })
       .then(r => r.json()).then((rows: any[]) => {
         const m: Record<string, { amr_low?: string; amr_high?: string }> = {};
         for (const row of rows) m[`${row.instrument_id}::${row.analyte}`] = row;
         setAmrValuesMap(m);
       }).catch(() => {});
-  }, [mapId]);
+  }, [mapId, mapApiBase]);
 
   // Save analyte values (ref range, critical values, units)
   const handleSaveAnalyteValues = useCallback(async (analyte: string, values: AnalyteValues) => {
-    await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/analyte-values/${encodeURIComponent(analyte)}`, {
+    await fetch(`${API_BASE}${mapApiBase}/analyte-values/${encodeURIComponent(analyte)}`, {
       method: "PUT",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
     setAnalyteValuesMap(prev => ({ ...prev, [analyte]: values }));
-  }, [mapId]);
+  }, [mapId, mapApiBase]);
 
   // Save AMR values (per instrument)
   const handleSaveAmrValues = useCallback(async (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => {
-    await fetch(`${API_BASE}/api/veritamap/maps/${mapId}/amr-values/${instrumentId}/${encodeURIComponent(analyte)}`, {
+    await fetch(`${API_BASE}${mapApiBase}/amr-values/${instrumentId}/${encodeURIComponent(analyte)}`, {
       method: "PUT",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
     setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: values }));
-  }, [mapId]);
+  }, [mapId, mapApiBase]);
 
   // Intelligence — use API data or compute client-side from localTests
   const intelligence: IntelligenceData = useMemo(
@@ -1791,7 +1791,7 @@ export default function VeritaMapMapPage() {
     }) => {
       const encoded = encodeURIComponent(analyte);
       const res = await fetch(
-        `${API_BASE}/api/veritamap/maps/${mapId}/tests/${encoded}`,
+        `${API_BASE}${mapApiBase}/tests/${encoded}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -2296,7 +2296,7 @@ export default function VeritaMapMapPage() {
                     setIsCopying(true);
                     try {
                       const res = await fetch(
-                        `${API_BASE}/api/veritamap/maps/${mapId}/instruments/${emptyInst.id}/copy-from/${sourceId}`,
+                        `${API_BASE}${mapApiBase}/instruments/${emptyInst.id}/copy-from/${sourceId}`,
                         { method: 'POST', headers: authHeaders() }
                       );
                       const data = await res.json();
@@ -2305,8 +2305,8 @@ export default function VeritaMapMapPage() {
                       } else {
                         toast({ title: 'Test menu copied', description: data.message });
                         qc.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith(`/veritamap/maps/${mapId}`) });
-                        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/instruments`] });
-                        qc.invalidateQueries({ queryKey: [`/api/veritamap/maps/${mapId}/intelligence`] });
+                        qc.invalidateQueries({ queryKey: [`${mapApiBase}/instruments`] });
+                        qc.invalidateQueries({ queryKey: [`${mapApiBase}/intelligence`] });
                       }
                     } catch {
                       toast({ title: 'Copy failed', description: 'Network error.', variant: 'destructive' });
