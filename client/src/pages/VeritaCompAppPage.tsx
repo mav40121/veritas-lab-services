@@ -546,9 +546,14 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
   const [checklistItems, setChecklistItems] = useState<{ label: string; description: string }[]>([]);
   const [creating, setCreating] = useState(false);
 
-  // Fetch user's VeritaMap maps
+  // Fetch the active lab's VeritaMap maps. Without the lab-scoped URL,
+  // multi-lab owners get every map they own across every lab, which leaks
+  // cross-lab content into the competency program builder.
+  const mapsUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/maps`
+    : `/api/veritamap/maps`;
   const { data: maps } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/veritamap/maps"],
+    queryKey: [mapsUrl],
     enabled: type === "technical" || type === "waived",
   });
 

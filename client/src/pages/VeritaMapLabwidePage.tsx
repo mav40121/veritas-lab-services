@@ -88,8 +88,15 @@ export default function VeritaMapLabwidePage() {
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [mapFilter, setMapFilter] = useState<string>("all");
 
+  // Lab-scoped labwide URL when an active lab is set. Without this, the URL
+  // says /labs/X/veritamap-app/labwide but the legacy user-scoped endpoint
+  // returns every map across every lab the owner is a member of, leaking
+  // cross-lab analytes into the whole-lab menu view.
+  const labwideUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/labwide`
+    : `/api/veritamap/labwide`;
   const { data, isLoading } = useQuery<LabwideResponse>({
-    queryKey: ["/api/veritamap/labwide"],
+    queryKey: [labwideUrl],
     enabled: isLoggedIn,
   });
 

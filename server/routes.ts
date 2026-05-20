@@ -3449,86 +3449,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Lab-wide menu (read-only union across all maps the active user owns).
   // PARKING_LOT #19 Phase 1. Scope helper isolated so swap to lab_id post
   // multi-lab Tier 2 (#11/#12) is a one-function change.
-  app.get("/api/veritamap/labwide", authMiddleware, (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-
-    // Scope helper: today = all maps owned by the active data user.
-    // Post #11/#12 lab_members: replace with lab-scoped query.
-    const maps = (db as any).$client.prepare(
-      "SELECT id, name, updated_at FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
-    ).all(dataUserId) as Array<{ id: number; name: string; updated_at: string }>;
-
+  // Shared implementation for labwide that takes the initial "which maps"
+  // list as a parameter. Used by both the legacy unscoped route (user-scoped)
+  // and the new /api/labs/:labId/veritamap/labwide route (lab-scoped).
+  function buildLabwideResponse(maps: Array<{ id: number; name: string; updated_at: string }>, res: any) {
     if (maps.length === 0) {
       return res.json({ analytes: [], sourceMaps: [], duplicates: [], totals: { mapCount: 0, analyteCount: 0, departmentCount: 0 } });
     }
-
     const mapIds = maps.map((m) => m.id);
     const mapNameById: Record<number, string> = {};
     for (const m of maps) mapNameById[m.id] = m.name;
-
     const placeholders = mapIds.map(() => "?").join(",");
-
-    // Tests union with their source map and primary instrument category.
-    // Department lives on the instrument (veritamap_instruments.category),
-    // not on the test row, so we LEFT JOIN through veritamap_instrument_tests
-    // and pick the first matching active instrument's category.
     const rows = (db as any).$client.prepare(`
       SELECT
-        t.id AS test_id,
-        t.map_id,
-        t.analyte,
-        t.specialty,
-        t.complexity,
-        t.active,
-        t.instrument_source,
-        t.last_cal_ver,
-        t.last_method_comp,
-        t.last_precision,
-        t.last_sop_review,
-        t.updated_at
+        t.id AS test_id, t.map_id, t.analyte, t.specialty, t.complexity, t.active,
+        t.instrument_source, t.last_cal_ver, t.last_method_comp, t.last_precision,
+        t.last_sop_review, t.updated_at
       FROM veritamap_tests t
       WHERE t.map_id IN (${placeholders}) AND t.active = 1
       ORDER BY t.specialty, t.analyte, t.map_id
     `).all(...mapIds) as Array<any>;
-
-    // For each test, look up its instrument category (department).
     const instrRows = (db as any).$client.prepare(`
       SELECT it.map_id, it.analyte, i.category, i.instrument_name
       FROM veritamap_instrument_tests it
       JOIN veritamap_instruments i ON i.id = it.instrument_id
       WHERE it.map_id IN (${placeholders}) AND it.active = 1
     `).all(...mapIds) as Array<{ map_id: number; analyte: string; category: string | null; instrument_name: string | null }>;
-
-    // Index instrument lookup by (map_id, lower(analyte)) -> first match wins.
     const instrByKey: Record<string, { category: string | null; instrument_name: string | null }> = {};
     for (const row of instrRows) {
       const key = `${row.map_id}:${(row.analyte || "").toLowerCase()}`;
-      if (!instrByKey[key]) {
-        instrByKey[key] = { category: row.category, instrument_name: row.instrument_name };
-      }
+      if (!instrByKey[key]) instrByKey[key] = { category: row.category, instrument_name: row.instrument_name };
     }
-
     const analytes = rows.map((r: any) => {
       const key = `${r.map_id}:${(r.analyte || "").toLowerCase()}`;
       const instr = instrByKey[key] ?? { category: null, instrument_name: null };
       return {
-        test_id: r.test_id,
-        map_id: r.map_id,
-        map_name: mapNameById[r.map_id] ?? "",
-        analyte: r.analyte,
-        specialty: r.specialty,
-        complexity: r.complexity,
-        department: instr.category,
-        instrument: instr.instrument_name || r.instrument_source || null,
-        last_cal_ver: r.last_cal_ver,
-        last_method_comp: r.last_method_comp,
-        last_precision: r.last_precision,
-        last_sop_review: r.last_sop_review,
+        test_id: r.test_id, map_id: r.map_id, map_name: mapNameById[r.map_id] ?? "",
+        analyte: r.analyte, specialty: r.specialty, complexity: r.complexity,
+        department: instr.category, instrument: instr.instrument_name || r.instrument_source || null,
+        last_cal_ver: r.last_cal_ver, last_method_comp: r.last_method_comp,
+        last_precision: r.last_precision, last_sop_review: r.last_sop_review,
         updated_at: r.updated_at,
       };
     });
-
-    // Duplicate detection: same analyte (case-insensitive) appearing in 2+ distinct maps.
     const byAnalyte: Record<string, Array<{ map_id: number; map_name: string; test_id: number }>> = {};
     for (const a of analytes) {
       const key = (a.analyte || "").toLowerCase().trim();
@@ -3537,29 +3500,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       byAnalyte[key].push({ map_id: a.map_id, map_name: a.map_name, test_id: a.test_id });
     }
     const duplicates = Object.entries(byAnalyte)
-      .filter(([, occurrences]) => {
-        const distinctMapIds = new Set(occurrences.map((o) => o.map_id));
-        return distinctMapIds.size >= 2;
-      })
-      .map(([analyteKey, occurrences]) => ({
-        analyte_key: analyteKey,
-        occurrences,
-      }));
-
-    const departmentCount = new Set(
-      analytes.map((a) => a.department).filter((d): d is string => !!d)
-    ).size;
-
+      .filter(([, occurrences]) => new Set(occurrences.map((o) => o.map_id)).size >= 2)
+      .map(([analyteKey, occurrences]) => ({ analyte_key: analyteKey, occurrences }));
+    const departmentCount = new Set(analytes.map((a) => a.department).filter((d): d is string => !!d)).size;
     res.json({
       analytes,
       sourceMaps: maps.map((m) => ({ id: m.id, name: m.name, updated_at: m.updated_at })),
       duplicates,
-      totals: {
-        mapCount: maps.length,
-        analyteCount: analytes.length,
-        departmentCount,
-      },
+      totals: { mapCount: maps.length, analyteCount: analytes.length, departmentCount },
     });
+  }
+
+  // Lab-scoped labwide endpoint (Pfizer-visible bug fix 2026-05-20). When the
+  // page is mounted at /labs/:labId/veritamap-app/labwide the URL says one
+  // lab but the legacy user-scoped endpoint returned every map across every
+  // lab the owner was a member of. Scoping by lab_id here matches what the
+  // URL contract promises.
+  const labScopeMW = (app as any).locals.labScopeMiddleware;
+  app.get("/api/labs/:labId/veritamap/labwide", authMiddleware, labScopeMW, (req: any, res) => {
+    const maps = (db as any).$client.prepare(
+      "SELECT id, name, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(req.scope.labId) as Array<{ id: number; name: string; updated_at: string }>;
+    return buildLabwideResponse(maps, res);
+  });
+
+  app.get("/api/veritamap/labwide", authMiddleware, (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const maps = (db as any).$client.prepare(
+      "SELECT id, name, updated_at FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
+    ).all(dataUserId) as Array<{ id: number; name: string; updated_at: string }>;
+    return buildLabwideResponse(maps, res);
   });
 
   // Create map
