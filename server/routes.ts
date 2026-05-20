@@ -9550,6 +9550,70 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ id: Number(result.lastInsertRowid), user_id: userIdForRow, name: name.trim(), title: title || "", hire_date: hireDate || null, lis_initials: lisInitials || null, status: "active", created_at: now });
   });
 
+  // Lab-scoped PUT + DELETE program-by-id (URL-hygiene fix 2026-05-20). The
+  // legacy variants gate on userCanAccessLabRow (user_id OR lab_members) so a
+  // multi-lab owner editing a program from another lab via a stale URL would
+  // succeed. Lab-scoped variants enforce WHERE id AND lab_id -> 404.
+  app.put("/api/labs/:labId/competency/programs/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const program = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const { name, department, methodGroups, checklistItems } = req.body;
+    const now = new Date().toISOString();
+    if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
+    if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
+    if (Array.isArray(methodGroups)) {
+      (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+      );
+      for (const g of methodGroups) {
+        stmt.run(req.params.id, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
+      }
+    }
+    if (Array.isArray(checklistItems)) {
+      (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+      );
+      checklistItems.forEach((item: any, idx: number) => {
+        stmt.run(req.params.id, item.label || String.fromCharCode(65 + idx), item.description, idx);
+      });
+    }
+    (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/labs/:labId/competency/programs/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const program = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const assessments = (db as any).$client.prepare("SELECT id FROM competency_assessments WHERE program_id = ?").all(req.params.id);
+    for (const a of assessments) {
+      (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(a.id);
+    }
+    (db as any).$client.prepare("DELETE FROM competency_assessments WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Lab-scoped DELETE employee-by-id (soft delete).
+  app.delete("/api/labs/:labId/competency/employees/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const emp = (db as any).$client.prepare(
+      "SELECT * FROM competency_employees WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    (db as any).$client.prepare("UPDATE competency_employees SET status = 'inactive' WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
 
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
@@ -9715,6 +9779,100 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delAssessment = (db as any).$client.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id) as any;
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: delAssessment ? `${delAssessment.employee_name} - ${delAssessment.program_name}` : undefined, before: { assessment: delAssessment, items: delAssessItems }, ipAddress: req.ip });
+    (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // Lab-scoped POST + DELETE assessments (URL-hygiene fix 2026-05-20).
+  // Legacy variants gate on the program's user_id (not lab_id), so a
+  // multi-lab owner could create/delete an assessment from another lab.
+  // Lab-scoped variants pin the program to req.scope.labId on lookup,
+  // and confirm employee is in the same lab.
+  app.post("/api/labs/:labId/competency/assessments", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
+    const labId = req.scope.labId;
+    const program = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
+    ).get(programId, labId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const emp = (db as any).$client.prepare(
+      "SELECT * FROM competency_employees WHERE id = ? AND lab_id = ?"
+    ).get(employeeId, labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(programId, employeeId, assessmentType || "initial", assessmentDate || now.split("T")[0], evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, now);
+    const assessmentId = Number(result.lastInsertRowid);
+    if (Array.isArray(items)) {
+      const stmt = (db as any).$client.prepare(
+        `INSERT INTO competency_assessment_items (
+          assessment_id, method_number, method_group_id, item_label, item_description,
+          evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info,
+          element_number, method_group_name,
+          el1_specimen_id, el1_observer_initials, el1_na, el1_na_justification,
+          el2_evidence, el2_date, el2_na, el2_na_justification,
+          el3_qc_date, el3_na, el3_na_justification,
+          el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
+          el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
+          el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
+          waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
+          nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const item of items) {
+        stmt.run(
+          assessmentId,
+          item.methodNumber ?? null, item.methodGroupId ?? null,
+          item.itemLabel ?? null, item.itemDescription ?? null,
+          item.evidence ?? null, item.dateMet ?? null,
+          item.employeeInitials ?? null, item.supervisorInitials ?? null,
+          item.passed ? 1 : 0, item.specimenInfo ?? null,
+          item.elementNumber ?? null, item.methodGroupName ?? null,
+          item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+          item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
+          item.el2Evidence ?? null, item.el2Date ?? null,
+          item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
+          item.el3QcDate ?? null,
+          item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
+          item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+          item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
+          item.el5SampleType ?? null, item.el5SampleId ?? null,
+          item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+          item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
+          item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+          item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
+          item.waivedInstrument ?? null, item.waivedTest ?? null,
+          item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
+          item.waivedDate ?? null, item.waivedInitials ?? null,
+          item.ntItemLabel ?? null, item.ntItemDescription ?? null,
+          item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
+        );
+      }
+    }
+    (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
+    if (status === "pass") {
+      const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      const userIdForScan = ownerRow?.owner_user_id ?? req.userId;
+      autoCompleteCompetencyScanItems(userIdForScan, competencyType || "technical");
+    }
+    res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
+  });
+
+  app.delete("/api/labs/:labId/competency/assessments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.* FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, labId) as any;
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: assessment ? `${assessment.employee_name ?? ''} - ${assessment.program_name ?? ''}`.trim() : undefined, before: { assessment, items: delAssessItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
