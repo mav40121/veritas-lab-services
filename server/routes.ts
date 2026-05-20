@@ -6333,22 +6333,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   // List trackers for user
-  app.get("/api/veritacheck/cumsum/trackers", authMiddleware, (req: any, res) => {
-    if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
-    const trackers = (db as any).$client.prepare(
-      "SELECT * FROM cumsum_trackers WHERE user_id = ? ORDER BY created_at DESC"
-    ).all(req.user.userId);
-    // Attach last entry info to each tracker
-    const result = trackers.map((t: any) => {
+  // Shared cumsum trackers list builder. Both the legacy user-scoped route
+  // and the new lab-scoped route reuse it so the response shape is identical.
+  function buildCumsumTrackersList(trackers: any[]): any[] {
+    return trackers.map((t: any) => {
       const lastEntry = (db as any).$client.prepare(
         "SELECT cumsum, verdict, created_at FROM cumsum_entries WHERE tracker_id = ? ORDER BY id DESC LIMIT 1"
       ).get(t.id);
       return { ...t, lastCumsum: lastEntry?.cumsum ?? 0, lastVerdict: lastEntry?.verdict ?? "N/A", lastEntryDate: lastEntry?.created_at ?? null };
     });
-    res.json(result);
+  }
+
+  // Lab-scoped cumsum trackers list (cross-lab leak fix 2026-05-20). The URL
+  // /labs/:labId/veritacheck/cumsum was returning trackers from every lab the
+  // owner had access to because the legacy endpoint filters by user_id.
+  // cumsum_trackers.lab_id was added in db.ts:2009 with a backfill so the
+  // direct scope works.
+  const cumsumLabScopeMW = (app as any).locals.labScopeMiddleware;
+  app.get("/api/labs/:labId/veritacheck/cumsum/trackers", authMiddleware, cumsumLabScopeMW, (req: any, res) => {
+    if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
+    const trackers = (db as any).$client.prepare(
+      "SELECT * FROM cumsum_trackers WHERE lab_id = ? ORDER BY created_at DESC"
+    ).all(req.scope.labId);
+    res.json(buildCumsumTrackersList(trackers));
+  });
+
+  app.get("/api/veritacheck/cumsum/trackers", authMiddleware, (req: any, res) => {
+    if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
+    const trackers = (db as any).$client.prepare(
+      "SELECT * FROM cumsum_trackers WHERE user_id = ? ORDER BY created_at DESC"
+    ).all(req.user.userId);
+    res.json(buildCumsumTrackersList(trackers));
   });
 
   // Create tracker
+  // Lab-scoped POST for new cumsum trackers. Sets lab_id directly from the
+  // URL-validated active lab rather than the stale users.lab_id, matching
+  // the fix pattern from PR #244 (legacy studies POST).
+  app.post("/api/labs/:labId/veritacheck/cumsum/trackers", authMiddleware, cumsumLabScopeMW, requireWriteAccess, (req: any, res) => {
+    if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
+    const { instrumentName, analyte } = req.body;
+    if (!instrumentName?.trim()) return res.status(400).json({ error: "Instrument name required" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      "INSERT INTO cumsum_trackers (user_id, lab_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(req.user.userId, req.scope.labId, instrumentName.trim(), analyte || "PTT", now);
+    res.json({ id: Number(result.lastInsertRowid), user_id: req.user.userId, lab_id: req.scope.labId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
+  });
+
   app.post("/api/veritacheck/cumsum/trackers", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
     const { instrumentName, analyte } = req.body;
@@ -6358,9 +6390,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO cumsum_trackers (user_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?)"
     ).run(req.user.userId, instrumentName.trim(), analyte || "PTT", now);
     const trackerId = Number(result.lastInsertRowid);
-    // Phase 3.12 dual-write lab_id from the owning user's lab so a freshly
-    // created tracker is immediately visible to other members of the same
-    // lab (otherwise they'd 404 until the next startup backfill).
+    // Legacy fallback dual-write from users.lab_id; the lab-scoped POST above
+    // sets lab_id directly and should be preferred when activeLabId is known.
     try {
       (db as any).$client.prepare(
         "UPDATE cumsum_trackers SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"

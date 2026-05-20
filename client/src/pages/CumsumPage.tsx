@@ -16,6 +16,7 @@ import { PlusCircle, ArrowLeft, FileDown, Trash2, AlertTriangle, CheckCircle2, X
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Link } from "wouter";
 import { geometricMean } from "@/lib/calculations";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 const API_BASE = "https://www.veritaslabservices.com";
 
@@ -54,6 +55,7 @@ interface SpecimenRow {
 
 export default function CumsumPage() {
   const { isLoggedIn } = useAuth();
+  const activeLabId = useActiveLabId();
   const { toast } = useToast();
   const readOnly = useIsReadOnly();
 
@@ -78,13 +80,20 @@ export default function CumsumPage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [excelLoading, setExcelLoading] = useState(false);
 
+  // Scope the trackers list to the active lab when set. Without this, the
+  // URL /labs/:labId/veritacheck/cumsum was returning trackers from every
+  // lab the owner is a member of because the legacy endpoint filters by
+  // user_id only.
+  const trackersUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/veritacheck/cumsum/trackers`
+    : `${API_BASE}/api/veritacheck/cumsum/trackers`;
   const fetchTrackers = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers`, { headers: authHeaders() });
+      const res = await fetch(trackersUrl, { headers: authHeaders() });
       if (res.ok) setTrackers(await res.json());
     } catch { }
     setLoading(false);
-  }, []);
+  }, [trackersUrl]);
 
   useEffect(() => { if (isLoggedIn) fetchTrackers(); else setLoading(false); }, [isLoggedIn, fetchTrackers]);
 
@@ -98,7 +107,12 @@ export default function CumsumPage() {
 
   const createTracker = async () => {
     if (!newInstrument.trim()) { toast({ title: "Enter instrument name", variant: "destructive" }); return; }
-    const res = await fetch(`${API_BASE}/api/veritacheck/cumsum/trackers`, {
+    // Use lab-scoped POST when activeLabId is set so the new tracker is
+    // stamped with the URL-validated lab_id instead of users.lab_id.
+    const createUrl = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/veritacheck/cumsum/trackers`
+      : `${API_BASE}/api/veritacheck/cumsum/trackers`;
+    const res = await fetch(createUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ instrumentName: newInstrument.trim(), analyte: newAnalyte }),
