@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -162,21 +163,28 @@ function statusLabel(v: Verification) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function VeritaCheckVerificationPage() {
   const { user } = useAuth();
+  const activeLabId = useActiveLabId();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [view, setView] = useState<"list" | "new" | "detail">("list");
   const [activeId, setActiveId] = useState<number | null>(null);
 
+  // Lab-scoped list URL when activeLabId is set. The legacy endpoint filters
+  // by user_id so multi-lab owners would otherwise see verifications from
+  // every lab. lab_id column was added to veritacheck_verifications in db.ts.
+  const verificationsUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritacheck/verifications`
+    : `/api/veritacheck/verifications`;
   const { data: verifications = [], isLoading } = useQuery<Verification[]>({
-    queryKey: ["/api/veritacheck/verifications"],
+    queryKey: [verificationsUrl],
     queryFn: async () => {
-      const r = await fetch(`${API_BASE}/api/veritacheck/verifications`, { headers: authHeaders() });
+      const r = await fetch(`${API_BASE}${verificationsUrl}`, { headers: authHeaders() });
       return r.json();
     },
   });
 
   const openDetail = (id: number) => { setActiveId(id); setView("detail"); };
-  const backToList = () => { setActiveId(null); setView("list"); qc.invalidateQueries({ queryKey: ["/api/veritacheck/verifications"] }); };
+  const backToList = () => { setActiveId(null); setView("list"); qc.invalidateQueries({ queryKey: [verificationsUrl] }); };
 
   return (
     <div className="space-y-6">
@@ -306,6 +314,7 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
 
 // ── New verification form ─────────────────────────────────────────────────────
 function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) => void; onCancel: () => void }) {
+  const activeLabId = useActiveLabId();
   const [instrumentName, setInstrumentName] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [triggerType, setTriggerType] = useState("");
@@ -364,7 +373,12 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
     setSaving(true);
     setError("");
     try {
-      const r = await fetch(`${API_BASE}/api/veritacheck/verifications`, {
+      // Lab-scoped POST when activeLabId is set so the new verification is
+      // stamped with the URL-validated lab_id rather than users.lab_id.
+      const createUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritacheck/verifications`
+        : `${API_BASE}/api/veritacheck/verifications`;
+      const r = await fetch(createUrl, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -53,7 +53,8 @@ export function registerVeritaCheckVerificationRoutes(
     res.json(CLSI_GUIDANCE);
   });
 
-  // GET all verifications for the user
+  // GET all verifications for the user (legacy, user-scoped — leaks across
+  // labs for multi-lab owners; preserved for legacy unprefixed callers).
   app.get("/api/veritacheck/verifications", authMiddleware, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
@@ -66,6 +67,24 @@ export function registerVeritaCheckVerificationRoutes(
       WHERE v.user_id = ?
       ORDER BY v.created_at DESC
     `).all(userId);
+    res.json(verifications);
+  });
+
+  // Lab-scoped variant (cross-lab leak fix 2026-05-20). Scopes by lab_id so
+  // the verifications list at /labs/:labId/dashboard/verifications only
+  // returns rows for that active lab. lab_id column was added in db.ts.
+  const verifLabScopeMW = (app as any).locals.labScopeMiddleware;
+  app.get("/api/labs/:labId/veritacheck/verifications", authMiddleware, verifLabScopeMW, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const verifications = sqlite.prepare(`
+      SELECT v.*,
+        (SELECT COUNT(*) FROM veritacheck_verification_instruments WHERE verification_id = v.id) as unit_count,
+        (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 1) as passed_count,
+        (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 0) as failed_count
+      FROM veritacheck_verifications v
+      WHERE v.lab_id = ?
+      ORDER BY v.created_at DESC
+    `).all(req.scope.labId);
     res.json(verifications);
   });
 
@@ -86,14 +105,12 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ...v as object, instruments, studies });
   });
 
-  // POST create new verification
-  app.post("/api/veritacheck/verifications", authMiddleware, requireWriteAccess, (req: any, res) => {
+  // Shared verification-create body builder. Used by both legacy and
+  // lab-scoped POST routes so the slot-creation logic doesn't drift.
+  function createVerificationRow(req: any, res: any, labIdOrNull: number | null) {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const {
-      instrument_name, manufacturer, trigger_type,
-      map_instrument_id, elements, element_reasons,
-    } = req.body;
+    const { instrument_name, manufacturer, trigger_type, map_instrument_id, elements, element_reasons } = req.body;
     if (!instrument_name || !trigger_type) {
       return res.status(400).json({ error: "instrument_name and trigger_type are required" });
     }
@@ -103,18 +120,17 @@ export function registerVeritaCheckVerificationRoutes(
       : ["accuracy", "precision", "reportable_range", "reference_interval"];
     const result = sqlite.prepare(`
       INSERT INTO veritacheck_verifications
-        (user_id, instrument_name, manufacturer, trigger_type, map_instrument_id,
+        (user_id, lab_id, instrument_name, manufacturer, trigger_type, map_instrument_id,
          elements, element_reasons, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
     `).run(
-      userId, instrument_name, manufacturer || null, trigger_type,
+      userId, labIdOrNull, instrument_name, manufacturer || null, trigger_type,
       map_instrument_id || null,
       JSON.stringify(elemArr),
       JSON.stringify(element_reasons || {}),
       now, now
     );
     const id = (result as any).lastInsertRowid;
-    // Auto-create study slots for each selected element
     for (const element of elemArr) {
       const guidance = CLSI_GUIDANCE[element];
       sqlite.prepare(`
@@ -124,6 +140,20 @@ export function registerVeritaCheckVerificationRoutes(
       `).run(id, element, guidance?.protocol || null, now, now);
     }
     res.json({ id, ok: true });
+  }
+
+  // POST create new verification (legacy — falls back to users.lab_id for
+  // backward compatibility with unprefixed callers).
+  app.post("/api/veritacheck/verifications", authMiddleware, requireWriteAccess, (req: any, res) => {
+    const userId = req.ownerUserId ?? req.user.userId;
+    const fallbackRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any;
+    return createVerificationRow(req, res, fallbackRow?.lab_id ?? null);
+  });
+
+  // Lab-scoped POST — stamps lab_id from the URL-validated scope so new
+  // verifications land in the right lab even when users.lab_id is stale.
+  app.post("/api/labs/:labId/veritacheck/verifications", authMiddleware, verifLabScopeMW, requireWriteAccess, (req: any, res) => {
+    return createVerificationRow(req, res, req.scope.labId);
   });
 
   // PATCH update verification header (director info, status, remediation, etc.)
