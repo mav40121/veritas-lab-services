@@ -1610,9 +1610,13 @@ export default function VeritaMapMapPage() {
   });
 
   // Lightweight: count of maps owned by this user (drives toggle visibility).
-  // PARKING_LOT #19 Phase 1.
+  // Lab-scoped so multi-lab owners see only the maps for the active lab; the
+  // toggle would otherwise reflect the union across every lab the owner has.
+  const allMapsUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritamap/maps`
+    : `/api/veritamap/maps`;
   const { data: allMaps = [] } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ["/api/veritamap/maps"],
+    queryKey: [allMapsUrl],
   });
 
   // Fetch instruments for copy-from feature
