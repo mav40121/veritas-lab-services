@@ -2791,6 +2791,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
         cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
         instrumentMeta: req.body.instrumentMeta,
+        // Phase 1 simple-precision parity inputs (optional).
+        vendorSd: req.body.vendorSd,
+        vendorSdConcentration: req.body.vendorSdConcentration,
+        targetMean: req.body.targetMean,
+        targetCv: req.body.targetCv,
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);
@@ -3043,6 +3048,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
         cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
         instrumentMeta: req.body.instrumentMeta,
+        // Phase 1 simple-precision parity inputs (optional).
+        vendorSd: req.body.vendorSd,
+        vendorSdConcentration: req.body.vendorSdConcentration,
+        targetMean: req.body.targetMean,
+        targetCv: req.body.targetCv,
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);
