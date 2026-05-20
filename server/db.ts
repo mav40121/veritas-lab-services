@@ -1106,6 +1106,16 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catc
 // back to user_id in the report SQL.
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN created_by_user_id INTEGER"); } catch {}
 
+// Phase 1 simple-precision parity (2026-05-20): optional inputs that mirror
+// EP Evaluator's User's Specifications panel. Vendor SD drives an alternate
+// three-state verdict (Pass/Fail/Uncertain) on the precision study; target
+// mean drives the optional bias/%bias surface. All four are nullable and do
+// not affect the primary CLIA TEa verdict when unset.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN vendor_sd REAL"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN vendor_sd_concentration REAL"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN target_mean REAL"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN target_cv REAL"); } catch {}
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // Labs table — normalized lab identity (CLIA, name, accreditation flags)
 // Migrated from per-user columns to shared lab entity so seats inherit and

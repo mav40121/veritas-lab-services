@@ -43,6 +43,15 @@ export const studies = sqliteTable("studies", {
   cliaAbsoluteFloor: real("clia_absolute_floor"),
   cliaAbsoluteUnit: text("clia_absolute_unit"),
   instrumentMeta: text("instrument_meta"),
+  // Phase 1 parity (2026-05-20): optional inputs for the simple precision
+  // study that mirror EP Evaluator's "User's Specifications" panel. Vendor
+  // SD drives the optional three-state verdict; target mean drives the
+  // optional bias / %bias surface; concentration + target CV are echoed in
+  // the Supporting Data panel only.
+  vendorSd: real("vendor_sd"),
+  vendorSdConcentration: real("vendor_sd_concentration"),
+  targetMean: real("target_mean"),
+  targetCv: real("target_cv"),
   createdAt: text("created_at").notNull(),
 });
 

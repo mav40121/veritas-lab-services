@@ -1800,7 +1800,21 @@ export default function StudyResults() {
   const rawDataPoints = JSON.parse(study.dataPoints);
   let results: StudyResults;
   if (study.studyType === "precision") {
-    results = calculatePrecision(rawDataPoints as PrecisionDataPoint[], study.cliaAllowableError, (rawDataPoints[0]?.days ? "advanced" : "simple"));
+    results = calculatePrecision(
+      rawDataPoints as PrecisionDataPoint[],
+      study.cliaAllowableError,
+      (rawDataPoints[0]?.days ? "advanced" : "simple"),
+      {
+        // Phase 1 parity (2026-05-20): wire the optional inputs persisted
+        // on the study record into the calculator so CIs / 2 SD range /
+        // bias / vendor verdict appear on saved studies, not only on
+        // fresh client-side computations.
+        vendorSD: (study as any).vendorSd ?? undefined,
+        vendorSDConcentration: (study as any).vendorSdConcentration ?? undefined,
+        targetMean: (study as any).targetMean ?? undefined,
+        targetCV: (study as any).targetCv ?? undefined,
+      },
+    );
   } else if (study.studyType === "lot_to_lot") {
     const { data, sampleType } = rawDataPoints;
     results = calculateLotToLot(data, study.cliaAllowableError, sampleType);

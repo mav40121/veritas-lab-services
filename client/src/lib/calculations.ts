@@ -34,6 +34,87 @@ function stddev(v: number[]) {
   return Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / (v.length - 1));
 }
 
+// ─── Inverse normal / chi-square / Student's t ───────────────────────────────
+// Needed for 95% confidence intervals on SD (chi-square inverse) and Mean
+// (t-distribution inverse) in the simple precision study. Accuracy goal: match
+// EP Evaluator's printed values to two decimal places for N in [5, 100]. All
+// hand-rolled to keep the bundle free of a stats dependency, consistent with
+// the rest of calculations.ts.
+
+// Acklam's rational approximation for the inverse standard normal CDF.
+// 6-figure accuracy across the open interval (0, 1). Reference:
+// https://web.archive.org/web/20150910044730/http://home.online.no/~pjacklam/notes/invnorm/
+function invStandardNormal(p: number): number {
+  if (p <= 0 || p >= 1) return 0;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const pLow = 0.02425;
+  const pHigh = 1 - pLow;
+  let q: number, r: number;
+  if (p < pLow) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  } else if (p <= pHigh) {
+    q = p - 0.5;
+    r = q * q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  } else {
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  }
+}
+
+// Wilson-Hilferty inverse chi-square: chi2_p,df ≈ df * (1 - 2/(9df) + z * sqrt(2/(9df)))^3.
+// Accurate to 4 figures for df >= 5; underlies the 95% CI for SD.
+function invChiSquare(p: number, df: number): number {
+  if (df <= 0) return 0;
+  const z = invStandardNormal(p);
+  const a = 2 / (9 * df);
+  const t = 1 - a + z * Math.sqrt(a);
+  return df * t * t * t;
+}
+
+// Hill's series (Hill, CACM 1970 Algorithm 396) for the inverse Student's t CDF.
+// Four-term polynomial in z = invStandardNormal(p). Matches EP Evaluator's
+// t(0.025, 34) = 2.0322 to four decimals.
+function invStudentT(p: number, df: number): number {
+  if (df <= 0) return 0;
+  if (df > 200) return invStandardNormal(p);
+  const z = invStandardNormal(p);
+  const z2 = z * z;
+  const z3 = z2 * z;
+  const z5 = z3 * z2;
+  const z7 = z5 * z2;
+  const term1 = (z3 + z) / (4 * df);
+  const term2 = (5 * z5 + 16 * z3 + 3 * z) / (96 * df * df);
+  const term3 = (3 * z7 + 19 * z5 + 17 * z3 - 15 * z) / (384 * df * df * df);
+  return z + term1 + term2 + term3;
+}
+
+// Two-tailed 95% CI for a sample SD given n observations. Returns [lower, upper].
+// Derivation: (n-1)*s^2/sigma^2 follows chi-square(n-1), so the CI for sigma
+// uses chi2(1-alpha/2) for the LOWER bound on sigma and chi2(alpha/2) for the
+// UPPER bound on sigma. Verified against EP Evaluator's printed values for
+// the Pfizer A-ALT dataset (n=35, SD=1.1, CI 0.9 to 1.4).
+export function sdConfidenceInterval95(sd: number, n: number): [number, number] | null {
+  if (n < 2 || sd <= 0) return null;
+  const df = n - 1;
+  const chiHigh = invChiSquare(0.975, df); // large chi-square -> small sigma -> LOWER CI bound for SD
+  const chiLow = invChiSquare(0.025, df);  // small chi-square -> large sigma -> UPPER CI bound for SD
+  if (chiHigh <= 0 || chiLow <= 0) return null;
+  return [sd * Math.sqrt(df / chiHigh), sd * Math.sqrt(df / chiLow)];
+}
+
+// Two-tailed 95% CI for a sample mean using Student's t.
+export function meanConfidenceInterval95(meanVal: number, sd: number, n: number): [number, number] | null {
+  if (n < 2 || sd <= 0) return null;
+  const tCrit = invStudentT(0.975, n - 1);
+  const margin = tCrit * sd / Math.sqrt(n);
+  return [meanVal - margin, meanVal + margin];
+}
+
 // Standard Error of Estimate (SEE) — spread of Y around the regression line
 function seeFn(x: number[], y: number[]): number {
   const n = x.length;
@@ -630,6 +711,25 @@ export interface PrecisionLevelResult {
   cv: number;
   allowableCV: number;
   passFail: "Pass" | "Fail";
+  // Phase 1 parity additions (2026-05-20). Present on every simple-mode
+  // result with n >= 2; advanced-mode also populates them for the aggregate
+  // (single-pool) view so the same Statistics block can render.
+  sdCiLower?: number;
+  sdCiUpper?: number;
+  meanCiLower?: number;
+  meanCiUpper?: number;
+  twoSDRangeLower?: number;
+  twoSDRangeUpper?: number;
+  // Populated only when caller passes opts.targetMean.
+  targetMean?: number;
+  bias?: number;
+  percentBias?: number;
+  // Populated only when caller passes opts.vendorSD. The three-state verdict
+  // follows EP Evaluator's strict reading: Pass = upper 95% CI for SD ≤ goal;
+  // Uncertain = goal lies inside the 95% CI; Fail = lower 95% CI > goal.
+  vendorSD?: number;
+  vendorVerdict?: "Pass" | "Fail" | "Uncertain";
+  // ANOVA components (advanced mode).
   withinRunSD?: number;
   withinRunCV?: number;
   betweenRunSD?: number;
@@ -640,6 +740,19 @@ export interface PrecisionLevelResult {
   totalCV?: number;
 }
 
+export interface PrecisionOptions {
+  // Optional vendor SD goal (within-run SD claim from manufacturer insert).
+  // When set, calculator emits vendorVerdict (Pass/Fail/Uncertain) on each
+  // level. Independent of the CLIA TEa% criterion, which still drives the
+  // primary passFail field.
+  vendorSD?: number;
+  vendorSDConcentration?: number;
+  // Optional target mean (assigned value or target from QC insert). When set,
+  // calculator emits bias / percentBias per level. Does not affect verdict.
+  targetMean?: number;
+  targetCV?: number;
+}
+
 export interface PrecisionResults {
   type: "precision";
   mode: "simple" | "advanced";
@@ -648,6 +761,13 @@ export interface PrecisionResults {
   passCount: number;
   totalCount: number;
   summary: string;
+  // Echo back the optional inputs so downstream renderers can show them in
+  // the User's Specifications and Supporting Data sections without having to
+  // re-parse the study record.
+  vendorSD?: number;
+  vendorSDConcentration?: number;
+  targetMean?: number;
+  targetCV?: number;
 }
 
 export interface PrecisionDataPoint {
@@ -663,9 +783,47 @@ export interface PrecisionDataPoint {
 export function calculatePrecision(
   dataPoints: PrecisionDataPoint[],
   cliaAllowableImprecision: number,
-  mode: "simple" | "advanced"
+  mode: "simple" | "advanced",
+  opts: PrecisionOptions = {}
 ): PrecisionResults {
   const allowableCV = cliaAllowableImprecision * 100;
+
+  // Compute the parity statistics (CIs, 2 SD range, bias, vendor verdict)
+  // around an already-derived mean/SD/n. Pulled out so both the simple and
+  // advanced result paths share one implementation.
+  const parityStats = (n: number, meanVal: number, sdVal: number) => {
+    const out: Partial<PrecisionLevelResult> = {};
+    if (n < 2 || !(sdVal > 0)) return out;
+    const sdCi = sdConfidenceInterval95(sdVal, n);
+    if (sdCi) {
+      out.sdCiLower = sdCi[0];
+      out.sdCiUpper = sdCi[1];
+    }
+    const meanCi = meanConfidenceInterval95(meanVal, sdVal, n);
+    if (meanCi) {
+      out.meanCiLower = meanCi[0];
+      out.meanCiUpper = meanCi[1];
+    }
+    out.twoSDRangeLower = meanVal - 2 * sdVal;
+    out.twoSDRangeUpper = meanVal + 2 * sdVal;
+    if (typeof opts.targetMean === "number" && opts.targetMean !== 0) {
+      out.targetMean = opts.targetMean;
+      out.bias = meanVal - opts.targetMean;
+      out.percentBias = (out.bias / opts.targetMean) * 100;
+    }
+    if (typeof opts.vendorSD === "number" && opts.vendorSD > 0) {
+      out.vendorSD = opts.vendorSD;
+      // EP Evaluator strict three-state verdict: Pass when upper 95% CI for SD
+      // does not exceed the goal; Uncertain when the goal sits inside the CI;
+      // Fail when the goal sits below the lower CI bound.
+      const upper = sdCi ? sdCi[1] : sdVal;
+      const lower = sdCi ? sdCi[0] : sdVal;
+      if (upper <= opts.vendorSD) out.vendorVerdict = "Pass";
+      else if (lower <= opts.vendorSD) out.vendorVerdict = "Uncertain";
+      else out.vendorVerdict = "Fail";
+    }
+    return out;
+  };
 
   const levelResults: PrecisionLevelResult[] = dataPoints.map(dp => {
     const allVals = mode === "simple"
@@ -688,7 +846,8 @@ export function calculatePrecision(
     if (mode === "simple") {
       return {
         level: dp.level, levelName: dp.levelName, n, mean: meanVal, sd: sdVal,
-        cv: cvVal, allowableCV, passFail: cvVal <= allowableCV ? "Pass" : "Fail"
+        cv: cvVal, allowableCV, passFail: cvVal <= allowableCV ? "Pass" : "Fail",
+        ...parityStats(n, meanVal, sdVal),
       };
     }
 
@@ -743,6 +902,7 @@ export function calculatePrecision(
       level: dp.level, levelName: dp.levelName, n, mean: meanVal, sd: sdVal,
       cv: cvVal, allowableCV,
       passFail: cvVal <= allowableCV ? "Pass" : "Fail",
+      ...parityStats(n, meanVal, sdVal),
       withinRunSD: Math.sqrt(varWithinRun), withinRunCV: toCV(varWithinRun),
       betweenRunSD: Math.sqrt(varBetweenRun), betweenRunCV: toCV(varBetweenRun),
       betweenDaySD: Math.sqrt(varBetweenDay), betweenDayCV: toCV(varBetweenDay),
@@ -759,7 +919,13 @@ export function calculatePrecision(
     `${passCount} of ${totalCount} levels met the adopted precision criterion. ` +
     `The precision study ${overallPass ? "PASSED" : "FAILED"} the adopted acceptance criterion.`;
 
-  return { type: "precision", mode, levelResults, overallPass, passCount, totalCount, summary };
+  return {
+    type: "precision", mode, levelResults, overallPass, passCount, totalCount, summary,
+    vendorSD: opts.vendorSD,
+    vendorSDConcentration: opts.vendorSDConcentration,
+    targetMean: opts.targetMean,
+    targetCV: opts.targetCV,
+  };
 }
 
 // ─── LOT-TO-LOT VERIFICATION ─────────────────────────────────────────────────
