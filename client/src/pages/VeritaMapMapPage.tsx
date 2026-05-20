@@ -1841,10 +1841,78 @@ export default function VeritaMapMapPage() {
     return Array.from(s).sort();
   }, [localTests]);
 
+  // Per-column sortable headers. Default sort is Analyte ascending to match
+  // the previous always-on behavior; user clicks toggle direction or pick
+  // a different column. Sortable fields cover every data column except
+  // Actions. Date columns sort missing/null values to the end (descending
+  // last) so missing-date rows do not crowd the top.
+  type MapSortField =
+    | "analyte"
+    | "instruments"
+    | "specialty"
+    | "complexity"
+    | "cfr"
+    | "correlation_required"
+    | "last_cal_ver"
+    | "last_method_comp"
+    | "last_precision"
+    | "last_sop_review"
+    | "notes";
+  const [sortField, setSortField] = useState<MapSortField>("analyte");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const handleSort = (field: MapSortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+  };
+
   const filteredTests = useMemo(() => {
     const base = filterSpecialty === "all" ? localTests : localTests.filter((t) => t.specialty === filterSpecialty);
-    return [...base].sort((a, b) => a.analyte.localeCompare(b.analyte));
-  }, [localTests, filterSpecialty]);
+    // Pull comparison values per field. Dates use "9999-12-31" sentinel so
+    // null sorts to the end on ascending. Booleans coerce to 0/1.
+    const valueFor = (t: TestRecord, f: MapSortField): string | number => {
+      switch (f) {
+        case "analyte":              return t.analyte.toLowerCase();
+        case "instruments":          return ((t.instruments ?? [])[0]?.instrument_name ?? "").toLowerCase();
+        case "specialty":            return (t.specialty ?? "").toLowerCase();
+        case "complexity":           return (t.complexity ?? "").toLowerCase();
+        case "cfr":                  return getCFR(t.specialty).toLowerCase();
+        case "correlation_required": return ((t.complexity !== "WAIVED") && ((t.instruments ?? []).length >= 2)) ? 0 : 1;
+        case "last_cal_ver":         return t.last_cal_ver ?? "9999-12-31";
+        case "last_method_comp":     return t.last_method_comp ?? "9999-12-31";
+        case "last_precision":       return t.last_precision ?? "9999-12-31";
+        case "last_sop_review":      return t.last_sop_review ?? "9999-12-31";
+        case "notes":                return (t.notes ?? "").toLowerCase();
+      }
+    };
+    return [...base].sort((a, b) => {
+      const av = valueFor(a, sortField);
+      const bv = valueFor(b, sortField);
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [localTests, filterSpecialty, sortField, sortDir]);
+
+  // Header component — active column shows a teal directional arrow,
+  // inactive columns show a muted ↕ as the affordance.
+  const SortableHeader = ({ field, children, className }: { field: MapSortField; children: React.ReactNode; className?: string }) => {
+    const isActive = sortField === field;
+    return (
+      <th
+        className={`px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
+        onClick={() => handleSort(field)}
+      >
+        <span className="inline-flex items-center gap-1">
+          {children}
+          {isActive ? (
+            <span className="text-xs text-[#01696F]">{sortDir === "asc" ? "▲" : "▼"}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground/40">{"↕"}</span>
+          )}
+        </span>
+      </th>
+    );
+  };
 
   const compliance = useMemo(() => calcCompliance(localTests), [localTests]);
 
@@ -2253,42 +2321,22 @@ export default function VeritaMapMapPage() {
             <table className="min-w-full text-xs" style={{minWidth: '1100px'}}>
               <thead>
                 <tr className="bg-muted/60 border-b border-border">
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Analyte
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Instruments
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Specialty
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Complexity
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    CFR
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
+                  <SortableHeader field="analyte">Analyte</SortableHeader>
+                  <SortableHeader field="instruments">Instruments</SortableHeader>
+                  <SortableHeader field="specialty">Specialty</SortableHeader>
+                  <SortableHeader field="complexity">Complexity</SortableHeader>
+                  <SortableHeader field="cfr">CFR</SortableHeader>
+                  <SortableHeader field="correlation_required">
                     <span className="flex items-center gap-1">
                       <AlertCircle size={10} className="text-red-500" />
                       Correlation Req'd
                     </span>
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Cal Verification
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Method Comparison
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Precision
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    SOP Review
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                    Notes
-                  </th>
+                  </SortableHeader>
+                  <SortableHeader field="last_cal_ver">Cal Verification</SortableHeader>
+                  <SortableHeader field="last_method_comp">Method Comparison</SortableHeader>
+                  <SortableHeader field="last_precision">Precision</SortableHeader>
+                  <SortableHeader field="last_sop_review">SOP Review</SortableHeader>
+                  <SortableHeader field="notes">Notes</SortableHeader>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                     Actions
                   </th>
