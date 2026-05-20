@@ -200,9 +200,13 @@ export default function VeritaLabAppPage() {
     };
 
     try {
-      const url = editCert
-        ? `${API_BASE}/api/veritalab/certificates/${editCert.id}`
-        : certsListUrl;
+      // Lab-scoped PUT for updates when activeLabId is set; the lab-scoped
+      // endpoint enforces WHERE id AND lab_id so a stale URL after a lab
+      // switch will 404 instead of editing a certificate from another lab.
+      const editUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritalab/certificates/${editCert?.id}`
+        : `${API_BASE}/api/veritalab/certificates/${editCert?.id}`;
+      const url = editCert ? editUrl : certsListUrl;
       const method = editCert ? "PUT" : "POST";
 
       const res = await fetch(url, {
@@ -226,7 +230,10 @@ export default function VeritaLabAppPage() {
 
   async function handleDelete(id: number) {
     try {
-      const res = await fetch(`${API_BASE}/api/veritalab/certificates/${id}`, {
+      const deleteUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritalab/certificates/${id}`
+        : `${API_BASE}/api/veritalab/certificates/${id}`;
+      const res = await fetch(deleteUrl, {
         method: "DELETE",
         headers: authHeaders(),
       });

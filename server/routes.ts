@@ -11535,6 +11535,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(201).json(cert);
   });
 
+  // Lab-scoped PUT certificate-by-id (URL-hygiene fix 2026-05-20). The
+  // legacy PUT uses userCanAccessCertificate which checks user_id OR
+  // lab_members so it doesn't enforce that the URL's lab matches the
+  // certificate's lab. The lab-scoped variant queries WHERE id AND lab_id
+  // so a stale-URL PUT 404s instead of editing a certificate from another
+  // lab the owner is a member of.
+  app.put("/api/labs/:labId/veritalab/certificates/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
+    if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab™ subscription required" });
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE id = ? AND lab_id = ? AND is_active = 1"
+    ).get(req.params.id, req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Certificate not found" });
+    const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE lab_certificates SET cert_type=?, cert_name=?, cert_number=?, issuing_body=?, issued_date=?, expiration_date=?, lab_director=?, notes=?, updated_at=? WHERE id=?"
+    ).run(
+      cert_type ?? existing.cert_type,
+      cert_name?.trim() ?? existing.cert_name,
+      cert_number ?? existing.cert_number,
+      issuing_body ?? existing.issuing_body,
+      issued_date ?? existing.issued_date,
+      expiration_date ?? existing.expiration_date,
+      lab_director ?? existing.lab_director,
+      notes ?? existing.notes,
+      now,
+      req.params.id
+    );
+    const newExp = expiration_date ?? existing.expiration_date;
+    if (newExp) scheduleReminders(Number(req.params.id), existing.user_id, newExp);
+    const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id);
+    res.json(cert);
+  });
+
+  // Lab-scoped DELETE (soft delete) certificate-by-id.
+  app.delete("/api/labs/:labId/veritalab/certificates/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
+    if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab™ subscription required" });
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM lab_certificates WHERE id = ? AND lab_id = ? AND is_active = 1"
+    ).get(req.params.id, req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Certificate not found" });
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritalab", action: "delete", entityType: "certificate", entityId: req.params.id, entityLabel: existing.cert_type ?? existing.cert_name, before: existing, ipAddress: req.ip });
+    const now = new Date().toISOString();
+    (db as any).$client.prepare("UPDATE lab_certificates SET is_active = 0, updated_at = ? WHERE id = ?").run(now, req.params.id);
+    (db as any).$client.prepare("DELETE FROM lab_certificate_reminders WHERE certificate_id = ? AND is_sent = 0").run(req.params.id);
+    res.json({ success: true });
+  });
+
   // POST /api/veritalab/certificates/:id/documents - upload document
   const multer = require("multer");
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
