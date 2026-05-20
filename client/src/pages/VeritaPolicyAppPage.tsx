@@ -224,7 +224,10 @@ export default function VeritaPolicyAppPage() {
   async function handleDownloadPdf() {
     setDownloadingPdf(true);
     try {
-      const res = await fetch(`${API_BASE}/api/veritapolicy/pdf`, { method: "POST", headers: authHeaders() });
+      const pdfUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritapolicy/pdf`
+        : `${API_BASE}/api/veritapolicy/pdf`;
+      const res = await fetch(pdfUrl, { method: "POST", headers: authHeaders() });
       if (!res.ok) throw new Error("PDF generation failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -243,7 +246,10 @@ export default function VeritaPolicyAppPage() {
   async function handleDownloadMasterList() {
     setDownloadingMasterList(true);
     try {
-      const res = await fetch(`${API_BASE}/api/veritapolicy/master-list/excel`, { headers: authHeaders() });
+      const excelUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritapolicy/master-list/excel`
+        : `${API_BASE}/api/veritapolicy/master-list/excel`;
+      const res = await fetch(excelUrl, { headers: authHeaders() });
       if (!res.ok) throw new Error("Excel generation failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
