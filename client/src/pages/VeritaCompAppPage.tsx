@@ -386,7 +386,10 @@ function ProgramListView() {
 
   const deleteProgram = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE}/api/competency/programs/${id}`, {
+      const deleteUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/competency/programs/${id}`
+        : `${API_BASE}/api/competency/programs/${id}`;
+      const res = await fetch(deleteUrl, {
         method: "DELETE",
         headers: authHeaders(),
       });
@@ -1070,6 +1073,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
 
 function AssessmentsTab({ program, onNewAssessment }: { program: Program & { assessments: Assessment[] }; onNewAssessment: () => void }) {
   const qc = useQueryClient();
+  const activeLabId = useActiveLabId();
   const assessments = program.assessments || [];
 
   const downloadPdf = async (assessmentId: number) => {
@@ -1083,7 +1087,10 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   };
 
   const deleteAssessment = async (id: number) => {
-    await fetch(`${API_BASE}/api/competency/assessments/${id}`, {
+    const deleteUrl = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments/${id}`
+      : `${API_BASE}/api/competency/assessments/${id}`;
+    await fetch(deleteUrl, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -1230,7 +1237,10 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
   });
 
   const deactivate = async (id: number) => {
-    await fetch(`${API_BASE}/api/competency/employees/${id}`, {
+    const deleteUrl = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/competency/employees/${id}`
+      : `${API_BASE}/api/competency/employees/${id}`;
+    await fetch(deleteUrl, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -1335,12 +1345,16 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
 
 function SettingsTab({ program }: { program: Program }) {
   const qc = useQueryClient();
+  const activeLabId = useActiveLabId();
   const [name, setName] = useState(program.name);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
-    await fetch(`${API_BASE}/api/competency/programs/${program.id}`, {
+    const putUrl = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/competency/programs/${program.id}`
+      : `${API_BASE}/api/competency/programs/${program.id}`;
+    await fetch(putUrl, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ name }),
@@ -1466,6 +1480,7 @@ function NewAssessmentDialog({
   onCreated: () => void;
 }) {
   const { toast } = useToast();
+  const activeLabId = useActiveLabId();
   const activeEmployees = employees.filter(e => e.status === "active");
   const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
   const [employeeId, setEmployeeId] = useState<number | null>(selectedEmployee?.id || null);
@@ -1726,7 +1741,10 @@ function NewAssessmentDialog({
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/competency/assessments`, {
+      const createUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments`
+        : `${API_BASE}/api/competency/assessments`;
+      const res = await fetch(createUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
