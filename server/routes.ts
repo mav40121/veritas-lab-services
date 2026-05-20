@@ -5731,12 +5731,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── VERITASCAN EXCEL EXPORT ──────────────────────────────────────────────
-  app.post("/api/veritascan/excel/:scanId", authMiddleware, async (req: any, res) => {
+  // Shared handler factory for VeritaScan Excel + PDF exports. Lab-scoped
+  // routes pass through labScopeMiddleware first, which sets req.scope.lab
+  // / req.scope.labId. The handler below prefers req.scope.lab over
+  // resolveLabForUser when set, and additionally enforces
+  // scan.lab_id = req.scope.labId so a multi-lab owner downloading from
+  // /labs/B/.../scan/{scanIdA} gets a 404 instead of a Lab A export
+  // stamped with Lab A's identity.
+  const veritascanExcelHandler = async (req: any, res: any) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const scanId = req.params.scanId;
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(scanId, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
+    if (req.scope?.labId && Number(scan.lab_id) !== Number(req.scope.labId)) {
+      return res.status(404).json({ error: "Scan not found" });
+    }
 
     // Get saved items from DB
     const dbItems = (db as any).$client.prepare(
@@ -5753,9 +5763,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "referenceItems array required" });
     }
 
-    // Phase 3.6 (2026-05-03): resolve preferred_standards for dynamic accreditor columns
+    // Phase 3.6 (2026-05-03): resolve preferred_standards for dynamic accreditor columns.
+    // Prefer req.scope.lab when on a lab-scoped URL so multi-lab owners get
+    // the URL lab's accreditation flags, not their primary lab's.
     let xlsxPreferredStandards: string[] = [];
-    const xlsxLab = resolveLabForUser(req.userId);
+    const xlsxLab = req.scope?.lab ?? resolveLabForUser(req.userId);
     if (xlsxLab) {
       if (xlsxLab.accreditation_cap) xlsxPreferredStandards.push("CAP");
       if (xlsxLab.accreditation_tjc) xlsxPreferredStandards.push("TJC");
@@ -5782,9 +5794,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.created = new Date();
 
       // ===== Lab identity (Excel Export Standard) =====
-      const ownerUserVs = storage.getUserById(dataUserId);
-      const labName = (ownerUserVs as any)?.cliaLabName || (ownerUserVs as any)?.clia_lab_name || ownerUserVs?.name || "Laboratory";
-      const cliaNumber = (ownerUserVs as any)?.cliaNumber || (ownerUserVs as any)?.clia_number || "Not on file";
+      // Lab-scoped requests source from req.scope.lab so the workbook
+      // identity matches the URL the download came from. Legacy unscoped
+      // requests fall back to the owner-user lookup.
+      let labName: string;
+      let cliaNumber: string;
+      if (req.scope?.lab) {
+        labName = req.scope.lab.lab_name || "Laboratory";
+        cliaNumber = req.scope.lab.clia_number || "Not on file";
+      } else {
+        const ownerUserVs = storage.getUserById(dataUserId);
+        labName = (ownerUserVs as any)?.cliaLabName || (ownerUserVs as any)?.clia_lab_name || ownerUserVs?.name || "Laboratory";
+        cliaNumber = (ownerUserVs as any)?.cliaNumber || (ownerUserVs as any)?.clia_number || "Not on file";
+      }
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
       // ===== About sheet (sheet 1) =====
@@ -6003,10 +6025,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("Excel generation error:", e);
       res.status(500).json({ error: "Excel generation failed" });
     }
-  });
+  };
+  app.post("/api/veritascan/excel/:scanId", authMiddleware, veritascanExcelHandler);
+  app.post("/api/labs/:labId/veritascan/excel/:scanId", authMiddleware, labScopeMiddleware, veritascanExcelHandler);
 
   // ── VERITASCAN PDF EXPORT ─────────────────────────────────────────────────
-  app.post("/api/veritascan/pdf/:scanId/:type", authMiddleware, async (req: any, res) => {
+  const veritascanPdfHandler = async (req: any, res: any) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const { scanId, type } = req.params;
     if (type !== "executive" && type !== "full") return res.status(400).json({ error: "type must be 'executive' or 'full'" });
@@ -6014,6 +6038,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(scanId, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
+    if (req.scope?.labId && Number(scan.lab_id) !== Number(req.scope.labId)) {
+      return res.status(404).json({ error: "Scan not found" });
+    }
 
     // Get saved items from DB
     const dbItems = (db as any).$client.prepare(
@@ -6056,8 +6083,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     });
 
-    // Fetch CLIA number and preferred standards from labs table, fallback to user
-    const scanLab = resolveLabForUser(req.userId);
+    // Fetch CLIA number and preferred standards from labs table, fallback to user.
+    // Lab-scoped requests source from req.scope.lab so the PDF identity matches
+    // the URL the download came from.
+    const scanLab = req.scope?.lab ?? resolveLabForUser(req.userId);
     let scanCliaNumber: string | undefined;
     let scanLabName: string | undefined;
     let scanPreferredStandards: string[] | undefined;
@@ -6113,7 +6142,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("VeritaScan PDF generation error:", err);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
-  });
+  };
+  app.post("/api/veritascan/pdf/:scanId/:type", authMiddleware, veritascanPdfHandler);
+  app.post("/api/labs/:labId/veritascan/pdf/:scanId/:type", authMiddleware, labScopeMiddleware, veritascanPdfHandler);
 
   // ── NEWSLETTER ────────────────────────────────────────────────────────────
   app.post("/api/newsletter/subscribe", async (req, res) => {
