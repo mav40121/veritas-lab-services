@@ -77,11 +77,51 @@ export const teaData: { analyte: string; criteria: string }[] = [
  * (canonical, with a §493 Subpart I citation) or "Lab-Set Internal Goal"
  * (laboratory-defined, no §493 citation). Parking-lot item #1.
  */
+// Alias index built once at module load. Each teaData entry contributes its
+// full name plus any parenthetical aliases (e.g. "Alanine Aminotransferase
+// (ALT/SGPT)" → "ALT" and "SGPT" map to the canonical entry). Also matches
+// when the user's free-text test name embeds an alias (e.g. "ALT (Pfizer
+// side-by-side)" still resolves to ALT). Built 2026-05-20 to fix the
+// false-negative narrative path that was treating common short names as
+// "Lab-Set Internal Goal" instead of canonical CLIA criteria.
+const _canonicalAliasSet: Set<string> = (() => {
+  const s = new Set<string>();
+  for (const row of teaData) {
+    const full = row.analyte.trim().toLowerCase();
+    s.add(full);
+    // Pull any parenthetical content and split on "/" so combined aliases
+    // like "(ALT/SGPT)" yield both "alt" and "sgpt".
+    const parenMatches = row.analyte.match(/\(([^)]+)\)/g) || [];
+    for (const paren of parenMatches) {
+      const inner = paren.slice(1, -1);
+      for (const alias of inner.split(/[\/,]/)) {
+        const a = alias.trim().toLowerCase();
+        if (a.length > 0) s.add(a);
+      }
+    }
+    // Also add the pre-paren portion (e.g. "Alanine Aminotransferase").
+    const prePar = row.analyte.split("(")[0].trim().toLowerCase();
+    if (prePar.length > 0) s.add(prePar);
+  }
+  return s;
+})();
+
 export function hasCanonicalTea(analyte: string | null | undefined): boolean {
   if (!analyte) return false;
   const needle = String(analyte).trim().toLowerCase();
   if (!needle) return false;
-  return teaData.some((row) => row.analyte.trim().toLowerCase() === needle);
+  if (_canonicalAliasSet.has(needle)) return true;
+  // Fall back to substring match for free-text test names that embed a
+  // canonical alias inside extra annotation (e.g. "ALT (Pfizer side-by-side)"
+  // or "Glucose - QC Run 3"). Check each indexed alias against the needle.
+  // Word-boundary check to avoid false positives like "saline" matching
+  // "alt" inside "saltern" (which has no analyte semantics anyway).
+  for (const alias of _canonicalAliasSet) {
+    if (alias.length < 3) continue; // skip ultra-short aliases to avoid noise
+    const re = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\b`, "i");
+    if (re.test(needle)) return true;
+  }
+  return false;
 }
 
 export function parseAbsoluteFloor(criteria: string): { value: number; unit: string } | null {

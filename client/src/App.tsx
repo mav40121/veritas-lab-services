@@ -35,6 +35,7 @@ import DemoLabPage from "@/pages/DemoLabPage";
 import DemoPage from "@/pages/DemoPage";
 import DemoSelectorPage from "@/pages/DemoSelectorPage";
 import ResourcesPage from "@/pages/ResourcesPage";
+import ArticlePrecisionInterpretationPage from "@/pages/ArticlePrecisionInterpretationPage";
 import FAQPage from "@/pages/FAQPage";
 import PricingPage from "@/pages/PricingPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
@@ -303,6 +304,7 @@ function AppContent() {
           <Route path="/resources/laboratory-inventory-management" component={ArticleInventoryManagementPage} />
           <Route path="/resources/manual-logs-why-most-labs-should-stop" component={ArticleManualLogsPage} />
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
+          <Route path="/resources/precision-verification-report-interpretation-guide" component={ArticlePrecisionInterpretationPage} />
           <Route path="/veritascan-app">{wrapLegacy(VeritaScanAppPage)}</Route>
           <Route path="/veritascan-app/:id">{wrapLegacy(VeritaScanScanPage)}</Route>
           <Route path="/veritamap-app">{wrapLegacy(VeritaMapAppPage)}</Route>

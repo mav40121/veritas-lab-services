@@ -707,6 +707,12 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
     if (controlLot) specs.push(["Control Lot", String(controlLot)]);
     if (reagentLot) specs.push(["Reagent Lot", String(reagentLot)]);
     if (comment) specs.push(["Comment", String(comment)]);
+    // EE Day 3: link to the standalone Report Interpretation Guide so the
+    // PDF stays compact while educational content lives at a stable URL.
+    specs.push([
+      "Report Interpretation Guide",
+      `<a href="https://www.veritaslabservices.com/resources/precision-verification-report-interpretation-guide" class="teal-link">veritaslabservices.com/resources/precision-verification-report-interpretation-guide</a>`,
+    ]);
   }
   const supporting = [
     ["Analyst", study.analyst],
