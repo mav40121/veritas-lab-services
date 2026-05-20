@@ -60,6 +60,54 @@ A user message saying "fix it" or "do it" earlier in the conversation does NOT c
 
 Both gates are phrased so violations are detectable in the conversation log. If Michael finds you shipped without an authorizing message or confirm_action, that is a discrete, demonstrable breach.
 
+### Gate 3: Verification before declaring done
+
+Before any sentence in your reply that asserts a change is "shipped", "complete", "done", "fixed", "ready", "verified", "QC'd", or any synonym, you must have completed and surfaced the following in the same reply:
+
+1. **Artifact verification.** The customer-facing output the change produces (PDF, page, API response, downloaded file) has been rendered or fetched and inspected against the intent in writing. Cite the file path or URL.
+2. **Math verification.** If any computation changed, the math has been exercised on a known input set with expected outputs cited. A `scripts/verify-*.js` script is the standard receipt.
+3. **Schema verification.** If a column or table was added or altered, confirm the migration ran in production by querying the new field via API or admin path.
+4. **URL verification.** Every new route was hit (curl or browser) and returned a 2xx with the expected content.
+5. **Bug-class sweep.** If a bug was fixed, audit the codebase for other instances of the same shape. State the search query and the result ("grep'd for X, found Y, all clean" or "found Z, fixed in same PR").
+6. **Deploy verification.** The production deploy is ACTIVE on the commit hash containing the change, not just "PR merged". Pull `deployments` on the service and confirm.
+7. **Conditional / null branch.** If the change has a feature flag, an optional input, or an if/else, exercise both states.
+
+For multi-PR sequences, **run Gate 3 after every PR that touches a customer-facing artifact**, not after the whole sequence. Mid-sequence verification catches bugs while context is fresh; end-of-sequence verification lets bugs stack across multiple PRs and makes triage harder.
+
+If any step is genuinely impractical (no local env, deploy delayed, private route, etc.), state so explicitly in the same reply. Skipping silently is a procedural breach.
+
+**Exempted changes** that do not need Gate 3: memory files, scripts in `/scripts`, internal documentation, CI config, comments-only edits, and changes to this CLAUDE.md itself. State "Gate 3 N/A (internal change)" when claiming such a change is done.
+
+Enforcement: violations are detectable by reading the conversation log. A "done" claim without the matching receipts is a discrete, demonstrable breach, same as Gate 1 and Gate 2.
+
+### The verify-*.js convention
+
+Any change to math, parsing, escaping, lot-tracking, or any logic with branching ships with a paired `scripts/verify-*.js` script that:
+
+- Hardcodes a known input set (typically the exact data set from the bug report or the spec)
+- Exercises every meaningful branch of the affected logic
+- Asserts expected outputs and prints PASS / FAIL per case
+- Exits with non-zero status on any failure (so it can land in CI later)
+
+Existing examples to copy the pattern from:
+
+- `scripts/verify-precision-parity.js` — math parity against EP Evaluator's printed values
+- `scripts/verify-canonical-tea-matching.js` — hasCanonicalTea direct + fallback + negative cases
+
+The verify script becomes the discoverable receipt for Gate 3 step 2 (math verification) and step 5 (bug-class sweep). Commit it in the same PR as the fix.
+
+### The sanity-curl convention
+
+After every deploy of a change that adds or alters a customer-facing API endpoint or field, run one `curl` against production after the deploy is ACTIVE and paste the response into the conversation. Three lines, ten seconds, removes the "merged ≠ live" failure mode.
+
+Example shape:
+
+```
+curl -sS -H "Authorization: Bearer $TOKEN" https://www.veritaslabservices.com/api/labs/3/studies/491 | python -m json.tool | head -20
+```
+
+This satisfies Gate 3 step 3 (schema verification) and step 4 (URL verification) for server-side changes.
+
 ### How to ask questions
 
 When you ask Michael a question with options, every option label MUST follow the format:
