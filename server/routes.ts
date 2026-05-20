@@ -9308,20 +9308,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Get single program with full data
-  app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
-    if (!program) return res.status(404).json({ error: "Program not found" });
+  // Shared program-detail response builder. Both legacy and lab-scoped GETs
+  // reuse this so the response shape stays in sync. Employees are scoped by
+  // a caller-provided filter (user_id for legacy, lab_id for lab-scoped) so
+  // the program-detail response doesn't leak employees from other labs.
+  function buildProgramDetailResponse(program: any, employeesSql: string, employeesArg: number | string, res: any) {
     const methodGroups = (db as any).$client.prepare(
       "SELECT * FROM competency_method_groups WHERE program_id = ?"
     ).all(program.id);
     const checklistItems = (db as any).$client.prepare(
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(program.id);
-    const employees = (db as any).$client.prepare(
-      "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
-    ).all(req.user.userId);
+    const employees = (db as any).$client.prepare(employeesSql).all(employeesArg);
     const assessments = (db as any).$client.prepare(
       `SELECT a.*, e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
@@ -9329,14 +9327,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE a.program_id = ?
        ORDER BY a.created_at DESC`
     ).all(program.id);
-    // Attach items to each assessment
-    const assessmentsWithItems = assessments.map((a: any) => {
+    const assessmentsWithItems = (assessments as any[]).map((a: any) => {
       const items = (db as any).$client.prepare(
         "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
       ).all(a.id);
       return { ...a, items };
     });
     res.json({ ...program, methodGroups, checklistItems, employees, assessments: assessmentsWithItems });
+  }
+
+  app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const program = userCanAccessLabRow('competency_programs', req.params.id, req);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    return buildProgramDetailResponse(
+      program,
+      "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name",
+      req.user.userId,
+      res,
+    );
+  });
+
+  // Lab-scoped program-detail. Validates the program belongs to the URL's
+  // lab via WHERE id AND lab_id, and scopes the embedded employees list by
+  // lab_id so the response does not leak employees from other labs the
+  // owner is a member of (a real leak in the legacy endpoint above).
+  app.get("/api/labs/:labId/competency/programs/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const program = (db as any).$client.prepare(
+      "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    return buildProgramDetailResponse(
+      program,
+      "SELECT * FROM competency_employees WHERE lab_id = ? AND status = 'active' ORDER BY name",
+      req.scope.labId,
+      res,
+    );
   });
 
   // Delete program
