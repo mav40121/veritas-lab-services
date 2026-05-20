@@ -4878,7 +4878,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── VERITAMAP EXCEL EXPORT ──────────────────────────────────────────────────
-  app.post("/api/veritamap/maps/:id/excel", authMiddleware, async (req: any, res) => {
+  // Shared VeritaMap Excel export handler. Mounted under both legacy and
+  // lab-scoped routes. Identity sourced from req.scope.lab when set so the
+  // workbook stamps the URL lab, not the user's primary lab. Lab-scoped
+  // routes additionally enforce map.lab_id = req.scope.labId via
+  // requireMapInActiveLab middleware before this body runs.
+  const veritamapExcelHandler = async (req: any, res: any) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
@@ -5008,9 +5013,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const wb = new ExcelJS.Workbook();
 
       // ===== Lab identity (Excel Export Standard) =====
-      const ownerUserVm = storage.getUserById(dataUserId);
-      const labName = (ownerUserVm as any)?.cliaLabName || (ownerUserVm as any)?.clia_lab_name || ownerUserVm?.name || "Laboratory";
-      const cliaNumber = (ownerUserVm as any)?.cliaNumber || (ownerUserVm as any)?.clia_number || "Not on file";
+      // Lab-scoped requests source from req.scope.lab so the workbook
+      // identity matches the URL the download came from.
+      let labName: string;
+      let cliaNumber: string;
+      if (req.scope?.lab) {
+        labName = req.scope.lab.lab_name || "Laboratory";
+        cliaNumber = req.scope.lab.clia_number || "Not on file";
+      } else {
+        const ownerUserVm = storage.getUserById(dataUserId);
+        labName = (ownerUserVm as any)?.cliaLabName || (ownerUserVm as any)?.clia_lab_name || ownerUserVm?.name || "Laboratory";
+        cliaNumber = (ownerUserVm as any)?.cliaNumber || (ownerUserVm as any)?.clia_number || "Not on file";
+      }
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
       // ===== About sheet (sheet 1) =====
@@ -5336,7 +5350,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("VeritaMap Excel generation error:", e);
       res.status(500).json({ error: "Excel generation failed" });
     }
-  });
+  };
+  app.post("/api/veritamap/maps/:id/excel", authMiddleware, veritamapExcelHandler);
+  app.post("/api/labs/:labId/veritamap/maps/:id/excel", authMiddleware, labScopeMiddleware, requireMapInActiveLab, veritamapExcelHandler);
 
   // ── VERITAMAP ANALYTE VALUES ─────────────────────────────────────────────
   // GET all analyte values for a map
