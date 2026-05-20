@@ -470,10 +470,13 @@ function IntelligenceBanner({
 
 // ── Excel Export ──────────────────────────────────────────────────────────────
 
-async function exportExcel(mapId: number, mapName: string): Promise<void> {
+async function exportExcel(mapId: number, mapName: string, activeLabId?: number | null): Promise<void> {
   const token = localStorage.getItem("veritas_token");
+  const excelUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/veritamap/maps/${mapId}/excel`
+    : `${API_BASE}/api/veritamap/maps/${mapId}/excel`;
   const res = await fetch(
-    `${API_BASE}/api/veritamap/maps/${mapId}/excel`,
+    excelUrl,
     {
       method: "POST",
       headers: {
@@ -2190,7 +2193,7 @@ export default function VeritaMapMapPage() {
             onClick={async () => {
               setExcelLoading(true);
               try {
-                await exportExcel(mapDetail.id, mapDetail.name);
+                await exportExcel(mapDetail.id, mapDetail.name, activeLabId);
               } catch (e) {
                 console.error("Excel export error:", e);
                 toast({ title: "Export failed", description: "Could not generate Excel file.", variant: "destructive" });
