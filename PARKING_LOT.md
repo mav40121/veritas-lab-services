@@ -901,37 +901,7 @@ top-10-state licensure registry).
 
 ### 26. Source-ground the 21 CFR / 29 CFR / 45 CFR / 42 CFR 482-485 portions of cfrRequirements.ts
 
-**What:** PR #105 (2026-05-11) source-grounded the 209 entries in
-`server/cfrRequirements.ts` that cite 42 CFR Part 493 against verbatim
-eCFR XML. 77 entries citing other CFR titles still carry pre-eCFR-
-rebuild descriptions (LLM paraphrases). Breakdown:
-
-- 43 entries citing 21 CFR (Parts 606, 610, 640 - blood bank cGMP)
-- 12 entries citing 29 CFR 1910.x (OSHA bloodborne pathogens,
-  chemical hygiene)
-- 10 entries citing 45 CFR 164.x (HIPAA Security Rule)
-- 9 entries citing 42 CFR 482 / 483 / 484 / 485 (hospital and LTC
-  Conditions of Participation)
-- 3 entries with legacy "Non_CLIA_*" or other agent-era chapter
-  labels (parking-lot #3 territory)
-
-**Fix shape:** Same approach as PR #105. Fetch each title's eCFR XML
-via `https://www.ecfr.gov/api/versioner/v1/full/{date}/title-{N}.xml`
-(Title 21, Title 29, Title 45, Title 42 sections 482-485). Parse to
-extract verbatim section titles + first paragraphs. Apply via the
-`rebuild_cfr_from_ecfr_v10.py` pattern. Em-dash normalize per
-CLAUDE.md §3. Update header comments to record the additional
-issue date.
-
-**Source:** PR #105 commit ab59ea0, called out as "explicitly out of
-scope for this round" in the PR body and the file's auto-generated
-header comment.
-
-**Status:** Open. Same shape as the completed 42 CFR 493 work; ~1
-hour of focused work to ship all four CFR titles together.
-
-**Pre- vs post-COLA:** Post-COLA. No customer urgency; eCFR is
-authoritative and stable.
+**CLOSED 2026-05-21 — see CLOSED C17 below.**
 
 ---
 
@@ -1082,6 +1052,81 @@ instead as the durable customer-feedback channel for VeritaMap;
 barcode scanning waits on revenue commitment.
 
 **Status:** Parked pending first paid commitment.
+
+---
+
+### 30. Plain-language summary layer for verbatim CFR citations
+
+**What:** `server/cfrRequirements.ts` now carries verbatim eCFR text in
+the `description` field (PR #301 closed #26). The verbatim text is
+authoritative but written for regulators, not lab directors. A separate
+optional `summary` field would carry a short plain-language paraphrase
+sitting next to the verbatim text. The verbatim citation stays as the
+regulatory anchor; the summary helps the director read it quickly.
+
+**Origin:** Surfaced 2026-05-21 by operator. Concern was that a prior
+agent had warned that verbatim copy, while legal, was not necessarily
+a good idea. The verbatim + plain-language pair resolves both:
+authoritative regulatory anchor + readable director-facing gloss.
+
+**Shape if built:**
+
+- Add optional `summary?: string` to the `CfrRequirement` interface in
+  `server/cfrRequirements.ts`. Field is optional, so existing entries
+  without a summary continue to work.
+- Author summaries entry-by-entry as a curated pilot, not a generated
+  pass. Verbatim is the regulatory citation; the summary is operator
+  voice. Five-entry pilot first, operator review, then expand.
+- Display in VeritaCheck narrative blocks and CFR-citation displays:
+  verbatim quoted in italics, summary shown as a single plain
+  paragraph below. Both labeled clearly.
+
+**Why parked:** Five-entry pilot was attempted before the session
+compaction; samples either never landed in the repo or got lost.
+Restarting needs a fresh operator review of the first 3-5 sample
+summaries before scaling to the ~280 entries currently in the file.
+
+**Effort:** Half-day for the pilot (interface change + 5 sample
+summaries + one paired display in VeritaCheck PDF). Full pass across
+all entries is a separate, much larger writing project.
+
+**Pre- vs post-COLA:** Post-COLA. No customer urgency.
+
+---
+
+### 31. VeritaStock department-scope toggle (VeritaMap pattern)
+
+**What:** Lab-wide / per-department scope toggle for VeritaStock,
+mirroring the toggle already shipped in VeritaMap (PARKING_LOT C8 in
+this file). On a single-department workspace, the table and reorder
+documents stay department-scoped; toggling to lab-wide widens the
+table and surfaces a lab-wide reorder PDF / XLSX with the same vendor
+filter behavior already shipped in PR #304.
+
+**Origin:** John, San Carlos lab, 2026-05-21. Same conversation that
+drove the vendor dropdown (PR #304), the FILTERED VIEW banner
+(PR #305), and the Snap Order workflow (PR #307). John's framing:
+labs want a single "what does this whole lab need to order" view
+without losing the per-department drilldown.
+
+**Shape if built (Option A scoping, ~3 days):**
+
+- Day 1: department-scope toggle UI on VeritaStockPage header, mirror
+  the VeritaMap labwide route pattern. Hook persists in
+  `ui_preferences.veritastock_scope` so the choice survives reload.
+- Day 2: server reorder-list endpoints honor the scope param the
+  same way they honor the vendor / department / category filters
+  added in PR #304. The reorder-document FILTERED VIEW banner picks
+  up "lab-wide" vs the active department automatically.
+- Day 3: verify-script + Gate 3 prod click.
+
+**Why parked:** John's primary asks (vendor filter, FILTERED VIEW
+banner, Snap Order) shipped 2026-05-21. The toggle is the next-tier
+nice-to-have, not blocker-grade. Park behind any paying-customer
+work.
+
+**Pre- vs post-COLA:** Post-COLA. Driven by partner-lab feedback,
+not survey urgency.
 
 ---
 
@@ -1379,6 +1424,35 @@ parity.
 **Source:** Originally Perplexity competitor analysis 2026-05-10.
 Audit 2026-05-21 confirmed the EP studies cover the PAL framing in
 full.
+
+---
+
+### C17. Source-grounded 21/29/45 CFR + 42 CFR 482-485 (formerly #26)
+
+**Closure evidence:** PR #301 (commit 8c27806, merged 2026-05-21)
+source-grounded the 74 remaining non-493 entries in
+`server/cfrRequirements.ts` against verbatim eCFR XML. Breakdown
+shipped:
+
+- 43 entries citing 21 CFR (Parts 606, 610, 640 - blood bank cGMP)
+- 12 entries citing 29 CFR 1910.x (OSHA bloodborne pathogens,
+  chemical hygiene)
+- 10 entries citing 45 CFR 164.x (HIPAA Security Rule)
+- 9 entries citing 42 CFR 482 / 483 / 484 / 485 (hospital and LTC
+  Conditions of Participation)
+
+Verbatim text comes from
+`https://www.ecfr.gov/api/versioner/v1/full/{date}/title-{N}.xml`
+through the same `rebuild_cfr_from_ecfr_v10.py` pipeline used for
+the 493 sweep. Em-dash normalize per CLAUDE.md §3 applied. Header
+comments updated to record the additional issue date.
+
+**Follow-on:** The operator-facing concern about verbatim copy
+displacement is tracked separately as parking lot #30 (plain-language
+summary layer). #30 is additive to the verbatim text shipped in
+this close-out, not a replacement for it.
+
+**Source:** PR #301; tasks #18 in the in-session task tracker.
 
 ---
 
