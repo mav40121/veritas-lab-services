@@ -594,11 +594,18 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      // Use the server's Content-Disposition filename so filter-scoped
+      // downloads land with names like "VeritaStock_Reorder_fisher_2026-05-21.xlsx"
+      // instead of a hardcoded generic name. Falls back to a sensible
+      // default if the header is missing for any reason.
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = cd.match(/filename="?([^";]+)"?/i);
       const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = m?.[1] || `VeritaStock_Reorder_${datestamp}.xlsx`;
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `VeritaStock_Reorder_${datestamp}.xlsx`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
