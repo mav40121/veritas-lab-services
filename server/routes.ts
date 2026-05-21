@@ -15419,7 +15419,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/labs/:labId/veritapolicy/master-list/excel
   app.get('/api/labs/:labId/veritapolicy/master-list/excel', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
-      const lab = req.scope.lab;
+      // labScopeMiddleware only attaches a minimal lab shape (id + plan +
+      // subscription fields) to req.scope.lab; the accreditation_* and
+      // identity columns are not carried. Fetch the full row directly so
+      // the AO citation columns and the About-sheet identity stamp work
+      // on lab-scoped exports the same way they do on the account-scoped
+      // legacy variant (which uses resolveLabForUser -> SELECT *).
+      const sqlite = (db as any).$client;
+      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(req.scope.labId) as any;
       const labName = lab?.lab_name || 'Laboratory';
       const cliaNumber = lab?.clia_number || 'Not on file';
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || 'veritaassure-export';
