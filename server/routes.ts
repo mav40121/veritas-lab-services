@@ -15143,63 +15143,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── VeritaPolicy Requirements Index Excel export ──────────────────────────
-  // One-row-per-citation export of the full requirement set for THIS lab
-  // (CFR + the lab's accreditation bodies on file). Carries the verbatim
-  // regulatory description alongside the optional plain-language summary
-  // pilot (CfrRequirement.summary). About-sheet copy is hand-written in
-  // server/veritapolicyRequirementsExcel.ts per CLAUDE.md Section 6.
-  // PARKING_LOT #30 follow-up to PR #309.
-  async function buildRequirementsExcelForLab(req: any, lab: any): Promise<{ filename: string; buffer: Buffer }> {
-    const { generateRequirementsIndexExcel } = await import('./veritapolicyRequirementsExcel');
-    const ownerUser = storage.getUserById(req.ownerUserId ?? req.userId);
-    const labName = lab?.lab_name || (ownerUser as any)?.cliaLabName || (ownerUser as any)?.clia_lab_name || ownerUser?.name || 'Laboratory';
-    const cliaNumber = lab?.clia_number || (ownerUser as any)?.cliaNumber || (ownerUser as any)?.clia_number || 'Not on file';
-    const aoParts: string[] = [];
-    if (lab?.accreditation_tjc)  aoParts.push('TJC');
-    if (lab?.accreditation_cap)  aoParts.push('CAP');
-    if (lab?.accreditation_cola) aoParts.push('COLA');
-    if (lab?.accreditation_aabb) aoParts.push('AABB');
-    const accreditationLabel = aoParts.length === 0 ? 'CLIA only (CFR-only view)' : aoParts.join(', ');
-    const exportPassword = process.env.EXCEL_PROTECT_PASSWORD || 'veritaassure-export';
-    const reqs = veritapolicyReqSetsForLab(lab);
-    const buffer = await generateRequirementsIndexExcel(reqs as any, {
-      labName, cliaNumber, accreditationLabel, exportPassword,
-    });
-    const date = new Date().toISOString().split('T')[0];
-    const filename = `VeritaPolicy_Requirements_${date}.xlsx`;
-    return { filename, buffer };
-  }
-
-  // GET /api/veritapolicy/requirements/excel - account-scoped (legacy)
-  app.get('/api/veritapolicy/requirements/excel', authMiddleware, async (req: any, res) => {
-    try {
-      const lab = resolveLabForUser(req.ownerUserId);
-      const { filename, buffer } = await buildRequirementsExcelForLab(req, lab);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(buffer);
-    } catch (err: any) {
-      console.error('VeritaPolicy requirements excel error:', err);
-      res.status(500).json({ error: err.message || 'Excel generation failed' });
-    }
-  });
-
-  // GET /api/labs/:labId/veritapolicy/requirements/excel - lab-scoped
-  app.get('/api/labs/:labId/veritapolicy/requirements/excel', authMiddleware, labScopeMiddleware, async (req: any, res) => {
-    try {
-      const sqlite = db.$client;
-      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(req.scope.labId);
-      const { filename, buffer } = await buildRequirementsExcelForLab(req, lab);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(buffer);
-    } catch (err: any) {
-      console.error('VeritaPolicy requirements excel error (lab-scoped):', err);
-      res.status(500).json({ error: err.message || 'Excel generation failed' });
-    }
-  });
-
   // ── MULTI-LAB Tier 2 — Phase 3.2b: lab-scoped VeritaPolicy endpoints ───────
   // Doc: docs/scoping-multi-lab-tier2.md Section 5 Phase 3.
   // Variants of the legacy /api/veritapolicy/* endpoints that read/write by
