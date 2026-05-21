@@ -41,9 +41,22 @@ export default function VeritaStockSnapOrderPage() {
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
 
+  // Read ?vendor= query param at mount and use it as the initial vendor
+  // filter. Lets a user who scoped the main VeritaStock table to one
+  // vendor and clicked "Start Snap Order" land here already scoped the
+  // same way (per 2026-05-21 feedback on the snap-order flow).
+  const initialVendor = (() => {
+    if (typeof window === "undefined") return "All";
+    try {
+      const v = new URLSearchParams(window.location.search).get("vendor");
+      return v ? v : "All";
+    } catch { return "All"; }
+  })();
+
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterVendor, setFilterVendor] = useState<string>(initialVendor);
   const [snap, setSnap] = useState<Record<number, { qty: string; unit: string }>>({});
   const [generating, setGenerating] = useState(false);
 
@@ -74,16 +87,31 @@ export default function VeritaStockSnapOrderPage() {
     else setLoading(false);
   }, [isLoggedIn, hasPlanAccess, loadItems]);
 
+  const uniqueVendors = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items) {
+      const v = (it.vendor ?? "").trim();
+      if (v) set.add(v);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
   const visibleItems = useMemo(() => {
-    if (!search.trim()) return items;
-    const q = search.trim().toLowerCase();
-    return items.filter((it) =>
-      (it.item_name ?? "").toLowerCase().includes(q) ||
-      (it.vendor ?? "").toLowerCase().includes(q) ||
-      (it.catalog_number ?? "").toLowerCase().includes(q) ||
-      (it.department ?? "").toLowerCase().includes(q),
-    );
-  }, [items, search]);
+    let result = items;
+    if (filterVendor !== "All") {
+      result = result.filter((it) => (it.vendor ?? "") === filterVendor);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter((it) =>
+        (it.item_name ?? "").toLowerCase().includes(q) ||
+        (it.vendor ?? "").toLowerCase().includes(q) ||
+        (it.catalog_number ?? "").toLowerCase().includes(q) ||
+        (it.department ?? "").toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [items, search, filterVendor]);
 
   const setQty = (id: number, qty: string, defaultUnit: string) => {
     setSnap((prev) => {
@@ -196,17 +224,40 @@ export default function VeritaStockSnapOrderPage() {
         </div>
       </div>
 
-      {/* Search + totals */}
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="relative flex-1 max-w-md">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search item, vendor, catalog #, department..."
-            className="pl-9"
-            data-testid="snap-search-input"
-          />
+      {/* Search + vendor filter + totals */}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-1 flex-wrap">
+          <div className="relative flex-1 max-w-md min-w-[220px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search item, vendor, catalog #, department..."
+              className="pl-9"
+              data-testid="snap-search-input"
+            />
+          </div>
+          <div className="min-w-[180px]">
+            <Select value={filterVendor} onValueChange={setFilterVendor}>
+              <SelectTrigger data-testid="snap-vendor-filter">
+                <SelectValue placeholder="All Vendors" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Vendors</SelectItem>
+                {uniqueVendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {filterVendor !== "All" && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setFilterVendor("All")}
+              data-testid="snap-clear-vendor"
+            >
+              Clear filter
+            </Button>
+          )}
         </div>
         <div className="text-sm text-muted-foreground">
           {totalLines === 0
