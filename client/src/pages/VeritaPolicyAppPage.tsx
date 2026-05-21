@@ -128,7 +128,6 @@ export default function VeritaPolicyAppPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingMasterList, setDownloadingMasterList] = useState(false);
-  const [downloadingRequirements, setDownloadingRequirements] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Filter/search state
@@ -267,29 +266,6 @@ export default function VeritaPolicyAppPage() {
     }
   }
 
-  async function handleDownloadRequirements() {
-    setDownloadingRequirements(true);
-    try {
-      const excelUrl = activeLabId
-        ? `${API_BASE}/api/labs/${activeLabId}/veritapolicy/requirements/excel`
-        : `${API_BASE}/api/veritapolicy/requirements/excel`;
-      const res = await fetch(excelUrl, { headers: authHeaders() });
-      if (!res.ok) throw new Error("Excel generation failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const date = new Date().toISOString().split("T")[0];
-      a.download = `VeritaPolicy_Requirements_${date}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast({ title: "Excel generation failed", variant: "destructive" });
-    } finally {
-      setDownloadingRequirements(false);
-    }
-  }
-
   async function handleBulkNa(section: string, rows: MasterPolicy[], markNa: boolean) {
     setBulkConfirm({ section, rows, markNa });
   }
@@ -403,9 +379,6 @@ export default function VeritaPolicyAppPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleDownloadRequirements} disabled={downloadingRequirements} className="gap-1.5" data-testid="download-requirements-excel">
-            <Download size={14} /> {downloadingRequirements ? "Generating..." : "Requirements Index (Excel)"}
-          </Button>
           <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
             <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}
           </Button>
