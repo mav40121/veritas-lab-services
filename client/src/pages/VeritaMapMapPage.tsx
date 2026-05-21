@@ -330,22 +330,37 @@ function DateCell({
 
 // ── Complexity badge ──────────────────────────────────────────────────────────
 
-function ComplexityBadge({ complexity }: { complexity: Complexity }) {
+// Mirrors the helper in VeritaMapBuildPage. Blood bank compatibility tests
+// are HIGH complexity per 42 CFR 493.17 (transfusion services); the asterisk
+// + tooltip signals that the classification depends on the transfusion-use
+// context (which is virtually always the case in clinical labs).
+const TRANSFUSION_COMPAT_PATTERN = /(^ABO\b|^Rh\b|^Antibody [Ss]creen|^Antibody [Ss]creening|^Antibody [Ii]dentification|[Cc]rossmatch|^DAT\b|[Dd]irect [Aa]ntiglobulin|[Ii]ndirect [Aa]ntiglobulin|^Phenotyping|^Immediate [Ss]pin)/;
+const BLOOD_BANK_SPECIALTIES = new Set(["Blood Bank", "Immunohematology"]);
+function isTransfusionCompatibilityTest(analyte: string, specialty: string): boolean {
+  if (!BLOOD_BANK_SPECIALTIES.has(specialty)) return false;
+  return TRANSFUSION_COMPAT_PATTERN.test(analyte);
+}
+const TRANSFUSION_NOTE = "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17.";
+
+function ComplexityBadge({ complexity, analyte, specialty }: { complexity: Complexity; analyte?: string; specialty?: string }) {
+  const isCompat = analyte && specialty && isTransfusionCompatibilityTest(analyte, specialty);
+  const title = isCompat ? TRANSFUSION_NOTE : undefined;
+  const asterisk = isCompat ? <sup className="ml-0.5">*</sup> : null;
   if (complexity === "WAIVED")
     return (
-      <Badge className="text-[10px] px-1.5 py-0 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-        WAIVED
+      <Badge title={title} className="text-[10px] px-1.5 py-0 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+        WAIVED{asterisk}
       </Badge>
     );
   if (complexity === "HIGH")
     return (
-      <Badge className="text-[10px] px-1.5 py-0 border-0 bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-        HIGH
+      <Badge title={title} className="text-[10px] px-1.5 py-0 border-0 bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        HIGH{asterisk}
       </Badge>
     );
   return (
-    <Badge className="text-[10px] px-1.5 py-0 border-0 bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-      MODERATE
+    <Badge title={title} className="text-[10px] px-1.5 py-0 border-0 bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+      MODERATE{asterisk}
     </Badge>
   );
 }
@@ -1176,7 +1191,7 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
 
       {/* Complexity */}
       <td className="px-3 py-2 whitespace-nowrap">
-        <ComplexityBadge complexity={test.complexity} />
+        <ComplexityBadge complexity={test.complexity} analyte={test.analyte} specialty={test.specialty} />
       </td>
 
       {/* CFR */}

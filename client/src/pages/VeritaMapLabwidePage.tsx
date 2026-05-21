@@ -424,7 +424,18 @@ export default function VeritaMapLabwidePage() {
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{a.department ?? "-"}</td>
                       <td className="px-3 py-2 text-muted-foreground">{a.specialty ?? "-"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{a.complexity ?? "-"}</td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {a.complexity ?? "-"}
+                        {/* Asterisk + tooltip on blood bank compatibility tests
+                            so the labwide view aligns with the per-map view.
+                            Pattern mirrored from VeritaMapMapPage. */}
+                        {a.complexity && a.analyte && a.specialty && (a.specialty === "Blood Bank" || a.specialty === "Immunohematology") && /(^ABO\b|^Rh\b|^Antibody [Ss]creen|^Antibody [Ss]creening|^Antibody [Ii]dentification|[Cc]rossmatch|^DAT\b|[Dd]irect [Aa]ntiglobulin|[Ii]ndirect [Aa]ntiglobulin|^Phenotyping|^Immediate [Ss]pin)/.test(a.analyte) && (
+                          <sup
+                            className="ml-0.5 cursor-help"
+                            title="Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
+                          >*</sup>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <Link
                           href={`/veritamap-app/${a.map_id}`}

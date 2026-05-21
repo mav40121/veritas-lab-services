@@ -175,22 +175,39 @@ function getCategoryColor(category: string): string {
   return map[category] ?? "bg-muted text-muted-foreground";
 }
 
-function getComplexityBadge(complexity: Complexity) {
+// Detects blood bank compatibility tests that are HIGH complexity per
+// 42 CFR 493.17 (transfusion services). The complexity itself is set
+// correctly in the data; this helper exists so the badge can show an
+// asterisk + tooltip explaining the "for transfusion" qualifier, since
+// the same test would be MODERATE in a hypothetical non-transfusion
+// context. Mirrored in VeritaMapMapPage.tsx.
+const TRANSFUSION_COMPAT_PATTERN = /(^ABO\b|^Rh\b|^Antibody [Ss]creen|^Antibody [Ss]creening|^Antibody [Ii]dentification|[Cc]rossmatch|^DAT\b|[Dd]irect [Aa]ntiglobulin|[Ii]ndirect [Aa]ntiglobulin|^Phenotyping|^Immediate [Ss]pin)/;
+const BLOOD_BANK_SPECIALTIES = new Set(["Blood Bank", "Immunohematology"]);
+function isTransfusionCompatibilityTest(analyte: string, specialty: string): boolean {
+  if (!BLOOD_BANK_SPECIALTIES.has(specialty)) return false;
+  return TRANSFUSION_COMPAT_PATTERN.test(analyte);
+}
+const TRANSFUSION_NOTE = "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17.";
+
+function getComplexityBadge(complexity: Complexity, analyte?: string, specialty?: string) {
+  const isCompat = analyte && specialty && isTransfusionCompatibilityTest(analyte, specialty);
+  const title = isCompat ? TRANSFUSION_NOTE : undefined;
+  const asterisk = isCompat ? <sup className="ml-0.5">*</sup> : null;
   if (complexity === "WAIVED")
     return (
-      <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">
-        WAIVED
+      <Badge title={title} className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">
+        WAIVED{asterisk}
       </Badge>
     );
   if (complexity === "HIGH")
     return (
-      <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0">
-        HIGH
+      <Badge title={title} className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0">
+        HIGH{asterisk}
       </Badge>
     );
   return (
-    <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">
-      MODERATE
+    <Badge title={title} className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">
+      MODERATE{asterisk}
     </Badge>
   );
 }
@@ -830,7 +847,7 @@ function InstrumentTestSection({
                               Custom
                             </Badge>
                           )}
-                          {getComplexityBadge(test.complexity)}
+                          {getComplexityBadge(test.complexity, test.analyte, test.specialty)}
                         </div>
                       </div>
                     ))}
