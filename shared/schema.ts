@@ -119,6 +119,29 @@ export const resetTokens = sqliteTable("reset_tokens", {
   usedAt: text("used_at"),
 });
 
+// VeritaMap instrument-add requests. Customers fill a short form when the
+// instrument they need is not in the picker; submissions email
+// info@veritaslabservices.com and queue for review. Status: pending /
+// approved (instrument added to fdaInstrumentData.json) / rejected (with
+// reviewer notes). Available on every tier so the feedback channel is
+// never gated.
+export const veritamapInstrumentRequests = sqliteTable("veritamap_instrument_requests", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  labId: integer("lab_id"),
+  instrumentName: text("instrument_name").notNull(),
+  vendor: text("vendor"),
+  categorySuggestion: text("category_suggestion"),
+  exampleAnalytes: text("example_analytes"),
+  notes: text("notes"),
+  status: text("status").notNull().default("pending"),
+  reviewerNotes: text("reviewer_notes"),
+  resolvedByUserId: integer("resolved_by_user_id"),
+  resolvedAt: text("resolved_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 // DataPoint shape (JSON)
 export interface DataPoint {
   level: number;
