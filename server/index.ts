@@ -277,6 +277,9 @@ app.use((req, res, next) => {
   // /meet-our-team -> /team (sitemap canonical); was redirecting to / which is a soft-404 risk
   app.get('/meet-our-team', (_req, res) => res.redirect(301, '/team'));
 
+  // /our-services -> /services (legacy marketing URL; SPA catch-all was returning soft-404)
+  app.get('/our-services', (_req, res) => res.redirect(301, '/services'));
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
