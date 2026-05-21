@@ -416,20 +416,59 @@ export function registerVeritaBenchRoutes(
   // ═══════════════════════════════════════════════════════════════════════
 
   // Per-item decoration shared by the legacy and lab-scoped list/reorder
-  // routes. Single source of truth for the trigger formula so the reorder
-  // document and the list view can never disagree.
+  // routes. Single source of truth for ALL inventory math so the list view,
+  // reorder PDF, and reorder Excel can never disagree.
+  //
+  // Math definitions (so future readers don't have to re-derive them):
+  //   reorder_point     burn_rate * (lead_time_days + safety_stock_days)
+  //                     the threshold at which we flag the item for reorder
+  //   order_to_qty      burn_rate * desired_days_of_stock
+  //                     the TARGET INVENTORY LEVEL (not "amount to order")
+  //   days_remaining    floor(quantity_on_hand / burn_rate)
+  //                     days of supply at current burn before stockout.
+  //                     Use floor not round so "5d" never means "actually
+  //                     4.5d remaining"
+  //   shortfall         max(0, order_to_qty - quantity_on_hand)
+  //                     how many additional eachs we need to hit target
+  //   suggested_order_packs   ceil(shortfall / units_per_order_unit)
+  //                     can't order half a box; round UP
+  //   delivered_qty           suggested_order_packs * units_per_order_unit
+  //                     what we'll ACTUALLY receive. Always >= shortfall;
+  //                     overshoot is unavoidable with case-pack packaging
+  //   ending_qty              quantity_on_hand + delivered_qty
+  //                     inventory level after the order arrives
+  //   ending_days             floor(ending_qty / burn_rate)
+  //                     days of supply after delivery; sanity check that
+  //                     ending_days >= desired_days_of_stock
   function decorateInventoryItem(item: any) {
     const burnRate = item.burn_rate || 0;
+    const onHand = item.quantity_on_hand || 0;
+    const upu = item.units_per_order_unit || 1;
     const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
     const orderToQty = burnRate * (item.desired_days_of_stock || 0);
-    const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
-    const needsReorder = item.quantity_on_hand <= reorderPoint;
+    const daysRemaining = burnRate > 0 ? Math.floor(onHand / burnRate) : null;
+    const needsReorder = onHand <= reorderPoint;
+
+    const shortfall = Math.max(0, Math.round(orderToQty) - onHand);
+    const suggestedOrderPacks = upu > 1
+      ? Math.ceil(shortfall / upu)
+      : shortfall;
+    const deliveredQty = upu > 1
+      ? suggestedOrderPacks * upu
+      : shortfall;
+    const endingQty = onHand + deliveredQty;
+    const endingDays = burnRate > 0 ? Math.floor(endingQty / burnRate) : null;
+
     return {
       ...item,
       reorder_point: Math.round(reorderPoint),
       order_to_qty: Math.round(orderToQty),
       days_remaining: daysRemaining,
       needs_reorder: needsReorder,
+      suggested_order_packs: suggestedOrderPacks,
+      delivered_qty: deliveredQty,
+      ending_qty: endingQty,
+      ending_days: endingDays,
     };
   }
 

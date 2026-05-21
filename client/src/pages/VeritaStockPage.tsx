@@ -53,11 +53,17 @@ interface InventoryItem {
   desired_days_of_stock: number;
   standing_order: number;
   standing_order_review_date: string | null;
-  // Calculated fields from API
-  reorder_point: number;
-  order_to_qty: number;
-  days_remaining: number | null;
+  // Calculated fields from API (decorateInventoryItem in server/veritabench.ts)
+  reorder_point: number;            // burn × (lead + safety) — trigger threshold
+  order_to_qty: number;             // burn × desired_days — TARGET inventory level
+  days_remaining: number | null;    // floor(on_hand / burn)
   needs_reorder: boolean;
+  // Order-math fields (added 2026-05-20). Renderers consume these directly
+  // so the math has a single source of truth.
+  suggested_order_packs?: number;   // ceil(max(0, target - on_hand) / upu)
+  delivered_qty?: number;            // suggested_order_packs × upu
+  ending_qty?: number;               // on_hand + delivered_qty
+  ending_days?: number | null;       // floor(ending_qty / burn)
 }
 
 const CATEGORIES = ["Reagent", "Control", "Calibrator", "Consumable", "Supply"];

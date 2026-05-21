@@ -74,7 +74,7 @@ function isXLSX(buf) {
     JSON.stringify(expectedNeedsReorder) === JSON.stringify(actualNeedsReorder),
     `expected=${expectedNeedsReorder.length} actual=${actualNeedsReorder.length}`);
 
-  // Every flagged item must carry the four computed fields the PDF builder relies on.
+  // Every flagged item must carry the four trigger-formula fields.
   const hasAllFields = list.items.length === 0 || list.items.every(it =>
     typeof it.reorder_point === 'number' &&
     typeof it.order_to_qty === 'number' &&
@@ -83,6 +83,37 @@ function isXLSX(buf) {
   );
   check('every item carries reorder_point + order_to_qty + days_remaining + needs_reorder',
     hasAllFields, `items=${list.items.length}`);
+
+  // Order-math fields added 2026-05-20 after the "3 boxes (60 each)" bug
+  // (ordering 3 boxes of 24 yields 72 eachs, not 60; also ignored on-hand).
+  // These checks recompute the math client-side and assert it matches what
+  // the server returned. Catches drift between renderer and decorator.
+  const mathDetail = [];
+  const mathOk = list.items.every(it => {
+    const upu = it.units_per_order_unit || 1;
+    const onHand = it.quantity_on_hand || 0;
+    const target = it.order_to_qty || 0;
+    const expectedShortfall = Math.max(0, target - onHand);
+    const expectedPacks = upu > 1 ? Math.ceil(expectedShortfall / upu) : expectedShortfall;
+    const expectedDelivered = upu > 1 ? expectedPacks * upu : expectedShortfall;
+    const expectedEnding = onHand + expectedDelivered;
+    const ok = it.suggested_order_packs === expectedPacks
+            && it.delivered_qty === expectedDelivered
+            && it.ending_qty === expectedEnding;
+    if (!ok) mathDetail.push(`${it.item_name}: server=${it.suggested_order_packs}/${it.delivered_qty}/${it.ending_qty} expected=${expectedPacks}/${expectedDelivered}/${expectedEnding}`);
+    return ok;
+  });
+  check('suggested_order_packs + delivered_qty + ending_qty match recomputed math',
+    mathOk, mathDetail.length ? mathDetail.join('; ') : `items=${list.items.length}`);
+
+  // Concrete invariant: delivered_qty must be >= shortfall (you can't
+  // round down a case pack; under-ordering would defeat the whole point).
+  const overshootOk = list.items.every(it => {
+    const shortfall = Math.max(0, (it.order_to_qty || 0) - (it.quantity_on_hand || 0));
+    return it.delivered_qty >= shortfall;
+  });
+  check('delivered_qty >= shortfall for every item (no rounding-down disaster)',
+    overshootOk, `items=${list.items.length}`);
 
   // ── PDF ──────────────────────────────────────────────────────────────────
   const pdfPostR = await fetch(`${API}/api/labs/${LAB_ID}/inventory/reorder-list/pdf`, { method: 'POST', headers: AUTH });
