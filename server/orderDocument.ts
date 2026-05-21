@@ -539,3 +539,198 @@ export async function generateReorderListPDF(items: ReorderItem[], ctx: ReorderL
     await page.close();
   }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Snap Order: emergency manual-order PDF. Bypasses the calculated reorder
+// logic entirely. User enters quantities by hand for items they want to
+// order RIGHT NOW (e.g., respiratory outbreak surge, supply-chain shock
+// preemptive stocking, audit-driven extra inventory).
+//
+// Item shape is intentionally minimal compared to ReorderItem -- no burn
+// rate / reorder point / suggested order / ending days context. The
+// director isn't reviewing a calculation; they're confirming a manual
+// decision. Surface only what helps the rep place the order.
+
+export interface SnapOrderItem {
+  id: number;
+  item_name: string;
+  catalog_number?: string | null;
+  lot_number?: string | null;
+  vendor?: string | null;
+  department?: string | null;
+  unit?: string | null;
+  order_unit?: string | null;
+  quantity_on_hand: number;
+  snap_qty: number;          // The manual order quantity entered by the user
+  snap_unit: string;          // Unit the order is expressed in (defaults to order_unit, falls back to unit, then "each")
+}
+
+function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[]): string {
+  const rows = items.map((it, idx) => {
+    const stripe = idx % 2 === 1 ? "background:#FAFBFD;" : "";
+    return `<tr style="${stripe}">
+      <td>${escapeHtml(it.item_name)}</td>
+      <td>${escapeHtml(it.catalog_number || "—")}</td>
+      <td>${escapeHtml(it.lot_number || "—")}</td>
+      <td>${escapeHtml(it.department || "—")}</td>
+      <td style="text-align:right;">${it.quantity_on_hand} ${escapeHtml(it.unit || "")}</td>
+      <td style="text-align:right;font-weight:700;color:${TEAL};">${it.snap_qty} ${escapeHtml(it.snap_unit)}</td>
+      <td style="text-align:center;width:60px;border:1px solid #D4D1CA;background:white;">&nbsp;</td>
+    </tr>`;
+  }).join("");
+  return `
+  <div class="vendor-section">
+    <div class="vendor-header">
+      <span class="vendor-name">${escapeHtml(vendor)}</span>
+      <span class="vendor-count">${items.length} item${items.length === 1 ? "" : "s"}</span>
+    </div>
+    <table class="reorder-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;">Item</th>
+          <th style="text-align:left;">Catalog #</th>
+          <th style="text-align:left;">Lot #</th>
+          <th style="text-align:left;">Department</th>
+          <th style="text-align:right;">On Hand</th>
+          <th style="text-align:right;">Order Qty</th>
+          <th style="text-align:center;">Confirmed Qty</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function snapHeaderHTML(ctx: ReorderLabContext, totalItems: number, totalVendors: number): string {
+  const labLine = ctx.labName
+    ? `<div style="font-size:8.5pt;font-weight:600;color:${DARK};margin-top:1px;">${escapeHtml(ctx.labName)}</div>`
+    : "";
+  const cliaLine = ctx.cliaNumber
+    ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${escapeHtml(ctx.cliaNumber)}</div>`
+    : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter in account settings</div>`;
+  return `
+  <div class="report-header">
+    <div>
+      <div class="logo">VeritaAssure&trade;</div>
+      <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+      ${labLine}
+      ${cliaLine}
+    </div>
+    <div class="header-right">
+      <div style="font-weight:600;color:${DARK};">Generated: ${today()}</div>
+      <div>${totalItems} item${totalItems === 1 ? "" : "s"} across ${totalVendors} vendor${totalVendors === 1 ? "" : "s"}</div>
+    </div>
+  </div>
+  <div class="report-title" style="color:#92400E;">VeritaStock&trade; Snap Order</div>
+  <div class="report-subtitle">Manual emergency order. Quantities entered by the operator, not calculated from reorder points.</div>
+  <div style="margin:6px 0 0 0;padding:6px 12px;border:1px solid #D4A017;background:#FFF8E1;border-radius:4px;font-size:9pt;color:#7A5A00;text-align:center;">
+    <span style="font-weight:700;">MANUAL ORDER:</span>
+    this is NOT the calculated reorder document. Quantities below were entered by hand to handle a specific event (e.g., outbreak surge, supply-chain disruption).
+  </div>
+  <hr class="divider">`;
+}
+
+function snapSignatureBlockHTML(ctx: ReorderLabContext): string {
+  const preparedBy = ctx.preparedBy ? escapeHtml(ctx.preparedBy) : "";
+  return `
+  <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #92400E;border-radius:5px;padding:6px 12px;background:#FFF8E1;break-inside:avoid;page-break-inside:avoid;">
+    <div style="font-size:8pt;font-weight:700;color:#92400E;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Approval (Manual Order)</div>
+    <p style="font-size:7.5pt;color:${DARK};line-height:1.4;margin:0 0 5px 0;font-style:italic;">"I have reviewed this manual order. The quantities below were entered by hand to address a specific event and intentionally bypass the calculated reorder thresholds."</p>
+    <div style="font-size:8pt;color:${DARK};margin-bottom:2px;">
+      <span style="margin-right:18px;">&#9675; Approved as listed</span>
+      <span style="margin-right:18px;">&#9675; Approved with modifications</span>
+      <span>&#9675; Hold for review</span>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:6px;">
+      <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:12px;">Signature</div>
+      </div>
+      <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:12px;">Date</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:4px;">
+      <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Print Name</div>
+      </div>
+      <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Title</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:4px;">
+      <div style="flex:4;border-bottom:1px solid #999;padding-bottom:2px;">
+        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Reason for snap order</div>
+      </div>
+    </div>
+    ${preparedBy ? `<div style="font-size:7pt;color:${MUTED};margin-top:6px;">Prepared by: ${preparedBy}</div>` : ""}
+  </div>`;
+}
+
+export function buildSnapOrderHTML(items: SnapOrderItem[], ctx: ReorderLabContext): string {
+  // Group by vendor; same convention as reorder doc (unassigned vendor last).
+  const map = new Map<string, SnapOrderItem[]>();
+  for (const it of items) {
+    const v = (it.vendor || "").trim() || "Unassigned vendor";
+    if (!map.has(v)) map.set(v, []);
+    map.get(v)!.push(it);
+  }
+  const groups = Array.from(map.entries()).map(([vendor, items]) => ({
+    vendor,
+    items: [...items].sort((a, b) => a.item_name.localeCompare(b.item_name)),
+  }));
+  groups.sort((a, b) => {
+    if (a.vendor === "Unassigned vendor") return 1;
+    if (b.vendor === "Unassigned vendor") return -1;
+    return a.vendor.localeCompare(b.vendor);
+  });
+
+  const totalItems = items.length;
+  const totalVendors = groups.length;
+  const body = totalItems === 0
+    ? `<div style="border:2px dashed #C7D2DE;border-radius:6px;padding:32px;text-align:center;margin-top:16px;"><div style="font-size:13pt;font-weight:700;color:${DARK};">No items selected for snap order</div></div>`
+    : groups.map(g => snapVendorSectionHTML(g.vendor, g.items)).join("\n");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaStock Snap Order</title><style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9pt; color: ${DARK}; background: white; }
+    @page { size: letter; margin: 14mm 15mm 18mm 15mm; }
+    .report-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 6px; border-bottom: 1px solid #d2d7dc; margin-bottom: 8px; }
+    .logo { font-size: 18pt; font-weight: 700; color: ${TEAL}; line-height: 1; }
+    .logo-sub { font-size: 7.5pt; color: ${MUTED}; margin-top: 2px; }
+    .header-right { text-align: right; font-size: 8pt; color: ${MUTED}; }
+    .report-title { font-size: 13pt; font-weight: 700; text-align: center; margin: 6px 0 2px; color: ${DARK}; }
+    .report-subtitle { font-size: 8pt; text-align: center; color: ${MUTED}; margin-bottom: 6px; }
+    .divider { border: none; border-top: 1px solid #d2d7dc; margin: 6px 0; }
+    .vendor-section { margin-top: 10px; page-break-inside: auto; }
+    .vendor-header { background: #FFF8E1; border-left: 4px solid #92400E; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; }
+    .vendor-name { font-size: 10pt; font-weight: 700; color: #92400E; }
+    .vendor-count { font-size: 8pt; color: ${MUTED}; font-weight: 600; }
+    table.reorder-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 8pt; }
+    table.reorder-table th { background: #f0f2f5; color: ${MUTED}; font-weight: 700; padding: 4px 6px; font-size: 7.5pt; border-bottom: 1px solid #d2d7dc; }
+    table.reorder-table td { padding: 3px 6px; border-bottom: 1px solid #EEF1F4; }
+  </style></head><body>
+  ${snapHeaderHTML(ctx, totalItems, totalVendors)}
+  ${snapSignatureBlockHTML(ctx)}
+  ${body}
+  </body></html>`;
+}
+
+export async function generateSnapOrderPDF(items: SnapOrderItem[], ctx: ReorderLabContext): Promise<Buffer> {
+  const html = buildSnapOrderHTML(items, ctx);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: FOOTER_TEMPLATE,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}

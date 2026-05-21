@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
@@ -893,6 +893,21 @@ export default function VeritaStockInventoryPage() {
           <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated par levels, and standing order management</p>
         </div>
         <div className="flex gap-2">
+          {/* Snap Order: emergency manual-order PDF (additive to calculated
+              reorder). Use cases per John, San Carlos, 2026-05-21: respiratory
+              outbreak surge, supply-chain shock, one-off correction. */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/snap-order` : "/veritastock/snap-order"}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={readOnly}
+              title="Start a manual emergency order that bypasses calculated reorder math"
+              data-testid="start-snap-order-button"
+              style={{ borderColor: "#92400E", color: "#92400E" }}
+            >
+              <Zap size={14} className="mr-1.5" />Start Snap Order
+            </Button>
+          </Link>
           {/* Order-Now document generation. Renders even when 0 items are due
               so the lab can produce a dated "nothing to order" record if
               an external accreditor wants documentation of the check. */}
