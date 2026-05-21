@@ -80,6 +80,7 @@ import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
 import VeritaBenchPage from "@/pages/VeritaBenchPage";
 import VeritaBenchStaffingPage from "@/pages/VeritaBenchStaffingPage";
 import VeritaStockPage from "@/pages/VeritaStockPage";
+import VeritaStockSnapOrderPage from "@/pages/VeritaStockSnapOrderPage";
 import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
 import RequestInvoicePage from "@/pages/RequestInvoicePage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
@@ -334,6 +335,7 @@ function AppContent() {
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
           <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
           <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
+          <Route path="/veritastock/snap-order">{wrapLegacy(VeritaStockSnapOrderPage)}</Route>
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/operations" component={OperationsPage} />
@@ -372,6 +374,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
+          <Route path="/labs/:labId/veritastock/snap-order" component={VeritaStockSnapOrderPage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
 
           <Route component={NotFound} />

@@ -7,7 +7,7 @@ import { db } from "./db";
 import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
-import { generateReorderListPDF, generateReorderListExcel, type ReorderItem } from "./orderDocument";
+import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem } from "./orderDocument";
 import { storePdfToken } from "./pdfTokens";
 
 function bencheLicenseCtx(req: any): LicenseContext {
@@ -640,6 +640,91 @@ export function registerVeritaBenchRoutes(
     }
   });
 
+  // POST /api/inventory/snap-order/pdf - emergency manual-order PDF.
+  //
+  // Use case: surge events (respiratory outbreak, supply-chain shock) where
+  // the lab wants to order quantities that intentionally bypass the
+  // calculated reorder thresholds. User enters quantities by hand on the
+  // Snap Order screen; this endpoint generates a vendor-grouped PDF with
+  // a director signature block, clearly framed as a MANUAL order so the
+  // rep doesn't confuse it with the auto-calculated reorder document.
+  //
+  // Body shape: { items: [{ id: number, snap_qty: number, snap_unit?: string }] }
+  // Server fetches each item by id (scoped to account), validates ownership,
+  // composes SnapOrderItem rows, and generates the PDF.
+  app.post("/api/inventory/snap-order/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const requestedItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    const valid = requestedItems
+      .filter((r: any) => typeof r?.id === "number" && typeof r?.snap_qty === "number" && r.snap_qty > 0)
+      .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null }));
+    if (valid.length === 0) {
+      return res.status(400).json({ error: "No items with snap_qty > 0 submitted." });
+    }
+    try {
+      const placeholders = valid.map(() => "?").join(",");
+      const rows = sqlite.prepare(
+        `SELECT * FROM inventory_items WHERE account_id = ? AND id IN (${placeholders})`
+      ).all(accountId, ...valid.map((v: any) => v.id)) as any[];
+
+      const byId = new Map<number, any>();
+      for (const r of rows) byId.set(r.id, r);
+
+      const items: SnapOrderItem[] = valid
+        .map((v: any) => {
+          const row = byId.get(v.id);
+          if (!row) return null;
+          return {
+            id: row.id,
+            item_name: row.item_name,
+            catalog_number: row.catalog_number,
+            lot_number: row.lot_number,
+            vendor: row.vendor,
+            department: row.department,
+            unit: row.unit,
+            order_unit: row.order_unit,
+            quantity_on_hand: row.quantity_on_hand || 0,
+            snap_qty: v.snap_qty,
+            snap_unit: v.snap_unit || row.order_unit || row.unit || "each",
+          } as SnapOrderItem;
+        })
+        .filter((x: any): x is SnapOrderItem => x !== null);
+
+      if (items.length === 0) {
+        return res.status(404).json({ error: "None of the submitted items found for this account." });
+      }
+
+      let labName: string | null = null;
+      let cliaNumber: string | null = null;
+      let preparedBy: string | null = null;
+      const userRow = sqlite.prepare(
+        "SELECT name, email, clia_lab_name, clia_number FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      if (userRow) {
+        preparedBy = userRow.name || userRow.email || null;
+        labName = userRow.clia_lab_name || null;
+        cliaNumber = userRow.clia_number || null;
+      }
+      const labRow = sqlite.prepare(
+        "SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1"
+      ).get(accountId) as any;
+      if (labRow) {
+        labName = labRow.lab_name || labName;
+        cliaNumber = labRow.clia_number || cliaNumber;
+      }
+
+      const pdfBuffer = await generateSnapOrderPDF(items, { labName, cliaNumber, preparedBy });
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = `VeritaStock_SnapOrder_${datestamp}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token, totalCount: items.length });
+    } catch (err: any) {
+      console.error("Snap order PDF generation error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -1241,6 +1326,75 @@ export function registerVeritaBenchRoutes(
       } catch (err: any) {
         console.error("Reorder Excel generation error (lab-scoped):", err.message);
         res.status(500).json({ error: "Excel generation failed", detail: err.message });
+      }
+    });
+
+    // POST /api/labs/:labId/inventory/snap-order/pdf — lab-scoped snap order
+    // PDF. Same shape as the legacy variant; differs only in how items are
+    // scoped (by lab_id rather than account_id) and where the lab identity
+    // header comes from (the labs row for THIS labId).
+    app.post("/api/labs/:labId/inventory/snap-order/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const requestedItems = Array.isArray(req.body?.items) ? req.body.items : [];
+      const valid = requestedItems
+        .filter((r: any) => typeof r?.id === "number" && typeof r?.snap_qty === "number" && r.snap_qty > 0)
+        .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null }));
+      if (valid.length === 0) {
+        return res.status(400).json({ error: "No items with snap_qty > 0 submitted." });
+      }
+      try {
+        const placeholders = valid.map(() => "?").join(",");
+        const rows = sqlite.prepare(
+          `SELECT * FROM inventory_items WHERE lab_id = ? AND id IN (${placeholders})`
+        ).all(req.scope.labId, ...valid.map((v: any) => v.id)) as any[];
+
+        const byId = new Map<number, any>();
+        for (const r of rows) byId.set(r.id, r);
+
+        const items: SnapOrderItem[] = valid
+          .map((v: any) => {
+            const row = byId.get(v.id);
+            if (!row) return null;
+            return {
+              id: row.id,
+              item_name: row.item_name,
+              catalog_number: row.catalog_number,
+              lot_number: row.lot_number,
+              vendor: row.vendor,
+              department: row.department,
+              unit: row.unit,
+              order_unit: row.order_unit,
+              quantity_on_hand: row.quantity_on_hand || 0,
+              snap_qty: v.snap_qty,
+              snap_unit: v.snap_unit || row.order_unit || row.unit || "each",
+            } as SnapOrderItem;
+          })
+          .filter((x: any): x is SnapOrderItem => x !== null);
+
+        if (items.length === 0) {
+          return res.status(404).json({ error: "None of the submitted items found in this lab." });
+        }
+
+        const labRow = sqlite.prepare(
+          "SELECT lab_name, clia_number FROM labs WHERE id = ?"
+        ).get(req.scope.labId) as any;
+        const userRow = sqlite.prepare(
+          "SELECT name, email FROM users WHERE id = ?"
+        ).get(req.userId) as any;
+
+        const pdfBuffer = await generateSnapOrderPDF(items, {
+          labName: labRow?.lab_name || null,
+          cliaNumber: labRow?.clia_number || null,
+          preparedBy: userRow?.name || userRow?.email || null,
+        });
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+        const filename = `VeritaStock_SnapOrder_${safeLab}_${datestamp}.pdf`;
+        const token = storePdfToken(pdfBuffer, filename);
+        res.json({ token, totalCount: items.length });
+      } catch (err: any) {
+        console.error("Snap order PDF generation error (lab-scoped):", err.message);
+        res.status(500).json({ error: "PDF generation failed", detail: err.message });
       }
     });
 
