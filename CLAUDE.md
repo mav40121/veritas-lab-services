@@ -71,6 +71,13 @@ Before any sentence in your reply that asserts a change is "shipped", "complete"
 5. **Bug-class sweep.** If a bug was fixed, audit the codebase for other instances of the same shape. State the search query and the result ("grep'd for X, found Y, all clean" or "found Z, fixed in same PR").
 6. **Deploy verification.** The production deploy is ACTIVE on the commit hash containing the change, not just "PR merged". Pull `deployments` on the service and confirm.
 7. **Conditional / null branch.** If the change has a feature flag, an optional input, or an if/else, exercise both states.
+8. **Browser exercise.** If the change ships a customer-clickable button, link, form, or download trigger, server-side verify scripts are NOT sufficient — they test API correctness in isolation and miss timing, token, popup, blob, redirect, and rendering bugs that only surface through the actual browser flow. Before claiming done, exactly one of:
+   - *Human-in-the-loop:* deploy to prod, then explicitly ask Michael to click the new button on the live URL and confirm the user-visible result. Wait for his confirmation. State explicitly: "deployed `<sha>`; Gate 3 requires you to click `<button>` on `<url>` before I can call this verified — please confirm or report what you see."
+   - *Browser-automated:* run a Playwright or Puppeteer script that loads the actual page on prod (or staging), drives the click, waits for the user-visible result (new tab opens, PDF downloads, toast appears, table updates), and asserts on the user-visible state.
+
+   This step exists because PR #286 shipped a "PDF token expired or not found" race that all 13 of my scripted verify checks PASSED. The script claimed the token in 50ms; the browser took 60+ seconds. Token-expiry bugs of that shape are invisible to script-only verification.
+
+   Step 8 is in scope the moment a button, link, or form appears in the diff. Pure backend-wiring PRs that ship no UI element don't trigger it.
 
 For multi-PR sequences, **run Gate 3 after every PR that touches a customer-facing artifact**, not after the whole sequence. Mid-sequence verification catches bugs while context is fresh; end-of-sequence verification lets bugs stack across multiple PRs and makes triage harder.
 
