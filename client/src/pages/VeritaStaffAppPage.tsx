@@ -314,7 +314,7 @@ export default function VeritaStaffAppPage() {
       )}
 
       {/* Lab Setup Dialog */}
-      <LabSetupDialog open={showLabSetup} onOpenChange={setShowLabSetup} lab={lab ?? null} />
+      <LabSetupDialog open={showLabSetup} onOpenChange={setShowLabSetup} lab={lab ?? null} isStaffAccreditorAllowed={isStaffAccreditorAllowed} />
 
       {/* Add/Edit Employee Dialog */}
       <EmployeeDialog
@@ -369,7 +369,7 @@ export default function VeritaStaffAppPage() {
 
 // ── Lab Setup Dialog ──────────────────────────────────────────────────
 
-function LabSetupDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChange: (v: boolean) => void; lab: Lab | null }) {
+function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: { open: boolean; onOpenChange: (v: boolean) => void; lab: Lab | null; isStaffAccreditorAllowed: (value: string) => boolean }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
