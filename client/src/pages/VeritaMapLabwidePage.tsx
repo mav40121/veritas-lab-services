@@ -463,10 +463,20 @@ export default function VeritaMapLabwidePage() {
       )}
 
       {!isLoading && filtered.length > 0 && (
-        <p className="text-xs text-muted-foreground mt-3">
-          Showing {filtered.length} of {data?.totals.analyteCount ?? 0} analytes. Click any row to
-          jump back to its source map.
-        </p>
+        <>
+          <p className="text-xs text-muted-foreground mt-3">
+            Showing {filtered.length} of {data?.totals.analyteCount ?? 0} analytes. Click any row to
+            jump back to its source map.
+          </p>
+          {/* Legend for the asterisk on Blood Bank / Immunohematology compatibility
+              tests. Mirrors the printed footnote on VeritaMapMapPage so the labwide
+              and per-map views read consistently. */}
+          <p className="text-[10px] text-muted-foreground mt-1">
+            <span className="font-semibold">*</span> Blood Bank / Immunohematology compatibility tests (ABO, Rh, antibody
+            screen, crossmatch, DAT, phenotyping) are classified HIGH complexity when used for transfusion services, which
+            is the dominant use case in clinical labs. Per 42 CFR §493.17.
+          </p>
+        </>
       )}
     </div>
   );
