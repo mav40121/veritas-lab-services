@@ -25,7 +25,7 @@ export interface ReorderItem {
   storage_location?: string | null;
   quantity_on_hand: number;
   reorder_point: number;       // computed: burn_rate * (lead + safety)
-  order_to_qty: number;         // computed: burn_rate * desired_days_of_stock
+  order_to_qty: number;        // computed: TARGET inventory level = burn × desired_days
   days_remaining: number | null;
   unit?: string | null;
   order_unit?: string | null;
@@ -33,6 +33,14 @@ export interface ReorderItem {
   lead_time_days?: number | null;
   needs_reorder: boolean;
   standing_order?: number | null;
+
+  // Server-computed in decorateInventoryItem (veritabench.ts). Renderers
+  // MUST consume these directly, never recompute, so the math has a single
+  // source of truth.
+  suggested_order_packs: number;   // ceil(max(0, target - on_hand) / upu)
+  delivered_qty: number;            // suggested_order_packs * upu
+  ending_qty: number;               // on_hand + delivered_qty
+  ending_days: number | null;       // floor(ending_qty / burn_rate)
 }
 
 export interface ReorderLabContext {
@@ -70,18 +78,31 @@ function groupByVendor(items: ReorderItem[]): Array<{ vendor: string; items: Reo
   return out;
 }
 
-// Compute how many "order_unit" packs to suggest, given the unit/packaging.
-// Example: order_to_qty = 50 tubes, units_per_order_unit = 24 -> 3 boxes.
-// Falls back to "as-is" if no packaging info.
+// Suggested order display. Consumes the server-computed
+// suggested_order_packs and delivered_qty so the math is the single source
+// of truth in decorateInventoryItem (veritabench.ts), not duplicated here.
+//
+// Two display modes:
+//   - Multi-pack packaging (upu > 1): "{packs} {orderUnit}s ({delivered} {unit})"
+//     Example: cool reagent, target 60, on-hand 13, 24-per-box
+//              shortfall 47 -> 2 boxes -> 48 each delivered
+//              Display: "2 boxes (48 each)"
+//   - Single-unit packaging (upu == 1): "{packs} {orderUnit}s"
+//     Example: target 100, on-hand 30, 1-per-order_unit
+//              shortfall 70 -> 70 eachs
+//              Display: "70 eachs"
+//   - Zero shortfall (already at/above target): "—"
 function suggestedOrderText(it: ReorderItem): string {
-  const qty = it.order_to_qty || 0;
+  const packs = it.suggested_order_packs || 0;
+  const delivered = it.delivered_qty || 0;
   const upu = it.units_per_order_unit || 1;
   const orderUnit = it.order_unit || "each";
-  if (upu > 1 && qty > 0) {
-    const packs = Math.ceil(qty / upu);
-    return `${packs} ${orderUnit}${packs === 1 ? "" : "s"} (${qty} ${it.unit || "each"})`;
+  const usageUnit = it.unit || "each";
+  if (packs === 0) return "—";
+  if (upu > 1) {
+    return `${packs} ${orderUnit}${packs === 1 ? "" : "s"} (${delivered} ${usageUnit})`;
   }
-  return `${qty} ${orderUnit}${qty === 1 ? "" : "s"}`;
+  return `${packs} ${orderUnit}${packs === 1 ? "" : "s"}`;
 }
 
 const escapeHtml = (s: string | null | undefined): string =>
@@ -159,6 +180,12 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[]): string {
       : it.days_remaining <= 0
       ? `<span style="color:#A12C7B;font-weight:700;">OUT</span>`
       : `${it.days_remaining}d`;
+    // After-delivery hint shows the case-pack overshoot in context so the
+    // director can see "ordering 2 boxes will leave us at 61 each, ~30
+    // days of supply" without doing the arithmetic themselves.
+    const endingHint = it.suggested_order_packs > 0
+      ? `${it.ending_qty}${it.ending_days != null ? ` <span style="color:${MUTED};">(${it.ending_days}d)</span>` : ""}`
+      : "—";
     return `<tr style="${stripe}">
       <td>${escapeHtml(it.item_name)}${standing}</td>
       <td>${escapeHtml(it.catalog_number || "—")}</td>
@@ -166,6 +193,7 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[]): string {
       <td style="text-align:right;">${it.reorder_point}</td>
       <td style="text-align:right;">${days}</td>
       <td style="text-align:right;font-weight:700;color:${TEAL};">${suggestedOrderText(it)}</td>
+      <td style="text-align:right;">${endingHint}</td>
       <td style="text-align:center;width:60px;border:1px solid #D4D1CA;background:white;">&nbsp;</td>
     </tr>`;
   }).join("");
@@ -184,6 +212,7 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[]): string {
           <th style="text-align:right;">Reorder Pt</th>
           <th style="text-align:right;">Days Left</th>
           <th style="text-align:right;">Suggested Order</th>
+          <th style="text-align:right;">After Delivery</th>
           <th style="text-align:center;">Confirmed Qty</th>
         </tr>
       </thead>
@@ -367,11 +396,24 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
     // Sheet names cap at 31 chars and ban / \ ? * [ ] :
     const safe = g.vendor.replace(/[\/\\?*\[\]:]/g, "-").slice(0, 31);
     const ws = wb.addWorksheet(safe);
+    // Column meanings:
+    //   On Hand        current inventory in usage units (eachs, tubes, etc.)
+    //   Reorder Pt     trigger threshold in usage units
+    //   Days Left      floor(on_hand / burn_rate) at current consumption
+    //   Order Qty      number of ORDER UNITS to buy (e.g., 2 boxes)
+    //   Order Unit     the packaging unit (e.g., "box")
+    //   Delivered      eachs delivered if Order Qty is purchased (e.g., 48)
+    //   Ending Qty     on_hand + delivered = inventory after delivery
+    //   Ending Days    days of supply after delivery; sanity check
+    // The "Order Qty + Order Unit + Delivered" trio explicitly shows the
+    // case-pack overshoot so purchasing can see exactly what they'll
+    // receive vs. what was strictly needed.
     const headers = [
       "Item", "Catalog #", "Lot #", "On Hand", "Unit", "Reorder Pt", "Days Left",
-      "Suggested Order", "Order Unit", "Standing?", "Confirmed Qty", "Notes",
+      "Order Qty", "Order Unit", "Delivered", "Ending Qty", "Ending Days",
+      "Standing?", "Confirmed Qty", "Notes",
     ];
-    const widths  = [38, 18, 14, 10, 10, 12, 11, 22, 14, 12, 16, 36];
+    const widths  = [38, 18, 14, 10, 10, 12, 11, 11, 14, 11, 12, 12, 12, 16, 36];
     ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: widths[i] }));
 
     for (const it of g.items) {
@@ -383,8 +425,11 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
         it.unit || "",
         it.reorder_point,
         it.days_remaining == null ? "" : it.days_remaining,
-        it.order_to_qty,
+        it.suggested_order_packs,
         it.order_unit || "",
+        it.delivered_qty,
+        it.ending_qty,
+        it.ending_days == null ? "" : it.ending_days,
         it.standing_order ? "Yes" : "",
         "",  // Confirmed Qty — unlocked
         "",  // Notes — unlocked
