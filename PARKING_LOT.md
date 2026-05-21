@@ -1193,6 +1193,83 @@ work pending until the source documents land.
 
 ---
 
+### 29. VeritaStock barcode scanning (full mobile scan flow)
+
+**What:** The remaining barcode-scanning build for VeritaStock, scoped
+during the 2026-05-20 Pfizer follow-up discussion. Order-now reorder
+document (PDF + Excel) already shipped in PR #286. This item is the
+mobile scan companion that turns VeritaStock into a true Unity Lab
+Services-class inventory product.
+
+**Full scope (12 working days):**
+- Day 1: barcode generation library + "Print Labels" PDF endpoint
+  (Avery 5160, 30 labels per sheet)
+- Day 2: schema additions (`barcode_value` column on
+  `inventory_items` + `scan_events` audit table) with ALTER TABLE
+  migration pattern
+- Day 3: PWA shell - manifest, service worker, install prompt,
+  mobile-first layout
+- Day 4: scanner page - camera access via MediaDevices API,
+  zxing-js decode, item lookup, quantity entry, submit
+- Day 5: scan-history view per item + scan-events Excel audit export
+- Day 6: edge cases - offline scan queue with local IndexedDB,
+  permission-denied UX, seat-user scan permissions
+- Day 7: real-device testing (iOS Safari + Android Chrome) + verify
+  script
+- Day 8: polish, marketing copy, roadmap page update, docs, Gate 3
+  prod verify
+- Day 9-10: offline queue hardening + mobile UI polish + error states
+- Day 11-12: label-printing wizard + item-catalog CSV import +
+  onboarding flow
+
+**Why parked vs build now:**
+- No paying customers yet for VeritaStock specifically
+- Pfizer expressed interest but has not committed; quote and pricing
+  discussion still in flight as of 2026-05-21
+- Pre-sell strategy decided: trigger build on first paid commitment
+  rather than speculative-build
+- "Coming Q3 2026" badge in marketing copy serves as signal-of-demand
+  capture in the meantime
+
+**Pricing model (locked during 2026-05-21 strategy session):**
+- Barcode scanning is INCLUDED FREE on every Clinic+ tier that has
+  VeritaStock (per the gate-by-cost-to-deliver principle - the
+  feature costs zero per customer to deliver after build)
+- Optional onboarding service: $1,500 flat (covers custom label
+  generation, CSV catalog import, 1-hour training Zoom)
+- Marketing line: "Unity Lab Services charges $30K+/year for barcode
+  scanning. We include it free with VeritaStock. Optional onboarding:
+  $1,500 flat. No tier upgrade required."
+
+**Technical anchors locked:**
+- PWA (Progressive Web App), NOT native iOS/Android apps - phone
+  camera works fine for lab volumes (200-400 items per round, not
+  Amazon-warehouse scale)
+- Libraries: zxing-js (scanning) and bwip-js (label generation) -
+  both MIT/Apache, $0 cost
+- No third-party services, no app store fees, no new infrastructure
+- Reuses existing JWT auth and multi-lab scoping
+
+**Out-of-pocket cash cost: $0.** Time cost: ~12 dev days + ~6 hours
+of operator testing.
+
+**Trigger to build:** First paid commitment from Pfizer or any other
+Hospital/Enterprise prospect that names barcode scanning as a
+requirement. Pre-sale closes via the Pfizer email or a similar
+inbound, then build kicks off the same day.
+
+**Source:** 2026-05-20 Pfizer follow-up session, after the order-now
+reorder document shipped (PR #286). Strategic decision documented in
+the team pricing analysis docx at
+`C:\Users\veril\Downloads\VeritaAssure-Pricing-Analysis-2026-05-21.docx`
+(version 2). The Request-an-Instrument feature (PR #293) was built
+instead as the durable customer-feedback channel for VeritaMap;
+barcode scanning waits on revenue commitment.
+
+**Status:** Parked pending first paid commitment.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
