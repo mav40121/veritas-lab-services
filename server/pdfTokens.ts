@@ -15,9 +15,22 @@ export interface PdfTokenEntry { buffer: Buffer; filename: string; expires: numb
 
 export const pdfTokenStore = new Map<string, PdfTokenEntry>();
 
+// Expiry window between "token stored" and "browser GETs the token URL".
+// Was 60s, which sounded generous until the reorder-PDF flow surfaced the
+// edge case: on a cold puppeteer launch the POST itself can take 30-60s,
+// so by the time the response transfer completes, the new tab opens, and
+// the browser actually navigates to /api/pdf/:token, the token has already
+// expired ("PDF token expired or not found" in the new tab).
+//
+// 300s leaves room for cold starts plus normal browser delays. Tokens are
+// single-use so this only matters in the window before first claim; the
+// store grows at most O(unclaimed tokens) which the opportunistic prune
+// below keeps bounded.
+const TOKEN_EXPIRY_MS = 300_000;
+
 export function storePdfToken(buffer: Buffer, filename: string): string {
   const token = crypto.randomUUID();
-  pdfTokenStore.set(token, { buffer, filename, expires: Date.now() + 60_000 });
+  pdfTokenStore.set(token, { buffer, filename, expires: Date.now() + TOKEN_EXPIRY_MS });
   // Prune expired entries opportunistically; no separate timer needed.
   for (const [k, v] of Array.from(pdfTokenStore)) {
     if (v.expires < Date.now()) pdfTokenStore.delete(k);
