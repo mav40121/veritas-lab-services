@@ -23502,36 +23502,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23541,36 +23549,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23580,36 +23596,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23619,36 +23643,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23658,36 +23690,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23697,36 +23737,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23736,36 +23784,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23775,36 +23831,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23814,36 +23878,44 @@
     "testCount": 8,
     "tests": {
       "ABO Group": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh Type": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Identification": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (IS)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch (AHG)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Phenotyping (Rh, Kell, Duffy, Kidd, MNS)": {
         "complexity": "HIGH",
-        "specialty": "Immunohematology"
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -23853,16 +23925,19 @@
     "testCount": 15,
     "tests": {
       "ABO forward grouping": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "ABO reverse grouping": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "ABO compatibility test (immediate spin crossmatch)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "RhD typing": {
         "complexity": "MODERATE",
@@ -23885,8 +23960,9 @@
         "specialty": "Blood Bank"
       },
       "Direct antiglobulin test (polyspecific anti-IgG,-C3d)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct antiglobulin test (monospecific anti-IgG)": {
         "complexity": "MODERATE",
@@ -29049,27 +29125,33 @@
     "tests": {
       "ABO (tube)": {
         "specialty": "Blood Bank",
-        "complexity": "MODERATE"
+        "complexity": "HIGH",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh (tube)": {
         "specialty": "Blood Bank",
-        "complexity": "MODERATE"
+        "complexity": "HIGH",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody Screen (tube)": {
         "specialty": "Blood Bank",
-        "complexity": "MODERATE"
+        "complexity": "HIGH",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch IS (tube)": {
         "specialty": "Blood Bank",
-        "complexity": "MODERATE"
+        "complexity": "HIGH",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch AHG (tube)": {
         "specialty": "Blood Bank",
-        "complexity": "MODERATE"
+        "complexity": "HIGH",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "DAT (tube)": {
         "specialty": "Blood Bank",
-        "complexity": "MODERATE"
+        "complexity": "HIGH",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },
@@ -32300,24 +32382,29 @@
     "testCount": 46,
     "tests": {
       "ABO grouping": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Rh typing": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "ABO/Rh confirmation": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "ABO forward grouping": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "ABO reverse grouping": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "D antigen typing": {
         "complexity": "MODERATE",
@@ -32332,32 +32419,38 @@
         "specialty": "Blood Bank"
       },
       "Antibody screen": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody identification": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody identification panel A (11-cell panel)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody identification panel B (11-cell panel)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody identification panel C, enzyme treated (22-cell panel)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Selected cells": {
         "complexity": "MODERATE",
         "specialty": "Blood Bank"
       },
       "Rh phenotype": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "RhK phenotype": {
         "complexity": "MODERATE",
@@ -32420,36 +32513,42 @@
         "specialty": "Blood Bank"
       },
       "DAT poly": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "DAT monospecific": {
         "complexity": "MODERATE",
         "specialty": "Hematology"
       },
       "DAT anti-IgG": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "DAT anti-C3d": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "DAT anti-IgG/anti-C3d": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Elution": {
         "complexity": "MODERATE",
         "specialty": "Blood Bank"
       },
       "Immediate spin crossmatch": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch compatibility testing (AHG)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Prenatal testing": {
         "complexity": "MODERATE",
@@ -32520,16 +32619,18 @@
         "specialty": "Blood Bank"
       },
       "Direct Antiglobulin Test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct Agglutination Test": {
         "complexity": "MODERATE",
         "specialty": "Blood Bank"
       },
       "Indirect Antiglobulin Test (IAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Blood typing": {
         "complexity": "MODERATE",
@@ -32540,20 +32641,24 @@
         "specialty": "Blood Bank"
       },
       "Antibody screening": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody identification": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Immediate Spin Crossmatch (ISXM)": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Bank"
+        "complexity": "HIGH",
+        "specialty": "Blood Bank",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Serial dilutions for titration studies": {
         "complexity": "MODERATE",
@@ -34295,24 +34400,29 @@
     "testCount": 5,
     "tests": {
       "ABO/Rh typing": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody screen": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Antibody identification": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Crossmatch": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       },
       "Direct antiglobulin test (DAT)": {
-        "complexity": "MODERATE",
-        "specialty": "Immunohematology"
+        "complexity": "HIGH",
+        "specialty": "Immunohematology",
+        "note": "Classified HIGH complexity when used for transfusion services (the dominant use case in clinical labs). Per 42 CFR 493.17."
       }
     }
   },

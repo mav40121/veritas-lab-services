@@ -2382,6 +2382,45 @@ sqlite.exec(`
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_requests_status ON veritamap_instrument_requests(status, created_at)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_requests_user ON veritamap_instrument_requests(user_id, created_at)`); } catch {}
 
+// One-time backfill: blood bank compatibility tests should be HIGH complexity
+// per 42 CFR 493.17 (transfusion services). Pre-2026-05-22 the fdaInstrumentData
+// classified ABO, Rh, antibody screen, crossmatch, DAT etc. as MODERATE, which
+// is only correct in the rare non-transfusion context. Update existing user
+// records to match the corrected source data. Idempotent: only touches rows
+// that are currently MODERATE AND whose analyte matches the compatibility-test
+// patterns AND whose specialty is Blood Bank or Immunohematology. Records the
+// number of rows updated to the migration log so we can confirm the change.
+try {
+  const compatibilityPattern = (
+    // ABO (Group, grouping, tube, forward, reverse, compatibility, /Rh typing)
+    "(LOWER(analyte) LIKE 'abo%' OR LOWER(analyte) LIKE '%/rh typing%' OR " +
+    // Rh (Type, typing, tube, phenotype)
+    "LOWER(analyte) LIKE 'rh %' OR LOWER(analyte) LIKE 'rh(%' OR LOWER(analyte) = 'rh type' OR LOWER(analyte) LIKE 'rh typ%' OR LOWER(analyte) LIKE 'rh phenotyp%' OR " +
+    // Antibody (screen, screening, identification)
+    "LOWER(analyte) LIKE 'antibody screen%' OR LOWER(analyte) LIKE 'antibody identif%' OR " +
+    // Crossmatch (any variant)
+    "LOWER(analyte) LIKE '%crossmatch%' OR LOWER(analyte) LIKE '%xm%' OR " +
+    // DAT and Direct Antiglobulin variants
+    "LOWER(analyte) LIKE 'dat%' OR LOWER(analyte) LIKE 'direct antiglobulin%' OR LOWER(analyte) LIKE 'indirect antiglobulin%' OR " +
+    // Phenotyping (Rh, Kell, Duffy, Kidd, MNS)
+    "LOWER(analyte) LIKE 'phenotyping%' OR " +
+    // Immediate spin crossmatch
+    "LOWER(analyte) LIKE 'immediate spin%')"
+  );
+  const result = sqlite.prepare(
+    `UPDATE veritamap_instrument_tests
+     SET complexity = 'HIGH'
+     WHERE complexity = 'MODERATE'
+       AND (specialty = 'Blood Bank' OR specialty = 'Immunohematology')
+       AND ${compatibilityPattern}`
+  ).run();
+  if (result.changes > 0) {
+    console.log(`[migration] Blood bank compatibility tests: bumped ${result.changes} row(s) MODERATE -> HIGH per 42 CFR 493.17`);
+  }
+} catch (err: any) {
+  console.warn('[migration] Blood bank backfill failed (table may not yet exist):', err?.message);
+}
+
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_productivity_months_account ON productivity_months(account_id, year, month)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_studies_account ON staffing_studies(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_hourly_study ON staffing_hourly_data(study_id, week_number, day_of_week)`); } catch {}
