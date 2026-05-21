@@ -895,8 +895,16 @@ export default function VeritaStockInventoryPage() {
         <div className="flex gap-2">
           {/* Snap Order: emergency manual-order PDF (additive to calculated
               reorder). Use cases per John, San Carlos, 2026-05-21: respiratory
-              outbreak surge, supply-chain shock, one-off correction. */}
-          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/snap-order` : "/veritastock/snap-order"}>
+              outbreak surge, supply-chain shock, one-off correction.
+              Carries the active vendor filter through as a ?vendor= URL
+              param so a user who scoped the main table to one vendor
+              lands on a snap-order page already scoped the same way. */}
+          <Link
+            href={(() => {
+              const base = activeLabId ? `/labs/${activeLabId}/veritastock/snap-order` : "/veritastock/snap-order";
+              return filterVendor !== "All" ? `${base}?vendor=${encodeURIComponent(filterVendor)}` : base;
+            })()}
+          >
             <Button
               size="sm"
               variant="outline"
@@ -905,7 +913,8 @@ export default function VeritaStockInventoryPage() {
               data-testid="start-snap-order-button"
               style={{ borderColor: "#92400E", color: "#92400E" }}
             >
-              <Zap size={14} className="mr-1.5" />Start Snap Order
+              <Zap size={14} className="mr-1.5" />
+              {filterVendor !== "All" ? `Start Snap Order (${filterVendor})` : "Start Snap Order"}
             </Button>
           </Link>
           {/* Order-Now document generation. Renders even when 0 items are due
