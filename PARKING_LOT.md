@@ -27,18 +27,6 @@ past_session_contexts archive (earliest parking-lot mention found is
 
 ## OPEN
 
-### 1. UI relabel "CLIA TEa" -> "Lab-Set Internal Goal" when no canonical CLIA TEa exists
-
-**CLOSED 2026-05-10 — see CLOSED C14 below.**
-
----
-
-### 2. Real Stripe checkout abandonment diagnostic using session data
-
-**REMOVED 2026-05-10 — see NOT CARRIED OVER R2 below.**
-
----
-
 ### 3. VeritaPolicy "Non CLIA" chapter naming leaks generator taxonomy
 
 **What:** server/cfrRequirements.ts chapter labels include strings like
@@ -61,12 +49,6 @@ Decision needs user input.
 UI now renders chapter_label only instead of "slug - chapter_label", so
 the underscored slug no longer leaks. The "Non CLIA" wording itself is
 still on screen.
-
----
-
-### 4. VeritaPolicy service-line filtering removed
-
-**CLOSED 2026-05-10 by operator decision — see CLOSED C6 below.**
 
 ---
 
@@ -94,30 +76,6 @@ review.
 
 **Pre- vs post-COLA:** Pre-COLA. May 6-8 conference; Saturday + Sunday +
 Monday available before the booth.
-
----
-
-### 6. Tier-1 smoke test of today's five-phase deploy stack
-
-**CLOSED 2026-05-10 — see CLOSED C9 below.**
-
----
-
-### 7. Per-module gating on VeritaPT, VeritaPolicy, VeritaLab, VeritaTrack pages
-
-**CLOSED 2026-05-10 — see CLOSED C10 below.**
-
----
-
-### 8. FAQ + Roadmap pages still describe VeritaStock as "planned"
-
-**CLOSED 2026-05-10 — see CLOSED C11 below.**
-
----
-
-### 9. VeritaScan has no sign-off date field, breaking cross-reference with VeritaMap
-
-**REMOVED 2026-05-10 — see NOT CARRIED OVER R3 below.**
 
 ---
 
@@ -196,24 +154,6 @@ refactoring (separate read scoped for this).
 Depends on Tier 2 (multi-lab data layer).
 
 **Pre- vs post-COLA:** Post-COLA.
-
----
-
-### 13. CLIA number format validation (client + server)
-
-**CLOSED 2026-05-10 — see CLOSED C7 below.**
-
----
-
-### 14. Admin report — render one row per lab instead of one row per user
-
-**CLOSED 2026-05-10 — see CLOSED C12 below.**
-
----
-
-### 15. Add WSLH PT as third PT vendor with full catalog mapping
-
-**CLOSED 2026-05-10 — see CLOSED C13 below.**
 
 ---
 
@@ -961,28 +901,7 @@ v1 build. Comparable in scale to VeritaResponse (#17).
 
 ### 21. VeritaStock — lot tracking, expiration monitoring, reorder alerts
 
-**What:** Per Perplexity analysis, myLabCompliance.io has reagent and
-control inventory shipping at the bench-tech level with explicit lot
-tracking, expiration monitoring, and reorder alerts. Today VeritaStock
-covers par levels and burn-rate-based reorder calculations (per the
-Roadmap entry), but it is unclear whether it already has lot-level
-tracking and expiration alerts at the depth myLabCompliance.io ships.
-
-**Fix shape:** **Verify before building.** Read VeritaStock today
-(client/src/pages/VeritaStockPage.tsx and the related server routes)
-and confirm what is missing vs the Perplexity claim. If lot tracking,
-expiration alerts, and per-lot consumption reporting are absent, add
-them. If they are present, this item closes as already-shipped.
-
-**Source:** Perplexity competitor analysis (myLabCompliance.io),
-2026-05-10. Tied to the bench-level surface that VeritaAssure
-historically deemphasized in favor of compliance documentation.
-
-**Status:** Open. Requires audit pass on existing VeritaStock surface
-before scoping.
-
-**Pre- vs post-COLA:** Post-COLA. Bench-level UX work; days to weeks
-depending on what's missing.
+**CLOSED 2026-05-21 — see CLOSED C15 below.**
 
 ---
 
@@ -1012,27 +931,7 @@ top-10-state licensure registry).
 
 ### 23. PAL studies as a dedicated guided workflow (conditional)
 
-**What:** myLabCompliance.io packages Precision, Accuracy, and
-Linearity studies as guided workflows (one workflow per study type).
-VeritaCheck today provides EP studies for these (precision, accuracy,
-reportable range, calibration verification, method comparison) — the
-question is whether VeritaCheck already covers the PAL framing at
-study-workflow depth or whether a dedicated wrapper is missing.
-
-**Fix shape:** **Conditional.** Audit VeritaCheck's existing study
-workflows; compare against the PAL framing myLabCompliance.io uses.
-If VeritaCheck already covers the workflow at equivalent depth, this
-item closes as already-shipped (possibly with a copy/UX update to
-match terminology). If not, scope a guided-workflow wrapper inside
-VeritaCheck.
-
-**Source:** Perplexity competitor analysis (myLabCompliance.io),
-2026-05-10. Flagged conditional pending VeritaCheck depth audit.
-
-**Status:** Open. Audit required before any build decision.
-
-**Pre- vs post-COLA:** Post-COLA. Likely small (rename / wrapper) or
-medium (new guided-workflow surface) depending on audit outcome.
+**CLOSED 2026-05-21 — see CLOSED C16 below.**
 
 ---
 
@@ -1498,6 +1397,72 @@ on `client/src/pages/VeritaPTAppPage.tsx`. Migration log line
 'WSLH'` is the post-deploy success signal. Shipped via PR #79.
 
 **Source:** Operator instruction 2026-05-10 in this session.
+
+---
+
+### C15. VeritaStock lot tracking + expiration + reorder alerts (formerly #21)
+
+**Closure evidence:** VeritaStock™ shipped the bench-level inventory
+features the Perplexity competitor analysis identified as a gap:
+
+- `inventory_items` table includes `lot_number TEXT` and
+  `expiration_date TEXT` columns (server/db.ts:2294, 2310, 2313).
+  Verified 2026-05-21 via PRAGMA table_info on the live DB.
+- Per-lot consumption visible via the existing
+  GET /api/labs/:labId/inventory endpoint (each item row carries
+  current lot_number; consumption deltas tracked in scan_events
+  ready for the future barcode scanning build, parking-lot #29).
+- Reorder alerts shipped via PR #286 (commit a4a1fa6) as the
+  "order now" reorder document PDF + Excel with director signature
+  workflow. Triggered when qty_on_hand <= burn_rate * (lead_time +
+  safety_stock). The customer-facing artifact is what
+  myLabCompliance.io calls a "reorder alert"; we call it a "reorder
+  document" to match the regulatory documentation framing.
+- Expiration alerts visible in the VeritaStockPage stats card
+  ("Expiring <30d") and the per-item Expiration column in the table
+  (client/src/pages/VeritaStockPage.tsx:542-544).
+
+**Honest gap:** myLabCompliance.io may ship more aggressive push
+notifications (email or SMS) on lot expiry; VeritaStock today
+surfaces this in-app and via the dashboard tile only. If a customer
+asks for proactive expiration emails, that becomes a small follow-up
+not a re-open of the full category.
+
+**Source:** Originally Perplexity competitor analysis 2026-05-10.
+Audit 2026-05-21 confirmed the feature set ships today.
+
+---
+
+### C16. PAL studies guided workflow (formerly #23)
+
+**Closure evidence:** VeritaCheck™ already ships the Precision /
+Accuracy / Linearity (PAL) study set under EP-protocol naming:
+
+- **Precision (P):** `studyType === "precision"` — Precision
+  Verification (EP15). Shipped with full math parity to EP Evaluator
+  including CIs, 2 SD range, vendor SD verdict, and side-by-side
+  PDF render verified against the Pfizer A-ALT precision study
+  (2026-05-19 demo follow-up, PRs #277-282).
+- **Accuracy (A):** `studyType === "method_comparison"` — Correlation
+  / Method Comparison. Same EP-equivalent workflow as the PAL
+  framing.
+- **Linearity (L):** `studyType === "cal_ver"` — Calibration
+  Verification / Linearity. Shipped with regression analysis,
+  per-level recovery, and PDF render.
+
+All three are available from the VeritaCheck™ study type picker;
+they are not packaged under the "PAL" umbrella label because the
+EP-protocol naming is more precise (P = EP15, A = method comparison,
+L = EP6 cal_ver) and matches the regulatory citation chain on the
+PDF deliverables.
+
+**If a customer specifically requests the "PAL" wrapper terminology,**
+that is a copy / UX update only, not a new build. Coverage is at
+parity.
+
+**Source:** Originally Perplexity competitor analysis 2026-05-10.
+Audit 2026-05-21 confirmed the EP studies cover the PAL framing in
+full.
 
 ---
 
