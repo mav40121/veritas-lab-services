@@ -472,6 +472,27 @@ export function registerVeritaBenchRoutes(
     };
   }
 
+  // Apply optional client-side filters to a decorated reorder list.
+  // Filters accepted as query params on the reorder-list endpoints (PDF
+  // + Excel + JSON). When provided, the generated document is scoped to
+  // matching items only. This is what powers "Order PDF (Fisher)" -- the
+  // John (San Carlos) ask from 2026-05-21 where the lab wants to print
+  // a vendor-specific list to hand to the rep.
+  //
+  // Status filter is intentionally not supported -- the reorder endpoint
+  // already filters to needs_reorder=true.
+  function applyReorderFilters(items: any[], query: any): any[] {
+    const department = (query.department || "").trim();
+    const category = (query.category || "").trim();
+    const vendor = (query.vendor || "").trim();
+    return items.filter(it => {
+      if (department && it.department !== department) return false;
+      if (category && it.category !== category) return false;
+      if (vendor && (it.vendor || "") !== vendor) return false;
+      return true;
+    });
+  }
+
   // GET /api/inventory - list all inventory items for account
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -494,7 +515,8 @@ export function registerVeritaBenchRoutes(
     const rows = sqlite.prepare(
       "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
     ).all(accountId);
-    const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+    const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+    const items = applyReorderFilters(decorated, req.query);
     res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
   });
 
@@ -511,7 +533,8 @@ export function registerVeritaBenchRoutes(
       const rows = sqlite.prepare(
         "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
       ).all(accountId);
-      const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+      const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+      const items = applyReorderFilters(decorated, req.query) as ReorderItem[];
 
       // Pull lab identity for the header. labs table first, user row fallback.
       let labName: string | null = null;
@@ -556,7 +579,8 @@ export function registerVeritaBenchRoutes(
       const rows = sqlite.prepare(
         "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
       ).all(accountId);
-      const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+      const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+      const items = applyReorderFilters(decorated, req.query) as ReorderItem[];
 
       let labName: string | null = null;
       let cliaNumber: string | null = null;
@@ -1113,7 +1137,8 @@ export function registerVeritaBenchRoutes(
       const rows = sqlite.prepare(
         "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
       ).all(req.scope.labId);
-      const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+      const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+      const items = applyReorderFilters(decorated, req.query);
       res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
     });
 
@@ -1127,7 +1152,8 @@ export function registerVeritaBenchRoutes(
         const rows = sqlite.prepare(
           "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
         ).all(req.scope.labId);
-        const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+        const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+        const items = applyReorderFilters(decorated, req.query) as ReorderItem[];
 
         const labRow = sqlite.prepare(
           "SELECT lab_name, clia_number FROM labs WHERE id = ?"
@@ -1162,7 +1188,8 @@ export function registerVeritaBenchRoutes(
         const rows = sqlite.prepare(
           "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
         ).all(req.scope.labId);
-        const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+        const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+        const items = applyReorderFilters(decorated, req.query) as ReorderItem[];
 
         const labRow = sqlite.prepare(
           "SELECT lab_name, clia_number FROM labs WHERE id = ?"

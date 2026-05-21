@@ -434,6 +434,10 @@ export default function VeritaStockInventoryPage() {
   const [filterDept, setFilterDept] = useState("All");
   const [filterCat, setFilterCat] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
+  // Vendor filter requested by John (San Carlos) on 2026-05-21. Surfaces the
+  // unique vendor list from the loaded items so the lab can scope the table
+  // to one vendor and hand a vendor-specific list to the rep for ordering.
+  const [filterVendor, setFilterVendor] = useState("All");
 
   // Sort - default: needs_reorder first, then days_remaining ascending
   const [sortField, setSortField] = useState<SortField>("days_remaining");
@@ -529,17 +533,38 @@ export default function VeritaStockInventoryPage() {
   // the xlsx inline because purchasing edits the file before sending and
   // the binary blob is exactly what they need to save.
   const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel">(null);
-  const reorderPdfUrl = activeLabId
-    ? `${API_BASE}/api/labs/${activeLabId}/inventory/reorder-list/pdf`
-    : `${API_BASE}/api/inventory/reorder-list/pdf`;
-  const reorderExcelUrl = activeLabId
-    ? `${API_BASE}/api/labs/${activeLabId}/inventory/reorder-list/excel`
-    : `${API_BASE}/api/inventory/reorder-list/excel`;
+  // Build the reorder URL with current client-side filters as query params
+  // so the generated document only includes items the user can currently
+  // see in the table. Status filter is intentionally omitted -- the reorder
+  // endpoint already filters to items where needs_reorder=true, so passing
+  // an additional Status filter would either narrow further (e.g. "Expiring
+  // Soon" intersected with reorder list) or duplicate the implicit filter.
+  // Vendor is the most-requested scoping per John (San Carlos) 2026-05-21.
+  const buildReorderUrl = useCallback((kind: "pdf" | "excel") => {
+    const base = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/inventory/reorder-list/${kind}`
+      : `${API_BASE}/api/inventory/reorder-list/${kind}`;
+    const params = new URLSearchParams();
+    if (filterDept !== "All") params.set("department", filterDept);
+    if (filterCat !== "All") params.set("category", filterCat);
+    if (filterVendor !== "All") params.set("vendor", filterVendor);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }, [activeLabId, filterDept, filterCat, filterVendor]);
+
+  // Label hint so the user can see what scope the button will produce.
+  const activeFilterLabels = useMemo(() => {
+    const parts: string[] = [];
+    if (filterVendor !== "All") parts.push(filterVendor);
+    if (filterDept !== "All") parts.push(filterDept);
+    if (filterCat !== "All") parts.push(filterCat);
+    return parts;
+  }, [filterDept, filterCat, filterVendor]);
 
   const generateOrderPdf = async () => {
     setGeneratingOrderDoc("pdf");
     try {
-      const res = await fetch(reorderPdfUrl, { method: "POST", headers: authHeaders() });
+      const res = await fetch(buildReorderUrl("pdf"), { method: "POST", headers: authHeaders() });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({ title: "Could not generate PDF", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
@@ -562,7 +587,7 @@ export default function VeritaStockInventoryPage() {
   const generateOrderExcel = async () => {
     setGeneratingOrderDoc("excel");
     try {
-      const res = await fetch(reorderExcelUrl, { method: "POST", headers: authHeaders() });
+      const res = await fetch(buildReorderUrl("excel"), { method: "POST", headers: authHeaders() });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({ title: "Could not generate Excel", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
@@ -627,6 +652,7 @@ export default function VeritaStockInventoryPage() {
 
     if (filterDept !== "All") result = result.filter((i) => i.department === filterDept);
     if (filterCat !== "All") result = result.filter((i) => i.category === filterCat);
+    if (filterVendor !== "All") result = result.filter((i) => (i.vendor || "") === filterVendor);
     if (filterStatus !== "All") {
       result = result.filter((i) => {
         if (filterStatus === "Reorder Now") return i.needs_reorder;
@@ -675,7 +701,19 @@ export default function VeritaStockInventoryPage() {
     });
 
     return result;
-  }, [items, filterDept, filterCat, filterStatus, sortField, sortDir]);
+  }, [items, filterDept, filterCat, filterStatus, filterVendor, sortField, sortDir]);
+
+  // Unique vendors derived from the loaded items list. Sorted alphabetically;
+  // items with no vendor are excluded from the dropdown (the filter cannot
+  // target them anyway). Recomputes whenever items change so newly added
+  // vendors appear automatically.
+  const uniqueVendors = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items) {
+      if (it.vendor && it.vendor.trim()) set.add(it.vendor.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [items]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -856,18 +894,30 @@ export default function VeritaStockInventoryPage() {
             variant="outline"
             onClick={generateOrderPdf}
             disabled={generatingOrderDoc !== null || readOnly}
-            title={`Generate Reorder PDF (${stats.reorderNow} item${stats.reorderNow === 1 ? "" : "s"} currently at or below reorder point)`}
+            title={
+              activeFilterLabels.length > 0
+                ? `Generate Reorder PDF scoped to: ${activeFilterLabels.join(", ")}`
+                : `Generate Reorder PDF (${stats.reorderNow} item${stats.reorderNow === 1 ? "" : "s"} currently at or below reorder point)`
+            }
             data-testid="generate-order-pdf-button"
           >
             <FileText size={14} className="mr-1.5" />
-            {generatingOrderDoc === "pdf" ? "Generating..." : `Order PDF${stats.reorderNow > 0 ? ` (${stats.reorderNow})` : ""}`}
+            {generatingOrderDoc === "pdf"
+              ? "Generating..."
+              : activeFilterLabels.length > 0
+              ? `Order PDF (${activeFilterLabels.join(", ")})`
+              : `Order PDF${stats.reorderNow > 0 ? ` (${stats.reorderNow})` : ""}`}
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={generateOrderExcel}
             disabled={generatingOrderDoc !== null || readOnly}
-            title="Generate Reorder workbook (Confirmed Qty + Notes columns unlocked)"
+            title={
+              activeFilterLabels.length > 0
+                ? `Generate Reorder workbook scoped to: ${activeFilterLabels.join(", ")}`
+                : "Generate Reorder workbook (Confirmed Qty + Notes columns unlocked)"
+            }
             data-testid="generate-order-excel-button"
           >
             <FileSpreadsheet size={14} className="mr-1.5" />
@@ -953,8 +1003,15 @@ export default function VeritaStockInventoryPage() {
             <SelectItem value="OK">OK</SelectItem>
           </SelectContent>
         </Select>
-        {(filterDept !== "All" || filterCat !== "All" || filterStatus !== "All") && (
-          <Button variant="ghost" size="sm" onClick={() => { setFilterDept("All"); setFilterCat("All"); setFilterStatus("All"); }}>
+        <Select value={filterVendor} onValueChange={setFilterVendor}>
+          <SelectTrigger className="w-[180px]" data-testid="filter-vendor"><SelectValue placeholder="Vendor" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All Vendors</SelectItem>
+            {uniqueVendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {(filterDept !== "All" || filterCat !== "All" || filterStatus !== "All" || filterVendor !== "All") && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterDept("All"); setFilterCat("All"); setFilterStatus("All"); setFilterVendor("All"); }}>
             Clear Filters
           </Button>
         )}
