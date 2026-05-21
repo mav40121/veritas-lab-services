@@ -26,8 +26,8 @@
 //
 // Exits non-zero on any failure so this can land in CI later.
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const API = process.env.API || 'http://localhost:5000';
 const TOKEN = process.env.TOKEN;
