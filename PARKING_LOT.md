@@ -1057,40 +1057,67 @@ barcode scanning waits on revenue commitment.
 
 ### 30. Plain-language summary layer for verbatim CFR citations
 
-**What:** `server/cfrRequirements.ts` now carries verbatim eCFR text in
+**What:** `server/cfrRequirements.ts` carries verbatim eCFR text in
 the `description` field (PR #301 closed #26). The verbatim text is
-authoritative but written for regulators, not lab directors. A separate
-optional `summary` field would carry a short plain-language paraphrase
-sitting next to the verbatim text. The verbatim citation stays as the
-regulatory anchor; the summary helps the director read it quickly.
+authoritative but written for regulators, not lab directors. A
+plain-language paraphrase next to the verbatim would help the
+director read faster.
 
-**Origin:** Surfaced 2026-05-21 by operator. Concern was that a prior
-agent had warned that verbatim copy, while legal, was not necessarily
-a good idea. The verbatim + plain-language pair resolves both:
-authoritative regulatory anchor + readable director-facing gloss.
+**Status (after 2026-05-21 session):** Partially shipped, then
+partially reverted. Lessons learned the hard way.
 
-**Shape if built:**
+**What was shipped and kept:**
 
-- Add optional `summary?: string` to the `CfrRequirement` interface in
-  `server/cfrRequirements.ts`. Field is optional, so existing entries
-  without a summary continue to work.
-- Author summaries entry-by-entry as a curated pilot, not a generated
-  pass. Verbatim is the regulatory citation; the summary is operator
-  voice. Five-entry pilot first, operator review, then expand.
-- Display in VeritaCheck narrative blocks and CFR-citation displays:
-  verbatim quoted in italics, summary shown as a single plain
-  paragraph below. Both labeled clearly.
+- PR #309: optional `summary?: string` field added to
+  `CFR_REQUIREMENTS`, populated for 5 high-traffic standards
+  (§493.1235, §493.1252, §493.1253, §493.1281, §493.1289).
+  Operator approved the writing voice on those 5 summaries.
+  Data layer remains on file as inert content. No UI surface
+  currently reads it.
 
-**Why parked:** Five-entry pilot was attempted before the session
-compaction; samples either never landed in the repo or got lost.
-Restarting needs a fresh operator review of the first 3-5 sample
-summaries before scaling to the ~280 entries currently in the file.
+**What was attempted and reverted:**
 
-**Effort:** Half-day for the pilot (interface change + 5 sample
-summaries + one paired display in VeritaCheck PDF). Full pass across
-all entries is a separate, much larger writing project.
+- PR #310: a new "Lab Requirements Index" Excel route plus button
+  on VeritaPolicyAppPage. One row per citation, columns for
+  Source / Citation / Section Title / **Verbatim Text** /
+  **Plain-Language Summary** / accreditor cross-refs. Reverted
+  2026-05-21 (PR #312) because the "Verbatim Text" column header
+  applied to CAP / TJC / COLA accreditor rows whose descriptions
+  are paraphrases of copyrighted accreditor manuals. Labelling
+  paraphrased copyrighted content as verbatim is the issue, not
+  the column itself. See [[feedback_no_verbatim_label_accreditor_content]].
+- PR #312 second commit: a "Plain-Language CFR Summary" column on
+  the existing Master List Excel that looked up each row's cited
+  CFRs in the summary map and concatenated matches. Reverted
+  2026-05-21 (PR #313) because the same CFR-section summary
+  attached to every Master List row that cited the section --
+  §493.1235 (competency) ended up on PPE Policy, Privacy Policy,
+  Information System Policy rows, etc. CFR-section-scoped
+  summary content does not fit policy-row-scoped Master List
+  rows. See [[feedback_cfr_summary_is_cfr_scoped_not_policy_scoped]].
 
-**Pre- vs post-COLA:** Post-COLA. No customer urgency.
+**Future-redesign requirements (what the next attempt must satisfy):**
+
+- Author summaries at a scope that matches the destination surface.
+  If the destination is the Master List Excel (one row per policy),
+  the summary text must live in `veritapolicyMasterList.ts` and be
+  authored one paraphrase per policy_id. CFR-section-scoped text
+  belongs on a CFR-scoped surface (a glossary, or an inline tooltip
+  on the CFR citation itself), not on a policy-scoped row.
+- Any surface that mixes CFR rows (verbatim safe) with accreditor
+  rows (paraphrase only) must split column headers or only render
+  the verbatim-implying label on CFR rows. Do NOT use one column
+  header that claims verbatim for both.
+- The 5 summaries already in `cfrRequirements.ts` are valid as
+  CFR-section glossary content. They are inappropriate as
+  Master-List-row content.
+
+**Effort if redesigned at policy-row scope:** Per-policy writing for
+the 96 Master List rows is a multi-day content project, not a
+quick pilot.
+
+**Pre- vs post-COLA:** Post-COLA. No customer urgency. Operator
+has not yet authorized a redesign attempt as of 2026-05-21.
 
 ---
 
