@@ -2405,6 +2405,15 @@ export default function VeritaMapMapPage() {
             Correlations required when 2+ instruments run the same analyte (42 CFR
             §493.1213).
           </p>
+          {/* Legend for the asterisk that appears on Blood Bank / Immunohematology
+              compatibility tests. Hover tooltip is easy to miss (and broken on
+              mobile), so the explanation is printed here as the clinical-document
+              standard. */}
+          <p className="text-[10px] text-muted-foreground mt-1">
+            <span className="font-semibold">*</span> Blood Bank / Immunohematology compatibility tests (ABO, Rh, antibody
+            screen, crossmatch, DAT, phenotyping) are classified HIGH complexity when used for transfusion services, which
+            is the dominant use case in clinical labs. Per 42 CFR §493.17.
+          </p>
         </div>
       </div>
 
