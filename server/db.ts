@@ -2357,6 +2357,31 @@ sqlite.exec(`
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_account ON inventory_items(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON inventory_items(account_id, expiration_date)`); } catch {}
 
+// VeritaMap instrument-add requests. Customers submit when their instrument
+// isn't in the picker; an email fires to info@veritaslabservices.com so
+// review is timely. Status: pending / approved / rejected with reviewer
+// notes. lab_id is nullable for legacy single-lab users.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritamap_instrument_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    instrument_name TEXT NOT NULL,
+    vendor TEXT,
+    category_suggestion TEXT,
+    example_analytes TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewer_notes TEXT,
+    resolved_by_user_id INTEGER,
+    resolved_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_requests_status ON veritamap_instrument_requests(status, created_at)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_requests_user ON veritamap_instrument_requests(user_id, created_at)`); } catch {}
+
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_productivity_months_account ON productivity_months(account_id, year, month)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_studies_account ON staffing_studies(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staffing_hourly_study ON staffing_hourly_data(study_id, week_number, day_of_week)`); } catch {}

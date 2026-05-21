@@ -3466,6 +3466,124 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return null;
   }
 
+  // ── VeritaMap instrument-add requests ────────────────────────────────────
+  //
+  // Customers submit when they cannot find their instrument in the picker.
+  // The submission saves to veritamap_instrument_requests AND fires an
+  // email to info@veritaslabservices.com so review is timely. Available on
+  // every tier (no plan gate) because feedback collection should never be
+  // a paid feature.
+  //
+  // Soft dedup: same user submitting the same instrument_name in the last
+  // 5 minutes returns the existing request id rather than creating a dupe.
+  // Real dedup happens at review time.
+  app.post("/api/veritamap/instrument-requests", authMiddleware, async (req: any, res) => {
+    const userId = req.userId ?? req.user?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const { instrument_name, vendor, category_suggestion, example_analytes, notes } = req.body || {};
+    const cleanName = String(instrument_name || "").trim();
+    if (!cleanName) return res.status(400).json({ error: "instrument_name required" });
+    if (cleanName.length > 200) return res.status(400).json({ error: "instrument_name too long (max 200 chars)" });
+
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const labRow = resolveLabForUser(userId);
+    const labId = labRow?.id ?? null;
+
+    // Soft dedup: same user, same name, in last 5 minutes.
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const existing = sqlite.prepare(
+      "SELECT id FROM veritamap_instrument_requests WHERE user_id = ? AND lower(instrument_name) = lower(?) AND created_at > ? LIMIT 1"
+    ).get(userId, cleanName, fiveMinAgo) as any;
+    if (existing) {
+      return res.json({ id: existing.id, deduped: true });
+    }
+
+    const result = sqlite.prepare(`
+      INSERT INTO veritamap_instrument_requests
+        (user_id, lab_id, instrument_name, vendor, category_suggestion, example_analytes, notes, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+    `).run(
+      userId, labId, cleanName,
+      (vendor || "").trim() || null,
+      (category_suggestion || "").trim() || null,
+      (example_analytes || "").trim() || null,
+      (notes || "").trim() || null,
+      now, now,
+    );
+    const requestId = Number(result.lastInsertRowid);
+
+    // Email notification. Failure does not block the save.
+    if (resend) {
+      try {
+        const userRow = sqlite.prepare("SELECT email, name, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+        const labLabel = labRow?.lab_name || userRow?.clia_lab_name || "Unknown lab";
+        await resend.emails.send({
+          from: "VeritaAssure™ <info@veritaslabservices.com>",
+          to: ["info@veritaslabservices.com", "verilabguy@gmail.com"],
+          subject: `New VeritaMap instrument request: ${cleanName}`,
+          html: `
+<div style="font-family: Arial, sans-serif; max-width: 600px; color: #1a1a1a;">
+  <h2 style="color: #01696F;">New Instrument Request (#${requestId})</h2>
+  <table style="border-collapse: collapse; width: 100%; margin-bottom: 16px;">
+    <tr><td style="padding: 4px 8px;"><strong>Instrument:</strong></td><td style="padding: 4px 8px;">${cleanName}</td></tr>
+    <tr><td style="padding: 4px 8px;"><strong>Vendor:</strong></td><td style="padding: 4px 8px;">${vendor || "(not specified)"}</td></tr>
+    <tr><td style="padding: 4px 8px;"><strong>Category:</strong></td><td style="padding: 4px 8px;">${category_suggestion || "(not specified)"}</td></tr>
+    <tr><td style="padding: 4px 8px;"><strong>Example analytes:</strong></td><td style="padding: 4px 8px;">${example_analytes || "(not specified)"}</td></tr>
+    <tr><td style="padding: 4px 8px;"><strong>Notes:</strong></td><td style="padding: 4px 8px;">${notes || "(none)"}</td></tr>
+    <tr><td style="padding: 4px 8px;"><strong>Submitted by:</strong></td><td style="padding: 4px 8px;">${userRow?.name || userRow?.email || `user ${userId}`} (${userRow?.email || ""})</td></tr>
+    <tr><td style="padding: 4px 8px;"><strong>Lab:</strong></td><td style="padding: 4px 8px;">${labLabel} (lab_id=${labId ?? "none"})</td></tr>
+  </table>
+  <p style="font-size: 13px; color: #666;">Review and resolve via the admin endpoint.</p>
+</div>`,
+        });
+      } catch (emailErr: any) {
+        console.error("[instrument-request] email failed:", emailErr?.message);
+      }
+    }
+
+    res.json({ id: requestId, deduped: false });
+  });
+
+  // Admin: list pending instrument requests (optionally filter by status).
+  app.get("/api/admin/instrument-requests", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const status = (req.query.status as string) || "pending";
+    const rows = sqlite.prepare(`
+      SELECT r.*, u.email AS user_email, u.name AS user_name, l.lab_name AS lab_name
+      FROM veritamap_instrument_requests r
+      LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN labs l ON l.id = r.lab_id
+      WHERE (? = 'all' OR r.status = ?)
+      ORDER BY r.created_at DESC
+      LIMIT 200
+    `).all(status, status);
+    res.json({ requests: rows, count: rows.length });
+  });
+
+  // Admin: resolve a request (approved when the instrument is added to the
+  // library, rejected when not adding with reason). Body: {status, reviewer_notes}.
+  app.post("/api/admin/instrument-requests/:id/resolve", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const id = Number(req.params.id);
+    const { status, reviewer_notes, resolved_by_user_id } = req.body || {};
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "status must be 'approved' or 'rejected'" });
+    }
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const result = sqlite.prepare(`
+      UPDATE veritamap_instrument_requests
+      SET status = ?, reviewer_notes = ?, resolved_by_user_id = ?, resolved_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(status, (reviewer_notes || "").trim() || null, resolved_by_user_id || null, now, now, id);
+    if (result.changes === 0) return res.status(404).json({ error: "request not found" });
+    res.json({ id, status });
+  });
+
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;

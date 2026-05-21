@@ -877,6 +877,152 @@ function InstrumentTestSection({
   );
 }
 
+// ── Request-an-Instrument dialog ────────────────────────────────────────────
+//
+// Surfaced when a user cannot find their instrument in the picker. Submits
+// a structured request to /api/veritamap/instrument-requests which fires
+// an email to info@veritaslabservices.com for review. The instrument the
+// user typed pre-fills the form so they do not have to retype.
+function RequestInstrumentDialog({
+  open, onOpenChange, prefilledName,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  prefilledName?: string;
+}) {
+  const { toast } = useToast();
+  const [instrumentName, setInstrumentName] = useState(prefilledName || "");
+  const [vendor, setVendor] = useState("");
+  const [categorySuggestion, setCategorySuggestion] = useState("");
+  const [exampleAnalytes, setExampleAnalytes] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open && prefilledName) setInstrumentName(prefilledName);
+  }, [open, prefilledName]);
+
+  const reset = () => {
+    setInstrumentName(prefilledName || "");
+    setVendor("");
+    setCategorySuggestion("");
+    setExampleAnalytes("");
+    setNotes("");
+  };
+
+  const submit = async () => {
+    if (!instrumentName.trim()) {
+      toast({ title: "Instrument name required", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/veritamap/instrument-requests`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instrument_name: instrumentName.trim(),
+          vendor: vendor.trim() || undefined,
+          category_suggestion: categorySuggestion.trim() || undefined,
+          example_analytes: exampleAnalytes.trim() || undefined,
+          notes: notes.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not submit request", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const body = await res.json();
+      if (body.deduped) {
+        toast({ title: "Already submitted recently", description: "Your earlier request is in the review queue." });
+      } else {
+        toast({
+          title: "Request received",
+          description: "We'll review and respond by email. In the meantime, use 'Add it manually' to keep building your map.",
+        });
+      }
+      reset();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Could not submit request", description: "Network error", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Request an instrument</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-xs text-muted-foreground">
+            Can't find your instrument? Tell us about it and we'll add it to the library.
+            We typically review and respond within one business day. In the meantime, you
+            can use "Add it manually" to keep building your map.
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="req-instrument-name">Instrument name <span className="text-red-500">*</span></Label>
+            <Input
+              id="req-instrument-name"
+              value={instrumentName}
+              onChange={(e) => setInstrumentName(e.target.value)}
+              placeholder="e.g., MEDTOX PROFILE II-A"
+              data-testid="request-instrument-name"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="req-vendor">Vendor</Label>
+            <Input
+              id="req-vendor"
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              placeholder="e.g., MEDTOX, Labcorp"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="req-category">Category</Label>
+            <Input
+              id="req-category"
+              value={categorySuggestion}
+              onChange={(e) => setCategorySuggestion(e.target.value)}
+              placeholder="e.g., Chemistry, Microbiology, Toxicology"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="req-analytes">Example analytes (optional)</Label>
+            <Input
+              id="req-analytes"
+              value={exampleAnalytes}
+              onChange={(e) => setExampleAnalytes(e.target.value)}
+              placeholder="comma-separated, e.g., Glucose, Sodium, Potassium"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="req-notes">Notes (optional)</Label>
+            <Input
+              id="req-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="anything else we should know"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={submitting} data-testid="request-instrument-submit">
+            {submitting ? "Submitting..." : "Submit request"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function VeritaMapBuildPage() {
@@ -907,6 +1053,9 @@ export default function VeritaMapBuildPage() {
   const [instrumentName, setInstrumentName] = useState<string>("");
   const [manualEntry, setManualEntry] = useState(false);
   const [manualInstrumentName, setManualInstrumentName] = useState("");
+  // Request-an-Instrument dialog. Prefills with whatever the user has
+  // already typed (custom write-in or manual entry) so they don't retype.
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [role, setRole] = useState<Role>("Primary");
   const [serialNumber, setSerialNumber] = useState("");
   const [instrumentNickname, setInstrumentNickname] = useState("");
@@ -1694,17 +1843,28 @@ export default function VeritaMapBuildPage() {
                     Back to instrument list
                   </button>
                 ) : !isOtherDepartment ? (
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
-                    onClick={() => {
-                      setManualEntry(!manualEntry);
-                      setInstrumentName("");
-                      setManualInstrumentName("");
-                    }}
-                  >
-                    {manualEntry ? "Back to instrument list" : "Don't see your instrument? Add it manually"}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
+                      onClick={() => {
+                        setManualEntry(!manualEntry);
+                        setInstrumentName("");
+                        setManualInstrumentName("");
+                      }}
+                    >
+                      {manualEntry ? "Back to instrument list" : "Don't see your instrument? Add it manually"}
+                    </button>
+                    <span className="text-xs text-muted-foreground" aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2"
+                      onClick={() => setRequestModalOpen(true)}
+                      data-testid="request-instrument-trigger"
+                    >
+                      Or request VLS add it to the library
+                    </button>
+                  </div>
                 ) : null}
               </div>
               <Button
@@ -1961,6 +2121,15 @@ export default function VeritaMapBuildPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Request-an-Instrument dialog. Prefilled with whatever the user
+          has typed (manual entry or custom write-in) so they do not need
+          to retype the name. */}
+      <RequestInstrumentDialog
+        open={requestModalOpen}
+        onOpenChange={setRequestModalOpen}
+        prefilledName={effectiveInstrumentName}
+      />
     </div>
   );
 }
