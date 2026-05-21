@@ -7,6 +7,8 @@ import { db } from "./db";
 import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
+import { generateReorderListPDF, generateReorderListExcel, type ReorderItem } from "./orderDocument";
+import { storePdfToken } from "./pdfTokens";
 
 function bencheLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -413,6 +415,24 @@ export function registerVeritaBenchRoutes(
   // INVENTORY MANAGER
   // ═══════════════════════════════════════════════════════════════════════
 
+  // Per-item decoration shared by the legacy and lab-scoped list/reorder
+  // routes. Single source of truth for the trigger formula so the reorder
+  // document and the list view can never disagree.
+  function decorateInventoryItem(item: any) {
+    const burnRate = item.burn_rate || 0;
+    const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
+    const orderToQty = burnRate * (item.desired_days_of_stock || 0);
+    const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
+    const needsReorder = item.quantity_on_hand <= reorderPoint;
+    return {
+      ...item,
+      reorder_point: Math.round(reorderPoint),
+      order_to_qty: Math.round(orderToQty),
+      days_remaining: daysRemaining,
+      needs_reorder: needsReorder,
+    };
+  }
+
   // GET /api/inventory - list all inventory items for account
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -420,21 +440,115 @@ export function registerVeritaBenchRoutes(
     const rows = sqlite.prepare(
       "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
     ).all(accountId);
-    const items = rows.map((item: any) => {
-      const burnRate = item.burn_rate || 0;
-      const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
-      const orderToQty = burnRate * (item.desired_days_of_stock || 0);
-      const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
-      const needsReorder = item.quantity_on_hand <= reorderPoint;
-      return {
-        ...item,
-        reorder_point: Math.round(reorderPoint),
-        order_to_qty: Math.round(orderToQty),
-        days_remaining: daysRemaining,
-        needs_reorder: needsReorder,
-      };
-    });
+    const items = (rows as any[]).map(decorateInventoryItem);
     res.json(items);
+  });
+
+  // GET /api/inventory/reorder-list - items currently flagged needs_reorder,
+  // grouped by vendor server-side so the client can either render a table
+  // or hand the payload straight to the PDF/Excel generator unchanged.
+  // The trigger formula lives in decorateInventoryItem above; we filter
+  // here rather than recomputing.
+  app.get("/api/inventory/reorder-list", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const rows = sqlite.prepare(
+      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
+    ).all(accountId);
+    const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+    res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
+  });
+
+  // POST /api/inventory/reorder-list/pdf - generate a reorder document PDF
+  // grouped by vendor with a director signature block. Returns a one-time
+  // token the client GETs at /api/pdf/:token (same pattern as the studies
+  // PDF flow in routes.ts). The lab identity stamped on the PDF is read
+  // fresh from the labs table when the requester has a lab, falling back
+  // to the user's clia_lab_name / clia_number for legacy single-lab users.
+  app.post("/api/inventory/reorder-list/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    try {
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
+      ).all(accountId);
+      const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+
+      // Pull lab identity for the header. labs table first, user row fallback.
+      let labName: string | null = null;
+      let cliaNumber: string | null = null;
+      let preparedBy: string | null = null;
+      const userRow = sqlite.prepare(
+        "SELECT name, email, clia_lab_name, clia_number FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      if (userRow) {
+        preparedBy = userRow.name || userRow.email || null;
+        labName = userRow.clia_lab_name || null;
+        cliaNumber = userRow.clia_number || null;
+      }
+      const labRow = sqlite.prepare(
+        "SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1"
+      ).get(accountId) as any;
+      if (labRow) {
+        labName = labRow.lab_name || labName;
+        cliaNumber = labRow.clia_number || cliaNumber;
+      }
+
+      const pdfBuffer = await generateReorderListPDF(items, { labName, cliaNumber, preparedBy });
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = `VeritaStock_Reorder_${datestamp}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token, totalCount: items.length });
+    } catch (err: any) {
+      console.error("Reorder PDF generation error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // POST /api/inventory/reorder-list/excel - same payload as the PDF route
+  // but streams an .xlsx directly. Excel is the format purchasing actually
+  // edits before sending to a vendor (Confirmed Qty + Notes columns are the
+  // only two left unlocked), so this route does not go through the PDF
+  // token store - we return the buffer inline with Content-Disposition.
+  app.post("/api/inventory/reorder-list/excel", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    try {
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
+      ).all(accountId);
+      const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+
+      let labName: string | null = null;
+      let cliaNumber: string | null = null;
+      let preparedBy: string | null = null;
+      const userRow = sqlite.prepare(
+        "SELECT name, email, clia_lab_name, clia_number FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      if (userRow) {
+        preparedBy = userRow.name || userRow.email || null;
+        labName = userRow.clia_lab_name || null;
+        cliaNumber = userRow.clia_number || null;
+      }
+      const labRow = sqlite.prepare(
+        "SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1"
+      ).get(accountId) as any;
+      if (labRow) {
+        labName = labRow.lab_name || labName;
+        cliaNumber = labRow.clia_number || cliaNumber;
+      }
+
+      const xlsxBuffer = await generateReorderListExcel(items, { labName, cliaNumber, preparedBy });
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = `VeritaStock_Reorder_${datestamp}.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", xlsxBuffer.length);
+      res.send(xlsxBuffer);
+    } catch (err: any) {
+      console.error("Reorder Excel generation error:", err.message);
+      res.status(500).json({ error: "Excel generation failed", detail: err.message });
+    }
   });
 
   // POST /api/inventory - create new inventory item
@@ -948,21 +1062,92 @@ export function registerVeritaBenchRoutes(
       const rows = sqlite.prepare(
         "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
       ).all(req.scope.labId);
-      const items = (rows as any[]).map((item: any) => {
-        const burnRate = item.burn_rate || 0;
-        const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
-        const orderToQty = burnRate * (item.desired_days_of_stock || 0);
-        const daysRemaining = burnRate > 0 ? Math.round(item.quantity_on_hand / burnRate) : null;
-        const needsReorder = item.quantity_on_hand <= reorderPoint;
-        return {
-          ...item,
-          reorder_point: Math.round(reorderPoint),
-          order_to_qty: Math.round(orderToQty),
-          days_remaining: daysRemaining,
-          needs_reorder: needsReorder,
-        };
-      });
+      const items = (rows as any[]).map(decorateInventoryItem);
       res.json(items);
+    });
+
+    // GET /api/labs/:labId/inventory/reorder-list — lab-scoped reorder list.
+    // Same shape as the legacy /api/inventory/reorder-list above; gated on
+    // the active lab membership rather than account_id.
+    app.get("/api/labs/:labId/inventory/reorder-list", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+      ).all(req.scope.labId);
+      const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+      res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
+    });
+
+    // POST /api/labs/:labId/inventory/reorder-list/pdf — lab-scoped reorder
+    // document PDF. Lab identity comes from the labs table for THIS labId
+    // (not the requester's default lab), so a user with memberships on
+    // multiple labs gets a correctly stamped header per lab.
+    app.post("/api/labs/:labId/inventory/reorder-list/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      try {
+        const rows = sqlite.prepare(
+          "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+        ).all(req.scope.labId);
+        const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+
+        const labRow = sqlite.prepare(
+          "SELECT lab_name, clia_number FROM labs WHERE id = ?"
+        ).get(req.scope.labId) as any;
+        const userRow = sqlite.prepare(
+          "SELECT name, email FROM users WHERE id = ?"
+        ).get(req.userId) as any;
+
+        const pdfBuffer = await generateReorderListPDF(items, {
+          labName: labRow?.lab_name || null,
+          cliaNumber: labRow?.clia_number || null,
+          preparedBy: userRow?.name || userRow?.email || null,
+        });
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+        const filename = `VeritaStock_Reorder_${safeLab}_${datestamp}.pdf`;
+        const token = storePdfToken(pdfBuffer, filename);
+        res.json({ token, totalCount: items.length });
+      } catch (err: any) {
+        console.error("Reorder PDF generation error (lab-scoped):", err.message);
+        res.status(500).json({ error: "PDF generation failed", detail: err.message });
+      }
+    });
+
+    // POST /api/labs/:labId/inventory/reorder-list/excel — lab-scoped Excel
+    // variant. Same shape as the legacy /api/inventory/reorder-list/excel
+    // above; differs only in how the lab identity for the header is read
+    // (this labId, not the requester's default lab).
+    app.post("/api/labs/:labId/inventory/reorder-list/excel", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      try {
+        const rows = sqlite.prepare(
+          "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+        ).all(req.scope.labId);
+        const items = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder) as ReorderItem[];
+
+        const labRow = sqlite.prepare(
+          "SELECT lab_name, clia_number FROM labs WHERE id = ?"
+        ).get(req.scope.labId) as any;
+        const userRow = sqlite.prepare(
+          "SELECT name, email FROM users WHERE id = ?"
+        ).get(req.userId) as any;
+
+        const xlsxBuffer = await generateReorderListExcel(items, {
+          labName: labRow?.lab_name || null,
+          cliaNumber: labRow?.clia_number || null,
+          preparedBy: userRow?.name || userRow?.email || null,
+        });
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+        const filename = `VeritaStock_Reorder_${safeLab}_${datestamp}.xlsx`;
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", xlsxBuffer.length);
+        res.send(xlsxBuffer);
+      } catch (err: any) {
+        console.error("Reorder Excel generation error (lab-scoped):", err.message);
+        res.status(500).json({ error: "Excel generation failed", detail: err.message });
+      }
     });
 
     app.post("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {

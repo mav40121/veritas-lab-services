@@ -11,6 +11,7 @@ import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS,
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
+import { pdfTokenStore, storePdfToken } from "./pdfTokens";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -520,19 +521,9 @@ function requireModuleEdit(module: string) {
 }
 
 // ── PDF TOKEN STORE ──────────────────────────────────────────────────────────
-// Short-lived in-memory store for PDF downloads.  Client calls POST to generate
-// the PDF, receives a one-time token, then redirects the browser to the GET
-// endpoint.  The browser handles the download natively so Adobe Acrobat's
-// extension never gets a chance to intercept a blob:// URL.
-interface PdfTokenEntry { buffer: Buffer; filename: string; expires: number; }
-const pdfTokenStore = new Map<string, PdfTokenEntry>();
-function storePdfToken(buffer: Buffer, filename: string): string {
-  const token = crypto.randomUUID();
-  pdfTokenStore.set(token, { buffer, filename, expires: Date.now() + 60_000 });
-  // Prune expired entries
-  for (const [k, v] of Array.from(pdfTokenStore)) { if (v.expires < Date.now()) pdfTokenStore.delete(k); }
-  return token;
-}
+// Moved to server/pdfTokens.ts so other route modules (veritabench, etc.)
+// can hand back tokens that the shared /api/pdf/:token endpoint serves.
+// (See top-of-file import of pdfTokenStore / storePdfToken.)
 
 // ── LAB LOCK + AUDIT HELPERS ─────────────────────────────────────────────────
 

@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
@@ -516,6 +516,70 @@ export default function VeritaStockInventoryPage() {
     }
   };
 
+  // ── Order-Now document generation ─────────────────────────────────────────
+  // Both handlers POST to the server's reorder-list endpoint. The PDF flow
+  // returns a one-time token the browser GETs at /api/pdf/:token so Adobe
+  // Acrobat's extension doesn't hijack a blob URL. The Excel flow streams
+  // the xlsx inline because purchasing edits the file before sending and
+  // the binary blob is exactly what they need to save.
+  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel">(null);
+  const reorderPdfUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/inventory/reorder-list/pdf`
+    : `${API_BASE}/api/inventory/reorder-list/pdf`;
+  const reorderExcelUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/inventory/reorder-list/excel`
+    : `${API_BASE}/api/inventory/reorder-list/excel`;
+
+  const generateOrderPdf = async () => {
+    setGeneratingOrderDoc("pdf");
+    try {
+      const res = await fetch(reorderPdfUrl, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not generate PDF", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token, totalCount } = await res.json();
+      // Browser-native download via direct GET, bypassing extension blob hijack.
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      toast({
+        title: totalCount === 0 ? "PDF generated (no items due)" : `Order PDF generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
+        description: "Review and sign the PDF before sending to vendors.",
+      });
+    } catch {
+      toast({ title: "Could not generate PDF", description: "Network error", variant: "destructive" });
+    } finally {
+      setGeneratingOrderDoc(null);
+    }
+  };
+
+  const generateOrderExcel = async () => {
+    setGeneratingOrderDoc("excel");
+    try {
+      const res = await fetch(reorderExcelUrl, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not generate Excel", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VeritaStock_Reorder_${datestamp}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Order workbook downloaded", description: "Confirmed Qty + Notes columns are unlocked for purchasing." });
+    } catch {
+      toast({ title: "Could not generate Excel", description: "Network error", variant: "destructive" });
+    } finally {
+      setGeneratingOrderDoc(null);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -777,9 +841,36 @@ export default function VeritaStockInventoryPage() {
           <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>VeritaStock{"™"}</h1>
           <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated par levels, and standing order management</p>
         </div>
-        <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
-          <Plus size={14} className="mr-1.5" />Add Item
-        </Button>
+        <div className="flex gap-2">
+          {/* Order-Now document generation. Renders even when 0 items are due
+              so the lab can produce a dated "nothing to order" record if
+              an external accreditor wants documentation of the check. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={generateOrderPdf}
+            disabled={generatingOrderDoc !== null || readOnly}
+            title={`Generate Reorder PDF (${stats.reorderNow} item${stats.reorderNow === 1 ? "" : "s"} currently at or below reorder point)`}
+            data-testid="generate-order-pdf-button"
+          >
+            <FileText size={14} className="mr-1.5" />
+            {generatingOrderDoc === "pdf" ? "Generating..." : `Order PDF${stats.reorderNow > 0 ? ` (${stats.reorderNow})` : ""}`}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={generateOrderExcel}
+            disabled={generatingOrderDoc !== null || readOnly}
+            title="Generate Reorder workbook (Confirmed Qty + Notes columns unlocked)"
+            data-testid="generate-order-excel-button"
+          >
+            <FileSpreadsheet size={14} className="mr-1.5" />
+            {generatingOrderDoc === "excel" ? "Generating..." : "Order XLSX"}
+          </Button>
+          <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
+            <Plus size={14} className="mr-1.5" />Add Item
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
