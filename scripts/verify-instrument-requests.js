@@ -102,6 +102,20 @@ function check(label, cond, detail) {
   });
   check('Invalid resolve status returns 400', badR.status === 400, `status=${badR.status}`);
 
+  // 7. Cleanup: delete the test record so verify runs don't accumulate
+  // pollution in the prod DB. If this fails, the test record stays but
+  // the other assertions still report correctly.
+  const delR = await fetch(`${API}/api/admin/instrument-requests/${requestId}`, {
+    method: 'DELETE', headers: ADMIN,
+  });
+  check('DELETE cleanup of test record returns 200', delR.status === 200, `status=${delR.status}`);
+
+  // 8. Confirm DELETE was hard: a second DELETE returns 404
+  const delR2 = await fetch(`${API}/api/admin/instrument-requests/${requestId}`, {
+    method: 'DELETE', headers: ADMIN,
+  });
+  check('Second DELETE on same id returns 404 (record actually gone)', delR2.status === 404, `status=${delR2.status}`);
+
   console.log(`\n${failed === 0 ? 'ALL TESTS PASSED' : `${failed} TEST(S) FAILED`}`);
   process.exit(failed === 0 ? 0 : 1);
 })().catch(err => { console.error(err); process.exit(1); });

@@ -3563,6 +3563,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ requests: rows, count: rows.length });
   });
 
+  // Admin: delete a request (used to clean up test records or genuine
+  // spam). Hard delete, no soft-delete state — there is no legitimate
+  // need to recover an instrument-add request.
+  app.delete("/api/admin/instrument-requests/:id", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const id = Number(req.params.id);
+    const sqlite = (db as any).$client;
+    const result = sqlite.prepare("DELETE FROM veritamap_instrument_requests WHERE id = ?").run(id);
+    if (result.changes === 0) return res.status(404).json({ error: "request not found" });
+    res.json({ id, deleted: true });
+  });
+
   // Admin: resolve a request (approved when the instrument is added to the
   // library, rejected when not adding with reason). Body: {status, reviewer_notes}.
   app.post("/api/admin/instrument-requests/:id/resolve", (req, res) => {
