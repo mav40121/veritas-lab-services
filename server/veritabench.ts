@@ -493,6 +493,32 @@ export function registerVeritaBenchRoutes(
     });
   }
 
+  // Build the filter-context object passed into the PDF/XLSX generators so
+  // they can render the FILTERED VIEW banner + reflect scope in the
+  // filename. Mirrors applyReorderFilters' inputs.
+  function reorderFilterContext(query: any) {
+    return {
+      filterDepartment: (query.department || "").trim() || null,
+      filterCategory: (query.category || "").trim() || null,
+      filterVendor: (query.vendor || "").trim() || null,
+    };
+  }
+
+  // Filename suffix when filters are active. Sanitizes the same way the
+  // lab name is sanitized so the output is a safe Windows/Mac filename.
+  function reorderFilenameSuffix(query: any): string {
+    const vendor = (query.vendor || "").trim();
+    const department = (query.department || "").trim();
+    const category = (query.category || "").trim();
+    const parts: string[] = [];
+    if (vendor) parts.push(vendor);
+    if (department) parts.push(department);
+    if (category) parts.push(category);
+    if (parts.length === 0) return "";
+    const joined = parts.join("_").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 60);
+    return joined ? `_${joined}` : "";
+  }
+
   // GET /api/inventory - list all inventory items for account
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -556,9 +582,9 @@ export function registerVeritaBenchRoutes(
         cliaNumber = labRow.clia_number || cliaNumber;
       }
 
-      const pdfBuffer = await generateReorderListPDF(items, { labName, cliaNumber, preparedBy });
+      const pdfBuffer = await generateReorderListPDF(items, { labName, cliaNumber, preparedBy, ...reorderFilterContext(req.query) });
       const datestamp = new Date().toISOString().slice(0, 10);
-      const filename = `VeritaStock_Reorder_${datestamp}.pdf`;
+      const filename = `VeritaStock_Reorder${reorderFilenameSuffix(req.query)}_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token, totalCount: items.length });
     } catch (err: any) {
@@ -601,9 +627,9 @@ export function registerVeritaBenchRoutes(
         cliaNumber = labRow.clia_number || cliaNumber;
       }
 
-      const xlsxBuffer = await generateReorderListExcel(items, { labName, cliaNumber, preparedBy });
+      const xlsxBuffer = await generateReorderListExcel(items, { labName, cliaNumber, preparedBy, ...reorderFilterContext(req.query) });
       const datestamp = new Date().toISOString().slice(0, 10);
-      const filename = `VeritaStock_Reorder_${datestamp}.xlsx`;
+      const filename = `VeritaStock_Reorder${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.setHeader("Content-Length", xlsxBuffer.length);
@@ -1166,10 +1192,11 @@ export function registerVeritaBenchRoutes(
           labName: labRow?.lab_name || null,
           cliaNumber: labRow?.clia_number || null,
           preparedBy: userRow?.name || userRow?.email || null,
+          ...reorderFilterContext(req.query),
         });
         const datestamp = new Date().toISOString().slice(0, 10);
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
-        const filename = `VeritaStock_Reorder_${safeLab}_${datestamp}.pdf`;
+        const filename = `VeritaStock_Reorder_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.pdf`;
         const token = storePdfToken(pdfBuffer, filename);
         res.json({ token, totalCount: items.length });
       } catch (err: any) {
@@ -1202,10 +1229,11 @@ export function registerVeritaBenchRoutes(
           labName: labRow?.lab_name || null,
           cliaNumber: labRow?.clia_number || null,
           preparedBy: userRow?.name || userRow?.email || null,
+          ...reorderFilterContext(req.query),
         });
         const datestamp = new Date().toISOString().slice(0, 10);
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
-        const filename = `VeritaStock_Reorder_${safeLab}_${datestamp}.xlsx`;
+        const filename = `VeritaStock_Reorder_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
         res.setHeader("Content-Length", xlsxBuffer.length);

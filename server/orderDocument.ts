@@ -47,6 +47,23 @@ export interface ReorderLabContext {
   labName?: string | null;
   cliaNumber?: string | null;
   preparedBy?: string | null;  // user.full_name from the requester
+  // Active client-side filters at generation time. Surfaces in the PDF/XLSX
+  // so readers can tell at a glance whether they are looking at the FULL
+  // lab reorder list or a filtered subset (e.g., "Vendor: fisher"). Empty
+  // / undefined = full lab; render no filter banner.
+  filterDepartment?: string | null;
+  filterCategory?: string | null;
+  filterVendor?: string | null;
+}
+
+// Compose a single human-readable filter label string for the header
+// banner. Empty when no filters are active.
+function filterBannerText(ctx: ReorderLabContext): string {
+  const parts: string[] = [];
+  if (ctx.filterVendor) parts.push(`Vendor: ${ctx.filterVendor}`);
+  if (ctx.filterDepartment) parts.push(`Department: ${ctx.filterDepartment}`);
+  if (ctx.filterCategory) parts.push(`Category: ${ctx.filterCategory}`);
+  return parts.join("   |   ");
 }
 
 const TEAL = "#01696F";
@@ -120,6 +137,16 @@ function headerHTML(ctx: ReorderLabContext, totalItems: number, totalVendors: nu
   const cliaLine = ctx.cliaNumber
     ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${escapeHtml(ctx.cliaNumber)}</div>`
     : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter in account settings</div>`;
+  // Filter banner: rendered as a prominent amber callout under the title
+  // when ANY filter is active. Makes it obvious at a glance that the
+  // document is a scoped subset rather than the full lab reorder list.
+  const bannerText = filterBannerText(ctx);
+  const filterBanner = bannerText
+    ? `<div style="margin:6px 0 0 0;padding:6px 12px;border:1px solid #D4A017;background:#FFF8E1;border-radius:4px;font-size:9pt;color:#7A5A00;text-align:center;">
+        <span style="font-weight:700;">FILTERED VIEW: this is not the full lab reorder list.</span>
+        &nbsp; ${escapeHtml(bannerText)}
+      </div>`
+    : "";
   return `
   <div class="report-header">
     <div>
@@ -130,11 +157,12 @@ function headerHTML(ctx: ReorderLabContext, totalItems: number, totalVendors: nu
     </div>
     <div class="header-right">
       <div style="font-weight:600;color:${DARK};">Generated: ${today()}</div>
-      <div>${totalItems} item${totalItems === 1 ? "" : "s"} across ${totalVendors} vendor${totalVendors === 1 ? "" : "s"}</div>
+      <div>${totalItems} item${totalItems === 1 ? "" : "s"} across ${totalVendors} vendor${totalVendors === 1 ? "" : "s"}${bannerText ? " (filtered)" : ""}</div>
     </div>
   </div>
   <div class="report-title">VeritaStock&trade; Reorder Document</div>
   <div class="report-subtitle">Items at or below reorder point (lead time + safety stock days of supply)</div>
+  ${filterBanner}
   <hr class="divider">`;
 }
 
@@ -327,6 +355,19 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
   about.getRow(2).height = 24;
 
   let row = 3;
+  // Filter banner: same scope-disclosure as the PDF. Renders as a bold
+  // amber row so opening the workbook makes the scope obvious before
+  // anyone reads the data tabs. Skipped when no filter is active.
+  const filterText = filterBannerText(ctx);
+  if (filterText) {
+    const f = about.getCell(`A${row}`);
+    f.value = `FILTERED VIEW: this workbook does not include the full lab. ${filterText}`;
+    f.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF7A5A00" } };
+    f.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF8E1" } };
+    f.alignment = { vertical: "middle", horizontal: "left", wrapText: true, indent: 1 };
+    f.border = aboutBorder;
+    about.getRow(row).height = 28; row += 1;
+  }
   const section = (text: string) => {
     const c = about.getCell(`A${row}`);
     c.value = text;
