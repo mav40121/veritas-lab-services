@@ -23900,7 +23900,7 @@
         "complexity": "MODERATE",
         "specialty": "Blood Bank"
       },
-      "Antibody detection at 37\u00b0C": {
+      "Antibody detection at 37°C": {
         "complexity": "MODERATE",
         "specialty": "Blood Bank"
       },
@@ -29377,7 +29377,7 @@
     "category": "Immunoassay",
     "testCount": 8,
     "tests": {
-      "Access 2, Access 2i, Access 2 Immunoassay Analyzer, Access AccuTnI+3, Access AFP, Access Anti-HCV, Access Anti-HBc, Access Anti-HBs, Access Anti-HIV-1/2, Access BBV, Access Beta CrossLaps, Access B12, Access CA125, Access CA15-3, Access CA19-9, Access CEA, Access Chagas, Access Cortisol, Access Cytomegalovirus IgG, Access Cytomegalovirus IgM, Access DHEA-S, Access Direct Free Testosterone, Access Ferritin, Access FSH, Access Free T3, Access Free T4, Access Folate, Access Gastrin, Access hCG (Total \u03b2hCG), Access HIV Ag/Ab Combo, Access hsCRP, Access haptoglobin, Access IgE, Access Insulin, Access Intact PTH, Access LH, Access Lyme, Access Malaria, Access Myoglobin, Access N-terminal pro B-type Natriuretic Peptide, Access Osteocalcin, Access Phenytoin, Access Procalcitonin, Access Progesterone, Access Prolactin, Access PSA, Access PSA Free, Access Rubella IgG, Access Rubella IgM, Access SARS-CoV-2, Access SHBG, Access Testosterone, Access Toxoplasma IgG, Access Toxoplasma IgM, Access TSH (3rd IS), Access T-Uptake, Access Vitamin B12, Access Vitamin D (25-OH), Access Anti-Tg, Access Tg, Access AMH, Access Estradiol, Access E2, Access LH2, Access FSH2, Access Prolactin2, Access AFP2, Access CA 19-9 (2nd IS), Access CA 125 (2nd IS), Access Free PSA, Access Total \u03b2hCG (5th IS), Access Anti-HBc IgM, Access Anti-HAV IgM, Access Anti-HBs 2, Access Anti-HCV 2, Access HBsAg, Access HBsAg Confirmatory, Access HBsAg II, Access HCV Ab, Access HIV Combo 4th Gen, Access HIV Combo 5th Gen, Access Syphilis Total, Access Syphilis IgG/IgM, Access HBeAg, Access Anti-HBe, Access NT-proBNP, Access PAPP-A, Access P1NP, Access sFlt-1, Access PlGF, Access GFAP, Access pTau217, Access beta-Amyloid 42/40, Access NEPHRIN, Access IGFBP-3, Access LH3, Access Estrone, Access Progesterone 2, Access Testosterone 2, Access Free Testosterone 2": {
+      "Access 2, Access 2i, Access 2 Immunoassay Analyzer, Access AccuTnI+3, Access AFP, Access Anti-HCV, Access Anti-HBc, Access Anti-HBs, Access Anti-HIV-1/2, Access BBV, Access Beta CrossLaps, Access B12, Access CA125, Access CA15-3, Access CA19-9, Access CEA, Access Chagas, Access Cortisol, Access Cytomegalovirus IgG, Access Cytomegalovirus IgM, Access DHEA-S, Access Direct Free Testosterone, Access Ferritin, Access FSH, Access Free T3, Access Free T4, Access Folate, Access Gastrin, Access hCG (Total βhCG), Access HIV Ag/Ab Combo, Access hsCRP, Access haptoglobin, Access IgE, Access Insulin, Access Intact PTH, Access LH, Access Lyme, Access Malaria, Access Myoglobin, Access N-terminal pro B-type Natriuretic Peptide, Access Osteocalcin, Access Phenytoin, Access Procalcitonin, Access Progesterone, Access Prolactin, Access PSA, Access PSA Free, Access Rubella IgG, Access Rubella IgM, Access SARS-CoV-2, Access SHBG, Access Testosterone, Access Toxoplasma IgG, Access Toxoplasma IgM, Access TSH (3rd IS), Access T-Uptake, Access Vitamin B12, Access Vitamin D (25-OH), Access Anti-Tg, Access Tg, Access AMH, Access Estradiol, Access E2, Access LH2, Access FSH2, Access Prolactin2, Access AFP2, Access CA 19-9 (2nd IS), Access CA 125 (2nd IS), Access Free PSA, Access Total βhCG (5th IS), Access Anti-HBc IgM, Access Anti-HAV IgM, Access Anti-HBs 2, Access Anti-HCV 2, Access HBsAg, Access HBsAg Confirmatory, Access HBsAg II, Access HCV Ab, Access HIV Combo 4th Gen, Access HIV Combo 5th Gen, Access Syphilis Total, Access Syphilis IgG/IgM, Access HBeAg, Access Anti-HBe, Access NT-proBNP, Access PAPP-A, Access P1NP, Access sFlt-1, Access PlGF, Access GFAP, Access pTau217, Access beta-Amyloid 42/40, Access NEPHRIN, Access IGFBP-3, Access LH3, Access Estrone, Access Progesterone 2, Access Testosterone 2, Access Free Testosterone 2": {
         "complexity": "HIGH",
         "specialty": "Cardiac"
       },
@@ -32216,7 +32216,7 @@
         "complexity": "HIGH",
         "specialty": "General Chemistry"
       },
-      "Total \u00df-hCG Generation II": {
+      "Total ß-hCG Generation II": {
         "complexity": "HIGH",
         "specialty": "Endocrinology"
       },
@@ -33398,5 +33398,107 @@
       }
     },
     "menuLastVerifiedAt": "2026-05-07"
+  },
+  "MEDTOX PROFILE II-A": {
+    "vendor": "MEDTOX (Labcorp)",
+    "category": "Toxicology / TDM",
+    "testCount": 12,
+    "tests": {
+      "Amphetamines": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Methamphetamines (mAMP)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Opiates (morphine)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Buprenorphine": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      }
+    }
+  },
+  "MEDTOX Sure-Step": {
+    "vendor": "MEDTOX (Labcorp)",
+    "category": "Toxicology / TDM",
+    "testCount": 10,
+    "tests": {
+      "Amphetamines": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Methamphetamines (mAMP)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Opiates (morphine)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      }
+    }
   }
 }
