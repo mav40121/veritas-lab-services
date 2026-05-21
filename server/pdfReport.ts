@@ -2609,7 +2609,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
 // ─── Puppeteer renderer ───────────────────────────────────────────────────────
 let _browser: any = null;
-async function getBrowser() {
+export async function getBrowser() {
   if (!_browser || !_browser.connected) {
     _browser = await puppeteer.launch({
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
