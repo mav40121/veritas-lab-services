@@ -14510,6 +14510,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return reqSets;
   }
 
+  // Plain-language CFR summary lookup for the Master List Excel column.
+  // Built once at startup from CFR_REQUIREMENTS entries that carry the
+  // optional `summary` field (curated by hand for the high-traffic
+  // sections operator has reviewed). Key is the section number portion
+  // of the citation, e.g. "493.1253" from "42 CFR §493.1253", so the
+  // Master List's plainer "42 CFR 493.1253" citation strings normalize
+  // to the same lookup key. Curated by design: a row stays blank when
+  // none of its cited CFRs has been authored a summary.
+  const cfrSummaryMap = new Map<string, string>();
+  for (const r of (CFR_REQUIREMENTS as unknown as any[])) {
+    if (typeof r?.summary === 'string' && r.summary.trim().length > 0) {
+      const m = String(r.standard || '').match(/(\d+\.\d+)/);
+      if (m && !cfrSummaryMap.has(m[1])) cfrSummaryMap.set(m[1], r.summary);
+    }
+  }
+  function cfrSummariesForCitations(cfrCitations: string | null | undefined): string {
+    if (!cfrCitations) return '';
+    const sections = [...String(cfrCitations).matchAll(/(\d+\.\d+)/g)].map((m) => m[1]);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const sec of sections) {
+      if (seen.has(sec)) continue;
+      seen.add(sec);
+      const s = cfrSummaryMap.get(sec);
+      if (s) out.push(s);
+    }
+    return out.join('\n\n');
+  }
+
   // GET settings
   // Phase 1 (2026-05-01): also returns accreditation_choice derived from labs
   // table flags. The legacy accreditation_body column is left in place but
@@ -15012,6 +15041,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
       aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
       aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
+      aboutBody('Plain-Language CFR Summary: a curated paraphrase of the cited CFR section, written in operator voice for lab-director scannability. Populated only for citations where the CFR text is dense enough that a plain-language reading aid helps; left blank for the rest. The CFR Citations column is the authoritative source. The summary is a reading aid, not a substitute for the citation.');
       aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
 
@@ -15054,6 +15084,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         { label: 'Service Line', width: 14 },
         { label: 'Description',  width: 70 },
         { label: 'CFR Citations', width: 38 },
+        // Curated plain-language paraphrase of the cited CFR section(s),
+        // populated only when one of the cited CFRs has an authored summary
+        // in cfrRequirements.ts. Blank by design when no summary is on file.
+        { label: 'Plain-Language CFR Summary', width: 60 },
       ];
       const aoHeaderDefs = aoCols.map(a => ({ label: a.label, width: 28 }));
       const tailHeaders = [
@@ -15073,6 +15107,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           r.service_line,
           r.description,
           r.cfr_citations,
+          cfrSummariesForCitations(r.cfr_citations),
           ...aoCells,
           r.notes || '',
           '',
@@ -15444,6 +15479,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
       aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
       aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
+      aboutBody('Plain-Language CFR Summary: a curated paraphrase of the cited CFR section, written in operator voice for lab-director scannability. Populated only for citations where the CFR text is dense enough that a plain-language reading aid helps; left blank for the rest. The CFR Citations column is the authoritative source. The summary is a reading aid, not a substitute for the citation.');
       aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
       aboutSection('Disclaimer');
@@ -15481,6 +15517,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         { label: 'Service Line', width: 14 },
         { label: 'Description',  width: 70 },
         { label: 'CFR Citations', width: 38 },
+        // Curated plain-language paraphrase of the cited CFR section(s),
+        // populated only when one of the cited CFRs has an authored summary
+        // in cfrRequirements.ts. Blank by design when no summary is on file.
+        { label: 'Plain-Language CFR Summary', width: 60 },
       ];
       const aoHeaderDefs = aoCols.map(a => ({ label: a.label, width: 28 }));
       const tailHeaders = [
@@ -15493,7 +15533,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const aoCells = aoCols.map(a => (r as any)[a.key] || '');
         ws.addRow([
           r.policy_id, r.policy_name, r.section, r.subspecialty, r.service_line,
-          r.description, r.cfr_citations, ...aoCells, r.notes || '', '',
+          r.description, r.cfr_citations, cfrSummariesForCitations(r.cfr_citations),
+          ...aoCells, r.notes || '', '',
         ]);
       }
       const headerRow = ws.getRow(1);
