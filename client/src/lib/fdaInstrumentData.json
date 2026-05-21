@@ -33500,5 +33500,973 @@
         "specialty": "Toxicology"
       }
     }
+  },
+  "bioMerieux VITEK 2 Compact": {
+    "vendor": "bioMerieux",
+    "category": "Microbiology",
+    "testCount": 4,
+    "tests": {
+      "Aerobic organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Anaerobic organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "bioMerieux BACT/ALERT 3D": {
+    "vendor": "bioMerieux",
+    "category": "Microbiology",
+    "testCount": 5,
+    "tests": {
+      "Aerobic blood culture": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Anaerobic blood culture": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Pediatric blood culture": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Mycobacteria (MP/MB) culture": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Sterile body fluid culture": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "bioMerieux VITEK MS": {
+    "vendor": "bioMerieux",
+    "category": "Microbiology",
+    "testCount": 3,
+    "tests": {
+      "Bacterial organism identification (MALDI-TOF)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast organism identification (MALDI-TOF)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Mycobacteria organism identification (MALDI-TOF)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "bioMerieux VIDAS 3": {
+    "vendor": "bioMerieux",
+    "category": "Microbiology",
+    "testCount": 10,
+    "tests": {
+      "Clostridium difficile toxins A/B": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Procalcitonin (sepsis marker)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lyme IgG/IgM": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "HIV combo (Ag/Ab)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Hepatitis B surface antigen": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Toxoplasma IgG/IgM": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CMV IgG/IgM": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Rubella IgG/IgM": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Mononucleosis (heterophile)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Influenza A/B": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "BD Phoenix 100": {
+    "vendor": "BD",
+    "category": "Microbiology",
+    "testCount": 4,
+    "tests": {
+      "Aerobic organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-negative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-positive)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "Bruker MALDI Biotyper sirius": {
+    "vendor": "Bruker",
+    "category": "Microbiology",
+    "testCount": 3,
+    "tests": {
+      "Bacterial organism identification (MALDI-TOF)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast organism identification (MALDI-TOF)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Mycobacteria organism identification (MALDI-TOF)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "Beckman Coulter MicroScan WalkAway plus": {
+    "vendor": "Beckman Coulter",
+    "category": "Microbiology",
+    "testCount": 4,
+    "tests": {
+      "Aerobic organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast organism identification": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-negative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-positive)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "Thermo Fisher Sensititre ARIS HiQ": {
+    "vendor": "Thermo Fisher",
+    "category": "Microbiology",
+    "testCount": 3,
+    "tests": {
+      "Antimicrobial susceptibility testing (gram-negative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-positive)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast antifungal susceptibility testing": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "Copan WASP": {
+    "vendor": "Copan",
+    "category": "Microbiology",
+    "testCount": 2,
+    "tests": {
+      "Automated specimen processing (plating)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Automated Gram stain preparation": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "Waters Xevo TQ-S Micro": {
+    "vendor": "Waters",
+    "category": "Mass Spectrometry",
+    "testCount": 6,
+    "tests": {
+      "Vitamin D metabolites (25-OH-D2 and D3)": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone (LC-MS/MS)": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Immunosuppressants panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Pain management drug panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Drugs of abuse confirmation": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Therapeutic drug monitoring panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      }
+    }
+  },
+  "Sciex Triple Quad 6500+": {
+    "vendor": "Sciex",
+    "category": "Mass Spectrometry",
+    "testCount": 5,
+    "tests": {
+      "Vitamin D metabolites": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Steroid panel (LC-MS/MS)": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Immunosuppressants panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Drugs of abuse confirmation": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Pain management drug panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      }
+    }
+  },
+  "Sciex API 4500MD": {
+    "vendor": "Sciex",
+    "category": "Mass Spectrometry",
+    "testCount": 5,
+    "tests": {
+      "Vitamin D metabolites": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Immunosuppressants panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Newborn screening (amino acids, acylcarnitines)": {
+        "complexity": "HIGH",
+        "specialty": "General Chemistry"
+      },
+      "Drugs of abuse confirmation": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Therapeutic drug monitoring panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      }
+    }
+  },
+  "Agilent 6470 LC-MS Triple Quadrupole": {
+    "vendor": "Agilent",
+    "category": "Mass Spectrometry",
+    "testCount": 5,
+    "tests": {
+      "Vitamin D metabolites": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Steroid panel (LC-MS/MS)": {
+        "complexity": "HIGH",
+        "specialty": "Endocrinology"
+      },
+      "Immunosuppressants panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Drugs of abuse confirmation": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Pain management drug panel": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      }
+    }
+  },
+  "Thermo Fisher Q Exactive Plus": {
+    "vendor": "Thermo Fisher",
+    "category": "Mass Spectrometry",
+    "testCount": 4,
+    "tests": {
+      "Newborn screening (high resolution)": {
+        "complexity": "HIGH",
+        "specialty": "General Chemistry"
+      },
+      "Proteomics panel": {
+        "complexity": "HIGH",
+        "specialty": "General Chemistry"
+      },
+      "Drugs of abuse confirmation (high resolution)": {
+        "complexity": "HIGH",
+        "specialty": "Toxicology"
+      },
+      "Untargeted metabolomics screen": {
+        "complexity": "HIGH",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "HemoCue Hb 201+": {
+    "vendor": "HemoCue",
+    "category": "Point of Care",
+    "testCount": 1,
+    "tests": {
+      "Hemoglobin": {
+        "complexity": "WAIVED",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "HemoCue WBC DIFF": {
+    "vendor": "HemoCue",
+    "category": "Point of Care",
+    "testCount": 2,
+    "tests": {
+      "White blood cell count (WBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell five-part differential": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Quidel Triage MeterPro": {
+    "vendor": "Quidel",
+    "category": "Point of Care",
+    "testCount": 4,
+    "tests": {
+      "BNP (B-type natriuretic peptide)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "D-dimer": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Drugs of abuse panel": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cardiac panel (CK-MB, myoglobin, troponin I)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Quidel Sofia 2": {
+    "vendor": "Quidel",
+    "category": "Point of Care",
+    "testCount": 5,
+    "tests": {
+      "Influenza A/B": {
+        "complexity": "WAIVED",
+        "specialty": "Microbiology"
+      },
+      "RSV (respiratory syncytial virus)": {
+        "complexity": "WAIVED",
+        "specialty": "Microbiology"
+      },
+      "Strep A": {
+        "complexity": "WAIVED",
+        "specialty": "Microbiology"
+      },
+      "SARS-CoV-2 antigen": {
+        "complexity": "WAIVED",
+        "specialty": "Microbiology"
+      },
+      "Lyme antibody": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      }
+    }
+  },
+  "Sekisui Acuity": {
+    "vendor": "Sekisui Diagnostics",
+    "category": "Point of Care",
+    "testCount": 3,
+    "tests": {
+      "Hemoglobin A1c (HbA1c)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Lipid panel": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Siemens Clinitek Status+": {
+    "vendor": "Siemens Healthineers",
+    "category": "Point of Care",
+    "testCount": 11,
+    "tests": {
+      "Urinalysis (10-parameter strip)": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine glucose": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine protein": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine ketones": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine blood": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine leukocyte esterase": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine nitrite": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine bilirubin": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine urobilinogen": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine pH and specific gravity": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine human chorionic gonadotropin (hCG, qualitative)": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      }
+    }
+  },
+  "Werfen GEM Premier 5000": {
+    "vendor": "Werfen",
+    "category": "Point of Care",
+    "testCount": 9,
+    "tests": {
+      "Blood gas (pH, pCO2, pO2)": {
+        "complexity": "MODERATE",
+        "specialty": "Blood Gas"
+      },
+      "Sodium (Na)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Potassium (K)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Chloride (Cl)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ionized calcium (iCa)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hematocrit (Hct)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Co-oximetry (tHb, O2Hb, COHb, MetHb)": {
+        "complexity": "MODERATE",
+        "specialty": "Blood Gas"
+      }
+    }
+  },
+  "ITC ProTime3": {
+    "vendor": "ITC",
+    "category": "Point of Care",
+    "testCount": 1,
+    "tests": {
+      "INR (prothrombin time)": {
+        "complexity": "WAIVED",
+        "specialty": "Coagulation"
+      }
+    }
+  },
+  "ITC Hemochron Signature Elite": {
+    "vendor": "ITC",
+    "category": "Point of Care",
+    "testCount": 4,
+    "tests": {
+      "ACT (activated clotting time, low range)": {
+        "complexity": "WAIVED",
+        "specialty": "Coagulation"
+      },
+      "ACT (activated clotting time, high range)": {
+        "complexity": "WAIVED",
+        "specialty": "Coagulation"
+      },
+      "APTT": {
+        "complexity": "WAIVED",
+        "specialty": "Coagulation"
+      },
+      "PT/INR": {
+        "complexity": "WAIVED",
+        "specialty": "Coagulation"
+      }
+    }
+  },
+  "Abaxis Piccolo Xpress": {
+    "vendor": "Abaxis (Zoetis)",
+    "category": "Point of Care",
+    "testCount": 14,
+    "tests": {
+      "Comprehensive metabolic panel (CMP)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Basic metabolic panel (BMP)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Lipid panel": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Liver panel": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Renal function panel": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Electrolytes panel": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Glucose": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A1c (HbA1c)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "BUN (urea nitrogen)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "ALT (alanine aminotransferase)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "AST (aspartate aminotransferase)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      },
+      "Total bilirubin": {
+        "complexity": "WAIVED",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Beckman Coulter UniCel DxH 800": {
+    "vendor": "Beckman Coulter",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BC-6800 Plus": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Hologic Aptima Panther": {
+    "vendor": "Hologic",
+    "category": "Molecular",
+    "testCount": 7,
+    "tests": {
+      "Chlamydia trachomatis / Neisseria gonorrhoeae (CT/NG)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Trichomonas vaginalis": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Mycoplasma genitalium": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HPV (high-risk genotypes)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HCV viral load (quantitative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HIV-1 viral load (quantitative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "HBV viral load (quantitative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "BD MAX": {
+    "vendor": "BD",
+    "category": "Molecular",
+    "testCount": 8,
+    "tests": {
+      "Group B Streptococcus (GBS)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "MRSA / SA nasal screen": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Clostridium difficile (toxin gene)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Vaginal panel (BV, Candida, Trich)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Chlamydia trachomatis / Neisseria gonorrhoeae (CT/NG)": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Enteric bacterial panel": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Enteric viral panel": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      },
+      "Enteric parasitic panel": {
+        "complexity": "MODERATE",
+        "specialty": "Microbiology"
+      }
+    }
+  },
+  "Ortho VISION": {
+    "vendor": "Ortho Clinical Diagnostics (now QuidelOrtho)",
+    "category": "Blood Bank",
+    "testCount": 5,
+    "tests": {
+      "ABO/Rh typing": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Antibody screen": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Antibody identification": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Crossmatch": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      },
+      "Direct antiglobulin test (DAT)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunohematology"
+      }
+    }
+  },
+  "Werfen ACL TOP 550": {
+    "vendor": "Werfen",
+    "category": "Coagulation",
+    "testCount": 9,
+    "tests": {
+      "Prothrombin time (PT/INR)": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Activated partial thromboplastin time (APTT)": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Fibrinogen (Clauss)": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Thrombin time": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "D-dimer": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Antithrombin III": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Protein C activity": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Protein S activity": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      },
+      "Factor assays (II, V, VII, VIII, IX, X, XI, XII)": {
+        "complexity": "MODERATE",
+        "specialty": "Coagulation"
+      }
+    }
+  },
+  "Alere Triage TOX Drug Screen": {
+    "vendor": "Alere (Abbott)",
+    "category": "Toxicology / TDM",
+    "testCount": 11,
+    "tests": {
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methylenedioxymethamphetamine (MDMA)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methaqualone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      }
+    }
+  },
+  "Premier Biotech CityCup": {
+    "vendor": "Premier Biotech",
+    "category": "Toxicology / TDM",
+    "testCount": 13,
+    "tests": {
+      "Amphetamines": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Methamphetamines (mAMP)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Opiates (morphine)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Buprenorphine": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      },
+      "Fentanyl": {
+        "complexity": "WAIVED",
+        "specialty": "Toxicology"
+      }
+    }
   }
 }
