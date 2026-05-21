@@ -599,11 +599,16 @@ User confirmed this booth answer 2026-05-07.
   commit 98d184a): `aa_records` table added in `server/db.ts` with
   method CHECK constraint and `frequency_per_year >= 2` CHECK; four
   CRUD endpoints under `/api/pt/aa-records` in `server/routes.ts`.
-- Phase 2 v2 (UI + coverage union) **STILL OWED**: AAA enrollment
-  form, extend `computePTCoverage()` to union `pt_enrollments_v2`
-  with `aa_records`, 3-bucket dashboard tile (PT-covered / AAA-covered
-  / Uncovered). Sequencing dependency on #19 (lab-wide menu toggle)
-  is now satisfied (#19 closed as C8 on 2026-05-10).
+- Phase 2 v2 (UI + coverage union) **CLOSED** 2026-05-21 (status drift
+  audit). All three deliverables verified shipped in current code:
+  AAA enrollment form lives in `VeritaPTAppPage.tsx` (modal opened by
+  "Manage AAA Records" button); `computePTCoverage()` in
+  `server/routes.ts:8486` already unions `pt_enrollments_v2` with
+  `aa_records` (lines 8513-8540) and returns 5-bucket summary
+  including `aaaCovered`; dashboard renders the AAA-Covered tile at
+  `VeritaPTAppPage.tsx:309`. The "STILL OWED" annotation was status
+  drift; the work shipped sometime after the data layer but the
+  parking lot was not updated.
 - Phase 3 (AAA-failure-to-finding linkage) remains deferred pending
   #17 launch.
 
