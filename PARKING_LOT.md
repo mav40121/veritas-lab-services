@@ -98,8 +98,7 @@ needs its own subscription tier or rolls into an existing one.
 "Parking lot:  build an operations module for cost per test
 calculations."
 
-**Status:** Open. Not started. Memory entry exists at
-work.projects.veritaassure.operations_module.
+**Status:** Deferred indefinitely unless a customer asks by name (2026-05-21). Same posture #24 and #25 had before they became hard NOs. Reason: no customer has requested this module; sizing is XL multi-week build with uncertain demand. Memory entry exists at work.projects.veritaassure.operations_module.
 
 **Pre- vs post-COLA:** Post-COLA. New module, not on the conference
 demo path.
@@ -159,59 +158,7 @@ Depends on Tier 2 (multi-lab data layer).
 
 ### 16. WSLH PT booth follow-up email
 
-**What:** User met WSLH Proficiency Testing in person at COLA Nashville
-2026 on 2026-05-07 (trade-show business card, UTM-tagged catalog URL
-`utm_source=tradeshow&utm_medium=business_card&utm_campaign=catalog_page`).
-A follow-up email is owed to the WSLH contact within the standard
-post-conference window (~5-10 business days from booth meeting), pegging
-the relationship before the warmth fades.
-
-**Why this is parked, not done now:** User is still on the floor at
-COLA. The right email depends on:
-
-1. The exact WSLH contact name / title / email from the business card
-   (user has the card; not in our system).
-2. Whether the conversation was vendor-partnership intent (we list them
-   as a recognized PT vendor in VeritaPT; they refer mutual labs back
-   to us) or pure information-gathering ("here's our catalog, take a
-   look").
-3. Whether user wants to hand them anything tangible in the email
-   (e.g., a screenshot of the WSLH card on the upcoming
-   `/veritaassure` catalog, or a short Loom of the VeritaPT coverage
-   matcher) — some of which doesn't exist until #15 ships the week of
-   2026-05-11.
-
-**Fix shape (when user is ready, post-COLA):**
-
-- User shares: WSLH contact name, email, title, and 1-2 sentences on
-  what was actually discussed at the booth.
-- Draft a short (~150-200 word), no-em-dash email that:
-  - Thanks them for the conversation by name.
-  - States the integration we're committing to: WSLH as a recognized
-    third PT vendor in VeritaPT, with program-code catalog mapping so
-    a WSLH order line auto-credits coverage for the lab's analytes.
-  - Names a target ship window (week of 2026-05-11, contingent on
-    review).
-  - Asks one specific question: confirm we're allowed to use the WSLH
-    name + module codes in product UI, and whether they have an API
-    or downloadable enrollment-quote schema we should target for the
-    Tier L parser later.
-  - Closes with a soft co-marketing ask (joint blurb on our
-    `/veritaassure` page, mutual referral) only if the booth
-    conversation went that direction.
-- Reply-to: michael@veritaslabservices.com.
-- Sign with full credential block (MS, MBA, MLS(ASCP), CPHQ).
-- Confirm before send (per standing rule on outbound communications).
-
-**Source:** 2026-05-07 conference user request; user said "Parking
-lot the email" at 14:52 CDT after the WSLH catalog discussion.
-
-**Status:** **DELAYED 2026-05-10 by operator instruction.** Revisit
-when WSLH contact details (name, email, title, 1-2 sentences on what
-was discussed at booth) are in hand. No date set.
-
-**Pre- vs post-COLA:** Post-COLA. Was originally targeted 2026-05-11
-or 12; deferred indefinitely on 2026-05-10.
+**NOT CARRIED OVER 2026-05-21 — see NOT CARRIED OVER R6 below.**
 
 ---
 
@@ -935,51 +882,15 @@ top-10-state licensure registry).
 
 ---
 
-### 24. Mini-LIS module (deferred unless asked)
+### 24. Mini-LIS module
 
-**What:** A lightweight LIS for labs too small to justify a real
-LIS. myLabCompliance.io ships this. Per Perplexity analysis, this
-would be a wedge into very small physician-office labs that have no
-LIS at all and is well-positioned for the COLA Nashville segment —
-but it is also a different product, not a feature.
-
-**Fix shape:** **Deferred unless a customer explicitly asks.**
-Mini-LIS is a category change for VeritaAssure (compliance platform
-vs operational LIS). Scoping is non-trivial; the build is multi-month;
-the support burden post-launch is real. Recommend not chasing
-proactively.
-
-**Source:** Perplexity competitor analysis (myLabCompliance.io),
-2026-05-10. Recommendation: do not build unless a paying customer
-requests.
-
-**Status:** Open, deferred. Park here; reopen only if a customer
-specifically asks for an LIS-shaped product.
-
-**Pre- vs post-COLA:** Indefinite.
+**NOT CARRIED OVER 2026-05-21 — see NOT CARRIED OVER R4 below.**
 
 ---
 
-### 25. Phlebotomy module (deferred unless asked)
+### 25. Phlebotomy module
 
-**What:** Specimen collection competency, draw-station tracking.
-myLabCompliance.io has a phlebotomy module. Per Perplexity analysis,
-every COLA-segment lab does phlebotomy, but the module is outside
-VeritaAssure's current spine.
-
-**Fix shape:** **Deferred unless a customer explicitly asks.** Niche
-unless a specific customer use case surfaces. VeritaStaff could
-absorb phlebotomist credentialing and competency tracking when those
-ship; specimen-collection workflow is the larger piece and more
-LIS-shaped than compliance-shaped.
-
-**Source:** Perplexity competitor analysis (myLabCompliance.io),
-2026-05-10. Recommendation: lower priority than every other
-competitor-driven candidate.
-
-**Status:** Open, deferred.
-
-**Pre- vs post-COLA:** Indefinite.
+**NOT CARRIED OVER 2026-05-21 — see NOT CARRIED OVER R5 below.**
 
 ---
 
@@ -1467,6 +1378,65 @@ full.
 ---
 
 ## NOT CARRIED OVER (explicitly rejected)
+
+### R4. Mini-LIS module (formerly #24) — HIPAA boundary
+
+**Rejected 2026-05-21 by operator decision.**
+
+**Reason:** A Laboratory Information System handles order entry, result
+reporting, patient demographics, MRNs, accession numbers, and specimen-
+to-patient linkage. Every one of those touches PHI and pulls VeritaAssure™
+across the HIPAA boundary. That triggers BAA negotiations, SOC 2 Type 2,
+breach notification obligations, PHI encryption at rest, and audit
+trails on every patient-data read. That is a different company with a
+different cost structure and a different sales motion.
+
+**Boundary statement:** VeritaAssure™ stays PHI-free as a permanent
+architectural and business constraint. The compliance documentation,
+QC, inventory, instrument mapping, competency, and policy modules all
+sit on the non-PHI side of the line and stay there. New feature
+proposals that would require accessioning, patient identifiers, or
+specimen-to-patient linkage are rejected on this basis without needing
+a per-feature debate.
+
+**Source:** 2026-05-21 strategic decision (this session).
+
+---
+
+### R5. Phlebotomy module (formerly #25) — HIPAA boundary
+
+**Rejected 2026-05-21 by operator decision, same basis as R4.**
+
+**Reason:** Specimen collection by definition links a tube to a patient.
+Phlebotomy workflow (drawing, labeling, accessioning, routing) is LIS-
+shaped, not compliance-shaped, and crosses the same HIPAA boundary as
+R4 Mini-LIS. Phlebotomist credentialing and competency tracking can
+still land in VeritaStaff™ or VeritaComp™ when they ship; the
+specimen-workflow surface itself is out of scope.
+
+**Source:** 2026-05-21 strategic decision (this session).
+
+---
+
+### R6. WSLH PT booth follow-up email (formerly #16) — stale
+
+**Closed 2026-05-21 by operator decision.**
+
+**Reason:** Originally parked 2026-05-07 after the COLA Nashville booth
+meeting. Delayed indefinitely on 2026-05-10 pending operator review of
+WSLH contact details, and remained delayed without progress through
+2026-05-21. Two weeks of no movement on a "send within 5-10 business
+days" item is the real signal that the moment passed. Closing rather
+than leaving in indefinite-delay state where it pretends to be active
+backlog at every session bootstrap.
+
+If WSLH outreach is needed in the future, that becomes a fresh parking
+lot entry with a current set of facts rather than a re-animation of
+the 2026-05-07 conversation.
+
+**Source:** 2026-05-21 cleanup decision (this session).
+
+---
 
 ### R1. Rotate Railway token because it appeared in chat
 
