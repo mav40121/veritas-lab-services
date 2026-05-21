@@ -77,6 +77,7 @@ export function serveStatic(app: Express) {
   // marketing or auth URLs are renamed.
   const LEGACY_REDIRECTS: Record<string, string> = {
     "/meet-our-team": "/team",
+    "/our-services": "/services",
     "/m/login": "/login",
     "/m/create-account": "/register",
     "/m/reset": "/reset-password",
