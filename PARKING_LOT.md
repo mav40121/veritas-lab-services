@@ -1104,37 +1104,7 @@ has not yet authorized a redesign attempt as of 2026-05-21.
 
 ### 31. VeritaStock department-scope toggle (VeritaMap pattern)
 
-**What:** Lab-wide / per-department scope toggle for VeritaStock,
-mirroring the toggle already shipped in VeritaMap (PARKING_LOT C8 in
-this file). On a single-department workspace, the table and reorder
-documents stay department-scoped; toggling to lab-wide widens the
-table and surfaces a lab-wide reorder PDF / XLSX with the same vendor
-filter behavior already shipped in PR #304.
-
-**Origin:** John, San Carlos lab, 2026-05-21. Same conversation that
-drove the vendor dropdown (PR #304), the FILTERED VIEW banner
-(PR #305), and the Snap Order workflow (PR #307). John's framing:
-labs want a single "what does this whole lab need to order" view
-without losing the per-department drilldown.
-
-**Shape if built (Option A scoping, ~3 days):**
-
-- Day 1: department-scope toggle UI on VeritaStockPage header, mirror
-  the VeritaMap labwide route pattern. Hook persists in
-  `ui_preferences.veritastock_scope` so the choice survives reload.
-- Day 2: server reorder-list endpoints honor the scope param the
-  same way they honor the vendor / department / category filters
-  added in PR #304. The reorder-document FILTERED VIEW banner picks
-  up "lab-wide" vs the active department automatically.
-- Day 3: verify-script + Gate 3 prod click.
-
-**Why parked:** John's primary asks (vendor filter, FILTERED VIEW
-banner, Snap Order) shipped 2026-05-21. The toggle is the next-tier
-nice-to-have, not blocker-grade. Park behind any paying-customer
-work.
-
-**Pre- vs post-COLA:** Post-COLA. Driven by partner-lab feedback,
-not survey urgency.
+**CLOSED 2026-05-22 — see CLOSED C19 below.**
 
 ---
 
@@ -1573,6 +1543,37 @@ data file directly.
 **Source:** CAP customer screenshot of the /veritapolicy chapter
 headers, 2026-05-01 evening. PR #300; tasks #17 in the in-session
 task tracker.
+
+---
+
+### C19. VeritaStock department-scope toggle (formerly #31)
+
+**Closure evidence:** PR #319 (commit d01f5fe, merged 2026-05-22)
+shipped the persistent dept-scope toggle on VeritaStockPage. A new
+"Working in:" selector in the page header lets a user choose between
+"Lab-wide" (default) or any specific department. The choice is
+persisted to `ui_preferences.veritastock_scope` and restored on every
+reload so users who manage a single department land in their own
+workspace without re-filtering.
+
+**Implementation note:** scoped down significantly from the original
+3-day Option A plan in the parking lot. The original called for
+server-side reorder-list endpoint changes (Day 2), but the existing
+endpoints already honor `?department=` query param via PR #304
+(vendor filter work). Since the new scope toggle just syncs the
+client-side `filterDept` to the user's saved scope on load, the
+existing reorder URL builder picks up the dept scope automatically.
+No server changes needed. Net diff: 49 lines on one file.
+
+**Behavior model:** scope is the persistent default at load time;
+filterDept is the session-level transient override. Changing
+filterDept mid-session does NOT update scope (deliberately, to avoid
+aggressive auto-saves). Changing scope via the new selector DOES
+sync filterDept so the table immediately reflects the new default.
+
+**Source:** John, San Carlos lab, 2026-05-21. Same conversation that
+drove the vendor dropdown (PR #304), FILTERED VIEW banner (PR #305),
+and Snap Order workflow (PR #307).
 
 ---
 
