@@ -1157,6 +1157,92 @@ not survey urgency.
 
 ---
 
+### 32. Lab leader community / forum (paid subscription idea)
+
+**What:** Operator-floated 2026-05-22: a vetted online forum for
+laboratory leaders (directors, managers, supervisors). Pricing as
+proposed: $5 first year promo, then $5/mo or $50/yr. David McCormick
+would manage day-to-day moderation with a 50% revenue split. Premise:
+existing lab-leader communities have decayed (Facebook groups bot-
+infested, LinkedIn lab-leader groups inactive, listservs dead,
+ASCP / CLMA discussions gated behind $200+/yr society dues). There
+is a real gap in the market for an active, vetted, current
+lab-leader water cooler.
+
+**SWOT summary (full analysis done 2026-05-22):**
+
+Strengths: real gap exists, operator credibility (MS/MBA/MLS(ASCP)/
+CPHQ + former TJC surveyor + 200+ surveys), warm seed network of
+~47 COLA contacts, David's consultant network extends reach,
+VeritaAssure customers become natural members, owned SaaS
+infrastructure could host.
+
+Weaknesses: operator is already overcommitted across 11+ Verita
+modules + active sales pipeline (COPC, Pfizer, Tywauna, Pagan,
+Rivera, etc.); forum operations is not core competence for either
+operator or David; lab leaders are time-poor and resist a 5th
+platform; $5/yr signals low value and underprices proper management;
+no plan for the daily content engine that keeps forums alive
+post-launch.
+
+Opportunities: real lead funnel into VeritaAssure (zero CAC for
+forum members), network-effect competitive moat if it reaches
+critical mass (~300+ engaged), content reuse for marketing,
+underserved niche within a niche (hospital-employed lab leaders),
+AI-assisted moderation now feasible.
+
+Threats: established communities (ASCP, CLMA, CAP, AABB) have 50+
+years of institutional inertia; moderation liability is meaningful
+in a clinical-leader context (member gets bad peer advice, clinical
+event follows, forum operator named); bot/spam invasion is what
+killed Facebook lab groups and will come for any open forum; free
+competitors keep emerging; biggest threat is distraction from
+VeritaAssure core business.
+
+**Economic math kills the proposal as stated:**
+
+- $5/yr × 100 members × 50% split = $250/yr each. David earns more
+  from one VeritaAssure Hospital tier referral ($1,999 × 50% Y1 =
+  $1,000) than from a full year of forum operations.
+- Break-even on real management compensation requires ~500 paying
+  members at $50/yr. 500 lab-leader members is harder than it sounds.
+  Mature professional society forums struggle to keep that many
+  actively paying for digital-only access.
+- Realistic David labor at 250 members: 5-8 hrs/week × 52 weeks =
+  260-416 hrs/yr for ~$6,250 = $15-24/hr. He will go consult
+  at $200/hr instead.
+
+**Verdict:** the IDEA is right (real gap, real demand). The
+EXECUTION as proposed is wrong: wrong pricing (too low to signal
+value or fund management), wrong incentive (David needs base + equity
+not pure rev share at $5/yr), wrong positioning (should be lead funnel
+into VeritaAssure not a standalone profit center), wrong commitment
+size (one-person shop running a 5th product surface is too much).
+
+**Recommended alternative (not blocked, can do anytime):**
+
+Spin up a free, invite-only Slack or Discord ("Verita Network" or
+similar) restricted to lab leaders the operator personally vets, plus
+VeritaAssure customers. Positioned as relationship glue + market
+intel + product feedback channel, not a profit center. Cost: $15-50/mo
+platform + evening hours. Upside is the SaaS lead funnel. Pair with a
+quarterly virtual roundtable (90 min, 15-25 invited attendees,
+topic-driven, recorded) for the "scheduled high-signal event" while
+the Slack/Discord is the "always-on water cooler between events."
+
+**Decision rule to revisit the paid forum:** answer yes to all three
+before building: (a) willing to commit 5-8 hrs/week to moderation for
+12-18 months even at sub-$5k/yr revenue, (b) explicitly funding it as
+a lead funnel into VeritaAssure rather than a P&L, (c) willing to cap
+VeritaAssure day-job hours to make room. If any answer is no, build
+the free Slack + roundtable alternative first and revisit the paid
+forum when VeritaAssure has 50+ paying customers and can fund a
+part-time community manager.
+
+**Pre- vs post-COLA:** Post-COLA. No customer urgency.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
