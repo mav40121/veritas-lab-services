@@ -29,26 +29,7 @@ past_session_contexts archive (earliest parking-lot mention found is
 
 ### 3. VeritaPolicy "Non CLIA" chapter naming leaks generator taxonomy
 
-**What:** server/cfrRequirements.ts chapter labels include strings like
-"Non CLIA AABB Transfusion Practice" and "Non CLIA FDA cGMP 21CFR".
-These appear on /veritapolicy for any lab that gets the CFR rows (i.e.,
-every lab, since CFR is universal). The "Non CLIA" prefix is an
-artifact of the generator script categorizing CFR rows by whether they
-sit inside or outside 42 CFR Part 493 (CLIA), and that internal
-taxonomy leaked to the user.
-
-**Fix shape:** Rename chapters in cfrRequirements.ts to user-facing
-labels. Candidates: "Transfusion Service - Federal", "Blood Bank cGMP
-- 21 CFR Part 606", or restructure chapters by CFR title (21 vs 42).
-Decision needs user input.
-
-**Source:** CAP customer screenshot of /veritapolicy chapter headers,
-2026-05-01 evening.
-
-**Status:** Open. Phase 3.6 (commit 2600b3f) shipped a partial fix: the
-UI now renders chapter_label only instead of "slug - chapter_label", so
-the underscored slug no longer leaks. The "Non CLIA" wording itself is
-still on screen.
+**CLOSED 2026-05-22 — see CLOSED C18 below.**
 
 ---
 
@@ -1566,6 +1547,32 @@ summary layer). #30 is additive to the verbatim text shipped in
 this close-out, not a replacement for it.
 
 **Source:** PR #301; tasks #18 in the in-session task tracker.
+
+---
+
+### C18. VeritaPolicy "Non CLIA" chapter rename (formerly #3)
+
+**Closure evidence:** PR #300 (commit 34d7707, merged 2026-05-21)
+renamed all 44 user-facing chapter labels in
+`server/cfrRequirements.ts` that started with "Non CLIA". The string
+was an artifact of the generator script categorizing CFR rows by
+whether they sat inside or outside 42 CFR Part 493 (CLIA), and the
+internal taxonomy was leaking onto the user-facing /veritapolicy
+page.
+
+Verified 2026-05-22 by grep: `Non CLIA` returns zero hits in
+`server/cfrRequirements.ts`. The labels now read as customer-facing
+descriptors anchored to the actual CFR title and topic.
+
+**Earlier partial fix:** Phase 3.6 (commit 2600b3f) had stopped the
+UI from rendering the underscored chapter slug alongside the label;
+that stopped the "Non_CLIA_*" form from leaking but not the "Non
+CLIA" wording itself. PR #300 closed the second half by editing the
+data file directly.
+
+**Source:** CAP customer screenshot of the /veritapolicy chapter
+headers, 2026-05-01 evening. PR #300; tasks #17 in the in-session
+task tracker.
 
 ---
 
