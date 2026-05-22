@@ -449,6 +449,14 @@ export default function VeritaStockInventoryPage() {
   // toggleable here (they are required for the table to be usable at all).
   const [hiddenColumns, setHiddenColumns] = useState<Set<ToggleableColumnKey>>(new Set());
 
+  // Dept-scope toggle (PARKING_LOT #31, John / San Carlos ask 2026-05-21).
+  // Persistent default scope: "lab-wide" or a specific department name.
+  // When scope is a department, filterDept is initialized to that department
+  // on page load so the user lands in their own workspace. Changing filterDept
+  // mid-session does NOT change scope (transient override); changing scope via
+  // the header selector DOES sync filterDept.
+  const [scope, setScope] = useState<string>("lab-wide");
+
   useEffect(() => {
     if (!isLoggedIn) return;
     fetch(`${API_BASE}/api/account/ui-preferences`, { headers: authHeaders() })
@@ -458,8 +466,15 @@ export default function VeritaStockInventoryPage() {
           ? prefs.veritastock_hidden_columns
           : [];
         setHiddenColumns(new Set(hidden));
+        const savedScope = typeof prefs?.veritastock_scope === "string"
+          ? prefs.veritastock_scope
+          : "lab-wide";
+        setScope(savedScope);
+        if (savedScope !== "lab-wide" && DEPARTMENTS.includes(savedScope)) {
+          setFilterDept(savedScope);
+        }
       })
-      .catch(() => { /* default to all-visible on any failure */ });
+      .catch(() => { /* default to all-visible / lab-wide on any failure */ });
   }, [isLoggedIn]);
 
   const persistHiddenColumns = useCallback((next: Set<ToggleableColumnKey>) => {
@@ -469,6 +484,22 @@ export default function VeritaStockInventoryPage() {
       body: JSON.stringify({ veritastock_hidden_columns: Array.from(next) }),
     }).catch(() => { /* best-effort; local state already reflects the change */ });
   }, []);
+
+  const persistScope = useCallback((newScope: string) => {
+    fetch(`${API_BASE}/api/account/ui-preferences`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ veritastock_scope: newScope }),
+    }).catch(() => { /* best-effort; local state already reflects the change */ });
+  }, []);
+
+  const handleScopeChange = useCallback((newScope: string) => {
+    setScope(newScope);
+    persistScope(newScope);
+    // Sync filterDept so the table immediately reflects the new scope choice.
+    if (newScope === "lab-wide") setFilterDept("All");
+    else setFilterDept(newScope);
+  }, [persistScope]);
 
   const toggleColumn = useCallback((key: ToggleableColumnKey) => {
     setHiddenColumns((prev) => {
@@ -891,6 +922,23 @@ export default function VeritaStockInventoryPage() {
         <div>
           <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>VeritaStock{"™"}</h1>
           <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated par levels, and standing order management</p>
+          {/* Dept-scope toggle (PARKING_LOT #31). Persistent default scope
+              for this user across reloads. "Lab-wide" shows the full lab;
+              picking a specific department lands here filtered to that
+              department on every visit. Filter dropdown below still works
+              as a session-level override. */}
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Working in:</span>
+            <Select value={scope} onValueChange={handleScopeChange}>
+              <SelectTrigger className="w-44 h-7 text-xs" data-testid="veritastock-scope-selector">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lab-wide">Lab-wide</SelectItem>
+                {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex gap-2">
           {/* Snap Order: emergency manual-order PDF (additive to calculated
