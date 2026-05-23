@@ -402,6 +402,20 @@ return (
           </Button>
         </div>
 
+        {/* Multi-lab owners (PARKING_LOT #11). Distinct from Enterprise+: this
+            covers the case of one owner running multiple independent labs
+            (different CLIA numbers, different tiers, different subscriptions),
+            not a multi-site health system buying one centrally-scoped plan. */}
+        <div className="bg-muted/30 border border-border rounded-lg p-5 text-center">
+          <p className="text-sm text-muted-foreground">
+            Managing multiple separate labs as one owner? Each lab gets its own subscription at its own tier.{" "}
+            <a href="mailto:info@veritaslabservices.com" className="text-primary font-medium hover:underline">
+              Email us
+            </a>{" "}
+            and we will set you up.
+          </p>
+        </div>
+
         {/* Guest Study CTA */}
         <div className="bg-muted/30 border border-border rounded-lg p-5 text-center">
           <p className="text-sm text-muted-foreground">
