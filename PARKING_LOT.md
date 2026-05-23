@@ -1579,25 +1579,38 @@ audit.
 ### C21. Multi-lab pricing model — Option A (formerly #11)
 
 **Closure evidence:** PR #322 (commit 0ccd925, merged 2026-05-22)
-added the customer-facing line to the pricing page that reflects the
-decision recorded 2026-05-07. The new block on
-`client/src/pages/PricingPage.tsx` sits immediately after the
-Enterprise+ block and reads:
+added the customer-facing line to the pricing page that reflects
+the parking-lot decision. Initial copy overspecified by asserting
+"each lab gets its own subscription at its own tier" -- that
+language committed the public page to a pricing structure that
+contradicts Enterprise+ positioning ("custom pricing, custom
+scope"). Softened the same session in a follow-up PR. Final block
+on `client/src/pages/PricingPage.tsx`, immediately after the
+Enterprise+ block, reads:
 
-"Managing multiple separate labs as one owner? Each lab gets its
-own subscription at its own tier. Email us and we will set you up."
+"Own multiple separate labs? Email us and we will work out the
+right setup."
 
 with a mailto link to `info@veritaslabservices.com`.
 
-**Decision (per original entry, implemented as written):** each lab
-is its own independent Stripe subscription at full tier price. No
-published multi-lab discount. Custom deals handled per-customer via
-Stripe coupon at owner's discretion (email-only, not on pricing
-page). Distinct from Enterprise+ which targets multi-site health
-systems buying one centrally-scoped plan.
+**Decision (per original entry, intent preserved):** the actual
+structure (independent subscriptions at full tier price vs one
+custom Enterprise+ contract) gets worked out per-customer in the
+email conversation, NOT pre-anchored on the public pricing page.
+This is why the entry was "Option A" without published bundle
+discounts: simplicity and flexibility, with the conversation
+shaped by each owner's actual situation.
+
+**Distinct from Enterprise+:** Enterprise+ targets multi-site
+health systems buying one centrally-scoped plan; multi-lab owner
+block targets one owner with multiple independent labs (different
+CLIA numbers, often different tiers, possibly different needs).
+Different buyer mental model, both end at "email us."
 
 **Source:** 2026-05-07 multi-lab discussion (Lisa Veri's
-canonical-case session). PR #322; tasks in-session tracker.
+canonical-case session). PR #322 (initial build); softening PR
+follow-up the same day after the operator caught the Enterprise+
+conflict.
 
 ---
 
