@@ -85,12 +85,13 @@ const PLANS = [
   },
   {
     name: "Clinic",
-    price: "$499",
+    price: "$999",
     period: "/yr",
     description: "Certificate of Waiver labs and small clinics.",
     features: [
       "Full VeritaAssure\u2122 suite including all future modules",
-      "2 seats included",
+      "2 active seats included ($500/seat)",
+      "Additional seats at $500 each, your tier rate",
       "CLIA number on all reports",
       "Complimentary 1-hour onboarding session",
     ],
@@ -101,12 +102,13 @@ const PLANS = [
   },
   {
     name: "Community",
-    price: "$999",
+    price: "$2,125",
     period: "/yr",
     description: "Community hospitals and independent labs.",
     features: [
       "Everything in Clinic",
-      "5 seats included",
+      "5 active seats included ($425/seat)",
+      "Additional seats at $425 each, your tier rate",
       "Complimentary 1-hour onboarding session",
       "Named seat support",
       "Priority support",
@@ -118,12 +120,13 @@ const PLANS = [
   },
   {
     name: "Hospital",
-    price: "$1,999",
+    price: "$4,995",
     period: "/yr",
     description: "Regional and acute care hospital labs.",
     features: [
       "Everything in Community",
-      "15 seats included",
+      "15 active seats included ($333/seat)",
+      "Additional seats at $333 each, your tier rate",
       "Complimentary 2-hour onboarding session",
     ],
     buttonLabel: "Subscribe",
@@ -132,19 +135,19 @@ const PLANS = [
     badge: null,
   },
   {
-    name: "Enterprise",
-    price: "$2,999",
-    period: "/yr",
-    description: "Large hospitals, health systems, and reference labs.",
+    name: "System",
+    price: "Custom",
+    period: "quote",
+    description: "Health systems, multi-site labs, and enterprise integrations.",
     features: [
-      "Everything in Hospital",
-      "25 seats included",
-      "Custom onboarding included",
-      "Priority support",
-      "Consulting access",
+      "More than one CLIA-certified lab",
+      "16+ active seats",
+      "Multi-site reporting + role-based admin hierarchy",
+      "SSO, BAA, custom security review",
+      "Dedicated success manager + priority SLA",
     ],
-    buttonLabel: "Subscribe",
-    buttonHref: "/login?tier=enterprise",
+    buttonLabel: "Request a quote",
+    buttonHref: "/contact?subject=System+tier+quote",
     highlight: false,
     badge: null,
   },
@@ -373,8 +376,54 @@ return (
 
         {/* Seat note */}
         <p className="text-xs text-center text-muted-foreground -mt-4">
-          Seat counts include the account owner.
+          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. View-only access for medical directors and reviewers is unlimited and not counted against the tier.
         </p>
+
+        {/* Founding Lab Program */}
+        <div className="rounded-lg border-2 border-primary/40 bg-gradient-to-br from-primary/10 to-transparent p-6 sm:p-8">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+              <h3 className="font-serif text-2xl font-bold flex items-center gap-2">
+                <span className="text-primary">★</span>
+                Founding Lab Program
+              </h3>
+              <Badge variant="outline" className="border-primary/40 text-primary">Limited cohort</Badge>
+            </div>
+            <p className="text-base mb-4 leading-relaxed">
+              Become a charter customer of VeritaAssure™.
+            </p>
+            <ul className="space-y-2 mb-5">
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>Discount</strong> on your annual subscription</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>24-month price lock</strong>: your renewal rate stays where it starts</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>Your facility name</strong> on our Founding Labs page (logo placement with your marketing approval)</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>Priority support</strong> throughout your first year</span>
+              </li>
+            </ul>
+            <div className="border-t border-primary/20 pt-4 mb-5">
+              <p className="text-sm text-muted-foreground italic leading-relaxed">
+                In exchange: up to 2 reference calls per month, 30 minutes each, scheduled through our calendar tool. You and the prospect on the line; Veritas is not present. You share your honest experience.
+              </p>
+            </div>
+            <div className="text-center">
+              <Button asChild size="lg" className="font-semibold">
+                <Link href="/founding-lab/apply">
+                  Apply to the Founding Lab Program <ArrowRight size={14} className="ml-1" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
 
         {/* Money-Back Guarantee */}
         <div className="border border-primary/20 bg-primary/5 rounded-lg p-6 text-center">
@@ -384,22 +433,6 @@ return (
             Subscription plans only. We'll refund your first subscription charge in full if you request a refund within 30 days of that charge. One refund per customer. Applies to the initial charge only, not renewals or per-study purchases. See our{" "}
             <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link> for full details.
           </p>
-        </div>
-
-        {/* Enterprise+ */}
-        <div className="rounded-lg border border-border bg-muted/30 p-6 sm:p-8 text-center">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Building2 size={20} className="text-primary" />
-            <h3 className="font-serif text-xl font-bold">Enterprise+</h3>
-          </div>
-          <p className="text-muted-foreground mb-5 max-w-xl mx-auto">
-            Multi-site health systems and national reference labs. Contact us for custom pricing.
-          </p>
-          <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
-            <Link href="/contact">
-              Contact Us <ChevronRight size={14} className="ml-1" />
-            </Link>
-          </Button>
         </div>
 
         {/* Multi-lab owners (PARKING_LOT #11). Distinct from Enterprise+:
