@@ -30,6 +30,7 @@ const allMobileLinks = [
   { href: "/veritabench/staffing", label: "VeritaShift™" },
   { href: "/veritabench/pi", label: "VeritaQA™" },
   { href: "/veritastock", label: "VeritaStock™" },
+  { href: "/veritaops-app", label: "VeritaOps™" },
   { href: "/book", label: "Book" },
   { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Resources" },
@@ -171,7 +172,7 @@ export function NavBar() {
             href="/operations"
             className={cn(
               "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-              ["/operations","/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/calculator"].some(p => location === p || location.startsWith(p + "/"))
+              ["/operations","/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/veritaops-app","/calculator"].some(p => location === p || location.startsWith(p + "/"))
                 ? "text-foreground bg-secondary"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             )}
