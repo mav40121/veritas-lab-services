@@ -88,28 +88,7 @@ demo path.
 
 ### 11. Multi-lab pricing model — Option A (full price per lab, no baseline discount)
 
-**What:** Decision recorded for how multi-lab system accounts (one
-human owning multiple labs) are priced. Lisa Veri is the canonical
-case: Hospital tier on UMass Memorial Milford + Clinic tier on a
-second lab she owns. Decision: each lab is its own independent
-subscription at full tier price. No published multi-lab discount.
-Custom deals handled per-customer via Stripe coupon at owner's
-discretion (email-only, not on pricing page).
-
-**Fix shape:** Pricing page shows one line: "Managing multiple labs?
-Email us." Each lab gets its own Stripe subscription, its own renewal
-date, its own seat count, its own tier, its own CLIA. No
-`parent_lab_id` linkage in billing. Self-serve "Add another lab"
-checkout deferred (Tier 3); manual Stripe creation for the first few
-cases is fine.
-
-**Source:** 2026-05-07 multi-lab discussion (this session), Lisa Veri
-bringing online a second lab.
-
-**Status:** Open. Decision recorded; build deferred to post-COLA.
-
-**Pre- vs post-COLA:** Post-COLA. Tied to Tier 2 (multi-lab data
-layer) build.
+**CLOSED 2026-05-22 — see CLOSED C21 below.**
 
 ---
 
@@ -344,6 +323,17 @@ zero rationale for any code change before the conference ends.
 ---
 
 ### 18. Unregulated analyte / Alternative Assessment (AAA) coverage — cross-module gap
+
+**STATUS (as of 2026-05-22): Phases 1 and 2 SHIPPED. Phase 3 deferred
+behind #17 (VeritaResponse, not yet built).**
+
+- **Phase 1 shipped:** VeritaScan AAA mini-section (post-COLA, prior session).
+- **Phase 2 shipped:** Real AAA coverage in VeritaPT plus the coverage-union UI (PR #18 in the in-session task tracker, Phase 2v2). Reportable-menu source-of-truth uses the lab-entered list; coverage matcher reads both `pt_enrollments_v2` and AAA records.
+- **Phase 3 still deferred:** AAA-failure-to-finding linkage. Requires VeritaResponse (PARKING_LOT #17) to exist as the deficiency-response surface that the linkage points at. Cannot ship until #17 ships.
+
+The rest of this entry is the original scoping context, preserved for the eventual Phase 3 work. Skip to "Phase 3 (deferred, post-#17)" further below for the specific deferred work.
+
+---
 
 **Cross-module: touches VeritaScan, VeritaCheck, VeritaPT, and (later)
 VeritaResponse #17. Treat as a single product capability with phased
@@ -1583,6 +1573,31 @@ lab they own") is implemented as written.
 of the Multi-Lab Tier 2 architecture work (Phase 3.x series, prior
 sessions). Status drift discovered 2026-05-22 during parking-lot
 audit.
+
+---
+
+### C21. Multi-lab pricing model — Option A (formerly #11)
+
+**Closure evidence:** PR #322 (commit 0ccd925, merged 2026-05-22)
+added the customer-facing line to the pricing page that reflects the
+decision recorded 2026-05-07. The new block on
+`client/src/pages/PricingPage.tsx` sits immediately after the
+Enterprise+ block and reads:
+
+"Managing multiple separate labs as one owner? Each lab gets its
+own subscription at its own tier. Email us and we will set you up."
+
+with a mailto link to `info@veritaslabservices.com`.
+
+**Decision (per original entry, implemented as written):** each lab
+is its own independent Stripe subscription at full tier price. No
+published multi-lab discount. Custom deals handled per-customer via
+Stripe coupon at owner's discretion (email-only, not on pricing
+page). Distinct from Enterprise+ which targets multi-site health
+systems buying one centrally-scoped plan.
+
+**Source:** 2026-05-07 multi-lab discussion (Lisa Veri's
+canonical-case session). PR #322; tasks in-session tracker.
 
 ---
 
