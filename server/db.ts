@@ -873,6 +873,34 @@ sqlite.exec(`
   );
 `);
 
+// Founding Lab Program applications. Prospects submit this form via the public
+// /founding-lab/apply page. No auth gate, no PHI. Triages into the sales
+// pipeline (Michael reviews + responds out of band). See
+// project_cola_pricing_grandfather_policy.md for the program structure.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS founding_lab_applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    lab_name TEXT NOT NULL,
+    clia_number TEXT,
+    contact_name TEXT NOT NULL,
+    contact_title TEXT,
+    contact_email TEXT NOT NULL,
+    contact_phone TEXT,
+    lab_type TEXT,
+    tier_of_interest TEXT,
+    approximate_seat_count INTEGER,
+    why_founder TEXT,
+    marketing_logo_approval INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'new',
+    notes TEXT,
+    ip_address TEXT,
+    user_agent TEXT
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_founder_apps_submitted_at ON founding_lab_applications(submitted_at DESC)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_founder_apps_status ON founding_lab_applications(status)`); } catch {}
+
 // Owner account - permanent free access (never downgrade from a higher plan).
 // Email sourced from OWNER_EMAIL env (default preserves prior hardcoded value).
 const ownerRow = sqlite.prepare("SELECT plan FROM users WHERE email = ?").get(OWNER_EMAIL) as any;
