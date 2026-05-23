@@ -958,6 +958,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
   });
 
+  // Admin: provision a comped secondary lab for an existing owner.
+  // Creates labs row + lab_members row (is_primary_lab=0, role='owner') in
+  // a single transaction. No Stripe customer or subscription is created.
+  // Used for free secondary labs the owner does not pay a seat on (PARKING_LOT
+  // C20 rule: owner burns one paid seat on their primary lab only). Guards
+  // against the inversion edge case by refusing to provision if the target
+  // user has zero is_primary_lab=1 memberships elsewhere — that would leave
+  // this new comp lab as their only primary and invert the seat math.
+  app.post("/api/admin/provision-comp-lab", (req, res) => {
+    const { secret, userId, labName, cliaNumber, plan, accreditationBody } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!userId || !labName || !cliaNumber) {
+      return res.status(400).json({ error: "userId, labName, cliaNumber required" });
+    }
+    const validPlans = ["clinic", "waived", "community", "hospital", "enterprise", "large_hospital"];
+    const resolvedPlan = plan || "clinic";
+    if (!validPlans.includes(resolvedPlan)) {
+      return res.status(400).json({ error: `plan must be one of: ${validPlans.join(", ")}` });
+    }
+    const validAccreditors = [null, undefined, "", "CAP", "TJC", "COLA", "AABB"];
+    if (!validAccreditors.includes(accreditationBody)) {
+      return res.status(400).json({ error: "accreditationBody must be CAP, TJC, COLA, AABB, or omitted" });
+    }
+    const sqlite = (db as any).$client;
+    const user = sqlite.prepare("SELECT id, email, name FROM users WHERE id = ?").get(Number(userId)) as any;
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Inversion guard: refuse if user has no existing primary-lab membership.
+    const primaryCount = (sqlite.prepare(
+      "SELECT COUNT(*) as n FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active'"
+    ).get(Number(userId)) as { n: number }).n;
+    if (primaryCount === 0) {
+      return res.status(400).json({
+        error: "User has no is_primary_lab=1 membership. Provisioning a comp lab would invert the seat rule. Flip an existing membership to primary first.",
+      });
+    }
+
+    // CLIA uniqueness check — labs.clia_number is UNIQUE when non-null.
+    const cliaConflict = sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(cliaNumber.trim()) as any;
+    if (cliaConflict) {
+      return res.status(409).json({ error: `CLIA ${cliaNumber} already in use by lab id=${cliaConflict.id} (${cliaConflict.lab_name})` });
+    }
+
+    const now = new Date().toISOString();
+    let newLabId: number;
+    try {
+      sqlite.exec("BEGIN");
+      const labResult = sqlite.prepare(
+        `INSERT INTO labs (
+          clia_number, lab_name, owner_user_id,
+          accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb,
+          clia_locked, lab_name_locked,
+          plan, subscription_status, subscription_expires_at, plan_expires_at,
+          stripe_customer_id, stripe_subscription_id,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', '2099-12-31T00:00:00.000Z', '2099-12-31T00:00:00.000Z', NULL, NULL, ?, ?)`
+      ).run(
+        cliaNumber.trim(), labName.trim(), Number(userId),
+        accreditationBody === "CAP" ? 1 : 0,
+        accreditationBody === "TJC" ? 1 : 0,
+        accreditationBody === "COLA" ? 1 : 0,
+        accreditationBody === "AABB" ? 1 : 0,
+        resolvedPlan, now, now,
+      );
+      newLabId = Number(labResult.lastInsertRowid);
+      sqlite.prepare(
+        `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+         VALUES (?, ?, 'owner', '{}', 'active', 0, ?, ?, ?)`
+      ).run(newLabId, Number(userId), now, now, now);
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[provision-comp-lab] DB insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to provision comp lab" });
+    }
+
+    const lab = sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(newLabId);
+    const membership = sqlite.prepare(
+      "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+    ).get(newLabId, Number(userId));
+    console.log(`[provision-comp-lab] Provisioned lab_id=${newLabId} (${labName}) for user_id=${userId} (${user.email}) plan=${resolvedPlan} is_primary_lab=0`);
+    res.json({
+      ok: true,
+      lab,
+      membership,
+      user: { id: user.id, email: user.email, name: user.name },
+    });
+  });
+
   // Admin: list all seat records (used by audit script to verify seat integrity)
   app.post("/api/admin/seats", (req, res) => {
     const { secret } = req.body;
