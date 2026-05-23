@@ -22,6 +22,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Lock, Plus, Edit2, Trash2, Calculator, FlaskConical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -92,12 +93,20 @@ function StudyDialog({
         other_supplies_per_test: 0,
         tech_minutes_per_test: 0,
         tech_loaded_hourly_rate: 0,
+        include_capital: 0,
+        instrument_purchase_cost: 0,
+        instrument_useful_life_years: 7,
+        annual_maintenance_cost: 0,
+        include_overhead: 0,
+        overhead_method: "flat",
+        overhead_value: 0,
         notes: "",
       });
     }
   }, [editStudy, open]);
 
-  // Live local preview of CPRT L1 and L2 as the user types. Server is the
+  // Live local preview of CPRT layers as the user types. Mirrors
+  // server/veritaops.ts computeCprt() logic exactly. Server is the
   // authoritative calculator on save; this just gives instant feedback.
   const preview = useMemo(() => {
     const v = Number(form.annual_volume || 0);
@@ -108,7 +117,24 @@ function StudyDialog({
       amortize(Number(form.qc_cost_per_run || 0) * Number(form.qc_runs_per_year || 0)) +
       Number(form.other_supplies_per_test || 0);
     const labor = (Number(form.tech_minutes_per_test || 0) / 60) * Number(form.tech_loaded_hourly_rate || 0);
-    return { l1, l2: l1 + labor };
+    const l2 = l1 + labor;
+    let l3 = l2;
+    if (Number(form.include_capital || 0) === 1) {
+      const life = Math.max(1, Number(form.instrument_useful_life_years || 1));
+      const annualDep = Number(form.instrument_purchase_cost || 0) / life;
+      const capitalPerTest = amortize(annualDep + Number(form.annual_maintenance_cost || 0));
+      l3 = l2 + capitalPerTest;
+    }
+    let l4 = l3;
+    if (Number(form.include_overhead || 0) === 1) {
+      const base = Number(form.include_capital || 0) === 1 ? l3 : l2;
+      if ((form.overhead_method || "flat") === "markup") {
+        l4 = base + base * Number(form.overhead_value || 0);
+      } else {
+        l4 = base + Number(form.overhead_value || 0);
+      }
+    }
+    return { l1, l2, l3, l4 };
   }, [form]);
 
   const setField = (k: keyof CprtStudy, v: any) => setForm((prev) => ({ ...prev, [k]: v }));
@@ -196,6 +222,60 @@ function StudyDialog({
             </p>
           </div>
 
+          {/* L3 opt-in: Equipment depreciation */}
+          <div className="rounded-lg border p-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={Number(form.include_capital || 0) === 1}
+                onCheckedChange={(v) => setField("include_capital", v ? 1 : 0)}
+                data-testid="toggle-l3-capital"
+              />
+              <span className="font-semibold text-sm" style={{ color: "#01696F" }}>L3: Equipment depreciation (opt-in)</span>
+            </label>
+            <p className="text-xs text-muted-foreground mt-1 ml-6">
+              Include the instrument purchase cost spread over its useful life, plus annual maintenance contract. Useful for capital justification and CFO budget defense; usually skipped for marginal-cost questions like insource vs send-out.
+            </p>
+            {Number(form.include_capital || 0) === 1 && (
+              <div className="grid grid-cols-3 gap-3 mt-3 ml-6">
+                {numericField("instrument_purchase_cost", "Instrument purchase cost ($)", "1")}
+                {numericField("instrument_useful_life_years", "Useful life (years)", "1")}
+                {numericField("annual_maintenance_cost", "Annual maintenance ($)", "1")}
+              </div>
+            )}
+          </div>
+
+          {/* L4 opt-in: Overhead */}
+          <div className="rounded-lg border p-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={Number(form.include_overhead || 0) === 1}
+                onCheckedChange={(v) => setField("include_overhead", v ? 1 : 0)}
+                data-testid="toggle-l4-overhead"
+              />
+              <span className="font-semibold text-sm" style={{ color: "#01696F" }}>L4: Overhead (opt-in)</span>
+            </label>
+            <p className="text-xs text-muted-foreground mt-1 ml-6">
+              Indirect costs: facility, QA, IT, admin. Add as a flat dollar amount per test (from finance) or as a percentage markup on the layer below. Used for fully-loaded charge-master pricing.
+            </p>
+            {Number(form.include_overhead || 0) === 1 && (
+              <div className="grid grid-cols-2 gap-3 mt-3 ml-6">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Method</Label>
+                  <select
+                    className="border rounded-md h-9 px-2 text-sm w-full bg-background"
+                    value={form.overhead_method ?? "flat"}
+                    onChange={(e) => setField("overhead_method", e.target.value)}
+                    data-testid="overhead-method-select"
+                  >
+                    <option value="flat">Flat dollars per test</option>
+                    <option value="markup">Percentage markup on L3 (or L2 if L3 off)</option>
+                  </select>
+                </div>
+                {numericField("overhead_value", form.overhead_method === "markup" ? "Markup (e.g. 0.15 for 15%)" : "Overhead ($/test)")}
+              </div>
+            )}
+          </div>
+
           {/* Live preview */}
           <div className="rounded-lg border p-4" style={{ backgroundColor: "#01696F10", borderColor: "#01696F40" }}>
             <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Live preview</div>
@@ -208,9 +288,21 @@ function StudyDialog({
                 <div className="text-xs text-muted-foreground">+ Staff time (L2)</div>
                 <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>{fmtCurrency(preview.l2)}</div>
               </div>
+              {Number(form.include_capital || 0) === 1 && (
+                <div>
+                  <div className="text-xs text-muted-foreground">+ Equipment (L3)</div>
+                  <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>{fmtCurrency(preview.l3)}</div>
+                </div>
+              )}
+              {Number(form.include_overhead || 0) === 1 && (
+                <div>
+                  <div className="text-xs text-muted-foreground">+ Overhead (L4 - fully loaded)</div>
+                  <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>{fmtCurrency(preview.l4)}</div>
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Server recalculates on save. Equipment depreciation (L3) and overhead (L4) layers are present in the data model but the UI for them lands in a follow-up.
+              Server recalculates on save. The number you should be looking at depends on the question you are answering: marginal cost (L1 or L2), capital justification (L3), charge-master pricing (L4).
             </p>
           </div>
 
@@ -364,37 +456,52 @@ export default function VeritaOpsAppPage() {
                     <th className="text-right px-3 py-2 font-semibold">Annual volume</th>
                     <th className="text-right px-3 py-2 font-semibold">L1: Reagents</th>
                     <th className="text-right px-3 py-2 font-semibold">L2: + Labor</th>
-                    <th className="text-right px-3 py-2 font-semibold">Annual L2 cost</th>
+                    <th className="text-right px-3 py-2 font-semibold">L3: + Equipment</th>
+                    <th className="text-right px-3 py-2 font-semibold">L4: + Overhead</th>
+                    <th className="text-right px-3 py-2 font-semibold">Annual cost</th>
                     <th className="text-right px-3 py-2 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {studies.map((s, idx) => (
-                    <tr key={s.id} className={`border-b ${idx % 2 === 0 ? "" : "bg-muted/20"}`} data-testid={`cprt-row-${s.id}`}>
-                      <td className="px-3 py-2">
-                        <div className="font-medium flex items-center gap-2">
-                          <FlaskConical size={14} className="text-muted-foreground" />
-                          {s.test_name}
-                        </div>
-                        {s.loinc && <div className="text-xs text-muted-foreground">LOINC {s.loinc}</div>}
-                      </td>
-                      <td className="px-3 py-2">{s.department}</td>
-                      <td className="px-3 py-2 text-right font-mono">{fmtInt(s.annual_volume)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{fmtCurrency(s.cprt_l1)}</td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold" style={{ color: "#01696F" }}>{fmtCurrency(s.cprt_l2)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                        {s.annual_volume > 0 ? fmtCurrency(s.cprt_l2 * s.annual_volume) : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => { setEditStudy(s); setShowForm(true); }} disabled={readOnly} data-testid={`edit-cprt-${s.id}`}>
-                          <Edit2 size={14} />
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(s)} disabled={readOnly} data-testid={`delete-cprt-${s.id}`}>
-                          <Trash2 size={14} className="text-red-600" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {studies.map((s, idx) => {
+                    // Annual cost uses the deepest enabled layer so the
+                    // total reflects what the user chose to include.
+                    const deepest = s.include_overhead === 1 ? s.cprt_l4
+                      : s.include_capital === 1 ? s.cprt_l3
+                      : s.cprt_l2;
+                    return (
+                      <tr key={s.id} className={`border-b ${idx % 2 === 0 ? "" : "bg-muted/20"}`} data-testid={`cprt-row-${s.id}`}>
+                        <td className="px-3 py-2">
+                          <div className="font-medium flex items-center gap-2">
+                            <FlaskConical size={14} className="text-muted-foreground" />
+                            {s.test_name}
+                          </div>
+                          {s.loinc && <div className="text-xs text-muted-foreground">LOINC {s.loinc}</div>}
+                        </td>
+                        <td className="px-3 py-2">{s.department}</td>
+                        <td className="px-3 py-2 text-right font-mono">{fmtInt(s.annual_volume)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{fmtCurrency(s.cprt_l1)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{fmtCurrency(s.cprt_l2)}</td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {s.include_capital === 1 ? fmtCurrency(s.cprt_l3) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {s.include_overhead === 1 ? fmtCurrency(s.cprt_l4) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold" style={{ color: "#01696F" }}>
+                          {s.annual_volume > 0 ? fmtCurrency(deepest * s.annual_volume) : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button size="sm" variant="ghost" onClick={() => { setEditStudy(s); setShowForm(true); }} disabled={readOnly} data-testid={`edit-cprt-${s.id}`}>
+                            <Edit2 size={14} />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(s)} disabled={readOnly} data-testid={`delete-cprt-${s.id}`}>
+                            <Trash2 size={14} className="text-red-600" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -404,7 +511,7 @@ export default function VeritaOpsAppPage() {
 
       {/* What's coming next */}
       <div className="mt-4 text-xs text-muted-foreground">
-        <strong>v1 ships L1 + L2.</strong> Equipment depreciation (L3) and overhead (L4) layers, PDF export, side-by-side study comparison, and pre-filled defaults based on published cost-mix benchmarks ship in subsequent updates.
+        <strong>All four CPRT layers (L1 reagents, L2 labor, L3 equipment, L4 overhead) are live.</strong> PDF export with About sheet citing CLSI GP11-A, side-by-side study comparison, and pre-filled defaults based on published cost-mix benchmarks ship in subsequent updates.
       </div>
 
       <StudyDialog
