@@ -5,6 +5,8 @@
 // schema-present and computed but their UI surfaces ship in a later PR.
 import type { Express } from "express";
 import { db } from "./db";
+import { storePdfToken } from "./pdfTokens";
+import { generateCprtPdf } from "./veritaopsPdf";
 
 // Plain-language tier labels. Used by the client to show what is in the
 // final CPRT number for a given study.
@@ -248,6 +250,37 @@ export function registerVeritaOpsRoutes(
     res.json({ ok: true });
   });
 
+  // PDF account-scoped. Returns a one-time token the browser GETs at
+  // /api/pdf/:token so Adobe Acrobat's extension doesn't hijack a blob URL.
+  app.post("/api/veritaops/studies/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaOps subscription required" });
+    }
+    const ownerId = req.ownerUserId ?? req.userId;
+    const study = sqlite.prepare(
+      "SELECT * FROM veritaops_test_cost_studies WHERE id = ? AND account_id = ?"
+    ).get(Number(req.params.id), ownerId) as any;
+    if (!study) return res.status(404).json({ error: "Study not found" });
+    const ownerRow = sqlite.prepare(
+      "SELECT clia_lab_name, clia_number, name, email FROM users WHERE id = ?"
+    ).get(ownerId) as any;
+    try {
+      const pdfBuffer = await generateCprtPdf(study, {
+        labName: ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory",
+        cliaNumber: ownerRow?.clia_number || "Not on file",
+        preparedBy: ownerRow?.name || ownerRow?.email || null,
+      });
+      const safeName = String(study.test_name || "Study").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = `VeritaOps_CPRT_${safeName}_${datestamp}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token, filename });
+    } catch (err: any) {
+      console.error("VeritaOps PDF generation error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
   // ── LAB-SCOPED ROUTES (Multi-Lab Tier 2) ────────────────────────────
   const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
   if (labScopeMiddleware) {
@@ -367,6 +400,40 @@ export function registerVeritaOpsRoutes(
       ).run(Number(req.params.id), req.scope.labId);
       if (result.changes === 0) return res.status(404).json({ error: "Study not found" });
       res.json({ ok: true });
+    });
+
+    // PDF lab-scoped. Pulls lab identity from the labs row directly so
+    // multi-lab users get the correct CLIA / lab name in the PDF header.
+    app.post("/api/labs/:labId/veritaops/studies/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) {
+        return res.status(403).json({ error: "VeritaOps subscription required" });
+      }
+      const study = sqlite.prepare(
+        "SELECT * FROM veritaops_test_cost_studies WHERE id = ? AND lab_id = ?"
+      ).get(Number(req.params.id), req.scope.labId) as any;
+      if (!study) return res.status(404).json({ error: "Study not found" });
+      const labRow = sqlite.prepare(
+        "SELECT lab_name, clia_number FROM labs WHERE id = ?"
+      ).get(req.scope.labId) as any;
+      const userRow = sqlite.prepare(
+        "SELECT name, email FROM users WHERE id = ?"
+      ).get(req.userId) as any;
+      try {
+        const pdfBuffer = await generateCprtPdf(study, {
+          labName: labRow?.lab_name || "Laboratory",
+          cliaNumber: labRow?.clia_number || "Not on file",
+          preparedBy: userRow?.name || userRow?.email || null,
+        });
+        const safeLab = String(labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 24);
+        const safeName = String(study.test_name || "Study").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const filename = `VeritaOps_CPRT_${safeLab}_${safeName}_${datestamp}.pdf`;
+        const token = storePdfToken(pdfBuffer, filename);
+        res.json({ token, filename });
+      } catch (err: any) {
+        console.error("VeritaOps PDF generation error (lab-scoped):", err.message);
+        res.status(500).json({ error: "PDF generation failed", detail: err.message });
+      }
     });
   }
 }

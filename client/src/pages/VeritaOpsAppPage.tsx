@@ -23,7 +23,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lock, Plus, Edit2, Trash2, Calculator, FlaskConical } from "lucide-react";
+import { Lock, Plus, Edit2, Trash2, Calculator, FlaskConical, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CprtStudy {
@@ -398,6 +398,29 @@ export default function VeritaOpsAppPage() {
     } catch {} finally { setDeleteTarget(null); }
   };
 
+  const [generatingPdfId, setGeneratingPdfId] = useState<number | null>(null);
+  const handleDownloadPdf = async (study: CprtStudy) => {
+    setGeneratingPdfId(study.id);
+    try {
+      const url = `${itemUrl(study.id)}/pdf`;
+      const res = await fetch(url, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "PDF generation failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token } = await res.json();
+      // Open via the shared token endpoint so the browser does the GET
+      // download directly (avoids Adobe Acrobat blob-URL hijacking).
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      toast({ title: `PDF generated for ${study.test_name}` });
+    } catch {
+      toast({ title: "PDF generation failed", description: "Network error", variant: "destructive" });
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="container mx-auto py-20 px-4 text-center">
@@ -492,6 +515,9 @@ export default function VeritaOpsAppPage() {
                           {s.annual_volume > 0 ? fmtCurrency(deepest * s.annual_volume) : "—"}
                         </td>
                         <td className="px-3 py-2 text-right">
+                          <Button size="sm" variant="ghost" onClick={() => handleDownloadPdf(s)} disabled={generatingPdfId !== null} title="Download CPRT report PDF" data-testid={`pdf-cprt-${s.id}`}>
+                            <FileText size={14} className={generatingPdfId === s.id ? "animate-pulse" : ""} />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => { setEditStudy(s); setShowForm(true); }} disabled={readOnly} data-testid={`edit-cprt-${s.id}`}>
                             <Edit2 size={14} />
                           </Button>
@@ -511,7 +537,7 @@ export default function VeritaOpsAppPage() {
 
       {/* What's coming next */}
       <div className="mt-4 text-xs text-muted-foreground">
-        <strong>All four CPRT layers (L1 reagents, L2 labor, L3 equipment, L4 overhead) are live.</strong> PDF export with About sheet citing CLSI GP11-A, side-by-side study comparison, and pre-filled defaults based on published cost-mix benchmarks ship in subsequent updates.
+        <strong>All four CPRT layers and PDF export are live.</strong> Side-by-side study comparison and pre-filled defaults based on published cost-mix benchmarks ship in subsequent updates.
       </div>
 
       <StudyDialog
