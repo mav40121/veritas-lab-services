@@ -2455,6 +2455,294 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, scope: req.scope });
   });
 
+  // ── LAB MEMBER MANAGEMENT (Phase 1: admin role + transfer ownership) ─────
+  // Membership roles: 'owner' (one per lab), 'admin' (can invite/remove),
+  // 'staff' (operational read/write per existing permissions_json). Existing
+  // operational endpoints (VeritaCheck, VeritaStock, etc) keep their current
+  // gates; this block only adds the management surface.
+
+  function canManageLabMembers(scope: any): boolean {
+    return scope?.role === "owner" || scope?.role === "admin";
+  }
+  function isLabOwner(scope: any): boolean {
+    return scope?.role === "owner";
+  }
+
+  // GET /api/labs/:labId/members — list all active members of the lab.
+  // Any active member can read. Returns user identity + role + status.
+  app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(`
+      SELECT lm.id AS membership_id, lm.user_id, lm.role, lm.is_primary_lab,
+             lm.status, lm.accepted_at, lm.created_at, lm.last_active_at,
+             u.name, u.email
+      FROM lab_members lm
+      JOIN users u ON u.id = lm.user_id
+      WHERE lm.lab_id = ? AND lm.status = 'active'
+      ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
+    `).all(req.scope.labId);
+    res.json({ members: rows });
+  });
+
+  // POST /api/labs/:labId/members — invite a new user to the lab.
+  // Body: { email, role?: 'staff'|'admin', permissions?: object }.
+  // Gated: admin or owner. Creates user_seats row under labs.owner_user_id
+  // (NOT the inviter), creates lab_members row with the chosen role, sends
+  // an invite email via Resend. Seat-count gate uses the LAB OWNER's
+  // user.plan and existing user_seats count, matching /api/account/seats POST.
+  app.post("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const { email, role: requestedRole, permissions } = req.body || {};
+    if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+    const role = requestedRole === "admin" ? "admin" : "staff";
+    // Only the owner can grant 'admin' on invite.
+    if (role === "admin" && !isLabOwner(req.scope)) {
+      return res.status(403).json({ error: "Only the owner can invite a member as admin" });
+    }
+
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const labOwnerId = lab.owner_user_id;
+    const ownerRow = sqlite.prepare("SELECT id, name, email, plan, seat_count, clia_lab_name, hospital_name FROM users WHERE id = ?").get(labOwnerId) as any;
+    if (!ownerRow) return res.status(500).json({ error: "Lab owner user not found" });
+
+    // Seat-count gate (owner-pooled, matches /api/account/seats POST behavior).
+    const ownerPlan = ownerRow.plan || "free";
+    const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
+    const dbSeats = ownerRow.seat_count || 0;
+    const maxSeats = Math.max(dbSeats, planSeatLimit);
+    const currentInvitees = (sqlite.prepare(
+      "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId) as any).cnt || 0;
+    if (currentInvitees + 1 /* owner */ + 1 /* new */ > maxSeats) {
+      return res.status(402).json({
+        error: "seat_limit_reached",
+        limit: maxSeats,
+        current: currentInvitees + 1,
+        plan: ownerPlan,
+      });
+    }
+
+    const normalizedEmail = String(email).toLowerCase();
+
+    // Duplicate-member check.
+    const existingUser = storage.getUserByEmail(normalizedEmail);
+    const seatUserId = existingUser ? existingUser.id : null;
+    if (seatUserId) {
+      const dupMember = sqlite.prepare(
+        "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
+      ).get(req.scope.labId, seatUserId) as any;
+      if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
+    }
+    const dupSeat = sqlite.prepare(
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner" });
+
+    const now = new Date().toISOString();
+    const newStatus = seatUserId ? "active" : "pending";
+    const permJson = JSON.stringify(permissions || { mode: "view_all" });
+    const inviteToken = crypto.randomUUID();
+
+    try {
+      sqlite.exec("BEGIN");
+      // Reactivate previously deactivated seat row if any.
+      const deactivated = sqlite.prepare(
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail) as any;
+      if (deactivated) {
+        sqlite.prepare(
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, deactivated.id);
+      } else {
+        sqlite.prepare(
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken);
+      }
+      // Create lab_members row when the invited user already has an account.
+      if (seatUserId) {
+        sqlite.prepare(
+          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+           VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
+        ).run(req.scope.labId, seatUserId, role, now, now, now);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[labs/:labId/members POST] DB insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to invite member" });
+    }
+
+    // Best-effort invite email (matches /api/account/seats template).
+    const labName = lab.lab_name || ownerRow.clia_lab_name || ownerRow.hospital_name || "the lab";
+    const inviterName = req.scope.role === "owner"
+      ? (ownerRow.name || "the lab owner")
+      : `${ownerRow.name || "the lab owner"}'s team`;
+    let emailSent = false;
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resendRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "VeritaAssure™ <noreply@veritaslabservices.com>",
+            to: normalizedEmail,
+            subject: `You've been invited to join ${labName} on VeritaAssure™`,
+            html: `
+              <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+                <h2 style="color:#01696F">VeritaAssure™</h2>
+                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure™ as a team member${role === "admin" ? " with admin rights" : ""}.</p>
+                <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
+                <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 7 days.</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+                <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
+              </div>
+            `,
+          }),
+        });
+        emailSent = resendRes.ok;
+        if (!resendRes.ok) {
+          const body = await resendRes.text().catch(() => "<unreadable>");
+          console.error(`[labs/:labId/members POST] Resend rejected: status=${resendRes.status} body=${body}`);
+        }
+      } catch (emailErr: any) {
+        console.error("[labs/:labId/members POST] Invite email failed:", emailErr?.message);
+      }
+    }
+
+    res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
+  });
+
+  // PATCH /api/labs/:labId/members/:memberId — change a member's role between
+  // 'staff' and 'admin'. Owner-only. Refuses target role 'owner' (must go
+  // through transfer-ownership). Refuses to change the current owner's role.
+  app.patch("/api/labs/:labId/members/:memberId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isLabOwner(req.scope)) return res.status(403).json({ error: "Owner required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const { role: newRole } = req.body || {};
+    if (newRole !== "admin" && newRole !== "staff") {
+      return res.status(400).json({ error: "role must be 'admin' or 'staff' (use transfer-ownership to change owner)" });
+    }
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") {
+      return res.status(409).json({ error: "Cannot change the owner's role here; use POST /transfer-ownership" });
+    }
+    const now = new Date().toISOString();
+    sqlite.prepare("UPDATE lab_members SET role = ?, updated_at = ? WHERE id = ?").run(newRole, now, memberId);
+    console.log(`[labs/${req.scope.labId}/members PATCH] member_id=${memberId} role: ${member.role} -> ${newRole} (by user_id=${req.userId})`);
+    res.json({ ok: true, membershipId: memberId, role: newRole });
+  });
+
+  // DELETE /api/labs/:labId/members/:memberId — remove a member from the lab.
+  // Admin or owner. Refuses to remove the current owner.
+  app.delete("/api/labs/:labId/members/:memberId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") return res.status(409).json({ error: "Cannot remove the owner; transfer ownership first" });
+
+    const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    try {
+      sqlite.exec("BEGIN");
+      sqlite.prepare("DELETE FROM lab_members WHERE id = ?").run(memberId);
+      // Also deactivate the matching user_seats row (matches the lab owner's seat pool).
+      const userRow = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(member.user_id) as any;
+      if (userRow?.email && lab?.owner_user_id) {
+        sqlite.prepare(
+          "UPDATE user_seats SET status = 'deactivated' WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
+        ).run(lab.owner_user_id, String(userRow.email).toLowerCase());
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[labs/:labId/members DELETE] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to remove member" });
+    }
+    console.log(`[labs/${req.scope.labId}/members DELETE] member_id=${memberId} user_id=${member.user_id} (by user_id=${req.userId})`);
+    res.json({ ok: true });
+  });
+
+  // POST /api/labs/:labId/transfer-ownership — atomic ownership transfer.
+  // Body: { newOwnerUserId, confirm: true }. Owner-only.
+  // Single transaction:
+  //   1. labs.owner_user_id = newOwnerUserId
+  //   2. old owner lab_members row: role -> 'admin', is_primary_lab flag handled below
+  //   3. new owner lab_members row: role -> 'owner'
+  //   4. is_primary_lab swap: if old owner had this lab as primary, clear that
+  //      flag and set it on the new owner's membership.
+  // Refuses if newOwnerUserId is not already an active member of the lab.
+  // Stripe customer / billing email NOT migrated (per Phase 1 scope decision).
+  app.post("/api/labs/:labId/transfer-ownership", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isLabOwner(req.scope)) return res.status(403).json({ error: "Owner required" });
+    const { newOwnerUserId, confirm } = req.body || {};
+    if (confirm !== true) return res.status(400).json({ error: "confirm: true required" });
+    const newOwnerId = Number(newOwnerUserId);
+    if (!Number.isFinite(newOwnerId)) return res.status(400).json({ error: "newOwnerUserId required" });
+    if (newOwnerId === req.userId) return res.status(400).json({ error: "Cannot transfer ownership to yourself" });
+
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    if (lab.owner_user_id !== req.userId) {
+      // Defensive: scope says role='owner' but labs.owner_user_id is someone else. Bail rather than mutate.
+      return res.status(409).json({ error: "Lab owner_user_id does not match the authenticated user; transfer aborted" });
+    }
+    const newOwnerMember = sqlite.prepare(
+      "SELECT id, user_id, role, is_primary_lab FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
+    ).get(req.scope.labId, newOwnerId) as any;
+    if (!newOwnerMember) {
+      return res.status(404).json({ error: "Target user is not an active member of this lab; invite them first" });
+    }
+    const oldOwnerMember = sqlite.prepare(
+      "SELECT id, user_id, role, is_primary_lab FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
+    ).get(req.scope.labId, req.userId) as any;
+    if (!oldOwnerMember) {
+      return res.status(409).json({ error: "Current owner has no active lab_members row; cannot transfer" });
+    }
+
+    const now = new Date().toISOString();
+    try {
+      sqlite.exec("BEGIN");
+      sqlite.prepare("UPDATE labs SET owner_user_id = ?, updated_at = ? WHERE id = ?").run(newOwnerId, now, req.scope.labId);
+      sqlite.prepare("UPDATE lab_members SET role = 'admin', updated_at = ? WHERE id = ?").run(now, oldOwnerMember.id);
+      sqlite.prepare("UPDATE lab_members SET role = 'owner', updated_at = ? WHERE id = ?").run(now, newOwnerMember.id);
+      // Move is_primary_lab=1 from old owner to new owner ONLY if old owner had it on this lab.
+      if (oldOwnerMember.is_primary_lab === 1) {
+        sqlite.prepare("UPDATE lab_members SET is_primary_lab = 0, updated_at = ? WHERE id = ?").run(now, oldOwnerMember.id);
+        // Clear any other primary the new owner might have so they only have one primary.
+        sqlite.prepare("UPDATE lab_members SET is_primary_lab = 0, updated_at = ? WHERE user_id = ? AND is_primary_lab = 1").run(now, newOwnerId);
+        sqlite.prepare("UPDATE lab_members SET is_primary_lab = 1, updated_at = ? WHERE id = ?").run(now, newOwnerMember.id);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[labs/:labId/transfer-ownership] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to transfer ownership" });
+    }
+    console.log(`[labs/${req.scope.labId}/transfer-ownership] old_owner=${req.userId} -> new_owner=${newOwnerId} (primary_moved=${oldOwnerMember.is_primary_lab === 1})`);
+    res.json({
+      ok: true,
+      labId: req.scope.labId,
+      oldOwnerUserId: req.userId,
+      newOwnerUserId: newOwnerId,
+      primaryFlagMoved: oldOwnerMember.is_primary_lab === 1,
+      note: "Stripe customer / billing email is unchanged on the lab; update in Stripe portal if you want billing emails to follow the new owner.",
+    });
+  });
+
   // ── STUDIES ───────────────────────────────────────────────────────────────
   app.get("/api/studies", (req, res) => {
     const auth = req.headers.authorization;

@@ -8,6 +8,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher } from "@/components/LabSwitcher";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { useMemberships } from "@/hooks/useMemberships";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 const allMobileLinks = [
   { href: "/", label: "Home" },
@@ -45,6 +47,14 @@ export function NavBar() {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const labRoute = useLabRoute();
+  const { data: memberships } = useMemberships();
+  const activeLabId = useActiveLabId();
+  const activeMembership =
+    memberships?.find(m => m.labId === activeLabId) ??
+    memberships?.find(m => m.isPrimaryLab) ??
+    memberships?.[0];
+  const showMembersLink = activeMembership && (activeMembership.role === "owner" || activeMembership.role === "admin");
+  const membersHref = activeMembership ? `/labs/${activeMembership.labId}/members` : null;
 
   const isActive = (href: string) => location === href;
 
@@ -212,6 +222,9 @@ export function NavBar() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild><Link href={labRoute("/dashboard")}>My Studies</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href={labRoute("/account/settings")}>Account</Link></DropdownMenuItem>
+                {showMembersLink && membersHref && (
+                  <DropdownMenuItem asChild><Link href={membersHref}>Lab Members</Link></DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={logout} className="text-destructive">
                   <LogOut size={13} className="mr-2" /> Sign out
                 </DropdownMenuItem>

@@ -1,10 +1,10 @@
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useMemberships, type Membership } from "@/hooks/useMemberships";
 import { useActiveLabId, withLabPrefix } from "@/hooks/useActiveLabId";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Building2, Check } from "lucide-react";
+import { ChevronDown, Building2, Check, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function labLabel(m: Membership): string {
@@ -75,6 +75,17 @@ export function LabSwitcher() {
             </DropdownMenuItem>
           );
         })}
+        {(current.role === "owner" || current.role === "admin") && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={`/labs/${current.labId}/members`} className="flex items-center gap-2 py-2 cursor-pointer">
+                <Users size={14} className="text-primary shrink-0" />
+                <span className="text-sm">Manage members</span>
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
