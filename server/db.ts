@@ -2357,6 +2357,91 @@ sqlite.exec(`
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_account ON inventory_items(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON inventory_items(account_id, expiration_date)`); } catch {}
 
+// VeritaOps: cost-per-reportable-test (CPRT) studies. PARKING_LOT #10.
+// Layered cost model per CLSI GP11-A "Basic Cost Accounting for Clinical
+// Services" conceptual basis:
+//   L1 = reagents + amortized calibrators + amortized QC + other supplies
+//   L2 = L1 + (tech minutes per test / 60) × loaded hourly rate
+//   L3 = L2 + (instrument depreciation / annual volume) + (annual maintenance / annual volume)
+//   L4 = L3 (or L2 if !include_capital) + overhead (flat per-test OR % markup)
+// L1 and L2 default on (most lab directors know reagent + labor; labor is
+// the biggest blind spot). L3 and L4 opt-in via the include_* toggles.
+// Lab-scoped via lab_id; account_id retained for legacy single-lab routes.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritaops_test_cost_studies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    test_name TEXT NOT NULL,
+    loinc TEXT,
+    department TEXT DEFAULT 'Core Lab',
+    annual_volume INTEGER DEFAULT 0,
+    reagent_cost_per_test REAL DEFAULT 0,
+    calibrator_kit_cost REAL DEFAULT 0,
+    cals_per_year INTEGER DEFAULT 0,
+    qc_cost_per_run REAL DEFAULT 0,
+    qc_runs_per_year INTEGER DEFAULT 0,
+    other_supplies_per_test REAL DEFAULT 0,
+    tech_minutes_per_test REAL DEFAULT 0,
+    tech_loaded_hourly_rate REAL DEFAULT 0,
+    include_capital INTEGER DEFAULT 0,
+    instrument_purchase_cost REAL DEFAULT 0,
+    instrument_useful_life_years INTEGER DEFAULT 7,
+    annual_maintenance_cost REAL DEFAULT 0,
+    include_overhead INTEGER DEFAULT 0,
+    overhead_method TEXT DEFAULT 'flat',
+    overhead_value REAL DEFAULT 0,
+    cprt_l1 REAL DEFAULT 0,
+    cprt_l2 REAL DEFAULT 0,
+    cprt_l3 REAL DEFAULT 0,
+    cprt_l4 REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// ALTER TABLE migration for veritaops_test_cost_studies. Adding new fields
+// in future PRs (e.g. semi-variable handling, charge-master comparison)
+// goes here as additional ensure() lines so production DBs pick them up
+// without manual migration. Per CLAUDE.md NEW DB TABLE RULE.
+{
+  const vopsCols = sqlite.prepare("PRAGMA table_info(veritaops_test_cost_studies)").all() as { name: string }[];
+  const vopsColNames = vopsCols.map((c) => c.name);
+  const vopsEnsure = (name: string, alter: string) => {
+    if (vopsCols.length > 0 && !vopsColNames.includes(name)) {
+      try { sqlite.exec(alter); } catch {}
+    }
+  };
+  vopsEnsure("lab_id",                       "ALTER TABLE veritaops_test_cost_studies ADD COLUMN lab_id INTEGER");
+  vopsEnsure("loinc",                        "ALTER TABLE veritaops_test_cost_studies ADD COLUMN loinc TEXT");
+  vopsEnsure("department",                   "ALTER TABLE veritaops_test_cost_studies ADD COLUMN department TEXT DEFAULT 'Core Lab'");
+  vopsEnsure("annual_volume",                "ALTER TABLE veritaops_test_cost_studies ADD COLUMN annual_volume INTEGER DEFAULT 0");
+  vopsEnsure("reagent_cost_per_test",        "ALTER TABLE veritaops_test_cost_studies ADD COLUMN reagent_cost_per_test REAL DEFAULT 0");
+  vopsEnsure("calibrator_kit_cost",          "ALTER TABLE veritaops_test_cost_studies ADD COLUMN calibrator_kit_cost REAL DEFAULT 0");
+  vopsEnsure("cals_per_year",                "ALTER TABLE veritaops_test_cost_studies ADD COLUMN cals_per_year INTEGER DEFAULT 0");
+  vopsEnsure("qc_cost_per_run",              "ALTER TABLE veritaops_test_cost_studies ADD COLUMN qc_cost_per_run REAL DEFAULT 0");
+  vopsEnsure("qc_runs_per_year",             "ALTER TABLE veritaops_test_cost_studies ADD COLUMN qc_runs_per_year INTEGER DEFAULT 0");
+  vopsEnsure("other_supplies_per_test",      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN other_supplies_per_test REAL DEFAULT 0");
+  vopsEnsure("tech_minutes_per_test",        "ALTER TABLE veritaops_test_cost_studies ADD COLUMN tech_minutes_per_test REAL DEFAULT 0");
+  vopsEnsure("tech_loaded_hourly_rate",      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN tech_loaded_hourly_rate REAL DEFAULT 0");
+  vopsEnsure("include_capital",              "ALTER TABLE veritaops_test_cost_studies ADD COLUMN include_capital INTEGER DEFAULT 0");
+  vopsEnsure("instrument_purchase_cost",     "ALTER TABLE veritaops_test_cost_studies ADD COLUMN instrument_purchase_cost REAL DEFAULT 0");
+  vopsEnsure("instrument_useful_life_years", "ALTER TABLE veritaops_test_cost_studies ADD COLUMN instrument_useful_life_years INTEGER DEFAULT 7");
+  vopsEnsure("annual_maintenance_cost",      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN annual_maintenance_cost REAL DEFAULT 0");
+  vopsEnsure("include_overhead",             "ALTER TABLE veritaops_test_cost_studies ADD COLUMN include_overhead INTEGER DEFAULT 0");
+  vopsEnsure("overhead_method",              "ALTER TABLE veritaops_test_cost_studies ADD COLUMN overhead_method TEXT DEFAULT 'flat'");
+  vopsEnsure("overhead_value",               "ALTER TABLE veritaops_test_cost_studies ADD COLUMN overhead_value REAL DEFAULT 0");
+  vopsEnsure("cprt_l1",                      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN cprt_l1 REAL DEFAULT 0");
+  vopsEnsure("cprt_l2",                      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN cprt_l2 REAL DEFAULT 0");
+  vopsEnsure("cprt_l3",                      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN cprt_l3 REAL DEFAULT 0");
+  vopsEnsure("cprt_l4",                      "ALTER TABLE veritaops_test_cost_studies ADD COLUMN cprt_l4 REAL DEFAULT 0");
+  vopsEnsure("notes",                        "ALTER TABLE veritaops_test_cost_studies ADD COLUMN notes TEXT");
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritaops_studies_account ON veritaops_test_cost_studies(account_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritaops_studies_lab ON veritaops_test_cost_studies(lab_id)`); } catch {}
+
 // VeritaMap instrument-add requests. Customers submit when their instrument
 // isn't in the picker; an email fires to info@veritaslabservices.com so
 // review is timely. Status: pending / approved / rejected with reviewer

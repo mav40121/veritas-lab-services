@@ -15564,6 +15564,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerVeritaBenchRoutes } = await import('./veritabench');
   registerVeritaBenchRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
+  // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
+  const { registerVeritaOpsRoutes } = await import('./veritaops');
+  registerVeritaOpsRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
   console.log('[routes] All routes registered successfully (176 routes)');
   return httpServer;
 }
