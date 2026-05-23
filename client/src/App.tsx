@@ -83,6 +83,7 @@ import VeritaStockPage from "@/pages/VeritaStockPage";
 import VeritaStockSnapOrderPage from "@/pages/VeritaStockSnapOrderPage";
 import VeritaOpsAppPage from "@/pages/VeritaOpsAppPage";
 import LabMembersPage from "@/pages/LabMembersPage";
+import FoundingLabApplyPage from "@/pages/FoundingLabApplyPage";
 import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
 import RequestInvoicePage from "@/pages/RequestInvoicePage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
@@ -346,6 +347,7 @@ function AppContent() {
           <Route path="/account/settings">{wrapLegacy(AccountSettingsPage)}</Route>
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
+          <Route path="/founding-lab/apply" component={FoundingLabApplyPage} />
 
           {/* Multi-Lab Tier 2 — Phase 2b: lab-scoped variants of every workspace page.
               Doc: docs/scoping-multi-lab-tier2.md. The legacy unprefixed routes above
