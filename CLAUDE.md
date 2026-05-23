@@ -117,13 +117,23 @@ This satisfies Gate 3 step 3 (schema verification) and step 4 (URL verification)
 
 ### How to ask questions
 
-When you ask Michael a question with options, every option label MUST follow the format:
+When you ask Michael a question with options, present them as numbered plain text in chat (not the AskUserQuestion modal — see STANDING_REQUIREMENTS.md "How to ask questions" for the modal exception):
 
 ```
-★ <option> [my-rec: brief reasoning]
+**Q1 — Question text?**
+
+1. ★ **Option label** — *[my-rec: brief reasoning]*
+2. **Alternate option** — *[my-rec: why I do not recommend this]*
+3. **Another alternate** — *[my-rec: why not this either]*
 ```
 
-The ★ is required. The my-rec annotation is required on every option, even the ones you are not recommending — phrase them so it's clear which one you actually recommend. Plain-text questions in chat without this format are a procedural breach.
+Required:
+
+- **Numbered** so Michael can answer with "Option N".
+- **Exactly one ★** on the recommended option. Not every option; not zero options. The ★ is the recommendation marker.
+- **`[my-rec: brief reasoning]` on every option**, including the ones you are not recommending. Phrase the my-rec annotations so it is obvious which one you actually recommend.
+
+Plain-text questions in chat without numbering, without the ★, or without `[my-rec: ...]` on every option are a procedural breach.
 
 ---
 
