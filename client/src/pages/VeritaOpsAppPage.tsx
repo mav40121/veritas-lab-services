@@ -58,6 +58,97 @@ interface CprtStudy {
 
 const DEPARTMENTS = ["Core Lab", "Chemistry", "Hematology", "Blood Bank", "Microbiology", "Urinalysis", "Point of Care", "Molecular"];
 
+// First-run defaults (v1.4). Test archetype templates so a brand-new
+// user has a starting point to override rather than staring at a blank
+// form. Numbers are typical mid-size hospital community lab; user is
+// expected to adjust to their actual operation. These are starting
+// scaffolds, not benchmarks.
+type ArchetypeKey = "custom" | "chemistry" | "hematology" | "manual_diff" | "sendout";
+
+interface Archetype {
+  key: ArchetypeKey;
+  label: string;
+  description: string;
+  defaults: Partial<CprtStudy>;
+}
+
+const ARCHETYPES: Archetype[] = [
+  {
+    key: "custom",
+    label: "Custom (blank form)",
+    description: "Start with empty fields. Pick this when none of the templates fit.",
+    defaults: {},
+  },
+  {
+    key: "chemistry",
+    label: "Chemistry, high-volume automated",
+    description: "Sodium, Potassium, Glucose, BMP-style analytes on a high-throughput analyzer with daily QC.",
+    defaults: {
+      department: "Chemistry",
+      annual_volume: 50000,
+      reagent_cost_per_test: 0.30,
+      other_supplies_per_test: 0.05,
+      calibrator_kit_cost: 200,
+      cals_per_year: 12,
+      qc_cost_per_run: 5,
+      qc_runs_per_year: 365,
+      tech_minutes_per_test: 0.5,
+      tech_loaded_hourly_rate: 55,
+    },
+  },
+  {
+    key: "hematology",
+    label: "Hematology CBC",
+    description: "Automated CBC with differential, including result-review time and daily QC.",
+    defaults: {
+      department: "Hematology",
+      annual_volume: 20000,
+      reagent_cost_per_test: 1.50,
+      other_supplies_per_test: 0.10,
+      calibrator_kit_cost: 150,
+      cals_per_year: 6,
+      qc_cost_per_run: 12,
+      qc_runs_per_year: 365,
+      tech_minutes_per_test: 1.5,
+      tech_loaded_hourly_rate: 55,
+    },
+  },
+  {
+    key: "manual_diff",
+    label: "Manual differential",
+    description: "Manual peripheral smear review. Labor-heavy, minimal consumables, no instrument QC.",
+    defaults: {
+      department: "Hematology",
+      annual_volume: 3000,
+      reagent_cost_per_test: 0.20,
+      other_supplies_per_test: 0.05,
+      calibrator_kit_cost: 0,
+      cals_per_year: 0,
+      qc_cost_per_run: 0,
+      qc_runs_per_year: 0,
+      tech_minutes_per_test: 8,
+      tech_loaded_hourly_rate: 55,
+    },
+  },
+  {
+    key: "sendout",
+    label: "Send-out (reference lab)",
+    description: "Test referred to outside reference lab. Reagent line carries the reference fee; tech time covers packaging, shipping, result tracking.",
+    defaults: {
+      department: "Core Lab",
+      annual_volume: 500,
+      reagent_cost_per_test: 45,
+      other_supplies_per_test: 2,
+      calibrator_kit_cost: 0,
+      cals_per_year: 0,
+      qc_cost_per_run: 0,
+      qc_runs_per_year: 0,
+      tech_minutes_per_test: 3,
+      tech_loaded_hourly_rate: 55,
+    },
+  },
+];
+
 function fmtCurrency(n: number | null | undefined): string {
   const v = Number(n || 0);
   return v.toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -76,11 +167,17 @@ function StudyDialog({
   editStudy: CprtStudy | null;
 }) {
   const [form, setForm] = useState<Partial<CprtStudy>>({});
+  // v1.4 template picker only shown when creating new, not editing.
+  const [archetype, setArchetype] = useState<ArchetypeKey>("custom");
 
   useEffect(() => {
     if (editStudy) {
       setForm(editStudy);
+      setArchetype("custom");
     } else {
+      // Default blank-form starting state for a new study; the user can
+      // also pick a template from the Start-from dropdown which fills
+      // additional fields on top of this.
       setForm({
         test_name: "",
         department: "Core Lab",
@@ -102,8 +199,24 @@ function StudyDialog({
         overhead_value: 0,
         notes: "",
       });
+      setArchetype("custom");
     }
   }, [editStudy, open]);
+
+  // Apply an archetype's defaults to the form. Preserves the user's
+  // test_name (so they don't lose what they typed) and the L3/L4 toggle
+  // state (those are explicit opt-ins, not part of the archetype scaffold).
+  const applyArchetype = useCallback((key: ArchetypeKey) => {
+    setArchetype(key);
+    const arch = ARCHETYPES.find((a) => a.key === key);
+    if (!arch || key === "custom") return;
+    setForm((prev) => ({
+      ...prev,
+      ...arch.defaults,
+      // Preserve user-typed test name if they already entered one
+      test_name: prev.test_name?.trim() ? prev.test_name : "",
+    }));
+  }, []);
 
   // Live local preview of CPRT layers as the user types. Mirrors
   // server/veritaops.ts computeCprt() logic exactly. Server is the
@@ -163,6 +276,28 @@ function StudyDialog({
           <DialogTitle>{editStudy ? `Edit: ${editStudy.test_name}` : "New CPRT Study"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-5">
+          {/* Template picker — only for new studies (v1.4) */}
+          {!editStudy && (
+            <div className="rounded-lg border p-3" style={{ backgroundColor: "#01696F08" }}>
+              <Label className="text-xs">Start from a template (optional)</Label>
+              <select
+                className="border rounded-md h-9 px-2 text-sm w-full bg-background mt-1"
+                value={archetype}
+                onChange={(e) => applyArchetype(e.target.value as ArchetypeKey)}
+                data-testid="archetype-picker"
+              >
+                {ARCHETYPES.map((a) => (
+                  <option key={a.key} value={a.key}>{a.label}</option>
+                ))}
+              </select>
+              {archetype !== "custom" && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {ARCHETYPES.find((a) => a.key === archetype)?.description} You will want to adjust these numbers to match your actual operation.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Identity */}
           <div>
             <h4 className="text-sm font-semibold mb-3" style={{ color: "#01696F" }}>Test identity</h4>
@@ -732,7 +867,7 @@ export default function VeritaOpsAppPage() {
 
       {/* What's coming next */}
       <div className="mt-4 text-xs text-muted-foreground">
-        <strong>All four CPRT layers, PDF export, and side-by-side comparison are live.</strong> Pre-filled defaults based on published cost-mix benchmarks ship in a subsequent update.
+        <strong>v1 feature-complete:</strong> all four CPRT layers, PDF export, side-by-side comparison, and starter templates are live. Verify script and additional polish ship in subsequent updates.
       </div>
 
       <StudyDialog
