@@ -71,6 +71,27 @@ A user message saying "fix it" or "do it" earlier in the conversation does NOT c
 
 Both gates are phrased so that violations are detectable in the conversation log. If the user finds the agent shipped without an authorizing message or confirm_action, that is a discrete, demonstrable breach, not a matter of interpretation.
 
+### How to ask questions
+
+When the agent asks Michael a question with options, the options MUST be presented in this format so Michael can answer with "Option N":
+
+```
+**Q1 — Question text?**
+
+1. ★ **Option label** — *[my-rec: brief reasoning]*
+2. **Alternate option** — *[my-rec: why I do not recommend this]*
+3. **Another alternate** — *[my-rec: why not this either]*
+```
+
+Required elements:
+
+- **Numbered** (1, 2, 3, ...). Michael answers with "Option N". Bulleted/unnumbered options force him to quote the label or paraphrase, which he has flagged explicitly as friction.
+- **Exactly one ★** on the recommended option. Never on every option; never on zero options. The ★ is the recommendation marker, not the option marker.
+- **`[my-rec: brief reasoning]` on every option** including the ones not recommended. Phrase the my-rec annotations so it is obvious which one the agent actually recommends.
+- **Plain text in chat by default**, not the `AskUserQuestion` modal. The modal covers the analysis above it; numbered plain-text options let Michael scroll back to context while deciding. Use the modal only when the question genuinely stands alone with no preceding analysis, or when a skill (e.g. `/loop`, `/schedule`) requires it.
+
+Plain-text questions in chat without numbering, without the ★, or without `[my-rec: ...]` on every option are a procedural breach.
+
 ## PDF Requirements (NON-NEGOTIABLE)
 - Signature MUST appear on PAGE 1 of COMPLIANCE documents (VeritaCheck studies, VeritaComp competency records, CMS 209). No exceptions. The director's approval (Accepted / Not accepted checkboxes plus Signature/Date/Print Name/Title) is the verdict, and it MUST be visible on the same page as the study results, narrative, and CFR citations. Never propose putting it on its own page, even with whitespace framed as 'professional'.
 - VeritaScan PDFs are INTERNAL USE documents — NO director signature required. Add internal use disclaimer instead.
