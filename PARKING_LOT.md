@@ -115,25 +115,7 @@ layer) build.
 
 ### 12. Primary-lab seat counting — owner counts on primary lab only, free on secondaries
 
-**What:** Decision recorded for how the lab owner consumes seats when
-they own multiple labs. Owner burns one paid seat on their primary
-(first) lab. On every additional lab they own, they are a free
-implicit seat. Only invited users count against per-lab seat caps on
-secondary labs.
-
-**Fix shape:** Add `is_primary_lab` flag (likely on a new
-`lab_members` join table replacing the single `users.lab_id` FK).
-Default to first lab created; owner can change which lab is primary
-via Account Settings. Update seat-cap enforcement to honor the
-primary-lab rule. Confirm whether seat-enforcement code needs
-refactoring (separate read scoped for this).
-
-**Source:** 2026-05-07 multi-lab discussion (this session).
-
-**Status:** Open. Decision recorded; build deferred to post-COLA.
-Depends on Tier 2 (multi-lab data layer).
-
-**Pre- vs post-COLA:** Post-COLA.
+**CLOSED 2026-05-22 — see CLOSED C20 below.**
 
 ---
 
@@ -1574,6 +1556,33 @@ sync filterDept so the table immediately reflects the new default.
 **Source:** John, San Carlos lab, 2026-05-21. Same conversation that
 drove the vendor dropdown (PR #304), FILTERED VIEW banner (PR #305),
 and Snap Order workflow (PR #307).
+
+---
+
+### C20. Primary-lab seat counting (formerly #12)
+
+**Closure evidence:** `is_primary_lab INTEGER NOT NULL DEFAULT 0`
+column was added to the `lab_members` table at db.ts:1276, with the
+ALTER TABLE migration at db.ts:1302 ensuring the column is added on
+production databases that pre-date the change. The first-lab-created
+default is wired at db.ts:1387 (initial INSERT sets is_primary_lab=1
+for the seed owner) and db.ts:1446 (membership lookups prefer
+is_primary_lab=1 ordering).
+
+The seat-counting logic that honors the primary-lab rule lives at
+routes.ts:759 -- the `isSecondaryRow` check treats memberships where
+`lab_id` is set AND `is_primary_lab !== 1` as secondary-lab rows
+that do not burn a paid seat against the owner's seat count.
+
+Schema, default-on-first-lab, lookup ordering, and seat enforcement
+are all in production. The original decision ("owner burns one paid
+seat on their primary lab, free implicit seat on every additional
+lab they own") is implemented as written.
+
+**Source:** 2026-05-07 multi-lab discussion. Build shipped as part
+of the Multi-Lab Tier 2 architecture work (Phase 3.x series, prior
+sessions). Status drift discovered 2026-05-22 during parking-lot
+audit.
 
 ---
 
