@@ -15,6 +15,14 @@ on:
   pull_request:
     branches:
       - main
+  # Manual trigger escape hatch. If GitHub Actions ever silently drops a
+  # pull_request event (which happened on PR #334 on 2026-05-23 — no run was
+  # created, no errors, branch protection blocked merge), the workflow can be
+  # fired by hand:
+  #   gh workflow run "Commit Message Gate" --ref <branch-name>
+  # The check runs the same logic and reaches the same pass/fail; this only
+  # adds an ignition switch, it does not weaken the substance gate.
+  workflow_dispatch:
 
 jobs:
   validate:
