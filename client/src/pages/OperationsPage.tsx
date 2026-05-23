@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  BarChart3, TrendingUp, Clock, Activity, Boxes,
+  BarChart3, TrendingUp, Clock, Activity, Boxes, Calculator,
   ChevronRight, Play,
 } from "lucide-react";
 
@@ -65,6 +65,17 @@ const MODULES = [
     icon: Boxes,
     color: "text-orange-600 bg-orange-500/10 border-orange-500/20",
   },
+  {
+    href: "/veritaops-app",
+    label: "VeritaOps™",
+    desc: "Cost per reportable test (CPRT)",
+    detail:
+      "Layered cost-per-reportable-test calculator: reagents and supplies, plus staff time, with capital depreciation and overhead as opt-in layers. Built on CLSI GP11-A cost accounting principles. Answers the build vs buy and the charge-master questions with transparent math the laboratory director can defend.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: Calculator,
+    color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
 ];
 
 function BadgePill({ label, color }: { label: string; color: string }) {
@@ -84,7 +95,7 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 export default function OperationsPage() {
   const { isLoggedIn } = useAuth();
   useSEO({
-    title: "Operations | VeritaBench, VeritaPace, VeritaShift, VeritaQA, VeritaStock",
+    title: "Operations | VeritaBench, VeritaPace, VeritaShift, VeritaQA, VeritaStock, VeritaOps",
     description: "Operational tools for clinical laboratories: productivity benchmarking, monthly trend tracking, by-hour demand analysis, department quality metrics, and reagent and supply tracking.",
   });
   return (
