@@ -23,7 +23,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lock, Plus, Edit2, Trash2, Calculator, FlaskConical, FileText } from "lucide-react";
+import { Lock, Plus, Edit2, Trash2, Calculator, FlaskConical, FileText, GitCompare, X as XIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CprtStudy {
@@ -324,6 +324,148 @@ function StudyDialog({
   );
 }
 
+// Side-by-side comparison of two CPRT studies. Build vs buy, vendor A vs
+// vendor B, current cost vs send-out quote, etc. Shows all four layers
+// per study, the per-layer delta, and the annual cost gap at each study's
+// deepest enabled layer. Cheaper side highlighted; user judges which
+// layer is the right comparison ground for their decision.
+function ComparisonDialog({
+  open, onClose, a, b,
+}: {
+  open: boolean;
+  onClose: () => void;
+  a: CprtStudy | null;
+  b: CprtStudy | null;
+}) {
+  if (!a || !b) return null;
+
+  const layers: Array<{ key: keyof CprtStudy; label: string; enabledOn: (s: CprtStudy) => boolean }> = [
+    { key: "cprt_l1", label: "L1: Reagents and supplies", enabledOn: () => true },
+    { key: "cprt_l2", label: "L2: + Direct labor", enabledOn: () => true },
+    { key: "cprt_l3", label: "L3: + Equipment depreciation", enabledOn: (s) => s.include_capital === 1 },
+    { key: "cprt_l4", label: "L4: + Overhead", enabledOn: (s) => s.include_overhead === 1 },
+  ];
+
+  const deepestOf = (s: CprtStudy): number =>
+    s.include_overhead === 1 ? s.cprt_l4
+    : s.include_capital === 1 ? s.cprt_l3
+    : s.cprt_l2;
+  const deepestLabelOf = (s: CprtStudy): string =>
+    s.include_overhead === 1 ? "L4"
+    : s.include_capital === 1 ? "L3"
+    : "L2";
+
+  const aAnnual = a.annual_volume > 0 ? deepestOf(a) * a.annual_volume : null;
+  const bAnnual = b.annual_volume > 0 ? deepestOf(b) * b.annual_volume : null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Compare: {a.test_name} vs {b.test_name}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* Identity */}
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="rounded border p-3">
+              <div className="font-semibold" style={{ color: "#01696F" }}>{a.test_name}</div>
+              <div className="text-xs text-muted-foreground mt-1">{a.department} &nbsp;|&nbsp; {fmtInt(a.annual_volume)} tests/yr</div>
+            </div>
+            <div className="rounded border p-3">
+              <div className="font-semibold" style={{ color: "#01696F" }}>{b.test_name}</div>
+              <div className="text-xs text-muted-foreground mt-1">{b.department} &nbsp;|&nbsp; {fmtInt(b.annual_volume)} tests/yr</div>
+            </div>
+          </div>
+
+          {/* CPRT layer comparison */}
+          <div>
+            <h4 className="text-sm font-semibold mb-2" style={{ color: "#01696F" }}>CPRT comparison</h4>
+            <table className="w-full text-sm border">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold">Layer</th>
+                  <th className="text-right px-3 py-2 font-semibold">{a.test_name}</th>
+                  <th className="text-right px-3 py-2 font-semibold">{b.test_name}</th>
+                  <th className="text-right px-3 py-2 font-semibold">Difference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {layers.map((layer) => {
+                  const aOn = layer.enabledOn(a);
+                  const bOn = layer.enabledOn(b);
+                  const aVal = aOn ? Number(a[layer.key] || 0) : null;
+                  const bVal = bOn ? Number(b[layer.key] || 0) : null;
+                  let deltaLabel = "—";
+                  let aHighlight = false;
+                  let bHighlight = false;
+                  if (aVal != null && bVal != null) {
+                    const delta = aVal - bVal;
+                    deltaLabel = (delta >= 0 ? "+" : "") + fmtCurrency(Math.abs(delta)) + (delta === 0 ? " (equal)" : delta > 0 ? " (B cheaper)" : " (A cheaper)");
+                    if (delta > 0) bHighlight = true;
+                    else if (delta < 0) aHighlight = true;
+                  }
+                  return (
+                    <tr key={String(layer.key)} className="border-t">
+                      <td className="px-3 py-2 font-medium">{layer.label}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${aHighlight ? "bg-emerald-50 text-emerald-800 font-semibold" : ""}`}>
+                        {aVal != null ? fmtCurrency(aVal) : <span className="text-muted-foreground italic">not enabled</span>}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-mono ${bHighlight ? "bg-emerald-50 text-emerald-800 font-semibold" : ""}`}>
+                        {bVal != null ? fmtCurrency(bVal) : <span className="text-muted-foreground italic">not enabled</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs text-muted-foreground">
+                        {deltaLabel}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Annual cost comparison */}
+          <div>
+            <h4 className="text-sm font-semibold mb-2" style={{ color: "#01696F" }}>Annual cost at deepest enabled layer</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded border p-3">
+                <div className="text-xs text-muted-foreground">
+                  {a.test_name} at {deepestLabelOf(a)} × {fmtInt(a.annual_volume)} tests
+                </div>
+                <div className="text-xl font-bold font-mono" style={{ color: "#01696F" }}>
+                  {aAnnual != null ? fmtCurrency(aAnnual) : "—"}
+                </div>
+              </div>
+              <div className="rounded border p-3">
+                <div className="text-xs text-muted-foreground">
+                  {b.test_name} at {deepestLabelOf(b)} × {fmtInt(b.annual_volume)} tests
+                </div>
+                <div className="text-xl font-bold font-mono" style={{ color: "#01696F" }}>
+                  {bAnnual != null ? fmtCurrency(bAnnual) : "—"}
+                </div>
+              </div>
+            </div>
+            {aAnnual != null && bAnnual != null && (
+              <div className="mt-3 text-sm">
+                <strong>Annual delta:</strong>{" "}
+                {fmtCurrency(Math.abs(aAnnual - bAnnual))}{" "}
+                {aAnnual === bAnnual ? "(equal)" : aAnnual > bAnnual ? `(${b.test_name} is cheaper annually)` : `(${a.test_name} is cheaper annually)`}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              The comparison is only as honest as the layer match. If one side enables L4 and the other does not, you are comparing fully-loaded against partial. Re-run with matching toggles for an apples-to-apples view.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function VeritaOpsAppPage() {
   useSEO({
     title: "VeritaOps - Cost Per Reportable Test (CPRT)",
@@ -340,6 +482,31 @@ export default function VeritaOpsAppPage() {
   const [showForm, setShowForm] = useState(false);
   const [editStudy, setEditStudy] = useState<CprtStudy | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CprtStudy | null>(null);
+  // Side-by-side comparison (v1.3). Limit to exactly 2 selections.
+  const [selectedForComparison, setSelectedForComparison] = useState<Set<number>>(new Set());
+  const [showComparison, setShowComparison] = useState(false);
+  const toggleCompare = (id: number) => {
+    setSelectedForComparison((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size >= 2) {
+        // Replace the oldest selection; keeps the user moving instead of
+        // making them deselect first.
+        const first = next.values().next().value as number | undefined;
+        if (first !== undefined) next.delete(first);
+        next.add(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+  const comparisonStudies = useMemo(() => {
+    const ids = Array.from(selectedForComparison);
+    const a = ids[0] != null ? studies.find((s) => s.id === ids[0]) ?? null : null;
+    const b = ids[1] != null ? studies.find((s) => s.id === ids[1]) ?? null : null;
+    return { a, b };
+  }, [selectedForComparison, studies]);
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
@@ -450,9 +617,29 @@ export default function VeritaOpsAppPage() {
             Cost per reportable test (CPRT) studies. Built on CLSI GP11-A cost accounting principles.
           </p>
         </div>
-        <Button size="sm" onClick={() => { setEditStudy(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }} data-testid="add-cprt-study">
-          <Plus size={14} className="mr-1.5" />New CPRT Study
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedForComparison.size > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedForComparison.size !== 2}
+              onClick={() => setShowComparison(true)}
+              title={selectedForComparison.size === 2 ? "Open side-by-side comparison" : "Select exactly 2 studies to compare"}
+              data-testid="open-cprt-compare"
+            >
+              <GitCompare size={14} className="mr-1.5" />
+              Compare {selectedForComparison.size}/2
+            </Button>
+          )}
+          {selectedForComparison.size > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSelectedForComparison(new Set())} title="Clear comparison selection">
+              <XIcon size={14} />
+            </Button>
+          )}
+          <Button size="sm" onClick={() => { setEditStudy(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }} data-testid="add-cprt-study">
+            <Plus size={14} className="mr-1.5" />New CPRT Study
+          </Button>
+        </div>
       </div>
 
       {/* Empty / loading / table */}
@@ -474,6 +661,7 @@ export default function VeritaOpsAppPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b">
                   <tr>
+                    <th className="text-center px-2 py-2 font-semibold w-8" title="Select up to 2 to compare"></th>
                     <th className="text-left px-3 py-2 font-semibold">Test</th>
                     <th className="text-left px-3 py-2 font-semibold">Dept</th>
                     <th className="text-right px-3 py-2 font-semibold">Annual volume</th>
@@ -493,7 +681,14 @@ export default function VeritaOpsAppPage() {
                       : s.include_capital === 1 ? s.cprt_l3
                       : s.cprt_l2;
                     return (
-                      <tr key={s.id} className={`border-b ${idx % 2 === 0 ? "" : "bg-muted/20"}`} data-testid={`cprt-row-${s.id}`}>
+                      <tr key={s.id} className={`border-b ${idx % 2 === 0 ? "" : "bg-muted/20"} ${selectedForComparison.has(s.id) ? "bg-emerald-50 dark:bg-emerald-900/10" : ""}`} data-testid={`cprt-row-${s.id}`}>
+                        <td className="px-2 py-2 text-center">
+                          <Checkbox
+                            checked={selectedForComparison.has(s.id)}
+                            onCheckedChange={() => toggleCompare(s.id)}
+                            data-testid={`compare-checkbox-${s.id}`}
+                          />
+                        </td>
                         <td className="px-3 py-2">
                           <div className="font-medium flex items-center gap-2">
                             <FlaskConical size={14} className="text-muted-foreground" />
@@ -537,7 +732,7 @@ export default function VeritaOpsAppPage() {
 
       {/* What's coming next */}
       <div className="mt-4 text-xs text-muted-foreground">
-        <strong>All four CPRT layers and PDF export are live.</strong> Side-by-side study comparison and pre-filled defaults based on published cost-mix benchmarks ship in subsequent updates.
+        <strong>All four CPRT layers, PDF export, and side-by-side comparison are live.</strong> Pre-filled defaults based on published cost-mix benchmarks ship in a subsequent update.
       </div>
 
       <StudyDialog
@@ -545,6 +740,13 @@ export default function VeritaOpsAppPage() {
         onClose={() => { setShowForm(false); setEditStudy(null); }}
         onSave={handleSave}
         editStudy={editStudy}
+      />
+
+      <ComparisonDialog
+        open={showComparison}
+        onClose={() => setShowComparison(false)}
+        a={comparisonStudies.a}
+        b={comparisonStudies.b}
       />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
