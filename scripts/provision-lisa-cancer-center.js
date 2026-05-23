@@ -79,7 +79,9 @@ async function verifyReport(adminSecret) {
     headers: { "x-admin-secret": adminSecret },
   });
   if (!res.ok) throw new Error(`/api/admin/report failed: ${res.status}`);
-  const rows = await res.json();
+  const data = await res.json();
+  // Endpoint shape: { generatedAt, totalLabs, labs, totalUsers, users }
+  const rows = Array.isArray(data) ? data : (data.users || data.rows || []);
   const lisaRows = rows.filter(
     (r) => r.id === TARGET_USER_ID || (r.email || "").toLowerCase() === TARGET_EMAIL,
   );
