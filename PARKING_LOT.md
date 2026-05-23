@@ -62,27 +62,7 @@ Monday available before the booth.
 
 ### 10. Operations module for cost-per-test calculations
 
-**What:** A new VeritaAssure module (working name: VeritaOps or similar)
-for laboratory cost-per-test calculations. Inputs span reagent cost,
-calibrator cost, control cost, QC frequency, instrument depreciation,
-labor (tech time per run, per result), batch sizes, send-out blends,
-and overhead allocation. Output: per-test cost with breakdown, plus
-throughput and break-even analysis.
-
-**Fix shape:** TBD. Needs a scoping question pass before any code:
-which cost dimensions are in scope for v1, what data the user already
-has vs needs to enter, how it integrates with VeritaMap (test list)
-and VeritaScan (volume), report shapes (PDF, Excel), and whether it
-needs its own subscription tier or rolls into an existing one.
-
-**Source:** This thread, 2026-05-07 12:05 PM CDT, user message:
-"Parking lot:  build an operations module for cost per test
-calculations."
-
-**Status:** Deferred indefinitely unless a customer asks by name (2026-05-21). Same posture #24 and #25 had before they became hard NOs. Reason: no customer has requested this module; sizing is XL multi-week build with uncertain demand. Memory entry exists at work.projects.veritaassure.operations_module.
-
-**Pre- vs post-COLA:** Post-COLA. New module, not on the conference
-demo path.
+**CLOSED 2026-05-22 — see CLOSED C22 below.**
 
 ---
 
@@ -1611,6 +1591,78 @@ Different buyer mental model, both end at "email us."
 canonical-case session). PR #322 (initial build); softening PR
 follow-up the same day after the operator caught the Enterprise+
 conflict.
+
+---
+
+### C22. VeritaOps cost-per-test module (formerly #10)
+
+**Closure evidence:** v1 of the VeritaOps Cost-Per-Reportable-Test
+(CPRT) module shipped across PR #325 through PR #330 on 2026-05-22.
+The module is feature-complete for the typical lab director workflow.
+
+**v1 build summary:**
+
+- **PR #325** v1.0 foundation: schema `veritaops_test_cost_studies`
+  + ALTER migrations, `server/veritaops.ts` with `computeCprt()` and
+  10 CRUD routes (account-scoped + lab-scoped), minimal
+  `VeritaOpsAppPage.tsx` with create/edit/list/delete and live
+  L1+L2 preview. Plan-gated. CLSI GP11-A cited in page subtitle.
+- **PR #326** v1.5 discoverability: Operations marketing tile +
+  NavBar entry, addressing the gap where v1.0 shipped a page with
+  no nav path. Same-PR discipline lesson recorded in the commit
+  message.
+- **PR #327** v1.1: L3 (equipment depreciation) and L4 (overhead,
+  flat dollars or % markup) opt-in sections in the dialog; live
+  preview extended to show enabled layers; studies table gains L3
+  and L4 columns with em-dash on opt-out.
+- **PR #328** v1.2: PDF export via `server/veritaopsPdf.ts` using
+  puppeteer. Internal-use report header, 2x2 CPRT result grid,
+  annual cost projection at deepest enabled layer, full assumptions
+  table for audit transparency, methodology block citing CLSI GP11-A.
+- **PR #329** v1.3: side-by-side comparison view. Per-row checkboxes,
+  Compare button activates at exactly 2 selections, dialog shows
+  4-layer comparison table with cheaper-side emerald highlighting +
+  annual cost tiles at each study's deepest enabled layer.
+- **PR #330** v1.4: starter templates. 5 archetypes (custom blank,
+  chemistry high-volume, hematology CBC, manual diff, send-out
+  reference). Picker only shows when creating new (not editing);
+  preserves user-typed test name when applying a template.
+- **This PR (v1.5)** ships `scripts/verify-veritaops-cprt-math.js`
+  with 10 known-input test cases exercising L1, L2, L3, L4 math
+  including divide-by-zero edge cases and the two archetype templates.
+  All 10 cases pass.
+
+**Conceptual basis:** CLSI GP11-A "Basic Cost Accounting for
+Clinical Services" (1998, the canonical lab cost-accounting
+document). Research validated 2026-05-22 via session web pass:
+[[reference_active_pipeline_doc]] context, GP35 was incorrectly
+cited initially, corrected to GP11-A. HFMA has no lab-specific
+cost-accounting framework so we do not cite them. The four-layer
+model (Direct -> +Labor -> +Capital -> +Overhead) is universal in
+cost accounting literature and aligned with what ADLM, ASCP, and
+the published activity-based-costing studies independently describe.
+
+**v2 backlog (NOT shipped, recorded for future work):**
+
+- Excel export (Master List-style branded workbook with About sheet)
+- Bulk import from LIS (rolling cost from real volume data)
+- Vendor catalog integration (Roche / Abbott / Beckman menu reagent
+  prices pre-loaded as defaults)
+- Cost roll-up at the department level (sum all tests in Chemistry)
+- Annual reporting view ("here is what your test menu cost this year")
+- Activity-based costing (multi-step time tracking instead of one
+  minutes-per-test number; the ABC PMC study referenced in research
+  pass shows the academic methodology)
+- Integration with VeritaStock (live reagent cost from inventory
+  rather than user-entered; obvious next move because VeritaStock
+  already tracks reagent cost + lot info)
+- CMS CLFS comparison (let users enter Medicare payment per test
+  alongside CPRT to show the margin/loss per test)
+
+**Source:** This thread, 2026-05-07 12:05 PM CDT, user message:
+"Parking lot: build an operations module for cost per test
+calculations." Scoping pass + research session 2026-05-22; v1
+build same session. PRs #325 through this one.
 
 ---
 
