@@ -174,6 +174,18 @@ export default function AdminReportPage() {
   // recent audit-log entries. Click count in the Actions column to open.
   const [activityUserId, setActivityUserId] = useState<number | null>(null);
 
+  // Collapse state per owner user_id. Owners with seats can be collapsed to
+  // reduce visual noise. In-memory only (no localStorage); reset on reload.
+  const [collapsedOwners, setCollapsedOwners] = useState<Set<number>>(() => new Set());
+  function toggleOwnerCollapsed(ownerId: number) {
+    setCollapsedOwners(prev => {
+      const next = new Set(prev);
+      if (next.has(ownerId)) next.delete(ownerId);
+      else next.add(ownerId);
+      return next;
+    });
+  }
+
   async function handleSetPlan(userId: number, plan: string) {
     setSetPlanLoading(userId);
     try {
@@ -289,26 +301,57 @@ export default function AdminReportPage() {
   // (one per lab). Seats only nest under that user's PRIMARY lab row (or the
   // first occurrence if no primary survives the active filter) so seats don't
   // duplicate across the user's secondary lab rows.
+  // Precomputed: nested-seat count per owner user_id. Used to render the
+  // chevron toggle + "(N seats)" indicator on owner rows. Derived from
+  // the unfiltered seat list so the count is honest about how many seats
+  // belong to the owner overall (not just those matching current search).
+  const seatCountByOwner = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const u of filtered) {
+      if (u.seat_owner_id) counts.set(u.seat_owner_id, (counts.get(u.seat_owner_id) || 0) + 1);
+    }
+    return counts;
+  }, [filtered]);
+
+  // Owner ids that currently have at least one nested seat. Used to drive
+  // the Expand all / Collapse all buttons (they only act on owners that
+  // actually have a chevron worth toggling).
+  const ownersWithSeats = useMemo(() => {
+    const ids = new Set<number>();
+    for (const [ownerId, n] of seatCountByOwner) {
+      if (n > 0) ids.add(ownerId);
+    }
+    return ids;
+  }, [seatCountByOwner]);
+
   const grouped = useMemo(() => {
     const owners = filtered.filter(u => !u.seat_owner_id);
     const seats  = filtered.filter(u =>  u.seat_owner_id);
-    const result: (UserRecord & { _isSeat?: boolean })[] = [];
+    const result: (UserRecord & { _isSeat?: boolean; _seatCount?: number })[] = [];
     const seatsAttachedFor = new Set<number>();
     for (const owner of owners) {
-      result.push(owner);
+      const ownerSeatCount = seatCountByOwner.get(owner.id) || 0;
+      result.push({ ...owner, _seatCount: ownerSeatCount });
       const ownerSeats = seats.filter(s => s.seat_owner_id === owner.id);
       const isPrimaryOrFirstForUser =
         (owner.is_primary_lab === 1) || (!seatsAttachedFor.has(owner.id) && !owners.some(o => o.id === owner.id && o.is_primary_lab === 1));
-      if (ownerSeats.length > 0 && isPrimaryOrFirstForUser) {
+      const isCollapsed = collapsedOwners.has(owner.id);
+      if (ownerSeats.length > 0 && isPrimaryOrFirstForUser && !isCollapsed) {
         for (const seat of ownerSeats) result.push({ ...seat, _isSeat: true });
+        seatsAttachedFor.add(owner.id);
+      } else if (ownerSeats.length > 0 && isPrimaryOrFirstForUser && isCollapsed) {
+        // Mark the owner row as "attached" even when collapsed so secondary
+        // membership rows for the same user don't try to host the seats.
         seatsAttachedFor.add(owner.id);
       }
     }
-    // Any seat whose owner isn't in the filtered list (e.g. filtered out)
+    // Any seat whose owner isn't in the filtered list (e.g. filtered out).
+    // Orphan seats always render regardless of collapse state — collapse
+    // only affects seats nested directly under a visible owner row.
     const orphanSeats = seats.filter(s => !owners.find(o => o.id === s.seat_owner_id));
     for (const seat of orphanSeats) result.push({ ...seat, _isSeat: true });
     return result;
-  }, [filtered]);
+  }, [filtered, collapsedOwners, seatCountByOwner]);
 
   // Summary stats
   const totalAccounts = filtered.length;
@@ -619,6 +662,26 @@ export default function AdminReportPage() {
             <option value="past_due">Past Due</option>
             <option value="canceled">Canceled</option>
           </select>
+          {ownersWithSeats.size > 0 && (
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => setCollapsedOwners(new Set(ownersWithSeats))}
+                className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground hover:bg-muted"
+                title="Collapse all owners that have nested seats"
+              >
+                Collapse all
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollapsedOwners(new Set())}
+                className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground hover:bg-muted"
+                title="Expand all owner groups"
+              >
+                Expand all
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Summary cards */}
@@ -677,12 +740,26 @@ export default function AdminReportPage() {
                 >
                   <td className="px-3 py-2 whitespace-nowrap">
                     {u._isSeat && <span className="inline-block w-4" />}
+                    {!u._isSeat && ((u as any)._seatCount ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); toggleOwnerCollapsed(u.id); }}
+                        className="inline-flex items-center justify-center w-4 h-4 mr-1 text-muted-foreground hover:text-foreground"
+                        title={collapsedOwners.has(u.id) ? "Expand seats" : "Collapse seats"}
+                        aria-label={collapsedOwners.has(u.id) ? "Expand seats" : "Collapse seats"}
+                      >
+                        <span style={{ display: "inline-block", transform: collapsedOwners.has(u.id) ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 120ms" }}>▾</span>
+                      </button>
+                    )}
                     <span className="font-medium">
                       {u.seat_owner_id
                         ? (u.effective_lab_name || u.clia_lab_name || u.seat_owner_lab_name || u.seat_owner_name || u.seat_owner_email)
                         : (u.effective_lab_name || u.clia_lab_name || <span className="text-muted-foreground font-normal">Not set</span>)
                       }
                     </span>
+                    {!u._isSeat && collapsedOwners.has(u.id) && ((u as any)._seatCount ?? 0) > 0 && (
+                      <span className="ml-2 text-xs text-muted-foreground">({(u as any)._seatCount} seat{(u as any)._seatCount === 1 ? "" : "s"} hidden)</span>
+                    )}
                     {isSecondaryMembership && (
                       <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700" title={`This user has an additional ${u.lab_role || 'member'} role on this lab. Their primary lab is shown elsewhere.`}>
                         Secondary lab ({u.lab_role || 'member'})
