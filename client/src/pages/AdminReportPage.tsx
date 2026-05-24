@@ -397,6 +397,45 @@ export default function AdminReportPage() {
   ).length;
   const totalSeats = filtered.reduce((sum, u) => sum + (u.seat_count || 0), 0);
 
+  // New summary tiles (PR 4): Trials expiring soon + Pending invites.
+  // Trials = subscription_status='trialing' OR plan_expires_at within 7 days.
+  // Pending invites = accounts with at least one pending_seats > 0.
+  const TRIAL_HORIZON_DAYS = 7;
+  const trialsExpiringSoon = useMemo(() => {
+    const horizon = Date.now() + TRIAL_HORIZON_DAYS * 24 * 60 * 60 * 1000;
+    const seen = new Set<number>();
+    let n = 0;
+    for (const u of filtered) {
+      if (seen.has(u.id)) continue;
+      const trialing = (u.subscription_status || "").toLowerCase() === "trialing";
+      const exp = u.plan_expires_at || u.subscription_expires_at;
+      const expSoon = exp ? new Date(exp).getTime() <= horizon : false;
+      if (trialing || expSoon) {
+        seen.add(u.id);
+        n++;
+      }
+    }
+    return n;
+  }, [filtered]);
+  const pendingInvitesCount = useMemo(() => {
+    const seen = new Set<number>();
+    let n = 0;
+    for (const u of filtered) {
+      if (seen.has(u.id)) continue;
+      if ((u.pending_seats || 0) > 0) {
+        seen.add(u.id);
+        n += u.pending_seats || 0;
+      }
+    }
+    return n;
+  }, [filtered]);
+  // Distinct accounts (dedupe by user.id across multi-lab rows).
+  const distinctAccounts = useMemo(() => {
+    const ids = new Set<number>();
+    for (const u of filtered) ids.add(u.id);
+    return ids.size;
+  }, [filtered]);
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -730,10 +769,11 @@ export default function AdminReportPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
             <div className="text-sm text-muted-foreground">Total Accounts</div>
-            <div className="text-2xl font-bold">{totalAccounts}</div>
+            <div className="text-2xl font-bold">{distinctAccounts}</div>
+            <div className="text-xs text-muted-foreground mt-1">{totalAccounts} rows shown</div>
           </div>
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
             <div className="text-sm text-muted-foreground">Active Paid</div>
@@ -746,6 +786,14 @@ export default function AdminReportPage() {
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
             <div className="text-sm text-muted-foreground">Total Seats</div>
             <div className="text-2xl font-bold text-blue-600">{totalSeats}</div>
+          </div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground" title="Subscription trialing OR plan expires within 7 days">Trials Expiring ≤7d</div>
+            <div className={`text-2xl font-bold ${trialsExpiringSoon > 0 ? "text-amber-600" : "text-muted-foreground"}`}>{trialsExpiringSoon}</div>
+          </div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground" title="Seat invites that haven't been accepted yet">Pending Invites</div>
+            <div className={`text-2xl font-bold ${pendingInvitesCount > 0 ? "text-blue-600" : "text-muted-foreground"}`}>{pendingInvitesCount}</div>
           </div>
         </div>
 
