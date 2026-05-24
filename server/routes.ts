@@ -697,18 +697,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ) lo_seats ON lo_seats.owner_user_id = lab_owner.id
       -- seat_link attaches LEGACY user_seats attribution (the pre-Tier-2
       -- "seat user" model where one user's whole identity is a seat under
-      -- another). It must NOT attach to rows where this user is an active
-      -- lab_members member of any lab -- otherwise seat_owner_* fields bleed
-      -- across every owned-lab row for users who also happen to hold a legacy
-      -- seat somewhere (e.g. admin-report screenshot 2026-05-24: owner-of-3
-      -- labs displayed all 3 rows tagged "Seat under <inviter's lab>" + with
-      -- the inviter's CLIA + "Seat" account type). Gating on lm.role IS NULL
-      -- preserves the legacy display for pure seat users (no lab_members row)
-      -- and suppresses it for any user who has joined the lab_members model.
+      -- another). The frontend uses seat_owner_id to render seats as blue
+      -- rows nested under their inviter. Gate:
+      --   1. Row with no lab joined (l.owner_user_id IS NULL, pure seat
+      --      user with no lab_members) -> attach unconditionally (legacy).
+      --   2. Row with a lab joined -> attach only when THIS row's lab is
+      --      owned by the seat owner. So Daniela's row on Michaels Lab
+      --      attaches (Michaels Lab owner = Michael, Daniela is Michael's
+      --      seat); Daniela's row on Milford does NOT (Milford owner =
+      --      Lisa, Daniela is not Lisa's seat).
+      -- This replaces the earlier "lm.role IS NULL" gate from PR #344,
+      -- which was too aggressive: it stripped seat_owner_id from every
+      -- user with any lab_members row and collapsed the blue-nested view
+      -- into flat orange "Secondary lab" rows. The new gate restores the
+      -- nesting while keeping the original bleed fix (an owner's owned-
+      -- lab rows still do not get tagged "Seat under <other-owner-lab>"
+      -- because there is no user_seats row where an owner is their own
+      -- seat).
       LEFT JOIN user_seats seat_link
         ON seat_link.seat_user_id = u.id
        AND seat_link.status = 'active'
-       AND lm.role IS NULL
+       AND (l.owner_user_id IS NULL OR seat_link.owner_user_id = l.owner_user_id)
       LEFT JOIN users owner ON owner.id = seat_link.owner_user_id
       LEFT JOIN (
         SELECT user_id, MAX(last_active) as last_login, COUNT(*) as session_count
