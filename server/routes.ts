@@ -797,10 +797,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           effective_lab_name: rest.lab_name || rest.clia_lab_name || null,
         };
       });
+      // Pending invites: user_seats rows that were sent but never claimed
+      // (no user account yet OR account exists but seat is still pending).
+      // Surfaced separately so the admin can see who's been sat on the
+      // doorstep waiting. Joined to the owner user for display.
+      let pendingInvites: any[] = [];
+      try {
+        pendingInvites = (db as any).$client.prepare(`
+          SELECT us.id AS seat_id,
+                 us.owner_user_id,
+                 us.seat_email,
+                 us.invited_at,
+                 us.status,
+                 us.invite_token,
+                 owner.name AS owner_name,
+                 owner.email AS owner_email,
+                 owner.clia_lab_name AS owner_lab_name
+          FROM user_seats us
+          JOIN users owner ON owner.id = us.owner_user_id
+          WHERE us.status = 'pending'
+          ORDER BY us.invited_at DESC
+        `).all();
+      } catch (err: any) {
+        console.error("[admin-report pending-invites] query failed:", err.message);
+      }
+
       res.json({
         generatedAt: new Date().toISOString(),
         totalLabs: labs.length,
         labs,
+        pendingInvites,
         // Backward-compatible aliases so any cached frontend bundle still
         // sees a readable response. Remove on the next major release once
         // all clients are confirmed on the new shape.
