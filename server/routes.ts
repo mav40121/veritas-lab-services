@@ -958,6 +958,75 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
   });
 
+  // Admin: bulk-import inventory_items rows for a lab. Used for migrating
+  // existing inventory data (e.g. from a customer's spreadsheet) into
+  // VeritaStock without requiring the caller to be a lab member. Items are
+  // inserted under labs.owner_user_id as account_id and the specified
+  // lab_id for multi-lab scoping. Atomic transaction; rollback on any error.
+  app.post("/api/admin/import-inventory", (req, res) => {
+    const { secret, labId, items } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "items must be a non-empty array" });
+    }
+
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const accountId = lab.owner_user_id;
+    const now = new Date().toISOString();
+
+    const insertStmt = sqlite.prepare(`
+      INSERT INTO inventory_items (
+        account_id, lab_id, item_name, catalog_number, lot_number,
+        department, category, quantity_on_hand, reorder_point, unit,
+        expiration_date, vendor, storage_location, notes, status,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let inserted = 0;
+    const errors: string[] = [];
+    try {
+      sqlite.exec("BEGIN");
+      for (const item of items) {
+        if (!item?.item_name || typeof item.item_name !== "string") {
+          errors.push(`Skipped row without item_name: ${JSON.stringify(item).slice(0, 120)}`);
+          continue;
+        }
+        insertStmt.run(
+          accountId,
+          Number(labId),
+          String(item.item_name).trim(),
+          item.catalog_number != null ? String(item.catalog_number) : null,
+          item.lot_number ?? null,
+          item.department ?? null,
+          item.category ?? "Reagent",
+          Number(item.quantity_on_hand ?? 0),
+          Number(item.reorder_point ?? 0),
+          item.unit ?? "each",
+          item.expiration_date ?? null,
+          item.vendor ?? null,
+          item.storage_location ?? null,
+          item.notes ?? null,
+          item.status ?? "active",
+          now,
+          now,
+        );
+        inserted++;
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/import-inventory] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Insert failed", inserted: 0 });
+    }
+
+    console.log(`[admin/import-inventory] Inserted ${inserted} items into lab_id=${labId} (owner_user_id=${accountId})`);
+    res.json({ ok: true, inserted, errors });
+  });
+
   // Admin: update an existing lab's identity fields (lab_name, clia_number,
   // accreditation flags). Built for replacing placeholders on comp-provisioned
   // labs before first report. Refuses to update name or CLIA if the
