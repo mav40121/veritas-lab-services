@@ -695,7 +695,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         FROM user_seats
         GROUP BY owner_user_id
       ) lo_seats ON lo_seats.owner_user_id = lab_owner.id
-      LEFT JOIN user_seats seat_link ON seat_link.seat_user_id = u.id AND seat_link.status = 'active'
+      -- seat_link attaches LEGACY user_seats attribution (the pre-Tier-2
+      -- "seat user" model where one user's whole identity is a seat under
+      -- another). It must NOT attach to rows where this user is an active
+      -- lab_members member of any lab -- otherwise seat_owner_* fields bleed
+      -- across every owned-lab row for users who also happen to hold a legacy
+      -- seat somewhere (e.g. admin-report screenshot 2026-05-24: owner-of-3
+      -- labs displayed all 3 rows tagged "Seat under <inviter's lab>" + with
+      -- the inviter's CLIA + "Seat" account type). Gating on `lm.role IS NULL`
+      -- preserves the legacy display for pure seat users (no lab_members row)
+      -- and suppresses it for any user who has joined the lab_members model.
+      LEFT JOIN user_seats seat_link
+        ON seat_link.seat_user_id = u.id
+       AND seat_link.status = 'active'
+       AND lm.role IS NULL
       LEFT JOIN users owner ON owner.id = seat_link.owner_user_id
       LEFT JOIN (
         SELECT user_id, MAX(last_active) as last_login, COUNT(*) as session_count
