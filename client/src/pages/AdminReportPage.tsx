@@ -265,13 +265,22 @@ export default function AdminReportPage() {
 
     if (search) {
       const q = search.toLowerCase();
-      rows = rows.filter(
-        (u) =>
-          (u.effective_lab_name || u.clia_lab_name || "").toLowerCase().includes(q) ||
-          (u.email || "").toLowerCase().includes(q) ||
-          (u.name || "").toLowerCase().includes(q) ||
-          (u.effective_clia_number || u.clia_number || "").toLowerCase().includes(q)
-      );
+      const matchesText = (u: UserRecord) =>
+        (u.effective_lab_name || u.clia_lab_name || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q) ||
+        (u.name || "").toLowerCase().includes(q) ||
+        (u.effective_clia_number || u.clia_number || "").toLowerCase().includes(q);
+
+      // Two-pass: first collect direct matches; then pull in the owner row
+      // for any seat that matched, so the hierarchy stays intact when you
+      // search for a seat name. Without this, searching "Daniela" would
+      // surface her seat row but drop Michael's owner row, breaking nesting.
+      const directMatches = rows.filter(matchesText);
+      const ownerIdsToInclude = new Set<number>();
+      for (const u of directMatches) {
+        if (u.seat_owner_id) ownerIdsToInclude.add(u.seat_owner_id);
+      }
+      rows = rows.filter(u => matchesText(u) || ownerIdsToInclude.has(u.id));
     }
 
     if (planFilter) {
@@ -653,13 +662,26 @@ export default function AdminReportPage() {
       <div className="px-6 py-4 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap gap-3">
-          <input
-            type="text"
-            placeholder="Search lab name, email, name, CLIA number..."
-            className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground flex-1 min-w-[220px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="flex-1 min-w-[220px] relative">
+            <input
+              type="text"
+              placeholder="Search lab name, email, name, CLIA number..."
+              className="border border-border rounded px-3 py-2 pr-8 text-sm bg-background text-foreground w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-lg leading-none"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <select
             className="border border-border rounded px-3 py-2 text-sm bg-background text-foreground"
             value={planFilter}
