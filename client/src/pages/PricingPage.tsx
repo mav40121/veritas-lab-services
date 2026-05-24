@@ -66,8 +66,8 @@ const PLANS = [
   {
     name: "VeritaCheck\u2122 Unlimited",
     price: "$299",
-    period: "/yr",
-    description: "Single user. Method verification suite only. 14-day free trial included.",
+    period: "first year \u00b7 $499/yr after",
+    description: "Single user. Method verification suite only. 14-day free trial included. First-year discount auto-applied at checkout.",
     features: [
       "Unlimited studies",
       "All VeritaCheck\u2122 study types",

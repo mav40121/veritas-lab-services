@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
-import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice } from "./stripe";
+import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
@@ -1104,7 +1104,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const totalSeats = 1 + (additionalSeats || 0);
     const lineItems: any[] = [{ price: priceId, quantity: 1 }];
     if (additionalSeats && additionalSeats > 0 && priceType !== "veritacheck_only") {
-      const seatTier = getSeatPrice(totalSeats);
+      // MEDIUM scenario: additional seats priced at the tier's per-seat rate.
+      // Falls back to legacy band-based getSeatPrice for any tier not in the
+      // tier-indexed map (e.g. large_hospital / System custom-quote).
+      const seatTier = getSeatPriceForTier(priceType) ?? getSeatPrice(totalSeats);
       if (seatTier) lineItems.push({ price: seatTier.priceId, quantity: additionalSeats });
     }
     const sessionParams: any = {
@@ -7048,6 +7051,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       trialDays = 14;
     }
 
+    // Auto-apply VC Unlimited first-year discount ($200 off once -> Y1 = $299,
+    // Y2+ = $499 list). Only applies if the customer did not enter another
+    // discount code. The coupon's duration:'once' means Stripe charges the
+    // discounted amount on the first invoice only; subsequent annual renewals
+    // bill the underlying $499 base price.
+    if (priceType === "veritacheck_only" && !couponId) {
+      couponId = VC_UNLIMITED_FIRST_YEAR_COUPON;
+    }
+
     try {
       // Reuse or create Stripe customer
       // Verify existing customer ID is valid in current mode (live vs test)
@@ -7076,7 +7088,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const lineItems: any[] = [{ price: priceId, quantity: 1 }];
       const totalSeats = 1 + (additionalSeats || 0);
       if (additionalSeats && additionalSeats > 0 && priceType !== "veritacheck_only") {
-        const seatTier = getSeatPrice(totalSeats);
+        // MEDIUM scenario: additional seats priced at the tier's per-seat
+        // rate via SEAT_PRICES_BY_TIER. Falls back to legacy band-based
+        // getSeatPrice for any tier not in the tier-indexed map.
+        const seatTier = getSeatPriceForTier(priceType) ?? getSeatPrice(totalSeats);
         if (seatTier) {
           lineItems.push({ price: seatTier.priceId, quantity: additionalSeats });
         }
