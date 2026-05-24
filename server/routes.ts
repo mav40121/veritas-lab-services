@@ -958,6 +958,66 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
   });
 
+  // Admin: update an existing lab's identity fields (lab_name, clia_number,
+  // accreditation flags). Built for replacing placeholders on comp-provisioned
+  // labs before first report. Refuses to update name or CLIA if the
+  // corresponding lock is set (those freeze on first report, per CLAUDE.md §5).
+  app.post("/api/admin/update-lab", (req, res) => {
+    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+
+    if (labName !== undefined && lab.lab_name_locked) {
+      return res.status(409).json({ error: "lab_name is locked (first report has been generated); cannot update" });
+    }
+    if (cliaNumber !== undefined && lab.clia_locked) {
+      return res.status(409).json({ error: "clia_number is locked (first report has been generated); cannot update" });
+    }
+
+    let normalizedClia: string | null | undefined;
+    if (cliaNumber !== undefined) {
+      if (cliaNumber === null || cliaNumber === "") {
+        normalizedClia = null;
+      } else {
+        const v = validateClia(String(cliaNumber));
+        if (!v.ok) return res.status(400).json({ error: v.error || "Invalid CLIA number format" });
+        normalizedClia = v.normalized;
+      }
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    if (labName !== undefined) { updates.push("lab_name = ?"); params.push(labName ? String(labName).trim() : null); }
+    if (cliaNumber !== undefined) { updates.push("clia_number = ?"); params.push(normalizedClia ?? null); }
+    if (accCap !== undefined)  { updates.push("accreditation_cap = ?");  params.push(accCap ? 1 : 0); }
+    if (accTjc !== undefined)  { updates.push("accreditation_tjc = ?");  params.push(accTjc ? 1 : 0); }
+    if (accCola !== undefined) { updates.push("accreditation_cola = ?"); params.push(accCola ? 1 : 0); }
+    if (accAabb !== undefined) { updates.push("accreditation_aabb = ?"); params.push(accAabb ? 1 : 0); }
+
+    if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
+
+    updates.push("updated_at = ?");
+    params.push(new Date().toISOString());
+    params.push(Number(labId));
+
+    try {
+      sqlite.prepare(`UPDATE labs SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+    } catch (err: any) {
+      console.error("[admin/update-lab] DB update failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to update lab" });
+    }
+
+    const updated = sqlite.prepare(
+      "SELECT id, lab_name, clia_number, clia_locked, lab_name_locked, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, owner_user_id FROM labs WHERE id = ?"
+    ).get(Number(labId));
+    console.log(`[admin/update-lab] Updated lab_id=${labId}: ${updates.slice(0, -1).join(", ")}`);
+    res.json({ ok: true, lab: updated });
+  });
+
   // Admin: provision a comped secondary lab for an existing owner.
   // Creates labs row + lab_members row (is_primary_lab=0, role='owner') in
   // a single transaction. No Stripe customer or subscription is created.
