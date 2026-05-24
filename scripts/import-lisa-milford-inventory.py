@@ -63,6 +63,7 @@ def pull_admin_secret():
         headers={
             "Authorization": f"Bearer {RAILWAY_TOKEN}",
             "Content-Type": "application/json",
+            "User-Agent": "veritas-import-script/1.0",
         },
         method="POST",
     )
