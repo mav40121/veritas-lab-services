@@ -290,18 +290,18 @@ Apply to every task, not just large ones.
 **Published list pricing as of 2026-05-23 (MEDIUM scenario):**
 
 - Per Study: $25 one-time (`price_1TGXPo5dn6rqLgIxsnvNa2oi`)
-- VeritaCheck Unlimited: $299/yr, single user (`price_1TGXPn5dn6rqLgIxfyoLXVKo`)
-- Clinic: **$999/yr**, 2 active seats included, additional seats at $500/seat
-- Community: **$2,125/yr**, 5 active seats included, additional seats at $425/seat (Most Popular)
-- Hospital: **$4,995/yr**, 15 active seats included, additional seats at $333/seat
-- System: **Custom quote**, triggered by >1 CLIA lab OR 16+ active seats OR SSO/BAA/SLA requirements
+- VeritaCheck Unlimited: **$299 first year, $499/yr after** (`price_1TaQXR5dn6rqLgIxsi2uMrxS` is the $499 base; coupon `VCFIRSTYEAR` auto-applies $200 off once for Y1)
+- Clinic: **$999/yr**, 2 active seats included, additional seats at $500/seat (`price_1TaQXR5dn6rqLgIxJVoI5Hsz` base, `price_1TaQXS5dn6rqLgIxLlLKs1Bv` add-on seat)
+- Community: **$2,125/yr**, 5 active seats included, additional seats at $425/seat (`price_1TaQXR5dn6rqLgIxHnDQt7fU` base, `price_1TaQXS5dn6rqLgIx38gjkn6t` add-on seat) — Most Popular
+- Hospital: **$4,995/yr**, 15 active seats included, additional seats at $333/seat (`price_1TaQXR5dn6rqLgIx5XOqsLKU` base, `price_1TaQXT5dn6rqLgIxxFWywFOy` add-on seat)
+- System: **Custom quote**, triggered by >1 CLIA lab OR 16+ active seats OR SSO/BAA/SLA requirements. No published Stripe price; sales-team negotiated.
 
-**Per-seat additional-seat model:** each tier's $/seat rate applies to seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. View-only seats (medical director, reviewers) are unlimited and free on every tier.
+**Per-seat additional-seat model:** each tier's $/seat rate applies to seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. View-only seats (medical director, reviewers) are unlimited and free on every tier. The function `getSeatPriceForTier(plan)` in `server/stripe.ts` returns the tier-indexed add-on rate.
 
-**Stripe price IDs:**
+**Coupons:**
 
-- The list dollar amounts above are what /pricing displays.
-- New Stripe price IDs for Clinic/Community/Hospital MEDIUM tier amounts and tier-indexed additional-seat prices are **still pending creation** in the Stripe dashboard (Phase B work). Until those IDs are wired into `server/stripe.ts`, checkout flows through the legacy OLD Stripe price IDs ($499/$999/$1,999) — i.e., customers subscribing during the bridge window pay LESS than displayed. Acceptable because zero paying customers exist; bounded by Michael's Stripe-dashboard action.
+- `VCFIRSTYEAR` — $200 off once, auto-applied at every VC Unlimited checkout. Delivers Y1 = $299 / Y2+ = $499.
+- `COLA2026`, `BETA2026`, `DAVID10`, `JOHN2026` — partner / conference codes per the project memories.
 
 **Grandfathered legacy IDs (preserved in `server/stripe.ts`, never delete; existing subs ride these):**
 
