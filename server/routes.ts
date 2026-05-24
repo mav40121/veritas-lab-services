@@ -1121,6 +1121,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     if (discountPct) {
       sessionParams.discounts = [{ coupon: `(would create) percent_off=${discountPct}, duration=once, name=${discountRow.partner_name} - ${discountPct}% off` }];
+    } else if (priceType === "veritacheck_only") {
+      // Mirror the /api/stripe/checkout auto-apply for QA visibility.
+      sessionParams.discounts = [{ coupon: VC_UNLIMITED_FIRST_YEAR_COUPON }];
     }
     res.json({
       ok: true,
