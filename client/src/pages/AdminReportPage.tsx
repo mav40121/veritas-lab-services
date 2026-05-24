@@ -113,7 +113,31 @@ type SortKey =
   | "audit_action_count"
   | "study_count"
   | "engagement"
+  | "annual_revenue"
   | "created_at";
+
+// MRR/ARR helper. Returns annual revenue in dollars for a given (plan,
+// activeSeats) pair, based on the MEDIUM pricing in CLAUDE.md §10. For
+// grandfathered legacy plan codes (waived, enterprise, large_hospital,
+// etc.) we use the legacy rates so existing customer rows show their
+// real ARR, not a re-priced number.
+function annualRevenue(plan: string | null, activeSeats: number): { annual: number; basis: string } {
+  const seats = Math.max(0, activeSeats || 0);
+  switch ((plan || "").toLowerCase()) {
+    case "per_study":         return { annual: 0,    basis: "$25/study (one-time)" };
+    case "veritacheck_only":  return { annual: 499,  basis: "VC Unlimited Y2+" };
+    case "clinic":            return { annual: 999  + Math.max(0, seats - 2)  * 500, basis: "Clinic" };
+    case "community":         return { annual: 2125 + Math.max(0, seats - 5)  * 425, basis: "Community" };
+    case "hospital":          return { annual: 4995 + Math.max(0, seats - 15) * 333, basis: "Hospital" };
+    case "waived":            return { annual: 499,  basis: "Waived (legacy)" };
+    case "enterprise":        return { annual: 2999, basis: "Enterprise (legacy)" };
+    case "large_hospital":    return { annual: 2999, basis: "Large Hospital (legacy)" };
+    case "lab":               return { annual: 0,    basis: "Internal/test" };
+    case "free":
+    case "":
+    default:                  return { annual: 0,    basis: "Free / N/A" };
+  }
+}
 
 // Engagement is computed: the most recent of last_login and last_action_at.
 // Returns ISO string (most recent) or null if neither exists. Used to render
@@ -317,6 +341,9 @@ export default function AdminReportPage() {
       } else if (sortKey === "engagement") {
         aVal = mostRecentActivity(a) || "";
         bVal = mostRecentActivity(b) || "";
+      } else if (sortKey === "annual_revenue") {
+        aVal = annualRevenue(a.plan, a.active_seats || 0).annual;
+        bVal = annualRevenue(b.plan, b.active_seats || 0).annual;
       } else {
         aVal = (a as any)[sortKey];
         bVal = (b as any)[sortKey];
@@ -447,6 +474,21 @@ export default function AdminReportPage() {
     const ids = new Set<number>();
     for (const u of filtered) ids.add(u.id);
     return ids.size;
+  }, [filtered]);
+
+  // Total ARR across distinct paying accounts (dedupe by user.id; only
+  // count owner rows so multi-lab + seat rows don't double-count).
+  const totalARR = useMemo(() => {
+    const seen = new Set<number>();
+    let sum = 0;
+    for (const u of filtered) {
+      if (u.seat_owner_id) continue; // skip seat rows
+      if (u.lab_id != null && u.is_primary_lab !== 1) continue; // skip secondary
+      if (seen.has(u.id)) continue;
+      seen.add(u.id);
+      sum += annualRevenue(u.plan, u.active_seats || 0).annual;
+    }
+    return sum;
   }, [filtered]);
 
   function toggleSort(key: SortKey) {
@@ -687,6 +729,7 @@ export default function AdminReportPage() {
     { label: "Expires", key: "expires" },
     { label: "CLIA Cert Type", key: "clia_certificate_type" },
     { label: "HIPAA Ack", key: "hipaa_acknowledged" },
+    { label: "ARR", key: "annual_revenue" },
     { label: "Engagement", key: "engagement" },
     { label: "Last Login", key: "last_login" },
     { label: "Sessions", key: "session_count" },
@@ -782,7 +825,7 @@ export default function AdminReportPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
             <div className="text-sm text-muted-foreground">Total Accounts</div>
             <div className="text-2xl font-bold">{distinctAccounts}</div>
@@ -807,6 +850,10 @@ export default function AdminReportPage() {
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
             <div className="text-sm text-muted-foreground" title="Seat invites that haven't been accepted yet">Pending Invites</div>
             <div className={`text-2xl font-bold ${pendingInvitesCount > 0 ? "text-blue-600" : "text-muted-foreground"}`}>{pendingInvitesCount}</div>
+          </div>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-4">
+            <div className="text-sm text-muted-foreground" title="Sum of annual recurring revenue across distinct paying accounts">Total ARR</div>
+            <div className={`text-2xl font-bold ${totalARR > 0 ? "text-green-600" : "text-muted-foreground"}`}>${totalARR.toLocaleString()}</div>
           </div>
         </div>
 
@@ -993,6 +1040,21 @@ export default function AdminReportPage() {
                   <td className="px-3 py-2 text-center">
                     {u.hipaa_acknowledged ? "Yes" : "No"}
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right text-xs">
+                    {(() => {
+                      // Suppress ARR on seat rows and secondary-membership
+                      // rows so we don't double-count. ARR is computed once
+                      // per owner row from owner's plan + active_seats.
+                      if (u._isSeat || isSecondaryMembership) return <span className="text-muted-foreground">-</span>;
+                      const r = annualRevenue(u.plan, u.active_seats || 0);
+                      if (r.annual === 0) return <span className="text-muted-foreground" title={r.basis}>-</span>;
+                      return (
+                        <span className="font-medium tabular-nums" title={`${r.basis}: $${r.annual.toLocaleString()}/yr`}>
+                          ${r.annual.toLocaleString()}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap text-xs">
                     {(() => {
                       const recent = mostRecentActivity(u);
@@ -1034,7 +1096,7 @@ export default function AdminReportPage() {
               })}
               {grouped.length === 0 && (
                 <tr>
-                  <td colSpan={18} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={19} className="px-3 py-8 text-center text-muted-foreground">
                     No users found
                   </td>
                 </tr>
