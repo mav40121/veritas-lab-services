@@ -99,7 +99,26 @@ type SortKey =
   | "session_count"
   | "audit_action_count"
   | "study_count"
+  | "engagement"
   | "created_at";
+
+// Engagement is computed: the most recent of last_login and last_action_at.
+// Returns ISO string (most recent) or null if neither exists. Used to render
+// the traffic-light dot and as a sortable signal for the Engagement column.
+function mostRecentActivity(u: { last_login: string | null; last_action_at: string | null }): string | null {
+  const a = u.last_login ? new Date(u.last_login).getTime() : 0;
+  const b = u.last_action_at ? new Date(u.last_action_at).getTime() : 0;
+  if (a === 0 && b === 0) return null;
+  return new Date(Math.max(a, b)).toISOString();
+}
+
+function engagementBucket(iso: string | null): { color: string; label: string; days: number | null } {
+  if (!iso) return { color: "bg-muted", label: "Never", days: null };
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 14) return { color: "bg-green-500", label: `${days}d ago`, days };
+  if (days <= 30) return { color: "bg-amber-500", label: `${days}d ago`, days };
+  return { color: "bg-red-500", label: `${days}d ago`, days };
+}
 
 function formatDate(val: string | null): string {
   if (!val) return "";
@@ -273,6 +292,9 @@ export default function AdminReportPage() {
       if (sortKey === "expires") {
         aVal = a.plan_expires_at || a.subscription_expires_at || "";
         bVal = b.plan_expires_at || b.subscription_expires_at || "";
+      } else if (sortKey === "engagement") {
+        aVal = mostRecentActivity(a) || "";
+        bVal = mostRecentActivity(b) || "";
       } else {
         aVal = (a as any)[sortKey];
         bVal = (b as any)[sortKey];
@@ -604,6 +626,7 @@ export default function AdminReportPage() {
     { label: "Expires", key: "expires" },
     { label: "CLIA Cert Type", key: "clia_certificate_type" },
     { label: "HIPAA Ack", key: "hipaa_acknowledged" },
+    { label: "Engagement", key: "engagement" },
     { label: "Last Login", key: "last_login" },
     { label: "Sessions", key: "session_count" },
     { label: "Actions", key: "audit_action_count" },
@@ -830,6 +853,23 @@ export default function AdminReportPage() {
                     {u.hipaa_acknowledged ? "Yes" : "No"}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-xs">
+                    {(() => {
+                      const recent = mostRecentActivity(u);
+                      const b = engagementBucket(recent);
+                      return (
+                        <span
+                          className="inline-flex items-center gap-1.5"
+                          title={recent
+                            ? `Last activity ${new Date(recent).toLocaleString()} (last_login: ${u.last_login || "never"}, last_action: ${u.last_action_at || "never"})`
+                            : "No login or audit activity recorded"}
+                        >
+                          <span className={`inline-block w-2 h-2 rounded-full ${b.color}`} />
+                          <span className={b.days === null ? "text-muted-foreground" : ""}>{b.label}</span>
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">
                     {u.last_login ? formatRelative(u.last_login) : <span className="text-muted-foreground">Never</span>}
                   </td>
                   <td className="px-3 py-2 text-center">{u.session_count || 0}</td>
@@ -853,7 +893,7 @@ export default function AdminReportPage() {
               })}
               {grouped.length === 0 && (
                 <tr>
-                  <td colSpan={17} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={18} className="px-3 py-8 text-center text-muted-foreground">
                     No users found
                   </td>
                 </tr>
