@@ -72,11 +72,24 @@ interface UserRecord {
   effective_lab_name: string | null;
 }
 
+interface PendingInvite {
+  seat_id: number;
+  owner_user_id: number;
+  seat_email: string;
+  invited_at: string;
+  status: string;
+  invite_token: string | null;
+  owner_name: string | null;
+  owner_email: string;
+  owner_lab_name: string | null;
+}
+
 interface ReportData {
   generatedAt: string;
   // New shape (parking-lot #14): one row per (user, lab) combination.
   totalLabs: number;
   labs: UserRecord[];
+  pendingInvites?: PendingInvite[];
   // Backward-compatible aliases the server still emits during the rollout.
   totalUsers?: number;
   users?: UserRecord[];
@@ -796,6 +809,64 @@ export default function AdminReportPage() {
             <div className={`text-2xl font-bold ${pendingInvitesCount > 0 ? "text-blue-600" : "text-muted-foreground"}`}>{pendingInvitesCount}</div>
           </div>
         </div>
+
+        {/* Pending invites section */}
+        {data && data.pendingInvites && data.pendingInvites.length > 0 && (
+          <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Pending Invites</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Seat invitations that have been sent but not yet accepted. {data.pendingInvites.length} pending.</p>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Invited Email</th>
+                  <th className="px-3 py-2 text-left font-semibold">Owner</th>
+                  <th className="px-3 py-2 text-left font-semibold">Owner Lab</th>
+                  <th className="px-3 py-2 text-left font-semibold">Invited At</th>
+                  <th className="px-3 py-2 text-left font-semibold">Days Pending</th>
+                  <th className="px-3 py-2 text-left font-semibold">Invite Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.pendingInvites.map((p) => {
+                  const daysPending = Math.floor((Date.now() - new Date(p.invited_at).getTime()) / (1000 * 60 * 60 * 24));
+                  const expired = daysPending > 7;
+                  return (
+                    <tr key={p.seat_id} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium">{p.seat_email}</td>
+                      <td className="px-3 py-2">{p.owner_name || p.owner_email}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{p.owner_lab_name || "-"}</td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">{new Date(p.invited_at).toLocaleDateString()}</td>
+                      <td className={`px-3 py-2 text-xs whitespace-nowrap ${expired ? "text-red-600 font-semibold" : daysPending > 3 ? "text-amber-600" : ""}`}>
+                        {daysPending}d {expired && "(expired)"}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {p.invite_token ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = `${window.location.origin}/join?token=${p.invite_token}`;
+                              navigator.clipboard.writeText(url).catch(() => {});
+                            }}
+                            className="text-primary hover:underline"
+                            title="Copy invite URL to clipboard"
+                          >
+                            Copy link
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">no token</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Data table */}
         <div
