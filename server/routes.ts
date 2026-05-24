@@ -3680,6 +3680,111 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // POST /api/founding-lab/apply — public application form for the Founding
+  // Lab Program. No auth (prospects don't have accounts yet), no PHI. Stores
+  // the application row, emails Michael via Resend. Michael reviews and
+  // responds out of band.
+  app.post("/api/founding-lab/apply", async (req: any, res) => {
+    const escapeHtml = (s: any) =>
+      String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    const {
+      labName, cliaNumber, contactName, contactTitle, contactEmail, contactPhone,
+      labType, tierOfInterest, approximateSeatCount, whyFounder, marketingLogoApproval,
+    } = req.body || {};
+
+    if (!labName || typeof labName !== "string" || labName.trim().length < 2) {
+      return res.status(400).json({ error: "Lab name is required" });
+    }
+    if (!contactName || typeof contactName !== "string" || contactName.trim().length < 2) {
+      return res.status(400).json({ error: "Contact name is required" });
+    }
+    if (!contactEmail || typeof contactEmail !== "string" || !contactEmail.includes("@")) {
+      return res.status(400).json({ error: "Valid contact email is required" });
+    }
+
+    const now = new Date().toISOString();
+    const ipAddress = (req.headers["x-forwarded-for"] as string) || req.ip || null;
+    const userAgent = (req.headers["user-agent"] as string) || null;
+
+    let applicationId: number;
+    try {
+      const sqlite = (db as any).$client;
+      const result = sqlite.prepare(`
+        INSERT INTO founding_lab_applications (
+          submitted_at, lab_name, clia_number, contact_name, contact_title,
+          contact_email, contact_phone, lab_type, tier_of_interest,
+          approximate_seat_count, why_founder, marketing_logo_approval,
+          ip_address, user_agent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        now,
+        String(labName).trim(),
+        cliaNumber ? String(cliaNumber).trim() : null,
+        String(contactName).trim(),
+        contactTitle ? String(contactTitle).trim() : null,
+        String(contactEmail).toLowerCase().trim(),
+        contactPhone ? String(contactPhone).trim() : null,
+        labType || null,
+        tierOfInterest || null,
+        Number.isFinite(Number(approximateSeatCount)) ? Number(approximateSeatCount) : null,
+        whyFounder ? String(whyFounder).trim() : null,
+        marketingLogoApproval ? 1 : 0,
+        ipAddress,
+        userAgent,
+      );
+      applicationId = Number(result.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[founding-lab/apply] DB insert failed:", err?.message);
+      return res.status(500).json({ error: "Failed to record application" });
+    }
+
+    // Best-effort notification email to Michael. If Resend fails, the row is
+    // still stored and retrievable from the DB.
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "VeritaAssure™ <noreply@veritaslabservices.com>",
+            to: "info@veritaslabservices.com",
+            reply_to: String(contactEmail).toLowerCase().trim(),
+            subject: `New Founding Lab application: ${String(labName).trim()}`,
+            html: `
+              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+                <h2 style="color:#01696F">New Founding Lab Application #${applicationId}</h2>
+                <table style="border-collapse:collapse;width:100%;font-size:14px">
+                  <tr><td style="padding:6px 8px;color:#666;width:180px">Lab name</td><td style="padding:6px 8px"><strong>${escapeHtml(labName)}</strong></td></tr>
+                  ${cliaNumber ? `<tr><td style="padding:6px 8px;color:#666">CLIA number</td><td style="padding:6px 8px">${escapeHtml(cliaNumber)}</td></tr>` : ""}
+                  <tr><td style="padding:6px 8px;color:#666">Contact</td><td style="padding:6px 8px">${escapeHtml(contactName)}${contactTitle ? ", " + escapeHtml(contactTitle) : ""}</td></tr>
+                  <tr><td style="padding:6px 8px;color:#666">Email</td><td style="padding:6px 8px"><a href="mailto:${escapeHtml(contactEmail)}">${escapeHtml(contactEmail)}</a></td></tr>
+                  ${contactPhone ? `<tr><td style="padding:6px 8px;color:#666">Phone</td><td style="padding:6px 8px">${escapeHtml(contactPhone)}</td></tr>` : ""}
+                  ${labType ? `<tr><td style="padding:6px 8px;color:#666">Lab type</td><td style="padding:6px 8px">${escapeHtml(labType)}</td></tr>` : ""}
+                  ${tierOfInterest ? `<tr><td style="padding:6px 8px;color:#666">Tier interest</td><td style="padding:6px 8px">${escapeHtml(tierOfInterest)}</td></tr>` : ""}
+                  ${approximateSeatCount ? `<tr><td style="padding:6px 8px;color:#666">Approx seats</td><td style="padding:6px 8px">${escapeHtml(String(approximateSeatCount))}</td></tr>` : ""}
+                  <tr><td style="padding:6px 8px;color:#666">Logo approval</td><td style="padding:6px 8px">${marketingLogoApproval ? "Yes" : "No"}</td></tr>
+                  ${whyFounder ? `<tr><td style="padding:6px 8px;color:#666;vertical-align:top">Why Founder</td><td style="padding:6px 8px;white-space:pre-wrap">${escapeHtml(whyFounder)}</td></tr>` : ""}
+                </table>
+                <p style="color:#888;font-size:12px;margin-top:24px">Application #${applicationId} · submitted ${now}</p>
+              </div>
+            `,
+          }),
+        });
+      } catch (err: any) {
+        console.error("[founding-lab/apply] Resend failed:", err?.message);
+      }
+    } else {
+      console.warn("[founding-lab/apply] RESEND_API_KEY not set; email skipped");
+    }
+
+    res.json({ ok: true, applicationId });
+  });
+
   // ── VERITAMAP ───────────────────────────────────────────────────────────
 
   // Plan label alone does NOT grant unlimited access — the user must have

@@ -287,15 +287,39 @@ Apply to every task, not just large ones.
 
 ## 10. Pricing (live in Stripe)
 
-- Per Study: $25 (`price_1TGXPo5dn6rqLgIxsnvNa2oi`)
+**Published list pricing as of 2026-05-23 (MEDIUM scenario):**
+
+- Per Study: $25 one-time (`price_1TGXPo5dn6rqLgIxsnvNa2oi`)
 - VeritaCheck Unlimited: $299/yr, single user (`price_1TGXPn5dn6rqLgIxfyoLXVKo`)
+- Clinic: **$999/yr**, 2 active seats included, additional seats at $500/seat
+- Community: **$2,125/yr**, 5 active seats included, additional seats at $425/seat (Most Popular)
+- Hospital: **$4,995/yr**, 15 active seats included, additional seats at $333/seat
+- System: **Custom quote**, triggered by >1 CLIA lab OR 16+ active seats OR SSO/BAA/SLA requirements
+
+**Per-seat additional-seat model:** each tier's $/seat rate applies to seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. View-only seats (medical director, reviewers) are unlimited and free on every tier.
+
+**Stripe price IDs:**
+
+- The list dollar amounts above are what /pricing displays.
+- New Stripe price IDs for Clinic/Community/Hospital MEDIUM tier amounts and tier-indexed additional-seat prices are **still pending creation** in the Stripe dashboard (Phase B work). Until those IDs are wired into `server/stripe.ts`, checkout flows through the legacy OLD Stripe price IDs ($499/$999/$1,999) — i.e., customers subscribing during the bridge window pay LESS than displayed. Acceptable because zero paying customers exist; bounded by Michael's Stripe-dashboard action.
+
+**Grandfathered legacy IDs (preserved in `server/stripe.ts`, never delete; existing subs ride these):**
+
 - Clinic / Waived: $499/yr (`price_1TGXPl5dn6rqLgIx14yANdxj`)
-- Community: $999/yr (`price_1TKiEg5dn6rqLgIxrBKvqbGb`) — was $799, grandfathered
-- Hospital: $1,999/yr (`price_1TKiEg5dn6rqLgIxXioYyC5u`) — was $1,299, grandfathered
-- Enterprise / Large Hospital: $2,999/yr (`price_1TKiEg5dn6rqLgIxZ9ktBavQ`) — was $1,999, grandfathered
-- Grandfathered (existing subs only): Community $799 (`price_1TGXPm5dn6rqLgIxHdfFVNfA`), Hospital $1,299 (`price_1TGXPm5dn6rqLgIxC5UCBXLn`), Enterprise $1,999 (`price_1TGXPm5dn6rqLgIxzahbIaQV`)
+- Community: $999/yr (`price_1TKiEg5dn6rqLgIxrBKvqbGb`)
+- Hospital: $1,999/yr (`price_1TKiEg5dn6rqLgIxXioYyC5u`)
+- Enterprise / Large Hospital: $2,999/yr (`price_1TKiEg5dn6rqLgIxZ9ktBavQ`)
+- Earlier-era (existing subs only): Community $799 (`price_1TGXPm5dn6rqLgIxHdfFVNfA`), Hospital $1,299 (`price_1TGXPm5dn6rqLgIxC5UCBXLn`), Enterprise $1,999 (`price_1TGXPm5dn6rqLgIxzahbIaQV`)
+
+**Legacy seat band Stripe IDs (preserved; replaced by tier-indexed model going forward):**
+
 - Seat bands: 2-5 = $199, 6-10 = $179, 11-25 = $159, 26+ = $139
-- CLIA tier auto-assigned from specialty count — no self-reporting
+
+**Founding Lab Program:** charter customer cohort, limited size, application-gated at `/founding-lab/apply`. Benefits: confidential discount, 24-month price lock, facility name on Founding Labs page, priority support Year 1. Exchange: up to 2 reference calls per month (30 min, Veritas not present). Discount amount is never published; negotiated per applicant.
+
+**COLA grandfather policy:** see `project_cola_pricing_grandfather_policy.md` memory. Three layers: COLA2026 code through 2026-12-31, named-contact honored pricing OR Founder terms through 2026-09-30, new pricing for everyone else.
+
+- CLIA tier auto-assigned from specialty count — no self-reporting.
 
 ---
 
