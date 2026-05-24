@@ -242,6 +242,53 @@ return (
       {/* Pricing Cards */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 space-y-14">
 
+        {/* Founding Lab Program — positioned ABOVE the price grid so it is the
+            headline; the tier tiles below are the menu. */}
+        <div className="rounded-lg border-2 border-primary/40 bg-gradient-to-br from-primary/10 to-transparent p-6 sm:p-8">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+              <h3 className="font-serif text-2xl font-bold flex items-center gap-2">
+                <span className="text-primary">★</span>
+                Founding Lab Program
+              </h3>
+              <Badge variant="outline" className="border-primary/40 text-primary">Limited cohort</Badge>
+            </div>
+            <p className="text-base mb-4 leading-relaxed">
+              Become a charter customer of VeritaAssure™.
+            </p>
+            <ul className="space-y-2 mb-5">
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>Discount</strong> on your annual subscription</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>24-month price lock</strong>: your renewal rate stays where it starts</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>Your facility name</strong> on our Founding Labs page (logo placement with your marketing approval)</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm">
+                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                <span><strong>Priority support</strong> throughout your first year</span>
+              </li>
+            </ul>
+            <div className="border-t border-primary/20 pt-4 mb-5">
+              <p className="text-sm text-muted-foreground italic leading-relaxed">
+                In exchange: up to 2 reference calls per month, 30 minutes each, scheduled through our calendar tool. You and the prospect on the line; Veritas is not present. You share your honest experience.
+              </p>
+            </div>
+            <div className="text-center">
+              <Button asChild size="lg" className="font-semibold">
+                <Link href="/founding-lab/apply">
+                  Apply to the Founding Lab Program <ArrowRight size={14} className="ml-1" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {PLANS.map((plan) => (
             <Card
@@ -270,7 +317,7 @@ return (
                   <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
                   <div className="flex items-baseline gap-1">
                     <span className="font-serif text-3xl font-bold">{plan.price}</span>
-                    <span className="text-muted-foreground text-sm">{plan.period}</span>
+                    <span className="text-foreground text-base font-medium">{plan.period}</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{plan.description}</p>
                 </div>
@@ -378,52 +425,6 @@ return (
         <p className="text-xs text-center text-muted-foreground -mt-4">
           Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. View-only access for medical directors and reviewers is unlimited and not counted against the tier.
         </p>
-
-        {/* Founding Lab Program */}
-        <div className="rounded-lg border-2 border-primary/40 bg-gradient-to-br from-primary/10 to-transparent p-6 sm:p-8">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <h3 className="font-serif text-2xl font-bold flex items-center gap-2">
-                <span className="text-primary">★</span>
-                Founding Lab Program
-              </h3>
-              <Badge variant="outline" className="border-primary/40 text-primary">Limited cohort</Badge>
-            </div>
-            <p className="text-base mb-4 leading-relaxed">
-              Become a charter customer of VeritaAssure™.
-            </p>
-            <ul className="space-y-2 mb-5">
-              <li className="flex items-start gap-2 text-sm">
-                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span><strong>Discount</strong> on your annual subscription</span>
-              </li>
-              <li className="flex items-start gap-2 text-sm">
-                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span><strong>24-month price lock</strong>: your renewal rate stays where it starts</span>
-              </li>
-              <li className="flex items-start gap-2 text-sm">
-                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span><strong>Your facility name</strong> on our Founding Labs page (logo placement with your marketing approval)</span>
-              </li>
-              <li className="flex items-start gap-2 text-sm">
-                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span><strong>Priority support</strong> throughout your first year</span>
-              </li>
-            </ul>
-            <div className="border-t border-primary/20 pt-4 mb-5">
-              <p className="text-sm text-muted-foreground italic leading-relaxed">
-                In exchange: up to 2 reference calls per month, 30 minutes each, scheduled through our calendar tool. You and the prospect on the line; Veritas is not present. You share your honest experience.
-              </p>
-            </div>
-            <div className="text-center">
-              <Button asChild size="lg" className="font-semibold">
-                <Link href="/founding-lab/apply">
-                  Apply to the Founding Lab Program <ArrowRight size={14} className="ml-1" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
 
         {/* Money-Back Guarantee */}
         <div className="border border-primary/20 bg-primary/5 rounded-lg p-6 text-center">
