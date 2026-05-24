@@ -1197,6 +1197,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(seats);
   });
 
+  // Admin: full dump of lab_members joined to users + labs, ordered by
+  // created_at. Read-only forensics endpoint built 2026-05-24 to trace the
+  // origin of spurious lab_members rows on Lisa's Milford lab (lab_id=4)
+  // that no /api/labs/:labId/members POST or user_seats history can
+  // explain. Returns row-level created_at / invited_at / accepted_at so
+  // we can correlate insertion windows against deploy timestamps and
+  // known admin actions.
+  app.post("/api/admin/lab-members-dump", (req, res) => {
+    const { secret } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const rows = (db as any).$client.prepare(`
+      SELECT lm.id, lm.lab_id, lm.user_id, lm.role, lm.status, lm.is_primary_lab,
+             lm.invited_at, lm.accepted_at, lm.last_active_at,
+             lm.created_at, lm.updated_at,
+             u.email AS user_email, u.name AS user_name,
+             l.lab_name, l.owner_user_id AS lab_owner_user_id
+      FROM lab_members lm
+      JOIN users u ON u.id = lm.user_id
+      JOIN labs l ON l.id = lm.lab_id
+      ORDER BY lm.created_at ASC, lm.id ASC
+    `).all();
+    res.json({ count: rows.length, rows });
+  });
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
