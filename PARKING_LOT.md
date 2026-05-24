@@ -27,12 +27,6 @@ past_session_contexts archive (earliest parking-lot mention found is
 
 ## OPEN
 
-### 3. VeritaPolicy "Non CLIA" chapter naming leaks generator taxonomy
-
-**CLOSED 2026-05-22 — see CLOSED C18 below.**
-
----
-
 ### 5. v0.6 source-grounded rebuild of all 4 accreditor columns
 
 **What:** AABB ids in aabbRequirements.ts (138/168 marked "real") and
@@ -57,30 +51,6 @@ review.
 
 **Pre- vs post-COLA:** Pre-COLA. May 6-8 conference; Saturday + Sunday +
 Monday available before the booth.
-
----
-
-### 10. Operations module for cost-per-test calculations
-
-**CLOSED 2026-05-22 — see CLOSED C22 below.**
-
----
-
-### 11. Multi-lab pricing model — Option A (full price per lab, no baseline discount)
-
-**CLOSED 2026-05-22 — see CLOSED C21 below.**
-
----
-
-### 12. Primary-lab seat counting — owner counts on primary lab only, free on secondaries
-
-**CLOSED 2026-05-22 — see CLOSED C20 below.**
-
----
-
-### 16. WSLH PT booth follow-up email
-
-**NOT CARRIED OVER 2026-05-21 — see NOT CARRIED OVER R6 below.**
 
 ---
 
@@ -550,206 +520,6 @@ shipped 2026-05-10.
 
 ---
 
-### 19. VeritaMap lab-wide menu toggle (cross-department / cross-map view)
-
-**CLOSED 2026-05-10 — see CLOSED C8 below.**
-
-(Original entry preserved below for historical context. Subsequent
-sections in the file may still reference #19 as a sequencing
-prerequisite for #18 Phase 2; that dependency has been satisfied by
-the closure.)
-
-**What:** Today VeritaMap's `veritamap_maps` table allows a single
-user to own multiple named maps, and many labs split their setup
-by department (Chemistry map, Hematology map, Coag map, Blood Bank
-map, etc.) instead of building one monolithic map. When the user is
-inside a single department map, there is no way to see the test menu
-of their other maps without leaving the active map. Add a toggle
-(`[ This map ] [ Whole lab ]`) inside VeritaMap that surfaces the
-read-only union of all the user's maps as a lab-wide test menu view.
-
-**Question that prompted this (user, 2026-05-08 COLA Nashville):**
-"In VeritaMap, if a lab does individual department as opposed to a
-monolith build, there needs to be a toggle switch where they can see
-the full lab test menu (as opposed to the department map they are
-currently in)."
-
-**Current architecture (verified 2026-05-08):**
-
-- `veritamap_maps`: id, user_id, name, instruments[], timestamps
-  (server/db.ts:119). One user can own multiple maps. No `lab_id`
-  yet — multi-lab Tier 2 (#11/#12) has not shipped.
-- `veritamap_tests`: keyed by `map_id` only; no department column.
-  Department lives on the instrument inside the map
-  (`veritamap_instruments.category`), not on the test row directly.
-- `veritamap_test_correlations`: cross-instrument method-comparison
-  records, also scoped to a single `map_id` today.
-- Department field options: Chemistry, Hematology, Coag, Blood Bank,
-  Microbiology, Immunology, etc. — from `CATEGORY_ORDER` in
-  client/src/pages/VeritaMapBuildPage.tsx.
-- So a "monolithic build" lab uses department-on-instrument inside a
-  single map; a "by-department build" lab creates one map per
-  department. Both are structurally supported today; only the second
-  has the toggle gap.
-
-**Why this matters more than it looks (sequencing implication):**
-
-The by-department-build labs are exactly the labs where #18
-(unregulated analyte AAA coverage) and #15 (WSLH catalog mapping)
-break silently. VeritaPT's coverage matcher
-(`computePTCoverage()` in server/routes.ts ~line 6411) operates per
-map, so a lab with 5 department maps gets 5 coverage scores instead
-of one lab-wide score. **#18 Phase 2 is wrong by default for
-multi-map labs unless the matcher is taught to union across maps,
-or this fix lands first.** This is a hard sequencing dependency, not
-an optional polish.
-
-**Decided scope (Option A first, then upgrade to Option B inside #18
-Phase 2). User confirmed 2026-05-08.**
-
-**Phase 1 (~1 day, post-COLA week of 2026-05-11):**
-
-- New top-level toggle inside VeritaMap UI:
-  `[ This map ] [ Whole lab ]`. Persistent per-session selection.
-- "Whole lab" view = read-only union of `veritamap_tests` across
-  every `veritamap_maps` row owned by the same `user_id` today. (Lab
-  scope refactor below.)
-- Columns: analyte, source map name, source instrument, department
-  (from instrument category), specialty, complexity, last calibration
-  verification, last method comparison, last precision, last SOP
-  review.
-- Sort/filter on department, source map, analyte name.
-- Surface duplicates explicitly: when the same analyte appears in 2+
-  maps, flag with an icon and a tooltip "Same analyte in 2 maps —
-  consider linking via method comparison." This is a useful nudge
-  toward `veritamap_test_correlations` records.
-- Read-only. To edit an analyte, click routes user back to its
-  source map. No inline editing in v1.
-- Empty-state copy when user has only one map: hide the toggle
-  entirely (no value to show).
-
-**Phase 2 (folded into #18 Phase 2, ~part of those 3-4 days):**
-
-- Coverage matcher (`computePTCoverage()`) extended to operate on
-  the lab-wide union of `veritamap_tests`, not a single `map_id`.
-- Lab-wide "Menu coverage" dashboard tile: PT-covered / AAA-covered
-  / Uncovered (the 3-bucket model from #18) computed across all
-  maps.
-- Gap analysis: analytes in CLIA Subpart I regulated list that are
-  not present in ANY of the user's maps (= analytes the lab might
-  not realize they're not running, or are running but not yet
-  documented in VeritaMap).
-- Duplicate-without-correlation analysis: same analyte in 2+ maps
-  with no `veritamap_test_correlations` row = method-comparison gap;
-  surveyor citation risk under 42 CFR §493.1281(a) and CAP COM.04250.
-- Department-rollup counts on the lab-wide menu (e.g. "42 analytes
-  across Chemistry, 28 across Hematology, 14 across Coag").
-
-**Lab scope refactor (when #11/#12 multi-lab Tier 2 lands):**
-
-- Today: union scope is "all maps where `veritamap_maps.user_id =
-  current_user`."
-- Post-#11/#12: union scope becomes "all maps where the map's
-  owning user is a member of the active `lab_id` per `lab_members`
-  table, AND the map is associated with that lab."
-- Estimated cost of refactor: ~30 minutes once `lab_members` exists.
-  Same pattern as the AAA records lab-id refactor in #18 Phase 2.
-- Defensive: when shipping Phase 1, isolate the union query in one
-  helper so the swap is one function later.
-
-**Out of scope for v1 (deferred):**
-
-- Inline editing in the unified view (raises "which map does this
-  edit go to if the analyte is in 2 maps?" — real product question).
-- Per-department editor permissions (Lisa-style hematology-director-
-  only-edits-Hematology). Belongs with #11/#12 multi-lab role work,
-  not here.
-- A `veritamap_lab_views` parent table grouping multiple maps under
-  one lab umbrella (Option C in user discussion). Premature without
-  a real customer asking for cross-department editing.
-
-**Booth posture (in effect from 2026-05-08 onward):**
-
-If a prospect or current customer asks about per-department setups:
-
-> "Yes — VeritaMap supports per-department setups today, and we're
-> shipping a lab-wide menu toggle next week so you can see your full
-> test menu across departments without leaving your active map. Our
-> coverage analyzer will work on the lab-wide menu, not just the
-> department you're currently in."
-
-**Risks:**
-
-- Performance: a lab with 5 maps and 200 analytes total is fine; a
-  hospital with 30 maps and 2000 analytes might need pagination or
-  virtualized rendering. Verify on the largest existing customer
-  data shape before shipping.
-- Map-name collisions across departments ("My Lab Map" used twice).
-  Surface map IDs or created-at timestamps for disambiguation in the
-  unified view.
-- Read-only constraint may surprise users who expect to edit
-  in-place. UI must communicate "click to edit in source map"
-  affordance clearly.
-- Empty state: hide toggle entirely if user has only one map (most
-  current users); otherwise the affordance creates phantom
-  expectations.
-
-**Cross-references:**
-
-- **#18 (AAA coverage):** HARD sequencing dependency. Phase 2 of
-  #18 must operate on the lab-wide union from this entry, not
-  per-map. Either ship #19 Phase 1 first, or build the union into
-  #18's matcher directly.
-- **#15 (WSLH catalog mapping):** same matcher; same sequencing
-  benefit.
-- **#11/#12 (multi-lab Tier 2):** lab-id refactor follows once
-  `lab_members` exists. Defensive coding in Phase 1 isolates the
-  scope query.
-- **#17 (VeritaResponse):** future deficiency findings tied to a
-  specific map's analyte should still surface in lab-wide search;
-  no Phase 1 dependency.
-- **veritamap_test_correlations:** the duplicate-without-correlation
-  analytics in Phase 2 directly motivate use of this existing table;
-  good moat-building.
-
-**Sources:**
-
-- 2026-05-08 conference user request, COLA Nashville. User goal
-  recorded verbatim above.
-- Code review 2026-05-08:
-  - server/db.ts:119 (veritamap_maps schema)
-  - server/db.ts:128 (veritamap_tests schema)
-  - server/db.ts:145 (veritamap_test_correlations schema)
-  - server/routes.ts ~line 6411 (computePTCoverage)
-  - client/src/pages/VeritaMapBuildPage.tsx:520-528 (department
-    select)
-- 42 CFR §493.1281(a) and CAP COM.04250 (multi-instrument method
-  comparison requirement) cited under Phase 2 duplicate analysis.
-
-**Status:** Open. User confirmed Option A first / B in #18 Phase 2,
-user_id-scoped now with lab_id refactor when #11/#12 lands,
-read-only v1, on 2026-05-08. Phase 1 target: post-COLA week of
-2026-05-11. Phase 2 target: folded into #18 Phase 2 same week.
-
-**Pre- vs post-COLA:** Post-COLA. No code changes during the
-conference; booth posture above bridges verbally.
-
----
-
-## COMPETITOR-DRIVEN CANDIDATES
-
-Six items added 2026-05-10 from a Perplexity competitor analysis of
-myLabCompliance.io (encountered at the COLA conference). The analysis
-identified gaps where the competitor ships features VeritaAssure does
-not. Each item below preserves the analysis source so future agents
-do not re-derive Perplexity's recommendations as their own.
-
-Pricing comparison is intentionally NOT included as a parking-lot
-item. Operator flagged it as "a separate conversation, not a parking
-lot item until you decide" (2026-05-10).
-
----
-
 ### 20. Live QC engine (Levey-Jennings + Westgard)
 
 **What:** A daily-use QC workflow: Levey-Jennings charts, Westgard
@@ -784,12 +554,6 @@ v1 build. Comparable in scale to VeritaResponse (#17).
 
 ---
 
-### 21. VeritaStock — lot tracking, expiration monitoring, reorder alerts
-
-**CLOSED 2026-05-21 — see CLOSED C15 below.**
-
----
-
 ### 22. CMS-116 application support + state licensing tracking
 
 **What:** CMS-116 is the federal CLIA application form. Today
@@ -811,30 +575,6 @@ candidates. Useful at lab startup and at certificate-type changes.
 
 **Pre- vs post-COLA:** Post-COLA. ~1-2 weeks for v1 (CMS-116 form +
 top-10-state licensure registry).
-
----
-
-### 23. PAL studies as a dedicated guided workflow (conditional)
-
-**CLOSED 2026-05-21 — see CLOSED C16 below.**
-
----
-
-### 24. Mini-LIS module
-
-**NOT CARRIED OVER 2026-05-21 — see NOT CARRIED OVER R4 below.**
-
----
-
-### 25. Phlebotomy module
-
-**NOT CARRIED OVER 2026-05-21 — see NOT CARRIED OVER R5 below.**
-
----
-
-### 26. Source-ground the 21 CFR / 29 CFR / 45 CFR / 42 CFR 482-485 portions of cfrRequirements.ts
-
-**CLOSED 2026-05-21 — see CLOSED C17 below.**
 
 ---
 
@@ -1054,12 +794,6 @@ has not yet authorized a redesign attempt as of 2026-05-21.
 
 ---
 
-### 31. VeritaStock department-scope toggle (VeritaMap pattern)
-
-**CLOSED 2026-05-22 — see CLOSED C19 below.**
-
----
-
 ### 32. Lab leader community / forum (paid subscription idea)
 
 **What:** Operator-floated 2026-05-22: a vetted online forum for
@@ -1143,6 +877,60 @@ forum when VeritaAssure has 50+ paying customers and can fund a
 part-time community manager.
 
 **Pre- vs post-COLA:** Post-COLA. No customer urgency.
+
+---
+
+### 33. Active vs view-only seat split
+
+**What:** The pricing analysis doc (2026-05-21 MEDIUM scenario, Decision 3) proposed splitting seats into two types: **active** (techs, supervisors, lab managers who edit data; counted against the tier seat cap) and **view-only** (medical director, administrators, reviewers who sign but don't enter; unlimited and free on every tier). The current schema treats all seats as one bucket.
+
+**Fix shape:**
+- `lab_members` (or `user_seats`) row gains a `seat_type` column ('active' | 'view_only')
+- Invite-flow UI asks which type at the moment of invitation
+- Counting logic in `/api/account/seats` and `/api/labs/:labId/members` only counts active seats toward the tier cap
+- Marketing copy on /pricing already says "active seats included" + "view-only seats unlimited and free" — this entry makes that claim actually true at the data layer
+
+**Source:** Pricing analysis doc Decision 3 (2026-05-21); deferred during Phase B Stripe wiring (2026-05-23) because no current customer is constrained by the missing distinction.
+
+**Status:** Open. Real product change, ~1 week of engineering when prioritized. Not blocking any current customer; activate when a prospect explicitly asks "do you charge for our medical director?"
+
+**Pre- vs post-COLA:** Post-COLA. Quality-of-life for sales positioning, not table stakes.
+
+---
+
+### 34. CCL lab name visual disambiguation in lab switcher
+
+**What:** Lisa Veri's two labs both carry "UMass Memorial Health - Milford Regional Medical Center" with the secondary differentiated only by a trailing " CCL" suffix. The NavBar `LabSwitcher` dropdown truncates long names, which makes fast visual differentiation between her two labs harder than it should be.
+
+**Fix shape (cheapest to most invasive):**
+1. Rename the secondary lab to lead with the disambiguator ("CCL — UMass Memorial Health - Milford Regional Medical Center") so the truncation preserves "CCL —" visibly. Lisa decides.
+2. Add a small badge/tag to the LabSwitcher row that surfaces the role+primary flag when the name is truncated (e.g., "primary" / "secondary").
+3. Truncate from the middle when names exceed the dropdown width, so distinguishing suffixes survive.
+
+**Source:** flagged 2026-05-23 immediately after provisioning Lisa's CCL lab via `/api/admin/update-lab`.
+
+**Status:** Open. Cosmetic. Only matters if Lisa reports picking the wrong lab from the dropdown.
+
+**Pre- vs post-COLA:** Post-COLA.
+
+---
+
+### 35. VC Unlimited Y1/Y2 price disclosure UX
+
+**What:** VC Unlimited list pricing is **$299 first year, $499/yr after** (auto-applied VCFIRSTYEAR coupon delivers Y1 = $299; Y2+ renews at the underlying $499 base). The /pricing tile shows this in the period text ("$299 first year · $499/yr after") at text-base font-medium weight as of 2026-05-23.
+
+**Risk to monitor:** procurement reviewers at institutional customers may still miss the renewal-price disclosure if their eye locks onto the big "$299" and skips the period text. If a customer signs at $299 and then disputes the $499 renewal as a hidden price hike, the tile is the artifact they'll point to.
+
+**Fix shape if signal emerges:**
+- Split the price into two visually distinct lines ("$299 first year" big, "$499/yr after" same size below)
+- Or add an explicit "Year 1 / Year 2+" comparison block under the price
+- Or move the Y2 amount into the tier title
+
+**Source:** Pricing rebuild 2026-05-23; flagged at the time as a potential UX gap pending customer feedback.
+
+**Status:** Open as a tracking item, not a build item. Trigger to act = first customer complaint or first procurement question that suggests the disclosure was missed.
+
+**Pre- vs post-COLA:** Post-COLA.
 
 ---
 
