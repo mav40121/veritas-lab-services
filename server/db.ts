@@ -1263,20 +1263,23 @@ if (!colNames.includes("lab_id")) {
     labsMigrated++;
   }
 
-  // Backfill seat users: every active seat user must point at the owner's
-  // lab_id, even if the seat user already has a (potentially stale) lab_id
-  // from an older backfill pass. Owner identity wins.
-  let seatsMigrated = 0;
-  const seatsNeedingLab = sqlite.prepare(
-    "SELECT us.seat_user_id, u_owner.lab_id AS owner_lab_id FROM user_seats us JOIN users u_owner ON us.owner_user_id = u_owner.id WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL AND u_owner.lab_id IS NOT NULL"
-  ).all() as any[];
-  for (const seat of seatsNeedingLab) {
-    const r = sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ? AND (lab_id IS NULL OR lab_id != ?)").run(seat.owner_lab_id, seat.seat_user_id, seat.owner_lab_id);
-    if (r.changes > 0) seatsMigrated++;
-  }
-
-  if (labsMigrated > 0 || seatsMigrated > 0) {
-    console.log(`[migration] Labs backfill: ${labsMigrated} lab(s) created from user records, ${seatsMigrated} seat user(s) linked`);
+  // DISABLED 2026-05-24: this seat backfill overwrote each active seat
+  // user's users.lab_id with the owner's CURRENT users.lab_id on every boot.
+  // Combined with the Phase 1 lab_members backfill below, this produced
+  // spurious lab_members rows whenever an owner's users.lab_id changed
+  // between deploys (the cascade dropped the same seat list onto every
+  // lab the owner ever touched). The 4 phantom Milford rows on 2026-05-24
+  // 20:57:34 were created by this exact mechanism — see PR adding this
+  // comment for full forensic trace.
+  //
+  // Going forward, lab_members is the authoritative source of "who can see
+  // which lab"; users.lab_id is the legacy single-lab field and must not
+  // be mass-overwritten by any boot migration. New seat invites populate
+  // lab_members explicitly via /api/account/seats POST and
+  // /api/labs/:labId/members POST.
+  // const seatsMigrated_DISABLED = 0;
+  if (labsMigrated > 0) {
+    console.log(`[migration] Labs backfill: ${labsMigrated} lab(s) created from user records (seat-cascade disabled 2026-05-24)`);
   }
 }
 
@@ -1375,48 +1378,22 @@ if (!colNames.includes("default_lab_id")) {
 // Idempotent: every step is skip-if-present. No reader/writer changes.
 // ─────────────────────────────────────────────────────────────────────────────────
 {
-  // Step 1: every user with a lab_id gets a membership row.
-  //   - role='owner' if labs.owner_user_id = user.id; else 'staff'
-  //   - permissions_json copied from user_seats.permissions for seat users
-  //   - is_primary_lab=1 only for owners on their earliest-id lab (the
-  //     primary-lab rule from parking-lot #12: owner is primary on owned
-  //     lab, seats are never primary)
-  const usersWithLab = sqlite.prepare(
-    "SELECT u.id AS user_id, u.lab_id, l.owner_user_id FROM users u JOIN labs l ON u.lab_id = l.id WHERE u.lab_id IS NOT NULL"
-  ).all() as any[];
-
-  let memberInserted = 0;
-  for (const row of usersWithLab) {
-    const exists = sqlite.prepare(
-      "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? LIMIT 1"
-    ).get(row.user_id, row.lab_id);
-    if (exists) continue;
-
-    const isOwner = Number(row.owner_user_id) === Number(row.user_id);
-    const role = isOwner ? "owner" : "staff";
-    let permissions = "{}";
-    if (!isOwner) {
-      const seatRow = sqlite.prepare(
-        "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-      ).get(row.user_id) as any;
-      if (seatRow?.permissions) permissions = seatRow.permissions;
-    }
-
-    let isPrimary = 0;
-    if (isOwner) {
-      const earliest = sqlite.prepare(
-        "SELECT id FROM labs WHERE owner_user_id = ? ORDER BY id ASC LIMIT 1"
-      ).get(row.user_id) as any;
-      isPrimary = earliest && Number(earliest.id) === Number(row.lab_id) ? 1 : 0;
-    }
-
-    const now = new Date().toISOString();
-    sqlite.prepare(`
-      INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
-    `).run(row.lab_id, row.user_id, role, permissions, isPrimary, now, now, now);
-    memberInserted++;
-  }
+  // Step 1: DISABLED 2026-05-24. This step previously created a
+  // lab_members row for every user with users.lab_id IS NOT NULL. It was
+  // intended as a one-time backfill for Phase 1 rollout, but ran on every
+  // server boot. Combined with the now-disabled seat backfill above
+  // (db.ts:1266) which overwrote seat users' users.lab_id on every boot,
+  // this cascade produced spurious lab_members rows whenever an owner's
+  // users.lab_id changed between deploys. The 4 phantom Milford rows on
+  // 2026-05-24 20:57:34 (Daniela Rivera, Jeff Moore, David McCormick,
+  // lisa.j.veri) were created by exactly this mechanism.
+  //
+  // Going forward, lab_members rows are created ONLY by the explicit
+  // invite endpoints (/api/account/seats POST, /api/labs/:labId/members
+  // POST, /api/labs/me/add, /api/admin/add-lab-membership,
+  // /api/admin/provision-comp-lab). Each insert is audit_log'd so any
+  // future spurious row has a traceable source.
+  const memberInserted = 0;
 
   // Step 2: copy plan / subscription / Stripe state from each owner's
   // users row to their primary labs row, only if the labs column is
