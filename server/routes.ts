@@ -938,6 +938,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, user: { id: row?.id, email: row?.email, name: row?.name, seatCount: row?.seat_count } });
   });
 
+  // Audit helper for every lab_members INSERT/UPDATE/DELETE. Writes one
+  // audit_log row per change so the next time a spurious lab_members row
+  // appears we can immediately see which endpoint, which actor, which
+  // source. Added 2026-05-24 after the boot-backfill cascade incident.
+  // Best-effort: a failure to log MUST NOT block the underlying change.
+  function auditLabMembership(
+    action: string,
+    membership: any,
+    actorUserId: number,
+    ipAddress: string | null,
+    source: string,
+    before: any = null,
+  ): void {
+    try {
+      const sqlite = (db as any).$client;
+      const labRow = sqlite.prepare("SELECT lab_name, owner_user_id FROM labs WHERE id = ?").get(membership?.lab_id) as any;
+      const userRow = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(membership?.user_id) as any;
+      sqlite.prepare(
+        "INSERT INTO audit_log (user_id, owner_user_id, module, action, entity_type, entity_id, entity_label, before_json, after_json, ip_address) VALUES (?, ?, 'lab_members', ?, 'lab_membership', ?, ?, ?, ?, ?)"
+      ).run(
+        actorUserId,
+        labRow?.owner_user_id ?? null,
+        `${action}:${source}`,
+        String(membership?.id ?? ''),
+        `${userRow?.email ?? '?'}@${labRow?.lab_name ?? '?'}`,
+        before ? JSON.stringify(before) : null,
+        membership ? JSON.stringify(membership) : null,
+        ipAddress,
+      );
+    } catch (err: any) {
+      console.error(`[audit-log] lab_members ${action} log failed:`, err.message);
+    }
+  }
+
   // Admin: grant an existing user a membership on an existing lab. Used to
   // manually wire enterprise multi-lab testers (e.g., give the operator a
   // second membership so the NavBar lab switcher renders). Idempotent:
@@ -968,7 +1002,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const membership = sqlite.prepare(
       "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
     ).get(Number(labId), Number(userId));
+    auditLabMembership("create", membership, 0, (req.headers["x-forwarded-for"] as string) || null, "admin/add-lab-membership");
     res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
+  });
+
+  // Admin: deactivate (or hard-delete) one or more lab_members rows.
+  // Built 2026-05-24 to clean up the 4 spurious Milford rows produced by
+  // the now-disabled boot-backfill cascade. Reversible by default
+  // (action='deactivate' flips status to 'inactive'); supports action='delete'
+  // for hard removal when explicitly requested. Every change is audit_log'd.
+  app.post("/api/admin/lab-members-cleanup", (req, res) => {
+    const { secret, membershipIds, action, reason } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(membershipIds) || membershipIds.length === 0) {
+      return res.status(400).json({ error: "membershipIds must be a non-empty array" });
+    }
+    const resolvedAction = action === "delete" ? "delete" : "deactivate";
+    const sqlite = (db as any).$client;
+    const ip = (req.headers["x-forwarded-for"] as string) || null;
+    const now = new Date().toISOString();
+    const affected: any[] = [];
+    const errors: string[] = [];
+    try {
+      sqlite.exec("BEGIN");
+      for (const id of membershipIds) {
+        const mid = Number(id);
+        if (!Number.isFinite(mid)) { errors.push(`bad id: ${id}`); continue; }
+        const before = sqlite.prepare("SELECT * FROM lab_members WHERE id = ?").get(mid) as any;
+        if (!before) { errors.push(`not found: ${mid}`); continue; }
+        if (resolvedAction === "delete") {
+          sqlite.prepare("DELETE FROM lab_members WHERE id = ?").run(mid);
+          auditLabMembership("delete", before, 0, ip, `admin/cleanup${reason ? `:${reason}` : ""}`, before);
+          affected.push({ id: mid, action: "deleted", before });
+        } else {
+          sqlite.prepare("UPDATE lab_members SET status = 'inactive', updated_at = ? WHERE id = ?").run(now, mid);
+          const after = sqlite.prepare("SELECT * FROM lab_members WHERE id = ?").get(mid) as any;
+          auditLabMembership("update_status", after, 0, ip, `admin/cleanup${reason ? `:${reason}` : ""}`, before);
+          affected.push({ id: mid, action: "deactivated", before, after });
+        }
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/lab-members-cleanup] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Cleanup failed" });
+    }
+    res.json({ ok: true, action: resolvedAction, affected, errors });
   });
 
   // Admin: bulk-import inventory_items rows for a lab. Used for migrating
@@ -1180,6 +1259,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const membership = sqlite.prepare(
       "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
     ).get(newLabId, Number(userId));
+    auditLabMembership("create", membership, 0, (req.headers["x-forwarded-for"] as string) || null, "admin/provision-comp-lab");
     console.log(`[provision-comp-lab] Provisioned lab_id=${newLabId} (${labName}) for user_id=${userId} (${user.email}) plan=${resolvedPlan} is_primary_lab=0`);
     res.json({
       ok: true,
@@ -2030,6 +2110,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         (db as any).$client.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, lab_id = ?, seat_count = 1, hospital_name = NULL, hospital_state = NULL, bed_count = NULL WHERE id = ?").run(ownerPlan, ownerRow?.lab_id || null, user.id); // PHASE5-OK seat-accept onboarding
         storage.updateUserPlan(user.id, ownerPlan, user.studyCredits);
       } catch {}
+      // Replaces the now-disabled boot lab_members backfill: granting lab
+      // membership on accept so the new account sees the inviter's lab in
+      // the switcher and passes per-lab data gates. Target = inviter's
+      // primary lab_members (is_primary_lab=1).
+      try {
+        const inviterPrimary = (db as any).$client.prepare(
+          "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+        ).get(seatInvite.owner_user_id) as any;
+        if (inviterPrimary?.lab_id) {
+          const dupMember = (db as any).$client.prepare(
+            "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?"
+          ).get(inviterPrimary.lab_id, user.id) as any;
+          if (!dupMember) {
+            const nowIso = new Date().toISOString();
+            (db as any).$client.prepare(
+              `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+               VALUES (?, ?, 'staff', '{}', 'active', 0, ?, ?, ?)`
+            ).run(inviterPrimary.lab_id, user.id, nowIso, nowIso, nowIso);
+            const newMembership = (db as any).$client.prepare(
+              "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+            ).get(inviterPrimary.lab_id, user.id);
+            auditLabMembership("create", newMembership, user.id, (req.headers["x-forwarded-for"] as string) || null, "auth/register:seat-accept");
+          }
+        }
+      } catch (err: any) {
+        console.error("[auth/register seat-accept] lab_members grant failed (non-fatal):", err.message);
+      }
     } else if (activeSeat) {
       // User is already an active seat (e.g. manually attached via admin endpoint)
       isSeatUser = true;
@@ -2518,6 +2625,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at)
          VALUES (?, ?, 'owner', 'active', 0, ?, ?, ?)`
       ).run(newLabId, req.userId, now, now, now);
+      const newOwnerMembership = (db as any).$client.prepare(
+        "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+      ).get(newLabId, req.userId);
+      auditLabMembership("create", newOwnerMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "labs/me/add");
     } catch (err: any) {
       console.error("[labs/me/add] DB insert failed:", err.message);
       // Best-effort Stripe customer cleanup so we don't accumulate orphans.
@@ -2743,6 +2854,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       try { sqlite.exec("ROLLBACK"); } catch {}
       console.error("[labs/:labId/members POST] DB insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to invite member" });
+    }
+    if (seatUserId) {
+      const newMembership = sqlite.prepare(
+        "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1"
+      ).get(req.scope.labId, seatUserId);
+      auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "labs/:labId/members");
     }
 
     // Best-effort invite email (matches /api/account/seats template).
@@ -12686,6 +12803,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const ownerLabRow = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(req.userId) as any;
       if (ownerLabRow?.lab_id) {
         (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(ownerLabRow.lab_id, seatUserId);
+      }
+      // Replaces the now-disabled boot lab_members backfill: a legacy seat
+      // invite to an already-registered user must also grant lab membership
+      // on the inviter's primary lab, otherwise the lab switcher and per-
+      // lab data gates won't see them (the original Bug 2 from 2026-05-24).
+      // Target lab = the inviter's primary lab_members row (is_primary_lab=1).
+      const inviterPrimary = (db as any).$client.prepare(
+        "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+      ).get(req.userId) as any;
+      if (inviterPrimary?.lab_id) {
+        const dupMember = (db as any).$client.prepare(
+          "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?"
+        ).get(inviterPrimary.lab_id, seatUserId) as any;
+        if (!dupMember) {
+          (db as any).$client.prepare(
+            `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+             VALUES (?, ?, 'staff', ?, 'active', 0, ?, ?, ?)`
+          ).run(inviterPrimary.lab_id, seatUserId, permJson, now, now, now);
+          const newMembership = (db as any).$client.prepare(
+            "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+          ).get(inviterPrimary.lab_id, seatUserId);
+          auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "account/seats:legacy-invite");
+        }
       }
     }
 
