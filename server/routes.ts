@@ -702,7 +702,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       -- across every owned-lab row for users who also happen to hold a legacy
       -- seat somewhere (e.g. admin-report screenshot 2026-05-24: owner-of-3
       -- labs displayed all 3 rows tagged "Seat under <inviter's lab>" + with
-      -- the inviter's CLIA + "Seat" account type). Gating on `lm.role IS NULL`
+      -- the inviter's CLIA + "Seat" account type). Gating on lm.role IS NULL
       -- preserves the legacy display for pure seat users (no lab_members row)
       -- and suppresses it for any user who has joined the lab_members model.
       LEFT JOIN user_seats seat_link
