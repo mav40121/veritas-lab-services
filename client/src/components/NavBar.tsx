@@ -11,41 +11,71 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 
-const allMobileLinks = [
+// Mobile menu IA \u2014 mirrors the desktop nav structure (top-level links +
+// collapsible groups) instead of dumping every route as a flat 27-item
+// list that overflows the viewport. Sections start collapsed; user
+// expands the group they want. Marketing routes use bare hrefs.
+const mobileTopLinks: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Consulting" },
   { href: "/pricing", label: "Plans" },
-  { href: "/veritaassure", label: "VeritaAssure\u2122" },
-  { href: "/team", label: "Our Team" },
-  { href: "/veritacheck", label: "VeritaCheck™" },
-  { href: "/veritacheck/cumsum", label: "VeritaCheck™ CUMSUM" },
-  { href: "/veritascan", label: "VeritaScan™" },
-  { href: "/veritamap", label: "VeritaMap™" },
-  { href: "/veritacomp", label: "VeritaComp™" },
-  { href: "/veritastaff", label: "VeritaStaff™" },
-  { href: "/veritapt", label: "VeritaPT™" },
-  { href: "/veritalab", label: "VeritaLab™" },
-  { href: "/veritapolicy", label: "VeritaPolicy™" },
-  { href: "/veritatrack", label: "VeritaTrack™" },
-  { href: "/calculator", label: "VeritaBench™" },
-  { href: "/veritabench", label: "VeritaPace™" },
-  { href: "/veritabench/staffing", label: "VeritaShift™" },
-  { href: "/veritabench/pi", label: "VeritaQA™" },
-  { href: "/veritastock", label: "VeritaStock™" },
-  { href: "/veritaops-app", label: "VeritaOps™" },
-  { href: "/book", label: "Book" },
+];
+const mobileVeritaassureLinks: { href: string; label: string }[] = [
+  { href: "/veritaassure", label: "All Modules Overview" },
+  { href: "/veritacheck", label: "VeritaCheck\u2122" },
+  { href: "/veritacheck/cumsum", label: "VeritaCheck\u2122 CUMSUM" },
+  { href: "/veritascan", label: "VeritaScan\u2122" },
+  { href: "/veritamap", label: "VeritaMap\u2122" },
+  { href: "/veritacomp", label: "VeritaComp\u2122" },
+  { href: "/veritastaff", label: "VeritaStaff\u2122" },
+  { href: "/veritapt", label: "VeritaPT\u2122" },
+  { href: "/veritalab", label: "VeritaLab\u2122" },
+  { href: "/veritapolicy", label: "VeritaPolicy\u2122" },
+  { href: "/veritatrack", label: "VeritaTrack\u2122" },
+];
+const mobileResourcesLinks: { href: string; label: string }[] = [
   { href: "/getting-started", label: "Getting Started" },
-  { href: "/resources", label: "Resources" },
+  { href: "/resources", label: "Articles" },
+  { href: "/book", label: "Lab Management 101 Book" },
+  { href: "/study-guide", label: "Study Guide" },
   { href: "/roadmap", label: "Roadmap" },
-  { href: "/demo", label: "Live Demo" },
+  { href: "/faq", label: "FAQ" },
+];
+const mobileOperationsLinks: { href: string; label: string }[] = [
+  { href: "/operations", label: "Operations Overview" },
+  { href: "/calculator", label: "VeritaBench\u2122" },
+  { href: "/veritabench", label: "VeritaPace\u2122" },
+  { href: "/veritabench/staffing", label: "VeritaShift\u2122" },
+  { href: "/veritabench/pi", label: "VeritaQA\u2122" },
+  { href: "/veritastock", label: "VeritaStock\u2122" },
+  { href: "/veritaops-app", label: "VeritaOps\u2122" },
+];
+const mobileFooterLinks: { href: string; label: string }[] = [
+  { href: "/team", label: "Our Team" },
   { href: "/contact", label: "Contact" },
 ];
+
 
 export function NavBar() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, isLoggedIn } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Mobile menu collapsible-group state. Resets every time the menu closes
+  // so the next open starts with the same short IA.
+  const [mobileExpanded, setMobileExpanded] = useState<Set<string>>(new Set());
+  function toggleMobileGroup(key: string) {
+    setMobileExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+  function closeMobile() {
+    setMobileOpen(false);
+    setMobileExpanded(new Set());
+  }
   const labRoute = useLabRoute();
   const { data: memberships } = useMemberships();
   const activeLabId = useActiveLabId();
@@ -246,44 +276,125 @@ export function NavBar() {
           </Button>
 
           {/* Mobile menu toggle */}
-          <Button variant="ghost" size="icon" className="lg:hidden w-8 h-8" onClick={() => setMobileOpen(o => !o)}>
+          <Button variant="ghost" size="icon" className="lg:hidden w-8 h-8" onClick={() => mobileOpen ? closeMobile() : setMobileOpen(true)}>
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </Button>
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile menu — collapsible IA mirroring the desktop nav. Container
+          is height-capped + scrollable so a long phone viewport never strands
+          the bottom CTAs off-screen. */}
       {mobileOpen && (
-        <div className="lg:hidden border-t border-border bg-card px-4 py-3 flex flex-col gap-1">
-          {/*
-            Use the raw href, NOT labRoute(href). These are all marketing /
-            public-site routes (/resources, /team, /pricing, /faq, /book,
-            product overview pages, etc.) which have no lab-scoped variant.
-            Wrapping them in labRoute() when a user is logged in produces
-            /labs/N/resources, /labs/N/team, etc. which 404. Fixed
-            2026-05-24 after a mobile user reported they couldn't navigate
-            to the Resources page from the hamburger menu. The desktop
-            nav above already uses bare hrefs; this brings mobile in line.
-          */}
-          {allMobileLinks.map(({ href, label }) => (
-            <Link key={href} href={href} onClick={() => setMobileOpen(false)}
-              className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
-              {label}
+        <div
+          className="lg:hidden border-t border-border bg-card flex flex-col overflow-y-auto"
+          style={{ maxHeight: "calc(100vh - 4rem)" }}
+        >
+          <div className="px-4 py-3 flex flex-col gap-1">
+            {/* Top-level marketing links */}
+            {mobileTopLinks.map(({ href, label }) => (
+              <Link key={href} href={href} onClick={closeMobile}
+                className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
+                {label}
+              </Link>
+            ))}
+
+            <MobileGroup
+              label="VeritaAssure™"
+              icon={<ShieldCheck size={14} className="text-primary" />}
+              expanded={mobileExpanded.has("va")}
+              onToggle={() => toggleMobileGroup("va")}
+              links={mobileVeritaassureLinks}
+              onLinkClick={closeMobile}
+            />
+            <MobileGroup
+              label="Resources"
+              expanded={mobileExpanded.has("res")}
+              onToggle={() => toggleMobileGroup("res")}
+              links={mobileResourcesLinks}
+              onLinkClick={closeMobile}
+            />
+            <MobileGroup
+              label="Operations"
+              icon={<BarChart3 size={14} className="text-primary" />}
+              expanded={mobileExpanded.has("ops")}
+              onToggle={() => toggleMobileGroup("ops")}
+              links={mobileOperationsLinks}
+              onLinkClick={closeMobile}
+            />
+
+            {mobileFooterLinks.map(({ href, label }) => (
+              <Link key={href} href={href} onClick={closeMobile}
+                className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
+                {label}
+              </Link>
+            ))}
+
+            {/* Live Demo CTA */}
+            <Link href="/demo" onClick={closeMobile}
+              className="px-3 py-2 rounded-md text-sm font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 inline-flex items-center gap-1.5">
+              <Play size={11} /> Live Demo
             </Link>
-          ))}
-          <div className="pt-2 border-t border-border mt-2 flex gap-2">
-            {isLoggedIn ? (
-              <>
-                <Button asChild variant="outline" size="sm" className="flex-1"><Link href={labRoute("/dashboard")} onClick={() => setMobileOpen(false)}><LayoutDashboard size={13} className="mr-1" />My Studies</Link></Button>
-                <Button variant="outline" size="sm" onClick={logout} className="flex-1">Sign out</Button>
-              </>
-            ) : (
-              <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/login" onClick={() => setMobileOpen(false)}>Sign in</Link></Button>
-            )}
-            <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground"><Link href="/veritacheck" onClick={() => setMobileOpen(false)}>Run a Study</Link></Button>
+
+            <div className="pt-2 border-t border-border mt-2 flex gap-2">
+              {isLoggedIn ? (
+                <>
+                  <Button asChild variant="outline" size="sm" className="flex-1"><Link href={labRoute("/dashboard")} onClick={closeMobile}><LayoutDashboard size={13} className="mr-1" />My Studies</Link></Button>
+                  <Button variant="outline" size="sm" onClick={() => { logout(); closeMobile(); }} className="flex-1">Sign out</Button>
+                </>
+              ) : (
+                <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/login" onClick={closeMobile}>Sign in</Link></Button>
+              )}
+              <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground"><Link href="/veritacheck" onClick={closeMobile}>Run a Study</Link></Button>
+            </div>
           </div>
         </div>
       )}
     </header>
+  );
+}
+
+// MobileGroup — collapsible section for the mobile menu. Used for the
+// VeritaAssure, Resources, and Operations buckets so the first-open list
+// stays short. Indented sub-links match the desktop dropdown contents.
+function MobileGroup({
+  label, icon, expanded, onToggle, links, onLinkClick,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  links: { href: string; label: string }[];
+  onLinkClick: () => void;
+}) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+        aria-expanded={expanded}
+      >
+        <span className="flex items-center gap-2">
+          {icon}
+          {label}
+        </span>
+        <ChevronDown
+          size={14}
+          className="transition-transform"
+          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
+        />
+      </button>
+      {expanded && (
+        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
+          {links.map(({ href, label: linkLabel }) => (
+            <Link key={href} href={href} onClick={onLinkClick}
+              className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              {linkLabel}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
