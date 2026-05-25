@@ -29,6 +29,9 @@ past_session_contexts archive (earliest parking-lot mention found is
 
 ### 5. v0.6 source-grounded rebuild of all 4 accreditor columns
 
+**Effort:** L (3-5 weeks)
+**Importance:** High — accreditor citation accuracy underpins every VeritaPolicy / VeritaScan / VeritaCheck artifact.
+
 **What:** AABB ids in aabbRequirements.ts (138/168 marked "real") and
 COLA ids in colaRequirements.ts (167/168 marked "real") came from
 agent generator output, not from a human cross-check against the
@@ -59,6 +62,9 @@ Monday available before the booth.
 **FLAGSHIP — Tier 1 product expansion. Sized larger than VeritaPT or
 VeritaCheck. Treat with same architectural care as the original
 VeritaAssure suite.**
+
+**Effort:** XL (6+ weeks; flagship-scale)
+**Importance:** High — booth-validated demand at COLA Nashville; no existing module covers post-survey deficiency response; CMS QSO-25-19-ALL 14-day disclosure window raises stakes.
 
 **What:** A new module that helps a lab manage the full lifecycle of
 responding to inspection deficiencies (CAP, TJC, COLA, CMS-2567,
@@ -273,6 +279,9 @@ zero rationale for any code change before the conference ends.
 ---
 
 ### 18. Unregulated analyte / Alternative Assessment (AAA) coverage — cross-module gap
+
+**Effort:** S (1-3 days once #17 ships) for Phase 3 — Phases 1 and 2 already shipped.
+**Importance:** Medium — closes a real workflow loop (AAA failure → VeritaResponse finding) but only matters once #17 exists.
 
 **STATUS (as of 2026-05-22): Phases 1 and 2 SHIPPED. Phase 3 deferred
 behind #17 (VeritaResponse, not yet built).**
@@ -522,6 +531,9 @@ shipped 2026-05-10.
 
 ### 20. Live QC engine (Levey-Jennings + Westgard)
 
+**Effort:** XL (6+ weeks; flagship-scale)
+**Importance:** High — largest single gap vs myLabCompliance.io per Perplexity competitor analysis; promotes VeritaAssure from documentation tool to lab operations platform.
+
 **What:** A daily-use QC workflow: Levey-Jennings charts, Westgard
 multi-rule violation detection, control lot management, automated QC
 scheduling. Today VeritaAssure documents QC posture (sign-offs,
@@ -556,6 +568,9 @@ v1 build. Comparable in scale to VeritaResponse (#17).
 
 ### 22. CMS-116 application support + state licensing tracking
 
+**Effort:** M (1-2 weeks for v1)
+**Importance:** Medium — competitor (myLabCompliance.io) has this; useful at lab startup and certificate-type changes; not table stakes for existing customers.
+
 **What:** CMS-116 is the federal CLIA application form. Today
 VeritaPolicy covers ongoing CLIA posture but not the application
 itself. The form is also relevant at certificate-type changes (waived
@@ -579,6 +594,9 @@ top-10-state licensure registry).
 ---
 
 ### 27. Acquire CAP MOL (Molecular) checklist to verify 2 pending entries
+
+**Effort:** N/A (operator action — ~1 hour of code work once the file is in hand)
+**Importance:** Low — two entries total; low traffic; only matters when a customer cites a MOL standard.
 
 **What:** PR #108 left 2 entries in `server/capRequirements.ts`
 flagged as unverified because the operator does not hold the CAP MOL
@@ -611,6 +629,9 @@ audit findings.
 ---
 
 ### 28. Acquire AABB Standards 35th edition + current COLA Accreditation Manual for exhaustive citation verification
+
+**Effort:** N/A (operator action — ~1-2 days of audit re-run once the manuals are held)
+**Importance:** High — gates #5 from reaching "exhaustively verified" status for AABB and COLA.
 
 **What:** The 2026-05-11 QC audit found that VeritaScan, cfrRequirements
 cross-refs, and colaRequirements.ts cite about 180 AABB and COLA codes
@@ -652,6 +673,9 @@ work pending until the source documents land.
 ---
 
 ### 29. VeritaStock barcode scanning (full mobile scan flow)
+
+**Effort:** L (12 working days, ~3 weeks calendar)
+**Importance:** High — strategic moat vs Unity Lab Services ($30K+/yr); presold as included on Clinic+ tiers; build triggers on first paid commitment.
 
 **What:** The remaining barcode-scanning build for VeritaStock, scoped
 during the 2026-05-20 Pfizer follow-up discussion. Order-now reorder
@@ -730,6 +754,9 @@ barcode scanning waits on revenue commitment.
 
 ### 30. Plain-language summary layer for verbatim CFR citations
 
+**Effort:** M (multi-day content authoring across 96 Master List rows if redesigned correctly)
+**Importance:** Medium — director readability win; no customer urgency.
+
 **What:** `server/cfrRequirements.ts` carries verbatim eCFR text in
 the `description` field (PR #301 closed #26). The verbatim text is
 authoritative but written for regulators, not lab directors. A
@@ -795,6 +822,9 @@ has not yet authorized a redesign attempt as of 2026-05-21.
 ---
 
 ### 32. Lab leader community / forum (paid subscription idea)
+
+**Effort:** XL (ongoing operational commitment, not a build) as paid; S (a few days to spin up) as free invite-only Slack/Discord alternative.
+**Importance:** Low as paid product (SWOT verdict: don't build); Medium as free lead-funnel alternative.
 
 **What:** Operator-floated 2026-05-22: a vetted online forum for
 laboratory leaders (directors, managers, supervisors). Pricing as
@@ -882,6 +912,9 @@ part-time community manager.
 
 ### 33. Active vs view-only seat split
 
+**Effort:** M (~1 week of engineering when prioritized)
+**Importance:** Medium — quality-of-life for sales positioning; /pricing copy already claims it; not blocking any current customer.
+
 **What:** The pricing analysis doc (2026-05-21 MEDIUM scenario, Decision 3) proposed splitting seats into two types: **active** (techs, supervisors, lab managers who edit data; counted against the tier seat cap) and **view-only** (medical director, administrators, reviewers who sign but don't enter; unlimited and free on every tier). The current schema treats all seats as one bucket.
 
 **Fix shape:**
@@ -900,6 +933,9 @@ part-time community manager.
 
 ### 34. CCL lab name visual disambiguation in lab switcher
 
+**Effort:** XS (under 1 day)
+**Importance:** Low — cosmetic; only matters if Lisa picks the wrong lab from the dropdown.
+
 **What:** Lisa Veri's two labs both carry "UMass Memorial Health - Milford Regional Medical Center" with the secondary differentiated only by a trailing " CCL" suffix. The NavBar `LabSwitcher` dropdown truncates long names, which makes fast visual differentiation between her two labs harder than it should be.
 
 **Fix shape (cheapest to most invasive):**
@@ -916,6 +952,9 @@ part-time community manager.
 ---
 
 ### 35. VC Unlimited Y1/Y2 price disclosure UX
+
+**Effort:** XS (under 1 day if triggered)
+**Importance:** Low — tracking item, not a build; trigger = first customer complaint or procurement question.
 
 **What:** VC Unlimited list pricing is **$299 first year, $499/yr after** (auto-applied VCFIRSTYEAR coupon delivers Y1 = $299; Y2+ renews at the underlying $499 base). The /pricing tile shows this in the period text ("$299 first year · $499/yr after") at text-base font-medium weight as of 2026-05-23.
 
