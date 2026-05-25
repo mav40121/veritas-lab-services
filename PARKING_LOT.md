@@ -931,45 +931,7 @@ part-time community manager.
 
 ---
 
-### 34. CCL lab name visual disambiguation in lab switcher
-
-**Effort:** XS (under 1 day)
-**Importance:** Low — cosmetic; only matters if Lisa picks the wrong lab from the dropdown.
-
-**What:** Lisa Veri's two labs both carry "UMass Memorial Health - Milford Regional Medical Center" with the secondary differentiated only by a trailing " CCL" suffix. The NavBar `LabSwitcher` dropdown truncates long names, which makes fast visual differentiation between her two labs harder than it should be.
-
-**Fix shape (cheapest to most invasive):**
-1. Rename the secondary lab to lead with the disambiguator ("CCL — UMass Memorial Health - Milford Regional Medical Center") so the truncation preserves "CCL —" visibly. Lisa decides.
-2. Add a small badge/tag to the LabSwitcher row that surfaces the role+primary flag when the name is truncated (e.g., "primary" / "secondary").
-3. Truncate from the middle when names exceed the dropdown width, so distinguishing suffixes survive.
-
-**Source:** flagged 2026-05-23 immediately after provisioning Lisa's CCL lab via `/api/admin/update-lab`.
-
-**Status:** Open. Cosmetic. Only matters if Lisa reports picking the wrong lab from the dropdown.
-
-**Pre- vs post-COLA:** Post-COLA.
-
----
-
-### 35. VC Unlimited Y1/Y2 price disclosure UX
-
-**Effort:** XS (under 1 day if triggered)
-**Importance:** Low — tracking item, not a build; trigger = first customer complaint or procurement question.
-
-**What:** VC Unlimited list pricing is **$299 first year, $499/yr after** (auto-applied VCFIRSTYEAR coupon delivers Y1 = $299; Y2+ renews at the underlying $499 base). The /pricing tile shows this in the period text ("$299 first year · $499/yr after") at text-base font-medium weight as of 2026-05-23.
-
-**Risk to monitor:** procurement reviewers at institutional customers may still miss the renewal-price disclosure if their eye locks onto the big "$299" and skips the period text. If a customer signs at $299 and then disputes the $499 renewal as a hidden price hike, the tile is the artifact they'll point to.
-
-**Fix shape if signal emerges:**
-- Split the price into two visually distinct lines ("$299 first year" big, "$499/yr after" same size below)
-- Or add an explicit "Year 1 / Year 2+" comparison block under the price
-- Or move the Y2 amount into the tier title
-
-**Source:** Pricing rebuild 2026-05-23; flagged at the time as a potential UX gap pending customer feedback.
-
-**Status:** Open as a tracking item, not a build item. Trigger to act = first customer complaint or first procurement question that suggests the disclosure was missed.
-
-**Pre- vs post-COLA:** Post-COLA.
+_(items #34 and #35 closed 2026-05-24; see C23 and C24 below)_
 
 ---
 
@@ -1490,6 +1452,28 @@ the published activity-based-costing studies independently describe.
 "Parking lot: build an operations module for cost per test
 calculations." Scoping pass + research session 2026-05-22; v1
 build same session. PRs #325 through this one.
+
+---
+
+### C23. CCL lab name visual disambiguation in lab switcher (formerly #34)
+
+**Effort:** XS (under 1 day, actual)
+**Importance:** Low — cosmetic; only mattered when Lisa or Michael picked the wrong lab from the dropdown.
+
+**What shipped (PR #361):** Added a `distinguishingSuffix()` helper to `client/src/components/LabSwitcher.tsx` that finds the longest shared prefix across a user's lab names and surfaces the differing tail. When the shared prefix is >20 chars (e.g. Lisa's two Milford labs that share "UMass Memorial Health - Milford Regional Medical Center"), the tail is rendered as a bold-foreground span on the active-lab chip and as an uppercase primary-tinted pill on each dropdown row. Role and primary flags also rendered as proper pills. Dropdown width bumped w-72 → w-80. Hovering a row shows the full lab name via `title=`.
+
+**Source:** flagged 2026-05-23 immediately after provisioning Lisa's CCL lab; closed 2026-05-24.
+
+---
+
+### C24. VC Unlimited Y1/Y2 price disclosure UX (formerly #35)
+
+**Effort:** XS (under 1 day, actual)
+**Importance:** Low when shipped (proactive, no customer complaint yet) — but high if a procurement reviewer later disputes the $499 renewal as undisclosed.
+
+**What shipped (PR #362):** VC Unlimited tile on `/pricing` now renders the price block as two prominent lines: `$299 first year` at text-3xl bold and `$499 /yr after` at text-2xl bold directly below. Procurement reviewers can no longer lock onto the headline $299 and miss the renewal disclosure. Implemented by splitting the PLAN data's combined `period` field into `period` + new optional `priceY2` / `periodY2` fields, with a conditional second-line render in PricingPage.tsx. Other tiles unchanged because the conditional gate is on `priceY2`.
+
+**Source:** Pricing rebuild 2026-05-23; closed 2026-05-24 proactively before any customer dispute.
 
 ---
 
