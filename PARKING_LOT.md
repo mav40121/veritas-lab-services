@@ -529,24 +529,32 @@ shipped 2026-05-10.
 
 ---
 
-### 22. CMS-116 application support + state licensing tracking
+### 22. VeritaLab™ extension: CMS-116 application support + state licensing registry
 
 **Effort:** M (1-2 weeks for v1)
 **Importance:** Medium — competitor (myLabCompliance.io) has this; useful at lab startup and certificate-type changes; not table stakes for existing customers.
 
-**What:** CMS-116 is the federal CLIA application form. Today
-VeritaPolicy covers ongoing CLIA posture but not the application
-itself. The form is also relevant at certificate-type changes (waived
-to moderate, moderate to high). State licensing tracking is the
-adjacent piece: many states require their own licensure on top of
-CLIA.
+**What:** VeritaLab already tracks CLIA, state license, and lab
+director license as cert types in the certificate tracker. The
+missing pieces sit alongside that data:
+- **CMS-116 form support**: the federal CLIA application form. Lab
+  startup workflow and certificate-type changes (waived → moderate,
+  moderate → high) both require filing CMS-116. Today VeritaLab tracks
+  the resulting certificate but does not help author the application.
+- **State licensure registry**: many states require their own license
+  on top of CLIA. VeritaLab tracks the cert when held; the registry
+  piece is the per-state authority, form URL, fee, and renewal cadence
+  so the lab can look up the state-specific obligation.
 
-**Fix shape:** Concrete, narrow, finite. Form-fill UX for CMS-116,
-with state-licensure registry per state (each state's authority,
-form, fee, renewal cadence). Pairs with VeritaPolicy and VeritaLab.
+**Fix shape:** Two new tabs inside VeritaLab (CMS-116 form-fill UX +
+state registry). Reuses the existing certificate tracker as the
+destination for issued artifacts. No new module surface; the existing
+`/veritalab-app` route gains the two sub-tabs.
 
 **Source:** Perplexity competitor analysis (myLabCompliance.io),
 2026-05-10. myLabCompliance.io has this; VeritaAssure does not.
+Reclassified as a VeritaLab extension 2026-05-25 (operator instinct:
+"it belongs with the VeritaLab module").
 
 **Status:** Open. Small build relative to the other competitor-driven
 candidates. Useful at lab startup and at certificate-type changes.
