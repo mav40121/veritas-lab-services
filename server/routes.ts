@@ -1238,6 +1238,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, lab: updated });
   });
 
+  // Admin: deactivate all user_seats rows where seat_user_id = ?. Used to
+  // clean up stale seat rows left over from the prior Lisa-cascade incident
+  // (an owner accidentally got invited as a seat under someone else's lab,
+  // got auto-accepted, and the seat row was never revoked when the cascade
+  // bug was patched). A lingering active seat row makes isSeatUser=true on
+  // /api/auth/me, which makes every Verita module render with
+  // useIsReadOnly("…")=true even when the user is a full owner of their
+  // own lab. Returns before/after rows for audit.
+  app.post("/api/admin/seat-cleanup-by-user", (req, res) => {
+    const { secret, userId, action } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    const resolvedAction = action === "delete" ? "delete" : "deactivate";
+    const sqlite = (db as any).$client;
+    const before = sqlite.prepare(
+      "SELECT id, owner_user_id, seat_user_id, seat_email, status, invited_at, accepted_at FROM user_seats WHERE seat_user_id = ? AND status = 'active'"
+    ).all(Number(userId)) as any[];
+    if (before.length === 0) {
+      return res.json({ ok: true, action: resolvedAction, affected: [], message: "no active seat rows" });
+    }
+    const ids = before.map(r => r.id);
+    const now = new Date().toISOString();
+    if (resolvedAction === "delete") {
+      const placeholders = ids.map(() => "?").join(",");
+      sqlite.prepare("DELETE FROM user_seats WHERE id IN (" + placeholders + ")").run(...ids);
+    } else {
+      const placeholders = ids.map(() => "?").join(",");
+      sqlite.prepare("UPDATE user_seats SET status = 'deactivated' WHERE id IN (" + placeholders + ")").run(...ids);
+    }
+    console.log(`[admin/seat-cleanup-by-user] user_id=${userId} action=${resolvedAction} affected=${ids.length}: ${JSON.stringify(ids)}`);
+    res.json({ ok: true, action: resolvedAction, affected: before, at: now });
+  });
+
   // Admin: extend an existing lab's subscription_expires_at + flip status to
   // 'active'. Used to comp internal/test labs (e.g. Michaels Lab dev account)
   // so every Verita module renders out of read-only. Pass expiresAt as ISO
