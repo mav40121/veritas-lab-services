@@ -2,6 +2,8 @@ import { useAuth } from "./AuthContext";
 import { AlertTriangle, Lock, ArrowRight } from "lucide-react";
 import { resolveSeatPermission } from "@shared/schema";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
+import { useMemberships } from "@/hooks/useMemberships";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 // Multi-Lab Tier 2 Phase 4.3c: accessLevel and subscription dates source
 // from the active lab's membership (via useActiveSubscription). Falls back
@@ -14,8 +16,24 @@ export function useAccessLevel() {
 export function useIsReadOnly(module?: string): boolean {
   const { user } = useAuth();
   const level = useAccessLevel();
+  const activeLabId = useActiveLabId();
+  const { data: memberships } = useMemberships();
   const baseReadOnly = level === 'read_only' || level === 'locked';
   if (baseReadOnly) return true;
+
+  // Lab-role override (2026-05-25): if the user is the owner or admin of the
+  // active lab, they get edit access regardless of any seat row that might
+  // exist under another lab. Without this, a stale user_seats row from the
+  // Lisa-cascade incident (or any future seat-row leak) makes every Verita
+  // module render as read-only on the owner's own labs because isSeatUser=true
+  // poisons the resolver branch below. The right rule is: owner on the active
+  // lab wins, full stop.
+  const activeMembership = activeLabId
+    ? memberships?.find(m => m.labId === activeLabId)
+    : (memberships?.find(m => m.isPrimaryLab) ?? memberships?.[0]);
+  if (activeMembership && (activeMembership.role === 'owner' || activeMembership.role === 'admin')) {
+    return false;
+  }
 
   // Seat user module check. Resolver handles both shapes:
   //   * legacy flat map (auto-upgrades all-edit seats to edit_all)
