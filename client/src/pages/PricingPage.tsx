@@ -66,7 +66,12 @@ const PLANS = [
   {
     name: "VeritaCheck\u2122 Unlimited",
     price: "$299",
-    period: "first year \u00b7 $499/yr after",
+    period: "first year",
+    // Y2+ renewal disclosure surfaced as a second prominent line in the
+    // price block (parking-lot #35), so procurement reviewers can't lock
+    // onto the headline $299 and miss the $499 renewal.
+    priceY2: "$499",
+    periodY2: "/yr after",
     description: "Single user. Method verification suite only. 14-day free trial included. First-year discount auto-applied at checkout.",
     features: [
       "Unlimited studies",
@@ -319,6 +324,12 @@ return (
                     <span className="font-serif text-3xl font-bold">{plan.price}</span>
                     <span className="text-foreground text-base font-medium">{plan.period}</span>
                   </div>
+                  {(plan as any).priceY2 && (
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="font-serif text-2xl font-bold text-foreground">{(plan as any).priceY2}</span>
+                      <span className="text-foreground text-base font-medium">{(plan as any).periodY2}</span>
+                    </div>
+                  )}
                   <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{plan.description}</p>
                 </div>
 
