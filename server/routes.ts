@@ -1461,6 +1461,159 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ─── VeritaQC Phase 1A: Westgard evaluator + result POST ─────────────────
+  // Phase 0 shipped the schema. Phase 1A adds the server-side rule evaluator
+  // and the customer endpoint that tech staff use to log a QC result. The
+  // evaluator computes lab cumulative mean and sample SD (n-1) from
+  // accepted_for_reporting=1 results for the same lot at evaluation time;
+  // honors per-lab qc_rule_settings (with optional per-analyte override).
+  //
+  // The corrective-action gate that toggles accepted_for_reporting=0 when a
+  // rejection fires lives in Phase 1B (entry UI) — toggling is a tech
+  // decision, not automatic, so we surface requires_corrective_action in
+  // the response and let the UI drive the workflow.
+  type WestgardViolation = {
+    rule_code: string;
+    severity: "warning" | "rejection";
+    detail: string;
+    related_result_ids: number[];
+  };
+
+  function evaluateWestgardForLot(
+    sqlite: any,
+    labId: number,
+    controlLotId: number,
+    newResultId: number,
+    biasN: number,
+    trendN: number,
+  ): WestgardViolation[] {
+    // Pull all accepted history (including the new result) in insert order.
+    const history = sqlite.prepare(
+      "SELECT id, result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 ORDER BY result_date ASC, id ASC"
+    ).all(labId, controlLotId) as { id: number; result_value: number }[];
+    // Establish mean and SD from the PRIOR history (excluding the new result).
+    // If we included the new point in the baseline, an outlier would inflate
+    // the baseline SD and self-dampen its own SDI, mis-classifying real 1-3s
+    // rejections as 1-2s warnings. Westgard convention: evaluate against the
+    // established lab mean and SD, not against a window that includes the
+    // candidate point.
+    const baseline = history.filter(r => r.id !== newResultId);
+    if (baseline.length < 2) return [];
+    const baselineVals = baseline.map(r => r.result_value);
+    const mean = baselineVals.reduce((a, b) => a + b, 0) / baselineVals.length;
+    const variance = baselineVals.reduce((s, v) => s + (v - mean) ** 2, 0) / (baselineVals.length - 1);
+    const sd = Math.sqrt(variance);
+    if (sd === 0) return [];
+    // SDIs for all history points (so multi-point rules can examine windows
+    // ending at the new point), all measured against the baseline mean / SD.
+    const vals = history.map(r => r.result_value);
+    const ids = history.map(r => r.id);
+    const sdis = vals.map(v => (v - mean) / sd);
+    const i = sdis.length - 1;
+    const z = sdis[i];
+    const violations: WestgardViolation[] = [];
+    if (Math.abs(z) > 3) {
+      violations.push({ rule_code: "1-3s", severity: "rejection",
+        detail: `|SDI|=${Math.abs(z).toFixed(2)} > 3`, related_result_ids: [ids[i]] });
+    } else if (Math.abs(z) > 2) {
+      violations.push({ rule_code: "1-2s", severity: "warning",
+        detail: `|SDI|=${Math.abs(z).toFixed(2)} > 2`, related_result_ids: [ids[i]] });
+    }
+    if (i >= 1 && Math.abs(z) > 2 && Math.abs(sdis[i - 1]) > 2 && z * sdis[i - 1] > 0) {
+      violations.push({ rule_code: "2-2s", severity: "rejection",
+        detail: "2 consecutive results on same side >2SD",
+        related_result_ids: [ids[i - 1], ids[i]] });
+    }
+    if (i >= 1 && Math.abs(z - sdis[i - 1]) > 4) {
+      violations.push({ rule_code: "R-4s", severity: "rejection",
+        detail: `range ${Math.abs(z - sdis[i - 1]).toFixed(2)}SD across zero`,
+        related_result_ids: [ids[i - 1], ids[i]] });
+    }
+    if (i >= 3) {
+      const window = sdis.slice(i - 3, i + 1);
+      if (window.every(s => Math.abs(s) > 1) && window.every(s => s * window[0] > 0)) {
+        violations.push({ rule_code: "4-1s", severity: "rejection",
+          detail: "4 consecutive results on same side >1SD",
+          related_result_ids: ids.slice(i - 3, i + 1) });
+      }
+    }
+    if (biasN > 0 && i >= biasN - 1) {
+      const window = sdis.slice(i - biasN + 1, i + 1);
+      if (window.every(s => s * window[0] > 0)) {
+        violations.push({ rule_code: `${biasN}-x`, severity: "rejection",
+          detail: `${biasN} consecutive results on same side of mean (bias)`,
+          related_result_ids: ids.slice(i - biasN + 1, i + 1) });
+      }
+    }
+    if (trendN > 0 && i >= trendN - 1) {
+      const window = vals.slice(i - trendN + 1, i + 1);
+      const strictlyUp = window.every((v, k) => k === 0 || v > window[k - 1]);
+      const strictlyDown = window.every((v, k) => k === 0 || v < window[k - 1]);
+      if (strictlyUp || strictlyDown) {
+        const direction = strictlyUp ? "increasing" : "decreasing";
+        violations.push({ rule_code: `${trendN}-T`, severity: "rejection",
+          detail: `${trendN} consecutive results strictly ${direction} (trend)`,
+          related_result_ids: ids.slice(i - trendN + 1, i + 1) });
+      }
+    }
+    return violations;
+  }
+
+  app.post("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
+    if (!control_lot_id || result_value === undefined || result_value === null || !result_date) {
+      return res.status(400).json({ error: "control_lot_id, result_value, result_date required" });
+    }
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare(
+      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(Number(control_lot_id), req.scope.labId) as any;
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+
+    const now = new Date().toISOString();
+    let newResultId: number;
+    try {
+      const ins = sqlite.prepare(
+        "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
+      ).run(
+        req.scope.labId, Number(control_lot_id), instrument || null, Number(result_value),
+        String(result_date), run_time || null, req.userId, comment || null, now, now,
+      );
+      newResultId = Number(ins.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[qc/results] insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Insert failed" });
+    }
+
+    // Per-lab settings with optional per-analyte override. Per-analyte row wins
+    // if present; otherwise fall back to the lab-wide row (analyte IS NULL).
+    const settings = sqlite.prepare(
+      "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
+    ).get(req.scope.labId, lot.analyte) as any;
+    const biasN = settings?.bias_consecutive_count ?? 10;
+    const trendN = settings?.trend_consecutive_count ?? 7;
+
+    const violations = evaluateWestgardForLot(sqlite, req.scope.labId, Number(control_lot_id), newResultId, biasN, trendN);
+
+    const insertViol = sqlite.prepare(
+      "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    const storedViolations: any[] = [];
+    for (const v of violations) {
+      const r = insertViol.run(newResultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
+      storedViolations.push({ id: Number(r.lastInsertRowid), ...v });
+    }
+
+    const requires_corrective_action = violations.some(v => v.severity === "rejection");
+    res.json({
+      ok: true,
+      result_id: newResultId,
+      violations: storedViolations,
+      requires_corrective_action,
+      settings_used: { bias_consecutive_count: biasN, trend_consecutive_count: trendN },
+    });
+  });
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
