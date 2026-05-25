@@ -1360,6 +1360,107 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ count: rows.length, rows });
   });
 
+  // Admin: VeritaQC Phase 0 seed. Populates one Estradiol control lot for
+  // the target lab, default per-lab rule settings, and Michael's actual
+  // April 2026 QC runs from the operator's pre-existing Excel. Used to
+  // verify the Phase 0 schema works end-to-end before Phase 1 entry
+  // endpoints are built.
+  app.post("/api/admin/qc-seed", (req, res) => {
+    const { secret, labId, analyte } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const useAnalyte = analyte || "Estradiol";
+    const now = new Date().toISOString();
+    const lotNumber = `SEED-${Date.now()}`;
+    let lotId: number;
+    try {
+      const lotResult = sqlite.prepare(
+        "INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, opened_date, status, created_at, updated_at) VALUES (?, ?, 'mid', ?, 'Bio-Rad Lyphochek IA Plus', 237, 35.5, 2, 166, 308, '2026-04-01', 'active', ?, ?)"
+      ).run(Number(labId), useAnalyte, lotNumber, now, now);
+      lotId = Number(lotResult.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[admin/qc-seed] lot insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Lot insert failed" });
+    }
+    const existingSettings = sqlite.prepare(
+      "SELECT id FROM qc_rule_settings WHERE lab_id = ? AND analyte IS NULL"
+    ).get(Number(labId)) as any;
+    if (!existingSettings) {
+      sqlite.prepare(
+        "INSERT INTO qc_rule_settings (lab_id, analyte, bias_consecutive_count, trend_consecutive_count, enabled_rules_json, created_at, updated_at) VALUES (?, NULL, 10, 7, '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]', ?, ?)"
+      ).run(Number(labId), now, now);
+    }
+    const aprilData: [number, number][] = [
+      [1, 293], [2, 295], [3, 293], [4, 296], [5, 296],
+      [8, 307], [9, 282], [10, 269], [11, 271], [12, 277],
+      [15, 277], [16, 286], [17, 292], [19, 277], [22, 272],
+      [25, 265], [29, 275], [30, 280],
+    ];
+    let inserted = 0;
+    const insertStmt = sqlite.prepare(
+      "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, 'Siemens Atellica IM 1300', ?, ?, 1, ?, ?)"
+    );
+    try {
+      sqlite.exec("BEGIN");
+      for (const [day, value] of aprilData) {
+        const dateStr = `2026-04-${String(day).padStart(2, "0")}`;
+        insertStmt.run(Number(labId), lotId, value, dateStr, now, now);
+        inserted++;
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/qc-seed] results insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Results insert failed", inserted });
+    }
+    res.json({
+      ok: true,
+      lab_id: Number(labId),
+      lab_name: lab.lab_name,
+      lot_id: lotId,
+      lot_number: lotNumber,
+      analyte: useAnalyte,
+      runs_seeded: inserted,
+      settings_default: { bias_consecutive_count: 10, trend_consecutive_count: 7 },
+    });
+  });
+
+  // Admin: dump the six VeritaQC tables for forensic verification. Optional
+  // labId narrows lots/results/corrective_actions/period_reviews/rule_settings
+  // to one lab; violations are always returned in full (small table).
+  app.post("/api/admin/qc-dump", (req, res) => {
+    const { secret, labId } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const where = labId ? "WHERE lab_id = ?" : "";
+    const args: any[] = labId ? [Number(labId)] : [];
+    const lots = sqlite.prepare("SELECT * FROM qc_control_lots " + where + " ORDER BY id DESC").all(...args);
+    const results = sqlite.prepare("SELECT * FROM qc_results " + where + " ORDER BY id DESC LIMIT 500").all(...args);
+    const corrective_actions = sqlite.prepare("SELECT * FROM qc_corrective_actions " + where + " ORDER BY id DESC LIMIT 200").all(...args);
+    const period_reviews = sqlite.prepare("SELECT * FROM qc_period_reviews " + where + " ORDER BY id DESC LIMIT 200").all(...args);
+    const rule_settings = sqlite.prepare("SELECT * FROM qc_rule_settings " + where + " ORDER BY id DESC").all(...args);
+    const violations = sqlite.prepare("SELECT * FROM qc_rule_violations ORDER BY id DESC LIMIT 500").all();
+    res.json({
+      counts: {
+        lots: lots.length,
+        results: results.length,
+        violations: violations.length,
+        corrective_actions: corrective_actions.length,
+        period_reviews: period_reviews.length,
+        rule_settings: rule_settings.length,
+      },
+      lots,
+      results,
+      violations,
+      corrective_actions,
+      period_reviews,
+      rule_settings,
+    });
+  });
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
