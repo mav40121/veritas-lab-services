@@ -334,6 +334,11 @@ export default function VeritaQCAppPage() {
         <FlaskConical className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold">VeritaQC&#8482;</h1>
         <Badge variant="outline" className="ml-2 text-xs">Phase 1 preview</Badge>
+        <div className="ml-auto">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/labs/${activeLabId}/veritaqc-app/review`}>Daily review</Link>
+          </Button>
+        </div>
       </div>
 
       {loadingLots ? (
