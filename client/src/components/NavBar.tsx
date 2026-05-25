@@ -255,8 +255,18 @@ export function NavBar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="lg:hidden border-t border-border bg-card px-4 py-3 flex flex-col gap-1">
+          {/*
+            Use the raw href, NOT labRoute(href). These are all marketing /
+            public-site routes (/resources, /team, /pricing, /faq, /book,
+            product overview pages, etc.) which have no lab-scoped variant.
+            Wrapping them in labRoute() when a user is logged in produces
+            /labs/N/resources, /labs/N/team, etc. which 404. Fixed
+            2026-05-24 after a mobile user reported they couldn't navigate
+            to the Resources page from the hamburger menu. The desktop
+            nav above already uses bare hrefs; this brings mobile in line.
+          */}
           {allMobileLinks.map(({ href, label }) => (
-            <Link key={href} href={labRoute(href)} onClick={() => setMobileOpen(false)}
+            <Link key={href} href={href} onClick={() => setMobileOpen(false)}
               className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
               {label}
             </Link>
