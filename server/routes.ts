@@ -1614,6 +1614,112 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ─── VeritaQC Phase 1B: entry-UI support endpoints ───────────────────────
+  // Three reads/writes the tech-facing app page needs:
+  //   GET  /api/labs/:labId/qc/lots
+  //   GET  /api/labs/:labId/qc/results?control_lot_id=X&limit=N
+  //   POST /api/labs/:labId/qc/corrective-actions
+  // All three reuse authMiddleware + labScopeMiddleware so the labId in the
+  // URL is verified against the caller's memberships before any row is read
+  // or written. Cross-lab access by manipulating the URL returns 403.
+
+  app.get("/api/labs/:labId/qc/lots", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const lots = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
+    ).all(req.scope.labId);
+    res.json({ lots });
+  });
+
+  app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;
+    const limit = Math.min(Number(req.query.limit) || 20, 200);
+    if (!controlLotId) return res.status(400).json({ error: "control_lot_id required" });
+    const sqlite = (db as any).$client;
+    // Confirm the lot belongs to this lab; prevents leaking another lab's
+    // results via a known lot id. (Same shape as the POST handler check.)
+    const lot = sqlite.prepare(
+      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(controlLotId, req.scope.labId) as any;
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    const results = sqlite.prepare(
+      "SELECT id, lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
+    ).all(req.scope.labId, controlLotId, limit) as any[];
+    if (results.length === 0) return res.json({ results: [], analyte: lot.analyte });
+    const ids = results.map(r => r.id);
+    // SQLite has no native array param; build a placeholder list. Safe because
+    // ids are integers from the previous query, not user input.
+    const placeholders = ids.map(() => "?").join(",");
+    const violations = sqlite.prepare(
+      "SELECT id, qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+    ).all(...ids) as any[];
+    const correctiveActions = sqlite.prepare(
+      "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, taken_by_user_id, taken_at, status, follow_up_notes, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+    ).all(...ids) as any[];
+    const violByResult: Record<number, any[]> = {};
+    for (const v of violations) {
+      (violByResult[v.qc_result_id] = violByResult[v.qc_result_id] || []).push(v);
+    }
+    const caByResult: Record<number, any[]> = {};
+    for (const ca of correctiveActions) {
+      (caByResult[ca.qc_result_id] = caByResult[ca.qc_result_id] || []).push(ca);
+    }
+    const enriched = results.map(r => ({
+      ...r,
+      violations: violByResult[r.id] || [],
+      corrective_actions: caByResult[r.id] || [],
+    }));
+    res.json({ results: enriched, analyte: lot.analyte });
+  });
+
+  app.post("/api/labs/:labId/qc/corrective-actions", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const { qc_result_id, qc_rule_violation_id, action_taken, status, follow_up_notes, nce_reference, exclude_from_baseline } = req.body || {};
+    if (!qc_result_id || !action_taken || !String(action_taken).trim()) {
+      return res.status(400).json({ error: "qc_result_id and action_taken required" });
+    }
+    const sqlite = (db as any).$client;
+    // Verify the qc_result belongs to this lab before recording any action
+    // against it. Stops a caller from using a known result id from another
+    // lab to file a corrective action under their own lab.
+    const result = sqlite.prepare(
+      "SELECT id, lab_id FROM qc_results WHERE id = ? AND lab_id = ?"
+    ).get(Number(qc_result_id), req.scope.labId) as any;
+    if (!result) return res.status(404).json({ error: "QC result not found in this lab" });
+    const now = new Date().toISOString();
+    let newId: number;
+    try {
+      const ins = sqlite.prepare(
+        "INSERT INTO qc_corrective_actions (lab_id, qc_result_id, qc_rule_violation_id, action_taken, taken_by_user_id, taken_at, status, follow_up_notes, nce_reference, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(
+        req.scope.labId,
+        Number(qc_result_id),
+        qc_rule_violation_id ? Number(qc_rule_violation_id) : null,
+        String(action_taken).trim(),
+        req.userId,
+        now,
+        status || "open",
+        follow_up_notes || null,
+        nce_reference || null,
+        now,
+        now,
+      );
+      newId = Number(ins.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[qc/corrective-actions] insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Insert failed" });
+    }
+    // Optional follow-on: tech can flag the underlying result as not
+    // accepted for reporting, which excludes it from the Westgard baseline
+    // on future evaluations. Toggling this is an explicit user choice
+    // captured in the same request to keep the audit trail intact.
+    if (exclude_from_baseline) {
+      sqlite.prepare(
+        "UPDATE qc_results SET accepted_for_reporting = 0, updated_at = ? WHERE id = ? AND lab_id = ?"
+      ).run(now, Number(qc_result_id), req.scope.labId);
+    }
+    res.json({ ok: true, corrective_action_id: newId, excluded_from_baseline: !!exclude_from_baseline });
+  });
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
