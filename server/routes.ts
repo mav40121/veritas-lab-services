@@ -1728,6 +1728,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ results: enriched, analyte: lot.analyte });
   });
 
+  // VeritaQC Phase 1C: cross-lot daily-review feed. Returns enriched results
+  // for all of the lab's lots, joined with their violations + corrective
+  // actions, filterable by date (`since`) and status:
+  //   any            — every result in the window
+  //   with_violation — any result that has at least one rule fired
+  //   missing_ca     — result has a rejection-severity violation AND no
+  //                    corrective_actions row filed yet (the triage queue)
+  // Results are returned newest-first across all lots, capped by limit.
+  app.get("/api/labs/:labId/qc/recent", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sinceRaw = String(req.query.since || "");
+    const since = /^\d{4}-\d{2}-\d{2}$/.test(sinceRaw) ? sinceRaw : null;
+    const status = String(req.query.status || "any");
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const sqlite = (db as any).$client;
+    const params: any[] = [req.scope.labId];
+    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ?";
+    if (since) { sql += " AND r.result_date >= ?"; params.push(since); }
+    sql += " ORDER BY r.result_date DESC, r.id DESC LIMIT ?";
+    params.push(limit);
+    const results = sqlite.prepare(sql).all(...params) as any[];
+    if (results.length === 0) return res.json({ results: [] });
+    const ids = results.map(r => r.id);
+    const placeholders = ids.map(() => "?").join(",");
+    const violations = sqlite.prepare(
+      "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")"
+    ).all(...ids) as any[];
+    const cas = sqlite.prepare(
+      "SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
+    ).all(...ids) as any[];
+    const vByR: Record<number, any[]> = {};
+    for (const v of violations) (vByR[v.qc_result_id] = vByR[v.qc_result_id] || []).push(v);
+    const cByR: Record<number, any[]> = {};
+    for (const c of cas) (cByR[c.qc_result_id] = cByR[c.qc_result_id] || []).push(c);
+    let enriched = results.map(r => ({
+      ...r,
+      violations: vByR[r.id] || [],
+      corrective_actions: cByR[r.id] || [],
+    }));
+    if (status === "with_violation") {
+      enriched = enriched.filter(r => r.violations.length > 0);
+    } else if (status === "missing_ca") {
+      enriched = enriched.filter(r =>
+        r.violations.some((v: any) => v.severity === "rejection") &&
+        r.corrective_actions.length === 0
+      );
+    }
+    res.json({ results: enriched });
+  });
+
   app.post("/api/labs/:labId/qc/corrective-actions", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const { qc_result_id, qc_rule_violation_id, action_taken, status, follow_up_notes, nce_reference, exclude_from_baseline } = req.body || {};
     if (!qc_result_id || !action_taken || !String(action_taken).trim()) {
