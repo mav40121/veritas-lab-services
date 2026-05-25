@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +12,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight,
+  AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ViolationRow {
   id: number;
@@ -73,9 +75,25 @@ function groupByLot(rows: RecentResult[]): Array<{ key: string; analyte: string;
   return order.map(id => seen[id]);
 }
 
+interface LotRow {
+  id: number;
+  analyte: string;
+  level: string;
+  lot_number: string;
+}
+interface PeriodReview {
+  id: number;
+  period_year: number;
+  period_month: number;
+  reviewed_at: string;
+  attestation_acknowledged: number;
+  review_notes: string | null;
+}
+
 export default function VeritaQCDailyReviewPage() {
   const { user, isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
+  const { toast } = useToast();
 
   const hasPlanAccess = !!user && [
     "annual", "professional", "lab", "complete",
@@ -87,6 +105,16 @@ export default function VeritaQCDailyReviewPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("30d");
   const [results, setResults] = useState<RecentResult[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Monthly review state
+  const [lots, setLots] = useState<LotRow[]>([]);
+  const [reviewLotId, setReviewLotId] = useState<number | null>(null);
+  const [reviewYear, setReviewYear] = useState<number>(new Date().getFullYear());
+  const [reviewMonth, setReviewMonth] = useState<number>(new Date().getMonth() + 1);
+  const [pastReviews, setPastReviews] = useState<PeriodReview[]>([]);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [filing, setFiling] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState("");
 
   async function load() {
     if (!activeLabId) return;
@@ -112,9 +140,101 @@ export default function VeritaQCDailyReviewPage() {
     }
   }
 
+  async function loadLots() {
+    if (!activeLabId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/lots`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setLots(data.lots || []);
+        if (data.lots && data.lots.length > 0 && reviewLotId === null) {
+          setReviewLotId(data.lots[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load lots:", err);
+    }
+  }
+
+  async function loadPastReviews(lotId: number) {
+    if (!activeLabId) return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/qc/period-reviews?control_lot_id=${lotId}`,
+        { headers: authHeaders() },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setPastReviews(data.reviews || []);
+      }
+    } catch (err) {
+      console.error("Failed to load past reviews:", err);
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!activeLabId || !reviewLotId) return;
+    setDownloadingPdf(true);
+    try {
+      const url = `${API_BASE}/api/labs/${activeLabId}/qc/period-reviews/pdf?control_lot_id=${reviewLotId}&year=${reviewYear}&month=${reviewMonth}`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "PDF generation failed", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const lot = lots.find(l => l.id === reviewLotId);
+      const fname = `VeritaQC_Monthly_Review_${lot?.analyte || "lot"}_${lot?.lot_number || reviewLotId}_${reviewYear}-${String(reviewMonth).padStart(2, "0")}.pdf`;
+      saveAs(blob, fname);
+      toast({ title: "PDF downloaded", description: "Review the artifact, then file the attestation below." });
+    } catch (err: any) {
+      toast({ title: err.message || "Download failed", variant: "destructive" });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
+  async function handleFileAttestation() {
+    if (!activeLabId || !reviewLotId) return;
+    setFiling(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/period-reviews`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          control_lot_id: reviewLotId,
+          period_year: reviewYear,
+          period_month: reviewMonth,
+          attestation_acknowledged: true,
+          review_notes: reviewNotes || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "Filing failed", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Attestation filed" });
+      setReviewNotes("");
+      await loadPastReviews(reviewLotId);
+    } catch (err: any) {
+      toast({ title: err.message || "Filing failed", variant: "destructive" });
+    } finally {
+      setFiling(false);
+    }
+  }
+
   useEffect(() => {
-    if (isLoggedIn && hasPlanAccess && activeLabId) load();
+    if (isLoggedIn && hasPlanAccess && activeLabId) {
+      load();
+      loadLots();
+    }
   }, [isLoggedIn, hasPlanAccess, activeLabId, statusFilter, dateFilter]);
+
+  useEffect(() => {
+    if (reviewLotId) loadPastReviews(reviewLotId);
+  }, [reviewLotId, activeLabId]);
 
   if (!isLoggedIn) {
     return (
@@ -312,6 +432,101 @@ export default function VeritaQCDailyReviewPage() {
           </Card>
         ))
       )}
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Monthly Review &amp; Attestation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            Generate a per-lot monthly review PDF (CLSI C24-style: results, violations, corrective actions, Levey-Jennings chart, attestation block). Review the PDF, then file the attestation below.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Control lot</div>
+              <Select value={reviewLotId ? String(reviewLotId) : ""} onValueChange={(v) => setReviewLotId(Number(v))}>
+                <SelectTrigger><SelectValue placeholder="Pick a lot..." /></SelectTrigger>
+                <SelectContent>
+                  {lots.map(l => (
+                    <SelectItem key={l.id} value={String(l.id)}>
+                      {l.analyte} &middot; Lot {l.lot_number} ({l.level})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Year</div>
+              <Select value={String(reviewYear)} onValueChange={(v) => setReviewYear(Number(v))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0, 1, 2].map(off => {
+                    const y = new Date().getFullYear() - off;
+                    return <SelectItem key={y} value={String(y)}>{y}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Month</div>
+              <Select value={String(reviewMonth)} onValueChange={(v) => setReviewMonth(Number(v))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["January","February","March","April","May","June","July","August","September","October","November","December"].map((name, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="mb-3">
+            <textarea
+              value={reviewNotes}
+              onChange={(e) => setReviewNotes(e.target.value)}
+              placeholder="Optional review notes (e.g. summary of the month's QC, outstanding items escalated to director)"
+              rows={2}
+              className="w-full text-sm rounded border border-input bg-background px-3 py-2"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleDownloadPdf} disabled={!reviewLotId || downloadingPdf} variant="outline">
+              <FileDown className="h-4 w-4 mr-1" />
+              {downloadingPdf ? "Generating..." : "Download monthly PDF"}
+            </Button>
+            <Button onClick={handleFileAttestation} disabled={!reviewLotId || filing}>
+              {filing ? "Filing..." : "File attestation"}
+            </Button>
+          </div>
+
+          {pastReviews.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs text-muted-foreground mb-1">Past attestations on this lot</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-left text-muted-foreground border-b">
+                    <tr>
+                      <th className="py-1.5 pr-2">Period</th>
+                      <th className="py-1.5 pr-2">Filed</th>
+                      <th className="py-1.5 pr-2">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pastReviews.map(p => (
+                      <tr key={p.id} className="border-b last:border-b-0">
+                        <td className="py-1.5 pr-2">
+                          {["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][p.period_month]} {p.period_year}
+                        </td>
+                        <td className="py-1.5 pr-2 text-muted-foreground">{p.reviewed_at.slice(0, 10)}</td>
+                        <td className="py-1.5 pr-2 text-muted-foreground">{p.review_notes || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
