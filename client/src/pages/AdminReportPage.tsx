@@ -863,7 +863,7 @@ export default function AdminReportPage() {
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Pending Invites</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Seat invitations that have been sent but not yet accepted. {data.pendingInvites.length} pending.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Seat invitations that have been sent but not yet accepted. {data.pendingInvites.length} pending. Links expire after 30 days; click Reissue to regenerate a dead link.</p>
               </div>
             </div>
             <table className="w-full text-sm">
@@ -874,24 +874,25 @@ export default function AdminReportPage() {
                   <th className="px-3 py-2 text-left font-semibold">Owner Lab</th>
                   <th className="px-3 py-2 text-left font-semibold">Invited At</th>
                   <th className="px-3 py-2 text-left font-semibold">Days Pending</th>
-                  <th className="px-3 py-2 text-left font-semibold">Invite Link</th>
+                  <th className="px-3 py-2 text-left font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data.pendingInvites.map((p) => {
                   const daysPending = Math.floor((Date.now() - new Date(p.invited_at).getTime()) / (1000 * 60 * 60 * 24));
-                  const expired = daysPending > 7;
+                  const expired = daysPending > 30;
+                  const stale = daysPending > 14;
                   return (
                     <tr key={p.seat_id} className="border-t border-border">
                       <td className="px-3 py-2 font-medium">{p.seat_email}</td>
                       <td className="px-3 py-2">{p.owner_name || p.owner_email}</td>
                       <td className="px-3 py-2 text-muted-foreground">{p.owner_lab_name || "-"}</td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{new Date(p.invited_at).toLocaleDateString()}</td>
-                      <td className={`px-3 py-2 text-xs whitespace-nowrap ${expired ? "text-red-600 font-semibold" : daysPending > 3 ? "text-amber-600" : ""}`}>
+                      <td className={`px-3 py-2 text-xs whitespace-nowrap ${expired ? "text-red-600 font-semibold" : stale ? "text-amber-600" : ""}`}>
                         {daysPending}d {expired && "(expired)"}
                       </td>
-                      <td className="px-3 py-2 text-xs">
-                        {p.invite_token ? (
+                      <td className="px-3 py-2 text-xs space-x-3">
+                        {p.invite_token && !expired ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -904,8 +905,45 @@ export default function AdminReportPage() {
                             Copy link
                           </button>
                         ) : (
-                          <span className="text-muted-foreground">no token</span>
+                          <span className="text-muted-foreground">link dead</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/admin/reissue-invite", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ secret, seatId: p.seat_id }),
+                              });
+                              const json = await res.json();
+                              if (!res.ok || !json.ok) {
+                                alert(`Reissue failed: ${json.error || res.statusText}`);
+                                return;
+                              }
+                              // Patch the row in place so the UI updates without a full reload.
+                              setData((d) => {
+                                if (!d || !d.pendingInvites) return d;
+                                return {
+                                  ...d,
+                                  pendingInvites: d.pendingInvites.map((row) =>
+                                    row.seat_id === p.seat_id
+                                      ? { ...row, invite_token: json.inviteToken, invited_at: json.invitedAt, status: "pending" }
+                                      : row
+                                  ),
+                                };
+                              });
+                              // Copy the new link to clipboard for convenience.
+                              navigator.clipboard.writeText(json.joinUrl).catch(() => {});
+                            } catch (err: any) {
+                              alert(`Reissue error: ${err?.message || err}`);
+                            }
+                          }}
+                          className="text-amber-600 hover:underline"
+                          title="Generate a new invite link and reset the 30-day clock (copies new link to clipboard)"
+                        >
+                          Reissue
+                        </button>
                       </td>
                     </tr>
                   );

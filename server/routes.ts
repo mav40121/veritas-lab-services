@@ -1085,6 +1085,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, action: resolvedAction, affected, errors });
   });
 
+  // Admin: reissue a pending seat invite. Generates a new invite_token and
+  // resets invited_at to now, so a previously expired invite link can be
+  // revived in one click from the admin report. Added 2026-05-24 alongside
+  // the 7d -> 30d expiration extension. ADMIN_SECRET-gated; only operates
+  // on user_seats rows that are NOT already 'active' or 'deactivated'.
+  app.post("/api/admin/reissue-invite", (req, res) => {
+    const { secret, seatId } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!seatId) return res.status(400).json({ error: "seatId required" });
+    const sqlite = (db as any).$client;
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status FROM user_seats WHERE id = ?").get(Number(seatId)) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (seat.status === "active") return res.status(409).json({ error: "Seat already accepted; cannot reissue" });
+    if (seat.status === "deactivated") return res.status(409).json({ error: "Seat is deactivated; cannot reissue" });
+    const newToken = crypto.randomUUID();
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE user_seats SET invite_token = ?, invited_at = ?, status = 'pending' WHERE id = ?"
+    ).run(newToken, now, Number(seatId));
+    const updated = sqlite.prepare("SELECT * FROM user_seats WHERE id = ?").get(Number(seatId));
+    const joinUrl = `${FRONTEND_URL || ""}/join?token=${newToken}`;
+    res.json({ ok: true, seat: updated, joinUrl, inviteToken: newToken, invitedAt: now });
+  });
+
   // Admin: bulk-import inventory_items rows for a lab. Used for migrating
   // existing inventory data (e.g. from a customer's spreadsheet) into
   // VeritaStock without requiring the caller to be a lab member. Items are
@@ -2920,7 +2944,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 <h2 style="color:#01696F">VeritaAssure™</h2>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure™ as a team member${role === "admin" ? " with admin rights" : ""}.</p>
                 <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
-                <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 7 days.</p>
+                <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 30 days.</p>
                 <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
                 <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
               </div>
@@ -12890,7 +12914,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u2122 as a team member.</p>
               <p style="font-size:14px;color:#374151;line-height:1.6">Click the link below to create your account and get started:</p>
               <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
-              <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 7 days.</p>
+              <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 30 days.</p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
             </div>
@@ -12930,10 +12954,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (seat.status === "active") return res.json({ valid: false, reason: "already_accepted" });
     if (seat.status === "deactivated") return res.json({ valid: false, reason: "not_found" });
 
-    // Check 7-day expiration
+    // Check 30-day expiration (extended from 7d on 2026-05-24; 7d was too
+    // aggressive for B2B where recipients often need a week to read email).
     const invitedAt = new Date(seat.invited_at);
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    if (Date.now() - invitedAt.getTime() > sevenDaysMs) {
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    if (Date.now() - invitedAt.getTime() > thirtyDaysMs) {
       return res.json({ valid: false, reason: "expired" });
     }
 
