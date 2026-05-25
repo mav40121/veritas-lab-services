@@ -125,12 +125,39 @@ def shorten(text: str, max_chars: int = 800) -> str:
 
 
 def write_xlsx(entries: list[dict], out_path: Path) -> None:
+    """One sheet per section (OPEN / CLOSED / RETIRED). OPEN opens first so
+    triage view is the default when Michael opens the file."""
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Parking Lot"
+    # Drop the default empty sheet; we create our own named sheets below.
+    default_sheet = wb.active
+    wb.remove(default_sheet)
 
+    by_section: dict[str, list[dict]] = {}
+    for e in entries:
+        by_section.setdefault(e.get("Section", "?"), []).append(e)
+
+    # Stable ordering: OPEN first (active triage), then CLOSED audit trail,
+    # then RETIRED rejections. Any unexpected section appended last.
+    preferred = ["OPEN", "CLOSED", "RETIRED"]
+    extras = [s for s in by_section.keys() if s not in preferred]
+    sheet_order = [s for s in preferred if s in by_section] + extras
+
+    for section_name in sheet_order:
+        write_section_sheet(wb, section_name, by_section[section_name])
+
+    # Set the OPEN sheet as the active tab on file open.
+    if "OPEN" in wb.sheetnames:
+        wb.active = wb.sheetnames.index("OPEN")
+
+    wb.save(out_path)
+
+
+def write_section_sheet(wb: Workbook, section_name: str, entries: list[dict]) -> None:
+    """Write a single section's entries to its own sheet with shared styling."""
+    ws = wb.create_sheet(title=section_name)
+
+    # Section column dropped: each sheet IS the section.
     columns = [
-        ("Section", 10),
         ("ID", 8),
         ("Title", 60),
         ("Status", 28),
@@ -149,7 +176,6 @@ def write_xlsx(entries: list[dict], out_path: Path) -> None:
     thin = Side(style="thin", color=BORDER)
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    # Header row
     for col_idx, (label, width) in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=col_idx, value=label)
         cell.font = header_font
@@ -159,10 +185,8 @@ def write_xlsx(entries: list[dict], out_path: Path) -> None:
         ws.column_dimensions[get_column_letter(col_idx)].width = width
     ws.row_dimensions[1].height = 22
 
-    # Data rows
     for row_idx, e in enumerate(entries, start=2):
         values = [
-            e.get("Section", ""),
             e.get("ID", ""),
             shorten(e.get("Title", ""), 200),
             shorten(strip_md(e.get("Status", "")), 200),
@@ -177,19 +201,14 @@ def write_xlsx(entries: list[dict], out_path: Path) -> None:
             cell.font = data_font
             cell.alignment = data_align
             cell.border = border
-        # Alt-row fill on every other row (excluding header).
         if row_idx % 2 == 0:
             for col_idx in range(1, len(columns) + 1):
                 ws.cell(row=row_idx, column=col_idx).fill = PatternFill("solid", fgColor=ALT_ROW)
-        # Row height: tall enough for the longest cell.
         ws.row_dimensions[row_idx].height = 90
 
-    # Freeze pane at B2 (keep ID column + header visible).
     ws.freeze_panes = "B2"
-    # Auto-filter across all columns of populated range.
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(entries) + 1}"
-
-    wb.save(out_path)
+    if entries:
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(entries) + 1}"
 
 
 def strip_md(text: str) -> str:
