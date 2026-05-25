@@ -1238,6 +1238,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, lab: updated });
   });
 
+  // Admin: extend an existing lab's subscription_expires_at + flip status to
+  // 'active'. Used to comp internal/test labs (e.g. Michaels Lab dev account)
+  // so every Verita module renders out of read-only. Pass expiresAt as ISO
+  // string; defaults to 2099-12-31 (matches provision-comp-lab convention).
+  app.post("/api/admin/extend-lab-subscription", (req, res) => {
+    const { secret, labId, expiresAt } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, subscription_expires_at, subscription_status FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const newExpiry = expiresAt || "2099-12-31T00:00:00.000Z";
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE labs SET subscription_expires_at = ?, subscription_status = 'active', updated_at = ? WHERE id = ?"
+    ).run(newExpiry, now, Number(labId));
+    const updated = sqlite.prepare(
+      "SELECT id, lab_name, plan, subscription_status, subscription_expires_at FROM labs WHERE id = ?"
+    ).get(Number(labId));
+    console.log(`[admin/extend-lab-subscription] lab_id=${labId} (${lab.lab_name}): ${lab.subscription_expires_at} -> ${newExpiry}`);
+    res.json({ ok: true, before: { expires_at: lab.subscription_expires_at, status: lab.subscription_status }, lab: updated });
+  });
+
   // Admin: provision a comped secondary lab for an existing owner.
   // Creates labs row + lab_members row (is_primary_lab=0, role='owner') in
   // a single transaction. No Stripe customer or subscription is created.
