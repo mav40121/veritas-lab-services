@@ -391,69 +391,74 @@ export default function VeritaQCAppPage() {
               <CardTitle className="text-base">Log a QC result</CardTitle>
             </CardHeader>
             <CardContent>
-              {isReadOnly ? (
-                <p className="text-sm text-muted-foreground">
-                  Read-only access &mdash; cannot log new QC runs.
+              {isReadOnly && (
+                <p className="mb-3 text-xs text-amber-700 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
+                  Read-only access on this lab. Submit is disabled until the
+                  subscription is renewed.
                 </p>
-              ) : (
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="qc-value">Result value <span className="text-red-600">*</span></Label>
-                    <Input
-                      id="qc-value"
-                      type="number"
-                      step="any"
-                      value={formValue}
-                      onChange={(e) => setFormValue(e.target.value)}
-                      placeholder="e.g. 102.3"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="qc-date">Result date <span className="text-red-600">*</span></Label>
-                    <Input
-                      id="qc-date"
-                      type="date"
-                      value={formDate}
-                      onChange={(e) => setFormDate(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="qc-instrument">Instrument</Label>
-                    <Input
-                      id="qc-instrument"
-                      value={formInstrument}
-                      onChange={(e) => setFormInstrument(e.target.value)}
-                      placeholder="e.g. Atellica IM 1300"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="qc-runtime">Run time</Label>
-                    <Input
-                      id="qc-runtime"
-                      type="time"
-                      value={formRunTime}
-                      onChange={(e) => setFormRunTime(e.target.value)}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label htmlFor="qc-comment">Comment</Label>
-                    <Textarea
-                      id="qc-comment"
-                      value={formComment}
-                      onChange={(e) => setFormComment(e.target.value)}
-                      placeholder="Optional context (reagent lot, calibrator lot, troubleshooting note)"
-                      rows={2}
-                    />
-                  </div>
-                  <div className="sm:col-span-2 flex justify-end">
-                    <Button type="submit" disabled={submitting}>
-                      {submitting ? "Submitting..." : "Submit result"}
-                    </Button>
-                  </div>
-                </form>
               )}
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="qc-value">Result value <span className="text-red-600">*</span></Label>
+                  <Input
+                    id="qc-value"
+                    type="number"
+                    step="any"
+                    value={formValue}
+                    onChange={(e) => setFormValue(e.target.value)}
+                    placeholder="e.g. 102.3"
+                    required
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="qc-date">Result date <span className="text-red-600">*</span></Label>
+                  <Input
+                    id="qc-date"
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    required
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="qc-instrument">Instrument</Label>
+                  <Input
+                    id="qc-instrument"
+                    value={formInstrument}
+                    onChange={(e) => setFormInstrument(e.target.value)}
+                    placeholder="e.g. Atellica IM 1300"
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="qc-runtime">Run time</Label>
+                  <Input
+                    id="qc-runtime"
+                    type="time"
+                    value={formRunTime}
+                    onChange={(e) => setFormRunTime(e.target.value)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="qc-comment">Comment</Label>
+                  <Textarea
+                    id="qc-comment"
+                    value={formComment}
+                    onChange={(e) => setFormComment(e.target.value)}
+                    placeholder="Optional context (reagent lot, calibrator lot, troubleshooting note)"
+                    rows={2}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div className="sm:col-span-2 flex justify-end">
+                  <Button type="submit" disabled={submitting || isReadOnly}>
+                    {submitting ? "Submitting..." : "Submit result"}
+                  </Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
 
