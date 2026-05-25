@@ -66,6 +66,7 @@ import VeritaStaffPage from "@/pages/VeritaStaffPage";
 import VeritaStaffAppPage from "@/pages/VeritaStaffAppPage";
 import VeritaLabPage from "@/pages/VeritaLabPage";
 import VeritaLabAppPage from "@/pages/VeritaLabAppPage";
+import VeritaQCAppPage from "@/pages/VeritaQCAppPage";
 import VeritaPolicyAppPage from "@/pages/VeritaPolicyAppPage";
 import VeritaPolicyPage from "@/pages/VeritaPolicyPage";
 import CumsumPage from "@/pages/CumsumPage";
@@ -330,6 +331,7 @@ function AppContent() {
           <Route path="/veritastaff-app/:employeeId">{wrapLegacy(VeritaStaffAppPage)}</Route>
           <Route path="/veritalab" component={VeritaLabPage} />
           <Route path="/veritalab-app">{wrapLegacy(VeritaLabAppPage)}</Route>
+          <Route path="/veritaqc-app">{wrapLegacy(VeritaQCAppPage)}</Route>
           <Route path="/veritapolicy-app">{wrapLegacy(VeritaPolicyAppPage)}</Route>
           <Route path="/veritapolicy" component={VeritaPolicyPage} />
           <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
@@ -376,6 +378,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritastaff-app" component={VeritaStaffAppPage} />
           <Route path="/labs/:labId/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
           <Route path="/labs/:labId/veritalab-app" component={VeritaLabAppPage} />
+          <Route path="/labs/:labId/veritaqc-app" component={VeritaQCAppPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />

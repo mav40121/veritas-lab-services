@@ -31,6 +31,7 @@ const mobileVeritaassureLinks: { href: string; label: string }[] = [
   { href: "/veritapt", label: "VeritaPT\u2122" },
   { href: "/veritalab", label: "VeritaLab\u2122" },
   { href: "/veritapolicy", label: "VeritaPolicy\u2122" },
+  { href: "/veritaqc-app", label: "VeritaQC\u2122" },
   { href: "/veritatrack", label: "VeritaTrack\u2122" },
 ];
 const mobileResourcesLinks: { href: string; label: string }[] = [
@@ -131,7 +132,7 @@ export function NavBar() {
             href="/veritaassure"
             className={cn(
               "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-              ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/veritaresponse","/book"].some(p => location === p || location.startsWith(p + "/"))
+              ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/veritaqc-app","/veritaresponse","/book"].some(p => location === p || location.startsWith(p + "/"))
                 ? "text-foreground bg-secondary"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             )}
