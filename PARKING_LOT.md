@@ -529,43 +529,6 @@ shipped 2026-05-10.
 
 ---
 
-### 20. Live QC engine (Levey-Jennings + Westgard)
-
-**Effort:** XL (6+ weeks; flagship-scale)
-**Importance:** High — largest single gap vs myLabCompliance.io per Perplexity competitor analysis; promotes VeritaAssure from documentation tool to lab operations platform.
-
-**What:** A daily-use QC workflow: Levey-Jennings charts, Westgard
-multi-rule violation detection, control lot management, automated QC
-scheduling. Today VeritaAssure documents QC posture (sign-offs,
-records, retention); it does not run the QC. The COLA segment (small
-physician-office labs, urgent care, ER) lives in daily QC and will
-pick the tool that draws their L-J chart.
-
-**Why this matters:** Per Perplexity analysis 2026-05-10, this is the
-single largest gap vs. myLabCompliance.io. Without it, VeritaAssure
-is a compliance documentation tool; with it, it becomes a lab
-operations platform. Strongest pitch for the COLA-segment audience
-the operator just met.
-
-**Fix shape:** Flagship-scale module. Hard build: multi-rule logic
-(1-2s, 1-3s, 2-2s, R-4s, 4-1s, 10-x, etc.), statistical control
-(SD, CV, mean tracking per lot), lot-bridging studies (parallel
-testing of old vs new lot, mean-shift detection), automated alerts.
-Pairs with VeritaCheck (verification studies feed initial ranges)
-and VeritaTrack (QC sign-offs).
-
-**Source:** Perplexity competitor analysis (myLabCompliance.io),
-2026-05-10. Operator forwarded the analysis; no decision yet.
-
-**Status:** Open. Scoping doc required per Section 8 Process Rules
-("Large tasks: present a build breakdown first, get approval, THEN
-build") before any code.
-
-**Pre- vs post-COLA:** Post-COLA. Multi-week scoping + multi-month
-v1 build. Comparable in scale to VeritaResponse (#17).
-
----
-
 ### 22. CMS-116 application support + state licensing tracking
 
 **Effort:** M (1-2 weeks for v1)
@@ -1474,6 +1437,27 @@ build same session. PRs #325 through this one.
 **What shipped (PR #362):** VC Unlimited tile on `/pricing` now renders the price block as two prominent lines: `$299 first year` at text-3xl bold and `$499 /yr after` at text-2xl bold directly below. Procurement reviewers can no longer lock onto the headline $299 and miss the renewal disclosure. Implemented by splitting the PLAN data's combined `period` field into `period` + new optional `priceY2` / `periodY2` fields, with a conditional second-line render in PricingPage.tsx. Other tiles unchanged because the conditional gate is on `priceY2`.
 
 **Source:** Pricing rebuild 2026-05-23; closed 2026-05-24 proactively before any customer dispute.
+
+---
+
+### C25. VeritaQC Phase 1 (Levey-Jennings + Westgard live engine) (formerly #20)
+
+**Effort:** L (about 5 days end-to-end, actual: Phase 0 schema → Phase 1A evaluator → 1B entry UI → 1C daily review → 1D monthly PDF + attestation)
+**Importance:** High — largest single gap vs myLabCompliance.io per Perplexity competitor analysis; promotes VeritaAssure from documentation tool to lab operations platform.
+
+**What shipped (PRs #364, #365, #366, #367, #368, #369, #370, #371):**
+- Phase 0 (#364): six-table schema (`qc_control_lots`, `qc_results`, `qc_rule_violations`, `qc_corrective_actions`, `qc_period_reviews`, `qc_rule_settings`) with PRAGMA-guarded ALTER migrations + admin seed/dump endpoints.
+- Phase 1A (#365): `evaluateWestgardForLot` server-side rule engine (1-2s, 1-3s, 2-2s, R-4s, 4-1s, N-x, N-T) with baseline-excludes-candidate evaluation. `POST /api/labs/:labId/qc/results` ingests a result, evaluates rules, returns violations + `requires_corrective_action`. Per-lab + per-analyte rule settings (`bias_consecutive_count`, `trend_consecutive_count`).
+- Phase 1B (#366): `VeritaQCAppPage` tech entry UI with lot picker, result form, in-the-moment violation banner, required corrective-action modal on rejection, recent-results table. Three endpoints: `GET /qc/lots`, `GET /qc/results`, `POST /qc/corrective-actions` (with optional `exclude_from_baseline`).
+- Phase 1B fix (#367): render form disabled instead of hiding on read-only labs; added `POST /api/admin/extend-lab-subscription`.
+- Stale-seat cleanup (#368): `POST /api/admin/seat-cleanup-by-user` to deactivate stray `user_seats` rows from the Lisa-cascade fallout.
+- Phase 1C (#369): `VeritaQCDailyReviewPage` cross-lot triage feed grouped by lot, status filter (any / with_violation / missing_ca), summary tiles. `GET /qc/recent` endpoint with date + status filters.
+- Phase 1D (#370): `server/pdfQCMonthly.ts` Puppeteer + HTML monthly review PDF with on-page-1 attestation block and inline SVG Levey-Jennings chart (Westgard color bands). Three endpoints: `GET /qc/period-reviews`, `POST /qc/period-reviews` (upsert by lab+lot+year+month), `GET /qc/period-reviews/pdf`. "Monthly Review & Attestation" card on the Daily Review page.
+- Owner-override fix (#371): `useIsReadOnly` now returns false immediately when the user is owner or admin of the active lab, regardless of `isSeatUser` state. Closes the architectural gap where stale seat rows from another lab poisoned module rendering on the owner's own labs.
+
+12/12 evaluator scenarios PASS in `scripts/verify-westgard-rules.js`. CLSI C24 supports lab-configurable bias/trend N via `qc_rule_settings`. Phase 1 is feature-complete; future phases (PT integration, multi-instrument LJ overlays, automated calibrator-lot bridging) deferred.
+
+**Source:** Perplexity competitor analysis 2026-05-10. Scoping confirmed via the build_phase1_mockup.py iterations 2026-05-24. Shipped 2026-05-25.
 
 ---
 
