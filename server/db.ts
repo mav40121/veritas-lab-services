@@ -2827,3 +2827,170 @@ if (process.env.SEED_USER_PLAN) {
     }
   }
 }
+
+// ─── VeritaQC Phase 0: schema only (parking-lot #20) ─────────────────────────
+// Live QC engine: Levey-Jennings + Westgard. Six tables. No customer-facing
+// surface in Phase 0; the entry endpoints, evaluator, and monthly review PDF
+// land in Phase 1.
+//
+// Tables:
+//   qc_control_lots        — per-lab control material; manufacturer mean/SD,
+//                            stored SD interval (1/2/3) so derived SD is
+//                            never assumed (operator's prior Excel bug).
+//   qc_results             — daily QC readings, one row per run; accepted_for_
+//                            reporting toggles via Phase 1 corrective-action gate.
+//   qc_rule_violations     — Westgard rule events tied to qc_results.
+//   qc_corrective_actions  — in-the-moment action documentation; nce_reference
+//                            free-text hook for future VeritaResponse FK.
+//   qc_period_reviews      — monthly review attestation (NOT accept/reject).
+//   qc_rule_settings       — per-lab (with optional per-analyte override)
+//                            configurable bias_consecutive_count, trend_count,
+//                            and enabled-rules list per CLSI C24 guidance.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS qc_control_lots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    level TEXT NOT NULL DEFAULT 'mid',
+    lot_number TEXT NOT NULL,
+    manufacturer TEXT,
+    mfr_mean REAL NOT NULL,
+    mfr_sd REAL NOT NULL,
+    mfr_sd_interval INTEGER NOT NULL DEFAULT 2,
+    mfr_range_low REAL,
+    mfr_range_high REAL,
+    expiration_date TEXT,
+    opened_date TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE(lab_id, analyte, lot_number)
+  );
+
+  CREATE TABLE IF NOT EXISTS qc_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    control_lot_id INTEGER NOT NULL,
+    instrument TEXT,
+    result_value REAL NOT NULL,
+    result_date TEXT NOT NULL,
+    run_time TEXT,
+    operator_user_id INTEGER,
+    comment TEXT,
+    accepted_for_reporting INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (control_lot_id) REFERENCES qc_control_lots(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS qc_rule_violations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    qc_result_id INTEGER NOT NULL,
+    rule_code TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    detail TEXT,
+    related_result_ids TEXT,
+    evaluated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (qc_result_id) REFERENCES qc_results(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS qc_corrective_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    qc_result_id INTEGER NOT NULL,
+    qc_rule_violation_id INTEGER,
+    action_taken TEXT NOT NULL,
+    taken_by_user_id INTEGER NOT NULL,
+    taken_at TEXT NOT NULL DEFAULT (datetime('now')),
+    status TEXT NOT NULL DEFAULT 'open',
+    follow_up_notes TEXT,
+    nce_reference TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (qc_result_id) REFERENCES qc_results(id),
+    FOREIGN KEY (qc_rule_violation_id) REFERENCES qc_rule_violations(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS qc_period_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    control_lot_id INTEGER NOT NULL,
+    period_month INTEGER NOT NULL,
+    period_year INTEGER NOT NULL,
+    reviewed_by_user_id INTEGER NOT NULL,
+    reviewed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    attestation_acknowledged INTEGER NOT NULL DEFAULT 0,
+    review_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (control_lot_id) REFERENCES qc_control_lots(id),
+    UNIQUE(lab_id, control_lot_id, period_year, period_month)
+  );
+
+  CREATE TABLE IF NOT EXISTS qc_rule_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    analyte TEXT,
+    bias_consecutive_count INTEGER NOT NULL DEFAULT 10,
+    trend_consecutive_count INTEGER NOT NULL DEFAULT 7,
+    enabled_rules_json TEXT NOT NULL DEFAULT '["1-2s","1-3s","2-2s","R-4s","4-1s","N-x","N-T"]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE(lab_id, analyte)
+  );
+`);
+
+// VeritaQC PRAGMA-guarded ALTER migration blocks per CLAUDE.md §8 NEW DB TABLE
+// RULE. Each block re-reads the live table's columns and adds anything that
+// was introduced after a prior partial deploy. Pattern mirrors lab_members.
+{
+  const ensure = (tableName: string, col: string, sql: string) => {
+    try {
+      const cols = (sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as any[]).map(c => c.name);
+      if (!cols.includes(col)) { try { sqlite.exec(sql); } catch {} }
+    } catch {}
+  };
+  ensure("qc_control_lots", "level",              "ALTER TABLE qc_control_lots ADD COLUMN level TEXT NOT NULL DEFAULT 'mid'");
+  ensure("qc_control_lots", "manufacturer",       "ALTER TABLE qc_control_lots ADD COLUMN manufacturer TEXT");
+  ensure("qc_control_lots", "mfr_sd_interval",    "ALTER TABLE qc_control_lots ADD COLUMN mfr_sd_interval INTEGER NOT NULL DEFAULT 2");
+  ensure("qc_control_lots", "mfr_range_low",      "ALTER TABLE qc_control_lots ADD COLUMN mfr_range_low REAL");
+  ensure("qc_control_lots", "mfr_range_high",     "ALTER TABLE qc_control_lots ADD COLUMN mfr_range_high REAL");
+  ensure("qc_control_lots", "expiration_date",    "ALTER TABLE qc_control_lots ADD COLUMN expiration_date TEXT");
+  ensure("qc_control_lots", "opened_date",        "ALTER TABLE qc_control_lots ADD COLUMN opened_date TEXT");
+  ensure("qc_control_lots", "status",             "ALTER TABLE qc_control_lots ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+
+  ensure("qc_results", "instrument",              "ALTER TABLE qc_results ADD COLUMN instrument TEXT");
+  ensure("qc_results", "run_time",                "ALTER TABLE qc_results ADD COLUMN run_time TEXT");
+  ensure("qc_results", "operator_user_id",        "ALTER TABLE qc_results ADD COLUMN operator_user_id INTEGER");
+  ensure("qc_results", "comment",                 "ALTER TABLE qc_results ADD COLUMN comment TEXT");
+  ensure("qc_results", "accepted_for_reporting",  "ALTER TABLE qc_results ADD COLUMN accepted_for_reporting INTEGER NOT NULL DEFAULT 1");
+
+  ensure("qc_rule_violations", "detail",              "ALTER TABLE qc_rule_violations ADD COLUMN detail TEXT");
+  ensure("qc_rule_violations", "related_result_ids",  "ALTER TABLE qc_rule_violations ADD COLUMN related_result_ids TEXT");
+
+  ensure("qc_corrective_actions", "qc_rule_violation_id", "ALTER TABLE qc_corrective_actions ADD COLUMN qc_rule_violation_id INTEGER");
+  ensure("qc_corrective_actions", "status",                "ALTER TABLE qc_corrective_actions ADD COLUMN status TEXT NOT NULL DEFAULT 'open'");
+  ensure("qc_corrective_actions", "follow_up_notes",       "ALTER TABLE qc_corrective_actions ADD COLUMN follow_up_notes TEXT");
+  ensure("qc_corrective_actions", "nce_reference",         "ALTER TABLE qc_corrective_actions ADD COLUMN nce_reference TEXT");
+
+  ensure("qc_period_reviews", "attestation_acknowledged", "ALTER TABLE qc_period_reviews ADD COLUMN attestation_acknowledged INTEGER NOT NULL DEFAULT 0");
+  ensure("qc_period_reviews", "review_notes",             "ALTER TABLE qc_period_reviews ADD COLUMN review_notes TEXT");
+
+  ensure("qc_rule_settings", "analyte",                    "ALTER TABLE qc_rule_settings ADD COLUMN analyte TEXT");
+  ensure("qc_rule_settings", "bias_consecutive_count",     "ALTER TABLE qc_rule_settings ADD COLUMN bias_consecutive_count INTEGER NOT NULL DEFAULT 10");
+  ensure("qc_rule_settings", "trend_consecutive_count",    "ALTER TABLE qc_rule_settings ADD COLUMN trend_consecutive_count INTEGER NOT NULL DEFAULT 7");
+  ensure("qc_rule_settings", "enabled_rules_json",         "ALTER TABLE qc_rule_settings ADD COLUMN enabled_rules_json TEXT NOT NULL DEFAULT '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]'");
+}
+
+// VeritaQC indexes for the read paths Phase 1 will hit hardest.
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_control_lots_lab ON qc_control_lots(lab_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lot_date ON qc_results(control_lot_id, result_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lab_date ON qc_results(lab_id, result_date DESC)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_violations_result ON qc_rule_violations(qc_result_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_corrective_actions_result ON qc_corrective_actions(qc_result_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_period_reviews_lot_period ON qc_period_reviews(lab_id, control_lot_id, period_year, period_month)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_settings_lab ON qc_rule_settings(lab_id)`); } catch {}
