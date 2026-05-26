@@ -27,6 +27,36 @@ const modules = [
     cta: "Explore Compliance Suite",
   },
   {
+    key: "qc",
+    label: "Westgard QC + Monthly Attestation",
+    brand: "VeritaQC\u2122 (Phase 1 preview)",
+    path: "/demo/qc",
+    color: "#16a34a",
+    icon: (
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="20" width="40" height="4" fill="#16a34a" opacity="0.2" />
+        <line x1="4" y1="22" x2="44" y2="22" stroke="#16a34a" strokeWidth="1" strokeDasharray="2 2" opacity="0.6" />
+        <polyline points="6,24 12,21 18,23 24,17 30,25 36,12 42,22" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="6" cy="24" r="2" fill="#16a34a" />
+        <circle cx="12" cy="21" r="2" fill="#16a34a" />
+        <circle cx="18" cy="23" r="2" fill="#16a34a" />
+        <circle cx="24" cy="17" r="2.5" fill="#d97706" />
+        <circle cx="30" cy="25" r="2" fill="#16a34a" />
+        <circle cx="36" cy="12" r="3" fill="#dc2626" />
+        <circle cx="42" cy="22" r="2" fill="#16a34a" />
+      </svg>
+    ),
+    features: [
+      "Westgard multi-rule evaluator (1-2s, 1-3s, 2-2s, R-4s, 4-1s, N-x, N-T)",
+      "Levey-Jennings chart with violation markers",
+      "Required corrective action on rejection",
+      "Monthly review PDF with on-page-1 attestation",
+    ],
+    description:
+      "90 days of Estradiol QC on a demo lot. One warning, one rejection with corrective action filed, one signed monthly review. See the full daily-to-monthly workflow.",
+    cta: "Run the QC walkthrough",
+  },
+  {
     key: "cprt",
     label: "Cost Per Reportable Test",
     brand: "VeritaOps\u2122",
