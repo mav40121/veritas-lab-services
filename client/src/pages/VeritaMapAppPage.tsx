@@ -200,11 +200,11 @@ export default function VeritaMapAppPage() {
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap™"
-        whatItDoes="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, FDA classification, reportable range, reference intervals, and critical values. The test menu feeds VeritaCheck for study setup, VeritaComp for competency programs, and VeritaPT for proficiency testing coverage."
+        whatItDoes="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. Critical values pre-populate from Mayo Clinic Laboratories published data. Reference intervals and analytical measurement range (AMR) are intentionally left blank for your lab to verify and enter per 42 CFR 493.1253. The test menu feeds VeritaCheck for study setup, VeritaComp for competency programs, and VeritaPT for proficiency testing coverage."
         howToUse={[
           "Pick your instruments from the database of 190+ FDA-cleared analyzers.",
-          "Toggle the tests your lab actually performs on each instrument; CLIA complexity auto-populates.",
-          "Enter your verified reference ranges, critical values, and AMR per 42 CFR 493.1253. Do not pre-populate without verification.",
+          "Toggle the tests your lab actually performs on each instrument; CLIA complexity, specialty, and FDA classification auto-populate.",
+          "Critical values populate from Mayo Clinic Laboratories. Enter your own verified reference intervals and AMR per 42 CFR 493.1253; the system intentionally does not pre-populate these.",
           "Export your test menu to Excel for survey reference or finance review.",
           "Other Verita modules read from this menu automatically; update here when you add or retire a test."
         ]}
