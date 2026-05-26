@@ -1,3 +1,25 @@
+// VeritaPolicy master list. 58 rows after Phase 3 consolidation (2026-05-26):
+//   - Original v6 polish landed 96 rows (1 row per source policy).
+//   - Phase 3 PR-A folded Cluster 1 (Transfusion, IDs 41-65) into 6 combined
+//     policies (IDs 97-102). 96 → 77 rows.
+//   - Phase 3 PR-B folded Cluster 2 (Personnel, IDs 17-21 + 91-94) into 3
+//     combined policies (IDs 103-105). 77 → 71 rows.
+//   - Phase 3 PR-C folded Clusters 3-8 (Waived/POCT, Molecular, Health Info
+//     Mgmt true-merge, Leadership Governance, Infection Prevention, HCT/P)
+//     into 6 combined policies (IDs 106-111). 71 → 58 rows.
+//   - Phase 3 PR-D: cosmetic fix to #36 ("Validation" → "Verification" per
+//     CLAUDE.md §3 labs-verify-manufacturers-validate rule) + this header.
+//
+// Each row carries CFR plus per-AO citation columns (TJC, CAP, COLA, AABB).
+// The /api/veritapolicy/master-list/excel route emits only the CFR column
+// plus the column matching the lab's accreditor selection.
+//
+// Source-policy IDs 1-96 that were absorbed (17-23, 25-32, 41-65, 75-77,
+// 82-88, 91-94) no longer appear in this list. Their per-lab status data
+// migrated forward at first boot of each cluster's PR via the Phase 3
+// migration blocks in server/db.ts. The original JSON template files live
+// in server/policyTemplates/data/deprecated/ for audit trail.
+
 export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
   {
     "policy_id": "1",
@@ -295,7 +317,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
   },
   {
     "policy_id": "36",
-    "policy_name": "Method Validation and Performance Specifications Policy",
+    "policy_name": "Method Verification and Performance Specifications Policy",
     "section": "Testing",
     "subspecialty": "",
     "service_line": "all",
