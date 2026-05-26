@@ -2942,7 +2942,23 @@ sqlite.exec(`
     FOREIGN KEY (lab_id) REFERENCES labs(id),
     UNIQUE(lab_id, analyte)
   );
+
+  -- PDF download tokens. Browser claims a token via GET /api/pdf/:token after
+  -- a server-side POST mints it; the GET delivers the PDF buffer and deletes
+  -- the row (one-time use). Persisted to SQLite (not an in-memory Map) so the
+  -- token survives deploys, OOM-restarts, and multi-replica load balancing.
+  -- See server/pdfTokens.ts for the storePdfToken / claimPdfToken API.
+  CREATE TABLE IF NOT EXISTS pdf_tokens (
+    token TEXT PRIMARY KEY,
+    buffer BLOB NOT NULL,
+    filename TEXT NOT NULL,
+    expires INTEGER NOT NULL
+  );
 `);
+
+// Opportunistic index for the prune sweep done on every mint. Cheap insert
+// on a few-row table but worth having so prune stays O(matched) not O(table).
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pdf_tokens_expires ON pdf_tokens(expires)`); } catch {}
 
 // VeritaQC PRAGMA-guarded ALTER migration blocks per CLAUDE.md §8 NEW DB TABLE
 // RULE. Each block re-reads the live table's columns and adds anything that

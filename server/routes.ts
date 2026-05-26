@@ -11,7 +11,7 @@ import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS,
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
-import { pdfTokenStore, storePdfToken } from "./pdfTokens";
+import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
@@ -524,7 +524,7 @@ function requireModuleEdit(module: string) {
 // ── PDF TOKEN STORE ──────────────────────────────────────────────────────────
 // Moved to server/pdfTokens.ts so other route modules (veritabench, etc.)
 // can hand back tokens that the shared /api/pdf/:token endpoint serves.
-// (See top-of-file import of pdfTokenStore / storePdfToken.)
+// (See top-of-file import of storePdfToken / claimPdfToken.)
 
 // ── LAB LOCK + AUDIT HELPERS ─────────────────────────────────────────────────
 
@@ -4622,12 +4622,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // to this GET endpoint.  Browser handles download natively - no blob:// URL,
   // no Adobe Acrobat interception.
   app.get("/api/pdf/:token", (req, res) => {
-    const entry = pdfTokenStore.get(req.params.token);
-    if (!entry || entry.expires < Date.now()) {
-      pdfTokenStore.delete(req.params.token);
+    // claimPdfToken handles the SELECT, the single-use DELETE, and the TTL
+    // check. Returns null if the token is missing or expired. Lives in
+    // SQLite so the lookup survives deploys and multi-replica routing.
+    const entry = claimPdfToken(req.params.token);
+    if (!entry) {
       return res.status(404).json({ error: "PDF token expired or not found" });
     }
-    pdfTokenStore.delete(req.params.token); // one-time use
     const encoded = encodeURIComponent(entry.filename);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
