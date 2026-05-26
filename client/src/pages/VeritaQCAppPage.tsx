@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { AlertTriangle, CheckCircle2, Lock, FlaskConical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 
 interface ControlLot {
   id: number;
@@ -340,6 +341,19 @@ export default function VeritaQCAppPage() {
           </Button>
         </div>
       </div>
+
+      <ModuleHowToCard
+        moduleKey="veritaqc"
+        moduleName="VeritaQC™"
+        whatItDoes="VeritaQC replaces the daily QC binder. A technologist logs a control result, the system evaluates Westgard multi-rules (1-2s, 1-3s, 2-2s, R-4s, 4-1s, plus configurable N-x bias and N-T trend) against the lab's cumulative baseline, and either accepts the run or holds it for a required corrective action. The daily review feed surfaces every result across every lot with a triage filter for results that fired a rejection but have no corrective action filed. Month end produces a one-page PDF with the Levey-Jennings chart, the violation log, the corrective actions, and the signature attestation block."
+        howToUse={[
+          "Add your control lots once: analyte, lot number, manufacturer mean and SD, SD interval.",
+          "Each shift, log control results as you run them. The system shows you the Westgard decision in real time.",
+          "When a rejection rule fires, file the required corrective action in the same screen before the run is released.",
+          "At month end, open the Daily Review page for each lot, generate the monthly PDF, sign the attestation block.",
+          "File the PDF in your QC binder or attach to your LIS record. Records retained per 42 CFR 493.1105.",
+        ]}
+      />
 
       {loadingLots ? (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Loading control lots...</CardContent></Card>

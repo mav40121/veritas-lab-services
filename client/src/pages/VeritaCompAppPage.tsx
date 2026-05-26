@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -296,6 +297,19 @@ export default function VeritaCompAppPage() {
           </p>
           <Button asChild><Link href="/login">Sign In</Link></Button>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritacomp"
+        moduleName="VeritaComp™"
+        whatItDoes="VeritaComp manages competency assessment for testing personnel using the six CLIA-required elements at 42 CFR 493.1235. Tracks Initial / 6-month / Annual cadence, embeds a scored quiz engine, and produces the per-employee competency record with appendix PDF."
+        howToUse={[
+          "Add your testing personnel and assign them to the tests they perform.",
+          "The system tracks each person next-due assessment per the CLIA timeline.",
+          "Document each of the six elements as you observe or test the staff member.",
+          "Optional: assign a scored quiz; the score appends to the competency record.",
+          "The evaluator signs; generate the PDF and file in the personnel record. Retain per 42 CFR 493.1105."
+        ]}
+      />
+
       </div>
     );
   }

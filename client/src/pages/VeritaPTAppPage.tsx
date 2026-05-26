@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -256,6 +257,19 @@ export default function VeritaPTAppPage() {
           <h1 className="text-2xl font-bold">VeritaPT™</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Proficiency Testing Coverage Analysis</p>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritapt"
+        moduleName="VeritaPT™"
+        whatItDoes="VeritaPT reads your VeritaMap test menu, checks each analyte against CLIA proficiency-testing requirements (42 CFR 493 Subpart I), and shows you required gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. Alternative-assessment-method analytes count as coverage per 42 CFR 493.1236(c)(1)."
+        howToUse={[
+          "Confirm your test menu in VeritaMap is current; this is the source of truth for required PT.",
+          "Open VeritaPT; the coverage table flags required gaps in red and recommended in amber.",
+          "For each gap, enroll in a PT program through CAP, API, or WSLH (links open in-app).",
+          "Record your enrollment; the analyte status flips to covered automatically.",
+          "Re-check coverage every PT cycle and any time your test menu changes."
+        ]}
+      />
+
         <div className="flex gap-2">
           <Button
             variant="outline"

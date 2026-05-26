@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -378,6 +379,19 @@ export default function VeritaPolicyAppPage() {
             {summary ? ` - ${summary.total} policies (${aoLabel})` : ""}
           </p>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritapolicy"
+        moduleName="VeritaPolicy™"
+        whatItDoes="VeritaPolicy ships 96 CFR-anchored generic policy templates the lab can adopt as starting points. Each template opens with verbatim eCFR text, then the lab standing rule in plain CFR voice. Token placeholders for lab name, CLIA number, and director are replaced with your lab identity at download time."
+        howToUse={[
+          "Browse the 96-row master list; service-line toggles auto-apply N/A to policies not relevant to your scope.",
+          "Click any policy to download a personalized DOCX with your lab identity already filled in.",
+          "Edit the lab-specific operational details (responsible roles, escalation paths, forms referenced) for your workflow.",
+          "Sign the policy with the medical director or designee; file as adopted.",
+          "The inspection-ready report tracks adoption by section and surfaces the readiness score."
+        ]}
+      />
+
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
             <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}

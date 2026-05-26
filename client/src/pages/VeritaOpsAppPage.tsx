@@ -10,6 +10,7 @@ import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -776,6 +777,19 @@ export default function VeritaOpsAppPage() {
           </Button>
         </div>
       </div>
+
+      <ModuleHowToCard
+        moduleKey="veritaops"
+        moduleName="VeritaOps™"
+        whatItDoes="VeritaOps runs Cost-Per-Reportable-Test (CPRT) studies in the four-layer GP11-A structure. L1 reagents and supplies, L2 + direct labor, L3 + equipment depreciation, L4 + indirect overhead. Each layer answers a different finance question: L2 is insource versus send-out, L3 is capital justification, L4 is charge-master pricing. Side-by-side comparison and a one-page PDF your finance team can read without translation."
+        howToUse={[
+          "Click New CPRT Study and pick an archetype (high-volume chemistry, low-volume send-out, POCT, manual coag) or start blank.",
+          "Enter your reagent cost, calibrator and QC cadence, labor minutes and loaded hourly rate, equipment cost and useful life, and overhead.",
+          "Toggle which layers to enable; L1 through L4 recompute live as you type.",
+          "Select two studies and click Compare to see them side-by-side. Match layer enablement on both sides for an honest comparison.",
+          "Export the one-page internal PDF for your next finance committee or budget meeting.",
+        ]}
+      />
 
       {/* Empty / loading / table */}
       <Card>

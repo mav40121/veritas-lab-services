@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -245,6 +246,19 @@ export default function VeritaStaffAppPage() {
             </p>
           )}
         </div>
+      <ModuleHowToCard
+        moduleKey="veritastaff"
+        moduleName="VeritaStaff™"
+        whatItDoes="VeritaStaff is the personnel roster with CLIA role assignments (Laboratory Director, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel) and specialty tracking. Auto-generates the CMS 209 Laboratory Personnel Report."
+        howToUse={[
+          "Add each staff member with their CLIA role, qualifications, and assigned specialties.",
+          "Update credentials, license expirations, and training records as they change.",
+          "Generate the CMS 209 Laboratory Personnel Report with one click when CMS asks.",
+          "Cross-link to VeritaComp for the competency side of each staff member.",
+          "Run the roster view weekly to see who is current, who is due, and who is overdue."
+        ]}
+      />
+
         <div className="flex gap-2">
           {lab && (
             <>

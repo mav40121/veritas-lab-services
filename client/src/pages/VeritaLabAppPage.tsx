@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -380,6 +381,19 @@ export default function VeritaLabAppPage() {
               Track certificates, store documents, and get renewal reminders.
             </p>
           </div>
+      <ModuleHowToCard
+        moduleKey="veritalab"
+        moduleName="VeritaLab™"
+        whatItDoes="VeritaLab tracks every laboratory certificate and accreditation: CLIA, CAP, TJC, COLA, state laboratory licenses, lab director credentials. Advance email reminders fire at 90, 60, and 30 days before expiration. Document archive holds the certificate PDF for every cert on the roster."
+        howToUse={[
+          "Add each certificate with its issuing body, certificate number, issue date, and expiration date.",
+          "Upload the certificate PDF to the document archive against the cert.",
+          "The system emails you 90, 60, and 30 days before expiration; renew before the 30-day warning.",
+          "Upload the renewed certificate; the expiration auto-recalculates and the warning cycle resets.",
+          "Run the certificate-status report before an inspection or board meeting."
+        ]}
+      />
+
           <div className="flex gap-2">
             {certificates.length > 0 && (
               <Button variant="outline" size="sm" onClick={handleExcelExport}>
