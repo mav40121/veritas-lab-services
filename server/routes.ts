@@ -12236,7 +12236,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(results);
   });
 
+  // GET /api/labs/:labId/competency/assessments/:id/pdf
+  // Lab-scoped PDF endpoint. Required because the legacy unprefixed route
+  // below scopes by p.user_id, which silently 404s when the caller is a
+  // lab MEMBER (not the program's original owner). Mirror of the DELETE
+  // pattern already in the client at VeritaCompAppPage.tsx:1104.
+  app.get("/api/labs/:labId/competency/assessments/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, req.scope.labId);
+    if (!assessment) return res.status(404).json({ error: "Assessment not found in this lab" });
+    const items = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id);
+    const methodGroups = (db as any).$client.prepare("SELECT * FROM competency_method_groups WHERE program_id = ?").all(assessment.program_id);
+    const checklistItems = (db as any).$client.prepare("SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(assessment.program_id);
+    const quizResults = (db as any).$client.prepare(
+      `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
+       FROM competency_quiz_results qr
+       JOIN competency_quizzes q ON qr.quiz_id = q.id
+       WHERE qr.assessment_id = ?`
+    ).all(assessment.id);
+    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const labName = compLab?.lab_name || "Clinical Laboratory";
+    const cliaForComp = compLab?.clia_number || undefined;
+    try {
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
+      const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
+      const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
+      const veritacompToken = storePdfToken(pdfBuffer, filename);
+      if (compLab) markLabReportingLocks(compLab.id);
+      return res.json({ token: veritacompToken });
+    } catch (err: any) {
+      console.error("Competency PDF generation error (lab-scoped):", err);
+      return res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
   // GET /api/veritacomp/assessments/:id/pdf
+  // Legacy single-user-scope route. Kept for backward compat with any
+  // external bookmarks; the multi-lab UI now calls the lab-scoped variant
+  // above when activeLabId is set.
   app.get("/api/veritacomp/assessments/:id/pdf", authMiddleware, async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
