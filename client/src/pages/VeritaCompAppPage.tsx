@@ -1088,14 +1088,29 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
 function AssessmentsTab({ program, onNewAssessment }: { program: Program & { assessments: Assessment[] }; onNewAssessment: () => void }) {
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
+  const { toast } = useToast();
   const assessments = program.assessments || [];
 
   const downloadPdf = async (assessmentId: number) => {
-    const res = await fetch(`${API_BASE}/api/veritacomp/assessments/${assessmentId}/pdf`, {
+    // Lab-scoped URL when activeLabId is set, so lab MEMBERS (not just the
+    // program's original owner user_id) can mint the PDF. Mirrors the
+    // deleteAssessment pattern below.
+    const url = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments/${assessmentId}/pdf`
+      : `${API_BASE}/api/veritacomp/assessments/${assessmentId}/pdf`;
+    const res = await fetch(url, {
       method: "GET",
       headers: authHeaders(),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({
+        title: "PDF download failed",
+        description: err.error || `HTTP ${res.status}`,
+        variant: "destructive",
+      });
+      return;
+    }
     const { token } = await res.json();
     downloadPdfToken(token, `VeritaComp_Assessment_${assessmentId}.pdf`);
   };
