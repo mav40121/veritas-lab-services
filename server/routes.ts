@@ -3477,13 +3477,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     // Phase 4.3a: JOIN labs so req.scope.lab carries plan + subscription
-    // state. Lets has*Access helpers prefer lab.plan over user.plan
-    // without a second DB round-trip per request.
+    // state. Phase 4.7 (2026-05-26): also carry lab_name, clia_number, and
+    // the accreditation_* flags so Excel/PDF export handlers don't have to
+    // do a second DB round-trip and stop silently defaulting to
+    // "Laboratory" / "Not on file" / CFR-only-no-accreditor-column.
     const row = (db as any).$client.prepare(`
       SELECT lm.id AS membership_id, lm.role AS role, lm.permissions_json AS permissions_json,
              l.id AS lab_id, l.plan AS plan, l.subscription_status AS subscription_status,
              l.subscription_expires_at AS subscription_expires_at,
-             l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id
+             l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id,
+             l.lab_name AS lab_name, l.clia_number AS clia_number,
+             l.accreditation_tjc AS accreditation_tjc, l.accreditation_cap AS accreditation_cap,
+             l.accreditation_cola AS accreditation_cola, l.accreditation_aabb AS accreditation_aabb
       FROM lab_members lm
       LEFT JOIN labs l ON l.id = lm.lab_id
       WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active' LIMIT 1
@@ -3506,6 +3511,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         subscription_expires_at: row.subscription_expires_at,
         plan_expires_at: row.plan_expires_at,
         stripe_customer_id: row.stripe_customer_id,
+        lab_name: row.lab_name,
+        clia_number: row.clia_number,
+        accreditation_tjc: row.accreditation_tjc,
+        accreditation_cap: row.accreditation_cap,
+        accreditation_cola: row.accreditation_cola,
+        accreditation_aabb: row.accreditation_aabb,
       },
     };
 
