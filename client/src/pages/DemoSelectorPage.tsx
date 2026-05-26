@@ -27,6 +27,34 @@ const modules = [
     cta: "Explore Compliance Suite",
   },
   {
+    key: "cprt",
+    label: "Cost Per Reportable Test",
+    brand: "VeritaOps\u2122",
+    path: "/demo/cprt",
+    color: "#7c3aed",
+    icon: (
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="32" width="9" height="12" rx="2" fill="#7c3aed" opacity="0.35" />
+        <rect x="17" y="24" width="9" height="20" rx="2" fill="#7c3aed" opacity="0.55" />
+        <rect x="28" y="16" width="9" height="28" rx="2" fill="#7c3aed" opacity="0.75" />
+        <rect x="39" y="8" width="6" height="36" rx="2" fill="#7c3aed" />
+        <text x="10" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L1</text>
+        <text x="21" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L2</text>
+        <text x="32" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L3</text>
+        <text x="42" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L4</text>
+      </svg>
+    ),
+    features: [
+      "Four-layer GP11-A conceptual model",
+      "Live volume slider on a worked scenario",
+      "Insource vs send-out, side-by-side",
+      "One-page internal PDF for finance",
+    ],
+    description:
+      "Cost per reportable test is not one number. It is four. Move the volume slider and watch the answer change. Built on the conceptual model in CLSI GP11-A.",
+    cta: "Run the CPRT walkthrough",
+  },
+  {
     key: "operations",
     label: "Operations Demo",
     brand: "VeritaBench\u2122",

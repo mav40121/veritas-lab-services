@@ -34,6 +34,7 @@ import VeritaMapPage from "@/pages/VeritaMapPage";
 import DemoLabPage from "@/pages/DemoLabPage";
 import DemoPage from "@/pages/DemoPage";
 import DemoSelectorPage from "@/pages/DemoSelectorPage";
+import DemoCprtPage from "@/pages/DemoCprtPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import ArticlePrecisionInterpretationPage from "@/pages/ArticlePrecisionInterpretationPage";
 import FAQPage from "@/pages/FAQPage";
@@ -296,6 +297,7 @@ function AppContent() {
           <Route path="/demo" component={DemoSelectorPage} />
           <Route path="/demo/operations" component={DemoPage} />
           <Route path="/demo/compliance" component={DemoLabPage} />
+          <Route path="/demo/cprt" component={DemoCprtPage} />
           <Route path="/resources" component={ResourcesPage} />
           <Route path="/faq" component={FAQPage} />
           <Route path="/pricing" component={PricingPage} />
