@@ -200,13 +200,13 @@ export default function VeritaMapAppPage() {
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap™"
-        whatItDoes="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. Critical values pre-populate from Mayo Clinic Laboratories published data. Reference intervals and analytical measurement range (AMR) are intentionally left blank for your lab to verify and enter per 42 CFR 493.1253. The test menu feeds VeritaCheck for study setup, VeritaComp for competency programs, and VeritaPT for proficiency testing coverage."
+        whatItDoes="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. Mayo Clinic Laboratories published critical values display as a STARTING POINT for your facility's Medical Executive Committee (MEC) to review and adopt; final critical values are set by the MEC, not by Mayo. Reference intervals and analytical measurement range (AMR) are intentionally left blank for your lab to verify and enter per 42 CFR 493.1253. The test menu feeds VeritaCheck, VeritaComp, and VeritaPT."
         howToUse={[
           "Pick your instruments from the database of 190+ FDA-cleared analyzers.",
           "Toggle the tests your lab actually performs on each instrument; CLIA complexity, specialty, and FDA classification auto-populate.",
-          "Critical values populate from Mayo Clinic Laboratories. Enter your own verified reference intervals and AMR per 42 CFR 493.1253; the system intentionally does not pre-populate these.",
-          "Export your test menu to Excel for survey reference or finance review.",
-          "Other Verita modules read from this menu automatically; update here when you add or retire a test."
+          "Take the Mayo Clinic Laboratories critical values to your MEC for review; record the MEC-adopted values in your lab's policy.",
+          "Enter your verified reference intervals and AMR per 42 CFR 493.1253. The system intentionally does not pre-populate these.",
+          "Export to Excel for survey reference or finance review. Other Verita modules read from this menu automatically; update here when you add or retire a test."
         ]}
       />
 
