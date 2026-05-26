@@ -319,7 +319,7 @@ Apply to every task, not just large ones.
 
 **COLA grandfather policy:** see `project_cola_pricing_grandfather_policy.md` memory. Three layers: COLA2026 code through 2026-12-31, named-contact honored pricing OR Founder terms through 2026-09-30, new pricing for everyone else.
 
-- CLIA tier auto-assigned from specialty count — no self-reporting.
+- Pricing tier is selected by the customer based on the number of active (writer) seats they need. View-only seats remain unlimited and free on every tier. No "auto-assignment from specialty count" — that was an earlier pricing concept that was retired.
 
 ---
 

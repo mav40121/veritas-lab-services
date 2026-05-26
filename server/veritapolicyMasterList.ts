@@ -1,26 +1,3 @@
-// AUTO-GENERATED from veritapolicy_polished.csv by csv_to_ts.py.
-// 96 policies. Each row carries CFR plus per-AO citation columns (TJC, CAP,
-// COLA, AABB). The /api/veritapolicy/master-list/excel route emits only the
-// CFR column plus the column matching the lab's accreditor selection.
-//
-// To regenerate: python /home/user/workspace/csv_to_ts.py
-//   (after refreshing veritapolicy_polished.csv via rebuild_veritapolicy_v6.py)
-
-export interface VeritaPolicyMasterRow {
-  policy_id: string;
-  policy_name: string;
-  section: string;
-  subspecialty: string;
-  service_line: string;
-  description: string;
-  cfr_citations: string;
-  tjc_citations: string;
-  cap_citations: string;
-  cola_citations: string;
-  aabb_citations: string;
-  notes: string;
-}
-
 export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
   {
     "policy_id": "1",
@@ -398,7 +375,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "GEN.40509; GEN.40930; GEN.41303; GEN.41304; GEN.48500",
     "cola_citations": "CA 9; LIS 1; LIS 2; ORG 7; PRE 1",
     "aabb_citations": "",
-    "notes": "Data integrity controls inside the LIS \u2014 interface validation, result verification at handoffs, retention windows. Pairs with the LIS validation file."
+    "notes": "Data integrity controls inside the LIS — interface validation, result verification at handoffs, retention windows. Pairs with the LIS validation file."
   },
   {
     "policy_id": "28",
@@ -440,7 +417,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "GEN.73150; GEN.73800; GEN.73900; GEN.77575; GEN.59980-GEN.60250",
     "cola_citations": "FAC 1-FAC 3",
     "aabb_citations": "",
-    "notes": "Independent labs only \u2014 for hospital-based labs, the parent governance structure usually satisfies this. The compliance binder holds the governance attestation."
+    "notes": "Independent labs only — for hospital-based labs, the parent governance structure usually satisfies this. The compliance binder holds the governance attestation."
   },
   {
     "policy_id": "31",
@@ -581,356 +558,6 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cola_citations": "APM 1; PT 1; PT 2; QC 1; VER 1",
     "aabb_citations": "",
     "notes": "Onboarding checklist file. Verifies that pre-independent-testing training was completed before the testing personnel ran patient samples."
-  },
-  {
-    "policy_id": "41",
-    "policy_name": "Blood Transfusion Service Policies and Procedures",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policies and procedures governing the laboratory's blood transfusion service, including ordering, compatibility testing, issuance, transfusion administration support, and adverse event handling.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.40; 21 CFR 610.41; 21 CFR 610.42; 21 CFR 630.10; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.857",
-    "tjc_citations": "QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.18.01; QSA.05.23.01",
-    "cap_citations": "COM.30450; GEN.62020; IMM.40300; IMM.40440; TRM.47500",
-    "cola_citations": "APM 1; ORG 1; ORG 2; QC 1; VER 1",
-    "aabb_citations": "5.4; 5.8; 5.14; 5.16; 6.2.1",
-    "notes": "Blood bank policy and procedure manual. AABB Standards reference is helpful; the lab's policies must reflect actual practice."
-  },
-  {
-    "policy_id": "42",
-    "policy_name": "Blood and Blood Component Inventory Management Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory manages blood and blood component inventory, including ordering, receipt, storage, rotation, issuance, and return.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.122; 21 CFR 640.34",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.12.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.44991",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "3.8; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "BPDR file (biological product deviation reports) and adverse reaction investigation file. FDA reporting timelines apply for licensed blood establishments."
-  },
-  {
-    "policy_id": "43",
-    "policy_name": "Blood Supplier Agreement Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory selects and contracts with blood suppliers, including qualification criteria, agreement terms, and ongoing performance monitoring.",
-    "cfr_citations": "42 CFR 493.1242; 42 CFR 493.1271; 21 CFR 606.100; 21 CFR 606.160",
-    "tjc_citations": "DC.01.01.01; QSA.05.04.01; QSA.05.04.03; QSA.05.09.01; QSA.05.23.01",
-    "cap_citations": "COM.30450; GEN.20375; GEN.40491-GEN.40507",
-    "cola_citations": "APM 1; ORG 15; PRE 7-PRE 12",
-    "aabb_citations": "3.8; 5.0; 5.1.5.2; 5.1.10; 5.14",
-    "notes": "Supplier qualification file: licensed supplier agreements, current FDA registration, and the lab's evaluation criteria. Annual review."
-  },
-  {
-    "policy_id": "44",
-    "policy_name": "Blood Component Release to External Organizations Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory releases blood components to external organizations, including authorization, documentation, transport, and reconciliation.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.65",
-    "tjc_citations": "DC.01.01.01; QSA.05.04.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "IMM.41400; TRM.30550; TRM.30575; TRM.30800; TRM.30850",
-    "cola_citations": "APM 1; MA 1; MA 17; QC 1; VER 1",
-    "aabb_citations": "3.6.1; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Crossmatch SOP with electronic crossmatch criteria where used. Type-and-screen vs. type-and-cross workflow defined."
-  },
-  {
-    "policy_id": "45",
-    "policy_name": "Blood Transport, Storage, and Return Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory transports, stores, and accepts returns of blood and blood components, including temperature control, documentation, and acceptability criteria.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.121; 21 CFR 606.165",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.12.01; QSA.05.23.01",
-    "cap_citations": "TRM.30800; TRM.33200; TRM.41450; TRM.44991; TRM.32250-TRM.32300",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "5.1.5.2; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Component preparation, labeling, storage, and issue procedures. Temperature monitoring and disposition records are the survey targets."
-  },
-  {
-    "policy_id": "46",
-    "policy_name": "Blood Storage Alarm Response Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory responds to blood storage alarms, including immediate actions, escalation, documentation, and product disposition.",
-    "cfr_citations": "42 CFR 493.1252; 21 CFR 606.20; 21 CFR 606.65; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 640.10; 21 CFR 640.24; 21 CFR 640.27; 21 CFR 640.51; 21 CFR 640.54",
-    "tjc_citations": "QSA.05.04.01; QSA.05.04.03; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "GEN.41042; TRM.42450; TRM.43900; TRM.44350; TRM.44400",
-    "cola_citations": "APM 1; MA 1-MA 18; ORG 15",
-    "aabb_citations": "2.1; 2.1.1; 5.4; 5.6; 5.8",
-    "notes": "Type-and-screen SOP including ABO confirmation requirement on second sample where policy requires it."
-  },
-  {
-    "policy_id": "47",
-    "policy_name": "Blood Bank Reagent Criteria Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing acceptance criteria for blood bank reagents, including reactivity testing, lot validation, storage, and use within stated stability.",
-    "cfr_citations": "42 CFR 493.1253; 42 CFR 493.1252; 42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 42 CFR 493.1202",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.12.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.33200",
-    "cola_citations": "APM 1; MA 1; ORG 2; QC 1; VER 1",
-    "aabb_citations": "3.8; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Reagent qualification file: vendor cert, lot acceptance, daily QC record. CFR 493.1252 anchors."
-  },
-  {
-    "policy_id": "48",
-    "policy_name": "Reagent Reactivity Testing Policy (Blood Bank)",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory tests blood bank reagents for expected reactivity, including frequency, controls, acceptance criteria, and corrective action when results fail.",
-    "cfr_citations": "42 CFR 493.1252; 42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.12.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.33200",
-    "cola_citations": "APM 1; MA 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "3.8; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Antibody identification SOP; reference panel handling and special technique documentation. Pairs with transfusion service competency."
-  },
-  {
-    "policy_id": "49",
-    "policy_name": "Specimen Collection for Typing and Crossmatching Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "blood_bank",
-    "description": "Written policy describing how the laboratory collects and identifies specimens for ABO, Rh, antibody screening, and crossmatching, including sample acceptability, retention, and rejection criteria.",
-    "cfr_citations": "42 CFR 493.1232; 42 CFR 493.1241; 42 CFR 493.1242; 42 CFR 493.1249; 42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.151; 21 CFR 606.120; 21 CFR 610.42; 21 CFR 640.5",
-    "tjc_citations": "DC.01.01.01; QSA.05.07.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "GEN.40491; TRM.30550; TRM.30575; TRM.30850; GEN.40016-GEN.40115",
-    "cola_citations": "APM 1; ORG 15; PRE 1-PRE 12",
-    "aabb_citations": "5.8; 5.14; 5.14.5; 5.16; 6.2.1",
-    "notes": "Pre-transfusion specimen requirements: dating, labeling, second-sample rule where used. Deficiencies cluster around labeling."
-  },
-  {
-    "policy_id": "50",
-    "policy_name": "ABO and Rh Blood Typing Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory performs ABO and Rh typing, including methods, interpretation, repeat testing requirements, and discrepancy resolution.",
-    "cfr_citations": "42 CFR 493.1271; 21 CFR 606.151; 21 CFR 606.170; 42 CFR 493.831; 42 CFR 493.857; 42 CFR 493.859",
-    "tjc_citations": "QSA.05.01.01; QSA.05.08.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "IMM.40300; IMM.40440; IMM.41400; TRM.31400; TRM.40050",
-    "cola_citations": "APM 1; ORG 15; PT 1-PT 8",
-    "aabb_citations": "5.1.10; 5.1.10.1; 5.14; 5.14.5; 5.16",
-    "notes": "Donor screening and eligibility SOP if the lab collects; otherwise the licensed supplier's documentation suffices. 21 CFR 630 series anchors."
-  },
-  {
-    "policy_id": "51",
-    "policy_name": "Compatibility Testing Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory performs compatibility testing for transfusion, including methods, acceptance criteria, electronic crossmatch eligibility, and incompatible-result handling.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.60; 21 CFR 606.65; 21 CFR 606.151; 42 CFR 493.831; 42 CFR 493.863",
-    "tjc_citations": "QSA.05.04.01; QSA.05.04.03; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "IMM.40300; IMM.40440; IMM.41400; TRM.31234; TRM.31400",
-    "cola_citations": "APM 1; MA 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "5.1.10; 5.14; 5.14.5; 5.16; 6.2.1",
-    "notes": "Issue records: pickup signature, time out, and return-or-disposition log. Audit trail for every component."
-  },
-  {
-    "policy_id": "52",
-    "policy_name": "Donor and Recipient Blood Identification Policy",
-    "section": "Quality",
-    "subspecialty": "",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory uniquely identifies donor and recipient blood throughout testing, processing, and issuance to prevent misidentification.",
-    "cfr_citations": "21 CFR 606.140; 21 CFR 606.151; 21 CFR 630.15",
-    "tjc_citations": "QSA.02.10.01; QSA.02.10.03; QSA.05.08.01; QSA.05.10.01; QSA.05.23.01",
-    "cap_citations": "IMM.40300; IMM.40440; IMM.40860; IMM.40980; IMM.41400",
-    "cola_citations": "APM 1; ORG 15; QC 1; QC 5",
-    "aabb_citations": "1.4.1; 1.7; 5.1.2; 5.1.2.1; 5.1.10",
-    "notes": "Two-person check at issue and at the bedside; ABO/Rh confirmation step. The transfusion administration policy in the parent facility carries this through."
-  },
-  {
-    "policy_id": "53",
-    "policy_name": "Emergency Release of Blood Policy",
-    "section": "Quality",
-    "subspecialty": "",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory issues blood in emergencies before all testing is complete, including authorization, documentation, post-issue testing, and notification of clinical findings.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 21 CFR 606.151; 21 CFR 606.160; 21 CFR 606.170",
-    "tjc_citations": "DC.01.01.01; QSA.05.08.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "IMM.40300; IMM.40440; IMM.40860; IMM.40980; IMM.41400",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "1.6; 1.6.1; 5.14; 5.14.5; 5.16",
-    "notes": "Emergency release SOP: signature requirements, sample pull-back when O-neg released uncrossmatched, and the catch-up plan once specimens arrive."
-  },
-  {
-    "policy_id": "54",
-    "policy_name": "Rh Immune Globulin (RhIG) Administration Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory supports RhIG administration, including candidate identification, dose calculation, and documentation.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 21 CFR 606.100; 21 CFR 606.151; 21 CFR 606.170",
-    "tjc_citations": "DC.01.01.01; QSA.05.08.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01",
-    "cap_citations": "IMM.40300; IMM.40440; IMM.40860; IMM.40980; IMM.41400",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "5.14; 5.14.5; 5.16; 6.1; 6.1.2",
-    "notes": "RhIG indications and dose calculation SOP. Postpartum and antepartum indications, fetal-maternal hemorrhage screening if performed."
-  },
-  {
-    "policy_id": "55",
-    "policy_name": "Plasma Component Processing and Transfusion Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory processes plasma components and supports plasma transfusion, including thawing, expiration management, and documentation.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.120; 21 CFR 606.121; 21 CFR 610.40",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.14.01; QSA.05.17.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.33200",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "5.9; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Component handling SOP: temperature, expiration, infusion-time limits. Returns and reissue criteria are common gaps."
-  },
-  {
-    "policy_id": "56",
-    "policy_name": "Blood Irradiation Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory irradiates blood components when indicated, including indications, dose verification, labeling, and outdating.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.122; 21 CFR 606.120; 21 CFR 606.121; 21 CFR 610.40",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.14.01; QSA.05.17.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.33200",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "5.9; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Apheresis program SOP if the lab supports therapeutic apheresis or platelet collection. AABB Standards apply."
-  },
-  {
-    "policy_id": "57",
-    "policy_name": "Leukoreduction Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory provides leukoreduced components, including indications, sourcing, quality monitoring, and documentation.",
-    "cfr_citations": "21 CFR 606.120; 21 CFR 606.121; 21 CFR 610.40",
-    "tjc_citations": "QSA.05.14.01; QSA.05.14.03; QSA.05.14.05; QSA.05.14.07; QSA.05.23.01",
-    "cap_citations": "TRM.40925; TRM.42235; TRM.43600; TRM.43605; TRM.44977",
-    "cola_citations": "",
-    "aabb_citations": "5.1.5.3; 5.1.5.3.1; 5.1.5.4.1; 5.8; 5.9",
-    "notes": "Leukoreduction documentation: vendor specs accepted vs. lab-prepared, residual WBC counts. Most labs accept supplier-prepared."
-  },
-  {
-    "policy_id": "58",
-    "policy_name": "Transfusion and Neonatal Transfusion Policies",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policies describing how the laboratory supports transfusion in adult and neonatal populations, including special component requirements, age-specific considerations, and documentation.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 610.40; 21 CFR 610.41; 21 CFR 610.42; 21 CFR 630.10; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.857",
-    "tjc_citations": "QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.18.01; QSA.05.23.01",
-    "cap_citations": "TRM.40450; TRM.47125; TRM.47150; TRM.47500; TRM.47050-TRM.47105",
-    "cola_citations": "APM 1; ORG 1; ORG 2; QC 1; VER 1",
-    "aabb_citations": "5.4; 5.8; 5.14; 5.16; 6.2.1",
-    "notes": "Special transfusion needs (CMV-safe, irradiated, HLA-matched) protocol; neonatal transfusion has tighter component requirements."
-  },
-  {
-    "policy_id": "59",
-    "policy_name": "Transfusion Monitoring and Adverse Event Reporting Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory supports transfusion monitoring and the investigation and reporting of adverse transfusion events to clinical, regulatory, and accrediting bodies.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 610.41; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.1235",
-    "tjc_citations": "QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.18.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.47500",
-    "cola_citations": "APM 1; ORG 1; ORG 2; QC 1; VER 1",
-    "aabb_citations": "5.1.5.2; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Massive transfusion protocol; pairs with the parent facility's clinical MTP."
-  },
-  {
-    "policy_id": "60",
-    "policy_name": "Transfusion Reaction Investigation Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory investigates suspected transfusion reactions, including specimen requirements, testing performed, interpretation, and reporting.",
-    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171",
-    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.12.01; QSA.05.23.01",
-    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.33200",
-    "cola_citations": "APM 1; ORG 15; QC 1; VER 1",
-    "aabb_citations": "5.1.5.2; 5.14; 5.16; 6.2.1; 7.5",
-    "notes": "Adverse reaction workup SOP with classification and reporting (internal QM plus FDA fatal reaction reporting timeline)."
-  },
-  {
-    "policy_id": "61",
-    "policy_name": "HIV Look-Back Notification Policy (Blood Recipients)",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory participates in HIV look-back notification when a donor is later found positive, including recipient identification, clinician notification, and documentation.",
-    "cfr_citations": "21 CFR 610.46",
-    "tjc_citations": "QSA.05.20.01; QSA.05.21.01",
-    "cap_citations": "TRM.30950; TRM.40450; TRM.42100-TRM.42170",
-    "cola_citations": "",
-    "aabb_citations": "1.4.1; 1.7; 5.2; 5.2.2; 5.8",
-    "notes": "HIV lookback procedure and notification timeline. 21 CFR 610.46/.47 anchors. Documentation for every recipient receiving lookback notification."
-  },
-  {
-    "policy_id": "62",
-    "policy_name": "HCV Look-Back Notification Policy (Blood Recipients)",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory participates in HCV look-back notification when a donor is later found positive, including recipient identification, clinician notification, and documentation.",
-    "cfr_citations": "21 CFR 610.46",
-    "tjc_citations": "QSA.05.20.01; QSA.05.21.01",
-    "cap_citations": "TRM.30950; TRM.40450; TRM.42100-TRM.42170",
-    "cola_citations": "",
-    "aabb_citations": "1.4.1; 1.7; 5.2; 5.2.2; 5.8",
-    "notes": "HCV lookback procedure mirroring HIV lookback. Same regulatory anchor."
-  },
-  {
-    "policy_id": "63",
-    "policy_name": "Blood Donation Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory operates blood donation activities where applicable, including donor eligibility, collection, processing, labeling, and release.",
-    "cfr_citations": "21 CFR 630.10; 21 CFR 630.15; 21 CFR 606.100; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.65; 21 CFR 606.120; 21 CFR 606.121; 21 CFR 606.122; 21 CFR 606.140; 21 CFR 606.160; 21 CFR 606.165; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 610.40; 21 CFR 610.42; 21 CFR 630.20; 21 CFR 630.30; 21 CFR 640.2; 21 CFR 640.3; 21 CFR 640.4; 21 CFR 640.5; 21 CFR 640.10; 21 CFR 640.11; 21 CFR 640.34; 21 CFR 640.51; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.845; 42 CFR 493.857; 42 CFR 493.1103; 42 CFR 493.1105; 42 CFR 493.1267; 42 CFR 493.1271; 45 CFR 164.512",
-    "tjc_citations": "QSA.05.01.01; QSA.05.04.01; QSA.05.12.01; QSA.05.17.01; QSA.05.23.01",
-    "cap_citations": "IMM.40300; IMM.41400; TRM.31234; TRM.44991; TRM.47500",
-    "cola_citations": "APM 1; ORG 1; ORG 2; QC 1; VER 1",
-    "aabb_citations": "4.3; 5.1.2; 5.4; 5.8; 5.9",
-    "notes": "Tissue tracking and storage SOP if the lab issues tissue. 21 CFR 1271 series applies."
-  },
-  {
-    "policy_id": "64",
-    "policy_name": "Donor Blood Collection Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory collects donor blood, including consent, donor screening, collection technique, post-collection donor care, and documentation.",
-    "cfr_citations": "21 CFR 630.10; 21 CFR 630.15; 21 CFR 606.100; 21 CFR 630.20; 21 CFR 630.30",
-    "tjc_citations": "DC.01.01.01; QSA.05.17.01; QSA.05.23.01; QSA.05.24.01; QSA.05.24.03",
-    "cap_citations": "TRM.46138; TRM.47300; TRM.47400; TRM.47995; TRM.48020",
-    "cola_citations": "APM 1; ORG 15",
-    "aabb_citations": "1.4.1; 1.7; 5.2; 5.2.1; 5.4",
-    "notes": "Cellular therapy products if the lab handles HPC, cord blood, or other CT products. Separate accreditation often applies (FACT)."
-  },
-  {
-    "policy_id": "65",
-    "policy_name": "Therapeutic Apheresis Policy",
-    "section": "Specialty Services",
-    "subspecialty": "Blood Bank",
-    "service_line": "all",
-    "description": "Written policy describing how the laboratory performs or supports therapeutic apheresis, including indications, procedures, monitoring, and documentation.",
-    "cfr_citations": "21 CFR 606.100; 21 CFR 640.20; 21 CFR 606.110",
-    "tjc_citations": "DC.01.01.01; EC.02.04.03; QSA.02.14.01; QSA.04.05.01; QSA.05.04.01",
-    "cap_citations": "GEN.20375; GEN.43040; GEN.73200; GEN.73300; TRM.42213",
-    "cola_citations": "APM 1; ORG 15",
-    "aabb_citations": "5.5; 5.6; 6.1; 6.1.2; 6.1.5",
-    "notes": "Microbiology procedure manual: culture workup algorithms, susceptibility testing, organism reporting rules. CLSI documents are the working reference."
   },
   {
     "policy_id": "66",
@@ -1365,5 +992,89 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cola_citations": "PRE 7-PRE 15",
     "aabb_citations": "5.1.10",
     "notes": "Reference lab evaluation criteria, current CLIA certificate for every reference lab on the list, and documented annual review. CFR 493.1242 anchors. Pairs with policy 10."
+  },
+  {
+    "policy_id": "97",
+    "policy_name": "Transfusion Service Master Policies and Procedures",
+    "section": "Specialty Services",
+    "subspecialty": "Blood Bank / Transfusion",
+    "service_line": "blood_bank",
+    "description": "Top-level framework for the laboratory's transfusion service: scope, governance, and the structure linking every transfusion-service sub-policy. Sub-policies cover pretransfusion testing, blood component handling, transfusion administration, recipient look-back, and donor operations. The medical director or designee approves the master and every sub-policy.",
+    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.40; 21 CFR 610.41; 21 CFR 610.42; 21 CFR 630.10; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.857",
+    "tjc_citations": "QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.18.01; QSA.05.23.01",
+    "cap_citations": "COM.30450; GEN.62020; IMM.40300; IMM.40440; TRM.47500",
+    "cola_citations": "APM 1; ORG 1; ORG 2; QC 1; VER 1",
+    "aabb_citations": "5.4; 5.8; 5.14; 5.16; 6.2.1",
+    "notes": "Replaces source #41. The five sub-policies (#98-#102) sit under this master. Records retained at least 10 years per 42 CFR 493.1105(a)(7)."
+  },
+  {
+    "policy_id": "98",
+    "policy_name": "Pretransfusion Testing Policy",
+    "section": "Specialty Services",
+    "subspecialty": "Blood Bank / Transfusion",
+    "service_line": "blood_bank",
+    "description": "Specimen collection, ABO and Rh typing, antibody screen, and compatibility testing for every transfusion recipient. Includes two-identifier verification at draw, forward and reverse ABO grouping, weak D where applicable, and serologic or electronic crossmatch. Repeat ABO/Rh on a second specimen before the first non-O group-specific transfusion unless an electronic patient-identification system is in place.",
+    "cfr_citations": "42 CFR 493.1232; 42 CFR 493.1241; 42 CFR 493.1242; 42 CFR 493.1249; 42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.151; 21 CFR 606.120; 21 CFR 610.42; 21 CFR 640.5; 42 CFR 493.831; 42 CFR 493.857; 42 CFR 493.859; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.60; 21 CFR 606.65; 42 CFR 493.863",
+    "tjc_citations": "DC.01.01.01; QSA.05.07.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01; QSA.05.01.01; QSA.05.08.01; QSA.05.04.01; QSA.05.04.03",
+    "cap_citations": "GEN.40491; TRM.30550; TRM.30575; TRM.30850; GEN.40016-GEN.40115; IMM.40300; IMM.40440; IMM.41400; TRM.31400; TRM.40050; TRM.31234",
+    "cola_citations": "APM 1; ORG 15; PRE 1-PRE 12; PT 1-PT 8; MA 1; QC 1; VER 1",
+    "aabb_citations": "5.8; 5.14; 5.14.5; 5.16; 6.2.1; 5.1.10; 5.1.10.1",
+    "notes": "Consolidates sources #49 + #50 + #51. Electronic crossmatch permitted only when recipient meets all FDA-recognized criteria."
+  },
+  {
+    "policy_id": "99",
+    "policy_name": "Blood Component Handling Policy",
+    "section": "Specialty Services",
+    "subspecialty": "Blood Bank / Transfusion",
+    "service_line": "blood_bank",
+    "description": "Component handling from supplier receipt through final disposition: inventory management, release to internal and external organizations, transport and storage, storage alarm response, reagent criteria and reactivity testing, plasma processing, irradiation, and leukoreduction. Continuous temperature monitoring, daily reagent QC, and unit-level traceability throughout.",
+    "cfr_citations": "42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.122; 21 CFR 640.34; 21 CFR 606.65; 21 CFR 606.121; 21 CFR 606.165; 42 CFR 493.1252; 21 CFR 606.20; 21 CFR 640.10; 21 CFR 640.24; 21 CFR 640.27; 21 CFR 640.51; 21 CFR 640.54; 42 CFR 493.1253; 42 CFR 493.1202; 21 CFR 606.120; 21 CFR 610.40",
+    "tjc_citations": "DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.12.01; QSA.05.23.01; QSA.05.04.01; QSA.05.04.03; QSA.05.14.01; QSA.05.17.01; QSA.05.14.03; QSA.05.14.05; QSA.05.14.07",
+    "cap_citations": "TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.44991; IMM.41400; TRM.33200; TRM.41450; TRM.32250-TRM.32300; GEN.41042; TRM.42450; TRM.43900; TRM.44350; TRM.44400; TRM.40925; TRM.42235; TRM.43600; TRM.43605; TRM.44977",
+    "cola_citations": "APM 1; ORG 15; QC 1; VER 1; MA 1; MA 17; MA 1-MA 18; ORG 2",
+    "aabb_citations": "3.8; 5.14; 5.16; 6.2.1; 7.5; 3.6.1; 5.1.5.2; 2.1; 2.1.1; 5.4; 5.6; 5.8; 5.9; 5.1.5.3; 5.1.5.3.1; 5.1.5.4.1",
+    "notes": "Consolidates sources #42, #44, #45, #46, #47, #48, #55, #56, #57. Records of storage temp, alarm events, reagent QC, and component disposition retained per 42 CFR 493.1105 and 21 CFR 606.160."
+  },
+  {
+    "policy_id": "100",
+    "policy_name": "Transfusion Administration Policy",
+    "section": "Specialty Services",
+    "subspecialty": "Blood Bank / Transfusion",
+    "service_line": "blood_bank",
+    "description": "Component issue, donor/recipient identification at issue, emergency release, Rh Immune Globulin administration, neonatal and pediatric transfusion, transfusion monitoring, and transfusion reaction investigation. Two-identifier verification at every component issue; FDA fatality reporting timeframes observed.",
+    "cfr_citations": "21 CFR 606.140; 21 CFR 606.151; 21 CFR 630.15; 42 CFR 493.1271; 42 CFR 493.1273; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.100; 42 CFR 493.1103; 21 CFR 606.171; 21 CFR 610.40; 21 CFR 610.41; 21 CFR 610.42; 21 CFR 630.10; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.857; 42 CFR 493.1235",
+    "tjc_citations": "QSA.02.10.01; QSA.02.10.03; QSA.05.08.01; QSA.05.10.01; QSA.05.23.01; DC.01.01.01; QSA.05.09.01; QSA.05.09.03; QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.18.01",
+    "cap_citations": "IMM.40300; IMM.40440; IMM.40860; IMM.40980; IMM.41400; TRM.40450; TRM.47125; TRM.47150; TRM.47500; TRM.47050-TRM.47105; TRM.30550; TRM.30575; TRM.30800; TRM.30850; TRM.33200",
+    "cola_citations": "APM 1; ORG 15; QC 1; QC 5; VER 1; ORG 1; ORG 2",
+    "aabb_citations": "1.4.1; 1.7; 5.1.2; 5.1.2.1; 5.1.10; 1.6; 1.6.1; 5.14; 5.14.5; 5.16; 6.1; 6.1.2; 5.4; 5.8; 6.2.1; 5.1.5.2; 7.5",
+    "notes": "Consolidates sources #52, #53, #54, #58, #59, #60. Transfusion reaction file maintained per 21 CFR 606.170. Fatalities reported to FDA CBER within required timeframe."
+  },
+  {
+    "policy_id": "101",
+    "policy_name": "Blood Recipient Look-Back Policy (HIV and HCV)",
+    "section": "Specialty Services",
+    "subspecialty": "Blood Bank / Transfusion",
+    "service_line": "blood_bank",
+    "description": "FDA-mandated look-back response when a previous blood donor tests positive for HIV (21 CFR 610.46) or HCV (21 CFR 610.47): identify recipients of components from the implicated donor, notify the recipients' treating physicians within the FDA-required timeframe with the agent-specific language, and quarantine any in-inventory components.",
+    "cfr_citations": "21 CFR 610.46",
+    "tjc_citations": "QSA.05.20.01; QSA.05.21.01",
+    "cap_citations": "TRM.30950; TRM.40450; TRM.42100-TRM.42170",
+    "cola_citations": "",
+    "aabb_citations": "1.4.1; 1.7; 5.2; 5.2.2; 5.8",
+    "notes": "Consolidates sources #61 (HIV) + #62 (HCV) into one workflow. Medical director or designee signs every look-back event."
+  },
+  {
+    "policy_id": "102",
+    "policy_name": "Donor Operations Policy",
+    "section": "Specialty Services",
+    "subspecialty": "Blood Bank / Transfusion",
+    "service_line": "blood_bank",
+    "description": "Donor operations across two distinct modes: (1) supplier agreements when components are purchased from a collection establishment, and (2) donor screening, collection, and therapeutic apheresis when the lab itself is the collection establishment. Donor eligibility per 21 CFR 630.10; collection per 21 CFR 606.110.",
+    "cfr_citations": "42 CFR 493.1242; 42 CFR 493.1271; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 630.10; 21 CFR 630.15; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.65; 21 CFR 606.120; 21 CFR 606.121; 21 CFR 606.122; 21 CFR 606.140; 21 CFR 606.165; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 610.40; 21 CFR 610.42; 21 CFR 630.20; 21 CFR 630.30; 21 CFR 640.2; 21 CFR 640.3; 21 CFR 640.4; 21 CFR 640.5; 21 CFR 640.10; 21 CFR 640.11; 21 CFR 640.34; 21 CFR 640.51; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.845; 42 CFR 493.857; 42 CFR 493.1103; 42 CFR 493.1105; 42 CFR 493.1267; 45 CFR 164.512; 21 CFR 640.20; 21 CFR 606.110",
+    "tjc_citations": "DC.01.01.01; QSA.05.04.01; QSA.05.04.03; QSA.05.09.01; QSA.05.23.01; QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.24.01; QSA.05.24.03; EC.02.04.03; QSA.02.14.01; QSA.04.05.01",
+    "cap_citations": "COM.30450; GEN.20375; GEN.40491-GEN.40507; IMM.40300; IMM.41400; TRM.31234; TRM.44991; TRM.47500; TRM.46138; TRM.47300; TRM.47400; TRM.47995; TRM.48020; GEN.43040; GEN.73200; GEN.73300; TRM.42213",
+    "cola_citations": "APM 1; ORG 15; PRE 7-PRE 12; ORG 1; ORG 2; QC 1; VER 1",
+    "aabb_citations": "3.8; 5.0; 5.1.5.2; 5.1.10; 5.14; 4.3; 5.1.2; 5.4; 5.8; 5.9; 1.4.1; 1.7; 5.2; 5.2.1; 5.5; 5.6; 6.1; 6.1.2; 6.1.5",
+    "notes": "Consolidates sources #43, #63, #64, #65. Applies only to labs operating as a collection establishment or maintaining supplier agreements. Most hospital transfusion services purchase components and only need the supplier-agreement portion."
   }
 ];
