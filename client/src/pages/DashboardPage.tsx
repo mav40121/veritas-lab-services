@@ -133,12 +133,12 @@ export default function Dashboard() {
       <ModuleHowToCard
         moduleKey="veritacheck"
         moduleName="VeritaCheck™"
-        whatItDoes="VeritaCheck runs the analytical performance verification studies CLIA requires before a new method goes into patient testing: calibration verification, precision, correlation/method comparison, reagent lot verification (EP26-A), QC lot verification (C24-Ed4), and coagulation new-lot. Each study calculates the statistics, generates the CFR-cited narrative, and produces a director-signed PDF on page 1."
+        whatItDoes="VeritaCheck runs the analytical performance verification studies CLIA requires before a new method goes into patient testing: Calibration Verification / Linearity, Precision, Correlation / Method Comparison, Reagent Lot Verification (EP26-A), QC Lot Verification (C24-Ed4), and Coagulation New Lot. Each study calculates the statistics, generates the CFR-cited narrative, and produces a director-signed PDF on page 1."
         howToUse={[
-          "Click New Study and pick the study type that matches your need (cal-ver, precision, method comparison, lot-to-lot).",
+          "Click New Study and pick the study type that matches your need (Calibration Verification / Linearity, Precision, Correlation / Method Comparison, Reagent Lot Verification, QC Lot Verification, Coagulation New Lot).",
           "Add the instrument and analyte from your VeritaMap test menu.",
           "Enter your data manually or paste from a CSV; the calculator runs the statistics live.",
-          "Review the calculated values against the CLIA TEa (or lab-set internal goal where no canonical TEa exists).",
+          "Review the calculated values against the CLIA TEa (or Lab-Set Internal Goal where no canonical TEa exists).",
           "The medical director or designee signs; download the PDF and file with your CLIA records.",
         ]}
       />
