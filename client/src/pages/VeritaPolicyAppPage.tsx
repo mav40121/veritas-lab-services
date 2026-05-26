@@ -382,13 +382,13 @@ export default function VeritaPolicyAppPage() {
       <ModuleHowToCard
         moduleKey="veritapolicy"
         moduleName="VeritaPolicy™"
-        whatItDoes="VeritaPolicy ships 96 CFR-anchored generic policy templates the lab can adopt as starting points. Each template opens with verbatim eCFR text, then the lab standing rule in plain CFR voice. Token placeholders for lab name, CLIA number, and director are replaced with your lab identity at download time."
+        whatItDoes="VeritaPolicy is a 96-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects."
         howToUse={[
-          "Browse the 96-row master list; service-line toggles auto-apply N/A to policies not relevant to your scope.",
-          "Click any policy to download a personalized DOCX with your lab identity already filled in.",
-          "Edit the lab-specific operational details (responsible roles, escalation paths, forms referenced) for your workflow.",
-          "Sign the policy with the medical director or designee; file as adopted.",
-          "The inspection-ready report tracks adoption by section and surfaces the readiness score."
+          "Browse the 96-row master list; expand any row to read the description, citations, and notes.",
+          "In each row, enter the name of the policy in your manual that addresses it under 'Our Policy Name'.",
+          "Click the status badge to cycle Not Started → In Progress → Complete; mark N/A for policies your lab does not need.",
+          "Watch the readiness score update live as you map your binder against the master list.",
+          "Export the Master List (Excel) or the Readiness Report (PDF) from the top-right buttons for board reporting or inspection prep."
         ]}
       />
 
