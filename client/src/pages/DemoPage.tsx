@@ -63,6 +63,7 @@ interface StaffingStudy {
 // ── Section navigation ────────────────────────────────────────────────────────
 
 const SECTIONS = [
+  { id: "cprt", label: "CPRT" },
   { id: "calculator", label: "Calculator" },
   { id: "tracker", label: "Tracker" },
   { id: "staffing", label: "Staffing" },
@@ -1063,7 +1064,7 @@ export default function DemoPage() {
             Interactive Live Demo
           </div>
           <h1 className="font-serif text-3xl sm:text-5xl font-bold text-white mb-4">
-            See VeritaBench{"\u2122"} in Action
+            See VeritaBench{"\u2122"} + VeritaOps{"\u2122"} in Action
           </h1>
           <p className="text-lg sm:text-xl text-white/80 max-w-2xl mx-auto mb-8">
             Built by a lab operations consultant. Designed for labs like yours.
@@ -1075,6 +1076,7 @@ export default function DemoPage() {
                 onClick={() => document.getElementById(`section-${s.id}`)?.scrollIntoView({ behavior: "smooth" })}
                 className="px-4 py-2 rounded-full text-sm font-medium bg-white/15 text-white hover:bg-white/25 transition-colors"
               >
+                {s.id === "cprt" && <DollarSign size={14} className="inline mr-1.5" />}
                 {s.id === "calculator" && <Calculator size={14} className="inline mr-1.5" />}
                 {s.id === "tracker" && <BarChart3 size={14} className="inline mr-1.5" />}
                 {s.id === "staffing" && <Grid3X3 size={14} className="inline mr-1.5" />}
@@ -1104,13 +1106,55 @@ export default function DemoPage() {
         </div>
       </div>
 
-      {/* Section 1: Calculator */}
+      {/* Section: VeritaOps CPRT preview (links to /demo/cprt for the full walkthrough) */}
+      <section id="section-cprt" className="py-12 sm:py-16 px-4" style={{ backgroundColor: "#7c3aed08" }}>
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#7c3aed15", color: "#7c3aed" }}>
+              <DollarSign size={14} />
+              Module 1: VeritaOps™ Cost Per Reportable Test
+            </div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">
+              CPRT is not one number. It is four.
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
+              Built on the conceptual model in CLSI GP11-A. Move the volume slider and watch the answer change.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[
+              { label: "L1", desc: "Reagents + supplies", q: "One more test on the analyzer" },
+              { label: "L2", desc: "+ direct labor", q: "Insource vs send-out" },
+              { label: "L3", desc: "+ equipment", q: "Capital purchase justification" },
+              { label: "L4", desc: "+ overhead", q: "Charge-master pricing" },
+            ].map((l) => (
+              <div key={l.label} className="rounded-lg border-2 p-3" style={{ borderColor: "#7c3aed30", backgroundColor: "#7c3aed05" }}>
+                <div className="text-xs font-bold uppercase tracking-wide" style={{ color: "#7c3aed" }}>{l.label}</div>
+                <div className="text-sm font-semibold mt-0.5">{l.desc}</div>
+                <div className="text-xs text-muted-foreground mt-1.5 italic">{l.q}</div>
+              </div>
+            ))}
+          </div>
+          <div className="text-center">
+            <a href="/demo/cprt"
+              className="inline-block px-6 py-3 rounded-lg font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#7c3aed" }}>
+              Run the full CPRT walkthrough &rarr;
+            </a>
+            <p className="text-xs text-muted-foreground mt-3">
+              Worked scenario: coagulation send-out brought in-house at 180 tests/year. Live volume slider, insource vs capital verdict bars.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Section: Calculator */}
       <section id="section-calculator" className="py-12 sm:py-16 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <Calculator size={14} />
-              Module 1: VeritaBench™
+              Module 2: VeritaBench™
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Instant Lab Productivity Scorecard</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -1129,7 +1173,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <BarChart3 size={14} />
-              Module 2: VeritaPace™
+              Module 3: VeritaPace™
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Track Productivity Over Time</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -1148,7 +1192,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <Grid3X3 size={14} />
-              Module 3: VeritaShift™
+              Module 4: VeritaShift™
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Optimize Staffing by the Hour</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -1167,7 +1211,7 @@ export default function DemoPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full mb-4" style={{ backgroundColor: "#01696F15", color: "#01696F" }}>
               <Package size={14} />
-              Module 4: VeritaStock{"™"}
+              Module 5: VeritaStock{"™"}
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Smart Inventory Management</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
