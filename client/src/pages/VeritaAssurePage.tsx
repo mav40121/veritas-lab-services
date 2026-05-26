@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
   ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
-  TestTubes, ClipboardList,
+  TestTubes, ClipboardList, Activity,
 } from "lucide-react";
 
 const MODULES = [
@@ -87,6 +87,17 @@ const MODULES = [
     badgeColor: "emerald",
     icon: Shield,
     color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
+  {
+    href: "/veritaqc-app",
+    label: "VeritaQC™",
+    desc: "Daily QC + Westgard Multi-Rule Evaluator",
+    detail:
+      "Tech-facing daily QC entry with real-time Westgard rule evaluation (1-2s, 1-3s, 2-2s, R-4s, 4-1s, N-x bias, N-T trend). Required corrective action capture on every rejection. Daily review feed across all lots with missing-CA triage filter. Monthly review PDF with on-page-1 attestation and inline Levey-Jennings chart. Per-lab and per-analyte rule configuration (CLSI C24 supports lab-set bias and trend counts).",
+    badge: "Phase 1 preview",
+    badgeColor: "amber",
+    icon: Activity,
+    color: "text-green-600 bg-green-500/10 border-green-500/20",
   },
   {
     href: "/veritatrack-app",
