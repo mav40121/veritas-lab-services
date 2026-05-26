@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-import { ModuleHowToCard } from "@/components/ModuleHowToCard";
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import {
   ArrowLeft,
   Copy,

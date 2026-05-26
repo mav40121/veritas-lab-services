@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-import { ModuleHowToCard } from "@/components/ModuleHowToCard";
   Select,
   SelectContent,
   SelectGroup,
@@ -20,6 +19,7 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import {
   Dialog,
   DialogContent,
