@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   CheckCircle2, AlertTriangle, MapPin, ClipboardList, FlaskConical,
-  ArrowRight, Shield, Users, Award,
+  ArrowRight, Shield, Users, Award, CalendarDays,
   ChevronDown, ChevronUp, Activity, Info, FileText, Download, TestTubes
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
@@ -117,6 +117,11 @@ export default function DemoLabPage() {
     { id: "veritacomp", label: "VeritaComp™", icon: Award },
     { id: "veritastaff", label: "VeritaStaff™", icon: Users },
     { id: "veritapt", label: "VeritaPT™", icon: TestTubes }, // coverage analyzer
+    { id: "veritalab", label: "VeritaLab™", icon: FileText },
+    { id: "veritapolicy", label: "VeritaPolicy™", icon: Shield },
+    { id: "veritaqc", label: "VeritaQC™", icon: Activity },
+    { id: "veritatrack", label: "VeritaTrack™", icon: CalendarDays },
+    { id: "veritaresponse", label: "VeritaResponse™", icon: ClipboardList },
   ];
 
   const typeLabel: Record<string, string> = {
@@ -1240,6 +1245,156 @@ export default function DemoLabPage() {
                 <p className="text-white font-medium">Know your PT coverage status before your next inspection.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
                   <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 7: VERITALAB ═══════════════ */}
+          {activeTab === "veritalab" && (
+            <div className="space-y-5">
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Riverside Regional never misses a certificate renewal.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaLab&#8482; tracks CLIA, CAP, TJC, COLA, state laboratory licenses, and lab director credentials with advance email reminders at 90, 60, and 30 days before expiration. Document archive holds every certificate PDF.
+                </p>
+              </div>
+              <Card>
+                <CardContent className="py-5">
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Certificate inventory: CLIA, CAP, TJC, COLA, state licenses, lab director licenses, board certifications.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Auto-populated CLIA from your CMS-116 application.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Advance email reminders at 90, 60, and 30 days before expiration.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Document archive: upload and retain certificate PDFs against each cert.</span></li>
+                  </ul>
+                </CardContent>
+              </Card>
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">See your certificate expirations before your director or surveyor does.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/veritalab">Learn more <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 8: VERITAPOLICY ═══════════════ */}
+          {activeTab === "veritapolicy" && (
+            <div className="space-y-5">
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  96 CFR-anchored laboratory policies, ready to adopt.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaPolicy&#8482; ships generic, CFR-anchored policy templates the lab can adopt directly. Each template opens with the verbatim eCFR text, then the lab's standing rule in plain CFR voice. Service-line toggles auto-apply N/A. Inspection-ready PDF report with readiness score.
+                </p>
+              </div>
+              <Card>
+                <CardContent className="py-5">
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>96 generic policy templates spanning Leadership, Specimen Management, Testing, Personnel, Quality, Information Systems, Safety, and Specialty Services.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Each template carries verbatim eCFR text plus the lab's standing rule. No accreditor checklist text reproduced (copyright-safe).</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Token placeholders ({"<<LAB_NAME>>"}, {"<<CLIA_NUMBER>>"}, {"<<DIRECTOR_NAME>>"}) replaced with your lab's identity at download time.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Inspection-ready PDF report with readiness score by section.</span></li>
+                  </ul>
+                </CardContent>
+              </Card>
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Stop staring at a blank page when a surveyor asks for a policy.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/veritapolicy">Learn more <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 9: VERITAQC ═══════════════ */}
+          {activeTab === "veritaqc" && (
+            <div className="space-y-5">
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Westgard rules evaluated at the bench. Monthly attestation signed by the medical director or designee.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaQC&#8482; runs daily QC entry with real-time Westgard rule evaluation (1-2s, 1-3s, 2-2s, R-4s, 4-1s, N-x bias, N-T trend). Required corrective action capture on every rejection. Monthly review PDF with on-page-1 attestation block and inline Levey-Jennings chart.
+                </p>
+              </div>
+              <Card>
+                <CardContent className="py-5">
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Tech-facing entry: pick a control lot, log the result, see the Westgard decision in real time.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Required corrective action capture when a rejection rule fires; baseline-excludes-candidate evaluator so outliers do not self-dampen.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Daily review feed across all lots, with missing-corrective-action triage filter.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Monthly PDF with on-page-1 attestation and inline Levey-Jennings chart. Phase 1 preview.</span></li>
+                  </ul>
+                </CardContent>
+              </Card>
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">90 days of Estradiol QC, one warning, one rejection, one signed monthly review.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/demo/qc">Run the full QC walkthrough <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 10: VERITATRACK ═══════════════ */}
+          {activeTab === "veritatrack" && (
+            <div className="space-y-5">
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  Every timed regulatory task, in one calendar.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaTrack&#8482; tracks calibration verification, correlations, competency, equipment calibration, QC review, and every other timed regulatory task. Auto-imports schedules from VeritaMap&#8482;. Sign-off logging with initials and dates. Excel export matches your existing regulatory calendar format.
+                </p>
+              </div>
+              <Card>
+                <CardContent className="py-5">
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Calibration verification, correlations, competency, instrument maintenance, QC review, PT enrollment, license renewal: all in one calendar.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Auto-imports schedules from VeritaMap&#8482; so adding a new instrument auto-creates its cal-ver cadence.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Sign-off logging with initials, dates, and reviewer; survey-ready audit trail.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Excel export matches the format your lab already uses for its regulatory calendar.</span></li>
+                  </ul>
+                </CardContent>
+              </Card>
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Know what is due, when, and who signed it off.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/veritatrack-app">Learn more <ArrowRight size={14} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════ TAB 11: VERITARESPONSE ═══════════════ */}
+          {activeTab === "veritaresponse" && (
+            <div className="space-y-5">
+              <div className="border-l-4 border-[#006064] pl-5 mb-2">
+                <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                  When you get cited, you have a clock and a workflow, not a Word document and a panic.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  VeritaResponse&#8482; turns post-survey deficiencies into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled. Cross-links to your most recent VeritaCheck&#8482; study for the cited standard.
+                </p>
+              </div>
+              <Card>
+                <CardContent className="py-5">
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Per-accreditor due-date clocks: CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Cross-links to your most recent VeritaCheck&#8482; study so you can show the surveyor what you had already done.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>One source of truth for each finding, replacing scattered Word documents and email threads.</span></li>
+                  </ul>
+                </CardContent>
+              </Card>
+              <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
+                <p className="text-white font-medium">Citation day is not the day to learn your response process.</p>
+                <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
+                  <Link href="/veritaresponse">Learn more <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
