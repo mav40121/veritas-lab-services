@@ -21,73 +21,16 @@ const modules = [
       "VeritaScan\u2122 Inspection Readiness",
       "VeritaMap\u2122 Reportable Range Mapping",
       "VeritaComp\u2122 Competency Tracking",
+      "VeritaQC\u2122 Westgard + Monthly Attestation (Phase 1 preview)",
     ],
     description:
-      "Explore the full compliance suite: method verification, inspection readiness scoring, reportable range mapping, and competency management.",
+      "Method verification, inspection readiness scoring, reportable range mapping, competency management, and daily QC with Westgard rule evaluation and monthly attestation.",
     cta: "Explore Compliance Suite",
-  },
-  {
-    key: "qc",
-    label: "Westgard QC + Monthly Attestation",
-    brand: "VeritaQC\u2122 (Phase 1 preview)",
-    path: "/demo/qc",
-    color: "#16a34a",
-    icon: (
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="20" width="40" height="4" fill="#16a34a" opacity="0.2" />
-        <line x1="4" y1="22" x2="44" y2="22" stroke="#16a34a" strokeWidth="1" strokeDasharray="2 2" opacity="0.6" />
-        <polyline points="6,24 12,21 18,23 24,17 30,25 36,12 42,22" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="6" cy="24" r="2" fill="#16a34a" />
-        <circle cx="12" cy="21" r="2" fill="#16a34a" />
-        <circle cx="18" cy="23" r="2" fill="#16a34a" />
-        <circle cx="24" cy="17" r="2.5" fill="#d97706" />
-        <circle cx="30" cy="25" r="2" fill="#16a34a" />
-        <circle cx="36" cy="12" r="3" fill="#dc2626" />
-        <circle cx="42" cy="22" r="2" fill="#16a34a" />
-      </svg>
-    ),
-    features: [
-      "Westgard multi-rule evaluator (1-2s, 1-3s, 2-2s, R-4s, 4-1s, N-x, N-T)",
-      "Levey-Jennings chart with violation markers",
-      "Required corrective action on rejection",
-      "Monthly review PDF with on-page-1 attestation",
-    ],
-    description:
-      "90 days of Estradiol QC on a demo lot. One warning, one rejection with corrective action filed, one signed monthly review. See the full daily-to-monthly workflow.",
-    cta: "Run the QC walkthrough",
-  },
-  {
-    key: "cprt",
-    label: "Cost Per Reportable Test",
-    brand: "VeritaOps\u2122",
-    path: "/demo/cprt",
-    color: "#7c3aed",
-    icon: (
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="32" width="9" height="12" rx="2" fill="#7c3aed" opacity="0.35" />
-        <rect x="17" y="24" width="9" height="20" rx="2" fill="#7c3aed" opacity="0.55" />
-        <rect x="28" y="16" width="9" height="28" rx="2" fill="#7c3aed" opacity="0.75" />
-        <rect x="39" y="8" width="6" height="36" rx="2" fill="#7c3aed" />
-        <text x="10" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L1</text>
-        <text x="21" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L2</text>
-        <text x="32" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L3</text>
-        <text x="42" y="42" fontSize="8" fontWeight="700" fill="#fff" textAnchor="middle">L4</text>
-      </svg>
-    ),
-    features: [
-      "Four-layer GP11-A conceptual model",
-      "Live volume slider on a worked scenario",
-      "Insource vs send-out, side-by-side",
-      "One-page internal PDF for finance",
-    ],
-    description:
-      "Cost per reportable test is not one number. It is four. Move the volume slider and watch the answer change. Built on the conceptual model in CLSI GP11-A.",
-    cta: "Run the CPRT walkthrough",
   },
   {
     key: "operations",
     label: "Operations Demo",
-    brand: "VeritaBench\u2122",
+    brand: "VeritaBench\u2122 + VeritaOps\u2122",
     path: "/demo/operations",
     color: "#01696F",
     icon: (
@@ -105,9 +48,10 @@ const modules = [
       "Monthly Productivity Tracking",
       "By-Hour Staffing Analysis",
       "Inventory Management",
+      "VeritaOps™ Cost Per Reportable Test (4-layer CLSI GP11-A)",
     ],
     description:
-      "See how your lab's staffing efficiency compares to industry benchmarks, track trends over time, and optimize scheduling by the hour.",
+      "Staffing efficiency benchmarks, monthly productivity tracking, by-hour scheduling, and the four-layer Cost-Per-Reportable-Test calculator built on the conceptual model in CLSI GP11-A.",
     cta: "Explore Operations Tools",
   },
 ];
