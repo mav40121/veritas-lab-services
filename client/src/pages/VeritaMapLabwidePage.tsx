@@ -8,13 +8,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-import { ModuleHowToCard } from "@/components/ModuleHowToCard";
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import {
   Tooltip,
   TooltipContent,
