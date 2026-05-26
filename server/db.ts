@@ -1689,6 +1689,121 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON ve
   }
 }
 
+// Phase 3 Cluster 1 (Transfusion) — one-shot migration: forward existing
+// per-source-policy status entries (IDs 41-65) onto the combined-policy
+// IDs (97-102). Idempotent: gated by the existence of any source row in
+// the status table. Migration rule per the plan: lowest-completion wins.
+// N/A only if ALL absorbed source rows for a given (user, combined) were
+// N/A. our_policy_name and notes are concatenated (deduped, "; "-joined)
+// so the lab does not lose context they entered against source rows.
+{
+  const SOURCE_TO_COMBINED: Record<string, string> = {
+    "41": "97",
+    "49": "98", "50": "98", "51": "98",
+    "42": "99", "44": "99", "45": "99", "46": "99", "47": "99",
+    "48": "99", "55": "99", "56": "99", "57": "99",
+    "52": "100", "53": "100", "54": "100", "58": "100", "59": "100", "60": "100",
+    "61": "101", "62": "101",
+    "43": "102", "63": "102", "64": "102", "65": "102",
+  };
+  const STATUS_RANK: Record<string, number> = {
+    "not_started": 0,
+    "in_progress": 1,
+    "complete": 2,
+  };
+  const STATUS_FROM_RANK = ["not_started", "in_progress", "complete"];
+
+  try {
+    const sourceIds = Object.keys(SOURCE_TO_COMBINED);
+    const placeholders = sourceIds.map(() => "?").join(",");
+    const stale = sqlite.prepare(
+      `SELECT user_id, policy_id, status, is_na, na_reason, our_policy_name, notes
+       FROM veritapolicy_master_status WHERE policy_id IN (${placeholders})`
+    ).all(...sourceIds) as Array<{
+      user_id: number; policy_id: string; status: string; is_na: number;
+      na_reason: string | null; our_policy_name: string | null; notes: string | null;
+    }>;
+
+    if (stale.length > 0) {
+      // Group by (user_id, combined_id)
+      const byUserCombined = new Map<string, typeof stale>();
+      for (const row of stale) {
+        const combinedId = SOURCE_TO_COMBINED[row.policy_id];
+        const k = `${row.user_id}|${combinedId}`;
+        if (!byUserCombined.has(k)) byUserCombined.set(k, []);
+        byUserCombined.get(k)!.push(row);
+      }
+
+      const upsert = sqlite.prepare(
+        `INSERT INTO veritapolicy_master_status
+           (user_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(user_id, policy_id) DO UPDATE SET
+           status = excluded.status,
+           is_na = excluded.is_na,
+           na_reason = excluded.na_reason,
+           our_policy_name = excluded.our_policy_name,
+           notes = excluded.notes,
+           updated_at = datetime('now')`
+      );
+      const dedupeJoin = (vals: Array<string | null>) => {
+        const seen: string[] = [];
+        for (const v of vals) {
+          for (const part of (v || "").split(/;\s*/)) {
+            const t = part.trim();
+            if (t && !seen.includes(t)) seen.push(t);
+          }
+        }
+        return seen.join("; ") || null;
+      };
+
+      let migratedCount = 0;
+      for (const [k, rows] of Array.from(byUserCombined)) {
+        const [userIdStr, combinedId] = k.split("|");
+        const userId = Number(userIdStr);
+        const allNa = rows.every(r => r.is_na === 1);
+        let combinedStatus: string;
+        let combinedIsNa: number;
+        if (allNa) {
+          combinedStatus = "not_started";
+          combinedIsNa = 1;
+        } else {
+          // Lowest-completion wins among non-N/A rows
+          const ranks = rows.filter(r => r.is_na !== 1).map(r => STATUS_RANK[r.status] ?? 0);
+          const minRank = Math.min(...ranks);
+          combinedStatus = STATUS_FROM_RANK[minRank];
+          combinedIsNa = 0;
+        }
+        upsert.run(
+          userId,
+          combinedId,
+          combinedStatus,
+          combinedIsNa,
+          dedupeJoin(rows.map(r => r.na_reason)),
+          dedupeJoin(rows.map(r => r.our_policy_name)),
+          dedupeJoin(rows.map(r => r.notes)),
+        );
+        migratedCount += 1;
+      }
+
+      // Delete the original source-id rows now that they've been folded into
+      // the combined-policy rows. Safe because UNIQUE(user_id, policy_id)
+      // guarantees the upsert created the new rows.
+      const delStmt = sqlite.prepare(
+        `DELETE FROM veritapolicy_master_status WHERE policy_id IN (${placeholders})`
+      );
+      const delResult = delStmt.run(...sourceIds);
+      console.log(
+        `[migration] VeritaPolicy Phase 3 Cluster 1: folded ${stale.length} ` +
+        `source-id status rows into ${migratedCount} combined-policy rows ` +
+        `(deleted ${delResult.changes} source rows).`
+      );
+    }
+  } catch (err: any) {
+    console.error("[migration] VeritaPolicy Phase 3 Cluster 1 failed:", err.message);
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.2 (VeritaPolicy module):
 // Add lab_id to all four veritapolicy_* tables and backfill from each row's
 // user_id → users.lab_id. user_id columns stay (with their UNIQUE constraints)
