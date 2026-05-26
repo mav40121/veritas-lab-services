@@ -46,7 +46,17 @@ function ColaBanner() {
   );
 }
 
-const PLANS = [
+// 2026-05-26 pricing-page redesign per Lisa Veri's feedback. The prior
+// 6-tile grid placed System ("Custom quote") at the bottom-right, which
+// read to prospects with a $3-5k capital budget as "the next tier above
+// Hospital is unaffordable, don't bother." Restructure: top row is the
+// pay-as-you-go entry options (VeritaCheck-only). Center band carries the
+// multi-lab / SSO / BAA / SLA messaging that the old System tile owned,
+// plus a "request a custom quote" CTA. Bottom row is the full-suite tiers
+// (Clinic, Community, Hospital). No standalone System tile; that path is
+// discoverable through the center band.
+
+const TOP_PLANS = [
   {
     name: "Per Study",
     price: "$25",
@@ -88,6 +98,9 @@ const PLANS = [
     highlight: false,
     badge: null,
   },
+];
+
+const SUITE_PLANS = [
   {
     name: "Clinic",
     price: "$999",
@@ -136,23 +149,6 @@ const PLANS = [
     ],
     buttonLabel: "Subscribe",
     buttonHref: "/login?tier=hospital",
-    highlight: false,
-    badge: null,
-  },
-  {
-    name: "System",
-    price: "Custom",
-    period: "quote",
-    description: "Health systems, multi-site labs, and enterprise integrations.",
-    features: [
-      "More than one CLIA-certified lab",
-      "16+ active seats",
-      "Multi-site reporting + role-based admin hierarchy",
-      "SSO, BAA, custom security review",
-      "Dedicated success manager + priority SLA",
-    ],
-    buttonLabel: "Request a quote",
-    buttonHref: "/contact?subject=System+tier+quote",
     highlight: false,
     badge: null,
   },
@@ -294,8 +290,17 @@ return (
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {PLANS.map((plan) => (
+        {/* Inline plan-card renderer. Same JSX shape and analytics events
+            as the prior single-grid version; just lifted into a helper so
+            the top row and bottom row can share it without duplication. */}
+        {(() => {
+          const tierSlug: Record<string, string> = {
+            "VeritaCheck\u2122 Unlimited": "veritacheck",
+            "Clinic": "clinic",
+            "Community": "community",
+            "Hospital": "hospital",
+          };
+          const renderPlanCard = (plan: typeof TOP_PLANS[number] | typeof SUITE_PLANS[number]) => (
             <Card
               key={plan.name}
               className={`relative h-full flex flex-col transition-all ${
@@ -342,62 +347,52 @@ return (
                   ))}
                 </ul>
 
-                {plan.period === "/yr" && plan.name !== "Per Study" ? (() => {
-                  const tierSlug: Record<string, string> = {
-                    "VeritaCheck\u2122 Unlimited": "veritacheck",
-                    "Clinic": "clinic",
-                    "Community": "community",
-                    "Hospital": "hospital",
-                    "Enterprise": "enterprise",
-                  };
-                  const slug = tierSlug[plan.name] || "";
-                  return (
-                    <div className="space-y-2.5">
-                      <Button
-                        asChild
-                        className="w-full font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
+                {plan.period === "/yr" && plan.name !== "Per Study" ? (
+                  <div className="space-y-2.5">
+                    <Button
+                      asChild
+                      className="w-full font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                      <Link
+                        href={`/request-invoice?tier=${tierSlug[plan.name] || ""}`}
+                        onClick={() => trackEvent('invoice_request_card_link_click', { tier: tierSlug[plan.name] || "" })}
                       >
-                        <Link
-                          href={`/request-invoice?tier=${slug}`}
-                          onClick={() => trackEvent('invoice_request_card_link_click', { tier: slug })}
-                        >
-                          Request an invoice <ChevronRight size={14} className="ml-1" />
-                        </Link>
-                      </Button>
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="w-full font-semibold border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground"
+                        Request an invoice <ChevronRight size={14} className="ml-1" />
+                      </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full font-semibold border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <Link
+                        href={plan.buttonHref}
+                        onClick={() => {
+                          // Funnel signal: user selected a plan and is heading to login/account
+                          // to start checkout. The actual GA4 begin_checkout event is fired
+                          // later, at the moment the Stripe session is created in
+                          // AccountSettingsPage.goToCheckout(), so the value matches the
+                          // priceType actually charged.
+                          trackEvent('select_item', {
+                            item_list_id: 'pricing_page',
+                            item_list_name: 'Pricing Page Plans',
+                            items: [{
+                              item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
+                              item_name: plan.name,
+                              price: parseFloat(plan.price.replace(/[$,]/g, '')),
+                              quantity: 1,
+                            }],
+                          });
+                        }}
                       >
-                        <Link
-                          href={plan.buttonHref}
-                          onClick={() => {
-                            // Funnel signal: user selected a plan and is heading to login/account
-                            // to start checkout. The actual GA4 begin_checkout event is fired
-                            // later, at the moment the Stripe session is created in
-                            // AccountSettingsPage.goToCheckout(), so the value matches the
-                            // priceType actually charged.
-                            trackEvent('select_item', {
-                              item_list_id: 'pricing_page',
-                              item_list_name: 'Pricing Page Plans',
-                              items: [{
-                                item_id: plan.name.toLowerCase().replace(/\W+/g, '_'),
-                                item_name: plan.name,
-                                price: parseFloat(plan.price.replace(/[$,]/g, '')),
-                                quantity: 1,
-                              }],
-                            });
-                          }}
-                        >
-                          Subscribe <ChevronRight size={14} className="ml-1" />
-                        </Link>
-                      </Button>
-                      <p className="text-xs text-center text-muted-foreground">
-                        14-day free trial &middot; 30-day money-back guarantee
-                      </p>
-                    </div>
-                  );
-                })() : (
+                        Subscribe <ChevronRight size={14} className="ml-1" />
+                      </Link>
+                    </Button>
+                    <p className="text-xs text-center text-muted-foreground">
+                      14-day free trial &middot; 30-day money-back guarantee
+                    </p>
+                  </div>
+                ) : (
                   <Button
                     asChild
                     className="w-full font-semibold"
@@ -429,11 +424,62 @@ return (
                 )}
               </CardContent>
             </Card>
-          ))}
-        </div>
+          );
+
+          return (
+            <>
+              {/* Top row: Pay-as-you-go entry tiles. Two cards, centered. */}
+              <div>
+                <p className="text-xs uppercase tracking-wider text-primary font-semibold text-center mb-3">
+                  Pay As You Go
+                </p>
+                <div className="grid sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+                  {TOP_PLANS.map(renderPlanCard)}
+                </div>
+              </div>
+
+              {/* Center band: Multi-lab / system messaging. Replaces the old
+                  System tile so prospects with mid-range budgets don't read
+                  a 6th tile as "the unaffordable next step up." */}
+              <div className="border border-primary/30 bg-primary/5 rounded-lg p-6 max-w-4xl mx-auto text-center">
+                <p className="font-semibold text-base text-foreground mb-2">
+                  Multi-lab, 16+ seats, SSO, BAA, or SLA?
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Combine the tiers below across multiple CLIA labs.
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  All labs in a system roll up under a single account, so directors and operators see every site from one dashboard.
+                </p>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="mt-4 font-semibold border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground"
+                >
+                  <Link
+                    href="/contact?subject=System+tier+quote"
+                    onClick={() => trackEvent('system_quote_request_band_click', { source: 'pricing_band' })}
+                  >
+                    Request a custom quote <ArrowRight size={14} className="ml-1" />
+                  </Link>
+                </Button>
+              </div>
+
+              {/* Bottom row: Full suite tiers. Most prospects land here. */}
+              <div>
+                <p className="text-xs uppercase tracking-wider text-primary font-semibold text-center mb-3">
+                  Full Suite
+                </p>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {SUITE_PLANS.map(renderPlanCard)}
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Seat note */}
-        <p className="text-xs text-center text-muted-foreground -mt-4">
+        <p className="text-xs text-center text-muted-foreground">
           Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. View-only access for medical directors and reviewers is unlimited and not counted against the tier.
         </p>
 
@@ -489,25 +535,23 @@ return (
                   <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Clinic</th>
                   <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Community</th>
                   <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Hospital</th>
-                  <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Enterprise</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {[
-                  { feature: "VeritaCheck\u2122 studies (including CUMSUM)", values: ["1 study", true, true, true, true, true] },
-                  { feature: "Full PDF reports with CLIA number", values: [true, true, true, true, true, true] },
-                  { feature: "VeritaScan\u2122 inspection readiness", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaMap\u2122 test menu mapping", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaComp\u2122 competency tracking", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaStaff\u2122 personnel management", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaTrack\u2122 regulatory calendar", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaLab\u2122 certificate management", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaQA™", values: [false, false, true, true, true, true] },
-                  { feature: "VeritaStock\u2122 inventory management", values: [false, false, true, true, true, true] },
-                  { feature: "Seats included", values: ["1", "1", "2", "5", "15", "25"] },
-                  { feature: "Onboarding session", values: [false, false, "1 hour", "1 hour", "2 hours", "Custom"] },
-                  { feature: "Priority support", values: [false, false, false, true, true, true] },
-                  { feature: "Consulting access", values: [false, false, false, false, false, true] },
+                  { feature: "VeritaCheck\u2122 studies (including CUMSUM)", values: ["1 study", true, true, true, true] },
+                  { feature: "Full PDF reports with CLIA number", values: [true, true, true, true, true] },
+                  { feature: "VeritaScan\u2122 inspection readiness", values: [false, false, true, true, true] },
+                  { feature: "VeritaMap\u2122 test menu mapping", values: [false, false, true, true, true] },
+                  { feature: "VeritaComp\u2122 competency tracking", values: [false, false, true, true, true] },
+                  { feature: "VeritaStaff\u2122 personnel management", values: [false, false, true, true, true] },
+                  { feature: "VeritaTrack\u2122 regulatory calendar", values: [false, false, true, true, true] },
+                  { feature: "VeritaLab\u2122 certificate management", values: [false, false, true, true, true] },
+                  { feature: "VeritaQA™", values: [false, false, true, true, true] },
+                  { feature: "VeritaStock\u2122 inventory management", values: [false, false, true, true, true] },
+                  { feature: "Seats included", values: ["1", "1", "2", "5", "15"] },
+                  { feature: "Onboarding session", values: [false, false, "1 hour", "1 hour", "2 hours"] },
+                  { feature: "Priority support", values: [false, false, false, true, true] },
                 ].map((row) => (
                   <tr key={row.feature} className="hover:bg-muted/20">
                     <td className="sticky left-0 bg-background px-4 py-2.5 font-medium">{row.feature}</td>

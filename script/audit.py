@@ -348,13 +348,15 @@ def check_live_seats():
 #      Hospital, Enterprise) must show every module as included.
 #   2. Tier monotonicity: a higher tier must not have FEWER features than a
 #      lower tier. Per Study and VC Unlimited are vertical SKUs and may legally
-#      omit modules; the four full plans (Clinic -> Community -> Hospital ->
-#      Enterprise) must be monotonically non-decreasing.
+#      omit modules; the three full plans (Clinic -> Community -> Hospital) must
+#      be monotonically non-decreasing. Enterprise was retired from the table
+#      on 2026-05-26 when the pricing-page redesign moved multi-lab buyers
+#      from a 6th tile to the center band.
 
 # Column order in the Compare Plans table values array.
-COMPARE_PLANS_COLUMNS = ["Per Study", "VC Unlimited", "Clinic", "Community", "Hospital", "Enterprise"]
-# Indexes 2..5 are the four full subscription tiers; these must include every module.
-FULL_PLAN_INDEXES = [2, 3, 4, 5]
+COMPARE_PLANS_COLUMNS = ["Per Study", "VC Unlimited", "Clinic", "Community", "Hospital"]
+# Indexes 2..4 are the three full subscription tiers; these must include every module.
+FULL_PLAN_INDEXES = [2, 3, 4]
 
 # Rows that represent a module/feature gate (boolean). Other rows like
 # "Seats included" or "Onboarding session" carry strings and are excluded.
