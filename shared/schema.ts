@@ -44,7 +44,7 @@ export const studies = sqliteTable("studies", {
   cliaAbsoluteUnit: text("clia_absolute_unit"),
   instrumentMeta: text("instrument_meta"),
   // Phase 1 parity (2026-05-20): optional inputs for the simple precision
-  // study that mirror EP Evaluator's "User's Specifications" panel. Vendor
+  // study that mirror other evaluation tools's "User's Specifications" panel. Vendor
   // SD drives the optional three-state verdict; target mean drives the
   // optional bias / %bias surface; concentration + target CV are echoed in
   // the Supporting Data panel only.

@@ -37,7 +37,7 @@ function stddev(v: number[]) {
 // ─── Inverse normal / chi-square / Student's t ───────────────────────────────
 // Needed for 95% confidence intervals on SD (chi-square inverse) and Mean
 // (t-distribution inverse) in the simple precision study. Accuracy goal: match
-// EP Evaluator's printed values to two decimal places for N in [5, 100]. All
+// other evaluation tools's printed values to two decimal places for N in [5, 100]. All
 // hand-rolled to keep the bundle free of a stats dependency, consistent with
 // the rest of calculations.ts.
 
@@ -77,7 +77,7 @@ function invChiSquare(p: number, df: number): number {
 }
 
 // Hill's series (Hill, CACM 1970 Algorithm 396) for the inverse Student's t CDF.
-// Four-term polynomial in z = invStandardNormal(p). Matches EP Evaluator's
+// Four-term polynomial in z = invStandardNormal(p). Matches other evaluation tools's
 // t(0.025, 34) = 2.0322 to four decimals.
 function invStudentT(p: number, df: number): number {
   if (df <= 0) return 0;
@@ -96,7 +96,7 @@ function invStudentT(p: number, df: number): number {
 // Two-tailed 95% CI for a sample SD given n observations. Returns [lower, upper].
 // Derivation: (n-1)*s^2/sigma^2 follows chi-square(n-1), so the CI for sigma
 // uses chi2(1-alpha/2) for the LOWER bound on sigma and chi2(alpha/2) for the
-// UPPER bound on sigma. Verified against EP Evaluator's printed values for
+// UPPER bound on sigma. Verified against other evaluation tools's printed values for
 // the Pfizer A-ALT dataset (n=35, SD=1.1, CI 0.9 to 1.4).
 export function sdConfidenceInterval95(sd: number, n: number): [number, number] | null {
   if (n < 2 || sd <= 0) return null;
@@ -725,7 +725,7 @@ export interface PrecisionLevelResult {
   bias?: number;
   percentBias?: number;
   // Populated only when caller passes opts.vendorSD. The three-state verdict
-  // follows EP Evaluator's strict reading: Pass = upper 95% CI for SD ≤ goal;
+  // follows other evaluation tools's strict reading: Pass = upper 95% CI for SD ≤ goal;
   // Uncertain = goal lies inside the 95% CI; Fail = lower 95% CI > goal.
   vendorSD?: number;
   vendorVerdict?: "Pass" | "Fail" | "Uncertain";
@@ -813,7 +813,7 @@ export function calculatePrecision(
     }
     if (typeof opts.vendorSD === "number" && opts.vendorSD > 0) {
       out.vendorSD = opts.vendorSD;
-      // EP Evaluator strict three-state verdict: Pass when upper 95% CI for SD
+      // other evaluation tools strict three-state verdict: Pass when upper 95% CI for SD
       // does not exceed the goal; Uncertain when the goal sits inside the CI;
       // Fail when the goal sits below the lower CI bound.
       const upper = sdCi ? sdCi[1] : sdVal;

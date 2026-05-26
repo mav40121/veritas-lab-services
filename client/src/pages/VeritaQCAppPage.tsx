@@ -132,6 +132,23 @@ export default function VeritaQCAppPage() {
   const [caFollowUp, setCaFollowUp] = useState("");
   const [caSubmitting, setCaSubmitting] = useState(false);
 
+  // Add-Control-Lot dialog state. Drives the 8-field form that creates a
+  // new entry in qc_control_lots via POST /api/labs/:labId/qc/control-lots.
+  // On success the dropdown auto-selects the new lot so the tech can log
+  // a result against it immediately.
+  const [addLotOpen, setAddLotOpen] = useState(false);
+  const [newAnalyte, setNewAnalyte] = useState("");
+  const [newLotNumber, setNewLotNumber] = useState("");
+  const [newLevel, setNewLevel] = useState<"low" | "mid" | "high">("mid");
+  const [newManufacturer, setNewManufacturer] = useState("");
+  const [newMfrMean, setNewMfrMean] = useState("");
+  const [newMfrSd, setNewMfrSd] = useState("");
+  const [newSdInterval, setNewSdInterval] = useState<"2" | "3">("2");
+  const [newExpiration, setNewExpiration] = useState("");
+  const [newOpened, setNewOpened] = useState("");
+  const [addLotSubmitting, setAddLotSubmitting] = useState(false);
+  const [retireSubmitting, setRetireSubmitting] = useState(false);
+
   async function loadLots() {
     if (!activeLabId) return;
     setLoadingLots(true);
@@ -278,6 +295,106 @@ export default function VeritaQCAppPage() {
     }
   }
 
+  function resetAddLotForm() {
+    setNewAnalyte("");
+    setNewLotNumber("");
+    setNewLevel("mid");
+    setNewManufacturer("");
+    setNewMfrMean("");
+    setNewMfrSd("");
+    setNewSdInterval("2");
+    setNewExpiration("");
+    setNewOpened("");
+  }
+
+  async function handleAddLot() {
+    if (!activeLabId) return;
+    if (!newAnalyte.trim() || !newLotNumber.trim()) {
+      toast({ title: "Analyte and lot number are required", variant: "destructive" });
+      return;
+    }
+    const meanN = Number(newMfrMean);
+    const sdN = Number(newMfrSd);
+    if (!Number.isFinite(meanN)) {
+      toast({ title: "Manufacturer mean must be a number", variant: "destructive" });
+      return;
+    }
+    if (!Number.isFinite(sdN) || sdN <= 0) {
+      toast({ title: "Manufacturer SD must be a positive number", variant: "destructive" });
+      return;
+    }
+    setAddLotSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/control-lots`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analyte: newAnalyte.trim(),
+          lot_number: newLotNumber.trim(),
+          level: newLevel,
+          manufacturer: newManufacturer.trim() || null,
+          mfr_mean: meanN,
+          mfr_sd: sdN,
+          mfr_sd_interval: Number(newSdInterval),
+          expiration_date: newExpiration || null,
+          opened_date: newOpened || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: res.status === 409 ? "Duplicate lot" : "Could not add control lot",
+          description: err.error || `HTTP ${res.status}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      const data = await res.json();
+      toast({ title: `Added ${data.lot.analyte} lot ${data.lot.lot_number}` });
+      resetAddLotForm();
+      setAddLotOpen(false);
+      await loadLots();
+      // Auto-select the new lot so the tech can log a result against it.
+      setSelectedLotId(data.lot.id);
+    } catch (err: any) {
+      toast({ title: err.message || "Could not add control lot", variant: "destructive" });
+    } finally {
+      setAddLotSubmitting(false);
+    }
+  }
+
+  async function handleRetireLot(lotId: number, nextStatus: "retired" | "hold" | "active") {
+    if (!activeLabId) return;
+    setRetireSubmitting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/qc/control-lots/${lotId}`,
+        {
+          method: "PATCH",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ status: nextStatus }),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "Could not update lot status", variant: "destructive" });
+        return;
+      }
+      const data = await res.json();
+      toast({ title: `Lot ${data.lot.lot_number} marked ${data.lot.status}` });
+      await loadLots();
+      // If we just retired the currently selected lot, slide off it so the
+      // tech doesn't accidentally log against a retired lot.
+      if (nextStatus !== "active" && selectedLotId === lotId) {
+        setSelectedLotId(null);
+      }
+    } catch (err: any) {
+      toast({ title: err.message || "Could not update lot status", variant: "destructive" });
+    } finally {
+      setRetireSubmitting(false);
+    }
+  }
+
   // ── Render gates ─────────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
@@ -360,21 +477,31 @@ export default function VeritaQCAppPage() {
       ) : lots.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-sm text-muted-foreground mb-2">No control lots yet for this lab.</p>
-            <p className="text-xs text-muted-foreground">
-              Ask an admin to seed a lot (POST /api/admin/qc-seed) or contact{" "}
+            <p className="text-sm text-muted-foreground mb-3">No control lots yet for this lab.</p>
+            <Button onClick={() => setAddLotOpen(true)} disabled={isReadOnly}>
+              Add your first control lot
+            </Button>
+            <p className="text-xs text-muted-foreground mt-3">
+              Need help onboarding multiple analytes at once?{" "}
               <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">
                 info@veritaslabservices.com
-              </a>{" "}
-              to onboard. Phase 1B is tech-entry only; lot management lands in a later phase.
+              </a>
             </p>
           </CardContent>
         </Card>
       ) : (
         <>
           <Card className="mb-4">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">Control lot</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAddLotOpen(true)}
+                disabled={isReadOnly}
+              >
+                + Add control lot
+              </Button>
             </CardHeader>
             <CardContent>
               <Select
@@ -392,15 +519,51 @@ export default function VeritaQCAppPage() {
                 </SelectContent>
               </Select>
               {selectedLot && (
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
-                  <div><span className="font-medium text-foreground">Mfr mean:</span> {selectedLot.mfr_mean}</div>
-                  <div><span className="font-medium text-foreground">Mfr SD:</span> {selectedLot.mfr_sd}</div>
-                  <div><span className="font-medium text-foreground">SD interval:</span> &plusmn;{selectedLot.mfr_sd_interval}</div>
-                  <div>
-                    <span className="font-medium text-foreground">Exp:</span>{" "}
-                    {selectedLot.expiration_date || "n/a"}
+                <>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
+                    <div><span className="font-medium text-foreground">Mfr mean:</span> {selectedLot.mfr_mean}</div>
+                    <div><span className="font-medium text-foreground">Mfr SD:</span> {selectedLot.mfr_sd}</div>
+                    <div><span className="font-medium text-foreground">SD interval:</span> &plusmn;{selectedLot.mfr_sd_interval}</div>
+                    <div>
+                      <span className="font-medium text-foreground">Exp:</span>{" "}
+                      {selectedLot.expiration_date || "n/a"}
+                    </div>
                   </div>
-                </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    {selectedLot.status === "active" ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRetireLot(selectedLot.id, "hold")}
+                          disabled={isReadOnly || retireSubmitting}
+                        >
+                          Hold
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRetireLot(selectedLot.id, "retired")}
+                          disabled={isReadOnly || retireSubmitting}
+                        >
+                          Retire
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRetireLot(selectedLot.id, "active")}
+                        disabled={isReadOnly || retireSubmitting}
+                      >
+                        Re-activate
+                      </Button>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      Status: <span className="font-medium text-foreground">{selectedLot.status}</span>
+                    </span>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -601,6 +764,135 @@ export default function VeritaQCAppPage() {
           <div className="flex justify-end gap-2">
             <Button onClick={handleCaSubmit} disabled={caSubmitting || !caActionTaken.trim()}>
               {caSubmitting ? "Saving..." : "File corrective action"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Control Lot dialog. 8 fields, 4 required (analyte, lot_number,
+          mfr_mean, mfr_sd). The rest are operational metadata that the
+          monthly PDF + Westgard evaluator can use but don't gate Phase 1
+          functionality. */}
+      <Dialog open={addLotOpen} onOpenChange={setAddLotOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add control lot</DialogTitle>
+            <DialogDescription>
+              New analyte or a new lot of an existing analyte. The dropdown
+              auto-selects this lot after it saves so you can log against it
+              immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Label htmlFor="new-analyte">Analyte <span className="text-red-600">*</span></Label>
+              <Input
+                id="new-analyte"
+                value={newAnalyte}
+                onChange={(e) => setNewAnalyte(e.target.value)}
+                placeholder="e.g. Glucose, AST, TSH"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-lot-number">Lot number <span className="text-red-600">*</span></Label>
+              <Input
+                id="new-lot-number"
+                value={newLotNumber}
+                onChange={(e) => setNewLotNumber(e.target.value)}
+                placeholder="e.g. 425671"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-level">Level <span className="text-red-600">*</span></Label>
+              <Select value={newLevel} onValueChange={(v) => setNewLevel(v as "low" | "mid" | "high")}>
+                <SelectTrigger id="new-level"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="mid">Mid</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="new-manufacturer">Manufacturer</Label>
+              <Input
+                id="new-manufacturer"
+                value={newManufacturer}
+                onChange={(e) => setNewManufacturer(e.target.value)}
+                placeholder="e.g. Bio-Rad, Roche"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-mean">Mfr mean <span className="text-red-600">*</span></Label>
+              <Input
+                id="new-mean"
+                type="number"
+                step="any"
+                value={newMfrMean}
+                onChange={(e) => setNewMfrMean(e.target.value)}
+                placeholder="e.g. 102.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-sd">Mfr SD <span className="text-red-600">*</span></Label>
+              <Input
+                id="new-sd"
+                type="number"
+                step="any"
+                value={newMfrSd}
+                onChange={(e) => setNewMfrSd(e.target.value)}
+                placeholder="e.g. 3.2"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-sd-interval">SD interval</Label>
+              <Select value={newSdInterval} onValueChange={(v) => setNewSdInterval(v as "2" | "3")}>
+                <SelectTrigger id="new-sd-interval"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">&plusmn;2 SD (default)</SelectItem>
+                  <SelectItem value="3">&plusmn;3 SD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="new-exp">Expiration date</Label>
+              <Input
+                id="new-exp"
+                type="date"
+                value={newExpiration}
+                onChange={(e) => setNewExpiration(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-opened">Opened date</Label>
+              <Input
+                id="new-opened"
+                type="date"
+                value={newOpened}
+                onChange={(e) => setNewOpened(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => { resetAddLotForm(); setAddLotOpen(false); }}
+              disabled={addLotSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddLot}
+              disabled={
+                addLotSubmitting ||
+                !newAnalyte.trim() ||
+                !newLotNumber.trim() ||
+                !newMfrMean ||
+                !newMfrSd
+              }
+            >
+              {addLotSubmitting ? "Saving..." : "Add control lot"}
             </Button>
           </div>
         </DialogContent>

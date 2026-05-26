@@ -227,7 +227,7 @@ function precisionPlotSVG(
 // ─── Histogram with normal curve overlay ─────────────────────────────────────
 // Counts each value into integer-rounded bins, overlays the Gaussian PDF
 // scaled to the bar height of the modal bin. Vertical lines mark observed
-// mean (blue) and target mean (red, when provided), matching EP Evaluator.
+// mean (blue) and target mean (red, when provided), matching other evaluation tools.
 function histogramSVG(
   values: number[], mean: number, sd: number, targetMean: number | null,
   w = 320, h = 220
