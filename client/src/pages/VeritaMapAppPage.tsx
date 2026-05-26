@@ -200,13 +200,13 @@ export default function VeritaMapAppPage() {
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap™"
-        whatItDoes="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. Mayo Clinic Laboratories published critical values display as a STARTING POINT for your facility's Medical Executive Committee (MEC) to review and adopt; final critical values are set by the MEC, not by Mayo. Reference intervals and analytical measurement range (AMR) are intentionally left blank for your lab to verify and enter per 42 CFR 493.1253. The test menu feeds VeritaCheck, VeritaComp, and VeritaPT."
+        whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, suggested critical values (from Mayo Clinic Laboratories, for your MEC to review and adopt), and fields for the reference intervals and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
-          "Pick your instruments from the database of 190+ FDA-cleared analyzers.",
-          "Toggle the tests your lab actually performs on each instrument; CLIA complexity, specialty, and FDA classification auto-populate.",
-          "Take the Mayo Clinic Laboratories critical values to your MEC for review; record the MEC-adopted values in your lab's policy.",
-          "Enter your verified reference intervals and AMR per 42 CFR 493.1253. The system intentionally does not pre-populate these.",
-          "Export to Excel for survey reference or finance review. Other Verita modules read from this menu automatically; update here when you add or retire a test."
+          "Add the instruments your lab runs from the database of 190+ FDA-cleared analyzers.",
+          "Toggle the tests you actually perform on each instrument; CLIA complexity, specialty, and FDA classification populate automatically.",
+          "Review the Mayo Clinic Laboratories starting-point critical values with your Medical Executive Committee; record the MEC-adopted values.",
+          "Enter your verified reference intervals and AMR per 42 CFR 493.1253.",
+          "Other Verita modules read from this menu automatically; update here whenever you add or retire a test."
         ]}
       />
 
