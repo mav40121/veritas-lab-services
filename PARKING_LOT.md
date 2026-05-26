@@ -906,6 +906,19 @@ _(items #34 and #35 closed 2026-05-24; see C23 and C24 below)_
 
 ---
 
+### 36. New module: laboratory non-conforming event documentation
+
+**Effort:** L (initial estimate, pending Michael's scope walkthrough — likely new DB tables, form UI, list / filter / status workflow, attachments, signoffs, exportable summary; comparable in shape to VeritaResponse™ or VeritaQC™)
+**Importance:** High — every accredited laboratory (TJC, CAP, COLA, AABB) has to document non-conforming events under their quality management system standards. No existing Verita module covers this surface; VeritaResponse™ handles post-survey citations and VeritaQC™ handles QC-rule violations, but the general-purpose NCE workflow is a gap.
+
+**What:** Build a module to document laboratory non-conforming events (NCEs). Surfaces a lab needs to capture include specimen rejection, temperature excursions, reagent issues, equipment failures, result-reporting errors, transcription errors, lost specimens, contamination events, and similar quality incidents. Full scope, target accreditor mapping, terminology preference (NCE / NCR / event / incident / occurrence), and how it should relate to the existing VeritaQC corrective-action engine and VeritaResponse deficiency tracker are TBD pending Michael's scope walkthrough.
+
+**Status:** Parked 2026-05-26 with a one-line scope intent. Michael indicated he will walk through the requirements in more detail in a follow-up conversation. Do not start building until that walkthrough happens; rough sizing here is a placeholder.
+
+**Pre- vs post-COLA:** Post-COLA. No customer urgency yet, but high strategic value once defined — closes a real gap every lab has and that no other Verita module currently serves.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
