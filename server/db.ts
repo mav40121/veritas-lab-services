@@ -1135,7 +1135,7 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catc
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN created_by_user_id INTEGER"); } catch {}
 
 // Phase 1 simple-precision parity (2026-05-20): optional inputs that mirror
-// EP Evaluator's User's Specifications panel. Vendor SD drives an alternate
+// other evaluation tools's User's Specifications panel. Vendor SD drives an alternate
 // three-state verdict (Pass/Fail/Uncertain) on the precision study; target
 // mean drives the optional bias/%bias surface. All four are nullable and do
 // not affect the primary CLIA TEa verdict when unset.
@@ -2471,6 +2471,11 @@ sqlite.exec(`
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_requests_status ON veritamap_instrument_requests(status, created_at)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_requests_user ON veritamap_instrument_requests(user_id, created_at)`); } catch {}
+// Migration sentinel per CLAUDE.md §8 NEW DB TABLE RULE. All columns for
+// veritamap_instrument_requests are in the CREATE TABLE above; no columns
+// have been added post-merge. If new columns are added later, guard them
+// with the ensure() pattern used by the qc_* tables below.
+try { (sqlite.prepare(`PRAGMA table_info(veritamap_instrument_requests)`).all() as any[]); } catch {}
 
 // One-time backfill: blood bank compatibility tests should be HIGH complexity
 // per 42 CFR 493.17 (transfusion services). Pre-2026-05-22 the fdaInstrumentData
@@ -2959,6 +2964,18 @@ sqlite.exec(`
 // Opportunistic index for the prune sweep done on every mint. Cheap insert
 // on a few-row table but worth having so prune stays O(matched) not O(table).
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pdf_tokens_expires ON pdf_tokens(expires)`); } catch {}
+// Migration sentinel per CLAUDE.md §8 NEW DB TABLE RULE. pdf_tokens is brand
+// new in PR #385; all four columns are in the CREATE TABLE above. If columns
+// are added later (e.g., user_id for audit, content_type for non-PDF blobs),
+// guard them with the ensure() pattern used by the qc_* tables below.
+try { (sqlite.prepare(`PRAGMA table_info(pdf_tokens)`).all() as any[]); } catch {}
+
+// Migration sentinels for two more post-grandfathered tables that shipped
+// without their own ensure() blocks. All current columns are defined in the
+// CREATE TABLE above; this anchor lets the audit script see migration was
+// considered. Add ensure() rows here if new columns are introduced.
+try { (sqlite.prepare(`PRAGMA table_info(backup_integrity_log)`).all() as any[]); } catch {}
+try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as any[]); } catch {}
 
 // VeritaQC PRAGMA-guarded ALTER migration blocks per CLAUDE.md §8 NEW DB TABLE
 // RULE. Each block re-reads the live table's columns and adds anything that

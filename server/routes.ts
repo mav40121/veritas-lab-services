@@ -1688,6 +1688,125 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ lots });
   });
 
+  // POST /api/labs/:labId/qc/control-lots — add a new control lot for this lab.
+  // Replaces the old admin-only POST /api/admin/qc-seed onboarding path so
+  // lab staff can onboard their own analytes without needing operator help.
+  //
+  // Required: analyte, lot_number, mfr_mean, mfr_sd.
+  // Optional: level (low/mid/high, default mid), manufacturer, mfr_sd_interval
+  // (2 or 3, default 2), mfr_range_low, mfr_range_high, expiration_date,
+  // opened_date.
+  //
+  // Returns 409 on (lab_id, analyte, lot_number) UNIQUE violation so the
+  // caller can re-key off a sibling lot rather than blow up an existing one.
+  app.post("/api/labs/:labId/qc/control-lots", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const {
+      analyte, level, lot_number, manufacturer,
+      mfr_mean, mfr_sd, mfr_sd_interval,
+      mfr_range_low, mfr_range_high,
+      expiration_date, opened_date,
+    } = req.body || {};
+
+    if (!analyte || typeof analyte !== "string" || !analyte.trim()) {
+      return res.status(400).json({ error: "analyte required" });
+    }
+    if (!lot_number || typeof lot_number !== "string" || !lot_number.trim()) {
+      return res.status(400).json({ error: "lot_number required" });
+    }
+    const meanN = Number(mfr_mean);
+    const sdN = Number(mfr_sd);
+    if (!Number.isFinite(meanN)) {
+      return res.status(400).json({ error: "mfr_mean must be a number" });
+    }
+    if (!Number.isFinite(sdN) || sdN <= 0) {
+      return res.status(400).json({ error: "mfr_sd must be a positive number" });
+    }
+    const lvl = String(level || "mid").toLowerCase();
+    if (!["low", "mid", "high"].includes(lvl)) {
+      return res.status(400).json({ error: "level must be low, mid, or high" });
+    }
+    const sdInt = Number(mfr_sd_interval) === 3 ? 3 : 2;
+    const rangeLow = mfr_range_low != null && mfr_range_low !== ""
+      ? Number(mfr_range_low) : null;
+    const rangeHigh = mfr_range_high != null && mfr_range_high !== ""
+      ? Number(mfr_range_high) : null;
+    if (rangeLow != null && !Number.isFinite(rangeLow)) {
+      return res.status(400).json({ error: "mfr_range_low must be a number if provided" });
+    }
+    if (rangeHigh != null && !Number.isFinite(rangeHigh)) {
+      return res.status(400).json({ error: "mfr_range_high must be a number if provided" });
+    }
+
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+
+    try {
+      const ins = sqlite.prepare(
+        "INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+      ).run(
+        req.scope.labId,
+        String(analyte).trim(),
+        lvl,
+        String(lot_number).trim(),
+        manufacturer ? String(manufacturer).trim() : null,
+        meanN,
+        sdN,
+        sdInt,
+        rangeLow,
+        rangeHigh,
+        expiration_date || null,
+        opened_date || null,
+        now, now,
+      );
+      const newLot = sqlite.prepare(
+        "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, created_at, updated_at FROM qc_control_lots WHERE id = ?"
+      ).get(Number(ins.lastInsertRowid));
+      return res.json({ ok: true, lot: newLot });
+    } catch (err: any) {
+      if (err && (err.code === "SQLITE_CONSTRAINT_UNIQUE" || /UNIQUE constraint/i.test(err.message || ""))) {
+        return res.status(409).json({
+          error: `A control lot with analyte "${String(analyte).trim()}" and lot number "${String(lot_number).trim()}" already exists for this lab.`,
+        });
+      }
+      console.error("[qc/control-lots] insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Insert failed" });
+    }
+  });
+
+  // PATCH /api/labs/:labId/qc/control-lots/:id — change lot status. Used by
+  // the "Retire" / "Hold" / "Re-activate" buttons. Status is the only field
+  // mutable via this endpoint; mean/SD edits would invalidate the historical
+  // Westgard chart and are intentionally not supported in this phase.
+  app.patch("/api/labs/:labId/qc/control-lots/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: "valid :id required" });
+    }
+    const { status } = req.body || {};
+    if (!status || typeof status !== "string") {
+      return res.status(400).json({ error: "status required" });
+    }
+    const s = status.toLowerCase();
+    if (!["active", "retired", "hold"].includes(s)) {
+      return res.status(400).json({ error: "status must be active, retired, or hold" });
+    }
+
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare(
+      "SELECT id FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(id, req.scope.labId) as any;
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+
+    sqlite.prepare(
+      "UPDATE qc_control_lots SET status = ?, updated_at = ? WHERE id = ?"
+    ).run(s, new Date().toISOString(), id);
+
+    const updated = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, created_at, updated_at FROM qc_control_lots WHERE id = ?"
+    ).get(id);
+    return res.json({ ok: true, lot: updated });
+  });
+
   app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;
     const limit = Math.min(Number(req.query.limit) || 20, 200);

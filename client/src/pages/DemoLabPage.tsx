@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { saveAs } from "file-saver";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
 import { SampleReportsSection } from "@/components/SampleReportsSection";
@@ -33,6 +34,11 @@ interface CompetencyData {
 }
 
 export default function DemoLabPage() {
+  // labRoute() prefixes lab-scopable paths with /labs/<id>/ when the user is
+  // in a lab context, and returns the path unchanged when they are not (the
+  // typical /demo/compliance case). Lets the "Learn more" buttons land the
+  // user in the right place regardless of how they arrived.
+  const labRoute = useLabRoute();
   const [data, setData] = useState<DemoData | null>(null);
   const [competencyData, setCompetencyData] = useState<CompetencyData | null>(null);
   const [ptCoverage, setPtCoverage] = useState<any>(null);
@@ -1364,7 +1370,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Know what is due, when, and who signed it off.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/veritatrack-app">Learn more <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritatrack-app")}>Learn more <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -1394,7 +1400,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Citation day is not the day to learn your response process.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/veritaresponse">Learn more <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritaresponse")}>Learn more <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
