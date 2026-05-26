@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -219,6 +220,19 @@ export default function VeritaScanAppPage() {
             <Link href="/login">Sign In</Link>
           </Button>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritascan"
+        moduleName="VeritaScan™"
+        whatItDoes="VeritaScan walks 168 inspection-readiness items across 10 domains aligned to TJC and CAP standards. Item-by-item status (compliant, needs attention, not applicable), evidence attachment, executive summary, full PDF export for internal-use distribution."
+        howToUse={[
+          "Pick a new scan and walk through items domain by domain.",
+          "Mark each item compliant, needs attention, or not applicable; attach evidence (policies, completed forms, training records) as you go.",
+          "Watch the readiness score update by domain; flagged items track to closure.",
+          "Export the executive summary or full PDF before your accreditor walks in.",
+          "Re-run quarterly so the readiness picture stays current."
+        ]}
+      />
+
       </div>
     );
   }

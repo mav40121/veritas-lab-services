@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -196,6 +197,19 @@ export default function VeritaMapAppPage() {
             <Link href="/login">Sign In</Link>
           </Button>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritamap"
+        moduleName="VeritaMap™"
+        whatItDoes="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, FDA classification, reportable range, reference intervals, and critical values. The test menu feeds VeritaCheck for study setup, VeritaComp for competency programs, and VeritaPT for proficiency testing coverage."
+        howToUse={[
+          "Pick your instruments from the database of 190+ FDA-cleared analyzers.",
+          "Toggle the tests your lab actually performs on each instrument; CLIA complexity auto-populates.",
+          "Enter your verified reference ranges, critical values, and AMR per 42 CFR 493.1253. Do not pre-populate without verification.",
+          "Export your test menu to Excel for survey reference or finance review.",
+          "Other Verita modules read from this menu automatically; update here when you add or retire a test."
+        ]}
+      />
+
       </div>
     );
   }

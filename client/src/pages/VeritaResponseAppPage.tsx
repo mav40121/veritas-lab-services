@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -231,6 +232,19 @@ export default function VeritaResponseAppPage() {
           <h1 className="text-2xl font-bold">VeritaResponse&trade;</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Post-survey deficiency response tracker</p>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritaresponse"
+        moduleName="VeritaResponse™"
+        whatItDoes="VeritaResponse turns post-survey deficiencies into one tracked finding per cited standard. Per-accreditor due-date clocks (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled."
+        howToUse={[
+          "Open a new finding when you receive a citation; pick the accreditor and the cited standard.",
+          "Author the response covering the 5 POC elements: root cause, immediate action, corrective action, monitoring plan, completion date.",
+          "Attach evidence as you complete each element (training records, revised SOPs, completed QC).",
+          "Generate the CMS-2567 PDF or the accreditor-specific response document.",
+          "Submit before the per-accreditor deadline; the dashboard tracks every open finding through closure."
+        ]}
+      />
+
         <div className="flex gap-2">
           <Button
             variant="outline"

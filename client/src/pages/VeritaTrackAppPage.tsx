@@ -17,6 +17,7 @@ import {
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -710,6 +711,19 @@ export default function VeritaTrackAppPage() {
             Regulatory compliance calendar. Track every timed task, sign off completions, and never miss a due date.
           </p>
         </div>
+      <ModuleHowToCard
+        moduleKey="veritatrack"
+        moduleName="VeritaTrack™"
+        whatItDoes="VeritaTrack is the regulatory calendar. Every timed task in one place: calibration verification, correlations, competency, equipment maintenance, QC review, PT enrollment, license renewal. Auto-imports schedules from VeritaMap so adding a new instrument creates its cal-ver cadence automatically."
+        howToUse={[
+          "Set up your test menu in VeritaMap; tasks auto-create here at their CLIA cadence.",
+          "Add ad-hoc tasks (equipment service, contract renewals, accreditor application deadlines).",
+          "Sign off tasks as complete with initials, date, and reviewer name.",
+          "Export to Excel in the regulatory-calendar format your lab already uses.",
+          "Review the calendar weekly; track overdue items to closure with the medical director or designee."
+        ]}
+      />
+
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             size="sm" variant="outline"

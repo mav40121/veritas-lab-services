@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -258,6 +259,19 @@ export default function VeritaBenchPage() {
                     "Know exactly when you're overstaffed, understaffed, and how you compare to peer labs."
                   </p>
                 </div>
+      <ModuleHowToCard
+        moduleKey="veritabench"
+        moduleName="VeritaBench™"
+        whatItDoes="VeritaBench is the productivity calculator. Tracks billable tests per productive hour, compares to industry benchmarks (community hospital, large trauma center, reference lab), surfaces month-over-month trend, and feeds the staffing-by-hour analysis."
+        howToUse={[
+          "Enter monthly billable test count and productive hours for each month you want to track.",
+          "The dashboard shows your tests-per-productive-hour ratio versus the benchmark range for your facility type.",
+          "Drill into the trend to see month-over-month direction and seasonal patterns.",
+          "Use the gap delta versus benchmark to drive staffing or workflow conversations with hospital leadership.",
+          "Export the dashboard to share with finance or the lab oversight committee."
+        ]}
+      />
+
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   VeritaPace{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups. Built by a former TJC laboratory surveyor with 200+ facility inspections.
                 </p>

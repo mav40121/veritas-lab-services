@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
+import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
@@ -845,6 +846,19 @@ export default function VeritaStockInventoryPage() {
                     "Stop running out of reagents at the worst possible moment."
                   </p>
                 </div>
+      <ModuleHowToCard
+        moduleKey="veritastock"
+        moduleName="VeritaStock™"
+        whatItDoes="VeritaStock manages reagent and supply inventory. Lot and expiration tracking, reorder-point calculation by burn rate, vendor-grouped Order PDF and Excel for routine reorders, and Snap Order for emergency stockouts."
+        howToUse={[
+          "Add inventory items with vendor, catalog number, pack size, lead time, and safety stock days.",
+          "Receive shipments; on-hand quantity and average burn rate update automatically.",
+          "The system computes reorder point as burn-rate times (lead time + safety stock); items at or below are flagged.",
+          "Generate the Order PDF or Excel for each vendor at reorder time; the medical director or designee signs.",
+          "For an unexpected stockout, use Snap Order: enter the catalog number and quantity, generate the PDF immediately."
+        ]}
+      />
+
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   VeritaStock{"\u2122"} replaces the spreadsheet your lead tech maintains by hand. Track reagents, controls, calibrators, consumables, and supplies across every department with calculated burn rates, lead-time-aware reorder points, and expiration alerts that fire before you have a problem. Built by a former TJC laboratory surveyor with 200+ facility inspections.
                 </p>
