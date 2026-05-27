@@ -314,3 +314,22 @@ Only two sources merged, but the obligations dropped are the central OSHA Bloodb
 2. **#108 Health Information Management.** Three CFR-cited obligations missing (§493.1281(c) interface calculation verification, the BAA requirement, the HIPAA Security Rule MFA and 6-year audit-log retention). These are commonly cited and the combined currently does not name them.
 
 **What this report is not:** I have not re-checked the CFR citation aggregation in the master list rows. The trigram report flagged some statements as LOW OVERLAP that I judged as adequately paraphrased — those are not listed here. The reviewer (you) makes the final call on whether to add back each item or accept the thinning.
+
+---
+
+## Addendum (post-enrichment, 2026-05-27): definition gap closure
+
+After the 19 high-priority definition add-backs landed in PR #397, the trigram coverage script's "NOT IN COMBINED" flag count dropped from 25 → 6.
+
+The 6 still-flagged definitions are **genuine naming variants** where the concept IS in the combined template under a slightly different spelling that the substring-match script cannot detect as a synonym. These are NOT real gaps. Leaving the combined names as-is rather than polluting the templates with duplicate entries:
+
+| Source def name | Combined name (already present) | Source → Combined |
+|---|---|---|
+| Forward type | Forward typing | #50 → #98 |
+| Reverse type | Reverse typing | #50 → #98 |
+| Computer (electronic) crossmatch | Electronic crossmatch | #51 → #98 |
+| Primary-source verification | Primary source verification | #17 → #103 |
+| Six-month assessment | 6-month re-assessment | #20 → #104 |
+| POCT coordinator | POC coordinator | #88 → #106 |
+
+All six are documented in the verify-veritapolicy-docx.js receipts and the regenerated coverage report. Future iterations of the coverage script could add a Levenshtein or normalized-name match to suppress these automatically.

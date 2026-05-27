@@ -84,6 +84,22 @@
     [
       "DAT (Direct Antiglobulin Test)",
       "Test that detects antibody or complement bound to a patient's red cells; positive on a post-transfusion specimen suggests immune hemolysis."
+    ],
+    [
+      "Transfusion reaction",
+      "Any adverse event during or after transfusion of a blood component. May be immune (acute hemolytic, allergic, febrile non-hemolytic), non-immune (volume overload, sepsis from bacterial contamination), or delayed."
+    ],
+    [
+      "Transfusion adverse event",
+      "Any unexpected occurrence during or after transfusion that may be related to the transfusion. Includes confirmed reactions and suspected reactions still under investigation. Tracked on the Transfusion Adverse Event Register."
+    ],
+    [
+      "Transfusion Adverse Event Register",
+      "The lab's central log of all suspected and confirmed transfusion adverse events, used for individual investigation closure and aggregate trend analysis. Reviewed quarterly by the medical director or designee."
+    ],
+    [
+      "Clerical check",
+      "First step of every transfusion reaction investigation: confirm the patient receiving the component matches the component label and the transfusion service records. A mismatch triggers immediate medical director or designee notification."
     ]
   ],
   "cfr_text_blocks": [

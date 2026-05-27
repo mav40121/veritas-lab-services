@@ -59,6 +59,10 @@ Generated automatically. For each of the 11 combined policies (IDs 97-111), this
 - **Historical comparison** — Comparison of the current ABO/Rh result against any prior result on file at this facility before blood is issued. A discrepancy halts issue pending investigation.
 - **Second-sample confirmation** — An ABO determination on a second, independently collected sample from the patient before non-O group-specific red cells are issued.
 - **Clinically significant antibody** — An unexpected red cell antibody capable of causing transfusion reactions or hemolytic disease of the newborn. Triggers antigen-negative unit selection at every subsequent crossmatch regardless of current screen result.
+- **Pretransfusion specimen** — A specimen collected for ABO/Rh typing, antibody screen, antibody identification, or compatibility testing in preparation for blood component transfusion. Subject to the specimen validity window and the 7-day post-transfusion retention rule.
+- **Major crossmatch** — Compatibility test between donor red cells and patient plasma or serum to confirm ABO compatibility and detect clinically significant antibodies. Includes immediate spin, antibody-detection (37 degrees C), and antiglobulin (indirect Coombs) phases.
+- **Antibody screen** — Test of patient plasma or serum against screening cells of known antigen profile to detect unexpected red cell antibodies. Performed on every recipient specimen; positive screens trigger antibody identification before component selection.
+- **Daily QC** — The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls.
 
 ### Source-side coverage check
 
@@ -86,7 +90,7 @@ _(6 statements · 5 steps · 2 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Pretransfusion specimen** — A specimen collected for ABO/Rh typing, antibody screen, antibody identification, or compatibility testing in preparation for blood component transfusion.
+- [✓] **Pretransfusion specimen** — A specimen collected for ABO/Rh typing, antibody screen, antibody identification, or compatibility testing in preparation for blood component transfusion.
 - [✓] **Specimen validity window** — The time period during which a pretransfusion specimen can be used for compatibility testing. Typically 3 days when recent immunologic exposure (pregnancy or transfusion) has occurred or history is unknown.
 
 
@@ -145,8 +149,8 @@ _(6 statements · 6 steps · 4 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Major crossmatch** — Compatibility test between donor red cells and patient plasma or serum to confirm ABO compatibility and detect clinically significant antibodies.
-- [🚩 NOT IN COMBINED] **Antibody screen** — Test of patient plasma or serum against screening cells of known antigen profile to detect unexpected red cell antibodies.
+- [✓] **Major crossmatch** — Compatibility test between donor red cells and patient plasma or serum to confirm ABO compatibility and detect clinically significant antibodies.
+- [✓] **Antibody screen** — Test of patient plasma or serum against screening cells of known antigen profile to detect unexpected red cell antibodies.
 - [🚩 NOT IN COMBINED] **Computer (electronic) crossmatch** — Crossmatch performed by an LIS algorithm against current and historical ABO and antibody records, in lieu of serologic crossmatch. Eligible only when the lab's written criteria are met.
 - [✓] **Clinically significant antibody** — An unexpected red cell antibody capable of causing transfusion reactions or hemolytic disease of the fetus and newborn. Honored at every subsequent transfusion regardless of current screen result.
 
@@ -208,6 +212,8 @@ _(6 statements · 6 steps · 4 definitions)_
 - **Thawed plasma** — Plasma component thawed from frozen and stored at 1 to 6 degrees C for use within the lab's validated stability window.
 - **TA-GVHD** — Transfusion-Associated Graft-Versus-Host Disease; rare but typically fatal complication where donor lymphocytes engraft and attack the recipient. Prevented by irradiation of cellular components for at-risk recipients.
 - **Leukoreduction** — Reduction of white blood cells in a cellular blood component to below an FDA-defined threshold (less than 5 x 10^6 residual leukocytes per unit). Reduces febrile non-hemolytic reactions, HLA alloimmunization, and CMV transmission risk.
+- **External release** — Issue of a blood component to an organization other than the lab's parent facility. Requires a written sharing agreement, an emergency request from a recognized facility, or an FDA recall/look-back response. Medical director or designee reviews every non-routine emergency external release within 5 business days.
+- **Daily QC** — The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls. Failed daily QC pauses patient testing on the affected reagent until resolution.
 
 ### Source-side coverage check
 
@@ -259,7 +265,7 @@ _(4 statements · 4 steps · 1 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **External release** — Issue of a blood component to an organization other than <<LAB_NAME>>'s parent facility.
+- [✓] **External release** — Issue of a blood component to an organization other than <<LAB_NAME>>'s parent facility.
 
 
 #### Source #45: Blood Transport, Storage, and Return Policy
@@ -362,7 +368,7 @@ _(4 statements · 3 steps · 1 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Daily QC** — The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a).
+- [✓] **Daily QC** — The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a).
 
 
 #### Source #55: Plasma Component Processing and Transfusion Policy
@@ -493,6 +499,10 @@ _(4 statements · 3 steps · 1 definitions)_
 - **Aliquot** — A sub-volume of a parent blood component, prepared sterilely with full traceability to the parent unit.
 - **TRALI** — Transfusion-Related Acute Lung Injury; serious adverse reaction with acute hypoxemia during or within 6 hours of transfusion.
 - **DAT (Direct Antiglobulin Test)** — Test that detects antibody or complement bound to a patient's red cells; positive on a post-transfusion specimen suggests immune hemolysis.
+- **Transfusion reaction** — Any adverse event during or after transfusion of a blood component. May be immune (acute hemolytic, allergic, febrile non-hemolytic), non-immune (volume overload, sepsis from bacterial contamination), or delayed.
+- **Transfusion adverse event** — Any unexpected occurrence during or after transfusion that may be related to the transfusion. Includes confirmed reactions and suspected reactions still under investigation. Tracked on the Transfusion Adverse Event Register.
+- **Transfusion Adverse Event Register** — The lab's central log of all suspected and confirmed transfusion adverse events, used for individual investigation closure and aggregate trend analysis. Reviewed quarterly by the medical director or designee.
+- **Clerical check** — First step of every transfusion reaction investigation: confirm the patient receiving the component matches the component label and the transfusion service records. A mismatch triggers immediate medical director or designee notification.
 
 ### Source-side coverage check
 
@@ -624,8 +634,8 @@ _(5 statements · 5 steps · 2 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Transfusion adverse event** — Any unexpected occurrence during or after transfusion that may be related to the transfusion. May be immune-mediated, non-immune, infectious, or related to volume.
-- [🚩 NOT IN COMBINED] **Transfusion Adverse Event Register** — The lab's central log of all suspected and confirmed transfusion adverse events, used for individual investigation closure and aggregate trend analysis.
+- [✓] **Transfusion adverse event** — Any unexpected occurrence during or after transfusion that may be related to the transfusion. May be immune-mediated, non-immune, infectious, or related to volume.
+- [✓] **Transfusion Adverse Event Register** — The lab's central log of all suspected and confirmed transfusion adverse events, used for individual investigation closure and aggregate trend analysis.
 
 
 #### Source #60: Transfusion Reaction Investigation Policy
@@ -655,8 +665,8 @@ _(8 statements · 7 steps · 3 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Transfusion reaction** — Any adverse event during or after transfusion of a blood component. May be immune (acute hemolytic, allergic, febrile non-hemolytic), non-immune (volume overload, sepsis from contamination), or delayed.
-- [🚩 NOT IN COMBINED] **Clerical check** — First step of every transfusion reaction investigation: confirm the patient receiving the component matches the component label and the transfusion service records.
+- [✓] **Transfusion reaction** — Any adverse event during or after transfusion of a blood component. May be immune (acute hemolytic, allergic, febrile non-hemolytic), non-immune (volume overload, sepsis from contamination), or delayed.
+- [✓] **Clerical check** — First step of every transfusion reaction investigation: confirm the patient receiving the component matches the component label and the transfusion service records.
 - [✓] **DAT (Direct Antiglobulin Test)** — Test that detects antibody or complement bound to a patient's red cells; positive on a post-transfusion specimen suggests immune-mediated reaction.
 
 
@@ -950,6 +960,11 @@ _(5 statements · 7 steps · 1 definitions)_
 - **Credential Expiry register** — Audit trail of every credential with an expiration date, the expiry, the renewal notifications sent at 60 and 30 days, and the restoration evidence.
 - **Day-to-day oversight** — On-site presence, telephone availability, or other accessibility model that allows the General Supervisor to be present in person within a reasonable time when high-complexity testing is being performed.
 - **Qualifying pathway** — The specific 42 CFR 493 paragraph the staff member uses to satisfy the qualification requirement (e.g., 493.1489(b)(2)(ii)(A) for high-complexity testing personnel with an accredited training program).
+- **CLIA-defined roles** — Laboratory Director, Technical Consultant (moderate complexity), Technical Supervisor (high complexity), Clinical Consultant (moderate complexity), General Supervisor (high complexity), and Testing Personnel. Qualifications and responsibilities per 42 CFR 493.1441 through 493.1467 (high) and the parallel moderate-complexity sections.
+- **Technical Supervisor** — The individual responsible per 42 CFR 493.1451 for the technical and scientific oversight of a high-complexity specialty. Qualifications per 42 CFR 493.1449. Each high-complexity specialty has a named Technical Supervisor.
+- **General Supervisor** — The individual responsible per 42 CFR 493.1463 for day-to-day supervision of high-complexity testing. Qualifications per 42 CFR 493.1461. Provides on-site, telephone, or otherwise-accessible oversight when high-complexity testing is being performed.
+- **Specialty** — A subset of laboratory testing defined in 42 CFR 493.1271 through 493.1278 (e.g., bacteriology, chemistry, hematology, immunohematology, molecular pathology). Each high-complexity specialty has its own Technical Supervisor.
+- **Credential evidence** — The documented credential itself (license certificate, board certificate, transcript, training program completion) plus the primary-source verification of authenticity. Filed in the personnel record before the individual performs patient testing.
 
 ### Source-side coverage check
 
@@ -979,7 +994,7 @@ _(6 statements · 6 steps · 3 definitions)_
 **Source definitions:**
 
 - [🚩 NOT IN COMBINED] **Primary-source verification** — Confirmation of a credential by contacting the issuing authority directly (state licensure board, certifying body, registrar). More authoritative than a copy of the credential supplied by the individual.
-- [🚩 NOT IN COMBINED] **Credential evidence** — The documented credential itself (license certificate, board certificate, transcript) plus the primary-source verification of authenticity.
+- [✓] **Credential evidence** — The documented credential itself (license certificate, board certificate, transcript) plus the primary-source verification of authenticity.
 - [✓] **Credential Expiry register** — Audit trail of every credential with an expiration date, the expiry, the renewal notifications sent, and the restoration evidence.
 
 
@@ -1036,8 +1051,8 @@ _(6 statements · 6 steps · 3 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Technical supervisor** — The individual responsible per 42 CFR 493.1451 for the technical and scientific oversight of a high complexity specialty. Qualifications per 42 CFR 493.1449.
-- [🚩 NOT IN COMBINED] **Specialty** — A subset of laboratory testing defined in 42 CFR 493.1271-1278 (e.g., bacteriology, chemistry, hematology, immunohematology). Each high complexity specialty has its own technical supervisor.
+- [✓] **Technical supervisor** — The individual responsible per 42 CFR 493.1451 for the technical and scientific oversight of a high complexity specialty. Qualifications per 42 CFR 493.1449.
+- [✓] **Specialty** — A subset of laboratory testing defined in 42 CFR 493.1271-1278 (e.g., bacteriology, chemistry, hematology, immunohematology). Each high complexity specialty has its own technical supervisor.
 - [✓] **Role Vacancy register** — Log of any CLIA-required role currently vacant, the interim coverage arrangement, and the target fill date.
 
 
@@ -1065,7 +1080,7 @@ _(6 statements · 6 steps · 2 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **General supervisor** — The individual responsible per 42 CFR 493.1463 for day-to-day supervision of high complexity testing. Qualifications per 42 CFR 493.1461.
+- [✓] **General supervisor** — The individual responsible per 42 CFR 493.1463 for day-to-day supervision of high complexity testing. Qualifications per 42 CFR 493.1461.
 - [✓] **Day-to-day oversight** — On-site presence, telephone availability, or other accessibility model that allows the supervisor to address technical problems while testing is being performed. Documented and reviewed annually.
 
 
@@ -1147,6 +1162,7 @@ _(6 statements · 6 steps · 3 definitions)_
 - **Annual re-assessment** — Yearly competency assessment of all six CLIA elements after the first-year cadence is complete. Anchored to the prior assessment date, not calendar year.
 - **Six CLIA elements** — The six required competency-assessment activities at 42 CFR 493.1235: direct observation of testing, recording/reporting monitoring, intermediate-results/QC/PT review, observation of instrument maintenance, blind/PT sample testing, problem-solving.
 - **Direct observation** — An assessor watches the staff member perform the test or maintenance step in real time and records the observation. Required for Elements 1 and 4 of the competency assessment.
+- **Competency assessment** — A documented evaluation of a staff member's ability to perform assigned testing tasks, covering the six CLIA-required elements at 42 CFR 493.1235. Performed at initial training, at 6 months, and annually thereafter. Required for waived, moderate, and high complexity testing personnel.
 
 ### Source-side coverage check
 
@@ -1230,7 +1246,7 @@ _(6 statements · 5 steps · 4 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Competency assessment** — A documented evaluation of a staff member's ability to perform assigned testing tasks, covering the six CLIA elements at 42 CFR 493.1235.
+- [✓] **Competency assessment** — A documented evaluation of a staff member's ability to perform assigned testing tasks, covering the six CLIA elements at 42 CFR 493.1235.
 - [✓] **Direct observation** — An assessor watches the staff member perform the test or maintenance step in real time and records the observation.
 - [✓] **Initial training** — The first instance of training a staff member on a test or test family; completion is documented before the staff member performs the test on patient specimens.
 - [🚩 NOT IN COMBINED] **Six-month assessment** — The CLIA-required follow-up assessment six months after initial training, after which assessments occur annually.
@@ -1291,6 +1307,7 @@ _(6 statements · 5 steps · 4 definitions)_
 - **Point-of-care testing (POCT)** — Laboratory testing performed at or near the site of patient care, outside the central laboratory. POC tests are often waived but not exclusively.
 - **POCT operator** — An individual trained and competency-assessed to perform a specific POCT test under the central lab's CLIA certificate. Listed on the POCT roster.
 - **POC coordinator** — Designated role responsible for inventory, QC, competency, training, and oversight of POC testing across all sites under the lab's CLIA certificate.
+- **Waived competency** — CLIA-required six-element competency assessment for staff performing waived testing, on the same Initial / 6-month / Annual cadence as moderate and high complexity testing. Assessor is the General Supervisor, Technical Consultant, or medical director or designee per CMS guidance.
 
 ### Source-side coverage check
 
@@ -1374,7 +1391,7 @@ _(4 statements · 5 steps · 1 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **Waived competency** — CLIA-required six-element competency assessment for staff performing waived testing, on the same cadence as moderate and high complexity.
+- [✓] **Waived competency** — CLIA-required six-element competency assessment for staff performing waived testing, on the same cadence as moderate and high complexity.
 
 
 #### Source #88: Point-of-Care Testing Oversight Policy
@@ -1584,6 +1601,8 @@ _(6 statements · 4 steps · 2 definitions)_
 - **Interface error queue** — The LIS queue of messages that failed to send or be received. Reviewed every business day; persistent failures trigger an IT ticket and medical director or designee notification.
 - **Breach** — Acquisition, access, use, or disclosure of PHI in a manner not permitted under HIPAA Privacy Rule that compromises the security or privacy of the PHI, per 45 CFR 164.402.
 - **Multi-factor authentication (MFA)** — Authentication requiring two or more independent credentials (e.g., password plus a one-time code on a registered device). Enforced for remote access and administrative-role accounts.
+- **Security incident** — Attempted or successful unauthorized access, use, disclosure, modification, or destruction of ePHI, or interference with system operations in an information system holding ePHI. Reported immediately to the Security Officer; investigation determines whether the Breach Notification Rule applies.
+- **Result transmission log** — Audit trail of every test result sent from the LIS, including timestamp, sender, recipient system, and acknowledgment of receipt where the receiving system supports it. Reviewed for anomalies and persistent failures.
 
 ### Source-side coverage check
 
@@ -1646,7 +1665,7 @@ _(7 statements · 6 steps · 4 definitions)_
 
 - [✓] **Electronic Protected Health Information (ePHI)** — PHI in electronic form. Subject to the HIPAA Security Rule (45 CFR Part 164 Subpart C).
 - [✓] **Audit log** — Record of access to and activity within systems containing ePHI. Required by 45 CFR 164.312(b).
-- [🚩 NOT IN COMBINED] **Security incident** — Attempted or successful unauthorized access, use, disclosure, modification, or destruction of ePHI, or interference with system operations in an information system holding ePHI.
+- [✓] **Security incident** — Attempted or successful unauthorized access, use, disclosure, modification, or destruction of ePHI, or interference with system operations in an information system holding ePHI.
 - [✓] **Breach** — Acquisition, access, use, or disclosure of PHI in a manner not permitted by the HIPAA Privacy Rule that compromises the security or privacy of the PHI (45 CFR 164.402).
 
 
@@ -1676,8 +1695,8 @@ _(6 statements · 6 steps · 4 definitions)_
 
 - [✓] **Calculation verification** — End-to-end check that a test result entered or generated in the instrument arrives in the LIS and the EHR with the same numeric value, units, and reference range. Required at interface go-live and after change.
 - [✓] **Interface error queue** — The LIS queue of messages that failed to send or receive. Reviewed every business day; persistent failures are escalated.
-- [🚩 NOT IN COMBINED] **Result transmission log** — Audit trail of every test result sent from the LIS, including timestamp, sender, recipient, and acknowledgment.
-- [🚩 NOT IN COMBINED] **HIPAA security incident** — Any actual or suspected unauthorized access, use, disclosure, modification, or destruction of electronic PHI. Reported per the HIPAA Security Policy.
+- [✓] **Result transmission log** — Audit trail of every test result sent from the LIS, including timestamp, sender, recipient, and acknowledgment.
+- [✓] **HIPAA security incident** — Any actual or suspected unauthorized access, use, disclosure, modification, or destruction of electronic PHI. Reported per the HIPAA Security Policy.
 
 
 ---
@@ -1735,6 +1754,7 @@ _(6 statements · 6 steps · 4 definitions)_
 - **Conflict of interest (COI)** — Any financial, family, or personal relationship that could reasonably appear to influence the staff member's lab decisions. Disclosed at hire, annually, and on change.
 - **Anti-kickback** — 42 USC 1320a-7b prohibition on soliciting or receiving remuneration in exchange for referrals of federal health care program business.
 - **Stark Law** — 42 USC 1395nn prohibition on physician self-referral for designated health services payable by Medicare or Medicaid.
+- **CLIA-defined roles** — Laboratory Director, Technical Consultant (moderate complexity), Technical Supervisor (high complexity), Clinical Consultant (moderate complexity), General Supervisor (high complexity), and Testing Personnel. Each role appears on the organizational chart with reporting line to the Director. Qualifications and responsibilities per 42 CFR 493.1441 through 493.1467 (high) and the parallel moderate-complexity sections.
 
 ### Source-side coverage check
 
@@ -1761,7 +1781,7 @@ _(5 statements · 5 steps · 3 definitions)_
 
 **Source definitions:**
 
-- [🚩 NOT IN COMBINED] **CLIA-defined roles** — Laboratory director, technical consultant (moderate complexity), technical supervisor (high complexity), clinical consultant (moderate complexity), general supervisor (high complexity), testing personnel. Qualifications and responsibilities per 42 CFR 493.1441-1467.
+- [✓] **CLIA-defined roles** — Laboratory director, technical consultant (moderate complexity), technical supervisor (high complexity), clinical consultant (moderate complexity), general supervisor (high complexity), testing personnel. Qualifications and responsibilities per 42 CFR 493.1441-1467.
 - [✓] **Reporting line** — The supervisor each role holder reports to for technical, quality, and personnel matters. Documented on the org chart.
 - [✓] **Role Vacancy register** — Log of any CLIA-required role currently vacant, the interim coverage arrangement, and the target fill date.
 

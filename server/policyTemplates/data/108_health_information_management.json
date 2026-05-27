@@ -69,6 +69,14 @@
     [
       "Multi-factor authentication (MFA)",
       "Authentication requiring two or more independent credentials (e.g., password plus a one-time code on a registered device). Enforced for remote access and administrative-role accounts."
+    ],
+    [
+      "Security incident",
+      "Attempted or successful unauthorized access, use, disclosure, modification, or destruction of ePHI, or interference with system operations in an information system holding ePHI. Reported immediately to the Security Officer; investigation determines whether the Breach Notification Rule applies."
+    ],
+    [
+      "Result transmission log",
+      "Audit trail of every test result sent from the LIS, including timestamp, sender, recipient system, and acknowledgment of receipt where the receiving system supports it. Reviewed for anomalies and persistent failures."
     ]
   ],
   "cfr_text_blocks": [
