@@ -16968,6 +16968,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const lab = sqlite.prepare('SELECT lab_name, clia_number, accreditation_tjc, accreditation_cap, accreditation_cola, accreditation_aabb FROM labs WHERE id = ?').get(labId) as any;
       if (!lab) return res.status(404).json({ error: 'Lab not found' });
 
+      // ARTIFACT-FIRST: if this lab has a pre-uploaded custom-formatted DOCX
+      // for this policy (e.g. SCAHC facility-template version), serve that.
+      const artifact = sqlite.prepare(
+        'SELECT filename, docx_blob FROM veritapolicy_lab_artifacts WHERE lab_id = ? AND policy_id = ?'
+      ).get(labId, policyId) as any;
+      if (artifact) {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${artifact.filename}"`);
+        res.setHeader('Content-Length', String(artifact.docx_blob.length));
+        res.setHeader('X-VeritaPolicy-Source', 'custom_artifact');
+        return res.end(artifact.docx_blob);
+      }
+
       const { generatePolicyDocxBuffer, loadTemplate } = await import('./veritapolicyDocx');
       const tmpl = loadTemplate(policyId);
       if (!tmpl) return res.status(404).json({ error: `Template not found for policy_id=${policyId}` });
@@ -16995,12 +17008,105 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', String(buf.length));
+      res.setHeader('X-VeritaPolicy-Source', 'default_generator');
       res.end(buf);
     } catch (err: any) {
       console.error('VeritaPolicy DOCX (lab-scoped) error:', err);
       res.status(500).json({ error: err?.message || 'DOCX generation failed' });
     }
   });
+
+  // GET /api/labs/:labId/veritapolicy/templates/has-custom
+  //   Returns { hasCustom: boolean, count: number } so the client can show a
+  //   "Custom template active" badge in the toolbar.
+  app.get('/api/labs/:labId/veritapolicy/templates/has-custom', authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const row = sqlite.prepare(
+      'SELECT COUNT(*) as n FROM veritapolicy_lab_artifacts WHERE lab_id = ?'
+    ).get(labId) as { n: number };
+    res.json({ hasCustom: row.n > 0, count: row.n });
+  });
+
+  // POST /api/admin/veritapolicy/labs/:labId/artifacts/bulk
+  //   Admin uploads a ZIP of DOCX files. Each <NNN>_*.docx inside the zip is
+  //   parsed for its policy_id (the leading 1-3 digits) and stored in the
+  //   veritapolicy_lab_artifacts table for that lab. Upserts on (lab_id, policy_id).
+  //   Used today to load John's SCAHC-formatted bundle into his lab.
+  {
+    const m = require('multer');
+    const adminUpload = m({ storage: m.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+    app.post('/api/admin/veritapolicy/labs/:labId/artifacts/bulk', adminUpload.single('bundle'), async (req: any, res) => {
+      const secret = String(req.query.secret || '');
+      if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+      const labId = Number(req.params.labId);
+      if (!Number.isFinite(labId) || labId <= 0) return res.status(400).json({ error: 'Invalid labId' });
+      if (!req.file) return res.status(400).json({ error: 'No bundle file uploaded (multipart field name: "bundle")' });
+
+      const sqlite = db.$client;
+      const labRow = sqlite.prepare('SELECT id, lab_name FROM labs WHERE id = ?').get(labId) as any;
+      if (!labRow) return res.status(404).json({ error: `Lab ${labId} not found` });
+
+      try {
+        const JSZipMod = (await import('jszip')).default;
+        const zip = await JSZipMod.loadAsync(req.file.buffer);
+        const entries: { name: string; buf: Buffer }[] = [];
+        for (const name of Object.keys(zip.files)) {
+          const entry = zip.files[name];
+          if (entry.dir) continue;
+          if (!name.toLowerCase().endsWith('.docx')) continue;
+          const buf = await entry.async('nodebuffer');
+          entries.push({ name, buf });
+        }
+
+        // Filename parser: accepts "<NNN>_anything.docx" or "<PREFIX>_<NNN>_anything.docx"
+        const parseId = (fn: string): string | null => {
+          const base = fn.split('/').pop() || fn;
+          let mm = base.match(/^(\d{1,3})_/);
+          if (mm) return mm[1].replace(/^0+/, '') || '0';
+          mm = base.match(/^[A-Za-z]+_(\d{1,3})_/);
+          if (mm) return mm[1].replace(/^0+/, '') || '0';
+          return null;
+        };
+
+        const upsert = sqlite.prepare(
+          `INSERT INTO veritapolicy_lab_artifacts (lab_id, policy_id, filename, docx_blob, source, uploaded_at, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, datetime('now'), NULL)
+           ON CONFLICT(lab_id, policy_id) DO UPDATE SET
+             filename = excluded.filename,
+             docx_blob = excluded.docx_blob,
+             source = excluded.source,
+             uploaded_at = excluded.uploaded_at`
+        );
+
+        let added = 0;
+        let replaced = 0;
+        const skipped: string[] = [];
+        const existing = sqlite.prepare('SELECT policy_id FROM veritapolicy_lab_artifacts WHERE lab_id = ?').all(labId) as { policy_id: string }[];
+        const before = new Set(existing.map((r) => r.policy_id));
+
+        for (const e of entries) {
+          const pid = parseId(e.name);
+          if (!pid) { skipped.push(`${e.name} (could not parse policy_id)`); continue; }
+          upsert.run(labId, pid, e.name.split('/').pop() || e.name, e.buf, 'admin_upload');
+          if (before.has(pid)) replaced += 1; else added += 1;
+        }
+
+        res.json({
+          ok: true,
+          labId,
+          labName: labRow.lab_name,
+          entries: entries.length,
+          added,
+          replaced,
+          skipped,
+        });
+      } catch (err: any) {
+        console.error('VeritaPolicy bulk artifact upload error:', err);
+        res.status(500).json({ error: err?.message || 'Bulk upload failed' });
+      }
+    });
+  }
 
   // GET /api/labs/:labId/veritapolicy/templates/bundle.zip
   //   Bulk Word download. Generates a DOCX for every policy on the master list
@@ -17023,10 +17129,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         clia_number: lab.clia_number || 'CLIA pending',
       };
 
+      // Pre-fetch any custom artifacts for this lab in one query so the loop
+      // below does a map lookup instead of N round-trips.
+      const artifactRows = sqlite.prepare(
+        'SELECT policy_id, filename, docx_blob FROM veritapolicy_lab_artifacts WHERE lab_id = ?'
+      ).all(labId) as Array<{ policy_id: string; filename: string; docx_blob: Buffer }>;
+      const artifactByPid = new Map<string, { filename: string; docx_blob: Buffer }>();
+      for (const r of artifactRows) artifactByPid.set(String(r.policy_id), { filename: r.filename, docx_blob: r.docx_blob });
+
       let added = 0;
       let skipped = 0;
+      let customServed = 0;
       for (const row of VERITAPOLICY_MASTER_LIST as any[]) {
         const pid = String(row.policy_id);
+        // Artifact-first: use the custom-formatted DOCX if present.
+        const a = artifactByPid.get(pid);
+        if (a) {
+          zip.file(a.filename, a.docx_blob);
+          added += 1; customServed += 1;
+          continue;
+        }
         const tmpl = loadTemplate(pid);
         if (!tmpl) { skipped += 1; continue; }
         const crosswalk: any = {};
@@ -17072,6 +17194,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader('Content-Length', String(buf.length));
       res.setHeader('X-VeritaPolicy-Bundle-Policies', String(added));
       if (skipped > 0) res.setHeader('X-VeritaPolicy-Bundle-Skipped', String(skipped));
+      if (customServed > 0) res.setHeader('X-VeritaPolicy-Bundle-Custom', String(customServed));
       res.end(buf);
     } catch (err: any) {
       console.error('VeritaPolicy bundle ZIP error:', err);
