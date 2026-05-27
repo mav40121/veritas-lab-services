@@ -24,7 +24,7 @@ export function useSEO({ title, description }: { title: string; description: str
     setOG("og:url", window.location.href);
 
     return () => {
-      document.title = "Veritas Lab Services";
+      document.title = "VeritaAssure™ | Veritas Lab Services";
     };
   }, [title, description]);
 }
