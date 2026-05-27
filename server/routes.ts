@@ -16965,17 +16965,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = db.$client;
       const labId = req.scope.labId;
       const policyId = String(req.params.policyId);
-      const lab = sqlite.prepare('SELECT lab_name, clia_number FROM labs WHERE id = ?').get(labId) as any;
+      const lab = sqlite.prepare('SELECT lab_name, clia_number, accreditation_tjc, accreditation_cap, accreditation_cola, accreditation_aabb FROM labs WHERE id = ?').get(labId) as any;
       if (!lab) return res.status(404).json({ error: 'Lab not found' });
 
       const { generatePolicyDocxBuffer, loadTemplate } = await import('./veritapolicyDocx');
       const tmpl = loadTemplate(policyId);
       if (!tmpl) return res.status(404).json({ error: `Template not found for policy_id=${policyId}` });
 
+      // Build the accreditor crosswalk from the master list row, filtered to
+      // accreditors the lab is actually under. Falls back to CFR-only if the
+      // lab has no accreditor flags set.
+      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
+      const masterRow = VERITAPOLICY_MASTER_LIST.find((p: any) => String(p.policy_id) === policyId) as any;
+      const crosswalk: any = {};
+      if (masterRow?.cfr_citations)                       crosswalk.cfr  = masterRow.cfr_citations;
+      if (lab.accreditation_tjc  && masterRow?.tjc_citations)  crosswalk.tjc  = masterRow.tjc_citations;
+      if (lab.accreditation_cap  && masterRow?.cap_citations)  crosswalk.cap  = masterRow.cap_citations;
+      if (lab.accreditation_cola && masterRow?.cola_citations) crosswalk.cola = masterRow.cola_citations;
+      if (lab.accreditation_aabb && masterRow?.aabb_citations) crosswalk.aabb = masterRow.aabb_citations;
+
       const buf = await generatePolicyDocxBuffer(policyId, {
         lab_name: lab.lab_name || 'Your Laboratory',
         clia_number: lab.clia_number || 'CLIA pending',
-      });
+      }, crosswalk);
       if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
 
       const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);

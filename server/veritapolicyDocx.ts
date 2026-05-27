@@ -60,6 +60,18 @@ export interface LabContext {
   clia_number: string;
 }
 
+// Accreditor citations for the policy, filtered to the lab's enabled
+// accreditors. Each entry is the raw citation string from the master
+// list (e.g. "QSA.05.04.01; QSA.05.05.01" for TJC). Empty/undefined
+// entries are skipped at render time.
+export interface AccreditorCrosswalk {
+  cfr?: string;
+  tjc?: string;
+  cap?: string;
+  cola?: string;
+  aabb?: string;
+}
+
 export function findTemplatePath(policyId: string): string | null {
   const dataDir = resolveDataDir();
   if (!dataDir) return null;
@@ -274,9 +286,60 @@ function gap(after = 120) {
   return new Paragraph({ spacing: { after }, children: [new TextRun({ text: "", size: 2 })] });
 }
 
+// Crosswalk row: accreditor label in bold teal in the left cell, citation
+// string in the right cell. Skips rows where citation is empty.
+function crosswalkRow(label: string, citation: string): TableRow {
+  return new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 1440, type: WidthType.DXA },
+        shading: { fill: TINT, type: ShadingType.CLEAR },
+        margins: { top: 100, bottom: 100, left: 200, right: 120 },
+        children: [new Paragraph({
+          children: [new TextRun({ text: label, bold: true, color: TEAL_DARK, size: 22, font: "Calibri" })],
+        })],
+      }),
+      new TableCell({
+        width: { size: 7920, type: WidthType.DXA },
+        margins: { top: 100, bottom: 100, left: 200, right: 200 },
+        children: [new Paragraph({
+          children: [new TextRun({ text: citation, color: TEXT_DARK, size: 22, font: "Calibri" })],
+        })],
+      }),
+    ],
+  });
+}
+
+function crosswalkTable(cw: AccreditorCrosswalk): Table {
+  const rows: TableRow[] = [];
+  if (cw.cfr)  rows.push(crosswalkRow("CFR",  cw.cfr));
+  if (cw.tjc)  rows.push(crosswalkRow("TJC",  cw.tjc));
+  if (cw.cap)  rows.push(crosswalkRow("CAP",  cw.cap));
+  if (cw.cola) rows.push(crosswalkRow("COLA", cw.cola));
+  if (cw.aabb) rows.push(crosswalkRow("AABB", cw.aabb));
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [1440, 7920],
+    borders: {
+      top:    { style: BorderStyle.SINGLE, size: 4, color: TEAL },
+      bottom: { style: BorderStyle.SINGLE, size: 4, color: TEAL },
+      left:   { style: BorderStyle.SINGLE, size: 4, color: TEAL },
+      right:  { style: BorderStyle.SINGLE, size: 4, color: TEAL },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 2, color: HAIR_GRAY },
+      insideVertical:   { style: BorderStyle.SINGLE, size: 2, color: HAIR_GRAY },
+    },
+    rows,
+  });
+}
+
+function hasCrosswalk(cw?: AccreditorCrosswalk | null): boolean {
+  if (!cw) return false;
+  return !!(cw.cfr || cw.tjc || cw.cap || cw.cola || cw.aabb);
+}
+
 // ─── Document assembly ───────────────────────────────────────────────────────
 
-function buildDocument(tmpl: PolicyTemplate, lab: LabContext): Document {
+function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: AccreditorCrosswalk | null): Document {
   const children: (Paragraph | Table)[] = [];
 
   children.push(brandBar());
@@ -293,6 +356,13 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext): Document {
   if (tmpl.scope) {
     children.push(sectionHeading("Scope"));
     children.push(bodyPara(sub(tmpl.scope, lab)));
+  }
+
+  if (hasCrosswalk(crosswalk)) {
+    children.push(sectionHeading("Accreditor Crosswalk"));
+    children.push(bodyPara("This policy addresses the following regulatory and accreditor obligations. Citations shown reflect the accreditors selected for this laboratory; refer to the source documents for full requirement text."));
+    children.push(crosswalkTable(crosswalk!));
+    children.push(gap(160));
   }
 
   if (tmpl.policy_statements && tmpl.policy_statements.length) {
@@ -378,10 +448,14 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext): Document {
   });
 }
 
-export async function generatePolicyDocxBuffer(policyId: string, lab: LabContext): Promise<Buffer | null> {
+export async function generatePolicyDocxBuffer(
+  policyId: string,
+  lab: LabContext,
+  crosswalk?: AccreditorCrosswalk | null,
+): Promise<Buffer | null> {
   const tmpl = loadTemplate(policyId);
   if (!tmpl) return null;
-  const doc = buildDocument(tmpl, lab);
+  const doc = buildDocument(tmpl, lab, crosswalk ?? null);
   const buf = await Packer.toBuffer(doc);
   return buf;
 }
