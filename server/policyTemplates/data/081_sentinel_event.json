@@ -1,0 +1,35 @@
+{
+  "policy_id": "81",
+  "slug": "sentinel_event",
+  "policy_name": "Sentinel Event Investigation Policy",
+  "section": "Safety",
+  "purpose": "This policy describes how <<LAB_NAME>> investigates sentinel events: errors with severe patient harm or significant risk of harm. Required by 42 CFR 493.1282 (corrective action) and the lab's quality management framework at 42 CFR 493.1200.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1282(a)",
+      "label": "Standard: Corrective actions",
+      "verbatim": "The laboratory must have and follow corrective action policies and procedures to ensure that: (1) Test systems perform as required throughout the patient's test result reporting process. (2) Patient test results are accurate, reliable, and prompt, and confidentiality of patient data is preserved. (3) When errors in the reported patient test results are detected, the laboratory does the following: (i) Promptly notifies the authorized person ordering the test and, if applicable, the individual using the test results, of reporting errors. (ii) Issues corrected reports promptly to the authorized person ordering the test and, if applicable, the individual using the test results. (iii) Maintains duplicates of the original report, as well as the corrected report."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel and the medical director or designee.",
+  "policy_statements": [
+    "A sentinel event is any unexpected event involving death, serious physical or psychological injury, or the risk thereof, attributable in whole or in part to laboratory error. Examples: ABO-mismatched transfusion, wrong-patient result, missed critical value contributing to harm.",
+    "Suspected sentinel events are reported to the medical director or designee immediately; an investigation team is convened within one business day.",
+    "Root cause analysis (RCA) is performed using a systematic method (5-whys, fishbone, fault tree); the analysis focuses on system factors, not individual blame, consistent with the Culture of Safety policy.",
+    "Corrective actions targeting the system causes are implemented and tracked to verified effectiveness; the RCA report is signed by the medical director or designee.",
+    "External reporting (CMS, state agency, accreditor, patient and family) occurs as required by regulation and by the lab's agreements; documentation is retained.",
+    "Sentinel event records are retained for at least 2 years per 42 CFR 493.1105 (longer if state law requires)."
+  ],
+  "procedure_steps": [
+    "On report of a suspected sentinel event, immediately notify the medical director or designee.",
+    "Within 1 business day, convene the investigation team (quality, technical supervisor, medical director or designee, HR if personnel matters are involved).",
+    "Preserve all evidence: specimens, records, instrument logs, LIS audit trails, staff statements.",
+    "Perform systematic RCA; identify system causes; design corrective actions targeting system fixes.",
+    "Implement corrective actions; verify effectiveness through follow-up monitoring.",
+    "Document the full RCA report; submit to the medical director or designee for signature; file with 2+ year retention."
+  ],
+  "definitions": [
+    ["Sentinel event", "An unexpected event involving death or serious physical or psychological injury, or the risk thereof, attributable in whole or part to laboratory error."],
+    ["Root cause analysis (RCA)", "Systematic process to identify the underlying system causes of an event, focused on preventing recurrence rather than assigning blame."]
+  ]
+}

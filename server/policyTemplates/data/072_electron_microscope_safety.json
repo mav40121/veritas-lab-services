@@ -1,0 +1,31 @@
+{
+  "policy_id": "72",
+  "slug": "electron_microscope_safety",
+  "policy_name": "Electron Microscope Safety Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> operates an electron microscope. Governs hazardous chemicals (osmium tetroxide, glutaraldehyde, propylene oxide, uranyl acetate), high-voltage electrical safety, and X-ray emission from the EM tube. Required by 29 CFR 1910.1450 (laboratory standard for hazardous chemicals), 29 CFR 1910.1200 (hazard communication), and 42 CFR 493.1101(c) (physical hazard safety).",
+  "cfr_text_blocks": [
+    {
+      "citation": "29 CFR 1910.1450(c)",
+      "label": "OSHA: Permissible exposure limits",
+      "verbatim": "For laboratory uses of OSHA regulated substances, the employer shall assure that laboratory employees' exposures to such substances do not exceed the permissible exposure limits specified in 29 CFR part 1910, subpart Z."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> operates an electron microscope. Personnel handling EM-specific chemicals or operating the EM.",
+  "policy_statements": [
+    "EM-specific chemicals (osmium tetroxide, glutaraldehyde, propylene oxide, uranyl acetate) are handled in a fume hood with documented airflow; SDS for each is accessible at the workstation.",
+    "Uranyl acetate (radioactive heavy metal) is handled per the Radiation Safety Policy and stored in a labeled secure cabinet.",
+    "EM operators are trained on high-voltage safety and X-ray shielding; the EM tube's interlock systems are tested per the manufacturer's schedule and documented.",
+    "Personal dosimetry is issued to EM operators if X-ray emission is above background; readings are reviewed monthly.",
+    "Annual safety inspection covers fume hood airflow, chemical storage, interlock function, and operator training currency."
+  ],
+  "procedure_steps": [
+    "Operators complete annual EM safety refresher; documented.",
+    "EM-specific chemicals are handled in the fume hood; spills follow the Spill Response procedure with hazardous-chemical adaptations.",
+    "Interlock testing follows the manufacturer's schedule; failed interlocks pause operation until repaired.",
+    "Annual inspection by the safety officer; findings tracked to closure."
+  ],
+  "definitions": [
+    ["EM-specific chemicals", "Osmium tetroxide (fixation), glutaraldehyde (fixation), propylene oxide (dehydration/embedding), uranyl acetate (staining). All require fume hood handling; uranyl acetate also has radiation considerations."]
+  ]
+}

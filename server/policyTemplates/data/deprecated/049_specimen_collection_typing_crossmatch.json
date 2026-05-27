@@ -1,0 +1,39 @@
+{
+  "policy_id": "49",
+  "slug": "specimen_collection_typing_crossmatch",
+  "policy_name": "Specimen Collection for Typing and Crossmatching Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> collects, labels, and accepts patient specimens used for pretransfusion testing (ABO/Rh, antibody screen, crossmatch). Pretransfusion specimen integrity is foundational to transfusion safety; required by 42 CFR 493.1232 (specimen integrity), 42 CFR 493.1242 (specimen submission), and 42 CFR 493.1271 (immunohematology).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1242",
+      "label": "Standard: Specimen submission, handling, and referral",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral."
+    }
+  ],
+  "scope": "All clinical staff who collect pretransfusion specimens and all <<LAB_NAME>> transfusion service personnel who receive and test them.",
+  "policy_statements": [
+    "Pretransfusion specimens are collected only after two-identifier patient verification at the bedside (name and DOB or MRN matched against the patient's wristband or equivalent).",
+    "Each tube is labeled in the patient's presence with: patient name, DOB or MRN, date and time of collection, and the collector's initials. Pre-printed labels are NOT applied before collection.",
+    "Specimens that are unlabeled, mislabeled, or have any discrepancy between tube and requisition are rejected without exception; the only resolution is recollect.",
+    "Pretransfusion specimens are typically valid for 3 days when the patient has been pregnant or transfused within the prior 3 months (or when history is unknown); valid for longer when no recent immunologic exposure has occurred, per the lab's policy approved by the medical director or designee.",
+    "Specimens for pretransfusion testing are kept refrigerated (1-6 deg C) when not in use and retained for at least 7 days after the last transfusion or compatibility test per the lab's transfusion service retention policy.",
+    "Specimen receipt is logged in the LIS with patient identifiers, collection time, receipt time, and the receiving staff member; any discrepancy triggers immediate review and ordering provider notification."
+  ],
+  "procedure_steps": [
+    "At the bedside, the collector verifies the patient using two identifiers against the wristband; the collector confirms the requisition matches the patient.",
+    "Tubes are drawn (typically EDTA-anticoagulated whole blood or clot tubes per the lab's required tube type); the collector labels each tube in the patient's presence with name, DOB/MRN, date/time, and initials.",
+    "Specimens are transported to the lab promptly; receipt staff verify labeling against the requisition; any discrepancy triggers rejection and recollect.",
+    "Acceptable specimens are accessioned in the LIS; refrigerated storage at 1-6 deg C until and between tests.",
+    "Specimens are retained for at least 7 days after the last transfusion or crossmatch; disposal follows the biohazard waste procedure."
+  ],
+  "definitions": [
+    ["Pretransfusion specimen", "A specimen collected for ABO/Rh typing, antibody screen, antibody identification, or compatibility testing in preparation for blood component transfusion."],
+    ["Specimen validity window", "The time period during which a pretransfusion specimen can be used for compatibility testing. Typically 3 days when recent immunologic exposure (pregnancy or transfusion) has occurred or history is unknown."]
+  ]
+}

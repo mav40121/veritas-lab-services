@@ -1,0 +1,29 @@
+{
+  "policy_id": "52",
+  "slug": "donor_recipient_identification",
+  "policy_name": "Donor and Recipient Blood Identification Policy",
+  "section": "Quality",
+  "purpose": "This policy describes how <<LAB_NAME>> verifies positive identification of both the donor unit and the recipient at component issue and transfusion, the single most important control against ABO-mismatch transfusion. Required by 21 CFR 606.140, 21 CFR 606.151, and 21 CFR 630.15.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.151(a)",
+      "label": "FDA: Compatibility testing (specimen ID)",
+      "verbatim": "A method of collecting and identifying the blood samples of recipients to ensure positive identification."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel and all clinical staff administering blood components.",
+  "policy_statements": [
+    "At component issue from the transfusion service, the issuing technologist verifies: patient name and second identifier on the issue slip match the unit's patient assignment tag; ABO/Rh on the unit matches the patient's compatible result; expiration is current; visual inspection shows no abnormality.",
+    "At the bedside immediately before transfusion, two qualified clinical staff independently verify the patient identity against the unit's patient assignment tag and the component label (ABO/Rh, unit number, expiration); both staff sign the bedside check.",
+    "If any element fails verification, the transfusion is NOT started; the component is returned to the transfusion service and the discrepancy is investigated.",
+    "All identification verifications (issue slip, bedside check) are documented and retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "At issue, the technologist completes the issue slip with patient identifiers and unit identifiers; both are verified visually against the unit label and the crossmatch record.",
+    "At the bedside, two clinical staff independently verify patient against unit per the bedside check procedure; both sign.",
+    "Any discrepancy halts the transfusion and triggers transfusion service notification."
+  ],
+  "definitions": [
+    ["Bedside check", "Two-staff independent verification of patient identity against the unit immediately before transfusion start. The most critical control against ABO-mismatch."]
+  ]
+}

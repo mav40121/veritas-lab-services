@@ -1,0 +1,102 @@
+{
+  "policy_id": "102",
+  "slug": "donor_operations",
+  "policy_name": "Donor Operations Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> conducts blood donation operations (supplier-receipt agreements when blood is purchased; donor screening, collection, and therapeutic apheresis when the lab is a collection establishment). Required by 21 CFR 606.100 (SOPs), 21 CFR 606.110 (donor collection), 21 CFR 607 (registration of blood establishments), 21 CFR 610.40-45 (donor testing for transfusion-transmitted infections), 21 CFR 630.10 (donor eligibility), and 21 CFR 630.40 (notification of abnormal findings). This policy applies only to laboratories that operate as a collection establishment or that maintain supplier agreements with collection establishments.",
+  "scope": "<<LAB_NAME>> transfusion service personnel performing donor screening, collection, or apheresis, the medical director or designee, and the supplier-relationship owner.",
+  "policy_statements": [
+    "For blood components purchased from a supplier, <<LAB_NAME>> maintains a written supplier agreement covering: components and quantities, ordering process, delivery and emergency-delivery commitments, packaging and transport temperature commitments, recall and look-back communication, billing, and term/termination.",
+    "Every blood supplier holds a current FDA registration as a blood establishment per 21 CFR 607; registration is verified at contracting and at each renewal.",
+    "Supplier performance (on-time delivery, recall responsiveness, component quality, customer service) is reviewed annually; the review is signed by the medical director or designee and filed. Recurring issues trigger discussion and may trigger supplier change.",
+    "Recall and look-back notifications from the supplier are acted on within the timeframes specified in the agreement and per FDA guidance; the lab's response is documented.",
+    "If <<LAB_NAME>> is a collection establishment, donor eligibility is determined per 21 CFR 630.10 at every donation: in good health; free of transfusion-transmitted infections per screening questions and required testing; meets demographic and physical criteria; has not received deferral-triggering exposures or treatments. Eligibility findings, vital signs, hemoglobin, and the deferral check are documented.",
+    "Donor consent is obtained in writing before donation; the consent covers the donation process, risks, post-donation testing, and notification of abnormal findings.",
+    "Donor screening uses the current FDA-recognized Donor History Questionnaire (DHQ); deferrals are applied per the published criteria and documented on the Donor Deferral register.",
+    "Post-donation testing for ABO/Rh, antibody screen, and transfusion-transmitted infectious diseases is performed on every collection per 21 CFR 610.40 through 610.45.",
+    "Donor notification of abnormal findings is performed per 21 CFR 630.40 with the required information and follow-up resources.",
+    "Donor blood collection follows the validated SOP per 21 CFR 606.110: site prep, venipuncture, collection volume, anticoagulant ratio, post-donation care. Donor is monitored throughout collection for adverse signs (vasovagal, hematoma, citrate reaction); any reaction triggers immediate intervention per the lab's Donor Adverse Reaction procedure.",
+    "Post-collection care includes rest, hydration, snack; donor is not released until alert and able to ambulate safely; any post-collection reaction is documented.",
+    "Therapeutic apheresis is performed under physician supervision per 21 CFR 606.110, with validated procedures for each apheresis modality (red cell exchange, plasma exchange, leukapheresis, etc.). Indication, prescribed regimen (number of procedures, volume, replacement fluid), informed consent, and continuous monitoring (vitals, machine alarms, adverse reactions) are documented before and during each procedure.",
+    "Donor records (eligibility, collection, post-donation, deferral, supplier qualification) are retained per 21 CFR 606.160 (typically 10 years post-distribution) and 42 CFR 493.1105(a)(7); donor confidentiality is maintained per HIPAA where applicable."
+  ],
+  "procedure_steps": [
+    "For supplier-sourced components, verify the supplier agreement is current and the supplier's qualification (FDA registration, accreditation status) is on file; renew the agreement annually; complete the annual supplier performance review with medical director or designee signature.",
+    "On recall or look-back communication, log on receipt and act per the response procedure within the agreement's specified timeframe and per FDA guidance.",
+    "If collection establishment: donor presents and identity is verified; written consent is obtained covering donation process, risks, post-donation testing, and abnormal-finding notification; the FDA-recognized DHQ is administered.",
+    "Eligibility is determined per the DHQ responses, physical exam findings, vital signs, hemoglobin, and current deferrals; ineligible donors are deferred with documented reason and reentry criteria.",
+    "Perform venipuncture and collection per the FDA-validated procedure for the collection type (whole blood, plateletpheresis, plasmapheresis, leukapheresis, etc.); document any adverse reaction (vasovagal, hematoma, citrate); intervene immediately and notify the supervising physician.",
+    "Deliver post-collection care: rest, hydration, snack; verify alertness and ambulation before release; document any post-collection reaction.",
+    "Perform post-donation testing per 21 CFR 610.40 through 610.45 on every collection; results are reviewed.",
+    "On abnormal findings, notify the donor per 21 CFR 630.40 with the required information and follow-up resources; document the notification.",
+    "For therapeutic apheresis: verify the physician order, patient identity, indication, prescribed regimen, and signed informed consent; set up the apheresis machine per the manufacturer's procedure; verify replacement fluid identity and integrity; perform the procedure with continuous monitoring; document vitals on the cadence; address alarms and adverse reactions per the lab's procedure; notify the supervising physician.",
+    "Complete post-procedure care and discharge per the protocol; file procedure records, deferrals, and donor adverse reactions with the required 10-year retention; submit any required reports (e.g., suspected transfusion-transmitted infection traceback) to FDA per 21 CFR 606.170."
+  ],
+  "definitions": [
+    [
+      "Collection establishment",
+      "An FDA-registered facility that collects, prepares, processes, or compatibility-tests blood or blood components. Most hospital transfusion services are NOT collection establishments and instead purchase components from a supplier."
+    ],
+    [
+      "Blood supplier",
+      "An FDA-registered blood establishment that collects, processes, or distributes blood components to the lab under a written supplier agreement."
+    ],
+    [
+      "Donor History Questionnaire (DHQ)",
+      "Standardized FDA-recognized questionnaire used to screen blood donors for eligibility. The lab uses the current FDA-recognized version."
+    ],
+    [
+      "Deferral",
+      "Temporary or permanent exclusion of a donor from blood donation based on eligibility criteria. Documented on the Donor Deferral register with reason and reentry criteria."
+    ],
+    [
+      "Adverse donor reaction",
+      "Any unexpected event during or after blood collection that may be related to the collection (vasovagal, hematoma, citrate reaction, delayed reaction). Triggers immediate intervention and documentation."
+    ],
+    [
+      "Therapeutic apheresis",
+      "Apheresis procedure performed for medical treatment of the patient (red cell exchange, plasma exchange, leukapheresis), distinct from donor apheresis (collection)."
+    ],
+    [
+      "Look-back",
+      "Process initiated when a donor is subsequently found to be infectious for a transfusion-transmitted disease; supplier notifications trigger the lab's response per the agreement and FDA guidance."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+    },
+    {
+      "citation": "21 CFR 607.20",
+      "label": "FDA: Registration of blood establishments",
+      "verbatim": "Establishments engaged in the manufacture of blood products shall register on Form FDA 2830 and list their products on the form provided by FDA."
+    },
+    {
+      "citation": "21 CFR 610.40(a)",
+      "label": "FDA: Testing requirements (donor specimen testing)",
+      "verbatim": "Except as specified in paragraphs (c) and (d) of this section, you must test each donation of human blood or blood component intended for use in preparing a product, including donations intended as a component of, or used to prepare, a medical device, for evidence of infection due to the following communicable disease agents: (1) Human immunodeficiency virus, type 1; (2) Human immunodeficiency virus, type 2; (3) Hepatitis B virus; (4) Hepatitis C virus; (5) Human T-lymphotropic virus, type I; (6) Human T-lymphotropic virus, type II; (7) Treponema pallidum."
+    },
+    {
+      "citation": "21 CFR 630.10(a)",
+      "label": "FDA: General donor eligibility requirements",
+      "verbatim": "A donor is eligible to donate blood or a blood component if you determine and document that the donor is in good health and free from transfusion-transmitted infections as required under this subpart, and meets all other applicable requirements under this subpart."
+    },
+    {
+      "citation": "21 CFR 630.40",
+      "label": "FDA: Donor notification",
+      "verbatim": "You must make reasonable attempts to notify any donor, including an autologous donor, who has been deferred based on the results of reactive screening tests for evidence of infection due to a relevant transfusion-transmitted infection or to notify the donor's physician of record, of the deferral and the basis for the deferral."
+    },
+    {
+      "citation": "21 CFR 606.110(a)",
+      "label": "FDA: Plateletpheresis, leukapheresis, and plasmapheresis",
+      "verbatim": "The plateletpheresis, leukapheresis, and plasmapheresis procedures shall be conducted under the supervision of a qualified, licensed physician knowledgeable in the medical procedures and informed of the medical status of the donor, and shall be responsible for any reactions encountered with the procedures."
+    },
+    {
+      "citation": "21 CFR 606.160",
+      "label": "FDA: Records (retention)",
+      "verbatim": "You must retain individual product records no less than 10 years after the records of processing are completed or 6 months after the latest expiration date for the individual product, whichever is the later date."
+    }
+  ]
+}

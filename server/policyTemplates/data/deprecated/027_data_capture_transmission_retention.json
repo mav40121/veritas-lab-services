@@ -1,0 +1,64 @@
+{
+  "policy_id": "27",
+  "slug": "data_capture_transmission_retention",
+  "policy_name": "Data Capture, Transmission, and Retention Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> captures, transmits, and retains laboratory data from instruments and the laboratory information system (LIS) to the electronic health record (EHR) and external recipients. Accuracy and security of laboratory data is required by 42 CFR 493.1283 (records and test reports), 42 CFR 493.1241 (test request), and 45 CFR Part 164 (HIPAA Security Rule).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1283",
+      "label": "Standard: Test records",
+      "verbatim": "The laboratory must maintain an information or record system that includes the following: (1) The positive identification of the specimen. (2) The date and time of specimen receipt into the laboratory. (3) The condition and disposition of specimens that do not meet the laboratory's criteria for specimen acceptability. (4) The records and dates of all specimen testing, including the identity of the personnel who performed the test(s). Records of patient testing including, if applicable, instrument printouts, must be retained."
+    },
+    {
+      "citation": "45 CFR 164.312(a)(1)",
+      "label": "Standard: Access control",
+      "verbatim": "Implement technical policies and procedures for electronic information systems that maintain electronic protected health information to allow access only to those persons or software programs that have been granted access rights as specified in 164.308(a)(4)."
+    },
+    {
+      "citation": "45 CFR 164.312(c)(1)",
+      "label": "Standard: Integrity",
+      "verbatim": "Implement policies and procedures to protect electronic protected health information from improper alteration or destruction."
+    },
+    {
+      "citation": "45 CFR 164.312(e)(1)",
+      "label": "Standard: Transmission security",
+      "verbatim": "Implement technical security measures to guard against unauthorized access to electronic protected health information that is being transmitted over an electronic communications network."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who interact with the LIS, instrument interfaces, EHR result delivery, or external reference lab data exchange. Applies to instrument-to-LIS interfaces, LIS-to-EHR interfaces, and any data sent to external recipients including health information exchanges and reference labs.",
+  "policy_statements": [
+    "Every patient test result transmitted from an instrument to the LIS is verified by a calculation verification at interface go-live and reverified after any interface change, per 42 CFR 493.1281(c).",
+    "LIS-to-EHR result transmission is verified at go-live and after any interface change with a documented end-to-end test (sample patient, sample result, confirm display in the EHR matches the LIS).",
+    "All result transmission is logged with date, time, sender, recipient, and confirmation of receipt where the receiving system supports acknowledgment.",
+    "Access to the LIS and to result data is restricted by role; access is provisioned by HR/IT at hire and de-provisioned on the same business day as separation.",
+    "Result retention: patient test records, including instrument printouts, are retained for at least 2 years from the date of testing per 42 CFR 493.1105; immunohematology records are retained for at least 10 years; pathology slides are retained per 42 CFR 493.1105(a)(7).",
+    "Any unauthorized access, alteration, or transmission of patient data is reported as a HIPAA security incident per the lab's HIPAA Security Policy and is documented in the security incident log."
+  ],
+  "procedure_steps": [
+    "At LIS or interface installation, IT and the lab medical director or designee complete a documented validation: test patient, test results across each result type (numeric, text, coded), confirm receipt in downstream system, confirm units of measure and reference ranges display correctly.",
+    "After any interface change, repeat the validation for the affected analytes and document the recheck before the interface returns to production use.",
+    "Daily, the LIS administrator (or designee) reviews the interface error queue for failed transmissions and corrects within the same business day; persistent errors trigger an IT ticket and notification to the medical director or designee.",
+    "On staff hire, HR notifies IT and IT provisions LIS access at the role-appropriate level (testing, review, release, admin). The provisioning request and approval are documented.",
+    "On staff separation, HR notifies IT and IT removes LIS access by close of business the same day. The de-provisioning is documented in the security log.",
+    "Patient records and instrument printouts are retained per the retention schedule; record disposal at end-of-retention requires medical director or designee approval and is documented in the destruction log."
+  ],
+  "definitions": [
+    [
+      "Calculation verification",
+      "End-to-end check that a test result entered or generated in the instrument arrives in the LIS and the EHR with the same numeric value, units, and reference range. Required at interface go-live and after change."
+    ],
+    [
+      "Interface error queue",
+      "The LIS queue of messages that failed to send or receive. Reviewed every business day; persistent failures are escalated."
+    ],
+    [
+      "Result transmission log",
+      "Audit trail of every test result sent from the LIS, including timestamp, sender, recipient, and acknowledgment."
+    ],
+    [
+      "HIPAA security incident",
+      "Any actual or suspected unauthorized access, use, disclosure, modification, or destruction of electronic PHI. Reported per the HIPAA Security Policy."
+    ]
+  ]
+}

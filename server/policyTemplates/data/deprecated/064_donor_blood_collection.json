@@ -1,0 +1,33 @@
+{
+  "policy_id": "64",
+  "slug": "donor_blood_collection",
+  "policy_name": "Donor Blood Collection Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> operates as a blood collection establishment, governing the actual collection procedure: phlebotomy technique, donor monitoring during collection, post-collection care, and adverse reaction handling. Required by 21 CFR 630, 21 CFR 606.100, and 21 CFR 606.110.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.110(a)",
+      "label": "FDA: Plateletpheresis, leukapheresis, and plasmapheresis",
+      "verbatim": "The plateletpheresis, leukapheresis, and plasmapheresis procedures shall be conducted under the supervision of a qualified, licensed physician knowledgeable in the medical procedures and informed of the medical status of the donor, and shall be responsible for any reactions encountered with the procedures."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> operates a blood collection establishment. Phlebotomy and apheresis personnel and the medical director or designee.",
+  "policy_statements": [
+    "Collection is performed by trained phlebotomy personnel following the FDA-validated procedure for the collection type (whole blood, plateletpheresis, plasmapheresis, leukapheresis, etc.).",
+    "Donor identity is verified at the collection chair; the collection site is prepped per the disinfection procedure; collection volume is monitored.",
+    "Donor is monitored throughout collection for adverse signs (vasovagal, hematoma, citrate reaction); any reaction triggers immediate intervention per the lab's Donor Adverse Reaction procedure.",
+    "Post-collection care: rest, hydration, snack; donor is not released until alert and able to ambulate safely; any post-collection reaction is documented.",
+    "Apheresis procedures are conducted under the supervision of a qualified physician per 21 CFR 606.110.",
+    "Records are retained for at least 10 years per 21 CFR 606.160 and 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "Phlebotomy or apheresis personnel verify donor identity, prep the collection site, and perform the collection per the validated procedure.",
+    "Donor is monitored throughout; vitals are reassessed per the procedure cadence.",
+    "Adverse reactions trigger immediate intervention and documentation; reactions are reported to the supervising physician.",
+    "Post-collection care is delivered; donor release is documented.",
+    "Adverse reactions are aggregated for periodic review."
+  ],
+  "definitions": [
+    ["Adverse donor reaction", "Any unexpected event during or after blood collection that may be related to the collection. Includes vasovagal, hematoma, citrate reaction, and rarely cardiac events."]
+  ]
+}

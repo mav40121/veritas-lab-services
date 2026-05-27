@@ -1,0 +1,42 @@
+{
+  "policy_id": "24",
+  "slug": "lis_downtime_backup",
+  "policy_name": "Information System Downtime and Backup Plan Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> protects laboratory data through routine backups and ensures recovery after data loss or system failure. CLIA at 42 CFR 493.1283 requires the lab to maintain test records; 45 CFR 164.308(a)(7) (HIPAA Security Rule contingency plan) requires data backup, disaster recovery, and emergency mode operation procedures for electronic PHI.",
+  "cfr_text_blocks": [
+    {
+      "citation": "45 CFR 164.308(a)(7)(i)",
+      "label": "HIPAA Security Rule: Contingency plan (Standard)",
+      "verbatim": "Establish (and implement as needed) policies and procedures for responding to an emergency or other occurrence (for example, fire, vandalism, system failure, and natural disaster) that damages systems that contain electronic protected health information."
+    },
+    {
+      "citation": "45 CFR 164.308(a)(7)(ii)",
+      "label": "HIPAA Security Rule: Contingency plan (Implementation specs)",
+      "verbatim": "(A) Data backup plan (Required). Establish and implement procedures to create and maintain retrievable exact copies of electronic protected health information. (B) Disaster recovery plan (Required). Establish (and implement as needed) procedures to restore any loss of data. (C) Emergency mode operation plan (Required). Establish (and implement as needed) procedures to enable continuation of critical business processes for protection of the security of electronic protected health information while operating in emergency mode."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> IT staff supporting the LIS and any system holding patient data, the medical director or designee, and all testing personnel during system recovery.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written Contingency Plan covering data backup, disaster recovery, and emergency mode operation for the LIS and any system holding patient data.",
+    "Data backup: every system holding patient data is backed up at least daily; backups are stored on a separate medium and in a separate physical location from the source system.",
+    "Backup integrity is verified at least monthly through a restore test of a sample data set; successful restore is documented in the Backup Integrity log.",
+    "Disaster recovery: a documented plan defines the recovery time objective (RTO) and recovery point objective (RPO) for each system; the plan is tested at least annually through a tabletop or live exercise.",
+    "Emergency mode operation: during system outage, the lab follows the System Downtime and Service Interruption policy; critical processes (specimen receipt, testing, critical-value notification) continue on paper.",
+    "Backup media containing PHI are encrypted at rest and during transport; access is restricted to authorized IT staff."
+  ],
+  "procedure_steps": [
+    "IT runs automated backups of the LIS and other PHI-containing systems on the daily schedule; success or failure is logged automatically; any backup failure triggers an IT ticket and remediation within one business day.",
+    "Monthly, IT performs a restore test using a sample data set; the test is documented on the Backup Integrity log with date, system, sample data, restore success, and time-to-restore.",
+    "Annually, IT and the medical director or designee conduct a disaster recovery exercise (tabletop or live); the exercise scenario, participants, findings, and corrective actions are documented.",
+    "On any actual disaster or data-loss event, IT activates the disaster recovery plan; the medical director or designee declares emergency mode operation; the lab follows the downtime workflow.",
+    "On recovery, restored data is reconciled against any paper records generated during emergency mode; any discrepancy is investigated and documented.",
+    "Backup media disposal at end-of-life follows the secure-destruction procedure; destruction is logged."
+  ],
+  "definitions": [
+    ["Recovery Time Objective (RTO)", "The maximum acceptable time from system failure to restored operation for a specific system or service."],
+    ["Recovery Point Objective (RPO)", "The maximum acceptable amount of data loss measured in time (e.g., 'no more than 24 hours of data loss')."],
+    ["Backup Integrity log", "Monthly record of restore tests confirming that backups can in fact be restored to a working state."],
+    ["Emergency mode operation", "The HIPAA-defined mode of operation during a system outage, where critical business processes continue while protecting PHI security."]
+  ]
+}

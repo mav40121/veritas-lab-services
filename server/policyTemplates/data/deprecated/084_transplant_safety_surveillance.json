@@ -1,0 +1,29 @@
+{
+  "policy_id": "84",
+  "slug": "transplant_safety_surveillance",
+  "policy_name": "Transplant Safety Surveillance Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> monitors transplant-related adverse events and reports HCT/P deviations to FDA. Required by 42 CFR 493.1278 (cytogenetics where applicable) and 21 CFR 1271.350 (HCT/P deviation reporting).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 1271.350(a)",
+      "label": "FDA: Reporting (HCT/P deviations)",
+      "verbatim": "You must investigate all adverse reactions involving a communicable disease related to an HCT/P that you made available for distribution. You must report to FDA an adverse reaction involving a communicable disease if it: (1) Is fatal; (2) Is life-threatening; (3) Results in permanent impairment of a body function or permanent damage to body structure; or (4) Necessitates medical or surgical intervention, including hospitalization."
+    }
+  ],
+  "scope": "<<LAB_NAME>> personnel involved in transplant tissue handling and the medical director or designee.",
+  "policy_statements": [
+    "Adverse reactions in transplant recipients involving a possible communicable disease related to HCT/P products are investigated by the lab in cooperation with the procuring organization.",
+    "Reportable adverse reactions per 21 CFR 1271.350(a) are reported to FDA within 15 days of the lab becoming aware.",
+    "Investigation outcomes are documented, including the determination of whether the HCT/P was the cause; records retained per 21 CFR 1271.270 and 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "On report of an adverse reaction, the medical director or designee initiates investigation.",
+    "Coordinate with the procuring organization and the recipient's treating clinician to gather information.",
+    "Determine whether the reaction meets the reportable threshold per 21 CFR 1271.350(a); if so, submit the FDA report within 15 days.",
+    "Document the investigation, conclusion, and corrective actions; retain per record retention rules."
+  ],
+  "definitions": [
+    ["HCT/P adverse reaction", "Adverse event in a recipient of an HCT/P that may involve transmission of a communicable disease. Reportable to FDA when meeting the 21 CFR 1271.350(a) criteria."]
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "policy_id": "10",
+  "slug": "system_downtime",
+  "policy_name": "System Downtime and Service Interruption Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> maintains testing and result delivery during planned or unplanned outages of the laboratory information system (LIS), instrument interfaces, or hospital information systems. Continuity is required by 42 CFR 493.1232 (specimen integrity), 42 CFR 493.1291 (test report delivery), and 42 CFR 493.1276 (immunohematology records).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1291(a)",
+      "label": "Standard: Test report",
+      "verbatim": "The laboratory must have an adequate manual or electronic system(s) in place to ensure test results and other patient-specific data are accurately and reliably sent from the point of data entry (whether interfaced or entered manually) to final report destination, in a timely manner. This includes the following: (1) Results reported from calculated data. (2) Results and patient-specific data electronically reported to network or interfaced systems. (3) Manually transcribed or electronically transmitted results and patient-specific information reported directly or upon receipt from outside referral laboratories, satellite or point-of-care testing locations."
+    },
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, IT staff supporting the LIS and instrument interfaces, and any hospital or clinic IT staff supporting the EHR or order-entry system used by the lab.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written downtime procedure that allows specimen receipt, testing, result release, and critical value notification to continue when the LIS, an instrument interface, or the EHR is unavailable.",
+    "Downtime procedures include: paper requisition fallback, paper result release with two-identifier specimen verification, paper critical value notification log, and a defined recovery process for entering downtime activity into the LIS once it is restored.",
+    "The downtime kit (paper requisitions, paper logs, blank result forms, current critical value list, paper acceptance criteria) is stored at every collection and testing area, inventoried monthly, and refreshed within one business day if any item is depleted.",
+    "Downtime drills are conducted at least annually by the medical director or designee; the drill, findings, and corrective actions are documented.",
+    "Every downtime event lasting more than 30 minutes is logged as a downtime incident with start time, end time, affected systems, root cause, and recovery actions; reviewed by the medical director or designee within 7 days.",
+    "Results released during downtime are reconciled to the LIS within one business day of system restoration; any discrepancy is investigated and documented."
+  ],
+  "procedure_steps": [
+    "On any system outage affecting result delivery, the testing area shift lead announces downtime to staff and the medical director or designee, and starts the downtime log noting the time of outage.",
+    "Staff switch to the paper downtime workflow: paper requisitions, paper result forms, paper critical value log, manual specimen tracking with two identifiers.",
+    "Critical results are notified to the responsible clinician using the paper Critical Value Notification log; notification is documented immediately (no later than the end of shift).",
+    "When the system is restored, the shift lead announces restoration and the recovery process begins: downtime requisitions and results are entered into the LIS, reconciled to test orders, and final reports are released.",
+    "The downtime event is logged on the Downtime Incident form (start, end, systems affected, root cause if known, recovery actions, results released on paper, time to reconcile to LIS) and reviewed by the medical director or designee within 7 days."
+  ],
+  "definitions": [
+    ["Downtime", "Any planned or unplanned interruption of the LIS, instrument interface, EHR, order-entry system, or other IT dependency that prevents normal electronic specimen, result, or order flow."],
+    ["Downtime kit", "The paper resources (requisitions, result forms, critical value log, acceptance criteria, current critical value list) stored at each testing area for immediate use during an outage."],
+    ["Downtime drill", "A scheduled simulation of an LIS outage where staff exercise the paper workflow end-to-end. Performed at least annually."]
+  ]
+}

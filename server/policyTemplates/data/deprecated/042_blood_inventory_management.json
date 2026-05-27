@@ -1,0 +1,34 @@
+{
+  "policy_id": "42",
+  "slug": "blood_inventory_management",
+  "policy_name": "Blood and Blood Component Inventory Management Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> manages inventory of blood and blood components: receipt, storage, rotation, expiration, and disposal. Required by 42 CFR 493.1271, 42 CFR 493.1273, and 21 CFR 606 cGMP.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding. Such procedures shall be available to the personnel for use in the areas where the procedures are performed."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel handling component inventory.",
+  "policy_statements": [
+    "Components are received from the supplier with documented chain of custody; receipt is logged with unit number, ABO/Rh, expiration, date/time, supplier, and the receiving staff member.",
+    "Inventory is stored under the component-specific conditions and rotated FEFO (First Expiry First Out) for issue.",
+    "Inventory levels are managed against a defined minimum-on-hand for each component and ABO/Rh group, with reorder triggers; the medical director or designee approves the inventory targets.",
+    "Daily inventory reconciliation confirms physical count matches the LIS or paper record; discrepancies trigger investigation.",
+    "Expired components, components received in unacceptable condition, and components returned in unacceptable condition are quarantined and disposed of per the Component Disposal procedure; disposal is documented.",
+    "Inventory records are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "On receipt, the staff member verifies the supplier paperwork against physical units (count, ABO/Rh, expiration); discrepancies trigger immediate supplier notification.",
+    "Units are entered into the LIS or paper inventory log and placed in storage at FEFO position.",
+    "Daily reconciliation by the transfusion service staff confirms physical count matches inventory record.",
+    "When a unit nears expiration, it is flagged for use-first or, if unsuitable for use, quarantined for disposal.",
+    "Disposal is logged with unit number, reason, disposal route, and staff member."
+  ],
+  "definitions": [
+    ["FEFO", "First Expiry First Out. Rotation rule that issues the unit with the earliest expiration first to minimize waste."],
+    ["Chain of custody", "Documented continuous tracking of a component from supplier to issue, with no unaccounted-for time."]
+  ]
+}

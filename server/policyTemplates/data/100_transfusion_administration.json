@@ -1,0 +1,136 @@
+{
+  "policy_id": "100",
+  "slug": "transfusion_administration",
+  "policy_name": "Transfusion Administration Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> supports transfusion administration: donor and recipient identification at issue, emergency release of blood, Rh immune globulin administration (including fetomaternal hemorrhage assessment), neonatal and adult transfusion, transfusion monitoring with adverse event reporting, and transfusion reaction investigation. Required by 42 CFR 493.1271(c) and (d), 21 CFR 606.151 (compatibility testing and release), and 21 CFR 606.170 (adverse reaction file and fatality reporting).",
+  "scope": "All <<LAB_NAME>> transfusion service personnel issuing components, clinical staff administering transfusions, the medical director or designee, and treating physicians ordering transfusion.",
+  "policy_statements": [
+    "At component issue, the issuing technologist verifies that patient name and second identifier on the issue slip match the unit's patient assignment tag, ABO/Rh on the unit matches the patient's compatible result, expiration is current, and visual inspection shows no abnormality.",
+    "At the bedside immediately before transfusion, two qualified clinical staff independently verify the patient identity against the unit's patient assignment tag and the component label (ABO/Rh, unit number, expiration); both staff sign the bedside check. If any element fails verification, the transfusion is NOT started; the component is returned to the transfusion service and the discrepancy is investigated.",
+    "Emergency release of blood is invoked only by a physician who certifies in writing that the urgency of the patient's condition does not permit completion of pretransfusion testing. The physician's signature and certification language are required at the time of release or as soon thereafter as practical.",
+    "Group O red cells are issued by default for emergency release: Group O Rh-negative for women of childbearing potential; Group O Rh-positive otherwise. Type-specific units may be issued if a current ABO/Rh result is on file at <<LAB_NAME>>.",
+    "Pretransfusion testing (ABO/Rh, antibody screen, crossmatch) is completed as soon as feasible on the patient specimen drawn before or concurrent with the emergency release; any incompatibility is reported to the ordering physician immediately. The medical director or designee reviews every emergency release within 5 business days; the review is signed and documented.",
+    "Rh Immune Globulin (RhIG) is offered to every D-negative woman who is pregnant or postpartum with a D-positive infant, who has had a pregnancy loss or termination, or who has experienced a fetomaternal hemorrhage event. The standard antepartum dose is one vial (300 mcg) at approximately 28 weeks gestation; the standard postpartum dose is one vial within 72 hours of delivery of a D-positive infant.",
+    "Fetomaternal hemorrhage (FMH) screening (rosette test or equivalent) is performed on the postpartum maternal sample of every D-negative woman delivering a D-positive infant; positive screens trigger quantitative testing (Kleihauer-Betke or flow cytometry) and dose adjustment.",
+    "RhIG dose calculation for FMH greater than 30 mL fetal whole blood: one additional vial per 30 mL fetal whole blood (or equivalent calculation per the manufacturer's instructions); the calculation is documented and verified by a second technologist or the medical director or designee.",
+    "Neonatal transfusion (recipient under 4 months of age) follows pediatric-specific rules: reverse ABO typing is NOT performed; the lab uses the mother's antibody screen result if maternal specimen is available; small-volume aliquots are prepared from approved parent units with full traceability to the parent unit; the medical director or designee approves the standing component-selection protocol (CMV-safe, irradiated, fresh, volume-reduced as clinically indicated).",
+    "Intrauterine transfusion follows the obstetric specialist's order with components selected per the parent-unit ABO compatibility rules for the mother and fetus. Exchange transfusion follows the medical director or designee-approved component-selection protocol for the indication.",
+    "Transfusion is monitored by qualified clinical staff: baseline vitals immediately before transfusion start, vitals at 15 minutes (when the highest risk of reaction occurs), and at completion. Visual observation continues throughout. Any sign of adverse reaction triggers immediate transfusion stop.",
+    "On suspected transfusion reaction, the clinical staff stops the transfusion, keeps the IV line open with normal saline, retains the unit and tubing, and notifies the transfusion service immediately. The transfusion service workup includes clerical check first, visual inspection of post-transfusion specimen for hemolysis, repeat ABO/Rh on pre- and post-transfusion specimens, direct antiglobulin test (DAT) on the post-transfusion specimen, and additional testing as ordered by the medical director or designee.",
+    "Confirmed fatal transfusion reactions are reported to FDA Center for Biologics Evaluation and Research (CBER) as soon as possible by telephone or electronic transmission; the written report is submitted within 7 days per 21 CFR 606.170(b).",
+    "Adverse reactions and their investigation outcomes are documented in the transfusion reaction file per 21 CFR 606.170; the Transfusion Adverse Event Register is reviewed quarterly by the medical director or designee."
+  ],
+  "procedure_steps": [
+    "At issue, the technologist completes the issue slip with patient identifiers and unit identifiers; both are verified visually against the unit label and the crossmatch record.",
+    "At the bedside, two clinical staff independently verify patient against unit per the bedside check procedure; both sign. Any discrepancy halts the transfusion and triggers transfusion service notification.",
+    "For emergency release, the ordering physician provides certification (verbal at time of request, written within the same shift); transfusion service issues Group O red cells (Rh-negative for women of childbearing potential, Rh-positive otherwise) unless current ABO/Rh on file supports type-specific issue; the technologist documents patient ID, unit numbers, date/time, physician, certification status, and technologist initials.",
+    "The patient specimen drawn before or concurrent with the emergency release is processed for full pretransfusion testing as soon as the emergency is contained; results are reported promptly to the ordering physician.",
+    "For RhIG, the transfusion service confirms the indication and the patient's D-negative status. For postpartum issue to a D-negative mother of a D-positive infant, perform rosette test (or equivalent FMH screen) on the maternal sample; if negative, issue one standard vial; if positive, perform quantitative FMH (Kleihauer-Betke or flow cytometry) and calculate dose (one additional vial per 30 mL fetal whole blood).",
+    "Dose calculation is verified by a second technologist or the medical director or designee and documented. Pull the calculated number of vials; verify lot, expiration, and integrity; document dose, lot, route, and administration time.",
+    "For neonatal transfusion (under 4 months), perform forward ABO only (no reverse), use mother's antibody screen if available, prepare aliquots from approved parent units with documented traceability; the medical director or designee-approved protocol guides component selection.",
+    "Clinical staff record baseline vitals immediately before transfusion start, then at 15 minutes and at completion; visual observation is continuous.",
+    "On suspected reaction, clinical staff stops the transfusion, keeps the IV line open with normal saline, retains the unit and tubing, and notifies transfusion service and the ordering physician immediately. Post-transfusion specimen (EDTA tube), remaining component, and IV tubing are sent to the transfusion service.",
+    "Transfusion service performs the workup: clerical check first; visual inspection of post-transfusion specimen for hemolysis; repeat ABO/Rh on pre- and post-transfusion specimens; DAT on post-transfusion specimen; additional testing per the medical director or designee.",
+    "If the reaction is confirmed fatal, the medical director or designee notifies FDA CBER as soon as possible by phone or electronic transmission; the written 7-day report is submitted per 21 CFR 606.170(b).",
+    "Findings are documented on the Transfusion Reaction Investigation form; the medical director or designee signs the conclusion; entry is closed on the Transfusion Adverse Event Register when investigation is complete.",
+    "Quarterly, the medical director or designee reviews the Adverse Event Register for trend; recurring patterns trigger root-cause analysis and process change."
+  ],
+  "definitions": [
+    [
+      "Two-identifier verification",
+      "Independent confirmation of recipient identity using two of: name, DOB, MRN, account number; performed at specimen draw and at component issue."
+    ],
+    [
+      "Bedside check",
+      "Two-staff independent verification of patient identity against the unit immediately before transfusion; both staff sign."
+    ],
+    [
+      "Emergency release",
+      "Issue of blood components without full pretransfusion testing under a physician certification that the urgency does not permit testing. Group O red cells are the default."
+    ],
+    [
+      "Physician certification",
+      "Written statement signed by the ordering physician justifying the emergency release. Required by FDA 21 CFR 606.151(d)."
+    ],
+    [
+      "RhIG",
+      "Rh Immune Globulin; concentrated anti-D antibody preparation administered to D-negative individuals to prevent anti-D alloimmunization after exposure to D-positive red cells."
+    ],
+    [
+      "Fetomaternal hemorrhage (FMH)",
+      "Transfer of fetal red cells into the maternal circulation, typically at delivery. May exceed the volume covered by a standard RhIG dose, requiring quantitative measurement."
+    ],
+    [
+      "Rosette test",
+      "Qualitative screening test for fetomaternal hemorrhage. Negative result confirms FMH is below the threshold covered by a standard RhIG dose; positive triggers quantitative testing."
+    ],
+    [
+      "Kleihauer-Betke / flow cytometry",
+      "Quantitative methods for measuring the volume of fetal red cells in the maternal circulation, used to calculate RhIG dose when the rosette test is positive."
+    ],
+    [
+      "Neonatal transfusion",
+      "Transfusion of a patient under 4 months of age. Specific rules apply for ABO typing, maternal antibody use, and aliquot preparation."
+    ],
+    [
+      "Aliquot",
+      "A sub-volume of a parent blood component, prepared sterilely with full traceability to the parent unit."
+    ],
+    [
+      "TRALI",
+      "Transfusion-Related Acute Lung Injury; serious adverse reaction with acute hypoxemia during or within 6 hours of transfusion."
+    ],
+    [
+      "DAT (Direct Antiglobulin Test)",
+      "Test that detects antibody or complement bound to a patient's red cells; positive on a post-transfusion specimen suggests immune hemolysis."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.151(a)",
+      "label": "FDA: Compatibility testing (specimen ID)",
+      "verbatim": "A method of collecting and identifying the blood samples of recipients to ensure positive identification."
+    },
+    {
+      "citation": "21 CFR 606.151(d)",
+      "label": "FDA: Procedure to expedite transfusion in life-threatening emergencies",
+      "verbatim": "A procedure to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
+    },
+    {
+      "citation": "42 CFR 493.1271(d)",
+      "label": "Standard: Compatibility testing (emergency exception)",
+      "verbatim": "The laboratory must perform compatibility testing prior to the issuance of blood and blood products, except as provided for an emergency situation defined in writing by the laboratory."
+    },
+    {
+      "citation": "21 CFR 606.151",
+      "label": "FDA: Compatibility testing",
+      "verbatim": "Standard operating procedures for compatibility testing shall include the following: (a) A method of collecting and identifying the blood samples of recipients to ensure positive identification. (b) The use of fresh recipient serum or plasma samples less than 3 days old for all pretransfusion testing if the recipient has been pregnant within the past 3 months or transfused within the past 3 months, or if the history is uncertain or unavailable. (c) Testing the recipient's serum or plasma with the donor's cells (major crossmatch) by a method that will demonstrate agglutinating, coating and hemolytic antibodies. (d) A procedure to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
+    },
+    {
+      "citation": "42 CFR 493.1271(a)",
+      "label": "Standard: Immunohematology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+    },
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+    },
+    {
+      "citation": "42 CFR 493.1271(c)",
+      "label": "Patient testing",
+      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+    },
+    {
+      "citation": "21 CFR 606.170(a)",
+      "label": "FDA: Adverse reaction file",
+      "verbatim": "Records shall be maintained of any reports of complaints of adverse reactions arising as a result of blood collection or transfusion. A thorough investigation of each reported adverse reaction shall be made. A written report of the investigation of adverse reactions, including conclusions and followup, shall be prepared and maintained as part of the record for that lot of final product by the collecting or transfusing facility."
+    },
+    {
+      "citation": "21 CFR 606.170(b)",
+      "label": "FDA: Fatality investigation (15-day phone, 7-day written)",
+      "verbatim": "When a complication of blood collection or transfusion is confirmed to be fatal, the Director, Office of Compliance and Biologics Quality, Center for Biologics Evaluation and Research (HFM-600) shall be notified by telephone, facsimile, express mail, or electronically transmitted mail as soon as possible; a written report of the investigation shall be submitted to the Director, Office of Compliance and Biologics Quality, Center for Biologics Evaluation and Research, by mail, courier, or electronically transmitted mail, within 7 days after the fatality by the collecting facility in the event of a donor reaction, or by the facility that performed the compatibility tests in the event of a transfusion reaction."
+    }
+  ]
+}

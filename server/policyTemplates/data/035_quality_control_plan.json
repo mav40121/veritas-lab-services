@@ -1,0 +1,44 @@
+{
+  "policy_id": "35",
+  "slug": "quality_control_plan",
+  "policy_name": "Quality Control Plan Policy",
+  "section": "Testing",
+  "purpose": "This policy describes how <<LAB_NAME>> designs, runs, evaluates, and acts on quality control (QC) for every nonwaived test. CLIA at 42 CFR 493.1256 sets the baseline control requirements; this policy operationalizes them and integrates with Westgard rule evaluation, corrective action, and the lab's monthly QC review.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(a)",
+      "label": "Standard: Control procedures",
+      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+    },
+    {
+      "citation": "42 CFR 493.1256(d)",
+      "label": "Standard: Control procedures (minimum frequency)",
+      "verbatim": "Unless CMS approves a procedure, specified in Appendix C of the State Operations Manual (CMS Pub. 7), that provides equivalent quality testing, the laboratory must, at least: (1) Perform control procedures as defined in paragraphs (d)(2) through (d)(4) of this section unless otherwise specified in the additional specialty and subspecialty requirements at 493.1261 through 493.1278. (2) Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure. (ii) A negative control material and a positive control material for each qualitative procedure. (iii) A negative control material and a control material with graded or titered reactivity, respectively, for each test producing graded or titered results. (3) Perform control material testing as specified in this paragraph (d) before resuming patient testing when a complete change of reagents is introduced; major preventive maintenance is performed; or any critical part that may influence test performance is replaced."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel and the medical director or designee. Applies to every nonwaived test on the lab's test menu.",
+  "policy_statements": [
+    "Every quantitative test has at least two control materials at different concentrations run in every patient run, per 42 CFR 493.1256(d)(2).",
+    "Every qualitative test has at least one negative and one positive control material run in every patient run, per 42 CFR 493.1256(d)(2).",
+    "Tests producing graded or titered results have a negative control plus a control with graded or titered reactivity in every patient run.",
+    "Control material is run before resuming patient testing after: a complete change of reagents, major preventive maintenance, or replacement of any critical part that may influence test performance.",
+    "Control results are evaluated against Westgard multi-rule criteria (1-2s warning; 1-3s, 2-2s, R-4s, 4-1s, N-x, N-T rejection); any rejection rule fires triggers the QC corrective action workflow before patient results are released.",
+    "Lab-set acceptable mean and SD for each lot of control material are established per 42 CFR 493.1253 (performance specifications verified or established by the laboratory).",
+    "QC records (control lot, expected mean, expected SD, observed result, accept/reject decision, technologist, date and time) are documented in the LIS or on paper QC log and retained for at least 2 years per 42 CFR 493.1105.",
+    "A monthly QC review is performed by the medical director or designee: review of all QC events, violations, corrective actions, trends; signed and dated; any unresolved concern is escalated."
+  ],
+  "procedure_steps": [
+    "At the start of each patient run, the testing staff member runs the test-specific control material per the active procedure.",
+    "Control results are evaluated automatically (if the LIS or instrument middleware applies Westgard rules) or manually against the lab-set mean and SD.",
+    "If any rejection rule fires, patient results are held; the testing staff member opens a QC corrective action: identifies cause (calibration, reagent, instrument, sample handling, control material), takes corrective action, reruns QC, and documents the outcome.",
+    "Patient results are released only after QC for the run is in control. If QC cannot be brought into control, the run is rejected and patient specimens are re-analyzed under acceptable QC.",
+    "All QC events, violations, corrective actions, and resolutions are documented in the QC log.",
+    "Monthly, the medical director or designee reviews the QC log, signs the monthly QC review attestation, and documents any unresolved issues for further investigation."
+  ],
+  "definitions": [
+    ["Quantitative test", "A test producing a numeric result on a continuous scale. Requires at least two control materials at different concentrations per run."],
+    ["Qualitative test", "A test producing a positive/negative or present/absent result. Requires at least one negative and one positive control per run."],
+    ["Westgard rules", "A multi-rule QC evaluation framework: 1-2s (warning, single point >2 SD), 1-3s (rejection, single >3 SD), 2-2s (two consecutive >2 SD same side), R-4s (range >4 SD across zero), 4-1s (four consecutive >1 SD same side), N-x (N consecutive same side of mean, bias), N-T (N consecutive trending, drift)."],
+    ["Monthly QC review", "Attestation by the medical director or designee that the prior month's QC has been reviewed and any concerns addressed. Signed and dated; retained for at least 2 years."]
+  ]
+}

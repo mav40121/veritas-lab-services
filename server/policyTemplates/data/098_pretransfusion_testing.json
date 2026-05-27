@@ -1,0 +1,115 @@
+{
+  "policy_id": "98",
+  "slug": "pretransfusion_testing",
+  "policy_name": "Pretransfusion Testing Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> performs pretransfusion testing: specimen collection for typing and crossmatching, ABO and Rh blood typing, and compatibility testing. Required by 42 CFR 493.1271(a) through (d), 42 CFR 493.1232 (specimen identification and integrity), 42 CFR 493.1256 (control procedures), and 21 CFR 606.151 (compatibility testing). Pretransfusion testing is the gating step that confirms recipient/donor compatibility before any blood component is issued for transfusion.",
+  "scope": "All <<LAB_NAME>> transfusion service personnel performing or supervising pretransfusion testing, the medical director or designee, and clinical staff collecting type-and-crossmatch specimens.",
+  "policy_statements": [
+    "Specimens for type and crossmatch are collected by trained personnel using two-patient-identifier verification at the bedside; each tube is labeled in the patient's presence with patient name, DOB or MRN, date and time of collection, and the collector's initials. Pre-printed labels are NOT applied before collection.",
+    "Specimens that are unlabeled, mislabeled, or have any discrepancy between tube and requisition are rejected without exception; the only resolution is recollect.",
+    "Pretransfusion specimen validity window: typically 3 days when the patient has been pregnant or transfused within the prior 3 months (or when history is unknown); validity may extend longer when no recent immunologic exposure has occurred, per the lab's policy approved by the medical director or designee.",
+    "Pretransfusion specimens are kept refrigerated at 1 to 6 degrees C when not in use and retained for at least 7 days after the last transfusion or compatibility test per the lab's transfusion service retention policy.",
+    "<<LAB_NAME>> performs ABO grouping by both forward (cell) and reverse (serum) typing on every recipient specimen; reverse typing is NOT performed on newborns under 4 months of age per the lab's transfusion service protocol approved by the medical director or designee; discrepancies are resolved before any blood is issued.",
+    "Rh(D) typing is performed on every recipient specimen using anti-D reagent per manufacturer instructions; weak D testing is performed on initial typing of donor units and on patients per the lab's defined indications (e.g., prenatal, infant of D-negative mother).",
+    "The current ABO/Rh result is compared to any historical result on file before any blood product is issued; any discrepancy is investigated and resolved by the medical director or designee before issue, and the resolution is documented.",
+    "Daily-of-use QC for ABO/Rh reagents is performed per 42 CFR 493.1256 and 42 CFR 493.1273(a): positive and negative controls for anti-A, anti-B, and anti-D; A1 and B reactive cells confirmed reactive with the corresponding antisera; antiglobulin reagent confirmed reactive with IgG-sensitized control cells.",
+    "Compatibility testing (crossmatch) is performed on every red cell unit before issue and includes an antiglobulin (indirect Coombs) phase, unless emergency release is invoked per the lab's written emergency release policy. Electronic crossmatch may substitute for the serologic crossmatch only when the recipient meets all FDA-recognized electronic-crossmatch criteria (no clinically significant antibodies current or historical, two ABO determinations on file, validated LIS algorithm).",
+    "Historical patient records are checked at each crossmatch; any prior clinically significant antibody is honored regardless of current screen result; the component selected is antigen-negative for any previously identified clinically significant antibody.",
+    "Incompatible crossmatch triggers investigation by the Technical Supervisor or medical director or designee before any component is issued; the investigation is documented (history review, repeat testing on fresh specimen, antibody identification or expanded panel, selection of alternate donor units).",
+    "Repeat patient ABO/Rh testing on a second specimen drawn at a different time is required before the first non-O group-specific transfusion, per AABB and FDA guidance, unless an electronic patient-identification system meeting the medical director or designee's approved equivalence criteria is in use.",
+    "Pretransfusion testing records (results, QC, reagent lot numbers, technologist initials, verification of historical comparison) are reviewed before component issue and retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "At specimen receipt, verify the requisition matches the specimen label (name, DOB or MRN, draw date/time, phlebotomist initials); reject any mismatched or unlabeled specimen and notify the ordering provider.",
+    "Log specimen receipt in the LIS with patient identifiers, collection time, receipt time, and the receiving staff member; refrigerate at 1 to 6 degrees C between tests.",
+    "At the start of each day of patient immunohematology testing, run the required daily QC per 42 CFR 493.1273(a): reagent red cells with positive and negative antisera; antisera with known antigen-positive and antigen-negative reference cells; antiglobulin reagent with IgG-sensitized control cells. Failed QC pauses patient testing on the affected reagent.",
+    "Perform ABO forward and reverse typing and Rh(D) typing per the lab's validated procedure; interpret reactions as 0, 1+, 2+, 3+, or 4+; resolve any forward/reverse discrepancy before reporting.",
+    "Compare the current ABO/Rh interpretation to any prior on-file result; if a prior result exists and differs, do NOT issue blood; investigate and document the resolution; notify the medical director or designee.",
+    "Perform antibody screen on every recipient specimen; identify any reactive antibody through panel testing before crossmatching; honor any historical antibody by selecting antigen-negative donor units.",
+    "Perform serologic crossmatch on every red cell unit with immediate spin (or computer crossmatch where eligible), antibody-detection phase (incubation at 37 degrees C), and antiglobulin (indirect Coombs) phase; document compatibility result.",
+    "If incompatible, the Technical Supervisor or medical director or designee initiates the documented investigation; component issue is held pending resolution.",
+    "Document QC, patient result, technologist, historical comparison, and any incompatibility investigation in the transfusion service record; retain for at least 10 years."
+  ],
+  "definitions": [
+    [
+      "Forward typing",
+      "ABO grouping performed by testing patient red cells with reagent anti-A and anti-B."
+    ],
+    [
+      "Reverse typing",
+      "ABO grouping performed by testing patient serum or plasma against reagent A1 and B cells; must agree with forward typing. Not performed on newborns under 4 months of age."
+    ],
+    [
+      "Electronic crossmatch",
+      "Compatibility determination based on validated computer logic comparing recipient ABO/Rh with donor unit ABO/Rh; permitted only when recipient meets all FDA-recognized criteria including two ABO determinations on file and no current or historical clinically significant antibodies."
+    ],
+    [
+      "Weak D",
+      "An expression of the D antigen that requires indirect antiglobulin testing to detect; affects donor unit labeling and may affect Rh(D)-negative recipient management."
+    ],
+    [
+      "Specimen validity window",
+      "The time period during which a pretransfusion specimen can be used for compatibility testing. Typically 3 days when the patient has been pregnant or transfused in the prior 3 months or history is unknown."
+    ],
+    [
+      "Historical comparison",
+      "Comparison of the current ABO/Rh result against any prior result on file at this facility before blood is issued. A discrepancy halts issue pending investigation."
+    ],
+    [
+      "Second-sample confirmation",
+      "An ABO determination on a second, independently collected sample from the patient before non-O group-specific red cells are issued."
+    ],
+    [
+      "Clinically significant antibody",
+      "An unexpected red cell antibody capable of causing transfusion reactions or hemolytic disease of the newborn. Triggers antigen-negative unit selection at every subsequent crossmatch regardless of current screen result."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1242",
+      "label": "Standard: Specimen submission, handling, and referral",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral."
+    },
+    {
+      "citation": "42 CFR 493.1271(a)",
+      "label": "Standard: Immunohematology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+    },
+    {
+      "citation": "42 CFR 493.1271(b)",
+      "label": "ABO group and D(Rho) type",
+      "verbatim": "The laboratory must perform ABO grouping by concurrently testing unknown red cells with, at a minimum, anti-A and anti-B grouping reagents. For confirmation of the ABO group of unknown sera or plasma, the unknown specimen must be tested with known A1 and B red cells. The laboratory must perform D(Rho) typing with anti-D (anti-Rho) blood typing reagent."
+    },
+    {
+      "citation": "42 CFR 493.1271(c)",
+      "label": "Patient testing",
+      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+    },
+    {
+      "citation": "42 CFR 493.1271(d)",
+      "label": "Standard: Compatibility testing",
+      "verbatim": "The laboratory must perform compatibility testing prior to the issuance of blood and blood products, except as provided for an emergency situation defined in writing by the laboratory. Compatibility testing must include a major crossmatch performed using methods that demonstrate ABO incompatibility and clinically significant antibodies to red cell antigens, and that include an antiglobulin test."
+    },
+    {
+      "citation": "42 CFR 493.1273(a)",
+      "label": "Standard: Immunohematology control procedures",
+      "verbatim": "If the laboratory performs ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, or compatibility testing, the laboratory must, at a minimum, do the following: (1) Test reagent red cells to confirm reactivity. (2) Test antiserum (anti-A, anti-B, anti-A,B, anti-D) at the manufacturer's recommended concentration with reference red cells. (3) Test antiglobulin reagent (anti-IgG, polyspecific) for reactivity with IgG-sensitized red cells. (4) Test the negative control."
+    },
+    {
+      "citation": "42 CFR 493.1256",
+      "label": "Standard: Control procedures (general)",
+      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+    },
+    {
+      "citation": "21 CFR 606.151(b)",
+      "label": "FDA: Use of fresh recipient samples",
+      "verbatim": "The use of fresh recipient serum or plasma samples less than 3 days old for all pretransfusion testing if the recipient has been pregnant within the past 3 months or transfused within the past 3 months, or if the history is uncertain or unavailable."
+    }
+  ]
+}

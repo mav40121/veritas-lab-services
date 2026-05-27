@@ -1,0 +1,42 @@
+{
+  "policy_id": "88",
+  "slug": "poct_oversight",
+  "policy_name": "Point-of-Care Testing Oversight Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> oversees point-of-care testing (POCT) performed outside the central lab (bedside, clinic exam room, ED, OR). POCT is laboratory testing under CLIA regardless of where it is performed; CLIA at 42 CFR 493.15 (waived) and 42 CFR 493.17 (moderate complexity) and Subpart M (waived QC) apply.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(a)",
+      "label": "Standard: Control procedures",
+      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+    },
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    }
+  ],
+  "scope": "All POCT operators at every site under the <<LAB_NAME>> CLIA certificate, the POCT coordinator (if assigned), and the medical director or designee.",
+  "policy_statements": [
+    "Every POCT site operating under the <<LAB_NAME>> CLIA certificate is listed on the lab's CLIA application and approved by the medical director or designee.",
+    "Each POCT device, kit, or method has a written procedure, QC requirements, operator training, and competency assessment as required by CLIA for the complexity level.",
+    "POCT operators are trained, competency-assessed, and authorized in the lab's POCT roster before performing patient testing; the roster is maintained current.",
+    "POCT QC is performed at the manufacturer-specified frequency at minimum; QC results, failed-QC corrective actions, and operator/device/lot identifiers are documented and reviewed by the POCT coordinator or designee monthly.",
+    "POCT results are entered into the LIS or EHR with operator ID, device ID, date/time, and result; critical results are reported per the lab's Critical Value Reporting policy.",
+    "POCT inventory (devices, reagents, controls) is managed by the central lab or POCT coordinator; expired reagents are removed from POCT sites promptly.",
+    "POCT compliance audits are performed at each site at least annually by the central lab or POCT coordinator; findings are tracked to closure."
+  ],
+  "procedure_steps": [
+    "When a new POCT site or device is added, the medical director or designee approves; the CLIA certificate is updated if the new site is at a different address.",
+    "POCT operators complete documented training; their initial competency assessment is performed before independent patient testing.",
+    "Daily, weekly, or per-shipment QC (per manufacturer) is performed by the POCT operator or POCT coordinator and documented.",
+    "Failed QC triggers immediate corrective action; affected POCT testing pauses until QC is in control; the central lab is notified.",
+    "Patient results, QC records, and competency records flow to the central lab; the POCT coordinator (or designee) reviews monthly.",
+    "Annual on-site POCT audits verify procedure availability, expired-reagent control, training, competency records, QC documentation, and result documentation."
+  ],
+  "definitions": [
+    ["Point-of-Care Testing (POCT)", "Laboratory testing performed at or near the site of patient care, outside the central laboratory."],
+    ["POCT operator", "An individual trained and competency-assessed to perform a specific POCT test under the central lab's CLIA certificate."],
+    ["POCT coordinator", "The role responsible for day-to-day oversight of POCT across sites: training, competency, QC review, audit, inventory."]
+  ]
+}

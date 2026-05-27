@@ -1,0 +1,33 @@
+{
+  "policy_id": "59",
+  "slug": "transfusion_monitoring_aer",
+  "policy_name": "Transfusion Monitoring and Adverse Event Reporting Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> monitors patients during and after transfusion and how transfusion adverse events are recognized, reported, and tracked. Required by 42 CFR 493.1271 and 21 CFR 606.170 (adverse reaction records).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.170(a)",
+      "label": "FDA: Adverse reaction file",
+      "verbatim": "Records shall be maintained of any reports of complaints of adverse reactions arising as a result of blood collection or transfusion. A thorough investigation of each reported adverse reaction shall be made. A written report of the investigation of adverse reactions, including conclusions and followup, shall be prepared and maintained as part of the record for that lot of final product by the collecting or transfusing facility."
+    }
+  ],
+  "scope": "All clinical staff administering and monitoring transfusions, <<LAB_NAME>> transfusion service personnel, and the medical director or designee.",
+  "policy_statements": [
+    "Every transfusion is monitored by qualified clinical staff: baseline vitals before the transfusion starts, vitals at 15 minutes (when the highest risk of reaction occurs), and at completion. Visual observation continues throughout.",
+    "Any sign of adverse reaction (fever, chills, hypotension, dyspnea, urticaria, hemoglobinuria, pain at the infusion site, unusual change in patient status) triggers immediate transfusion stop and notification of the transfusion service per the Transfusion Reaction Investigation policy.",
+    "All confirmed reactions are logged on the Transfusion Adverse Event Register with: date, patient, component, reaction type, severity, investigation outcome, and any reporting to external authorities.",
+    "Quarterly, the medical director or designee reviews the Adverse Event Register for trend; recurring patterns trigger root-cause analysis and process change.",
+    "Records of adverse events and investigations are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "Clinical staff record baseline vitals immediately before transfusion start, then at 15 minutes and at completion; visual observation is continuous.",
+    "Any adverse sign triggers transfusion stop; the IV line is kept open with normal saline; the transfusion service is notified per the Transfusion Reaction Investigation policy.",
+    "The clinical event, vitals, intervention, and patient outcome are documented in the patient chart and on the Transfusion Adverse Event Register.",
+    "Transfusion service performs the investigation; the conclusion is filed and the Adverse Event Register entry is closed when the investigation is complete.",
+    "Quarterly review by the medical director or designee summarizes incidents, trends, and any required corrective action."
+  ],
+  "definitions": [
+    ["Transfusion adverse event", "Any unexpected occurrence during or after transfusion that may be related to the transfusion. May be immune-mediated, non-immune, infectious, or related to volume."],
+    ["Transfusion Adverse Event Register", "The lab's central log of all suspected and confirmed transfusion adverse events, used for individual investigation closure and aggregate trend analysis."]
+  ]
+}

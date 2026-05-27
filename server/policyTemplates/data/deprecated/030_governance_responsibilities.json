@@ -1,0 +1,38 @@
+{
+  "policy_id": "30",
+  "slug": "governance_responsibilities",
+  "policy_name": "Governance Responsibilities Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes the governance framework of <<LAB_NAME>>: who is ultimately accountable for the lab's compliance, quality, financial integrity, and clinical outcomes. CLIA at 42 CFR 493.1100 requires effective laboratory general systems.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1100",
+      "label": "Condition: General laboratory systems",
+      "verbatim": "Each laboratory that performs nonwaived testing must establish and follow written policies and procedures for an effective laboratory general systems including the policies and procedures specified in 493.1101 through 493.1105."
+    }
+  ],
+  "scope": "Owner, governing body, the medical director or designee, and senior leadership of <<LAB_NAME>>.",
+  "policy_statements": [
+    "<<LAB_NAME>> has a defined governance structure: ownership entity, governing body (board or equivalent), medical director or designee, and operational management.",
+    "The governing body's responsibilities are documented and include: appointment and oversight of the medical director or designee, approval of major operational and capital decisions, financial stewardship, and final accountability for regulatory compliance.",
+    "The medical director or designee reports to the governing body and is responsible for the overall operation and administration of the lab per 42 CFR 493.1445 (moderate complexity) or 42 CFR 493.1407 (high complexity).",
+    "Governance roles, reporting lines, and decision authorities are documented and reviewed annually.",
+    "Conflicts of interest among governance members are disclosed and managed per the lab's Code of Ethical Conduct policy."
+  ],
+  "procedure_steps": [
+    "Governance roles are defined in writing; each role holder signs the role description at appointment.",
+    "Governing body meetings occur on a regular schedule (typically quarterly); minutes are retained.",
+    "Annual review of governance roles, reporting lines, and decision authorities is documented and signed.",
+    "Any change in ownership, governing body composition, or medical director or designee is reflected in updated documentation and triggers CMS notification per the Accreditation Body Notification policy."
+  ],
+  "definitions": [
+    [
+      "Governing body",
+      "The board or equivalent group with final accountability for the lab's operations and compliance. May be the owner if a small lab, or a board of directors if larger."
+    ],
+    [
+      "Decision authority",
+      "The level of governance approval required for specific decisions (capital purchases, director change, scope of services change, etc.). Defined in the governance documentation."
+    ]
+  ]
+}

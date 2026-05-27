@@ -1,0 +1,36 @@
+{
+  "policy_id": "86",
+  "slug": "waived_testing_qc",
+  "policy_name": "Waived Testing Quality Control Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> runs QC for CLIA-waived tests. Although CLIA does not specify QC frequency for waived tests, the lab follows the manufacturer's QC instructions per 42 CFR 493.15(e), and tracks QC results to detect drift.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.15(e)",
+      "label": "Standard: Laboratories performing waived tests",
+      "verbatim": "Laboratories must follow manufacturers' test instructions and meet the requirements specified in 493.35, 493.37, 493.39, 493.43, 493.45, and 493.51, when applicable, and the conditions specified in 493.5, 493.17, and 493.19."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who perform waived testing and the medical director or designee.",
+  "policy_statements": [
+    "QC for every waived test is run at the manufacturer's specified frequency at minimum; the lab may run additional QC if recommended by the medical director or designee for the lab's risk profile.",
+    "QC materials are stored, handled, and used per the manufacturer's instructions; expired QC material is not used.",
+    "QC results are documented with: control identity, lot number, expiration, result, accept/reject decision, operator, date/time.",
+    "Failed QC triggers immediate corrective action: investigate (operator, device, lot, environment), document, rerun QC; patient testing pauses on the affected device until QC is in control.",
+    "QC results are reviewed monthly by the medical director or designee; trends are analyzed and corrective action taken where indicated.",
+    "QC records are retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "At the manufacturer-specified frequency, the operator runs the required QC on the device.",
+    "QC result is interpreted against the manufacturer's acceptance criteria.",
+    "If accepted, the operator documents the QC (control, lot, result, operator, date/time) and proceeds with patient testing.",
+    "If rejected, patient testing pauses; the operator investigates (operator technique, device issue, expired control, environmental factor), rerunds QC.",
+    "If QC cannot be brought into control, the device is taken out of service; the medical director or designee is notified; affected prior patient results are reviewed for potential impact.",
+    "The medical director or designee reviews QC documentation monthly and signs the review."
+  ],
+  "definitions": [
+    ["Waived test QC", "Quality control performed per the test manufacturer's instructions on a CLIA-waived test. CLIA does not specify frequency; manufacturer instructions control."],
+    ["External QC", "QC using a control material separate from the patient sample. Most waived tests have external QC requirements at minimum per lot, per shipment, or per operator."],
+    ["Internal QC", "Built-in QC features of the device itself (e.g., internal control line on a lateral flow assay). Manufacturer-defined; documented per device."]
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "policy_id": "111",
+  "slug": "hct_p_human_cells_tissues",
+  "policy_name": "Human Cells, Tissues, and Cellular Tissue-Based Products (HCT/P) Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> handles human cells, tissues, and cellular and tissue-based products (HCT/Ps): donation eligibility (including specific infectious-disease marker testing), tissue handling and traceability, release-to-use four-element verification, and post-distribution safety surveillance including the 15-day FDA reporting timeframe. Required by 21 CFR Part 1271 (HCT/Ps), specifically 21 CFR 1271.85 (donor eligibility), 21 CFR 1271.155 (donor screening), 21 CFR 1271.270 (records retention), and 21 CFR 1271.350 (adverse reaction reporting). This policy applies only to laboratories that recover, process, or distribute HCT/Ps.",
+  "scope": "<<LAB_NAME>> personnel handling HCT/Ps, the medical director or designee, and the tissue program coordinator.",
+  "policy_statements": [
+    "Donor eligibility for HCT/Ps is determined per 21 CFR 1271.85 before recovery: review of relevant medical records for risk factors for and clinical evidence of relevant communicable disease agents, infectious-disease screening using FDA-licensed/approved/cleared donor screening tests per manufacturer instructions, and physical assessment as applicable. Ineligible donations are not used for transplantation.",
+    "Required infectious-disease markers tested per 21 CFR 1271.85 include: HIV-1, HIV-2, Hepatitis B virus (HBV), Hepatitis C virus (HCV), Human T-lymphotropic virus type I (HTLV-I), Human T-lymphotropic virus type II (HTLV-II), Treponema pallidum (syphilis treponemal test), and other agents per the current FDA list.",
+    "Results of donor eligibility testing are reported to the procuring organization with full specimen identification, test methods, reactive or non-reactive determination, and any limitations.",
+    "Tissue products are received with complete donor eligibility documentation per 21 CFR 1271.155 through 1271.170; products missing eligibility evidence are NOT accepted.",
+    "Storage temperatures are validated and monitored continuously per the tissue product's specific requirements (temperature, container, light); storage is monitored with alarmed devices; alarm response follows the documented procedure.",
+    "Release of HCT/Ps to surgical use requires the four-element verification: (1) verified donor eligibility documentation; (2) intact packaging; (3) valid expiration; and (4) recipient/product identification matching the request. All four elements are documented before release.",
+    "Adverse reactions in tissue recipients involving a possible communicable disease related to HCT/P products are investigated by the medical director or designee in cooperation with the procuring organization and the recipient's treating clinician.",
+    "Reportable adverse reactions per 21 CFR 1271.350(a) (fatal; life-threatening; permanent impairment or damage; necessitating medical or surgical intervention including hospitalization) are reported to FDA within 15 days of the lab becoming aware.",
+    "Adverse events involving HCT/P deviations (departure from manufacturing requirements, applicable regulations, or established specifications) are reported to FDA per 21 CFR 1271.350 with full investigation documentation.",
+    "Tissue records (donor eligibility, recovery, processing, distribution, recipient, adverse events) are retained for at least 10 years after the distribution date per 21 CFR 1271.270 (and per the longer of that or 42 CFR 493.1105 where applicable).",
+    "Personnel handling HCT/Ps complete documented training before working with tissue products; competency is reassessed at the lab's documented cadence."
+  ],
+  "procedure_steps": [
+    "For each donation, complete the donor eligibility determination per 21 CFR 1271.85: review medical records for risk factors and clinical evidence of relevant communicable disease agents; perform required infectious-disease testing (HIV-1, HIV-2, HBV, HCV, HTLV-I, HTLV-II, syphilis treponemal, others per current FDA list) using FDA-licensed/approved/cleared screening tests per the manufacturer's instructions; the medical director or designee approves the eligibility determination before recovery.",
+    "Report donor testing results to the procuring organization in writing with full specimen identification, test methods, reactive/non-reactive determination, and limitations.",
+    "On receipt of tissue from a supplier or recovery: verify donor eligibility documentation is complete, packaging is intact, expiration is valid, and storage history during transport is acceptable; products missing eligibility evidence are NOT accepted.",
+    "Store tissue per the product's specific requirements (temperature, container, light) with continuous alarmed monitoring; document temperature, time, and condition on receipt.",
+    "On release to surgical use, complete the four-element verification: (1) verified donor eligibility; (2) intact packaging; (3) valid expiration; (4) recipient/product identification matching the request; document all four elements before release.",
+    "Distribute or transplant tissue only after eligibility determination is complete; document the distribution event with full traceability (donor ID, product ID, recipient, date, surgeon).",
+    "On report of an adverse reaction: the medical director or designee initiates investigation; coordinate with the procuring organization and the recipient's treating clinician to gather information; determine whether the reaction meets the reportable threshold per 21 CFR 1271.350(a) (fatal, life-threatening, permanent impairment, requires medical/surgical intervention).",
+    "If reportable, submit the FDA report within 15 days of becoming aware; document the investigation, conclusion, determination of whether the HCT/P was the cause, and corrective actions; retain per the record retention rules.",
+    "Retain all tissue records for at least 10 years post-distribution per 21 CFR 1271.270; longer where state law or 42 CFR 493.1105 requires."
+  ],
+  "definitions": [
+    [
+      "HCT/P",
+      "Human cells, tissues, and cellular and tissue-based products as defined in 21 CFR 1271.3(d); includes bone, ligaments, skin, dura mater, heart valves, corneas, semen, ova, and others."
+    ],
+    [
+      "Donor eligibility testing",
+      "Infectious-disease screening required for HCT/P donors per 21 CFR 1271.85 to confirm absence of communicable disease agents (HIV-1, HIV-2, HBV, HCV, HTLV-I, HTLV-II, syphilis treponemal, others per current FDA list)."
+    ],
+    [
+      "HCT/P deviation",
+      "Departure from manufacturing requirements, applicable regulations, or established specifications for an HCT/P. Reported to FDA per 21 CFR 1271.350."
+    ],
+    [
+      "HCT/P adverse reaction",
+      "Adverse event in a recipient of an HCT/P that may involve transmission of a communicable disease. Reportable to FDA within 15 days of awareness when fatal, life-threatening, causing permanent impairment, or requiring medical or surgical intervention per 21 CFR 1271.350(a)."
+    ],
+    [
+      "Four-element release verification",
+      "The required pre-release check for HCT/Ps: verified donor eligibility, intact packaging, valid expiration, recipient/product identification matching the request. All four documented before release."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 1271.85(a)",
+      "label": "FDA: HCT/P donor eligibility testing",
+      "verbatim": "You must test a donor specimen for evidence of infection due to relevant communicable disease agents, with the exception of CJD and other transmissible spongiform encephalopathies, listed in 1271.85(a)(1) using appropriate FDA-licensed, approved, or cleared donor screening tests, in accordance with the manufacturer's instructions."
+    },
+    {
+      "citation": "21 CFR 1271.85(a)(1)",
+      "label": "FDA: HCT/P required communicable disease agents",
+      "verbatim": "You must test a donor specimen for evidence of infection due to the following communicable disease agents: (i) Human immunodeficiency virus, type 1; (ii) Human immunodeficiency virus, type 2; (iii) Hepatitis B virus; (iv) Hepatitis C virus; (v) Human T-lymphotropic virus, type I; (vi) Human T-lymphotropic virus, type II; (vii) Treponema pallidum."
+    },
+    {
+      "citation": "21 CFR 1271.155(a)",
+      "label": "FDA: Donor screening (general)",
+      "verbatim": "You must screen a donor of cells or tissue by reviewing the donor's relevant medical records for risk factors for, and clinical evidence of, relevant communicable disease agents and diseases."
+    },
+    {
+      "citation": "21 CFR 1271.270",
+      "label": "FDA: Records retention (10 years post-distribution)",
+      "verbatim": "You must maintain records concerning a specific HCT/P in a manner that permits prompt review of all of your activities relating to that HCT/P. You must retain all records pertaining to a particular HCT/P at least 10 years after the date of its administration, or if the date of administration is not known, then at least 10 years after the date of the HCT/P's distribution, disposition, or expiration, whichever is latest."
+    },
+    {
+      "citation": "21 CFR 1271.350(a)",
+      "label": "FDA: Reporting (HCT/P adverse reactions, 15 days)",
+      "verbatim": "You must investigate all adverse reactions involving a communicable disease related to an HCT/P that you made available for distribution. You must report to FDA an adverse reaction involving a communicable disease if it: (1) Is fatal; (2) Is life-threatening; (3) Results in permanent impairment of a body function or permanent damage to body structure; or (4) Necessitates medical or surgical intervention, including hospitalization. You must report each adverse reaction within 15 calendar days of initial receipt of the information."
+    }
+  ]
+}

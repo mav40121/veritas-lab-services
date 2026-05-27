@@ -1,0 +1,32 @@
+{
+  "policy_id": "43",
+  "slug": "blood_supplier_agreement",
+  "policy_name": "Blood Supplier Agreement Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> selects, qualifies, and contracts with blood suppliers. Required by 42 CFR 493.1242 (specimen referral applies to component sourcing) and 21 CFR 606.100 SOPs.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service leadership and the medical director or designee.",
+  "policy_statements": [
+    "Every blood supplier holds a current FDA registration as a blood establishment per 21 CFR 607; registration is verified at contracting and at each renewal.",
+    "Written supplier agreements cover: components and quantities, ordering process, delivery and emergency-delivery commitments, packaging and transport temperature commitments, recall and look-back communication, billing, and term/termination.",
+    "Supplier performance (on-time delivery, recall responsiveness, component quality, customer service) is reviewed annually; recurring issues trigger discussion and may trigger supplier change.",
+    "Recall and look-back notifications from the supplier are acted on within the timeframes specified in the agreement and per FDA guidance; the lab's response is documented.",
+    "Records of supplier qualification, the written agreement, and performance reviews are retained per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "At supplier selection, the medical director or designee confirms FDA registration, reviews the supplier's QMS evidence, and approves the supplier; the approval is documented.",
+    "A written agreement is executed covering the items listed in the policy statements.",
+    "Annual performance review of each supplier is conducted; the review is signed by the medical director or designee and filed.",
+    "Recall or look-back communications from the supplier are logged on receipt and acted on per the response procedure."
+  ],
+  "definitions": [
+    ["Blood supplier", "An FDA-registered blood establishment that collects, processes, or distributes blood components to the lab for transfusion."],
+    ["Look-back", "Process initiated when a donor is subsequently found to be infectious for a transfusion-transmitted disease; recipients of prior components from that donor are identified and the treating clinicians are notified."]
+  ]
+}

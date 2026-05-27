@@ -1,0 +1,34 @@
+{
+  "policy_id": "105",
+  "slug": "performance_evaluation",
+  "policy_name": "Staff Performance Evaluation Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes how <<LAB_NAME>> conducts the HR-side staff performance evaluation for laboratory personnel: cadence, content, and documentation. This is distinct from CLIA competency assessment (see the Training and Competency policy). Required by general HR practice and by 42 CFR 493.1235 references to staff performance review.",
+  "scope": "All <<LAB_NAME>> laboratory personnel, their direct supervisors, the Laboratory Director or designee, and the HR function.",
+  "policy_statements": [
+    "Every laboratory staff member receives a documented performance evaluation at least annually, conducted by the staff member's direct supervisor and reviewed by the Laboratory Director or designee.",
+    "Performance evaluation covers role-based competencies, dependability, communication, teamwork, adherence to lab policies, regulatory compliance behavior, and individual development goals; it is distinct from (and does not substitute for) the CLIA competency assessment.",
+    "Performance issues identified in evaluation are documented with a corrective action plan, a follow-up timeline, and the supervisor's signature; HR is engaged when required by policy.",
+    "Completed performance evaluations are filed in the personnel record per HR retention policy."
+  ],
+  "procedure_steps": [
+    "Schedule each staff member's performance evaluation at the annual anniversary of hire (or per the lab's documented cadence).",
+    "Conduct the evaluation conversation; document the evaluation form covering all required dimensions; both supervisor and staff member sign.",
+    "Route to the Laboratory Director or designee for review and signature.",
+    "For any documented performance issue, attach the corrective action plan and follow-up schedule; engage HR per policy.",
+    "File the completed evaluation in the personnel record per HR retention."
+  ],
+  "definitions": [
+    [
+      "Performance evaluation",
+      "HR-driven annual review of a staff member's overall job performance, distinct from CLIA competency assessment which is a per-test technical assessment."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    }
+  ]
+}

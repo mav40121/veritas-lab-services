@@ -1,0 +1,31 @@
+{
+  "policy_id": "55",
+  "slug": "plasma_component_processing",
+  "policy_name": "Plasma Component Processing and Transfusion Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> stores, thaws, and issues plasma components (FFP, FP24, thawed plasma, cryoprecipitate). Required by 42 CFR 493.1271 and 21 CFR 606.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel handling plasma components.",
+  "policy_statements": [
+    "FFP and FP24 are stored at -18 deg C or colder; thawed plasma is stored at 1-6 deg C and used within the validated thawed-stability window per the lab's procedure.",
+    "Thawing is performed in a validated plasma thawer (water bath or dry heat) per the manufacturer's instructions and the lab's procedure; thaw time and temperature are documented.",
+    "ABO-compatibility for plasma issue: AB plasma is universal; A plasma is compatible with A and O recipients; B plasma is compatible with B and O recipients; O plasma is compatible only with O recipients.",
+    "Plasma issued is documented with unit number, ABO, expiration, recipient, issue time, and technologist; bedside check confirms patient ID and component before transfusion.",
+    "Records are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "On request, the technologist verifies the order, the recipient's ABO/Rh, and selects ABO-compatible plasma.",
+    "Plasma is thawed in the validated thawer; thaw time and temperature are documented.",
+    "Issue documentation is completed and the unit is released for transfusion.",
+    "Bedside check by two clinical staff occurs immediately before transfusion."
+  ],
+  "definitions": [
+    ["Thawed plasma", "Plasma component thawed from frozen and stored at 1-6 deg C for use within the lab's validated stability window."]
+  ]
+}

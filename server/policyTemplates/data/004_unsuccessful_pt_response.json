@@ -1,0 +1,58 @@
+{
+  "policy_id": "4",
+  "slug": "unsuccessful_pt_response",
+  "policy_name": "Unsuccessful Proficiency Testing Response Policy",
+  "section": "Quality",
+  "purpose": "This policy describes how <<LAB_NAME>> responds to unsuccessful proficiency testing (PT) performance, including investigation, corrective action, and notification. CLIA requires that unsuccessful PT be investigated and that patient testing for the analyte be suspended in the most severe cases (42 CFR 493.801, 493.803, 493.821).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.821(b)",
+      "label": "Standard: Unsuccessful participation in proficiency testing for analytes, tests, subspecialties, or specialties",
+      "verbatim": "If a laboratory does not achieve a satisfactory score for an analyte, test, subspecialty, or specialty for two consecutive or two out of three testing events, the laboratory has performed unsuccessfully and must take corrective action including, as appropriate, the cessation of patient testing for the affected analyte, test, subspecialty, or specialty."
+    },
+    {
+      "citation": "42 CFR 493.1236(b)",
+      "label": "Standard: Evaluation of proficiency testing performance",
+      "verbatim": "The laboratory must evaluate and document, at least twice annually, the comparability of results between methods used to perform the same test, or between testing sites at which the same test is performed when more than one method or testing site is used to perform that test."
+    },
+    {
+      "citation": "42 CFR 493.1299(a)",
+      "label": "Standard: Corrective actions",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the post-analytic systems specified at 493.1289."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, and the technical consultant or technical supervisor responsible for each PT-graded analyte. Applies to every analyte enrolled in PT, including ungraded events and educational challenges.",
+  "policy_statements": [
+    "<<LAB_NAME>> investigates every PT result graded UNSATISFACTORY (<80%) or UNACCEPTABLE (any individual incorrect challenge in a regulated subspecialty), regardless of whether the overall event was successful.",
+    "Investigation begins within 5 business days of receiving the PT report and is completed within 30 days. Investigations are documented on the PT Investigation Form and signed by the medical director or designee.",
+    "If the lab fails the same analyte UNSUCCESSFULLY (two consecutive events or two of three) the lab CEASES patient testing for that analyte immediately and notifies the accrediting body within 30 days. Patient testing for the analyte does not resume until the lab demonstrates successful performance on two consecutive subsequent events.",
+    "PT challenges are tested by the same personnel, using the same equipment, reagents, and procedures used for patient samples; PT samples are NOT discussed with or sent to another laboratory, and are NOT subjected to additional or repeat testing not performed on routine patient samples.",
+    "Communication or sharing of PT results between laboratories before the PT provider's deadline is prohibited and results in immediate revocation of CLIA certification per 42 CFR 493.1840(a)(8)."
+  ],
+  "procedure_steps": [
+    "Within 5 business days of receiving a PT report, the technical consultant or supervisor reviews each result for the assigned subspecialty. Any UNSATISFACTORY or UNACCEPTABLE result triggers investigation.",
+    "The investigator opens a PT Investigation Form and documents: analyte, event, the lab's result, the peer-group target, the deviation, and the likely cause categories to consider (clerical, methodologic, technical, instrument, reagent, PT provider, PT material handling).",
+    "The investigator performs the appropriate root-cause analysis: review of QC for the analyte around the PT testing date, review of calibration and maintenance, review of staff training records, comparison to current peer-group performance.",
+    "Corrective action is implemented and documented (recalibration, retraining, instrument service, reagent lot change, procedure update); the medical director or designee signs the completed investigation.",
+    "If the analyte fails UNSUCCESSFULLY (per the two-consecutive or two-of-three rule), the lab issues a written notice within 30 days to the accrediting body and to CMS regional office; ceases patient testing for the analyte; documents the cessation date; and submits two consecutive successful PT events before resuming patient testing.",
+    "PT performance trends are reviewed quarterly by the medical director or designee as part of the quality management plan."
+  ],
+  "definitions": [
+    [
+      "Unsatisfactory PT score",
+      "An overall analyte score below 80% (or the analyte-specific CLIA threshold) for a single PT event."
+    ],
+    [
+      "Unsuccessful PT performance",
+      "Failure of the same analyte on two consecutive events or two of three consecutive events, triggering mandatory cessation of patient testing per 42 CFR 493.821."
+    ],
+    [
+      "PT cessation",
+      "Suspension of patient testing for the affected analyte. The lab does not resume patient testing until two consecutive successful PT events are documented."
+    ],
+    [
+      "PT referral prohibition",
+      "PT samples may not be sent to another lab for testing, nor may PT results be discussed with another lab before the PT provider's reporting deadline. Violation triggers CLIA revocation per 493.1840(a)(8)."
+    ]
+  ]
+}

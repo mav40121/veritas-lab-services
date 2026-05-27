@@ -1,0 +1,36 @@
+{
+  "policy_id": "21",
+  "slug": "staff_performance_evaluation",
+  "policy_name": "Staff Performance Evaluation Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes how <<LAB_NAME>> evaluates the job performance of testing personnel separately from CLIA competency assessment. CLIA at 42 CFR 493.1235 covers technical competency; performance evaluation covers professional conduct, attendance, teamwork, communication, and adherence to lab policies.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, supervisors, the medical director or designee, and the HR partner supporting the lab.",
+  "policy_statements": [
+    "Every testing staff member receives a documented annual performance evaluation by their immediate supervisor or by the medical director or designee.",
+    "The evaluation covers: adherence to lab policies and procedures, attendance and punctuality, professional conduct and teamwork, communication with peers and providers, response to feedback, and progress against prior-year goals.",
+    "Performance evaluation is separate from CLIA competency assessment; technical competency is covered by the Staff Competency Assessment policy on its own cadence.",
+    "Evaluations include goals for the coming year, agreed by the staff member and supervisor.",
+    "Completed evaluations are signed by the staff member and the supervisor; if the staff member disagrees, they may attach a written response that is filed with the evaluation.",
+    "Performance evaluations are retained in the personnel record for the entire time the staff member is employed plus 2 years after separation."
+  ],
+  "procedure_steps": [
+    "HR notifies the supervisor 60 days before each staff member's annual evaluation due date.",
+    "The supervisor collects observations through the year (attendance, peer feedback, incident reports, training participation) and drafts the evaluation using the lab's Performance Evaluation form.",
+    "The supervisor meets with the staff member to discuss the evaluation, listens to the staff member's perspective, agrees on goals for the coming year, and signs the form.",
+    "The staff member signs the form acknowledging the evaluation was discussed (signature does not imply agreement); the staff member may attach a written response.",
+    "The completed form is filed in the personnel record; HR enters the completion in the personnel-tracking system.",
+    "Performance concerns identified between annual evaluations are handled through a written Performance Concern memo with the medical director or designee notified; corrective action is documented."
+  ],
+  "definitions": [
+    ["Performance evaluation", "Documented annual review of a staff member's job performance covering policy adherence, conduct, communication, and goal achievement. Separate from CLIA technical competency."],
+    ["Goals", "Agreed objectives for the staff member's next year, set during the evaluation and reviewed at the next year's evaluation."],
+    ["Performance Concern memo", "Written documentation of a between-evaluations issue. Filed in the personnel record with the corrective action taken."]
+  ]
+}

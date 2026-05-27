@@ -1,0 +1,40 @@
+{
+  "policy_id": "8",
+  "slug": "specimen_identification_tracking",
+  "policy_name": "Specimen Identification and Tracking Policy",
+  "section": "Specimen Management",
+  "purpose": "This policy describes how <<LAB_NAME>> identifies and tracks every patient specimen from receipt through testing to result release and disposal. Required by 42 CFR 493.1232 (positive specimen identification) and 42 CFR 493.1249 (preanalytic systems).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1249(a)",
+      "label": "Standard: Preanalytic systems quality assessment",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the preanalytic systems specified at 493.1241 through 493.1242."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who receive, accession, store, transport, or test patient specimens.",
+  "policy_statements": [
+    "Every specimen carries at least two patient identifiers (name and DOB or MRN) on every container from collection through disposal.",
+    "On receipt, specimens are accessioned in the LIS with patient identifiers, ordering provider, specimen source, collection date/time, receipt date/time, and the receiving staff member; an accession number or barcode tracks the specimen through the lab.",
+    "Splits, aliquots, and derived containers (slides, blocks, tubes) inherit the patient identifiers and accession number from the parent specimen; the link to the parent is preserved.",
+    "Specimens transported between benches, off-site testing locations, or to reference labs are logged at every hand-off with date/time, courier or staff member, and receipt acknowledgment.",
+    "Specimens are stored under the analyte-specific conditions until testing, retest, or disposal; storage location is tracked in the LIS or on a paper specimen log.",
+    "After testing and any retention period, specimens are disposed of per the lab's specimen retention policy and biohazard waste procedure."
+  ],
+  "procedure_steps": [
+    "On receipt, the staff member compares the specimen labeling to the requisition (two identifiers match); any mismatch triggers the Specimen Rejection procedure.",
+    "Accession in the LIS: enter patient identifiers, requisition, source, collection and receipt times; the LIS assigns the accession number or barcode.",
+    "Apply the accession barcode to the primary container if not already labeled; the original collection label remains in place.",
+    "For each split, aliquot, slide, or block, apply a label carrying the same accession number and patient identifiers.",
+    "Log every hand-off (bench-to-bench, lab-to-courier, lab-to-reference-lab) with date/time and the staff member.",
+    "After testing, store specimens per the analyte-specific retention requirements; at end of retention, dispose per the biohazard waste procedure and document."
+  ],
+  "definitions": [
+    ["Accession number", "Unique lab-assigned identifier for a specimen, applied at receipt and inherited by all splits, aliquots, and derived materials."],
+    ["Specimen tracking", "End-to-end documentation of where a specimen is at every point from receipt to disposal, including each hand-off and storage location."]
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "policy_id": "22",
+  "slug": "infection_prevention",
+  "policy_name": "Infection Prevention and Control Program Policy",
+  "section": "Safety",
+  "purpose": "This policy describes how <<LAB_NAME>> protects staff, patients, and visitors from laboratory-acquired infections. CLIA at 42 CFR 493.1101(c) requires the lab to ensure the safety of laboratory personnel from biological hazards; 29 CFR 1910.1030 (OSHA Bloodborne Pathogens) layers federal occupational requirements for blood and other potentially infectious materials.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1101(c)",
+      "label": "Standard: Facilities (safety from biological hazards)",
+      "verbatim": "The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+    },
+    {
+      "citation": "29 CFR 1910.1030(c)",
+      "label": "OSHA: Exposure Control Plan",
+      "verbatim": "Each employer having an employee(s) with occupational exposure as defined by paragraph (b) of this section shall establish a written Exposure Control Plan designed to eliminate or minimize employee exposure. The Exposure Control Plan shall contain at least the following elements: (i) The exposure determination required by paragraph (c)(2), (ii) The schedule and method of implementation for paragraphs (d) Methods of Compliance, (e) HIV and HBV Research Laboratories and Production Facilities, (f) Hepatitis B Vaccination and Post-Exposure Evaluation and Follow-up, (g) Communication of Hazards to Employees, and (h) Recordkeeping, of this standard, and (iii) The procedure for the evaluation of circumstances surrounding exposure incidents as required by paragraph (f)(3)(i)."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, contractors, and visitors. Applies at every testing site under the lab's CLIA certificate.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written Exposure Control Plan that identifies job classifications with occupational exposure to blood or other potentially infectious materials and the methods used to eliminate or minimize exposure.",
+    "Standard Precautions apply to all human blood and other potentially infectious materials: PPE (gloves, gown, eye protection, face shield as needed), engineering controls (sharps containers, biosafety cabinets, splash guards), and work practice controls (no eating, drinking, mouth pipetting, or applying cosmetics in the lab).",
+    "Hepatitis B vaccination is offered at no cost to every staff member with occupational exposure within 10 working days of initial assignment; declination is documented in writing.",
+    "Sharps injuries and other exposure incidents are reported immediately, evaluated by the occupational health provider, and documented on the Exposure Incident log per 29 CFR 1910.1030(f).",
+    "The Exposure Control Plan is reviewed and updated annually and whenever new tasks or procedures introduce new exposure risks.",
+    "Hand hygiene per CDC guidelines is performed on entry and exit of the lab, between glove changes, and after any specimen handling."
+  ],
+  "procedure_steps": [
+    "On hire, every staff member with occupational exposure receives training on the Exposure Control Plan, PPE use, engineering and work-practice controls, and the exposure reporting process; documented and re-delivered annually.",
+    "Hepatitis B vaccination is offered within 10 working days of initial assignment; the staff member's acceptance or written declination is filed in the personnel record.",
+    "Any sharps injury or exposure incident is reported immediately to the supervisor and to occupational health; first aid is rendered and the source patient (where identifiable) is tested per OSHA requirements.",
+    "The Exposure Incident is documented on the Exposure Incident log: date/time, route, source patient ID (if known), staff member, PPE in use, immediate action, source-patient testing, staff post-exposure prophylaxis or follow-up.",
+    "The medical director or designee reviews exposure incidents quarterly and the Exposure Control Plan annually; updates are documented."
+  ],
+  "definitions": [
+    ["Exposure Control Plan", "The lab's written plan for eliminating or minimizing occupational exposure to blood and other potentially infectious materials. Required by 29 CFR 1910.1030."],
+    ["Standard Precautions", "The CDC infection-control approach treating all human blood and body fluids as if known to be infectious for bloodborne pathogens."],
+    ["Exposure incident", "A specific eye, mouth, other mucous membrane, non-intact skin, or parenteral contact with blood or other potentially infectious materials that results from the performance of an employee's duties (29 CFR 1910.1030)."]
+  ]
+}

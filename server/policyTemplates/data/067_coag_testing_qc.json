@@ -1,0 +1,30 @@
+{
+  "policy_id": "67",
+  "slug": "coag_testing_qc",
+  "policy_name": "Coagulation Testing QC and Specimen Collection Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes specimen collection, handling, and QC for coagulation testing (PT/INR, aPTT, fibrinogen, D-dimer, thrombin time, factor assays). Coagulation specimen integrity is uniquely sensitive to collection technique and time-to-testing; required by 42 CFR 493.1232 (specimen integrity), 42 CFR 493.1242 (handling), and 42 CFR 493.1256 (controls).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(d)(3)",
+      "label": "Standard: Control procedures (each run)",
+      "verbatim": "Perform control material testing as specified in this paragraph (d) before resuming patient testing when a complete change of reagents is introduced; major preventive maintenance is performed; or any critical part that may influence test performance is replaced."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel collecting or testing coagulation specimens.",
+  "policy_statements": [
+    "Coagulation specimens are collected in sodium citrate tubes (typically blue-top, 3.2% sodium citrate) with attention to the 9:1 blood-to-citrate ratio; underfilled or overfilled tubes are rejected.",
+    "Time from collection to centrifugation and to testing is documented and within the manufacturer-defined limits; specimens exceeding the limit are rejected.",
+    "Centrifugation, plasma separation, and storage follow the manufacturer's instructions; freeze-thaw history is tracked for specimens not tested immediately.",
+    "Two levels of control are run each day of testing for quantitative coagulation tests per 42 CFR 493.1256(d); failed QC pauses patient testing until in control.",
+    "Patient-specific anticoagulant therapy is considered in the lab's reportable range and interpretation guidance."
+  ],
+  "procedure_steps": [
+    "Specimen receipt staff verify tube fill (within manufacturer-defined acceptable range) and time-from-collection.",
+    "Acceptable specimens are processed per the procedure (centrifugation per manufacturer's protocol, plasma separated if storage required).",
+    "Two control levels are run each day of testing; QC review and corrective action per the Quality Control Plan policy."
+  ],
+  "definitions": [
+    ["Blood-to-citrate ratio", "Required 9:1 ratio of blood to sodium citrate anticoagulant in coagulation tubes. Underfill or overfill alters the ratio and invalidates coagulation results."]
+  ]
+}

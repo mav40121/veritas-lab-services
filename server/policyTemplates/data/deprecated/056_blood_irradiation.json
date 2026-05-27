@@ -1,0 +1,31 @@
+{
+  "policy_id": "56",
+  "slug": "blood_irradiation",
+  "policy_name": "Blood Irradiation Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> identifies patients requiring irradiated blood components and how irradiated components are sourced, verified, and issued. Required by 42 CFR 493.1271 and 21 CFR 606.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.122",
+      "label": "FDA: Instruction circular",
+      "verbatim": "An instruction circular shall be available for distribution if the product is intended for transfusion. The instruction circular shall provide adequate directions for use, including all information set forth below to the extent that it is applicable to the product."
+    }
+  ],
+  "scope": "<<LAB_NAME>> transfusion service personnel, ordering clinicians, and the medical director or designee.",
+  "policy_statements": [
+    "Irradiated cellular blood components (red cells, platelets, granulocytes) are issued to patients at risk of transfusion-associated graft-versus-host disease (TA-GVHD): intrauterine and neonatal transfusion, HLA-matched units, units from biologic relatives, hematologic malignancy, hematopoietic stem cell transplant recipients, congenital immunodeficiency, and other indications per the medical director or designee's approved list.",
+    "Indications are flagged in the LIS by diagnosis or by clinician order; the transfusion service confirms the irradiation requirement at each component issue.",
+    "Irradiated components are sourced from a supplier with documented irradiation capability OR irradiated on-site if the lab holds the appropriate license and equipment.",
+    "Irradiation is verified by the indicator on the unit (radiation-sensitive label) and by supplier documentation; units without acceptable irradiation evidence are not issued to patients requiring irradiation.",
+    "Records of irradiation status are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "On order receipt, the transfusion service checks the patient's irradiation indication; if positive, only irradiated units are selected.",
+    "Selected units are verified for irradiation evidence (indicator label, supplier documentation).",
+    "Issue and bedside check confirm the irradiation requirement was met.",
+    "Any patient with a new irradiation indication is flagged in the LIS for ongoing future transfusions."
+  ],
+  "definitions": [
+    ["TA-GVHD", "Transfusion-Associated Graft-Versus-Host Disease, a rare but typically fatal complication where donor lymphocytes attack the recipient. Prevented by irradiating cellular components for at-risk patients."]
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "policy_id": "20",
+  "slug": "staff_competency_assessment",
+  "policy_name": "Staff Competency Assessment Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes how <<LAB_NAME>> assesses and documents the competency of all testing personnel performing moderate and high complexity testing. Competency assessment is required by 42 CFR 493.1235 and 42 CFR 493.1413(b)(8) to ensure that personnel maintain the skills needed to produce accurate results.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    },
+    {
+      "citation": "42 CFR 493.1413(b)(8)",
+      "label": "Technical consultant responsibilities (moderate complexity)",
+      "verbatim": "Evaluating the competency of all testing personnel and assuring that the staff maintain their competency to perform test procedures and report test results promptly, accurately and proficiently. The procedures for evaluation of the competency of the staff must include, but are not limited to (i) Direct observations of routine patient test performance, including patient preparation, if applicable, specimen handling, processing and testing; (ii) Monitoring the recording and reporting of test results; (iii) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records; (iv) Direct observation of performance of instrument maintenance and function checks; (v) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples; and (vi) Assessment of problem solving skills."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel performing waived, moderate, or high complexity testing, including consultants when applicable. Applies to manual methods (Gram stain, manual differential, urine microscopy) as well as automated testing.",
+  "policy_statements": [
+    "Every staff member performing patient testing is assessed for competency on each test or test family at initial training, again six months after initial training, twelve months after the six-month assessment (the first annual), and annually thereafter.",
+    "Competency assessment covers the six CLIA-required elements per 42 CFR 493.1235: direct observation of routine testing, monitoring of result recording and reporting, review of QC and PT records, direct observation of instrument maintenance, blind sample or PT-style performance, and problem-solving skills.",
+    "The competency assessor's title is set by test complexity: Technical Consultant for moderate complexity testing, Technical Supervisor for high complexity testing, and General Supervisor for waived and PPM testing.",
+    "Element 1 (direct observation) and Element 4 (direct observation of maintenance) require the OBSERVER'S initials, not the evaluator's. The observer must hold the role of Laboratory Director, Technical Consultant, or Technical Supervisor.",
+    "Element 3 records the date the staff member RAN the QC, not the date the QC was reviewed.",
+    "The completed competency assessment is signed by the evaluator; the same person may serve as both the observer and the evaluator if their role qualifies. Both signature fields are required."
+  ],
+  "procedure_steps": [
+    "At hire, the staff member completes initial training on each test or test family they will perform; the trainer documents completion on the Initial Training record.",
+    "Six months after the initial training date, the assessor performs the six-element competency assessment and documents each element on the Competency Assessment form.",
+    "One year after the six-month assessment, the assessor performs the first annual assessment, again documenting all six elements.",
+    "Subsequent assessments occur annually, with the assessment date driven by the prior assessment date (not by calendar year).",
+    "All completed Competency Assessment forms are filed in the staff member's competency record and retained for at least two years after the staff member leaves the lab or the test is retired."
+  ],
+  "definitions": [
+    [
+      "Competency assessment",
+      "A documented evaluation of a staff member's ability to perform assigned testing tasks, covering the six CLIA elements at 42 CFR 493.1235."
+    ],
+    [
+      "Direct observation",
+      "An assessor watches the staff member perform the test or maintenance step in real time and records the observation."
+    ],
+    [
+      "Initial training",
+      "The first instance of training a staff member on a test or test family; completion is documented before the staff member performs the test on patient specimens."
+    ],
+    [
+      "Six-month assessment",
+      "The CLIA-required follow-up assessment six months after initial training, after which assessments occur annually."
+    ]
+  ]
+}

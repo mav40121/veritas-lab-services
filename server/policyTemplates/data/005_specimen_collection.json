@@ -1,0 +1,55 @@
+{
+  "policy_id": "5",
+  "slug": "specimen_collection",
+  "policy_name": "Specimen Collection Policy",
+  "section": "Pre-Analytic",
+  "purpose": "This policy describes how <<LAB_NAME>> instructs ordering providers and collection staff on the correct collection, labeling, handling, and transport of specimens submitted for laboratory testing. Specimen integrity and positive identification are required by 42 CFR 493.1232 and 42 CFR 493.1241 because pre-analytic error is the single largest source of result error.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1241(a)-(c)",
+      "label": "Standard: Test request",
+      "verbatim": "The laboratory must have a written or electronic request for patient testing from an authorized person. The laboratory may accept oral requests for laboratory tests if it solicits a written or electronic authorization within 30 days of the oral request and maintains the authorization or documentation of its efforts to obtain the authorization. The laboratory must ensure the test request solicits all of the following information: (1) The name and address or other suitable identifiers of the authorized person requesting the test and, if applicable, the individual responsible for using the test results, or the name and address of the laboratory referring the specimen, including, as applicable, a contact person to enable the reporting of imminently life threatening laboratory results or panic or alert values. (2) The patient's name or unique patient identifier. (3) The sex and age or date of birth of the patient. (4) The test(s) to be performed. (5) The source of the specimen, when appropriate. (6) The date and, if appropriate, time of specimen collection. (7) For Pap smears, the patient's last menstrual period, and indication of whether the patient had a previous abnormal report, treatment, or biopsy. (8) Any additional information relevant and necessary for a specific test to ensure accurate and timely testing and reporting of results, including interpretation, if applicable."
+    },
+    {
+      "citation": "42 CFR 493.1242",
+      "label": "Standard: Specimen submission, handling, and referral",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who collect, receive, label, store, or transport patient specimens. Applies to specimens collected on-site, specimens collected at off-site draw stations, and specimens received from referring providers or facilities.",
+  "policy_statements": [
+    "All test requests must include the elements listed in 42 CFR 493.1241(c): authorized requester identification, patient name or unique ID, sex and age or DOB, tests ordered, specimen source when relevant, and collection date/time.",
+    "Every specimen container is labeled at the time of collection in the presence of the patient with at least two patient identifiers (name and DOB or MRN), the date and time of collection, the collector's initials, and the specimen source when relevant.",
+    "Pre-printed labels are NOT applied before collection; un-labeled or mis-labeled specimens are rejected per the Specimen Rejection Criteria attachment.",
+    "Specimens are collected, handled, stored, and transported per the analyte-specific requirements in the lab's test directory (tube type, additive, volume, time-to-lab, temperature).",
+    "Specimens not meeting acceptance criteria are documented, the ordering provider is notified, and a recollect is requested; no testing is performed on unacceptable specimens unless approved by the medical director or designee with a documented exception.",
+    "Specimen acceptance and rejection trends are reviewed monthly as part of the quality management plan."
+  ],
+  "procedure_steps": [
+    "The collector verifies the patient identity using two identifiers (name and DOB or MRN) and confirms the requisition matches the patient.",
+    "The collector reviews the test directory entry for any special preparation (fasting, time of day, medication hold) and confirms with the patient before collection.",
+    "The collector draws or collects the specimen using the analyte-specific tube, additive, and volume; specimens are mixed by inversion per tube manufacturer instructions immediately after collection.",
+    "The collector labels every container in the patient's presence with name, DOB or MRN, collection date/time, collector initials, and source.",
+    "The collector transports or stages the specimen per the analyte-specific transport conditions (room temperature, refrigerated, frozen, protected from light) and logs the collection in the LIS.",
+    "Specimen receipt staff inspect each specimen against acceptance criteria; any unacceptable specimen is rejected, logged, and the ordering provider is notified per the Specimen Rejection procedure."
+  ],
+  "definitions": [
+    [
+      "Two patient identifiers",
+      "Two distinct pieces of patient-identifying information used in combination, such as name plus date of birth, or name plus medical record number. Room number and bed number are NOT acceptable identifiers."
+    ],
+    [
+      "Specimen acceptance criteria",
+      "The lab's written rules for the minimum specimen quality, volume, container, and labeling required before testing will proceed."
+    ],
+    [
+      "Specimen source",
+      "The anatomic location or fluid type of the specimen (e.g., right antecubital venous blood, sputum, midstream urine)."
+    ]
+  ]
+}

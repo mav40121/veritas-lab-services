@@ -1,0 +1,39 @@
+{
+  "policy_id": "29",
+  "slug": "organizational_chart",
+  "policy_name": "Organizational Chart and Reporting Structure Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes how <<LAB_NAME>> documents its organizational structure, the reporting chain from testing personnel to the laboratory director, and the chain of supervision required by CLIA at 42 CFR 493.1441-1467 for moderate and high complexity testing.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1441",
+      "label": "Condition: Laboratories performing moderate complexity testing; laboratory director",
+      "verbatim": "The laboratory performing moderate complexity testing must have a director who meets the qualification requirements of 493.1443 of this subpart and provides overall management and direction in accordance with 493.1445 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1445(a)",
+      "label": "Standard: Laboratory director responsibilities",
+      "verbatim": "The laboratory director is responsible for the overall operation and administration of the laboratory, including the employment of personnel who are competent to perform test procedures, and record and report test results promptly, accurately and proficiently and for assuring compliance with the applicable regulations."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel and the medical director or designee. Applies at every CLIA-certified testing site under the lab's certificate.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a current organizational chart that shows the laboratory director, technical consultant (moderate complexity) or technical supervisor (high complexity), general supervisor (high complexity), clinical consultant (moderate complexity), and all testing personnel with their reporting lines.",
+    "The org chart is reviewed and approved by the medical director or designee at least annually and any time a CLIA-defined role changes.",
+    "Each named role on the org chart has a current job description on file in the personnel record, signed by the role holder and by the medical director or designee.",
+    "The current org chart is posted in the lab and available to inspectors on request; previous versions are archived for at least 2 years per the record retention policy.",
+    "Any vacancy in a CLIA-required role (director, technical consultant or supervisor, general supervisor, clinical consultant) is filled or covered by a qualified individual immediately; vacancies lasting more than 30 days are reported to the medical director or designee for escalation to CMS notification per 42 CFR 493.1775."
+  ],
+  "procedure_steps": [
+    "The medical director or designee maintains the current org chart with role titles, named individuals, CLIA-required qualifications met, and reporting lines.",
+    "Any change in role assignment (hire, separation, role change) is reflected on the chart within 5 business days of the change.",
+    "At each annual review, the medical director or designee re-signs and re-dates the chart and updates job descriptions for any role whose responsibilities changed.",
+    "The current chart is posted at each testing site; archived versions are filed with the personnel records for 2-year retention.",
+    "Any CLIA-required role left vacant is logged on the Role Vacancy register; the medical director or designee approves any interim coverage arrangement."
+  ],
+  "definitions": [
+    ["CLIA-defined roles", "Laboratory director, technical consultant (moderate complexity), technical supervisor (high complexity), clinical consultant (moderate complexity), general supervisor (high complexity), testing personnel. Qualifications and responsibilities per 42 CFR 493.1441-1467."],
+    ["Reporting line", "The supervisor each role holder reports to for technical, quality, and personnel matters. Documented on the org chart."],
+    ["Role Vacancy register", "Log of any CLIA-required role currently vacant, the interim coverage arrangement, and the target fill date."]
+  ]
+}

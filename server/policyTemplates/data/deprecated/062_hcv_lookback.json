@@ -1,0 +1,26 @@
+{
+  "policy_id": "62",
+  "slug": "hcv_lookback",
+  "policy_name": "HCV Look-Back Notification Policy (Blood Recipients)",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> responds to notification that a previous blood donor has subsequently tested positive for HCV, identifying recipients of components from that donor and supporting notification of the recipients' treating physicians. Required by 21 CFR 610.47.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 610.47",
+      "label": "FDA: HCV look-back requirements",
+      "verbatim": "If you are a transfusion service, you must establish, maintain, and follow an appropriate system for the following actions, when you are notified by the collecting establishment of information indicating the potential risk of transmission of HCV by a blood or blood component you received from the collecting establishment."
+    }
+  ],
+  "scope": "<<LAB_NAME>> transfusion service personnel and the medical director or designee.",
+  "policy_statements": [
+    "Look-back triggered by HCV notification follows the same workflow as HIV look-back (see policy #61): identify implicated units, identify recipients, notify treating physicians within FDA-required timeframe, quarantine and dispose of any remaining in-inventory components.",
+    "HCV-specific notification language and recipient testing recommendations follow current FDA and CDC guidance.",
+    "All look-back events are documented and reviewed by the medical director or designee; records are retained per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "Follow the look-back procedure as documented in the HIV Look-Back policy (#61), substituting HCV-specific notification language and follow-up testing recommendations."
+  ],
+  "definitions": [
+    ["HCV look-back", "FDA-mandated process under 21 CFR 610.47 to identify and notify recipients of components from a donor subsequently found to be HCV-positive."]
+  ]
+}

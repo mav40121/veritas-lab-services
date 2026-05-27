@@ -1,0 +1,40 @@
+{
+  "policy_id": "45",
+  "slug": "blood_transport_storage_return",
+  "policy_name": "Blood Transport, Storage, and Return Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> stores, transports, and accepts return of blood components to preserve component integrity. Required by 21 CFR 606.122 (labeling), 21 CFR 606.140 (component storage requirements), and 42 CFR 493.1252(b) (specimen and reagent storage conditions).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1252(b)",
+      "label": "Standard: Storage conditions",
+      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
+    },
+    {
+      "citation": "21 CFR 606.122",
+      "label": "FDA: Instruction circular",
+      "verbatim": "An instruction circular shall be available for distribution if the product is intended for transfusion. The instruction circular shall provide adequate directions for use, including all information set forth below to the extent that it is applicable to the product."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel, couriers, clinical staff issuing and returning components, and the medical director or designee.",
+  "policy_statements": [
+    "Red blood cells are stored between 1 and 6 deg C; platelets are stored at 20-24 deg C with continuous gentle agitation; fresh frozen plasma is stored at -18 deg C or colder; cryoprecipitate is stored at -18 deg C or colder. Manufacturer's instructions or the most stringent of regulatory and manufacturer requirements apply.",
+    "Refrigerator, freezer, and platelet incubator temperatures are continuously monitored with audible alarms; alarm thresholds are set inside the storage range so corrective action begins before excursion. Temperature monitoring records are retained.",
+    "Components issued for transfusion are transported in validated coolers (red cells), unpacked validated containers (platelets), or insulated containers per the component's requirements. Transport time and temperature are documented for storage validation.",
+    "Components returned to inventory are accepted only if they have been continuously in approved conditions: red cells returned within 30 minutes of issue (or longer if validated cooler maintained 1-10 deg C per current standards and component integrity is intact); platelets, FFP, and cryo per the lab's validated return criteria.",
+    "Returned components that do not meet acceptance criteria are quarantined and discarded per the lab's component disposal procedure; the discard is documented.",
+    "Storage alarm response: any alarm triggers immediate investigation, temperature read at the affected location, component triage (accept, quarantine, or discard), and documentation per the Blood Storage Alarm Response procedure."
+  ],
+  "procedure_steps": [
+    "Daily, the transfusion service verifies refrigerator, freezer, and platelet incubator temperatures against the lab's acceptance range; any out-of-range reading triggers immediate investigation.",
+    "On component issue: pack per the component's transport requirements (red cells in validated cooler with monitored temperature, platelets without agitation interruption beyond validated time, FFP frozen); document issue time, courier, destination.",
+    "On component return: confirm transport conditions (cooler temperature in range, component appearance intact, time-since-issue within validated return window); accept or quarantine per the criteria; document.",
+    "On storage alarm: respond immediately, read affected location temperature, triage components (accept, quarantine, discard), notify the medical director or designee for any quarantine or discard event, document on the Storage Alarm Response log.",
+    "Discarded components are recorded on the Component Disposal log with reason, quantity, and disposal route."
+  ],
+  "definitions": [
+    ["Validated cooler", "A transport cooler whose temperature performance has been documented to maintain components within the required temperature range for a defined duration. Validation is repeated periodically per the lab's cooler validation schedule."],
+    ["Return window", "The lab's defined maximum time during which a transported component may be returned to inventory and reissued. Set per component type based on storage validation."],
+    ["Storage alarm", "Audible and visual notification that a refrigerator, freezer, or platelet incubator is outside its set acceptance range. Triggers immediate response and component triage."]
+  ]
+}

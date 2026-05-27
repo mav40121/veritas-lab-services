@@ -1,0 +1,29 @@
+{
+  "policy_id": "66",
+  "slug": "manual_hematology_qc",
+  "policy_name": "Manual Hematology QC Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes QC for manual hematology procedures (manual differential, body fluid cell count, manual reticulocyte count, manual platelet estimate). Required by 42 CFR 493.1256 (control procedures) and 42 CFR 493.1261 (general hematology QC).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1261(a)",
+      "label": "Standard: Hematology",
+      "verbatim": "If the laboratory performs automated hematology testing, the laboratory must perform at least two levels of control material each day of testing in accordance with 493.1256(d). If the laboratory performs manual cell counts, the laboratory must perform two controls within each 8 hours of operation and each time a change in reagents occurs."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> hematology testing personnel performing manual hematology procedures.",
+  "policy_statements": [
+    "Manual cell counts (CSF, body fluid, manual platelet, manual differential) have two levels of control material run within each 8-hour shift of operation and each time reagents change per 42 CFR 493.1261(a).",
+    "Manual differential review: standardized review of stained smear, with documented technologist proficiency assessed at competency cycles per the Staff Competency Assessment policy.",
+    "QC results are documented on the manual hematology QC log; failed QC triggers immediate corrective action and pauses patient testing until QC is in control.",
+    "Records retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "At the start of each 8-hour shift performing manual cell counts, the technologist runs two levels of control material; results are documented.",
+    "Failed QC triggers immediate corrective action: investigate, document, rerun QC; patient testing pauses until in control.",
+    "Manual differential proficiency is assessed at scheduled competency cycles."
+  ],
+  "definitions": [
+    ["Manual cell count", "Counting of cellular elements by manual hemocytometer, used for body fluids and when automated counts are unreliable. Subject to 42 CFR 493.1261(a) two-level, 8-hour control requirement."]
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "policy_id": "104",
+  "slug": "training_and_competency",
+  "policy_name": "Training and Competency Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes how <<LAB_NAME>> orients new testing personnel, delivers continuing education and training, and assesses competency against the six CLIA-required elements at 42 CFR 493.1235. Cadence is Initial assessment before unsupervised testing, 6-month re-assessment during the first year, and Annual assessment thereafter. Subsequent assessment dates are anchored to the prior assessment date, NOT the calendar year.",
+  "scope": "All <<LAB_NAME>> testing personnel, evaluators (Technical Consultants, Technical Supervisors, General Supervisors as appropriate to complexity), and the Laboratory Director or designee.",
+  "policy_statements": [
+    "New testing personnel complete a documented orientation before performing patient testing on any test or test family. Orientation covers: lab organizational structure and reporting chain; location of procedures and the procedure manual; location of safety equipment and emergency procedures; HIPAA and patient privacy training; infection prevention and PPE training; specimen handling and identification; downtime procedures; critical value reporting; and incident reporting.",
+    "Test-specific orientation (test menu, instrument operation, QC review, result release) is documented per test or test family on the Initial Training record before the staff member runs patient specimens for that test.",
+    "Continuing education and training are provided on new test introduction, procedure changes, lessons-learned from incident review, and any change in regulatory or accreditor expectation; participation is documented. Continuing-education events (external CE, internal in-services, vendor training, conference attendance) are logged in the personnel record with date, topic, hours, and certificate where applicable.",
+    "When a test system, reagent, calibrator, or procedure changes materially, re-training is delivered to all staff who perform the affected test and documented on the Re-Training record BEFORE the change goes into effect.",
+    "Competency for each test performed is assessed against the six CLIA-required elements at 42 CFR 493.1235: (1) direct observation of routine patient test performance; (2) monitoring the recording and reporting of test results; (3) review of intermediate test results, worksheets, QC, PT, and preventive maintenance; (4) direct observation of instrument maintenance and function checks; (5) assessment of test performance through blind or PT samples; (6) assessment of problem-solving skills.",
+    "Initial competency is documented before the tester is released for unsupervised testing; 6-month re-assessment is completed during the first year of performing the test; annual re-assessment is completed every 12 months thereafter. Subsequent assessment dates are driven by the PRIOR assessment date, not by calendar year.",
+    "Evaluator role by complexity: Technical Supervisor for high-complexity; Technical Consultant for moderate-complexity; General Supervisor for waived and PPM (per CMS guidance for waived complexity). The evaluator signs the competency record; the Laboratory Director or designee reviews and signs the final record.",
+    "Element 1 (direct observation of testing) and Element 4 (direct observation of maintenance) require the OBSERVER'S initials, not the evaluator's. The observer must hold the role of Laboratory Director, Technical Consultant, or Technical Supervisor.",
+    "Element 3 records the date the staff member RAN the QC, not the date the QC was reviewed.",
+    "The same person may serve as both the observer and the evaluator if their role qualifies; both signature fields are required regardless.",
+    "Competency records, orientation, education, and re-training documentation are retained per 42 CFR 493.1105 and the applicable HR retention policy. Training records are retained for the entire time the staff member is employed plus 2 years after separation."
+  ],
+  "procedure_steps": [
+    "At hire, HR notifies the medical director or designee; a supervisor is assigned to deliver orientation; the supervisor walks the new staff member through each Orientation Checklist item; each item is initialed and dated as completed.",
+    "Test-specific Initial Training is delivered per test or test family by a qualified trainer (Laboratory Director, Technical Consultant, Technical Supervisor, or a senior staff member designated by the medical director or designee); the trainer walks the staff member through the procedure, instrument operation, QC, and specimen handling; the trainer observes the staff member running known specimens and reviews documentation.",
+    "On completion of orientation and Initial Training, the supervisor schedules the initial competency assessment; the initial assessment must be completed before the staff member performs unsupervised patient testing.",
+    "Initial competency: evaluator completes all six CLIA elements; Element 1 and Element 4 record the OBSERVER'S initials (observer must be LD, TC, or TS); Element 3 records the date the staff member RAN the QC; the evaluator signs the record.",
+    "Six months after the initial training date, the assessor performs the six-element re-assessment; document each element; evaluator signs.",
+    "One year after the six-month assessment, the assessor performs the first annual; subsequent annual assessments are scheduled relative to the prior assessment date (not by calendar year).",
+    "When a test system, reagent, calibrator, or procedure changes materially, schedule re-training BEFORE the change goes into effect; the trainer-observation-sign-off cycle is repeated; the re-training record is filed.",
+    "Route the completed competency record to the Laboratory Director or designee for review and signature; file in the personnel record with the configured retention.",
+    "Failed elements trigger retraining and re-assessment before the tester resumes the affected activity unsupervised; document the corrective action and the closure date.",
+    "Continuing education events are logged with date, topic, hours, and certificate (where applicable) in the personnel record."
+  ],
+  "definitions": [
+    [
+      "Orientation",
+      "The initial introduction of a new staff member to the laboratory, covering organizational, safety, and procedural topics. Delivered before any patient testing."
+    ],
+    [
+      "Initial Training",
+      "Test-specific training on a particular test or test family delivered before the staff member performs the test on patient specimens. Documented on the Initial Training record."
+    ],
+    [
+      "Re-training",
+      "Test-specific training delivered to staff when the test system, reagent, calibrator, or procedure changes materially. Delivered before the change goes into effect."
+    ],
+    [
+      "Continuing education",
+      "Ongoing professional learning relevant to laboratory practice. Logged in the personnel record."
+    ],
+    [
+      "Initial competency",
+      "Documented competency assessment of all six CLIA elements completed before the tester is released for unsupervised testing on a given test."
+    ],
+    [
+      "6-month re-assessment",
+      "Second competency assessment of all six CLIA elements, completed within 6 months of initial assessment, during the tester's first year on the test."
+    ],
+    [
+      "Annual re-assessment",
+      "Yearly competency assessment of all six CLIA elements after the first-year cadence is complete. Anchored to the prior assessment date, not calendar year."
+    ],
+    [
+      "Six CLIA elements",
+      "The six required competency-assessment activities at 42 CFR 493.1235: direct observation of testing, recording/reporting monitoring, intermediate-results/QC/PT review, observation of instrument maintenance, blind/PT sample testing, problem-solving."
+    ],
+    [
+      "Direct observation",
+      "An assessor watches the staff member perform the test or maintenance step in real time and records the observation. Required for Elements 1 and 4 of the competency assessment."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    },
+    {
+      "citation": "42 CFR 493.1413(b)(8)",
+      "label": "Technical consultant responsibilities (moderate complexity)",
+      "verbatim": "Evaluating the competency of all testing personnel and assuring that the staff maintain their competency to perform test procedures and report test results promptly, accurately and proficiently. The procedures for evaluation of the competency of the staff must include, but are not limited to (i) Direct observations of routine patient test performance, including patient preparation, if applicable, specimen handling, processing and testing; (ii) Monitoring the recording and reporting of test results; (iii) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records; (iv) Direct observation of performance of instrument maintenance and function checks; (v) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples; and (vi) Assessment of problem solving skills."
+    },
+    {
+      "citation": "42 CFR 493.1451(b)(8)",
+      "label": "Technical supervisor responsibilities (high complexity, competency)",
+      "verbatim": "Evaluating the competency of all testing personnel and assuring that the staff maintain their competency to perform test procedures and report test results promptly, accurately and proficiently. The procedures for evaluation of the competency of the staff must include, but are not limited to (i) Direct observations of routine patient test performance, including patient preparation, if applicable, specimen handling, processing and testing; (ii) Monitoring the recording and reporting of test results; (iii) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records; (iv) Direct observation of performance of instrument maintenance and function checks; (v) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples; and (vi) Assessment of problem solving skills."
+    }
+  ]
+}

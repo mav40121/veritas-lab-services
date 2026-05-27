@@ -1,0 +1,44 @@
+{
+  "policy_id": "60",
+  "slug": "transfusion_reaction_investigation",
+  "policy_name": "Transfusion Reaction Investigation Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> investigates suspected transfusion reactions. Required by 42 CFR 493.1271 (immunohematology), 21 CFR 606.170 (adverse reaction recordkeeping), and 21 CFR 606.171 (fatality reporting to FDA).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.170(a)",
+      "label": "FDA: Adverse reaction file",
+      "verbatim": "Records shall be maintained of any reports of complaints of adverse reactions arising as a result of blood collection or transfusion. A thorough investigation of each reported adverse reaction shall be made. A written report of the investigation of adverse reactions, including conclusions and followup, shall be prepared and maintained as part of the record for that lot of final product by the collecting or transfusing facility."
+    },
+    {
+      "citation": "21 CFR 606.170(b)",
+      "label": "FDA: Fatality investigation",
+      "verbatim": "When a complication of blood collection or transfusion is confirmed to be fatal, the Director, Office of Compliance and Biologics Quality, Center for Biologics Evaluation and Research (HFM-600) shall be notified by telephone, facsimile, express mail, or electronically transmitted mail as soon as possible; a written report of the investigation shall be submitted to the Director, Office of Compliance and Biologics Quality, Center for Biologics Evaluation and Research, by mail, courier, or electronically transmitted mail, within 7 days after the fatality by the collecting facility in the event of a donor reaction, or by the facility that performed the compatibility tests in the event of a transfusion reaction."
+    }
+  ],
+  "scope": "All clinical staff monitoring transfusion recipients, <<LAB_NAME>> transfusion service personnel, the medical director or designee, and any reporting designee.",
+  "policy_statements": [
+    "Any suspected transfusion reaction is reported to <<LAB_NAME>> transfusion service immediately; the transfusion is stopped and the IV line is kept open with normal saline.",
+    "Clerical check is performed first: confirm patient identity matches the component label, confirm component matches the patient's records.",
+    "A post-transfusion specimen (EDTA tube) is collected from the patient and sent with the remaining component, IV tubing, and any unused components to the transfusion service for workup.",
+    "Investigation includes: clerical check, visual inspection of post-transfusion specimen for hemolysis, repeat ABO/Rh on pre- and post-transfusion specimens, direct antiglobulin test (DAT) on post-transfusion specimen, comparison of post-transfusion to pre-transfusion specimen.",
+    "Additional testing (antibody screen, antibody ID, repeat crossmatch, culture of component if bacterial contamination is suspected) is performed as indicated by the workup findings and the medical director or designee's judgment.",
+    "Every suspected reaction is documented on the Transfusion Reaction Investigation form: clinical signs, component identification, workup steps, findings, conclusion, and signature of the medical director or designee.",
+    "Confirmed fatal reactions are reported to FDA CBER by telephone or electronic transmission as soon as possible, with a written report within 7 days per 21 CFR 606.170(b).",
+    "Transfusion reaction records are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "Clinical staff stops the transfusion at the first sign of suspected reaction, keeps the IV line open with normal saline, and notifies the transfusion service and the ordering physician immediately.",
+    "Transfusion service receives the post-transfusion specimen, the remaining component (clamped), and any unused components.",
+    "Clerical check: confirm patient ID matches component label and crossmatch records; any mismatch triggers immediate medical director or designee notification.",
+    "Visual inspection of post-transfusion specimen: pink or red plasma suggests intravascular hemolysis; investigation proceeds urgently.",
+    "Repeat ABO/Rh on pre- and post-transfusion specimens; DAT on post-transfusion specimen; compare to pre-transfusion.",
+    "Findings are reviewed by the medical director or designee; further testing is ordered as indicated; conclusion is documented on the Transfusion Reaction Investigation form.",
+    "If the reaction is confirmed to be fatal, the medical director or designee notifies FDA CBER as soon as possible by phone or electronic transmission; the written 7-day report is submitted."
+  ],
+  "definitions": [
+    ["Transfusion reaction", "Any adverse event during or after transfusion of a blood component. May be immune (acute hemolytic, allergic, febrile non-hemolytic), non-immune (volume overload, sepsis from contamination), or delayed."],
+    ["Clerical check", "First step of every transfusion reaction investigation: confirm the patient receiving the component matches the component label and the transfusion service records."],
+    ["DAT (Direct Antiglobulin Test)", "Test that detects antibody or complement bound to a patient's red cells; positive on a post-transfusion specimen suggests immune-mediated reaction."]
+  ]
+}

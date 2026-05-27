@@ -1,0 +1,35 @@
+{
+  "policy_id": "15",
+  "slug": "environment_of_care",
+  "policy_name": "Environment of Care Management Plan",
+  "section": "Safety",
+  "purpose": "This policy describes how <<LAB_NAME>> manages the physical environment of the laboratory to protect staff, visitors, specimens, and equipment from physical, chemical, biological, and electrical hazards. CLIA at 42 CFR 493.1101 requires the lab's space, ventilation, utilities, and safety to be appropriate for the testing performed.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1101",
+      "label": "Standard: Facilities",
+      "verbatim": "The laboratory must be constructed, arranged, and maintained to ensure the following: (a) The space, ventilation, and utilities necessary for conducting all phases of the testing process. (b) Contamination of patient specimens, equipment, instruments, reagents, materials, and supplies is minimized. (c) The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel and the medical director or designee. Applies to every testing site under the lab's CLIA certificate.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains the lab space, ventilation, lighting, utilities, and storage to support the testing performed.",
+    "Hazardous-material storage (chemical, biological, radioactive where applicable) follows the manufacturer's safety data sheets and applicable federal and state regulations; SDS for every in-use chemical is accessible to staff.",
+    "Eye wash stations, emergency showers, fire extinguishers, spill kits, and first-aid supplies are inspected on the manufacturer-defined cadence (at minimum monthly) and logged; out-of-spec equipment is removed from service and corrected within one business day.",
+    "Temperature- and humidity-sensitive equipment and reagents are monitored daily; out-of-range readings trigger corrective action and a documented impact assessment on affected work.",
+    "Hazardous waste (chemical, biological, sharps) is segregated, contained, labeled, stored, and removed per the lab's hazardous-waste contract and applicable federal/state requirements.",
+    "Annual safety walk-through is performed by the medical director or designee, documented, and any findings tracked to closure."
+  ],
+  "procedure_steps": [
+    "Daily, designated staff verify and log: refrigerator temperatures, freezer temperatures, ambient lab temperature and humidity (where required), eye-wash flush test, emergency shower test (per cycle), and any safety equipment status changes.",
+    "Monthly, the safety officer or designee inspects: fire extinguishers (gauge in green, tag current), spill kits (contents complete), first-aid supplies (in-date, restocked), and chemical inventory (SDS available, labels intact). Findings are logged.",
+    "Any out-of-spec finding triggers immediate corrective action (remove from service, replace, document), and an entry on the Safety Finding log.",
+    "Annually, the medical director or designee performs the Environment of Care walk-through, completes the inspection checklist, and signs the report.",
+    "Hazardous waste is segregated at the point of generation per the lab's color-coded container system; full containers are sealed, dated, and stored in the hazardous-waste storage area; pick-up by the contracted vendor is logged."
+  ],
+  "definitions": [
+    ["Safety Finding", "An out-of-spec condition observed during daily, monthly, or annual safety inspection. Logged, corrected, and reviewed by the medical director or designee."],
+    ["Safety Data Sheet (SDS)", "The standardized chemical-safety document required for every hazardous chemical in use; accessible to all staff."],
+    ["Annual Environment of Care walk-through", "Year-end safety inspection performed by the medical director or designee; covers space, ventilation, utilities, hazard storage, and emergency equipment."]
+  ]
+}

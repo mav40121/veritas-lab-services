@@ -1,0 +1,40 @@
+{
+  "policy_id": "93",
+  "slug": "general_supervisor_qualifications",
+  "policy_name": "General Supervisor Qualifications and Responsibilities Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes the CLIA qualification requirements and day-to-day responsibilities of the general supervisor for high complexity testing at <<LAB_NAME>>. Required by 42 CFR 493.1459 (condition), 42 CFR 493.1461 (qualifications), and 42 CFR 493.1463 (responsibilities).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1459",
+      "label": "Condition: General supervisor (high complexity)",
+      "verbatim": "The laboratory performing high complexity testing must have a general supervisor who meets the qualification requirements of 493.1461 of this subpart and provides general supervision in accordance with 493.1463 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1463(b)",
+      "label": "Standard: General supervisor responsibilities",
+      "verbatim": "The general supervisor is accountable to the technical supervisor for the following: (1) Day-to-day supervision or oversight of the laboratory operation and personnel performing testing and reporting test results. (2) Resolving technical problems and ensuring that remedial actions are taken whenever test systems deviate from the laboratory's established performance specifications. (3) Ensuring that patient test results are not reported until all corrective actions have been taken and the test system is properly functioning. (4) Providing orientation to all testing personnel. (5) Annually evaluating and documenting the performance of all testing personnel."
+    }
+  ],
+  "scope": "Each named general supervisor of <<LAB_NAME>>, the technical supervisor(s) they report to, and the medical director or designee. Applies to every high complexity testing area.",
+  "policy_statements": [
+    "<<LAB_NAME>> appoints a general supervisor for high complexity testing who meets the applicable CLIA qualification per 42 CFR 493.1461.",
+    "Qualification evidence is verified and filed in the personnel record at appointment.",
+    "The supervisor's responsibilities per 42 CFR 493.1463(b) are documented in a signed job description.",
+    "The general supervisor provides day-to-day oversight: when high complexity testing is being performed, a general supervisor is on-site, accessible by phone, or otherwise able to be present in person within a reasonable time per CMS guidance.",
+    "Orientation of every new testing staff member is delivered or directly overseen by the general supervisor; documented per the Staff Orientation policy.",
+    "Annual performance evaluation of every testing staff member is completed by the general supervisor or their delegate; documented per the Staff Performance Evaluation policy."
+  ],
+  "procedure_steps": [
+    "At appointment, credential evidence is collected and primary-source verification is filed per the Staff Credential Verification policy.",
+    "The medical director or designee confirms qualifications meet 42 CFR 493.1461 before clearing the general supervisor for the role.",
+    "The general supervisor signs the job description acknowledging the five CLIA responsibilities; filed with the verification package.",
+    "The general supervisor's schedule of on-site presence and on-call coverage is documented; reviewed annually.",
+    "Orientation of new testing staff is delivered or directly overseen by the general supervisor; the Orientation Checklist is signed.",
+    "Annual performance evaluations are completed by the general supervisor (or delegated to a qualified peer) and filed."
+  ],
+  "definitions": [
+    ["General supervisor", "The individual responsible per 42 CFR 493.1463 for day-to-day supervision of high complexity testing. Qualifications per 42 CFR 493.1461."],
+    ["Day-to-day oversight", "On-site presence, telephone availability, or other accessibility model that allows the supervisor to address technical problems while testing is being performed. Documented and reviewed annually."]
+  ]
+}

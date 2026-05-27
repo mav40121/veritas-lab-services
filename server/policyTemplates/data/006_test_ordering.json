@@ -1,0 +1,39 @@
+{
+  "policy_id": "6",
+  "slug": "test_ordering",
+  "policy_name": "Test Ordering Policy",
+  "section": "Specimen Management",
+  "purpose": "This policy describes how <<LAB_NAME>> accepts and processes test orders from authorized requesters. CLIA at 42 CFR 493.1241 requires a written or electronic request for every patient test and defines the minimum content of that request.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1241(a)",
+      "label": "Standard: Test request",
+      "verbatim": "The laboratory must have a written or electronic request for patient testing from an authorized person. The laboratory may accept oral requests for laboratory tests if it solicits a written or electronic authorization within 30 days of the oral request and maintains the authorization or documentation of its efforts to obtain the authorization."
+    },
+    {
+      "citation": "42 CFR 493.1241(c)",
+      "label": "Standard: Test request content",
+      "verbatim": "The laboratory must ensure the test request solicits all of the following information: (1) The name and address or other suitable identifiers of the authorized person requesting the test and, if applicable, the individual responsible for using the test results, or the name and address of the laboratory referring the specimen, including, as applicable, a contact person to enable the reporting of imminently life threatening laboratory results or panic or alert values. (2) The patient's name or unique patient identifier. (3) The sex and age or date of birth of the patient. (4) The test(s) to be performed. (5) The source of the specimen, when appropriate. (6) The date and, if appropriate, time of specimen collection. (7) For Pap smears, the patient's last menstrual period, and indication of whether the patient had a previous abnormal report, treatment, or biopsy. (8) Any additional information relevant and necessary for a specific test to ensure accurate and timely testing and reporting of results, including interpretation, if applicable."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who receive, process, or release test orders, and all ordering providers and their delegates.",
+  "policy_statements": [
+    "Every test order is accepted only from an authorized person as defined by state law (typically a licensed physician, advanced practice provider, or designee with prescriptive authority).",
+    "Every order, whether written, electronic, or oral, must capture all eight required elements per 42 CFR 493.1241(c): requester identification, patient name or unique ID, sex and age or DOB, tests, specimen source when relevant, collection date/time, Pap-specific elements when applicable, and any additional information required for accurate testing.",
+    "Oral orders are accepted only when documented immediately by the receiving staff member with a written or electronic confirmation solicited within 30 days. The confirmation request and the response (or evidence of attempts) are retained.",
+    "Orders missing required elements are not accepted; the receiving staff member contacts the requester for the missing information before testing begins.",
+    "All test orders are retained per the lab's record retention schedule (minimum 2 years per 42 CFR 493.1105)."
+  ],
+  "procedure_steps": [
+    "Order receipt staff verify the requester is an authorized person and that the order contains all required elements.",
+    "If the order is oral, the staff member captures all required elements in writing or in the LIS at the time of receipt, then sends a written or electronic confirmation request to the ordering provider within 24 hours.",
+    "If any required element is missing, the staff member contacts the requester before testing begins; the contact and resolution are documented on the order.",
+    "Confirmed orders are released to the testing benches; the original order is retained per the record retention schedule.",
+    "Oral order confirmations received within 30 days are matched to the original order and filed; if a confirmation is not received within 30 days, the lab documents the attempts and escalates to the medical director or designee."
+  ],
+  "definitions": [
+    ["Authorized person", "An individual authorized under State law to order tests or receive test results, or both. Typically a licensed physician, advanced practice provider, dentist, or designee with prescriptive authority. State law controls."],
+    ["Oral order", "A test order communicated by voice (in person, phone, voicemail) rather than in writing or electronically. Must be reduced to writing at the time of receipt and confirmed in writing or electronically within 30 days per 42 CFR 493.1241(a)."],
+    ["Required order elements", "The eight items listed in 42 CFR 493.1241(c). Every order must contain all applicable elements before testing begins."]
+  ]
+}

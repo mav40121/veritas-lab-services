@@ -1,0 +1,31 @@
+{
+  "policy_id": "80",
+  "slug": "virology_qc",
+  "policy_name": "Virology Laboratory QC Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes QC for virology testing (viral culture, antigen detection, molecular viral testing, serology). Required by 42 CFR 493.1256 (controls), 42 CFR 493.1261-1278 (specialty QC).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(d)(2)",
+      "label": "Standard: Controls in each run",
+      "verbatim": "Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure. (ii) A negative control material and a positive control material for each qualitative procedure. (iii) A negative control material and a control material with graded or titered reactivity, respectively, for each test producing graded or titered results."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> virology testing personnel.",
+  "policy_statements": [
+    "Viral culture: positive and negative controls run per the procedure cadence; cell line viability and morphology assessed per QC plan.",
+    "Antigen detection assays: positive and negative controls each run; internal control read where the kit supports.",
+    "Molecular viral assays: positive, negative, and internal amplification controls each run per the Molecular QC policy.",
+    "Serology assays: positive and negative controls each run; quantitative serology (titer or index) uses two-level controls per 42 CFR 493.1256(d)(2)(i).",
+    "Failed controls trigger run rejection and corrective action before patient results are released.",
+    "QC records retained per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "Run setup includes the specialty-specific required controls.",
+    "Control results are interpreted alongside patient results; failed controls trigger investigation and re-run.",
+    "Monthly review by the medical director or designee per the Quality Control Plan policy."
+  ],
+  "definitions": [
+    ["Cell line viability QC", "Confirmation that the cell line used for viral culture is viable and shows expected morphology, performed on a defined cadence."]
+  ]
+}

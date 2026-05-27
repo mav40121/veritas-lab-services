@@ -1,0 +1,32 @@
+{
+  "policy_id": "47",
+  "slug": "blood_bank_reagent_criteria",
+  "policy_name": "Blood Bank Reagent Criteria Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> selects, qualifies, and uses blood bank reagents (antisera, reagent red cells, antiglobulin reagents, controls). Required by 42 CFR 493.1252 (test systems), 42 CFR 493.1253 (performance verification), and 42 CFR 493.1271/1273 (immunohematology and QC).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1273(a)",
+      "label": "Standard: Immunohematology (control procedures)",
+      "verbatim": "If the laboratory performs ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, or compatibility testing, the laboratory must, at a minimum, do the following: (1) Test reagent red cells to confirm reactivity. (2) Test antiserum (anti-A, anti-B, anti-A,B, anti-D) at the manufacturer's recommended concentration with reference red cells. (3) Test antiglobulin reagent (anti-IgG, polyspecific) for reactivity with IgG-sensitized red cells. (4) Test the negative control."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel.",
+  "policy_statements": [
+    "Blood bank reagents are FDA-cleared and used per the manufacturer's instructions; modified or non-cleared reagents are not used without performance establishment per the Method Verification policy and medical director or designee approval.",
+    "Reactivity QC on reagents is performed each day of use per 42 CFR 493.1273(a): reagent red cells confirmed reactive, antisera confirmed reactive with known antigen-positive reference cells, antiglobulin reagent confirmed reactive with IgG-sensitized reference cells, negative controls confirmed non-reactive.",
+    "Reagent lot acceptance: new lots are parallel-tested against the prior lot and against patient samples covering the expected range of reactivity; acceptance is documented before placing the new lot into service.",
+    "Storage of reagents per manufacturer instructions; expired reagents are removed from inventory and discarded.",
+    "Reagent QC records and lot acceptance documentation are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "On reagent receipt, log lot, expiration, date, and store per manufacturer instructions.",
+    "Each day of use, perform reactivity QC per 42 CFR 493.1273(a); failed QC pauses patient testing on the affected reagent.",
+    "On new-lot introduction, perform parallel testing against the prior lot using reference cells and patient samples; document acceptance.",
+    "Discard expired reagents and log the disposal."
+  ],
+  "definitions": [
+    ["Reactivity QC", "Daily-of-use quality control on blood bank reagents confirming each reagent performs as expected with known reference cells."],
+    ["Antiglobulin reagent (Coombs reagent)", "Reagent containing antibodies to human immunoglobulin used to detect antibody bound to red cells. Polyspecific (anti-IgG plus anti-complement) or monospecific (anti-IgG only)."]
+  ]
+}

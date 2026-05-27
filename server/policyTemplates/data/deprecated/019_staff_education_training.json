@@ -1,0 +1,36 @@
+{
+  "policy_id": "19",
+  "slug": "staff_education_training",
+  "policy_name": "Staff Education and Training Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes how <<LAB_NAME>> delivers ongoing education and test-specific training to testing personnel. CLIA at 42 CFR 493.1235 requires ongoing competency, which builds on documented training. Initial training precedes any patient testing on a new test; ongoing training keeps staff current as test systems and procedures evolve.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, supervisors, and the medical director or designee. Applies to initial test-specific training and ongoing continuing education.",
+  "policy_statements": [
+    "Every testing staff member receives documented initial training on each test or test family before performing the test on patient specimens.",
+    "Initial training covers: the active procedure, instrument operation, calibration and QC procedures, specimen handling specific to the test, expected reportable range and critical values, troubleshooting common issues, and documentation requirements.",
+    "Training is delivered by a qualified trainer (Laboratory Director, Technical Consultant, Technical Supervisor, or a senior staff member designated by the medical director or designee) and documented on the Initial Training record.",
+    "When a test system, reagent, calibrator, or procedure changes materially, re-training is delivered to all staff who perform the affected test and documented on the Re-Training record before the change goes into effect.",
+    "Continuing education is encouraged and tracked: external CE, internal in-services, vendor training, and conference attendance are logged in the staff member's personnel record.",
+    "Training records are retained for the entire time the staff member is employed plus 2 years after separation."
+  ],
+  "procedure_steps": [
+    "When a new test is added or a staff member is assigned to a new test, the supervisor schedules initial training.",
+    "The trainer walks the staff member through the procedure, instrument operation, QC, and specimen handling; the trainer observes the staff member running known specimens and reviews documentation.",
+    "On completion, the trainer and the staff member sign the Initial Training record; the record is filed in the personnel record.",
+    "Before the staff member tests patient specimens independently, the initial competency assessment per the Staff Competency Assessment policy is performed.",
+    "When a procedure or test system changes, the supervisor schedules re-training; the same trainer-observation-sign-off cycle is repeated; the re-training record is filed.",
+    "Continuing education events are logged with date, topic, hours, and certificate (where applicable) in the personnel record."
+  ],
+  "definitions": [
+    ["Initial training", "Test-specific training delivered to a staff member before they perform the test on patient specimens. Documented on the Initial Training record."],
+    ["Re-training", "Test-specific training delivered to a staff member when the test system, reagent, calibrator, or procedure changes materially. Documented on the Re-Training record."],
+    ["Continuing education", "Ongoing professional learning relevant to laboratory practice. Logged in the personnel record."]
+  ]
+}

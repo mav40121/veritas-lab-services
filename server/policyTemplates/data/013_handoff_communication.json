@@ -1,0 +1,39 @@
+{
+  "policy_id": "13",
+  "slug": "handoff_communication",
+  "policy_name": "Hand-off Communication Policy",
+  "section": "Specimen Management",
+  "purpose": "This policy describes how <<LAB_NAME>> ensures continuity of specimen and result information during shift change, transfer between testing benches, transfer to a reference lab, and return of results to the ordering provider. Hand-off integrity is required by 42 CFR 493.1232 (specimen integrity) and 42 CFR 493.1291 (result reporting).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1291(a)",
+      "label": "Standard: Test report",
+      "verbatim": "The laboratory must have an adequate manual or electronic system(s) in place to ensure test results and other patient-specific data are accurately and reliably sent from the point of data entry (whether interfaced or entered manually) to final report destination, in a timely manner."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel involved in specimen receipt, testing, result release, shift change, and inter-bench or inter-facility transfer.",
+  "policy_statements": [
+    "Every hand-off of a specimen, in-process test, or pending result includes: patient identifiers (name + DOB or MRN), specimen source, test(s), current status, any anomalies (QC issues, instrument flags, repeat needed), and any time-sensitive action.",
+    "Shift change hand-offs are documented on the Shift Hand-off log or in the LIS shift report; the outgoing and incoming staff each sign or initial.",
+    "Hand-offs to a reference laboratory follow the reference-lab packaging, labeling, and chain-of-custody requirements; the send-out is logged with date/time, courier, and acknowledgment of receipt when available.",
+    "Pending critical or time-sensitive results are flagged at hand-off and verbal hand-off is required; receipt acknowledgment is documented.",
+    "Hand-off failures (missed information, lost specimens, missed critical-value windows) are logged as non-conformance events and reviewed by the medical director or designee monthly."
+  ],
+  "procedure_steps": [
+    "At shift change, the outgoing shift lead reviews open work (in-process specimens, pending results, instrument issues, QC concerns) with the incoming shift lead using the Shift Hand-off log or LIS shift report.",
+    "Each open item is verbally hand-off-ed with patient ID, status, and required next action; both leads initial the log.",
+    "For bench-to-bench transfers, the originating testing staff member packages the specimen with labeling intact, hand-delivers or logs the transfer, and the receiving staff member confirms receipt.",
+    "For reference-lab send-outs, the staff member packages per the reference lab's requirements, logs the send-out on the Send-Out log (patient, test, courier, date/time), and tracks for return-of-result.",
+    "Any hand-off failure is logged on the Non-Conformance Event log and reviewed monthly."
+  ],
+  "definitions": [
+    ["Hand-off", "Transfer of responsibility for a specimen, in-process test, or pending result from one staff member, shift, bench, or facility to another."],
+    ["Shift Hand-off log", "Documentation of shift change including open work, pending issues, and any required next actions, with sign-off from outgoing and incoming staff."],
+    ["Send-Out log", "Audit trail of every specimen sent to a reference lab, including courier, date/time, and return-of-result tracking."]
+  ]
+}

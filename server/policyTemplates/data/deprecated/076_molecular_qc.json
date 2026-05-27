@@ -1,0 +1,30 @@
+{
+  "policy_id": "76",
+  "slug": "molecular_qc",
+  "policy_name": "Molecular QC Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes daily QC for molecular testing. Required by 42 CFR 493.1256 (control procedures) and 42 CFR 493.1276 (molecular).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(d)",
+      "label": "Standard: Control procedures (each run)",
+      "verbatim": "Unless CMS approves a procedure, specified in Appendix C of the State Operations Manual (CMS Pub. 7), that provides equivalent quality testing, the laboratory must, at least: (1) Perform control procedures as defined in paragraphs (d)(2) through (d)(4) of this section unless otherwise specified in the additional specialty and subspecialty requirements at 493.1261 through 493.1278. (2) Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> molecular testing personnel.",
+  "policy_statements": [
+    "Every molecular run includes positive control(s), negative control (no-template), and internal amplification control where applicable.",
+    "Quantitative assays include at least two concentration levels of positive control.",
+    "Failed controls (positive control negative, negative control positive, IAC failed) trigger run rejection and corrective action before patient results are released.",
+    "QC results are documented per run with control identity, lot, result, accept/reject, and operator; reviewed monthly by the medical director or designee."
+  ],
+  "procedure_steps": [
+    "Run setup includes the required controls; controls are tracked with patient samples.",
+    "Control results are interpreted alongside patient results; failed controls trigger run rejection.",
+    "Failed runs are investigated, corrective action documented, and re-run performed before patient results are released.",
+    "Monthly QC review by the medical director or designee documents the review and any unresolved concerns."
+  ],
+  "definitions": [
+    ["Run-level QC", "Quality control performed within each batch of patient testing, as opposed to daily-aggregate QC."]
+  ]
+}

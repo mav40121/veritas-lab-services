@@ -1,0 +1,34 @@
+{
+  "policy_id": "70",
+  "slug": "surgical_specimen",
+  "policy_name": "Surgical Specimen Identification and Handling Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> receives, identifies, processes, and tracks surgical specimens (anatomic pathology, frozen section, special handling tissue). Required by 42 CFR 493.1232 (specimen integrity) and 42 CFR 493.1273-1274 (cytology and histopathology retention).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1273(a)",
+      "label": "Standard: Histopathology",
+      "verbatim": "If the laboratory provides services in the subspecialty of histopathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who receive, accession, gross, or process surgical specimens.",
+  "policy_statements": [
+    "Every surgical specimen arrives with the surgeon's requisition containing patient identifiers, clinical history, ordering provider, specimen site/laterality, collection date/time, and any special handling instructions (frozen section, intraoperative consult, special stains).",
+    "Specimens are accessioned in the LIS with the surgical accession number; each container is verified against the requisition before processing.",
+    "Multiple-container submissions are accessioned with unique sub-identifiers (A, B, C) tied to the parent accession; sub-identifiers are maintained on all derived slides, blocks, and reports.",
+    "Specimens are fixed per the procedure's fixation requirements (formalin volume, fixation time) for histology preservation; special studies (frozen section, fresh tissue for genetics) follow their specific handling.",
+    "Specimen rejection criteria: unlabeled containers, mismatched requisitions, dry tissue, contaminated specimens; rejection triggers immediate ordering provider notification.",
+    "Slides and blocks are retained per 42 CFR 493.1105(a)(7): wet tissue at least 2 weeks after final report; paraffin blocks at least 2 years; slides at least 10 years."
+  ],
+  "procedure_steps": [
+    "Receipt staff verify container labels match the requisition; any discrepancy triggers immediate ordering provider notification.",
+    "Specimens are accessioned in the LIS with surgical accession number and sub-identifiers for multi-container cases.",
+    "Specimens are placed in fixation per the procedure or processed for special studies.",
+    "All derived materials (slides, blocks) carry the accession number and sub-identifier.",
+    "Retention per CFR is applied at the end of clinical use."
+  ],
+  "definitions": [
+    ["Surgical accession", "The lab-assigned accession number for a surgical specimen and all materials derived from it (slides, blocks, special stains)."],
+    ["Sub-identifier", "Letter-suffix (A, B, C) applied to multiple containers from the same case to maintain unique identification of each container."]
+  ]
+}

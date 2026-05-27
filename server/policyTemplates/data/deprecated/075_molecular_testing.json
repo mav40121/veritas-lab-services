@@ -1,0 +1,32 @@
+{
+  "policy_id": "75",
+  "slug": "molecular_testing",
+  "policy_name": "Molecular Testing Policies and Procedures",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> performs molecular testing (PCR, sequencing, FISH, microarray). Required by 42 CFR 493.1253 (performance verification), 42 CFR 493.1265 (cytogenetics), and 42 CFR 493.1276 (molecular).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1253(b)(2)",
+      "label": "Standard: Performance specifications (modified/LDT)",
+      "verbatim": "Each laboratory that modifies an FDA-cleared or approved test system, or introduces a test system not subject to FDA clearance or approval (including methods developed in-house and standardized methods such as text book procedures), or uses a test system in which performance specifications are not provided by the manufacturer must, before reporting patient test results, establish for each test system the performance specifications for the following performance characteristics, as applicable: (i) Accuracy. (ii) Precision. (iii) Analytical sensitivity. (iv) Analytical specificity to include interfering substances. (v) Reportable range of test results for the test system. (vi) Reference intervals (normal values). (vii) Any other performance characteristic required for test performance."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> molecular testing personnel and the medical director or designee.",
+  "policy_statements": [
+    "Every molecular test (FDA-cleared, modified, or laboratory-developed) has documented performance verification or establishment per 42 CFR 493.1253 before patient testing begins.",
+    "Workflow controls minimize contamination: physical separation of pre-amplification and post-amplification areas, unidirectional workflow, dedicated pipettes and reagents per area, decontamination of work surfaces.",
+    "Every test run includes appropriate controls: positive control (template at clinical decision concentration), negative control (no-template), and internal amplification control (where the test design supports).",
+    "Reportable range and analytical sensitivity are established and documented; results outside the reportable range are reported with the appropriate qualifier.",
+    "Records retained per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "Performance verification or establishment is completed and signed before first patient use.",
+    "Each run includes the required controls; failed controls pause patient result release until in control.",
+    "Results are interpreted per the validated cutoffs; reported with appropriate clinical comments.",
+    "Workflow controls (separation, unidirectional movement, decontamination) are observed continuously and audited periodically."
+  ],
+  "definitions": [
+    ["Pre-amplification area", "Lab area where reagents are prepared and patient specimens are added to reaction mixtures, before any amplified product exists. Kept physically separated from post-amplification to prevent amplicon contamination."],
+    ["Internal amplification control (IAC)", "A control sequence amplified in the same reaction as the target. Confirms the reaction worked and the absence of a target signal is not due to inhibition."]
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "policy_id": "69",
+  "slug": "cell_exchange",
+  "policy_name": "Cell Exchange Program Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> participates in a cell exchange program (red cell, white cell, or platelet exchange) for proficiency or research. Required by 42 CFR 493.1291 (result reporting) and the lab's documented program protocol.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1291(c)",
+      "label": "Standard: Test report",
+      "verbatim": "Test reports must indicate the following: (1) For positive patient identification, either the patient's name and identification number, or a unique patient identifier and identification number. (2) The name and address of the laboratory location where the test was performed. (3) The test report date. (4) The test performed. (5) Specimen source, when appropriate. (6) The test result and, if applicable, the units of measurement or interpretation, or both. (7) Any information regarding the condition and disposition of specimens that do not meet the laboratory's criteria for acceptability."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> participates in a cell exchange program.",
+  "policy_statements": [
+    "Cell exchange participation is approved by the medical director or designee with documented scope (program, frequency, exchange material, expected outcomes).",
+    "Exchange samples are handled per the program's protocol and the lab's standard specimen integrity controls.",
+    "Results are reported back to the program coordinator per the program's deadlines; any unsatisfactory result triggers investigation and corrective action.",
+    "Program participation, results, and any corrective actions are documented and retained per the lab's retention policy."
+  ],
+  "procedure_steps": [
+    "Receive exchange material per the program's shipping schedule; process per the protocol.",
+    "Test, interpret, and report per the program's deadlines.",
+    "Document results in the lab's exchange program log; address any unsatisfactory performance with documented corrective action."
+  ],
+  "definitions": [
+    ["Cell exchange program", "External program in which participating laboratories exchange cellular samples for comparative testing, typically used in immunohematology and cellular therapy to assess inter-lab performance."]
+  ]
+}

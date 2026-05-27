@@ -1,0 +1,44 @@
+{
+  "policy_id": "3",
+  "slug": "non_retaliation_whistleblower",
+  "policy_name": "Non-Retaliation and Whistleblower Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes how <<LAB_NAME>> protects employees, contractors, and patients who report concerns about laboratory quality, patient safety, regulatory non-compliance, or other workplace issues. CLIA at 42 CFR 493.1773 requires labs to allow employees and other reporters to communicate concerns directly to the accrediting body and to CMS without fear of retaliation.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1773",
+      "label": "Standard: Inspection (employee complaints and access)",
+      "verbatim": "A laboratory must permit CMS or a CMS agent to conduct an inspection to assess the laboratory's compliance with the requirements of this part. CMS or its agent is authorized to interview any laboratory employee, contractor, or other agent of the laboratory whose activities are subject to this part, and to inspect any laboratory record relevant to compliance with these requirements. A laboratory may not impede, obstruct, hinder, or interfere with any such inspection or interview."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> employees, contractors, students, vendors, and patients. Applies to any report concerning laboratory quality, patient safety, regulatory non-compliance, billing integrity, ethics, harassment, or unsafe working conditions.",
+  "policy_statements": [
+    "<<LAB_NAME>> prohibits retaliation in any form against any person who reports a concern in good faith to laboratory management, to the medical director or designee, to the accrediting body, to CMS, to any other regulatory authority, or to law enforcement.",
+    "Reports may be made openly or anonymously through the channels listed in Section 5 (Procedure). The lab posts the contact information for the accrediting body and CMS in the laboratory's public area and on the patient-facing portion of the lab website.",
+    "All reports are documented, investigated by an independent reviewer (not the subject of the report), and resolved within 60 days. The reporter, if identified and willing, receives a summary of the outcome.",
+    "Retaliation includes (but is not limited to) termination, demotion, schedule changes, reduction in hours, exclusion from work activities, threats, or hostile treatment. Any allegation of retaliation is itself a reportable event and triggers an independent investigation.",
+    "Confirmed retaliation results in disciplinary action up to and including termination of the retaliator, and is itself reported to the accrediting body and CMS within 30 days."
+  ],
+  "procedure_steps": [
+    "A reporter may submit a concern by: (a) speaking with the medical director or designee, (b) speaking with any laboratory manager, (c) using the anonymous reporting channel (web form or hotline) listed on the lab's posting, (d) contacting the accrediting body or CMS directly. Direct contact with the accrediting body and CMS is the reporter's right and may be exercised without lab notification.",
+    "Within 5 business days of receipt, the laboratory logs the report (date, reporter if known, nature of concern, channel) on the Concern Report log and assigns an independent reviewer.",
+    "The independent reviewer investigates: interviews relevant personnel, reviews relevant records, and documents findings. The reviewer cannot be the subject of the report or report to the subject of the report.",
+    "Findings are reviewed with the medical director or designee. Corrective action, if any, is implemented and documented.",
+    "The reporter (if identified and willing to receive follow-up) is provided a written summary of the outcome within 60 days of the original report. The summary does not disclose any personnel-action specifics.",
+    "Any allegation of retaliation is logged separately on the Retaliation Allegation log and triggers an independent investigation by a reviewer outside the lab's normal management chain (e.g., HR, compliance, or outside counsel)."
+  ],
+  "definitions": [
+    [
+      "Good-faith report",
+      "A report made by an individual who believes, based on the information available to them, that the concern raised is true. A report is in good faith even if the investigation later finds the concern was unfounded, so long as the report was not knowingly false."
+    ],
+    [
+      "Retaliation",
+      "Any adverse action taken against a reporter because of their report. Includes termination, demotion, schedule changes, reduction in hours, exclusion from work activities, threats, harassment, or hostile treatment."
+    ],
+    [
+      "Independent reviewer",
+      "A laboratory or organizational staff member who is not the subject of the report, does not report to the subject, and has no conflict of interest in the matter."
+    ]
+  ]
+}

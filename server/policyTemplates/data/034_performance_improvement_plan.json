@@ -1,0 +1,49 @@
+{
+  "policy_id": "34",
+  "slug": "performance_improvement_plan",
+  "policy_name": "Performance Improvement Plan",
+  "section": "Quality",
+  "purpose": "This policy describes how <<LAB_NAME>> identifies, monitors, evaluates, and corrects problems in pre-analytic, analytic, and post-analytic processes as part of an ongoing quality management system. Required by 42 CFR 493.1200, 493.1230, 493.1239, 493.1249, 493.1289, and 493.1299.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1200(a)",
+      "label": "Condition: Quality systems",
+      "verbatim": "Each laboratory that performs nonwaived testing must establish and maintain written policies and procedures that implement and monitor a quality system for all phases of the total testing process (that is, preanalytic, analytic, and postanalytic) as well as general laboratory systems."
+    },
+    {
+      "citation": "42 CFR 493.1239(a)",
+      "label": "Standard: General laboratory systems quality assessment",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the general laboratory systems requirements specified at 493.1101 through 493.1105."
+    },
+    {
+      "citation": "42 CFR 493.1289(a)",
+      "label": "Standard: Postanalytic systems quality assessment",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the postanalytic systems specified at 493.1281 and 493.1283."
+    },
+    {
+      "citation": "42 CFR 493.1299(a)",
+      "label": "Standard: Postanalytic systems quality assessment (corrective action)",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the post-analytic systems specified at 493.1289."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, the technical consultant or technical supervisor, and the quality coordinator (if assigned).",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written Quality Management Plan (QMP) covering pre-analytic, analytic, post-analytic, and general laboratory systems.",
+    "Quality indicators are defined for each phase: pre-analytic (specimen rejection rate, requisition completeness, turnaround time from collection to receipt), analytic (QC pass rate, PT performance, calibration timeliness, instrument downtime), post-analytic (critical value notification timeliness, amended report rate, turnaround time from result release to delivery).",
+    "Indicator targets are set by the medical director or designee based on lab baseline and applicable peer benchmarks; performance against target is tracked monthly.",
+    "Quality findings (missed targets, trends, sentinel events, complaints) are logged, investigated, and addressed with documented corrective action; the medical director or designee reviews findings monthly.",
+    "An annual quality management review summarizes indicator performance, trends, corrective actions taken, and goals for the next year; signed by the medical director or designee and retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "The medical director or designee, with the quality coordinator, defines the lab's quality indicators and targets at the start of each year.",
+    "Indicator data is collected monthly by the assigned data owner (testing supervisor, IT, or quality coordinator) and entered on the Quality Dashboard.",
+    "Any indicator missing its target triggers a Quality Finding entry: root cause analysis, corrective action plan, owner, due date.",
+    "The medical director or designee reviews the Quality Dashboard and open Quality Findings monthly; updates are documented in the meeting log.",
+    "At year end, the medical director or designee completes the Annual Quality Management Review summarizing the year's indicators, findings, corrective actions, and goals for the next year; signed and filed."
+  ],
+  "definitions": [
+    ["Quality indicator", "A measurable metric that tracks performance of a pre-analytic, analytic, or post-analytic process against a defined target."],
+    ["Quality Finding", "A documented instance of an indicator missing its target, a sentinel event, a complaint, or any other quality concern. Triggers root-cause analysis and corrective action."],
+    ["Annual Quality Management Review", "The year-end summary signed by the medical director or designee covering the year's indicator performance, findings, corrective actions, and next-year goals."]
+  ]
+}

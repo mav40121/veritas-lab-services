@@ -1,0 +1,33 @@
+{
+  "policy_id": "40",
+  "slug": "microbiology_isolation_id",
+  "policy_name": "Microbiology Isolation and Identification Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> isolates and identifies bacterial, mycobacterial, fungal, and parasitic organisms from clinical specimens. Required by 42 CFR 493.1262 (microbiology QC) and 42 CFR 493.1261 (general bacteriology and mycology requirements).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1262(a)",
+      "label": "Standard: Bacteriology",
+      "verbatim": "For each batch (i.e., shipment, lot, or in-house preparation) and shipment of media, the laboratory must check media for sterility if sterility is required for testing, ability to support growth, and, as appropriate, selectivity/inhibition and biochemical response."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> microbiology testing personnel, the technical supervisor for microbiology, and the medical director or designee.",
+  "policy_statements": [
+    "Specimens are processed per the source-specific procedure (urine, wound, blood, respiratory, stool, body fluid, tissue) with appropriate primary plating media and incubation conditions.",
+    "Media QC: each batch and shipment of media is tested for sterility (when required), growth support with stock organisms, selectivity and inhibition (selective media), and biochemical response (differential media) per 42 CFR 493.1262(a); QC results are documented before patient use.",
+    "Isolates are identified using validated methods (manual biochemical, automated identification systems, MALDI-TOF, molecular) per the lab's procedure; method choice is based on the organism and clinical relevance.",
+    "Susceptibility testing follows the lab's procedure with current breakpoint interpretive criteria; results are reviewed by the technical supervisor or medical director or designee before release for critical isolates.",
+    "Identification, susceptibility, and any pathogen-specific notification (reportable diseases) are documented; reportable conditions are reported to the public health authority per state requirements."
+  ],
+  "procedure_steps": [
+    "Specimen is processed per the source-specific procedure with plating and incubation per the procedure.",
+    "Media QC is performed on each batch/shipment and documented before patient use; failed QC triggers media rejection.",
+    "Isolates are identified using the lab's validated method; the identification is documented with isolate ID, method, and technologist.",
+    "Susceptibility (where applicable) is performed and interpreted with current breakpoints; the report includes the interpretive comment.",
+    "Reportable diseases are reported to the public health authority on the state's required cadence; the report is logged."
+  ],
+  "definitions": [
+    ["Media QC", "Quality control of culture media for sterility, growth support, selectivity, and biochemical response. Required on each batch and shipment per 42 CFR 493.1262(a)."],
+    ["Susceptibility testing", "Determination of antimicrobial agents to which an isolated organism is susceptible or resistant. Performed with current interpretive criteria."]
+  ]
+}

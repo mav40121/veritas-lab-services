@@ -1,0 +1,48 @@
+{
+  "policy_id": "50",
+  "slug": "abo_rh_blood_typing",
+  "policy_name": "ABO and Rh Blood Typing Policy",
+  "section": "Transfusion Service",
+  "purpose": "This policy describes how <<LAB_NAME>> performs ABO group and Rh(D) type determinations for transfusion service patients and donor units. Accurate ABO/Rh typing is the foundation of transfusion safety; misidentification or mistyping is the leading cause of acute hemolytic transfusion reactions. CLIA requires written procedures for immunohematology testing at 42 CFR 493.1271.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1271(a)",
+      "label": "Standard: Immunohematology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+    },
+    {
+      "citation": "42 CFR 493.1271(b)",
+      "label": "ABO group and D(Rho) type",
+      "verbatim": "The laboratory must perform ABO grouping by concurrently testing unknown red cells with, at a minimum, anti-A and anti-B grouping reagents. For confirmation of the ABO group of unknown sera or plasma, the unknown specimen must be tested with known A1 and B red cells. The laboratory must perform D(Rho) typing with anti-D (anti-Rho) blood typing reagent."
+    },
+    {
+      "citation": "42 CFR 493.1271(c)",
+      "label": "Patient testing",
+      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel performing ABO/Rh typing on patient or donor samples, including manual tube tests, gel column tests, and automated immunohematology analyzers. Applies to pretransfusion testing, prenatal testing, and any other ABO/Rh determination.",
+  "policy_statements": [
+    "Every patient ABO/Rh determination uses concurrent forward (red cell) and reverse (serum/plasma) typing with anti-A, anti-B, A1 cells, and B cells. Reverse typing is not performed on newborns under 4 months of age per the lab's transfusion service protocol approved by the medical director or designee.",
+    "D(Rho) typing uses anti-D reagent per manufacturer instructions; weak D testing is performed on donor units and on patients per the lab's defined indications (e.g., prenatal, infant of D-negative mother).",
+    "The current ABO/Rh result is compared to any historical result on file before any blood product is issued. Any discrepancy is investigated and resolved by the medical director or designee before issue; the resolution is documented.",
+    "QC for ABO/Rh reagents is performed on each day of patient testing per 42 CFR 493.1256: positive and negative controls for anti-A, anti-B, and anti-D; A1 and B cells reactive with their corresponding antisera.",
+    "A second-sample confirmation of the patient ABO/Rh is obtained before issuing non-O red cells, or an electronic positive patient identification system meeting the medical director or designee's approved equivalence criteria is in use.",
+    "All ABO/Rh results, QC, reagent lot numbers, technologist initials, and verification of historical comparison are documented in the transfusion service record and retained per 42 CFR 493.1105 (10 years for immunohematology records)."
+  ],
+  "procedure_steps": [
+    "Verify the specimen meets pretransfusion testing requirements: two patient identifiers on the tube, collection date/time, collector initials, and a current type-and-screen or type-and-crossmatch order.",
+    "Set up forward typing: add patient red cells (washed or suspended per the manufacturer's instructions) to wells or tubes labeled anti-A, anti-B, and anti-D. Add the corresponding antiserum to each.",
+    "Set up reverse typing: add patient serum or plasma to wells labeled A1 cells and B cells, then add the corresponding reagent red cells.",
+    "Run forward and reverse tests per manufacturer instructions (centrifugation time, reading method); record reactions as 0, 1+, 2+, 3+, or 4+.",
+    "Interpret the ABO group from the forward/reverse pattern; resolve any forward/reverse discrepancy before reporting. Interpret D type from the anti-D reaction.",
+    "Compare the current ABO/Rh interpretation to any prior result on file. If a prior result exists and differs, do NOT issue blood; investigate and document the resolution; notify the medical director or designee.",
+    "Document QC for the reagents and cells used (lot number, expiration, control result), the patient result, the technologist, and the historical comparison in the transfusion service record."
+  ],
+  "definitions": [
+    ["Forward type", "ABO grouping performed by testing unknown red cells against known anti-A and anti-B reagents."],
+    ["Reverse type", "ABO grouping performed by testing unknown serum or plasma against known A1 and B red cells. Not performed on newborns under 4 months of age."],
+    ["Historical comparison", "Comparison of the current ABO/Rh result against any prior result on file at this facility before blood products are issued, required by 42 CFR 493.1271(c). Discrepancies must be resolved by the medical director or designee."],
+    ["Second-sample confirmation", "An ABO determination on a second, independently collected sample from the patient before non-O red cells are issued. An electronic positive patient identification system approved by the medical director or designee may substitute."]
+  ]
+}

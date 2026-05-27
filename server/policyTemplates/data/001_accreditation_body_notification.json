@@ -1,0 +1,38 @@
+{
+  "policy_id": "1",
+  "slug": "accreditation_body_notification",
+  "policy_name": "Accreditation Body Notification Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes how <<LAB_NAME>> notifies CMS of changes that affect CLIA certification, including changes in ownership, location, lab director, certificate type, or services offered. Notification is required by 42 CFR 493.1100 and 42 CFR 493.1775 so the federal certification record stays accurate and inspections remain effective.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1775(a)",
+      "label": "Standard: Notification requirements",
+      "verbatim": "A laboratory must notify HHS in writing within 30 days of any of the following changes: (1) Name of the laboratory. (2) Ownership of the laboratory. (3) Address. (4) Director of the laboratory. (5) Hours of operation. (6) Withdrawal of the laboratory's request for certification or licensure. (7) Any change of supervisor at a laboratory performing high complexity testing. The laboratory must report any change in the requirements specified in this paragraph to all responsible Federal, State, or local agencies, before or as the change occurs."
+    },
+    {
+      "citation": "42 CFR 493.1100",
+      "label": "Condition: General laboratory systems",
+      "verbatim": "Each laboratory that performs nonwaived testing must establish and follow written policies and procedures for an effective laboratory general systems including the policies and procedures specified in 493.1101 through 493.1105."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> leadership, the medical director or designee, and any administrative personnel responsible for CLIA correspondence, licensure, or certification.",
+  "policy_statements": [
+    "<<LAB_NAME>> notifies CMS in writing within 30 days of any change in lab name, ownership, address, lab director, hours of operation, withdrawal of certification, or change of supervisor at a high complexity site.",
+    "Changes that materially expand the scope of testing (new specialty, new subspecialty, new complexity level, new testing site) trigger a CMS notification AND a CLIA application amendment (CMS-116) before patient testing begins under the new scope.",
+    "All written notifications are made on lab letterhead, addressed to the State Agency CLIA office, signed by the medical director or designee, and retained in the lab's CLIA correspondence file for at least 5 years.",
+    "The medical director or designee reviews the lab's CLIA certificate annually and at every renewal cycle to confirm the certificate matches current scope, location, and director."
+  ],
+  "procedure_steps": [
+    "When any reportable change is anticipated or occurs, the medical director or designee initiates a written notification letter on lab letterhead identifying the lab name, CLIA number, the change, the effective date, and the contact for follow-up.",
+    "The letter is sent to the State Agency CLIA office (and the federal CMS regional office if the State Agency directs) within 30 days of the change.",
+    "If the change is a director, ownership, or location change: the lab also submits a revised CMS-116 form. Patient testing under the new scope does not begin until the revised certificate is received or the State Agency confirms in writing that operations may continue.",
+    "The signed notification, mail tracking, and any acknowledgment from the State Agency are filed in the CLIA correspondence binder.",
+    "At each CLIA renewal, the medical director or designee reviews the certificate against current operations and submits any required updates."
+  ],
+  "definitions": [
+    ["Reportable change", "Any change to lab name, ownership, address, lab director, hours of operation, withdrawal of certification, or supervisor at a high complexity site. Requires CMS notification within 30 days per 42 CFR 493.1775(a)."],
+    ["CMS-116", "The federal CLIA application form. Required for initial certification and for material amendments such as certificate-type change, location change, or director change."],
+    ["State Agency", "The state-level CLIA office that processes CMS-116 applications and notifications on behalf of CMS in most states."]
+  ]
+}

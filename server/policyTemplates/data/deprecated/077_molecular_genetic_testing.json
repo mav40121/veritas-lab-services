@@ -1,0 +1,33 @@
+{
+  "policy_id": "77",
+  "slug": "molecular_genetic_testing",
+  "policy_name": "Molecular Genetic Testing Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> performs and reports molecular genetic testing for inherited conditions, somatic mutations in tumors, and pharmacogenomics. Required by 42 CFR 493.1265 (cytogenetics) and 42 CFR 493.1276 (molecular).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1276(a)",
+      "label": "Standard: Molecular pathology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Molecular Pathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> molecular pathology personnel and the medical director or designee.",
+  "policy_statements": [
+    "Genetic test orders include indication, family history when relevant, ethnicity when used in interpretation, and any prior testing in the patient or family.",
+    "Informed consent for genetic testing is documented when required by state law or by the lab's policy; the consent covers the implications of positive, negative, and indeterminate results.",
+    "Test interpretation includes the variant classification (per current ACMG-style criteria or equivalent), clinical significance, and any implications for family members.",
+    "Reports include the regions or genes tested, variants identified, variant classification, recommended follow-up (genetic counseling, family testing, clinical correlation), and limitations of the test methodology.",
+    "Variant classification is reviewed periodically as new evidence emerges; clinically significant reclassifications trigger amended reports and provider notification per the lab's variant reclassification procedure.",
+    "Genetic testing records are retained per 42 CFR 493.1105 with additional retention as required by state genetic privacy law."
+  ],
+  "procedure_steps": [
+    "Order receipt confirms indication, consent (where required), and pre-analytic information.",
+    "Testing performed per the validated procedure with documented controls.",
+    "Interpretation by qualified personnel; reports include all required elements.",
+    "Variant reclassifications triggered by new evidence are managed per the variant reclassification procedure with amended reports and notification."
+  ],
+  "definitions": [
+    ["Variant classification", "Categorization of a genetic variant by likelihood of clinical significance: pathogenic, likely pathogenic, uncertain significance (VUS), likely benign, benign."],
+    ["Variant reclassification", "Update of a previously reported variant classification based on new evidence. May trigger amended report and provider notification."]
+  ]
+}

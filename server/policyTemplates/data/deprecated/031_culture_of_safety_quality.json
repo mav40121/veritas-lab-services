@@ -1,0 +1,32 @@
+{
+  "policy_id": "31",
+  "slug": "culture_of_safety_quality",
+  "policy_name": "Culture of Safety and Quality Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes how <<LAB_NAME>> builds and sustains a culture in which staff feel safe to report errors, near-misses, and quality concerns without fear of blame. CLIA at 42 CFR 493.1232 requires confidentiality and integrity of patient data; the culture-of-safety expectation is implicit in the quality system requirements at 42 CFR 493.1200.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1200(a)",
+      "label": "Condition: Quality systems",
+      "verbatim": "Each laboratory that performs nonwaived testing must establish and maintain written policies and procedures that implement and monitor a quality system for all phases of the total testing process (that is, preanalytic, analytic, and postanalytic) as well as general laboratory systems."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, leadership, and the medical director or designee.",
+  "policy_statements": [
+    "<<LAB_NAME>> commits to a non-punitive approach to error and near-miss reporting: staff who report in good faith are not subject to discipline solely for the report.",
+    "Errors caused by reckless behavior, willful misconduct, or knowing violation of policy are subject to disciplinary action; honest mistakes and system failures are addressed through process improvement, not blame.",
+    "Every staff member is trained at hire and annually on the lab's error reporting channels, non-retaliation commitment, and the distinction between system failure and individual misconduct (the 'Just Culture' framework).",
+    "Quality and safety metrics (error rate, near-miss reports, complaint volume, staff-perceived safety climate) are tracked and reviewed at least annually by the medical director or designee; trends drive system change.",
+    "Leadership models culture-of-safety behaviors: visible response to reports, acknowledgment of contributions, transparency about findings and actions, and consistent application of the just-culture distinctions."
+  ],
+  "procedure_steps": [
+    "On hire, every staff member receives culture-of-safety training including the non-punitive reporting commitment and the Just Culture framework; refreshed annually.",
+    "Errors and near-misses are reported on the Quality Event log; reports are acknowledged within 5 business days.",
+    "Investigation distinguishes between system failure, at-risk behavior (lapse), and reckless behavior; corrective action is matched to the category.",
+    "Annual culture-of-safety review by the medical director or designee assesses metrics and survey data; findings drive system change."
+  ],
+  "definitions": [
+    ["Just Culture", "Framework distinguishing human error (managed by system change), at-risk behavior (managed by coaching), and reckless behavior (managed by discipline)."],
+    ["Non-punitive reporting", "The lab's commitment that staff reporting errors or near-misses in good faith are not subject to discipline solely for the report."]
+  ]
+}
