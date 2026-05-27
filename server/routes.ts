@@ -3608,7 +3608,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    const rows = (db as any).$client.prepare(`
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(`
       SELECT lm.id AS membership_id, lm.user_id, lm.role, lm.is_primary_lab,
              lm.status, lm.accepted_at, lm.created_at, lm.last_active_at,
              u.name, u.email
@@ -3617,7 +3618,74 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       WHERE lm.lab_id = ? AND lm.status = 'active'
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
     `).all(req.scope.labId);
-    res.json({ members: rows });
+
+    // Pending invites: user_seats rows scoped to this lab's owner where the
+    // recipient hasn't accepted yet (no matching user account = no lab_members
+    // row exists for them yet). Owner-pooled per the current schema; an owner
+    // with multiple labs will see invites for all of them on each lab's view.
+    // Parking-lot for proper per-lab scoping: add lab_id to user_seats.
+    let pendingInvites: any[] = [];
+    try {
+      const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      if (lab) {
+        pendingInvites = sqlite.prepare(`
+          SELECT id AS seat_id, seat_email, invited_at, status, invite_token
+          FROM user_seats
+          WHERE owner_user_id = ? AND status = 'pending'
+          ORDER BY invited_at DESC
+        `).all(lab.owner_user_id);
+      }
+    } catch (err: any) {
+      console.error("[labs/:labId/members GET pendingInvites] query failed:", err.message);
+    }
+
+    res.json({ members: rows, pendingInvites });
+  });
+
+  // POST /api/labs/:labId/seat-invites/:id/reissue
+  //   Lab-scoped equivalent of /api/admin/reissue-invite. Owner or admin of
+  //   the lab can regenerate a pending invite's token and reset the 30-day
+  //   clock without needing ADMIN_SECRET. Verifies the seat row belongs to
+  //   the lab's owner before mutating.
+  app.post("/api/labs/:labId/seat-invites/:id/reissue", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const seatId = Number(req.params.id);
+    if (!Number.isFinite(seatId) || seatId <= 0) return res.status(400).json({ error: "Invalid seat id" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status FROM user_seats WHERE id = ?").get(seatId) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (seat.owner_user_id !== lab.owner_user_id) return res.status(403).json({ error: "Seat does not belong to this lab's owner" });
+    if (seat.status === "active") return res.status(409).json({ error: "Seat already accepted; cannot reissue" });
+    if (seat.status === "deactivated") return res.status(409).json({ error: "Seat is deactivated; cannot reissue" });
+    if (seat.status === "dismissed") return res.status(409).json({ error: "Seat was dismissed; create a new invite instead" });
+    const newToken = crypto.randomUUID();
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE user_seats SET invite_token = ?, invited_at = ?, status = 'pending' WHERE id = ?"
+    ).run(newToken, now, seatId);
+    const joinUrl = `${FRONTEND_URL || ""}/join?token=${newToken}`;
+    res.json({ ok: true, seatId, joinUrl, inviteToken: newToken, invitedAt: now });
+  });
+
+  // POST /api/labs/:labId/seat-invites/:id/dismiss
+  //   Lab-scoped equivalent of /api/admin/seat-invites/:id/dismiss. Owner or
+  //   admin can dismiss a pending invite that won't be reissued.
+  app.post("/api/labs/:labId/seat-invites/:id/dismiss", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const seatId = Number(req.params.id);
+    if (!Number.isFinite(seatId) || seatId <= 0) return res.status(400).json({ error: "Invalid seat id" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const seat = sqlite.prepare("SELECT id, owner_user_id, status FROM user_seats WHERE id = ?").get(seatId) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (seat.owner_user_id !== lab.owner_user_id) return res.status(403).json({ error: "Seat does not belong to this lab's owner" });
+    if (seat.status === "active") return res.status(409).json({ error: "Seat is active; use deactivate, not dismiss" });
+    if (seat.status === "dismissed") return res.json({ ok: true, dismissed_id: seatId, alreadyDismissed: true });
+    sqlite.prepare("UPDATE user_seats SET status = 'dismissed' WHERE id = ?").run(seatId);
+    res.json({ ok: true, dismissed_id: seatId });
   });
 
   // POST /api/labs/:labId/members — invite a new user to the lab.

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X } from "lucide-react";
 
 interface LabMember {
   membership_id: number;
@@ -23,6 +23,14 @@ interface LabMember {
   last_active_at: string | null;
   name: string | null;
   email: string;
+}
+
+interface PendingInvite {
+  seat_id: number;
+  seat_email: string;
+  invited_at: string;
+  status: string;
+  invite_token: string | null;
 }
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
@@ -57,12 +65,13 @@ export default function LabMembersPage() {
   const isOwner = myRole === "owner";
   const canManage = myRole === "owner" || myRole === "admin";
 
-  const { data, isLoading } = useQuery<{ members: LabMember[] }>({
+  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[] }>({
     queryKey: [`/api/labs/${activeLabId}/members`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
   });
   const members = data?.members || [];
+  const pendingInvites = data?.pendingInvites || [];
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
@@ -100,6 +109,28 @@ export default function LabMembersPage() {
     },
     onSuccess: () => { toast({ title: "Member removed" }); invalidate(); },
     onError: (err: any) => toast({ title: "Remove failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  const reissueMutation = useMutation({
+    mutationFn: async (seatId: number) => {
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/seat-invites/${seatId}/reissue`);
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      if (r?.joinUrl) navigator.clipboard.writeText(r.joinUrl).catch(() => {});
+      toast({ title: "Invite reissued", description: "Fresh 30-day link copied to clipboard." });
+      invalidate();
+    },
+    onError: (err: any) => toast({ title: "Reissue failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: async (seatId: number) => {
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/seat-invites/${seatId}/dismiss`);
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Invite dismissed" }); invalidate(); },
+    onError: (err: any) => toast({ title: "Dismiss failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
   // Transfer ownership state
@@ -177,11 +208,17 @@ export default function LabMembersPage() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Members ({members.length})</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Members ({members.length}{pendingInvites.length > 0 && (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">+ {pendingInvites.length} pending</span>
+            )})
+          </CardTitle>
+        </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" size={14} /> Loading...</div>
-          ) : members.length === 0 ? (
+          ) : (members.length === 0 && pendingInvites.length === 0) ? (
             <div className="text-sm text-muted-foreground">No members yet.</div>
           ) : (
             <div className="overflow-x-auto">
@@ -199,7 +236,7 @@ export default function LabMembersPage() {
                     const isSelf = m.user_id === user?.id;
                     const isMemberOwner = m.role === "owner";
                     return (
-                      <tr key={m.membership_id} className="border-b last:border-b-0">
+                      <tr key={`m-${m.membership_id}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-3">
                           <div className="font-medium">{m.name || m.email}{isSelf && <span className="text-xs text-muted-foreground ml-1">(you)</span>}</div>
                           {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
@@ -224,6 +261,52 @@ export default function LabMembersPage() {
                               }
                             }} disabled={removeMutation.isPending}>
                               <Trash2 size={12} className="mr-1" /> Remove
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {pendingInvites.map(inv => {
+                    const daysPending = Math.floor((Date.now() - new Date(inv.invited_at).getTime()) / (1000 * 60 * 60 * 24));
+                    const expired = daysPending > 30;
+                    return (
+                      <tr key={`p-${inv.seat_id}`} className="border-b last:border-b-0 bg-amber-50/30">
+                        <td className="py-2 pr-3">
+                          <div className="font-medium text-muted-foreground italic">{inv.seat_email}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Invited {fmtDate(inv.invited_at)} ({daysPending}d ago)
+                          </div>
+                        </td>
+                        <td className="py-2 pr-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${expired ? "bg-red-100 text-red-900 border-red-300" : "bg-amber-100 text-amber-900 border-amber-300"}`}>
+                            <Clock size={11} />
+                            {expired ? `Expired (${daysPending}d)` : "Pending invitation"}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-muted-foreground">{fmtDate(inv.invited_at)}</td>
+                        <td className="py-2 pr-3 text-right space-x-1">
+                          {canManage && inv.invite_token && !expired && (
+                            <Button size="sm" variant="ghost" onClick={() => {
+                              const url = `${window.location.origin}/join?token=${inv.invite_token}`;
+                              navigator.clipboard.writeText(url).catch(() => {});
+                              toast({ title: "Invite link copied to clipboard" });
+                            }}>
+                              <LinkIcon size={12} className="mr-1" /> Copy link
+                            </Button>
+                          )}
+                          {canManage && (
+                            <Button size="sm" variant="outline" onClick={() => reissueMutation.mutate(inv.seat_id)} disabled={reissueMutation.isPending}>
+                              <RotateCw size={12} className="mr-1" /> Reissue
+                            </Button>
+                          )}
+                          {canManage && (
+                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => {
+                              if (confirm(`Dismiss the invitation for ${inv.seat_email}? They won't get any further emails. You can re-invite them later if needed.`)) {
+                                dismissMutation.mutate(inv.seat_id);
+                              }
+                            }} disabled={dismissMutation.isPending}>
+                              <X size={12} className="mr-1" /> Dismiss
                             </Button>
                           )}
                         </td>
