@@ -16955,6 +16955,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/labs/:labId/veritapolicy/templates/:policyId/docx
+  //   Per-policy Word download. Reads the JSON template from
+  //   server/policyTemplates/data/, substitutes <<LAB_NAME>> with the live
+  //   lab name, and returns a branded DOCX for the Laboratory Director or
+  //   designee to adopt as their lab's policy.
+  app.get('/api/labs/:labId/veritapolicy/templates/:policyId/docx', authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const sqlite = db.$client;
+      const labId = req.scope.labId;
+      const policyId = String(req.params.policyId);
+      const lab = sqlite.prepare('SELECT lab_name, clia_number FROM labs WHERE id = ?').get(labId) as any;
+      if (!lab) return res.status(404).json({ error: 'Lab not found' });
+
+      const { generatePolicyDocxBuffer, loadTemplate } = await import('./veritapolicyDocx');
+      const tmpl = loadTemplate(policyId);
+      if (!tmpl) return res.status(404).json({ error: `Template not found for policy_id=${policyId}` });
+
+      const buf = await generatePolicyDocxBuffer(policyId, {
+        lab_name: lab.lab_name || 'Your Laboratory',
+        clia_number: lab.clia_number || 'CLIA pending',
+      });
+      if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
+
+      const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
+      const filename = `VeritaPolicy_${String(policyId).padStart(3, '0')}_${safeSlug}.docx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', String(buf.length));
+      res.end(buf);
+    } catch (err: any) {
+      console.error('VeritaPolicy DOCX (lab-scoped) error:', err);
+      res.status(500).json({ error: err?.message || 'DOCX generation failed' });
+    }
+  });
+
   // ── MULTI-LAB Tier 2 — VeritaPolicy exports (URL-hygiene fix 2026-05-20) ──
   // Legacy /api/veritapolicy/pdf and /master-list/excel pick the lab via
   // resolveLabForUser(userId), which picks the user's primary lab. For a
