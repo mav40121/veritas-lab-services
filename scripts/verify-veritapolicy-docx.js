@@ -84,7 +84,16 @@ async function main() {
     if (!tmplPath) {
       errors.push("template file missing");
     } else {
-      const buf = await generatePolicyDocxBuffer(id, { lab_name: LAB_NAME, clia_number: CLIA });
+      // Build a realistic crosswalk fixture from the master list row so the
+      // verify run exercises the same render path as production.
+      const cw = {
+        cfr:  p.cfr_citations  || undefined,
+        tjc:  p.tjc_citations  || undefined,
+        cap:  p.cap_citations  || undefined,
+        cola: p.cola_citations || undefined,
+        aabb: p.aabb_citations || undefined,
+      };
+      const buf = await generatePolicyDocxBuffer(id, { lab_name: LAB_NAME, clia_number: CLIA }, cw);
       if (!buf) {
         errors.push("generator returned null");
       } else if (buf.length < 1000) {
@@ -107,6 +116,10 @@ async function main() {
         if (!footerText.includes("VeritaAssure") || !footerText.includes("VeritaPolicy")) errors.push("footer missing brand line");
         const bodyEmDashes = (bodyText.match(/—/g) || []).length;
         if (bodyEmDashes > 0) errors.push(`body has ${bodyEmDashes} em-dash(es) (CLAUDE.md §3 violation)`);
+        // If the master list row has any accreditor citations, the rendered
+        // DOCX must contain the "Accreditor Crosswalk" header.
+        const expectsCrosswalk = !!(cw.cfr || cw.tjc || cw.cap || cw.cola || cw.aabb);
+        if (expectsCrosswalk && !bodyText.includes("Accreditor Crosswalk")) errors.push("Accreditor Crosswalk section missing despite citations available");
         fs.unlinkSync(outPath);
       }
     }
