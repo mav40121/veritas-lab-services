@@ -1,11 +1,37 @@
 #!/bin/bash
 # VeritaAssure Pre-Commit Hook (managed by husky -- survives fresh clones)
-# Runs the Python audit script before every commit.
-# To bypass in a genuine emergency: git commit --no-verify
+# Two guards, in order:
+#   1. Block commits made directly on main. Catches branch-slip incidents
+#      where the active branch unexpectedly switched back to main between
+#      `git checkout -b feature/x` and `git commit`. Workflow expects every
+#      commit to land on a feature branch and ship via PR.
+#   2. Run the Python audit script.
+# To bypass either in a genuine emergency: git commit --no-verify
 # (document the reason in the commit message)
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# Guard 1: branch check
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
+if [ "$CURRENT_BRANCH" = "main" ]; then
+  echo ""
+  echo "COMMIT BLOCKED: HEAD is currently on 'main'."
+  echo ""
+  echo "All commits must land on a feature branch and ship via PR per the"
+  echo "Veritas workflow (CLAUDE.md §14). If you intended to be on a feature"
+  echo "branch, that branch likely slipped between checkout and commit --"
+  echo "investigate before retrying."
+  echo ""
+  echo "Recovery:"
+  echo "  git checkout -b feat/your-branch-name   # capture HEAD on a feature branch"
+  echo "  git commit ...                          # re-run the commit"
+  echo ""
+  echo "To bypass in a genuine emergency: git commit --no-verify"
+  echo "(Document why in the commit message.)"
+  exit 1
+fi
+
+# Guard 2: audit
 echo "Running pre-commit audit..."
 python3 "$REPO_ROOT/script/audit.py"
 EXIT_CODE=$?
