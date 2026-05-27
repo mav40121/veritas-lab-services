@@ -7,8 +7,8 @@ const BASE_URL = "https://www.veritaslabservices.com";
 
 export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/": {
-    title: "Veritas Lab Services | Clinical Laboratory Compliance Software",
-    description: "VeritaAssure\u2122 is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT gap analysis, competency tracking, and more.",
+    title: "VeritaAssure\u2122 Lab Compliance Software | Veritas Lab Services",
+    description: "VeritaAssure\u2122 is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking.",
   },
   "/veritaassure": {
     title: "VeritaAssure\u2122 | Lab Compliance Software Suite for Clinical Laboratories",
