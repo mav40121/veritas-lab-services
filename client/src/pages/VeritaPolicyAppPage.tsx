@@ -141,6 +141,7 @@ export default function VeritaPolicyAppPage() {
   const [bulkConfirm, setBulkConfirm] = useState<{ section: string; rows: MasterPolicy[]; markNa: boolean } | null>(null);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState<Record<string, boolean>>({});
+  const [downloadingBundle, setDownloadingBundle] = useState(false);
 
   const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -273,6 +274,36 @@ export default function VeritaPolicyAppPage() {
       toast({ title: "Download failed", description: e?.message || "Could not generate the Word document.", variant: "destructive" });
     } finally {
       setDownloadingDocx(prev => { const n = { ...prev }; delete n[policyId]; return n; });
+    }
+  }
+
+  async function handleDownloadBundle() {
+    if (!activeLabId) {
+      toast({ title: "Lab context required", description: "Bundle download is available when you are inside a specific lab.", variant: "destructive" });
+      return;
+    }
+    setDownloadingBundle(true);
+    try {
+      const url = `${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/bundle.zip`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Bundle download failed (HTTP ${res.status})`);
+      }
+      const count = res.headers.get("X-VeritaPolicy-Bundle-Policies") || "?";
+      const blob = await res.blob();
+      const dlUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = dlUrl;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `VeritaPolicy_Bundle_${date}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(dlUrl);
+      toast({ title: "Bundle downloaded", description: `${count} policy Word starters in one ZIP` });
+    } catch (e: any) {
+      toast({ title: "Bundle download failed", description: e?.message || "Could not generate the bundle.", variant: "destructive" });
+    } finally {
+      setDownloadingBundle(false);
     }
   }
 
@@ -427,6 +458,10 @@ export default function VeritaPolicyAppPage() {
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
             <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleDownloadBundle} disabled={!activeLabId || downloadingBundle} className="gap-1.5"
+            title={activeLabId ? "Download all policy starters as a single ZIP, each with your lab name and CLIA filled in" : "Open this lab to download the bundle"}>
+            <FileText size={14} /> {downloadingBundle ? "Bundling..." : "All Starters (ZIP)"}
           </Button>
           <Button size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-1.5">
             <Download size={14} /> {downloadingPdf ? "Generating..." : "Download PDF"}
