@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight } from "lucide-react";
+import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight, FileText } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -140,6 +140,7 @@ export default function VeritaPolicyAppPage() {
   const [editingPolicyName, setEditingPolicyName] = useState<Record<string, string>>({});
   const [bulkConfirm, setBulkConfirm] = useState<{ section: string; rows: MasterPolicy[]; markNa: boolean } | null>(null);
   const [bulkApplying, setBulkApplying] = useState(false);
+  const [downloadingDocx, setDownloadingDocx] = useState<Record<string, boolean>>({});
 
   const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -241,6 +242,37 @@ export default function VeritaPolicyAppPage() {
       toast({ title: "PDF generation failed", variant: "destructive" });
     } finally {
       setDownloadingPdf(false);
+    }
+  }
+
+  async function handleDownloadPolicyDocx(policyId: string, policyName: string) {
+    if (!activeLabId) {
+      toast({ title: "Lab context required", description: "Per-policy Word download is available when you are inside a specific lab.", variant: "destructive" });
+      return;
+    }
+    setDownloadingDocx(prev => ({ ...prev, [policyId]: true }));
+    try {
+      const url = `${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/${encodeURIComponent(policyId)}/docx`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Download failed (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const dlUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = dlUrl;
+      const safeName = policyName.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 60);
+      a.download = `VeritaPolicy_${String(policyId).padStart(3, "0")}_${safeName}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(dlUrl);
+      toast({ title: "Policy downloaded", description: `${policyName} (Word doc)` });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e?.message || "Could not generate the Word document.", variant: "destructive" });
+    } finally {
+      setDownloadingDocx(prev => { const n = { ...prev }; delete n[policyId]; return n; });
     }
   }
 
@@ -599,6 +631,20 @@ export default function VeritaPolicyAppPage() {
                                 </div>
                               )}
                             </button>
+                            {isExpanded && (
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  disabled={!activeLabId || !!downloadingDocx[p.policy_id]}
+                                  onClick={(e) => { e.stopPropagation(); handleDownloadPolicyDocx(p.policy_id, p.policy_name); }}
+                                  title={activeLabId ? "Download a branded Word starter for this policy with your lab name and CLIA filled in" : "Open this lab to download per-policy starters"}
+                                  className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/5 hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  <FileText size={12} />
+                                  {downloadingDocx[p.policy_id] ? "Generating..." : "Download Word starter"}
+                                </button>
+                              </div>
+                            )}
                           </td>
 
                           {/* Citations: CFR + AO chips */}
