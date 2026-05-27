@@ -142,6 +142,7 @@ export default function VeritaPolicyAppPage() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState<Record<string, boolean>>({});
   const [downloadingBundle, setDownloadingBundle] = useState(false);
+  const [hasCustomTemplate, setHasCustomTemplate] = useState<{ count: number } | null>(null);
 
   const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -170,6 +171,19 @@ export default function VeritaPolicyAppPage() {
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess) loadAll();
   }, [isLoggedIn, hasPlanAccess, loadAll]);
+
+  // Detect whether this lab has custom-formatted DOCX artifacts stored.
+  // If so, surface a "Custom template" badge so the director knows their
+  // downloads are using their facility template, not the generic one.
+  useEffect(() => {
+    if (!activeLabId) { setHasCustomTemplate(null); return; }
+    let cancelled = false;
+    fetch(`${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/has-custom`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (!cancelled && d) setHasCustomTemplate({ count: d.count || 0 }); })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [activeLabId]);
 
   async function saveSettings(updated: PolicySettings) {
     if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current);
@@ -459,10 +473,21 @@ export default function VeritaPolicyAppPage() {
           <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
             <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleDownloadBundle} disabled={!activeLabId || downloadingBundle} className="gap-1.5"
-            title={activeLabId ? "Download all policy starters as a single ZIP, each with your lab name and CLIA filled in" : "Open this lab to download the bundle"}>
-            <FileText size={14} /> {downloadingBundle ? "Bundling..." : "All Starters (ZIP)"}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" onClick={handleDownloadBundle} disabled={!activeLabId || downloadingBundle} className="gap-1.5"
+              title={activeLabId ? (hasCustomTemplate && hasCustomTemplate.count > 0
+                ? `Download all policies as a ZIP. ${hasCustomTemplate.count} of these use your facility template; the rest use the VeritaAssure default.`
+                : "Download all policy starters as a single ZIP, each with your lab name and CLIA filled in")
+                : "Open this lab to download the bundle"}>
+              <FileText size={14} /> {downloadingBundle ? "Bundling..." : "All Starters (ZIP)"}
+            </Button>
+            {hasCustomTemplate && hasCustomTemplate.count > 0 && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary text-primary"
+                title={`Your facility template is active for ${hasCustomTemplate.count} polic${hasCustomTemplate.count === 1 ? "y" : "ies"}. Downloads use your custom format instead of the VeritaAssure default.`}>
+                Custom template ({hasCustomTemplate.count})
+              </Badge>
+            )}
+          </div>
           <Button size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-1.5">
             <Download size={14} /> {downloadingPdf ? "Generating..." : "Download PDF"}
           </Button>
