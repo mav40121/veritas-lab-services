@@ -800,11 +800,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       // Pending invites: user_seats rows that were sent but never claimed
       // (no user account yet OR account exists but seat is still pending).
-      // Surfaced separately so the admin can see who's been sat on the
-      // doorstep waiting. Joined to the owner user for display.
-      let pendingInvites: any[] = [];
+      // Split into live (invite link still valid) and expired (link dead,
+      // recipient needs a Reissue or admin should Dismiss). Anything that
+      // has been expired for more than 60 days is auto-dismissed first so
+      // the report doesn't accumulate ancient zombies.
+      let pendingInvitesLive: any[] = [];
+      let pendingInvitesExpired: any[] = [];
+      let pendingInvites: any[] = []; // back-compat alias for one release
       try {
-        pendingInvites = (db as any).$client.prepare(`
+        // Auto-dismiss anything pending for more than 90 days total
+        // (30-day live window + 60-day expired grace). Silent: no email,
+        // no log noise. The recipient stopped acting on the invite long ago.
+        (db as any).$client.prepare(`
+          UPDATE user_seats
+          SET status = 'dismissed'
+          WHERE status = 'pending'
+            AND invited_at < datetime('now', '-90 days')
+        `).run();
+
+        const rows = (db as any).$client.prepare(`
           SELECT us.id AS seat_id,
                  us.owner_user_id,
                  us.seat_email,
@@ -819,6 +833,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           WHERE us.status = 'pending'
           ORDER BY us.invited_at DESC
         `).all();
+
+        // Compute is_expired per row. Threshold: invited_at + 30 days < now.
+        const nowMs = Date.now();
+        const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+        for (const r of rows as any[]) {
+          const invitedMs = r.invited_at ? new Date(r.invited_at).getTime() : nowMs;
+          const isExpired = (nowMs - invitedMs) > THIRTY_DAYS_MS;
+          r.is_expired = isExpired ? 1 : 0;
+          if (isExpired) pendingInvitesExpired.push(r);
+          else pendingInvitesLive.push(r);
+        }
+        pendingInvites = [...pendingInvitesLive, ...pendingInvitesExpired];
       } catch (err: any) {
         console.error("[admin-report pending-invites] query failed:", err.message);
       }
@@ -827,6 +853,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         generatedAt: new Date().toISOString(),
         totalLabs: labs.length,
         labs,
+        // New shape: split arrays. is_expired flag on each row in pendingInvites.
+        pendingInvitesLive,
+        pendingInvitesExpired,
         pendingInvites,
         // Backward-compatible aliases so any cached frontend bundle still
         // sees a readable response. Remove on the next major release once
@@ -1108,6 +1137,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const updated = sqlite.prepare("SELECT * FROM user_seats WHERE id = ?").get(Number(seatId));
     const joinUrl = `${FRONTEND_URL || ""}/join?token=${newToken}`;
     res.json({ ok: true, seat: updated, joinUrl, inviteToken: newToken, invitedAt: now });
+  });
+
+  // Admin: dismiss a pending seat invite (manual clear). Moves the row to
+  // status='dismissed' so it drops out of the pendingInvites lists on the
+  // admin report. Used when an invite has expired and the recipient is
+  // unreachable / no longer relevant (left the org, used different email,
+  // etc.) so the admin doesn't want to Reissue. Auto-dismiss in /admin/report
+  // covers the >90-day case; this handles the manual case.
+  app.post("/api/admin/seat-invites/:id/dismiss", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const seatId = Number(req.params.id);
+    if (!Number.isFinite(seatId) || seatId <= 0) return res.status(400).json({ error: "Invalid seat id" });
+    const sqlite = (db as any).$client;
+    const seat = sqlite.prepare("SELECT id, status FROM user_seats WHERE id = ?").get(seatId) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    if (seat.status === "active") return res.status(409).json({ error: "Seat is active; use deactivate, not dismiss" });
+    if (seat.status === "dismissed") return res.json({ ok: true, dismissed_id: seatId, alreadyDismissed: true });
+    sqlite.prepare("UPDATE user_seats SET status = 'dismissed' WHERE id = ?").run(seatId);
+    res.json({ ok: true, dismissed_id: seatId });
   });
 
   // Admin: bulk-import inventory_items rows for a lab. Used for migrating

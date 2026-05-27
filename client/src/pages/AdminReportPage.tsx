@@ -90,6 +90,10 @@ interface ReportData {
   totalLabs: number;
   labs: UserRecord[];
   pendingInvites?: PendingInvite[];
+  // Split arrays: live = link still valid (<=30d), expired = link dead (>30d).
+  // Server also auto-dismisses anything >90 days pending so this list stays bounded.
+  pendingInvitesLive?: PendingInvite[];
+  pendingInvitesExpired?: PendingInvite[];
   // Backward-compatible aliases the server still emits during the rollout.
   totalUsers?: number;
   users?: UserRecord[];
@@ -848,8 +852,13 @@ export default function AdminReportPage() {
             <div className={`text-2xl font-bold ${trialsExpiringSoon > 0 ? "text-amber-600" : "text-muted-foreground"}`}>{trialsExpiringSoon}</div>
           </div>
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
-            <div className="text-sm text-muted-foreground" title="Seat invites that haven't been accepted yet">Pending Invites</div>
-            <div className={`text-2xl font-bold ${pendingInvitesCount > 0 ? "text-blue-600" : "text-muted-foreground"}`}>{pendingInvitesCount}</div>
+            <div className="text-sm text-muted-foreground" title="Seat invites with a live link, awaiting acceptance">Pending Invites</div>
+            <div className={`text-2xl font-bold ${(data?.pendingInvitesLive?.length || 0) > 0 ? "text-blue-600" : "text-muted-foreground"}`}>{data?.pendingInvitesLive?.length ?? 0}</div>
+            {(data?.pendingInvitesExpired?.length || 0) > 0 && (
+              <div className="text-xs text-red-600 mt-1" title="Invites where the 30-day link has expired. Click Dismiss or Reissue in the section below.">
+                {data?.pendingInvitesExpired?.length} expired
+              </div>
+            )}
           </div>
           <div className="bg-card rounded-lg shadow-sm border border-border p-4">
             <div className="text-sm text-muted-foreground" title="Sum of annual recurring revenue across distinct paying accounts">Total ARR</div>
@@ -924,13 +933,15 @@ export default function AdminReportPage() {
                               // Patch the row in place so the UI updates without a full reload.
                               setData((d) => {
                                 if (!d || !d.pendingInvites) return d;
+                                const patch = (row: PendingInvite) =>
+                                  row.seat_id === p.seat_id
+                                    ? { ...row, invite_token: json.inviteToken, invited_at: json.invitedAt, status: "pending" }
+                                    : row;
                                 return {
                                   ...d,
-                                  pendingInvites: d.pendingInvites.map((row) =>
-                                    row.seat_id === p.seat_id
-                                      ? { ...row, invite_token: json.inviteToken, invited_at: json.invitedAt, status: "pending" }
-                                      : row
-                                  ),
+                                  pendingInvites: d.pendingInvites.map(patch),
+                                  pendingInvitesLive: d.pendingInvitesLive?.map(patch),
+                                  pendingInvitesExpired: d.pendingInvitesExpired?.map(patch),
                                 };
                               });
                               // Copy the new link to clipboard for convenience.
@@ -943,6 +954,44 @@ export default function AdminReportPage() {
                           title="Generate a new invite link and reset the 30-day clock (copies new link to clipboard)"
                         >
                           Reissue
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const confirmed = window.confirm(
+                              `Dismiss the invite for ${p.seat_email}? The recipient won't get any further emails, and the row drops off this report. You can still re-add them as a seat later if needed.`
+                            );
+                            if (!confirmed) return;
+                            try {
+                              const res = await fetch(`/api/admin/seat-invites/${p.seat_id}/dismiss`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", "x-admin-secret": secret || "" },
+                                body: JSON.stringify({ secret }),
+                              });
+                              const json = await res.json();
+                              if (!res.ok || !json.ok) {
+                                alert(`Dismiss failed: ${json.error || res.statusText}`);
+                                return;
+                              }
+                              // Drop the row from the local state so the UI updates without a full reload.
+                              setData((d) => {
+                                if (!d) return d;
+                                const drop = (rows?: PendingInvite[]) => rows?.filter((row) => row.seat_id !== p.seat_id);
+                                return {
+                                  ...d,
+                                  pendingInvites: drop(d.pendingInvites),
+                                  pendingInvitesLive: drop(d.pendingInvitesLive),
+                                  pendingInvitesExpired: drop(d.pendingInvitesExpired),
+                                };
+                              });
+                            } catch (err: any) {
+                              alert(`Dismiss error: ${err?.message || err}`);
+                            }
+                          }}
+                          className="text-muted-foreground hover:text-red-600 hover:underline"
+                          title="Mark this invite as dismissed. The row drops off the report; the recipient won't get any further emails."
+                        >
+                          Dismiss
                         </button>
                       </td>
                     </tr>
