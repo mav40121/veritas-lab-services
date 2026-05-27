@@ -628,10 +628,22 @@ export default function VeritaPolicyAppPage() {
                         <tr key={p.policy_id}
                           className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${isNa ? "opacity-60" : ""}`}>
 
-                          {/* Policy ID + subspecialty + service line */}
+                          {/* Policy ID + Word download icon + subspecialty + service line */}
                           <td className="px-3 py-2 align-top">
                             <div className="flex flex-col gap-1">
-                              <span className="font-mono text-xs font-bold text-primary">{p.policy_id}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-xs font-bold text-primary">{p.policy_id}</span>
+                                <button
+                                  type="button"
+                                  disabled={!activeLabId || !!downloadingDocx[p.policy_id]}
+                                  onClick={(e) => { e.stopPropagation(); handleDownloadPolicyDocx(p.policy_id, p.policy_name); }}
+                                  title={activeLabId ? "Download this policy as a Word starter" : "Open this lab to download per-policy starters"}
+                                  className="inline-flex items-center justify-center w-5 h-5 rounded text-primary/60 hover:text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  aria-label="Download Word starter"
+                                >
+                                  <FileText size={12} />
+                                </button>
+                              </div>
                               {p.subspecialty && <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{p.subspecialty}</Badge>}
                               {p.service_line && p.service_line !== "all" && (
                                 <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{p.service_line}</Badge>
@@ -666,20 +678,6 @@ export default function VeritaPolicyAppPage() {
                                 </div>
                               )}
                             </button>
-                            {isExpanded && (
-                              <div className="mt-2">
-                                <button
-                                  type="button"
-                                  disabled={!activeLabId || !!downloadingDocx[p.policy_id]}
-                                  onClick={(e) => { e.stopPropagation(); handleDownloadPolicyDocx(p.policy_id, p.policy_name); }}
-                                  title={activeLabId ? "Download a branded Word starter for this policy with your lab name and CLIA filled in" : "Open this lab to download per-policy starters"}
-                                  className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/5 hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <FileText size={12} />
-                                  {downloadingDocx[p.policy_id] ? "Generating..." : "Download Word starter"}
-                                </button>
-                              </div>
-                            )}
                           </td>
 
                           {/* Citations: CFR + AO chips */}
