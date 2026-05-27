@@ -1,6 +1,8 @@
 import { useSEO } from "@/hooks/useSEO";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import * as XLSX from "xlsx";
+// .xlsx parsing uses ExcelJS via dynamic import (CLAUDE.md §6: ExcelJS only).
+// ExcelJS handles .xlsx (Office Open XML). The legacy .xls (BIFF binary)
+// format is not supported and will surface the existing parse-error message.
 import { useLocation, useSearch, useRoute, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -740,12 +742,23 @@ export default function VeritaCheckPage() {
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (ext === "xlsx" || ext === "xls") {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          const arrayBuffer = e.target?.result as ArrayBuffer;
+          const { default: ExcelJS } = await import("exceljs");
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(arrayBuffer);
+          const sheet = workbook.worksheets[0];
+          if (!sheet) {
+            setCsvErrors(["Excel file contains no sheets."]);
+            return;
+          }
+          // ExcelJS row.values is 1-indexed; slot 0 is undefined. Slice it off.
+          const rawRows: any[][] = [];
+          sheet.eachRow({ includeEmpty: false }, (row) => {
+            const values = row.values as any[];
+            rawRows.push(values.slice(1).map((v) => (v == null ? "" : v)));
+          });
           if (rawRows.length < 2) {
             setCsvErrors(["File must contain at least a header row and one data row."]);
             return;
@@ -756,7 +769,9 @@ export default function VeritaCheckPage() {
             .filter(r => r.some(c => c));
           processImportedData(headers, rows);
         } catch {
-          setCsvErrors(["Could not read this Excel file. Please check the file and try again."]);
+          setCsvErrors([
+            "Could not read this Excel file. If it has a .xls extension, please re-save it as .xlsx in Excel and try again."
+          ]);
         }
       };
       reader.readAsArrayBuffer(file);
