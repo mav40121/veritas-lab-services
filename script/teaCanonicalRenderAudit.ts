@@ -315,21 +315,54 @@ function auditDualVerdicts(): Failure[] {
 }
 
 async function writeFreshnessArtifact() {
-  const verifiedAt = new Date().toISOString();
-  const outDir = path.join(ROOT, "dist", "data");
-  await mkdir(outDir, { recursive: true });
-  const payload = {
-    verifiedAt,
+  // Content-comparison: only rewrite tea_audit.json when the meaningful
+  // payload (cfr, canonicalAnalyteCount, pass) actually changed. Stops the
+  // file from churning git status with a fresh verifiedAt on every build.
+  // The verifiedAt then reflects the last time the audit found something
+  // different to record, not the last time the build ran, which is the
+  // honest semantics.
+  const meaningfulPayload = {
     cfr: "42 CFR §493 Subpart I",
     canonicalAnalyteCount: teaData.length,
     pass: true,
   };
-  await writeFile(path.join(outDir, "tea_audit.json"), JSON.stringify(payload, null, 2));
-  // Also write to server/data/ so dev runs (which read from server/data) can pick it up.
+  const outDir = path.join(ROOT, "dist", "data");
   const devDir = path.join(ROOT, "server", "data");
+  await mkdir(outDir, { recursive: true });
   await mkdir(devDir, { recursive: true });
-  await writeFile(path.join(devDir, "tea_audit.json"), JSON.stringify(payload, null, 2));
-  console.log(`[teaCanonicalRenderAudit] Stamped TEA_AUDIT_VERIFIED_AT=${verifiedAt}`);
+
+  // Read existing dev-tree artifact (the one git tracks) and compare.
+  const devPath = path.join(devDir, "tea_audit.json");
+  let existingVerifiedAt: string | null = null;
+  let needsRewrite = true;
+  try {
+    const { readFile } = await import("fs/promises");
+    const raw = await readFile(devPath, "utf-8");
+    const j = JSON.parse(raw);
+    const existingMeaningful = {
+      cfr: j.cfr,
+      canonicalAnalyteCount: j.canonicalAnalyteCount,
+      pass: j.pass,
+    };
+    if (JSON.stringify(existingMeaningful) === JSON.stringify(meaningfulPayload) && j.verifiedAt) {
+      existingVerifiedAt = String(j.verifiedAt);
+      needsRewrite = false;
+    }
+  } catch {
+    /* file missing or unreadable — fall through to write */
+  }
+
+  const verifiedAt = needsRewrite ? new Date().toISOString() : existingVerifiedAt!;
+  const payload = { verifiedAt, ...meaningfulPayload };
+  // Always write to dist/data (build output, never tracked).
+  await writeFile(path.join(outDir, "tea_audit.json"), JSON.stringify(payload, null, 2));
+  // Only write to server/data when content actually changed (so git status stays clean).
+  if (needsRewrite) {
+    await writeFile(devPath, JSON.stringify(payload, null, 2));
+    console.log(`[teaCanonicalRenderAudit] Stamped TEA_AUDIT_VERIFIED_AT=${verifiedAt} (content changed)`);
+  } else {
+    console.log(`[teaCanonicalRenderAudit] TEA_AUDIT_VERIFIED_AT unchanged at ${verifiedAt} (no content drift)`);
+  }
 }
 
 async function main() {
