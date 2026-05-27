@@ -63,6 +63,22 @@
     [
       "Clinically significant antibody",
       "An unexpected red cell antibody capable of causing transfusion reactions or hemolytic disease of the newborn. Triggers antigen-negative unit selection at every subsequent crossmatch regardless of current screen result."
+    ],
+    [
+      "Pretransfusion specimen",
+      "A specimen collected for ABO/Rh typing, antibody screen, antibody identification, or compatibility testing in preparation for blood component transfusion. Subject to the specimen validity window and the 7-day post-transfusion retention rule."
+    ],
+    [
+      "Major crossmatch",
+      "Compatibility test between donor red cells and patient plasma or serum to confirm ABO compatibility and detect clinically significant antibodies. Includes immediate spin, antibody-detection (37 degrees C), and antiglobulin (indirect Coombs) phases."
+    ],
+    [
+      "Antibody screen",
+      "Test of patient plasma or serum against screening cells of known antigen profile to detect unexpected red cell antibodies. Performed on every recipient specimen; positive screens trigger antibody identification before component selection."
+    ],
+    [
+      "Daily QC",
+      "The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls."
     ]
   ],
   "cfr_text_blocks": [

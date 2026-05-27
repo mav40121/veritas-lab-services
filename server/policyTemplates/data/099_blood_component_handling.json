@@ -83,6 +83,14 @@
     [
       "Leukoreduction",
       "Reduction of white blood cells in a cellular blood component to below an FDA-defined threshold (less than 5 x 10^6 residual leukocytes per unit). Reduces febrile non-hemolytic reactions, HLA alloimmunization, and CMV transmission risk."
+    ],
+    [
+      "External release",
+      "Issue of a blood component to an organization other than the lab's parent facility. Requires a written sharing agreement, an emergency request from a recognized facility, or an FDA recall/look-back response. Medical director or designee reviews every non-routine emergency external release within 5 business days."
+    ],
+    [
+      "Daily QC",
+      "The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls. Failed daily QC pauses patient testing on the affected reagent until resolution."
     ]
   ],
   "cfr_text_blocks": [

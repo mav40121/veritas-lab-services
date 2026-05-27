@@ -64,6 +64,10 @@
     [
       "POC coordinator",
       "Designated role responsible for inventory, QC, competency, training, and oversight of POC testing across all sites under the lab's CLIA certificate."
+    ],
+    [
+      "Waived competency",
+      "CLIA-required six-element competency assessment for staff performing waived testing, on the same Initial / 6-month / Annual cadence as moderate and high complexity testing. Assessor is the General Supervisor, Technical Consultant, or medical director or designee per CMS guidance."
     ]
   ],
   "cfr_text_blocks": [
