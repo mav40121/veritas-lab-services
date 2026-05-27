@@ -1669,6 +1669,33 @@ sqlite.exec(`
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON veritapolicy_master_status(user_id, policy_id)`); } catch {}
 
+// Per-lab artifact storage: when a lab uploads custom-formatted DOCX policy
+// files (e.g. SCAHC's facility template), they're stored here as BLOBs keyed
+// by (lab_id, policy_id). The DOCX download routes check this table first
+// before falling back to the generic VeritaAssure-branded generator.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_lab_artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    policy_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    docx_blob BLOB NOT NULL,
+    source TEXT NOT NULL DEFAULT 'admin_upload',
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    uploaded_by INTEGER,
+    UNIQUE(lab_id, policy_id)
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab ON veritapolicy_lab_artifacts(lab_id)`); } catch {}
+
+// Migration sentinel for veritapolicy_lab_artifacts (no schema changes yet
+// but keeps the pattern in place for future ALTER TABLE additions).
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(veritapolicy_lab_artifacts)").all() as { name: string }[]).map((c) => c.name);
+  // Future columns added via ALTER TABLE go here, gated on !cols.includes("colname").
+  void cols;
+}
+
 // ALTER TABLE migration for veritapolicy_master_status
 {
   const vmsCols = sqlite.prepare("PRAGMA table_info(veritapolicy_master_status)").all() as { name: string }[];
