@@ -23,7 +23,7 @@ const stats = [
 ];
 
 export default function HomePage() {
-    useSEO({ title: "VeritaAssure™ Lab Compliance Software | Veritas Lab Services", description: "VeritaAssure™ is the all-in-one compliance platform for clinical laboratories. Method verification, inspection readiness, PT, competency tracking." });
+    useSEO({ title: "VeritaAssure™ Lab Compliance Software | Veritas Lab Services", description: "VeritaAssure™ is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking." });
 return (
     <div>
       {/* Hero */}
