@@ -1,0 +1,32 @@
+{
+  "policy_id": "58",
+  "slug": "transfusion_neonatal",
+  "policy_name": "Transfusion and Neonatal Transfusion Policies",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> selects and issues components for routine adult and pediatric transfusion as well as neonatal-specific transfusion (intrauterine, exchange, top-up, small-volume aliquots). Required by 42 CFR 493.1271 and 21 CFR 606.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1271(c)",
+      "label": "Patient testing",
+      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+    }
+  ],
+  "scope": "<<LAB_NAME>> transfusion service personnel and the medical director or designee.",
+  "policy_statements": [
+    "Routine adult and pediatric transfusion follows the Compatibility Testing policy and the bedside identification controls per the Donor and Recipient Blood Identification policy.",
+    "Neonatal transfusion (under 4 months of age) follows pediatric-specific rules: reverse ABO typing is NOT performed; the lab uses the mother's antibody screen result if mother's specimen is available; small-volume aliquots are prepared from approved parent units per the lab's aliquot preparation procedure with full traceability to the parent unit.",
+    "Intrauterine transfusion follows the obstetric specialist's order with components selected per the parent-unit ABO compatibility rules for the mother and fetus.",
+    "Exchange transfusion follows the medical director or designee-approved component-selection protocol for the indication (neonatal hyperbilirubinemia, sickle cell crisis, etc.).",
+    "All neonatal transfusions are documented with the same elements as adult transfusions, with the addition of the maternal antibody screen status when applicable."
+  ],
+  "procedure_steps": [
+    "Routine transfusions follow the standard Compatibility Testing procedure.",
+    "For neonatal transfusion: forward ABO only (no reverse), use mother's antibody screen if available, prepare aliquots from approved parent units with documented traceability.",
+    "Intrauterine and exchange transfusion follow medical director or designee-approved protocols.",
+    "Documentation is complete and retained per the 10-year retention rule."
+  ],
+  "definitions": [
+    ["Neonatal transfusion", "Transfusion of a patient under 4 months of age. Specific rules apply for ABO typing, maternal antibody utilization, and small-volume aliquot preparation."],
+    ["Aliquot", "A sub-volume of a parent component, prepared sterilely with full traceability to the parent unit."]
+  ]
+}

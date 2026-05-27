@@ -1,0 +1,114 @@
+{
+  "policy_id": "109",
+  "slug": "laboratory_governance_and_leadership",
+  "policy_name": "Laboratory Governance and Leadership Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes <<LAB_NAME>>'s governance structure and leadership framework: organizational chart and reporting structure, governing body responsibilities, Laboratory Director responsibilities, culture of safety and quality, and code of ethical conduct (including anti-fraud, conflict of interest, anti-kickback, and Stark Law). Required by 42 CFR 493.1441 (Laboratory Director qualifications), 42 CFR 493.1445 (Laboratory Director responsibilities), 42 CFR 493.1100 (overall CLIA structure), 42 CFR 493.1200 (laboratory quality systems), 42 CFR 493.1232 (specimen and result integrity), 42 CFR 493.1775 (notification of changes), 42 USC 1320a-7b (anti-kickback), and 42 USC 1395nn (Stark Law).",
+  "scope": "All <<LAB_NAME>> personnel, the governing body, the Laboratory Director, and the laboratory leadership team.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a current organizational chart that names each CLIA-required role (Laboratory Director, Technical Consultant for moderate complexity, Technical Supervisor for high complexity, General Supervisor, Clinical Consultant for moderate complexity, Testing Personnel) and the reporting line from each to the Director.",
+    "The org chart is reviewed and approved by the medical director or designee at least annually and any time a CLIA-defined role changes; the current chart is posted in the lab and available to inspectors on request; previous versions are archived for at least 2 years per the record retention policy.",
+    "Any vacancy in a CLIA-required role (Director, Technical Consultant or Supervisor, General Supervisor, Clinical Consultant) is filled or covered by a qualified individual immediately; vacancies lasting more than 30 days are reported to the medical director or designee for escalation to CMS notification per 42 CFR 493.1775.",
+    "<<LAB_NAME>> has a defined governance structure: ownership entity, governing body (board or equivalent), medical director or designee, and operational management. The governing body's responsibilities are documented and include: appointment and oversight of the medical director or designee, approval of major operational and capital decisions, financial stewardship, and final accountability for regulatory compliance.",
+    "The Laboratory Director holds the responsibilities listed at 42 CFR 493.1445, including final responsibility for every result reported, and may delegate specific duties to qualified designees while retaining responsibility. The Director reports to the governing body and is responsible for the overall operation and administration of the lab.",
+    "The laboratory's quality program (42 CFR 493.1200) is governed by the Laboratory Director or designee, with documented review of QC, PT, complaints, incidents, and corrective action on the lab's documented cadence (typically quarterly); minutes are filed in the quality binder.",
+    "<<LAB_NAME>> commits to a non-punitive (just-culture) approach to error and near-miss reporting: staff who report in good faith are not subject to discipline solely for the report. Errors caused by reckless behavior, willful misconduct, or knowing violation of policy are subject to disciplinary action; honest mistakes and system failures are addressed through process improvement, not blame.",
+    "Quality and safety metrics (error rate, near-miss reports, complaint volume, staff-perceived safety climate) are tracked and reviewed at least annually by the medical director or designee; trends drive system change.",
+    "Every staff member conducts themselves with integrity, honesty, and respect for patients, colleagues, and the regulatory environment. Fabrication of test results, alteration of records, falsification of QC data, falsification of competency assessments, and any other form of fraud are absolute violations resulting in immediate termination and reporting to the appropriate licensing and regulatory authorities.",
+    "Conflicts of interest (financial relationships with vendors, ownership of competing labs, family members in regulatory or referring positions) are disclosed at hire, on change, and annually; the lab's COI committee or medical director or designee reviews and manages.",
+    "<<LAB_NAME>> complies with anti-kickback obligations under 42 USC 1320a-7b and Stark Law obligations under 42 USC 1395nn; the lab does not solicit or accept anything of value in exchange for referrals.",
+    "Every staff member completes Code of Ethical Conduct training at hire and annually; signed acknowledgments are filed in the personnel record.",
+    "Leadership reviews the governance structure annually, updates the org chart as roles change, and re-affirms the Laboratory Director's responsibilities in writing."
+  ],
+  "procedure_steps": [
+    "Maintain the organizational chart in the leadership binder; update on every role change within 5 business days; annual review with sign-off by the Laboratory Director.",
+    "Post the current org chart at each testing site; archive prior versions with the personnel records for the 2-year retention.",
+    "Log any CLIA-required role vacancy on the Role Vacancy register; medical director or designee approves any interim coverage arrangement; vacancies longer than 30 days are escalated to CMS notification per 42 CFR 493.1775.",
+    "Document the Laboratory Director's delegation of any specific responsibilities in writing; designee acknowledges in writing.",
+    "Governing body meetings occur on a regular schedule (typically quarterly); minutes are retained; annual review of governance roles, reporting lines, and decision authorities is documented and signed.",
+    "Hold the documented governance/quality review cadence (typically quarterly); minutes filed in the quality binder; trends in QC, PT, complaints, and incidents drive corrective action.",
+    "Maintain the just-culture incident-reporting channel; report into the quality review; investigation distinguishes between system failure, at-risk behavior (lapse), and reckless behavior; corrective action matches the category.",
+    "Annual culture-of-safety review by the medical director or designee assesses metrics and survey data; findings drive system change.",
+    "On hire, every staff member receives and signs the Code of Ethical Conduct, which includes COI disclosure, anti-fraud, confidentiality, anti-kickback, and Stark obligations; the signed acknowledgment is filed.",
+    "Annual refresher training covers conflicts of interest, anti-fraud, confidentiality, and anti-kickback obligations; tracked in the personnel record.",
+    "COI disclosures are collected at hire, annually, and on change; the medical director or designee or the COI committee reviews and manages; the disclosure register is updated.",
+    "Suspected violations are reported via the lab's reporting channels (medical director or designee, anonymous hotline, or external authority); investigation follows the Whistleblower policy.",
+    "On change of ownership, governing body composition, or Laboratory Director: updated documentation is filed and CMS is notified per the Accreditation Body Notification policy and 42 CFR 493.1775.",
+    "Conduct the annual leadership review of governance, structure, and code; document."
+  ],
+  "definitions": [
+    [
+      "Just culture",
+      "A workplace framework that distinguishes human error (console and coach), at-risk behavior (coach), and reckless behavior (sanction), used in incident review to drive learning instead of blame."
+    ],
+    [
+      "Non-punitive reporting",
+      "The lab's commitment that staff reporting errors or near-misses in good faith are not subject to discipline solely for the report. Reckless behavior remains subject to discipline."
+    ],
+    [
+      "Reporting line",
+      "The supervisor each role holder reports to for technical, quality, and personnel matters. Documented on the organizational chart."
+    ],
+    [
+      "Role Vacancy register",
+      "Log of any CLIA-required role currently vacant, the interim coverage arrangement, and the target fill date. Vacancies longer than 30 days trigger escalation."
+    ],
+    [
+      "Governing body",
+      "The board or equivalent group with final accountability for the lab's operations and compliance. May be the hospital board, the lab's own board, or the ownership entity."
+    ],
+    [
+      "Decision authority",
+      "The level of governance approval required for specific decisions (capital purchases, director changes, major operational changes). Documented in the governance structure."
+    ],
+    [
+      "Conflict of interest (COI)",
+      "Any financial, family, or personal relationship that could reasonably appear to influence the staff member's lab decisions. Disclosed at hire, annually, and on change."
+    ],
+    [
+      "Anti-kickback",
+      "42 USC 1320a-7b prohibition on soliciting or receiving remuneration in exchange for referrals of federal health care program business."
+    ],
+    [
+      "Stark Law",
+      "42 USC 1395nn prohibition on physician self-referral for designated health services payable by Medicare or Medicaid."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1441",
+      "label": "Condition: Laboratories performing moderate complexity testing; laboratory director",
+      "verbatim": "The laboratory performing moderate complexity testing must have a director who meets the qualification requirements of 493.1443 of this subpart and provides overall management and direction in accordance with 493.1445 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1445(a)",
+      "label": "Standard: Laboratory director responsibilities",
+      "verbatim": "The laboratory director is responsible for the overall operation and administration of the laboratory, including the employment of personnel who are competent to perform test procedures, and record and report test results promptly, accurately and proficiently and for assuring compliance with the applicable regulations."
+    },
+    {
+      "citation": "42 CFR 493.1100",
+      "label": "Condition: General laboratory systems",
+      "verbatim": "Each laboratory that performs nonwaived testing must establish and follow written policies and procedures for an effective laboratory general systems including the policies and procedures specified in 493.1101 through 493.1105."
+    },
+    {
+      "citation": "42 CFR 493.1200(a)",
+      "label": "Condition: Quality systems",
+      "verbatim": "Each laboratory that performs nonwaived testing must establish and maintain written policies and procedures that implement and monitor a quality system for all phases of the total testing process (that is, preanalytic, analytic, and postanalytic) as well as general laboratory systems."
+    },
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1445(e)(1)",
+      "label": "Standard: Laboratory director responsibilities",
+      "verbatim": "The laboratory director must ensure that testing systems developed and used for each of the tests performed in the laboratory provide quality laboratory services for all aspects of test performance, which includes the preanalytic, analytic, and postanalytic phases of testing."
+    },
+    {
+      "citation": "42 CFR 493.1775",
+      "label": "Standard: Notification of changes (CMS notification)",
+      "verbatim": "The laboratory must notify HHS within 30 days of the following changes: (1) Any changes in ownership. (2) Any changes in the name of the laboratory. (3) Any changes in the laboratory director. (4) Any changes in the location of the laboratory. (5) Deletion or addition of tests or examinations. (6) Any increase of 5 percent or more in the total annual test volume reported on the most recent application as a result of changes in tests or examinations."
+    }
+  ]
+}

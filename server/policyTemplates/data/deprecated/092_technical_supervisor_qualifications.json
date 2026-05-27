@@ -1,0 +1,41 @@
+{
+  "policy_id": "92",
+  "slug": "technical_supervisor_qualifications",
+  "policy_name": "Technical Supervisor Qualifications and Responsibilities Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes the CLIA qualification requirements and responsibilities of the technical supervisor for each specialty performed at high complexity in <<LAB_NAME>>. Required by 42 CFR 493.1447 (condition), 42 CFR 493.1449 (qualifications), and 42 CFR 493.1451 (responsibilities).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1447",
+      "label": "Condition: Technical supervisor (high complexity)",
+      "verbatim": "The laboratory performing high complexity testing must have a technical supervisor who meets the qualification requirements of 493.1449 of this subpart and provides technical supervision in accordance with 493.1451 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1451(b)",
+      "label": "Standard: Technical supervisor responsibilities",
+      "verbatim": "The technical supervisor is responsible for: (1) Selection of the test methodology that is appropriate for the clinical use of the test results. (2) Verification of the test procedures performed and the establishment of the laboratory's test performance characteristics, including the precision and accuracy of each test and test system. (3) Enrollment and participation in an HHS approved proficiency testing program commensurate with the services offered. (4) Establishing a quality control program appropriate for the testing performed and establishing the parameters for acceptable levels of analytic performance and ensuring that these levels are maintained throughout the entire testing process from the initial receipt of the specimen, through sample analysis and reporting of test results. (5) Resolving technical problems and ensuring that remedial actions are taken whenever test systems deviate from the laboratory's established performance specifications. (6) Ensuring that patient test results are not reported until all corrective actions have been taken and the test system is functioning properly. (7) Identifying training needs and assuring that each individual performing tests receives regular in-service training and education appropriate for the type and complexity of the laboratory services performed. (8) Evaluating the competency of all testing personnel and assuring that the staff maintain their competency to perform test procedures and report test results promptly, accurately and proficiently."
+    }
+  ],
+  "scope": "Each named technical supervisor of <<LAB_NAME>> and the medical director or designee. Applies to every high complexity specialty performed.",
+  "policy_statements": [
+    "Each high complexity specialty performed at <<LAB_NAME>> has a named technical supervisor who meets the applicable CLIA qualification per 42 CFR 493.1449.",
+    "Technical supervisor qualifications are verified at appointment and the verification (license, board certification, degree, experience) is filed in the personnel record.",
+    "The supervisor's responsibilities per 42 CFR 493.1451(b) are documented in a signed job description.",
+    "Vacancies in any technical supervisor role are filled or covered by a qualified individual; vacancies longer than 30 days are reported to the medical director or designee for escalation.",
+    "Each technical supervisor is named on the lab's organizational chart and on the CLIA certification record.",
+    "Performance of each supervisor against the eight CLIA responsibilities is reviewed annually by the medical director or designee; the review is signed and filed."
+  ],
+  "procedure_steps": [
+    "At appointment, HR collects credential evidence per the Staff Credential Verification policy; primary-source verification is filed in the personnel record.",
+    "The medical director or designee confirms the candidate's qualifications meet the applicable CLIA pathway for the specialty before clearing them for the role.",
+    "The supervisor signs the job description acknowledging the eight CLIA responsibilities; filed with the verification package.",
+    "The org chart is updated to name the supervisor and the specialties they cover.",
+    "Annually, the medical director or designee reviews the supervisor's performance against the eight responsibilities; the review is signed and filed.",
+    "Any vacancy is logged on the Role Vacancy register; interim coverage is documented; fill within 30 days is the lab's target."
+  ],
+  "definitions": [
+    ["Technical supervisor", "The individual responsible per 42 CFR 493.1451 for the technical and scientific oversight of a high complexity specialty. Qualifications per 42 CFR 493.1449."],
+    ["Specialty", "A subset of laboratory testing defined in 42 CFR 493.1271-1278 (e.g., bacteriology, chemistry, hematology, immunohematology). Each high complexity specialty has its own technical supervisor."],
+    ["Role Vacancy register", "Log of any CLIA-required role currently vacant, the interim coverage arrangement, and the target fill date."]
+  ]
+}

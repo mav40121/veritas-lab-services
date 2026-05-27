@@ -1,0 +1,146 @@
+{
+  "policy_id": "103",
+  "slug": "personnel_qualifications",
+  "policy_name": "Personnel Qualifications Policy",
+  "section": "Personnel",
+  "purpose": "This policy defines the qualifications, credential verification, and responsibilities for every CLIA-defined personnel role at <<LAB_NAME>>: Laboratory Director, Technical Consultant (where applicable), Technical Supervisor (high-complexity), General Supervisor, and Testing Personnel. Required by 42 CFR 493 Subpart M (laboratories performing high complexity testing: 493.1441 through 493.1495) and Subpart M parallel sections for moderate complexity (493.1361 through 493.1413). Credentials are verified at hire and re-verified on the defined cadence; vacancies and director changes trigger CMS notification per 42 CFR 493.1775.",
+  "scope": "All <<LAB_NAME>> laboratory personnel and the human resources function supporting credential verification.",
+  "policy_statements": [
+    "Every person performing or supervising laboratory testing at <<LAB_NAME>> meets the CLIA qualifications for the role and complexity level they perform, per 42 CFR 493 Subpart M (high complexity) or the parallel moderate-complexity sections.",
+    "The Laboratory Director meets the qualifications of 42 CFR 493.1443 (moderate complexity) or 42 CFR 493.1405 (high complexity) and holds responsibility for every test result reported by the laboratory. The Director may delegate specific duties to a qualified designee in writing, but cannot delegate the overall responsibility for laboratory operation and compliance.",
+    "The Director's responsibilities per 42 CFR 493.1445 (moderate) or 42 CFR 493.1407 (high) are documented in the Director's job description, signed and dated at appointment and at any change in responsibilities. The Director's oversight model (on-site days per month, remote access, on-call coverage) is documented and reviewed annually.",
+    "On any change of Laboratory Director, the lab notifies CMS in writing within 30 days per 42 CFR 493.1775 (and the Accreditation Body Notification policy); the new Director re-reads, re-signs, and re-dates every active procedure within 6 months of appointment.",
+    "The Technical Supervisor (for high-complexity testing) meets 42 CFR 493.1449 and is responsible for technical and scientific oversight per 42 CFR 493.1451(b). Each high-complexity specialty has a named Technical Supervisor; vacancies are reported to the medical director or designee and any vacancy longer than 30 days is escalated for resolution. Each Technical Supervisor is named on the lab's organizational chart and on the CLIA certification record; performance against the eight CLIA responsibilities is reviewed annually and the review is signed and filed.",
+    "The General Supervisor (for high-complexity testing) meets 42 CFR 493.1461 and provides day-to-day supervision per 42 CFR 493.1463(b). Day-to-day oversight model is documented: when high-complexity testing is being performed, a General Supervisor is on-site, accessible by phone, or otherwise able to be present in person within a reasonable time per CMS guidance.",
+    "Orientation of every new testing staff member is delivered or directly overseen by the General Supervisor (per 42 CFR 493.1463(b)(4)); the orientation is documented per the Training and Competency policy.",
+    "Annual performance evaluation of every testing staff member is completed by the General Supervisor (or delegated to a qualified peer) per 42 CFR 493.1463(b)(5); evaluations are filed in the personnel record.",
+    "Testing Personnel meet 42 CFR 493.1489 (high complexity) or 493.1423 (moderate complexity) and may perform testing only after orientation and the initial competency assessment is documented (see Training and Competency policy). Any qualification gap identified at hire or during the role removes the individual from CLIA-qualifying duties until the gap is closed.",
+    "Credentials (degree, transcripts, licensure, board certification where applicable) are verified at hire from primary source and retained in the personnel record. Credentials with expiration dates (state license, board certification) are tracked on the Credential Expiry register; the lab notifies the role holder at least 60 days before expiration and confirms renewal before expiry.",
+    "If a role holder's credentials lapse, the individual is removed from CLIA-qualifying duties until the credential is restored; the lapse, restoration date, and medical director or designee approval are documented.",
+    "Personnel records (qualifications, position description, signed competency assessments, performance evaluations) are retained per 42 CFR 493.1105 and applicable HR retention policy."
+  ],
+  "procedure_steps": [
+    "At hire, HR collects required credential evidence: state license number for primary-source check, board certificate or registry verification, transcripts or registrar letters, prior-employment verification for experience claims.",
+    "HR or the medical director or designee performs primary-source verification through the state licensure board, the certifying body's online registry, the issuing institution's registrar, or the prior employer; verification results (date verified, source, evidence captured) are filed in the personnel record.",
+    "Map each new hire to the specific CLIA role(s) they will perform; the personnel record is reviewed by the medical director or designee against the applicable CLIA qualification pathway before clearance for patient testing; the role assignment is documented in the position description.",
+    "Re-verify time-bound credentials (licenses, board certifications) at renewal; expiring credentials are tracked on the Credential Expiry register with notifications to the role holder at 60 and 30 days before expiration; restoration evidence is filed at renewal.",
+    "On any credential lapse, immediately remove the individual from CLIA-qualifying duties; document removal, restoration date, and medical director or designee approval.",
+    "On Laboratory Director change: HR collects primary-source verification of license, board certification, degree, and required training/experience for the new Director; the new Director signs the job description acknowledging the full set of CLIA responsibilities; the medical director or designee notifies CMS in writing within 30 days per 42 CFR 493.1775; within 6 months of appointment, the new Director re-reads, re-signs, and re-dates every active procedure.",
+    "Annually, the Director's documented oversight model (on-site cadence, remote access, on-call) is reviewed and re-signed.",
+    "Any written delegation of specific duties to a designee is documented with the designee's name, scope, effective date, and both signatures; filed in the personnel records.",
+    "On Technical Supervisor appointment: HR collects credential evidence; primary-source verification is filed; medical director or designee confirms qualifications meet 42 CFR 493.1449; the supervisor signs the job description acknowledging the eight CLIA responsibilities; org chart and CLIA certification record are updated.",
+    "Annually, the medical director or designee reviews each Technical Supervisor's performance against the eight CLIA responsibilities at 42 CFR 493.1451(b); the review is signed and filed.",
+    "Any Technical Supervisor vacancy is logged on the Role Vacancy register; interim coverage is documented; fill within 30 days is the lab's target; vacancies longer than 30 days are escalated to the medical director or designee for CMS notification per 42 CFR 493.1775 if appropriate.",
+    "On General Supervisor appointment: credential evidence is collected and primary-source verified; medical director or designee confirms qualifications meet 42 CFR 493.1461; supervisor signs the job description acknowledging the five CLIA responsibilities; schedule of on-site presence and on-call coverage is documented and reviewed annually.",
+    "On any role change (e.g., testing personnel promoted to general supervisor), confirm the new role's CLIA qualifications are met and update the position description; primary-source verification for new credentials is filed."
+  ],
+  "definitions": [
+    [
+      "High complexity testing",
+      "Testing classified as high complexity by FDA under 42 CFR 493.17; subject to the personnel requirements in 42 CFR 493 Subpart M sections 493.1441 through 493.1495."
+    ],
+    [
+      "Moderate complexity testing",
+      "Testing classified as moderate complexity by FDA under 42 CFR 493.17; subject to the parallel personnel requirements in 42 CFR 493 sections 493.1361 through 493.1413."
+    ],
+    [
+      "Primary source verification",
+      "Confirmation of a credential directly from the issuing institution (e.g., university registrar, ASCP for board certification, state for licensure), not from a copy supplied by the candidate."
+    ],
+    [
+      "Medical director / Laboratory Director",
+      "The individual responsible for the overall operation and administration of the laboratory per 42 CFR 493.1445 (moderate) or 493.1407 (high). The terms are used interchangeably in this policy."
+    ],
+    [
+      "Designee",
+      "An individual to whom the Laboratory Director has, in writing, delegated specific duties. The Director may delegate duties but cannot delegate the overall responsibility."
+    ],
+    [
+      "Director-oversight model",
+      "The lab's documented arrangement for on-site presence, remote access, and on-call coverage by the medical director, reviewed and re-signed annually."
+    ],
+    [
+      "Role Vacancy register",
+      "Log of any CLIA-required role currently vacant, the interim coverage arrangement, and the target fill date. Vacancies longer than 30 days trigger escalation."
+    ],
+    [
+      "Credential Expiry register",
+      "Audit trail of every credential with an expiration date, the expiry, the renewal notifications sent at 60 and 30 days, and the restoration evidence."
+    ],
+    [
+      "Day-to-day oversight",
+      "On-site presence, telephone availability, or other accessibility model that allows the General Supervisor to be present in person within a reasonable time when high-complexity testing is being performed."
+    ],
+    [
+      "Qualifying pathway",
+      "The specific 42 CFR 493 paragraph the staff member uses to satisfy the qualification requirement (e.g., 493.1489(b)(2)(ii)(A) for high-complexity testing personnel with an accredited training program)."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1363",
+      "label": "Standard: Testing personnel qualifications (high complexity)",
+      "verbatim": "Each individual performing high complexity testing must (a) Possess a current license issued by the State in which the laboratory is located, if such licensing is required; and (b) Meet one of the requirements specified in 493.1489."
+    },
+    {
+      "citation": "42 CFR 493.1487",
+      "label": "Standard: Testing personnel qualifications (moderate complexity)",
+      "verbatim": "Each individual performing moderate complexity testing must (a) Possess a current license issued by the State in which the laboratory is located, if such licensing is required; and (b) Meet one of the requirements specified in 493.1489."
+    },
+    {
+      "citation": "42 CFR 493.1441",
+      "label": "Condition: Laboratory director (moderate complexity)",
+      "verbatim": "The laboratory performing moderate complexity testing must have a director who meets the qualification requirements of 493.1443 of this subpart and provides overall management and direction in accordance with 493.1445 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1443",
+      "label": "Standard: Laboratory director qualifications (moderate complexity)",
+      "verbatim": "The laboratory director must possess a current license as a laboratory director issued by the State in which the laboratory is located, if such licensing is required and must meet one of the following requirements: (a) Be a doctor of medicine, doctor of osteopathy, or doctor of podiatric medicine licensed to practice medicine, osteopathy, or podiatry in the State in which the laboratory is located. (b) Hold an earned doctoral degree in a chemical, physical, biological, or clinical laboratory science from an accredited institution and be certified by a board approved by HHS. (c) Hold a doctor of medicine or doctor of osteopathy degree and have had at least one year of laboratory training during medical residency or have at least two years of experience directing or supervising moderate complexity testing. (d) Hold an earned master's degree in a chemical, physical, biological, or clinical laboratory science from an accredited institution and have at least one year of laboratory training or experience and one year of supervisory laboratory experience. (e) Hold an earned bachelor's degree in a chemical, physical, biological, or clinical laboratory science from an accredited institution and have at least two years of laboratory training or experience and two years of supervisory laboratory experience."
+    },
+    {
+      "citation": "42 CFR 493.1445(a)",
+      "label": "Standard: Laboratory director responsibilities (overall)",
+      "verbatim": "The laboratory director is responsible for the overall operation and administration of the laboratory, including the employment of personnel who are competent to perform test procedures, and record and report test results promptly, accurately and proficiently and for assuring compliance with the applicable regulations."
+    },
+    {
+      "citation": "42 CFR 493.1445(e)",
+      "label": "Standard: Laboratory director responsibilities (specific)",
+      "verbatim": "The laboratory director must (1) Ensure that testing systems developed and used for each of the tests performed in the laboratory provide quality laboratory services for all aspects of test performance, which includes the preanalytic, analytic, and postanalytic phases of testing. (2) Ensure that the physical plant and environmental conditions of the laboratory are appropriate for the testing performed and provide a safe environment in which employees are protected from physical, chemical, and biological hazards. (3) Ensure that (i) The test methodologies selected have the capability of providing the quality of results required for patient care; (ii) Verification procedures used are adequate to determine the accuracy, precision, and other pertinent performance characteristics of the method; and (iii) Laboratory personnel are performing the test methods as required for accurate and reliable results."
+    },
+    {
+      "citation": "42 CFR 493.1447",
+      "label": "Condition: Technical supervisor (high complexity)",
+      "verbatim": "The laboratory performing high complexity testing must have a technical supervisor who meets the qualification requirements of 493.1449 of this subpart and provides technical supervision in accordance with 493.1451 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1451(b)",
+      "label": "Standard: Technical supervisor responsibilities",
+      "verbatim": "The technical supervisor is responsible for: (1) Selection of the test methodology that is appropriate for the clinical use of the test results. (2) Verification of the test procedures performed and the establishment of the laboratory's test performance characteristics, including the precision and accuracy of each test and test system. (3) Enrollment and participation in an HHS approved proficiency testing program commensurate with the services offered. (4) Establishing a quality control program appropriate for the testing performed and establishing the parameters for acceptable levels of analytic performance and ensuring that these levels are maintained throughout the entire testing process from the initial receipt of the specimen, through sample analysis and reporting of test results. (5) Resolving technical problems and ensuring that remedial actions are taken whenever test systems deviate from the laboratory's established performance specifications. (6) Ensuring that patient test results are not reported until all corrective actions have been taken and the test system is functioning properly. (7) Identifying training needs and assuring that each individual performing tests receives regular in-service training and education appropriate for the type and complexity of the laboratory services performed. (8) Evaluating the competency of all testing personnel and assuring that the staff maintain their competency to perform test procedures and report test results promptly, accurately and proficiently."
+    },
+    {
+      "citation": "42 CFR 493.1459",
+      "label": "Condition: General supervisor (high complexity)",
+      "verbatim": "The laboratory performing high complexity testing must have a general supervisor who meets the qualification requirements of 493.1461 of this subpart and provides general supervision in accordance with 493.1463 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1463(b)",
+      "label": "Standard: General supervisor responsibilities",
+      "verbatim": "The general supervisor is accountable to the technical supervisor for the following: (1) Day-to-day supervision or oversight of the laboratory operation and personnel performing testing and reporting test results. (2) Resolving technical problems and ensuring that remedial actions are taken whenever test systems deviate from the laboratory's established performance specifications. (3) Ensuring that patient test results are not reported until all corrective actions have been taken and the test system is properly functioning. (4) Providing orientation to all testing personnel. (5) Annually evaluating and documenting the performance of all testing personnel."
+    },
+    {
+      "citation": "42 CFR 493.1423",
+      "label": "Standard: Testing personnel qualifications (moderate complexity)",
+      "verbatim": "Each individual performing moderate complexity testing must (a) Possess a current license issued by the State in which the laboratory is located, if such licensing is required; and (b) Meet one of the following requirements: (1) Be a doctor of medicine, doctor of osteopathy, or doctor of podiatric medicine licensed to practice medicine, osteopathy, or podiatry in the State in which the laboratory is located; or (2) Have earned a doctoral, master's, or bachelor's degree in a chemical, physical, biological or clinical laboratory science, or medical technology from an accredited institution; or (3) Have earned an associate degree in a laboratory science or medical laboratory technology from an accredited institution; or (4) Be a high school graduate or equivalent and have successfully completed an official military medical laboratory procedures course of at least 50 weeks duration and have held the military enlisted occupational specialty of Medical Laboratory Specialist (Laboratory Technician); or (5) Have earned a high school diploma or equivalent; and (i) Have successfully completed an accredited clinical laboratory training program; or (ii) Have successfully completed a clinical laboratory training program equivalent to (b)(5)(i) of this section that meets the requirements specified in 493.1489(b)(2)(ii)(B)."
+    },
+    {
+      "citation": "42 CFR 493.1489",
+      "label": "Standard: Testing personnel qualifications (high complexity)",
+      "verbatim": "Each individual performing high complexity testing must (a) Possess a current license issued by the State in which the laboratory is located, if such licensing is required; and (b) Meet one of the following requirements: (1) Be a doctor of medicine, doctor of osteopathy, or doctor of podiatric medicine licensed to practice medicine, osteopathy, or podiatry in the State in which the laboratory is located; or (2)(i) Have earned a doctoral, master's, or bachelor's degree in a chemical, physical, biological or clinical laboratory science, or medical technology from an accredited institution; or (ii) Have earned an associate degree in a laboratory science or medical laboratory technology from an accredited institution; and (iii) Have laboratory training that includes either (A) Completion of a clinical laboratory training program approved or accredited by the ABHES, NAACLS, or other organization approved by HHS; or (B) At least three months documented laboratory training in each specialty in which the individual performs high complexity testing."
+    },
+    {
+      "citation": "42 CFR 493.1775",
+      "label": "Standard: Notification of changes (CMS notification)",
+      "verbatim": "The laboratory must notify HHS within 30 days of the following changes: (1) Any changes in ownership. (2) Any changes in the name of the laboratory. (3) Any changes in the laboratory director. (4) Any changes in the location of the laboratory. (5) Deletion or addition of tests or examinations. (6) Any increase of 5 percent or more in the total annual test volume reported on the most recent application as a result of changes in tests or examinations."
+    }
+  ]
+}

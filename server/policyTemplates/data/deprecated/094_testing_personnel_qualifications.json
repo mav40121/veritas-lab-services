@@ -1,0 +1,41 @@
+{
+  "policy_id": "94",
+  "slug": "testing_personnel_qualifications",
+  "policy_name": "Testing Personnel Qualifications Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes the CLIA qualification requirements for every testing person at <<LAB_NAME>>, sorted by test complexity. Required by 42 CFR 493.1421 (moderate complexity condition), 42 CFR 493.1423 (moderate complexity qualifications), 42 CFR 493.1467 (high complexity condition), and 42 CFR 493.1489 (high complexity qualifications).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1423",
+      "label": "Standard: Testing personnel qualifications (moderate complexity)",
+      "verbatim": "Each individual performing moderate complexity testing must (a) Possess a current license issued by the State in which the laboratory is located, if such licensing is required; and (b) Meet one of the following requirements: (1) Be a doctor of medicine, doctor of osteopathy, or doctor of podiatric medicine licensed to practice medicine, osteopathy, or podiatry in the State in which the laboratory is located; or (2) Have earned a doctoral, master's, or bachelor's degree in a chemical, physical, biological or clinical laboratory science, or medical technology from an accredited institution; or (3) Have earned an associate degree in a laboratory science or medical laboratory technology from an accredited institution; or (4) Be a high school graduate or equivalent and have successfully completed an official military medical laboratory procedures course of at least 50 weeks duration and have held the military enlisted occupational specialty of Medical Laboratory Specialist (Laboratory Technician); or (5) Have earned a high school diploma or equivalent; and (i) Have successfully completed an accredited clinical laboratory training program; or (ii) Have successfully completed a clinical laboratory training program equivalent to (b)(5)(i) of this section that meets the requirements specified in 493.1489(b)(2)(ii)(B)."
+    },
+    {
+      "citation": "42 CFR 493.1489",
+      "label": "Standard: Testing personnel qualifications (high complexity)",
+      "verbatim": "Each individual performing high complexity testing must (a) Possess a current license issued by the State in which the laboratory is located, if such licensing is required; and (b) Meet one of the following requirements: (1) Be a doctor of medicine, doctor of osteopathy, or doctor of podiatric medicine licensed to practice medicine, osteopathy, or podiatry in the State in which the laboratory is located; or (2)(i) Have earned a doctoral, master's, or bachelor's degree in a chemical, physical, biological or clinical laboratory science, or medical technology from an accredited institution; or (ii) Have earned an associate degree in a laboratory science or medical laboratory technology from an accredited institution; and (iii) Have laboratory training that includes either (A) Completion of a clinical laboratory training program approved or accredited by the ABHES, NAACLS, or other organization approved by HHS; or (B) At least three months documented laboratory training in each specialty in which the individual performs high complexity testing."
+    }
+  ],
+  "scope": "Every testing person at <<LAB_NAME>> performing moderate or high complexity testing, and the medical director or designee.",
+  "policy_statements": [
+    "Every testing person meets the applicable CLIA qualification for the highest complexity testing they perform (moderate: 42 CFR 493.1423; high: 42 CFR 493.1489).",
+    "State license (where required) is current; primary-source verified at hire and at every renewal.",
+    "Degree and training evidence is primary-source verified and filed in the personnel record before the individual performs patient testing.",
+    "If the qualification pathway requires laboratory training, the training records (clinical lab training program completion, military laboratory specialty completion, or three-months-per-specialty documented training) are filed in the personnel record.",
+    "Initial competency assessment per the Staff Competency Assessment policy is completed after orientation and training but before independent patient testing.",
+    "Any qualification gap identified at hire or during the role removes the individual from CLIA-qualifying duties until the gap is closed."
+  ],
+  "procedure_steps": [
+    "At hire, HR collects all qualification evidence applicable to the pathway: license, degree (transcript or registrar verification), training program completion (program transcript or certificate), military service record where applicable, and documented experience.",
+    "Primary-source verification is performed per the Staff Credential Verification policy.",
+    "The medical director or designee reviews the package against the applicable CLIA pathway (493.1423 for moderate, 493.1489 for high) and approves the individual for the corresponding complexity level.",
+    "The personnel record is filed with the verification package, the signed job description, and the orientation/training records.",
+    "Initial competency assessment is scheduled and completed before independent patient testing.",
+    "State licenses with expiration dates are tracked on the Credential Expiry register; renewal evidence is verified and filed before expiry."
+  ],
+  "definitions": [
+    ["Moderate complexity testing", "Testing categorized as moderate complexity under CLIA. Personnel qualifications per 42 CFR 493.1423."],
+    ["High complexity testing", "Testing categorized as high complexity under CLIA. Personnel qualifications per 42 CFR 493.1489 (more stringent than moderate)."],
+    ["Qualifying pathway", "The specific 42 CFR 493 paragraph the staff member uses to satisfy the qualification requirement (e.g., 'bachelor's degree in clinical laboratory science from accredited institution' under 493.1423(b)(2))."]
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "policy_id": "73",
+  "slug": "histopathology_qmp",
+  "policy_name": "Histopathology Quality Management Plan",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> monitors and improves quality in anatomic pathology and histology. Required by 42 CFR 493.1200 (quality systems), 42 CFR 493.1273 (histopathology QA), and 42 CFR 493.1249 (preanalytic) / 42 CFR 493.1289 (postanalytic) assessments.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1273(a)",
+      "label": "Standard: Histopathology",
+      "verbatim": "If the laboratory provides services in the subspecialty of histopathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> anatomic pathology personnel and the medical director or designee.",
+  "policy_statements": [
+    "Quality indicators tracked for histopathology include: specimen turn-around time (receipt to final report), block recut rate, slide recut rate, special stain QC pass rate, amended report rate, intradepartmental case review concordance, and frozen-section to final-diagnosis concordance.",
+    "Indicator targets are set by the medical director or designee; performance is tracked monthly and reviewed at least quarterly.",
+    "Intradepartmental case review (peer review): a defined sample of cases is reviewed by a second pathologist; concordance is tracked and discordant cases are discussed and documented.",
+    "Frozen section-to-final-diagnosis concordance is tracked; significant discordances are reviewed.",
+    "Slides, blocks, and special stains use only materials that meet the lab's quality criteria per 42 CFR 493.1273(a)(2).",
+    "QA records are retained per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "Quality coordinator collects indicator data monthly; reports the dashboard.",
+    "Quarterly, the medical director or designee reviews indicators, peer review concordance, and frozen-final concordance.",
+    "Discordant cases are discussed with the responsible pathologist and corrective action documented if a pattern emerges.",
+    "Annual QMP review by the medical director or designee signs the year-end summary."
+  ],
+  "definitions": [
+    ["Peer review concordance", "Agreement rate between original pathologist diagnosis and the reviewing pathologist's diagnosis on a sampled case set."],
+    ["Frozen-final concordance", "Agreement rate between the intraoperative frozen section diagnosis and the final paraffin-section diagnosis on the same specimen."]
+  ]
+}

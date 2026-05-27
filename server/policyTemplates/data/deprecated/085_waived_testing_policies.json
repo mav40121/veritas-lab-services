@@ -1,0 +1,41 @@
+{
+  "policy_id": "85",
+  "slug": "waived_testing_policies",
+  "policy_name": "Waived Testing Policies and Procedures",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> performs and oversees CLIA-waived tests. Required by 42 CFR 493.15 (Certificate of Waiver), 42 CFR 493.35 (waived test categorization), and 42 CFR 493.1235 (personnel competency) for waived testing.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.15(e)",
+      "label": "Standard: Laboratories performing waived tests",
+      "verbatim": "Laboratories must follow manufacturers' test instructions and meet the requirements specified in 493.35, 493.37, 493.39, 493.43, 493.45, and 493.51, when applicable, and the conditions specified in 493.5, 493.17, and 493.19."
+    },
+    {
+      "citation": "42 CFR 493.1291(g)",
+      "label": "Standard: Test report (critical results, applies to waived too)",
+      "verbatim": "The laboratory must immediately alert the individual or entity requesting the test and, if applicable, the individual responsible for using the test results when any test result indicates an imminently life-threatening condition, or panic or alert values."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who perform CLIA-waived testing (point-of-care or otherwise) and the medical director or designee.",
+  "policy_statements": [
+    "Every waived test performed at <<LAB_NAME>> is on the current CLIA waived-test list and is performed exactly per the manufacturer's instructions, with no modification.",
+    "Modification of a waived test (different sample type, off-label use, calculation alteration) reclassifies the test as high complexity per CMS guidance; the lab does not modify waived tests unless the higher complexity certification, personnel, and QC are in place.",
+    "Waived testing personnel receive documented training on each waived test before testing patient specimens; competency is assessed annually per the lab's Waived Testing Competency Assessment policy.",
+    "Manufacturer-required QC is run at the manufacturer-specified frequency and documented; missing or failed QC triggers corrective action before patient testing resumes.",
+    "Critical results from waived tests follow the lab's Critical Value Reporting policy; the manufacturer's stated reportable range and limitations are followed.",
+    "Waived test results are reported with the testing site identified and retained per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "When a new waived test is added, the medical director or designee confirms the test is on the CMS waived-test list and the lab holds the appropriate CLIA certificate.",
+    "The manufacturer's instructions, QC requirements, and quick-reference card are placed at every testing site; staff are trained and competency-assessed.",
+    "On each patient test, staff follow the manufacturer's instructions exactly; result is recorded with patient ID, date/time, result, lot number, expiration, and tester initials.",
+    "QC is run at the manufacturer-specified frequency (typically per lot, per shipment, per new operator, or per defined interval); QC results are documented.",
+    "Failed QC triggers corrective action: investigate, document, and rerun QC; patient testing on the affected device pauses until QC is in control.",
+    "Critical results are reported per the lab's Critical Value Reporting policy; the result and notification are documented."
+  ],
+  "definitions": [
+    ["Waived test", "A test categorized as waived under CLIA at 42 CFR 493.15. Waived tests are simple, accurate, and pose minimal risk if performed incorrectly."],
+    ["Manufacturer's instructions", "The package insert, operator's manual, or quick-reference card supplied by the test manufacturer. Waived tests must be performed exactly per these instructions to retain waived status."],
+    ["Modification", "Any change from the manufacturer's instructions (sample type, calculation, interpretation, reagent substitution). Modification reclassifies the test as high complexity per CMS guidance."]
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "policy_id": "33",
+  "slug": "test_procedure_approval_review",
+  "policy_name": "Test Procedure Approval and Review Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes how <<LAB_NAME>> approves new test procedures, re-approves procedures when revised, and reviews active procedures on a defined cycle. CLIA at 42 CFR 493.1251(d) requires that procedures and changes in procedures be approved, signed, and dated by the current laboratory director before use.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1251(d)",
+      "label": "Standard: Procedure approval",
+      "verbatim": "Procedures and changes in procedures must be approved, signed, and dated by the current laboratory director before use."
+    },
+    {
+      "citation": "42 CFR 493.1251(e)",
+      "label": "Standard: Procedure change",
+      "verbatim": "The laboratory must maintain a copy of each procedure with the dates of initial use and discontinuance. The laboratory must retain a copy of each procedure for at least 2 years after a procedure has been discontinued."
+    },
+    {
+      "citation": "42 CFR 493.1445(e)(11)",
+      "label": "Standard: Laboratory director responsibilities (procedure approval)",
+      "verbatim": "The laboratory director must ensure that prior to testing patients' specimens, all personnel have the appropriate education and experience, receive the appropriate training for the type and complexity of the services offered, and have demonstrated that they can perform all testing operations reliably to provide and report accurate results."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, and any technical consultant or technical supervisor who authors or reviews procedures.",
+  "policy_statements": [
+    "Every new procedure is approved, signed, and dated by the medical director or designee before use on patient specimens.",
+    "Every revision to an active procedure, however small, is re-approved, signed, and dated by the current medical director or designee before the change takes effect.",
+    "Every active procedure is reviewed by the medical director or designee at least every 2 years; the review date, signature, and any revisions are documented on the procedure.",
+    "On a change in directorship, the new medical director or designee re-reviews and re-approves every active procedure within 6 months of assuming the role; the re-approvals are documented.",
+    "Procedure version control identifies the current version with effective date, the prior version archived, and the date of retirement on any retired procedure.",
+    "Retired procedures are retained for at least 2 years from the date of discontinuance per 42 CFR 493.1251(e)."
+  ],
+  "procedure_steps": [
+    "When a new procedure is needed, the author drafts the procedure using the lab template (covering all 14 applicable elements from 42 CFR 493.1251(b)).",
+    "The technical consultant or technical supervisor for the affected specialty reviews the draft for technical accuracy and completeness; the review is signed.",
+    "The medical director or designee reviews and approves the procedure with signature and date; the signed approval page is filed with the active procedure.",
+    "The new or revised procedure is published to the bench with a version number and effective date; the prior version (if any) is archived with the date of discontinuance.",
+    "On the 2-year review cycle (or sooner on test-system, reagent, or scope change), the medical director or designee re-reads, revises if needed, signs, and dates the review.",
+    "When a procedure is retired, the medical director or designee signs the retirement; the procedure is moved to the retired-procedures archive with at least 2-year retention."
+  ],
+  "definitions": [
+    [
+      "Procedure approval",
+      "The signed and dated authorization by the medical director or designee that a procedure may be used on patient specimens. Required before initial use and after every revision."
+    ],
+    [
+      "Periodic review",
+      "The CLIA-required re-read of an active procedure by the medical director or designee at least every 2 years."
+    ],
+    [
+      "Procedure retirement",
+      "Discontinuance of a procedure. The retired procedure is retained for at least 2 years from the date of discontinuance per 42 CFR 493.1251(e)."
+    ]
+  ]
+}

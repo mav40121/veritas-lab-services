@@ -1,0 +1,30 @@
+{
+  "policy_id": "79",
+  "slug": "radiobioassay_qc",
+  "policy_name": "Radiobioassay QC and Radiation Safety Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> performs radiobioassay testing (radioimmunoassay or similar in-vitro testing with radioisotopes). Required by 42 CFR 493.1256 (QC), 42 CFR 493.1261-1278 (specialty QC), 10 CFR 20 (radiation protection), and 42 CFR 493.1101(c) (safety).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(a)",
+      "label": "Standard: Control procedures",
+      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> performs radiobioassay testing. Personnel and the Radiation Safety Officer.",
+  "policy_statements": [
+    "Radiobioassay testing follows the manufacturer's instructions and the lab's validated procedure with documented QC each run (two levels for quantitative assays).",
+    "Radioisotope handling follows the Radiation Safety Policy with personal dosimetry, fume hood handling, and waste segregation.",
+    "Decay tracking: counts are corrected for isotope decay per the half-life and the assay's calculation; expired isotope is removed from service.",
+    "Records retained per 42 CFR 493.1105 plus 10 CFR 20.2103 for radiation safety records."
+  ],
+  "procedure_steps": [
+    "Run setup includes two-level controls for quantitative assays.",
+    "Radioisotope is dispensed in the fume hood with dosimetry monitoring.",
+    "Counts are corrected for decay; QC interpretation and result release per the procedure.",
+    "Waste segregated and disposed per the Radiation Safety Policy."
+  ],
+  "definitions": [
+    ["Radiobioassay", "In-vitro test that uses a radioactive isotope as a label, typically a radioimmunoassay measuring antibody-antigen interaction."]
+  ]
+}

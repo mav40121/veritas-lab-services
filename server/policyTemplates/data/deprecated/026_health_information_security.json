@@ -1,0 +1,53 @@
+{
+  "policy_id": "26",
+  "slug": "health_information_security",
+  "policy_name": "Health Information Security Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> protects the confidentiality, integrity, and availability of electronic protected health information (ePHI). 45 CFR Part 164 Subpart C (the HIPAA Security Rule) requires administrative, physical, and technical safeguards for ePHI.",
+  "cfr_text_blocks": [
+    {
+      "citation": "45 CFR 164.306(a)",
+      "label": "HIPAA Security Rule: General requirements",
+      "verbatim": "Covered entities and business associates must do the following: (1) Ensure the confidentiality, integrity, and availability of all electronic protected health information the covered entity or business associate creates, receives, maintains, or transmits. (2) Protect against any reasonably anticipated threats or hazards to the security or integrity of such information. (3) Protect against any reasonably anticipated uses or disclosures of such information that are not permitted or required under subpart E of this part. (4) Ensure compliance with this subpart by its workforce."
+    },
+    {
+      "citation": "45 CFR 164.312(a)(1)",
+      "label": "HIPAA Security Rule: Access control (Standard)",
+      "verbatim": "Implement technical policies and procedures for electronic information systems that maintain electronic protected health information to allow access only to those persons or software programs that have been granted access rights as specified in 164.308(a)(4)."
+    },
+    {
+      "citation": "45 CFR 164.312(b)",
+      "label": "HIPAA Security Rule: Audit controls",
+      "verbatim": "Implement hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use electronic protected health information."
+    },
+    {
+      "citation": "45 CFR 164.402",
+      "label": "HIPAA Breach Notification Rule: Definitions",
+      "verbatim": "Breach means the acquisition, access, use, or disclosure of protected health information in a manner not permitted under subpart E of this part which compromises the security or privacy of the protected health information."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, contractors, business associates, and IT systems that create, receive, maintain, or transmit ePHI.",
+  "policy_statements": [
+    "<<LAB_NAME>> implements administrative, physical, and technical safeguards for ePHI as required by 45 CFR Part 164 Subpart C.",
+    "Access to ePHI is restricted by role; unique user IDs are assigned to every workforce member; access rights are reviewed at least annually and adjusted promptly on role change or separation.",
+    "Authentication uses individually assigned credentials; multi-factor authentication is enforced for remote access and for any administrative role; shared accounts are prohibited.",
+    "Audit logs of access to and modification of ePHI are maintained, retained for at least 6 years per the HIPAA Security Rule, and reviewed at least monthly for anomalies.",
+    "ePHI is encrypted at rest on portable devices and during transmission across non-internal networks; encryption keys are managed per the lab's key management procedure.",
+    "Workforce HIPAA Security training is delivered at hire and annually; completion is documented.",
+    "Security incidents (unauthorized access, malware, lost devices, suspected breach) are reported immediately to the security officer; investigated; documented; and reported externally where required by 45 CFR 164.404."
+  ],
+  "procedure_steps": [
+    "At hire, IT provisions a unique user account with role-appropriate access; the workforce member completes HIPAA Security training; both are documented.",
+    "On role change, IT adjusts access within one business day of HR notification; the change is documented in the access log.",
+    "On separation, IT disables access by close of business the same day as separation; physical credentials (badges, tokens) are collected; the de-provisioning is documented.",
+    "Audit logs are reviewed monthly by the security officer; anomalies (access outside normal hours, access to records not assigned, repeated authentication failures) trigger investigation.",
+    "Encryption is verified at hardware provisioning (portable devices) and at transmission go-live (interfaces, file transfers); evidence is filed.",
+    "Security incidents are logged on the Security Incident log; the security officer performs risk assessment per 45 CFR 164.402; breach determination drives notifications per 45 CFR 164.404 (affected individuals within 60 days, HHS via the breach portal, media if 500+ in a state)."
+  ],
+  "definitions": [
+    ["Electronic Protected Health Information (ePHI)", "PHI in electronic form. Subject to the HIPAA Security Rule (45 CFR Part 164 Subpart C)."],
+    ["Audit log", "Record of access to and activity within systems containing ePHI. Required by 45 CFR 164.312(b)."],
+    ["Security incident", "Attempted or successful unauthorized access, use, disclosure, modification, or destruction of ePHI, or interference with system operations in an information system holding ePHI."],
+    ["Breach", "Acquisition, access, use, or disclosure of PHI in a manner not permitted by the HIPAA Privacy Rule that compromises the security or privacy of the PHI (45 CFR 164.402)."]
+  ]
+}

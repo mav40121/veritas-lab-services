@@ -1,0 +1,48 @@
+{
+  "policy_id": "11",
+  "slug": "critical_value_reporting",
+  "policy_name": "Critical Value Reporting Policy",
+  "section": "Results",
+  "purpose": "This policy describes how <<LAB_NAME>> identifies, reports, and documents critical, panic, or alert values so that life-threatening test results reach the responsible clinician without delay. Critical value reporting is required by 42 CFR 493.1291(g) for every laboratory holding a CLIA certificate of compliance or accreditation.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1291(g)",
+      "label": "Test report (test results that require immediate notification)",
+      "verbatim": "The laboratory must immediately alert the individual or entity requesting the test and, if applicable, the individual responsible for using the test results when any test result indicates an imminently life-threatening condition, or panic or alert values."
+    },
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who perform, review, or release test results. Applies to all testing performed under CLIA (waived, moderate, and high complexity). Applies to results reported from in-house testing and to results reported on behalf of reference laboratories.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written list of critical values per analyte, reviewed and approved annually by the medical director or designee.",
+    "Any test result that meets a critical value threshold is reported to the responsible clinician or licensed designee immediately, with a target notification time of 30 minutes from result release or sooner per the lab's approved threshold list.",
+    "All critical value notifications are documented with: result value, date and time of result release, date and time of notification, the name of the individual notified, the name of the laboratory staff member making the notification, and a read-back confirmation when applicable.",
+    "If the responsible clinician cannot be reached, the laboratory follows a documented escalation chain (covering provider, on-call provider, charge nurse, hospital operator) until contact is confirmed.",
+    "Critical value reporting performance is reviewed monthly as part of the laboratory's quality management plan; any miss, delay, or escalation is logged as a non-conformance event and reviewed by the medical director or designee."
+  ],
+  "procedure_steps": [
+    "When a result meeting a critical value threshold is generated, the testing staff member verifies the result (repeat or confirm per analyte SOP) before notification.",
+    "The staff member contacts the responsible clinician or licensed designee by the most direct available method (in-person, phone, secure messaging) and obtains a read-back of the result, patient name, and ordering provider.",
+    "The notification is documented in the LIS or on the approved Critical Value Notification log: patient ID, test, result, date/time released, date/time notified, recipient name and role, reporter name, read-back confirmed (Y/N).",
+    "If the responsible clinician is unavailable, the staff member follows the escalation chain until contact is confirmed and documents each step.",
+    "The medical director or designee reviews the Critical Value Notification log monthly for completeness, timeliness, and trends."
+  ],
+  "definitions": [
+    [
+      "Critical value",
+      "A laboratory result that indicates an imminently life-threatening condition (per 42 CFR 493.1291(g))."
+    ],
+    [
+      "Read-back",
+      "Verbal confirmation by the recipient of the patient identifier, test, and result, exactly as reported by the laboratory."
+    ],
+    [
+      "Responsible clinician or licensed designee",
+      "The ordering provider, the covering provider, or a licensed clinical staff member authorized to receive critical results on the provider's behalf."
+    ]
+  ]
+}

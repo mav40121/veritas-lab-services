@@ -1,0 +1,55 @@
+{
+  "policy_id": "9",
+  "slug": "test_procedures",
+  "policy_name": "Test Procedures Policy",
+  "section": "Testing",
+  "purpose": "This policy describes how <<LAB_NAME>> writes, approves, reviews, and follows test procedures for every nonwaived test on its test menu. CLIA at 42 CFR 493.1251 requires a complete written procedure for every test the laboratory performs, kept current, approved by the lab director, and immediately available to testing personnel.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1251(a)",
+      "label": "Standard: Procedure manual",
+      "verbatim": "A written procedure manual for all tests, assays, and examinations performed by the laboratory must be available to, and followed by, laboratory personnel. Textbooks may supplement but not replace the laboratory's written procedures for testing or examining of specimens."
+    },
+    {
+      "citation": "42 CFR 493.1251(b)",
+      "label": "Standard: Procedure manual content",
+      "verbatim": "The procedure manual must include the following when applicable to the test procedure: (1) Requirements for patient preparation; specimen collection, labeling, storage, preservation, transportation, processing, and referral; and criteria for specimen acceptability and rejection. (2) Microscopic examination, including the detection of inadequately prepared slides. (3) Step-by-step performance of the procedure, including test calculations and interpretation of results. (4) Preparation of slides, solutions, calibrators, controls, reagents, stains, and other materials used in testing. (5) Calibration and calibration verification procedures. (6) The reportable range for test results for the test system as established or verified in 493.1253. (7) Control procedures. (8) Corrective action to take when calibration or control results fail to meet the laboratory's criteria for acceptability. (9) Limitations in the test methodology, including interfering substances. (10) Reference intervals (normal values). (11) Imminently life-threatening test results, or panic or alert values. (12) Pertinent literature references. (13) The laboratory's system for entering results in the patient record and reporting patient results including, when appropriate, the protocol for reporting imminently life-threatening results, or panic or alert values. (14) Description of the course of action to take if a test system becomes inoperable."
+    },
+    {
+      "citation": "42 CFR 493.1251(d)",
+      "label": "Standard: Procedure approval",
+      "verbatim": "Procedures and changes in procedures must be approved, signed, and dated by the current laboratory director before use."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel and the medical director or designee responsible for procedure approval. Applies to every nonwaived test on the lab's test menu.",
+  "policy_statements": [
+    "Every nonwaived test has a written procedure containing all 14 applicable elements per 42 CFR 493.1251(b).",
+    "Every procedure is approved, signed, and dated by the medical director or designee before use. Any change to a procedure is reapproved, signed, and dated by the current medical director or designee before the change is implemented.",
+    "Each procedure is reviewed at least every two years (or sooner when the test system, reagent, or scope changes) by the medical director or designee; the review date and signature are documented on the procedure.",
+    "When a change in directorship occurs, the new medical director or designee reviews and reapproves every active procedure within six months of assuming the role.",
+    "Procedures are immediately available to testing personnel at the bench (paper or electronic). Textbooks may supplement but do not replace the lab's written procedure.",
+    "Retired procedures are retained for a minimum of two years from the date of retirement per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "When a new test is added or a procedure is revised, the author drafts the procedure using the lab's procedure template covering all 14 applicable elements from 42 CFR 493.1251(b).",
+    "The draft is reviewed by the technical consultant or technical supervisor for the affected specialty, who confirms each element is present and accurate.",
+    "The medical director or designee signs and dates the approved procedure; the signature page is retained with the active procedure.",
+    "The active procedure is published to the bench (paper binder or LIS document control) with a version number and effective date.",
+    "On the 2-year review cycle, the medical director or designee re-reads the procedure, confirms or revises it, signs and dates the review.",
+    "When a procedure is retired, the date of retirement is recorded on the procedure and it is moved to the retired-procedures archive with a minimum 2-year retention."
+  ],
+  "definitions": [
+    [
+      "Procedure manual",
+      "The collected, current, written procedures for every test the lab performs. Required by 42 CFR 493.1251."
+    ],
+    [
+      "Procedure review",
+      "A documented re-read of the procedure by the medical director or designee, at least every two years, confirming the procedure is still accurate and current."
+    ],
+    [
+      "Retired procedure",
+      "A procedure no longer in active use. Retained for at least 2 years from retirement per 42 CFR 493.1105 so prior patient results can be defended against the procedure in force at the time of testing."
+    ]
+  ]
+}

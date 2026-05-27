@@ -1,0 +1,36 @@
+{
+  "policy_id": "14",
+  "slug": "emergency_operations_plan",
+  "policy_name": "Emergency Operations Plan",
+  "section": "Safety",
+  "purpose": "This policy describes how <<LAB_NAME>> prepares for, responds to, and recovers from emergencies that disrupt laboratory operations. CLIA at 42 CFR 493.1101 requires the lab facility to provide a safe environment for testing, which includes a plan for foreseeable disruptions.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1101(a)",
+      "label": "Standard: Facilities",
+      "verbatim": "The laboratory must be constructed, arranged, and maintained to ensure the following: (1) The space, ventilation, and utilities necessary for conducting all phases of the testing process. (2) Contamination of patient specimens, equipment, instruments, reagents, materials, and supplies is minimized. (3) The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel and the medical director or designee. Applies to all testing sites, satellite locations, and point-of-care sites under the lab's CLIA certificate.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written Emergency Operations Plan covering the foreseeable emergencies for its location: fire, power outage, water loss, severe weather, chemical or biological release, active threat, and prolonged HVAC failure.",
+    "The plan defines for each emergency: trigger conditions, immediate response actions, communication chain, decision authority for testing suspension or relocation, downtime workflow activation, and recovery criteria.",
+    "Emergency contact information (medical director or designee, building security, local fire department, local emergency management) is posted at every testing area and updated within 30 days of any change.",
+    "Emergency response drills are conducted at least annually; each drill is documented with date, scenario, participants, findings, and corrective actions; findings are reviewed by the medical director or designee.",
+    "Critical reagents and consumables (control material, calibrators, urgent-test reagents) are inventoried so that at least 7 days of normal operations can continue without resupply.",
+    "Patient specimens in process during an emergency are protected per the analyte-specific storage requirements; if storage cannot be maintained, specimens are documented as compromised and the ordering provider is notified for recollect.",
+    "Every emergency event lasting more than 1 hour is logged with start time, end time, affected systems, response actions, and recovery outcomes; reviewed by the medical director or designee within 7 days."
+  ],
+  "procedure_steps": [
+    "On any emergency event affecting lab operations, the shift lead announces the emergency, activates the applicable response from the Emergency Operations Plan, and notifies the medical director or designee.",
+    "Staff secure in-process specimens per the analyte-specific instructions in the plan and switch to the downtime workflow if testing must continue.",
+    "If the emergency requires testing suspension, the shift lead notifies ordering providers and the medical director or designee approves suspension; resumption requires medical director or designee sign-off after recovery criteria are met.",
+    "After the emergency, the shift lead completes the Emergency Event log (start, end, scenario, response, specimens affected, recovery) and submits to the medical director or designee within 7 days.",
+    "Lessons-learned from each event drive an update to the Emergency Operations Plan if a gap is identified; the plan is reviewed at least annually by the medical director or designee."
+  ],
+  "definitions": [
+    ["Emergency Operations Plan", "The lab's written plan for responding to foreseeable emergencies. Reviewed at least annually."],
+    ["Recovery criteria", "Documented conditions that must be met before testing resumes after a suspension. Defined per emergency type in the plan."],
+    ["Emergency drill", "A scheduled simulation of an emergency response. Performed at least annually with documented findings."]
+  ]
+}

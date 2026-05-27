@@ -1,0 +1,47 @@
+{
+  "policy_id": "36",
+  "slug": "method_validation_performance_specs",
+  "policy_name": "Method Verification and Performance Specifications Policy",
+  "section": "Testing",
+  "purpose": "This policy describes how <<LAB_NAME>> verifies (for FDA-cleared methods) or establishes (for modified or laboratory-developed methods) the performance specifications of every nonwaived test before patient testing begins. CLIA at 42 CFR 493.1253 requires verification of accuracy, precision, reportable range, and reference intervals (and additional items for modified or laboratory-developed methods).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1253(b)(1)",
+      "label": "Standard: Establishment and verification of performance specifications (FDA-cleared methods)",
+      "verbatim": "Each laboratory that introduces an unmodified, FDA-cleared or approved test system must do the following before reporting patient test results: (i) Demonstrate that it can obtain performance specifications comparable to those established by the manufacturer for the following performance characteristics: (A) Accuracy. (B) Precision. (C) Reportable range of test results for the test system. (ii) Verify that the manufacturer's reference intervals (normal values) are appropriate for the laboratory's patient population."
+    },
+    {
+      "citation": "42 CFR 493.1253(b)(2)",
+      "label": "Standard: Establishment of performance specifications (modified or LDT)",
+      "verbatim": "Each laboratory that modifies an FDA-cleared or approved test system, or introduces a test system not subject to FDA clearance or approval (including methods developed in-house and standardized methods such as text book procedures), or uses a test system in which performance specifications are not provided by the manufacturer must, before reporting patient test results, establish for each test system the performance specifications for the following performance characteristics, as applicable: (i) Accuracy. (ii) Precision. (iii) Analytical sensitivity. (iv) Analytical specificity to include interfering substances. (v) Reportable range of test results for the test system. (vi) Reference intervals (normal values). (vii) Any other performance characteristic required for test performance."
+    },
+    {
+      "citation": "42 CFR 493.1253(b)(3)",
+      "label": "Standard: Control material targets",
+      "verbatim": "The laboratory must determine the test system's calibration procedures and control procedures based upon the performance specifications verified or established under paragraph (b)(1) or (b)(2) of this section."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel and the medical director or designee. Applies to every nonwaived test before initial use, after any major method change, and after any change that may affect performance.",
+  "policy_statements": [
+    "Before reporting any patient result on a new nonwaived test, <<LAB_NAME>> completes and documents the applicable performance verification (FDA-cleared, unmodified) or establishment (modified, LDT, or no manufacturer specs) studies per 42 CFR 493.1253(b).",
+    "For FDA-cleared unmodified methods: accuracy, precision, reportable range, and reference interval verification are completed and documented; the lab director or designee signs the completed verification before the test goes into service.",
+    "For modified methods, laboratory-developed tests (LDT), or methods without manufacturer specs: accuracy, precision, analytical sensitivity, analytical specificity (interfering substances), reportable range, reference intervals, and any other relevant performance characteristic are established and documented; signed by the medical director or designee before service.",
+    "Performance verification or establishment studies use the lab's defined statistical acceptance criteria (CLIA TEa where canonical; medical director or designee-set internal goal where no CLIA TEa exists).",
+    "The completed verification or establishment package is retained as long as the test is in service plus at least 2 years after retirement.",
+    "Whenever the method, instrument, reagent lot pattern, calibrator, or any factor that may affect performance changes materially, the affected performance characteristics are re-verified before patient testing resumes."
+  ],
+  "procedure_steps": [
+    "Before a new method is introduced, the medical director or designee approves the verification or establishment plan: which performance characteristics, how many specimens or replicates, the acceptance criteria, the statistical methods.",
+    "The testing staff performs the planned studies, captures raw data, and runs the statistical calculations (mean, SD, %CV, CI, bias, regression, etc.).",
+    "Results are evaluated against the acceptance criteria; any characteristic that does not meet criteria triggers investigation and re-test or a documented exception approved by the medical director or designee.",
+    "The completed verification or establishment package, including raw data, statistics, the approved plan, and the director-signed approval, is filed with the method's documentation.",
+    "The Procedure Manual is updated with the verified or established performance specifications: reportable range, reference intervals, expected control means and SD, calibration acceptance criteria.",
+    "On any material change, the affected studies are repeated and the new package is filed; the prior package is retained per the retention schedule."
+  ],
+  "definitions": [
+    ["Performance verification", "The CLIA process for confirming the manufacturer's performance claims on an unmodified FDA-cleared method. Required per 42 CFR 493.1253(b)(1)."],
+    ["Performance establishment", "The CLIA process for setting the lab's own performance specifications on a modified, lab-developed, or no-manufacturer-specs method. Required per 42 CFR 493.1253(b)(2). More extensive than verification."],
+    ["Reportable range", "The span of test result values over which the laboratory can establish or verify the accuracy of the instrument or test system measurement response. Per 42 CFR 493.1253(b)(1)(i)(C)."],
+    ["Reference interval", "The range of values into which a population's results are expected to fall, used to flag patient results as within or outside the expected range. Verified or established per 42 CFR 493.1253."]
+  ]
+}

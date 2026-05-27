@@ -1,0 +1,82 @@
+{
+  "policy_id": "107",
+  "slug": "molecular_testing",
+  "policy_name": "Molecular Testing Policy",
+  "section": "Testing",
+  "purpose": "This policy describes how <<LAB_NAME>> performs molecular testing: method verification, quality control specific to molecular methods (including run-level controls), contamination prevention for amplification-based methods, and the additional requirements for molecular genetic testing (including informed consent, variant classification, and variant reclassification). Required by 42 CFR 493.1253(b)(2) (verification of performance specifications), 42 CFR 493.1256(d) (QC including two control levels for quantitative procedures), and 42 CFR 493.1276 (molecular pathology specialty requirements).",
+  "scope": "All <<LAB_NAME>> personnel performing molecular testing, the Technical Supervisor for high-complexity molecular work, and the Laboratory Director or designee.",
+  "policy_statements": [
+    "Every molecular test (FDA-cleared, modified, or laboratory-developed) has documented performance verification or establishment per 42 CFR 493.1253 before patient testing begins: accuracy, precision, reportable range, reference interval (where applicable), and analytical sensitivity / specificity.",
+    "Workflow controls minimize contamination: physical separation of pre-amplification and post-amplification areas, unidirectional workflow, dedicated pipettes and reagents per area, and decontamination of work surfaces. Contamination-prevention practices are documented and audited on the documented cadence.",
+    "Every molecular run includes appropriate controls: positive control (template at clinical decision concentration), negative control (no-template), and internal amplification control (where the test design supports). Quantitative assays include at least two concentration levels of positive control per 42 CFR 493.1256(d)(3).",
+    "Failed controls (positive control negative, negative control positive, internal amplification control failed) trigger run rejection and corrective action before patient results are released. Investigation, corrective action, and re-run are documented.",
+    "Molecular genetic testing (germline or somatic) follows the additional requirements of 42 CFR 493.1276: documented test methodology, clinical and analytical performance characteristics, and report interpretation guidance signed by the Laboratory Director or designee.",
+    "Genetic test orders include indication, family history when relevant, ethnicity when used in interpretation, and any prior testing in the patient or family.",
+    "Informed consent for genetic testing is documented when required by state law or by the lab's policy; the consent covers the implications of positive, negative, and indeterminate results.",
+    "Test interpretation includes variant classification per current ACMG-style criteria or equivalent (pathogenic, likely pathogenic, variant of uncertain significance, likely benign, benign); clinical significance; and any implications for family members.",
+    "Genetic test reports include: the regions or genes tested, variants identified, variant classification, recommended follow-up (genetic counseling, family testing, clinical correlation), and limitations of the test methodology.",
+    "Variant classification is reviewed periodically as new evidence emerges; clinically significant reclassifications trigger amended reports and provider notification per the lab's variant reclassification procedure.",
+    "QC results are documented per run with control identity, lot, result, accept/reject, and operator; reviewed monthly by the medical director or designee.",
+    "Records (verification, QC, lot tracking, interpretation, sign-out, amended reports) are retained per 42 CFR 493.1105 with the longer retention applicable to genetic test results per state genetic privacy law where applicable."
+  ],
+  "procedure_steps": [
+    "Before a new molecular assay goes live, complete the verification or establishment study per 42 CFR 493.1253: accuracy, precision, reportable range, reference interval, analytical sensitivity, analytical specificity (including interfering substances); document and sign; reverify after any test-system change.",
+    "Run setup includes the required controls: positive, negative, and internal amplification control where applicable; for quantitative assays, at least two concentration levels of positive control per run; controls are tracked with patient samples.",
+    "Control results are interpreted alongside patient results; failed controls trigger run rejection; investigation, corrective action, and re-run are documented before patient results are released.",
+    "Workflow controls (separation of pre-amp and post-amp areas, unidirectional workflow, dedicated equipment, decontamination of surfaces) are observed continuously and audited on the documented cadence; document findings.",
+    "On genetic test order: confirm indication, family history when relevant, ethnicity when used in interpretation, prior testing; confirm consent (where required by state law or lab policy) is signed and on file before testing begins.",
+    "Perform testing per the validated procedure with documented controls; interpretation by qualified personnel; classify variants per ACMG-style criteria; reports include regions/genes tested, variants identified, classification, recommended follow-up, and methodology limitations.",
+    "Route genetic-test reports to the Laboratory Director or designee for interpretive sign-out as defined by the assay's standing rule.",
+    "On new evidence triggering reclassification of a previously reported variant: follow the variant reclassification procedure; issue an amended report; notify the ordering provider per the lab's communication procedure; document.",
+    "Monthly QC review by the medical director or designee documents the review and any unresolved concerns.",
+    "File verification, QC, lot, reporting, and amended-report records per the applicable retention schedule."
+  ],
+  "definitions": [
+    [
+      "Molecular genetic testing",
+      "Testing of nucleic acids for germline or somatic variants; subject to additional requirements at 42 CFR 493.1276 beyond general molecular QC."
+    ],
+    [
+      "Pre-amplification area",
+      "Lab area where reagents are prepared and patient specimens are added to reaction mixtures, before amplification. Physically separated from the post-amplification area with unidirectional workflow to minimize amplicon contamination."
+    ],
+    [
+      "Internal amplification control (IAC)",
+      "A control sequence amplified in the same reaction as the target. Confirms the reaction chemistry worked and there is no PCR inhibition even when the patient analyte is undetectable."
+    ],
+    [
+      "Run-level QC",
+      "Quality control performed within each batch of patient testing, as opposed to daily-aggregate QC. Includes positive, negative, and IAC controls per molecular run."
+    ],
+    [
+      "Variant classification",
+      "Categorization of a genetic variant by likelihood of clinical significance per ACMG-style criteria: pathogenic, likely pathogenic, variant of uncertain significance (VUS), likely benign, benign."
+    ],
+    [
+      "Variant reclassification",
+      "Update of a previously reported variant classification based on new evidence. Clinically significant reclassifications trigger amended reports and provider notification."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1253(b)(2)",
+      "label": "Standard: Performance specifications (modified/LDT)",
+      "verbatim": "Each laboratory that modifies an FDA-cleared or approved test system, or introduces a test system not subject to FDA clearance or approval (including methods developed in-house and standardized methods such as text book procedures), or uses a test system in which performance specifications are not provided by the manufacturer must, before reporting patient test results, establish for each test system the performance specifications for the following performance characteristics, as applicable: (i) Accuracy. (ii) Precision. (iii) Analytical sensitivity. (iv) Analytical specificity to include interfering substances. (v) Reportable range of test results for the test system. (vi) Reference intervals (normal values). (vii) Any other performance characteristic required for test performance."
+    },
+    {
+      "citation": "42 CFR 493.1256(d)",
+      "label": "Standard: Control procedures (each run)",
+      "verbatim": "Unless CMS approves a procedure, specified in Appendix C of the State Operations Manual (CMS Pub. 7), that provides equivalent quality testing, the laboratory must, at least: (1) Perform control procedures as defined in paragraphs (d)(2) through (d)(4) of this section unless otherwise specified in the additional specialty and subspecialty requirements at 493.1261 through 493.1278. (2) Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure."
+    },
+    {
+      "citation": "42 CFR 493.1256(d)(3)",
+      "label": "Standard: Control procedures (qualitative)",
+      "verbatim": "Include the following controls in each run of patient specimens: (ii) A negative and positive control for each qualitative procedure."
+    },
+    {
+      "citation": "42 CFR 493.1276(a)",
+      "label": "Standard: Molecular pathology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Molecular Pathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+    }
+  ]
+}

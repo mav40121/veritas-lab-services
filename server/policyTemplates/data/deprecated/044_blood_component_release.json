@@ -1,0 +1,30 @@
+{
+  "policy_id": "44",
+  "slug": "blood_component_release",
+  "policy_name": "Blood Component Release to External Organizations Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> releases blood components to external organizations (other hospitals, transfusion services, or facilities) when emergency conditions or pre-arranged sharing agreements require. Required by 21 CFR 606.100 SOPs and 42 CFR 493.1271 immunohematology.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+    }
+  ],
+  "scope": "<<LAB_NAME>> transfusion service personnel and the medical director or designee.",
+  "policy_statements": [
+    "Release of components to an external organization occurs only under a written sharing agreement, an emergency request from a recognized facility, or an FDA recall/look-back response.",
+    "Released components are documented with: unit number, ABO/Rh, expiration, receiving organization, requesting clinician (if emergency), date/time, packaging and transport conditions, and the releasing technologist.",
+    "Components are packaged for transport per the component's validated transport requirements; receipt acknowledgment is obtained from the receiving organization.",
+    "The medical director or designee is notified of any emergency release to an external organization; documentation is reviewed within 5 business days."
+  ],
+  "procedure_steps": [
+    "On request, the technologist verifies the requesting organization, the indication (sharing agreement, emergency, recall), and obtains the medical director or designee authorization for non-routine releases.",
+    "Components are pulled, packaged per transport requirements, and released with the documentation listed in the policy statements.",
+    "Receipt acknowledgment is obtained and filed.",
+    "Documentation is reviewed by the medical director or designee within 5 business days for non-routine releases."
+  ],
+  "definitions": [
+    ["External release", "Issue of a blood component to an organization other than <<LAB_NAME>>'s parent facility."]
+  ]
+}

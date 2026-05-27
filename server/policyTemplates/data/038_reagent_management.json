@@ -1,0 +1,51 @@
+{
+  "policy_id": "38",
+  "slug": "reagent_management",
+  "policy_name": "Reagent Management Policy",
+  "section": "Testing",
+  "purpose": "This policy describes how <<LAB_NAME>> receives, stores, labels, uses, and tracks reagents, calibrators, controls, and consumables. CLIA at 42 CFR 493.1252 requires the lab to ensure that reagents are stored and used in accordance with the manufacturer's instructions and that performance is monitored.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1252(a)",
+      "label": "Standard: Test systems, equipment, instruments, reagents, materials, and supplies",
+      "verbatim": "Test systems must be selected by the laboratory. The testing must be performed following the manufacturer's instructions and in a manner that provides test results within the laboratory's stated performance specifications for each test system as determined under 493.1253."
+    },
+    {
+      "citation": "42 CFR 493.1252(b)",
+      "label": "Standard: Reagent storage",
+      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
+    },
+    {
+      "citation": "42 CFR 493.1252(c)",
+      "label": "Standard: Reagent labeling",
+      "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies, as appropriate, must be labeled to indicate the following: (1) Identity and, when significant, titer, strength or concentration. (2) Storage requirements. (3) Preparation and expiration dates. (4) Other pertinent information required for proper use."
+    },
+    {
+      "citation": "42 CFR 493.1252(d)",
+      "label": "Standard: Expired reagents",
+      "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies must not be used when they have exceeded their expiration date, have deteriorated, or are of substandard quality."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel and the staff member(s) responsible for reagent receipt, inventory, and storage.",
+  "policy_statements": [
+    "Every reagent received is logged on the Reagent Receipt log with lot number, manufacturer, expiration date, date received, and the staff member's initials.",
+    "Reagents are stored per the manufacturer's instructions; storage areas (refrigerators, freezers, ambient shelves) are temperature-monitored daily and the readings logged; out-of-range readings trigger corrective action and a reagent quality assessment.",
+    "Each reagent container is labeled with the contents, lot number, opened date or in-use date, expiration date, and the staff member's initials at first use.",
+    "Expired reagents, reagents with deteriorated appearance, or reagents stored outside the manufacturer's conditions are not used; they are removed from inventory, documented, and discarded per the lab's hazardous-material disposal procedure.",
+    "Before a new lot or shipment of any critical reagent is placed into service, lot-to-lot parallel testing is performed per the lab's reagent acceptance procedure and documented; new-lot acceptance is signed by the technical consultant or technical supervisor.",
+    "Reagent inventory is reviewed monthly to identify reagents nearing expiration; expiring reagents are flagged for use-first or reorder."
+  ],
+  "procedure_steps": [
+    "On receipt, the receiving staff member inspects the shipment for damage, verifies the order against the packing slip, logs each reagent on the Reagent Receipt log (lot, expiration, date), and stores per manufacturer instructions.",
+    "Storage area temperatures are recorded daily; out-of-range readings trigger immediate corrective action (move reagents to backup storage, investigate cause, document reagent disposition).",
+    "When a reagent is first opened or first put into use, the staff member labels the container with the open-date and initials.",
+    "Before each use, the staff member confirms the reagent is within expiration, has been stored per manufacturer instructions, and shows no signs of deterioration.",
+    "For new lots of critical reagents (calibrators, control materials, primary antibody reagents, key chemistry reagents): parallel testing is performed against the prior lot per the reagent acceptance procedure; results are documented and signed before the new lot is placed into service.",
+    "Monthly, the lab manager or designee reviews the Reagent Inventory and identifies expiring items for use-first or reorder."
+  ],
+  "definitions": [
+    ["Reagent Receipt log", "Audit trail of every reagent received, including lot, expiration, and date of receipt. Retained per the lab's record retention schedule."],
+    ["New-lot acceptance", "Parallel testing of a new lot against the existing in-use lot to confirm equivalent performance before the new lot enters service. Required for critical reagents."],
+    ["Expired reagent", "A reagent past its manufacturer-stated expiration date or open-use expiration. Must not be used per 42 CFR 493.1252(d)."]
+  ]
+}

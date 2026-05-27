@@ -1,0 +1,141 @@
+{
+  "policy_id": "108",
+  "slug": "health_information_management",
+  "policy_name": "Health Information Management Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> manages health information: privacy under HIPAA, security (administrative, physical, technical safeguards), and data capture, transmission, and retention. Required by 42 CFR 493.1231 (confidentiality of patient information), 42 CFR 493.1281(c) (verification of test transmission accuracy), 42 CFR 493.1283 (test records), and 45 CFR Part 164 Subparts C and E (HIPAA Security and Privacy Rules). LIS downtime and cybersecurity incident response remain separate standalone policies.",
+  "scope": "All <<LAB_NAME>> personnel handling patient health information, the Privacy Officer, the Security Officer, the IT function, and the Laboratory Director or designee.",
+  "policy_statements": [
+    "Patient health information is treated as confidential per HIPAA Privacy Rule (45 CFR 164 Subpart E) and per 42 CFR 493.1231; access is limited to those with a documented need-to-know.",
+    "The minimum-necessary standard (45 CFR 164.502(b)) applies to every internal use, external disclosure, and request: only the PHI needed for the purpose is accessed, used, or shared.",
+    "Administrative, physical, and technical safeguards required by HIPAA Security Rule (45 CFR 164 Subpart C) are implemented and documented: access control, audit controls, integrity controls, transmission security, and workforce security.",
+    "Access to ePHI is restricted by role; unique user IDs are assigned to every workforce member; multi-factor authentication is enforced for remote access and for any administrative role; shared accounts are prohibited.",
+    "Audit logs of access to and modification of ePHI are maintained, retained for at least 6 years per the HIPAA Security Rule retention requirement, and reviewed at least monthly by the Security Officer for anomalies.",
+    "ePHI is encrypted at rest on portable devices (laptops, tablets, removable media) and encrypted in transit across non-internal networks; encryption keys are managed per the lab's key management procedure.",
+    "Test results are transmitted only through validated, encrypted channels (LIS interfaces, secure messaging); unsolicited transmission of PHI via unencrypted email is prohibited.",
+    "Calculation verification of test transmission from instrument to LIS, and end-to-end validation of LIS-to-EHR result transmission, is performed at interface go-live and re-verified after any interface change, per 42 CFR 493.1281(c) and the lab's documented procedure.",
+    "Business Associate Agreements (BAA) are in place with every vendor, courier, billing service, IT service, cloud provider, or contractor that creates, receives, maintains, or transmits PHI on the lab's behalf, per 45 CFR 164.502(e) and 45 CFR 164.504(e); BAAs are reviewed annually and at vendor change.",
+    "Result records are retained per 42 CFR 493.1105 (typically 2 years for non-immunohematology results, 5 years for cytology, 10 years for immunohematology and pathology) and the lab's HIPAA-aligned retention policy.",
+    "Patient access to their own information follows HIPAA Privacy Rule 45 CFR 164.524 and 42 CFR 493.1291(l); the lab's documented procedure routes requests to the Privacy Officer for response within 30 days.",
+    "Breaches of unsecured PHI follow the Breach Notification Rule (45 CFR 164.402 onward): risk assessment per 164.402, notification to affected individuals without unreasonable delay and in no case later than 60 days, notification to HHS via the breach portal (annually for breaches affecting fewer than 500 individuals; without unreasonable delay and no later than 60 days for breaches affecting 500 or more), and notification to prominent media outlets for breaches affecting 500 or more residents of a state or jurisdiction. Coordination with the LIS Downtime policy applies when relevant; coordination with the Cybersecurity Incident Response policy applies for security incidents."
+  ],
+  "procedure_steps": [
+    "At hire, every staff member completes HIPAA Privacy and Security training, signs the lab's Confidentiality Agreement, and receives a unique user account with role-appropriate access provisioned by IT; training and account provisioning are documented in the personnel record. Annual refresher training is delivered and tracked.",
+    "Workforce access to the LIS and other PHI systems is granted on a need-to-know basis; access rights are reviewed at least annually and adjusted within one business day of any role change; on separation, IT disables access by close of business the same day and physical credentials are collected.",
+    "Multi-factor authentication is enforced at provisioning for all remote access and all administrative-role accounts; the IT function audits MFA enforcement at the documented cadence and reports any exception to the Security Officer.",
+    "Audit logs are generated automatically for ePHI access and modification; the Security Officer reviews the logs at least monthly for anomalies (access outside normal hours, access to records not assigned, repeated authentication failures); anomalies trigger investigation and are documented; logs are retained at least 6 years.",
+    "All transmission of PHI uses validated, encrypted channels; the IT function maintains the list of approved channels and audits actual usage at the documented cadence; ePHI on portable devices is encrypted at hardware provisioning and the encryption status is re-verified annually.",
+    "Calculation verification at LIS interface go-live: IT and the medical director or designee complete a documented end-to-end test using sample patients across each result type (numeric, text, coded), confirm receipt in the downstream system, and confirm that units of measure and reference ranges display correctly; the verification is signed before the interface goes live. The same procedure is repeated for the affected analytes after any interface change.",
+    "Daily, the LIS administrator or designee reviews the interface error queue for failed transmissions and corrects within the same business day; persistent errors trigger an IT ticket and notification to the medical director or designee.",
+    "Business Associate Agreements are executed before any vendor handles PHI on the lab's behalf; the Privacy Officer reviews all BAAs annually and at vendor change; renewals or amendments are filed.",
+    "Records retention follows the documented schedule; secure destruction at end of retention requires medical director or designee approval and is documented in the destruction log.",
+    "Patient access requests are routed to the Privacy Officer; the patient's identity is verified; the requested PHI is provided within 30 days in the form requested where readily producible.",
+    "On a suspected privacy or security event, the staff member who observes or causes the event notifies the Privacy Officer or Security Officer immediately; the officer logs the event, performs the breach risk assessment per 45 CFR 164.402, and (when notification is required) drives notifications: affected individuals within 60 days, HHS via the breach portal per the threshold rule, and prominent media outlets if 500 or more individuals in a state or jurisdiction are affected.",
+    "Annually, the Security Officer and Privacy Officer audit the HIPAA safeguards (administrative, physical, technical) and the BAA inventory; findings and corrective actions are documented and signed."
+  ],
+  "definitions": [
+    [
+      "PHI",
+      "Protected Health Information; individually identifiable health information held or transmitted by a HIPAA covered entity or business associate, per 45 CFR 160.103."
+    ],
+    [
+      "ePHI",
+      "Electronic Protected Health Information; PHI in electronic form. Subject to the HIPAA Security Rule (45 CFR Part 164 Subpart C)."
+    ],
+    [
+      "Minimum necessary",
+      "The HIPAA standard requiring that PHI uses, disclosures, and requests be limited to the minimum amount of PHI needed to accomplish the intended purpose. Per 45 CFR 164.502(b) and 164.514(d)."
+    ],
+    [
+      "Business Associate Agreement (BAA)",
+      "Written contract required by HIPAA between a covered entity and any vendor that creates, receives, maintains, or transmits PHI on the covered entity's behalf. Required by 45 CFR 164.502(e) and 45 CFR 164.504(e)."
+    ],
+    [
+      "Audit log",
+      "Record of access to and activity within systems containing ePHI. Required by 45 CFR 164.312(b). Retained at least 6 years per HIPAA Security Rule retention."
+    ],
+    [
+      "Calculation verification",
+      "End-to-end check that a test result generated by an instrument arrives in the LIS and downstream EHR with correct numeric value, units of measure, and reference range display. Required at interface go-live and after any interface change per 42 CFR 493.1281(c)."
+    ],
+    [
+      "Interface error queue",
+      "The LIS queue of messages that failed to send or be received. Reviewed every business day; persistent failures trigger an IT ticket and medical director or designee notification."
+    ],
+    [
+      "Breach",
+      "Acquisition, access, use, or disclosure of PHI in a manner not permitted under HIPAA Privacy Rule that compromises the security or privacy of the PHI, per 45 CFR 164.402."
+    ],
+    [
+      "Multi-factor authentication (MFA)",
+      "Authentication requiring two or more independent credentials (e.g., password plus a one-time code on a registered device). Enforced for remote access and administrative-role accounts."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1231",
+      "label": "Standard: Confidentiality of patient information",
+      "verbatim": "The laboratory must ensure confidentiality of patient information throughout all phases of the testing process that are under the laboratory's control."
+    },
+    {
+      "citation": "42 CFR 493.1281(c)",
+      "label": "Standard: Verification of test transmission accuracy",
+      "verbatim": "The laboratory must, at least twice annually, verify, using the appropriate criteria as specified in 493.1253 and 493.1281, that data transmitted from the point of data entry (whether interfaced or entered manually) to final report receipt are accurate."
+    },
+    {
+      "citation": "42 CFR 493.1283",
+      "label": "Standard: Test records",
+      "verbatim": "The laboratory must maintain an information or record system that includes the following: (1) The positive identification of the specimen. (2) The date and time of specimen receipt into the laboratory. (3) The condition and disposition of specimens that do not meet the laboratory's criteria for specimen acceptability. (4) The records and dates of all specimen testing, including the identity of the personnel who performed the test(s). Records of patient testing including, if applicable, instrument printouts, must be retained."
+    },
+    {
+      "citation": "45 CFR 164.502(a)",
+      "label": "HIPAA Privacy Rule: Uses and disclosures",
+      "verbatim": "A covered entity or business associate may not use or disclose protected health information, except as permitted or required by this subpart or by subpart C of part 160 of this subchapter."
+    },
+    {
+      "citation": "45 CFR 164.502(b)",
+      "label": "HIPAA: Minimum necessary",
+      "verbatim": "When using or disclosing protected health information or when requesting protected health information from another covered entity or business associate, a covered entity or business associate must make reasonable efforts to limit protected health information to the minimum necessary to accomplish the intended purpose of the use, disclosure, or request."
+    },
+    {
+      "citation": "45 CFR 164.504(e)",
+      "label": "HIPAA: Business Associate contracts (required)",
+      "verbatim": "A covered entity may permit a business associate to create, receive, maintain, or transmit electronic protected health information on its behalf only if the covered entity obtains satisfactory assurances, in accordance with 164.314(a), that the business associate will appropriately safeguard the information. A covered entity is not required to obtain such satisfactory assurances from a business associate that is a subcontractor."
+    },
+    {
+      "citation": "45 CFR 164.306(a)",
+      "label": "HIPAA Security Rule: General requirements",
+      "verbatim": "Covered entities and business associates must do the following: (1) Ensure the confidentiality, integrity, and availability of all electronic protected health information the covered entity or business associate creates, receives, maintains, or transmits. (2) Protect against any reasonably anticipated threats or hazards to the security or integrity of such information. (3) Protect against any reasonably anticipated uses or disclosures of such information that are not permitted or required under subpart E of this part. (4) Ensure compliance with this subpart by its workforce."
+    },
+    {
+      "citation": "45 CFR 164.312(a)(1)",
+      "label": "HIPAA Security Rule: Access control (Standard)",
+      "verbatim": "Implement technical policies and procedures for electronic information systems that maintain electronic protected health information to allow access only to those persons or software programs that have been granted access rights as specified in 164.308(a)(4)."
+    },
+    {
+      "citation": "45 CFR 164.312(b)",
+      "label": "HIPAA Security Rule: Audit controls",
+      "verbatim": "Implement hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use electronic protected health information."
+    },
+    {
+      "citation": "45 CFR 164.312(c)(1)",
+      "label": "Standard: Integrity",
+      "verbatim": "Implement policies and procedures to protect electronic protected health information from improper alteration or destruction."
+    },
+    {
+      "citation": "45 CFR 164.312(e)(1)",
+      "label": "Standard: Transmission security",
+      "verbatim": "Implement technical security measures to guard against unauthorized access to electronic protected health information that is being transmitted over an electronic communications network."
+    },
+    {
+      "citation": "45 CFR 164.402",
+      "label": "HIPAA Breach Notification Rule: Definitions",
+      "verbatim": "Breach means the acquisition, access, use, or disclosure of protected health information in a manner not permitted under subpart E of this part which compromises the security or privacy of the protected health information."
+    },
+    {
+      "citation": "45 CFR 164.404(b)",
+      "label": "HIPAA Breach Notification: Timeliness",
+      "verbatim": "Except as provided in 164.412, a covered entity shall provide the notification required by paragraph (a) of this section without unreasonable delay and in no case later than 60 calendar days after discovery of a breach."
+    }
+  ]
+}

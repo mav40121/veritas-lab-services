@@ -1,0 +1,29 @@
+{
+  "policy_id": "68",
+  "slug": "histocompatibility",
+  "policy_name": "Histocompatibility Mixed Lymphocyte Culture Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> performs mixed lymphocyte culture (MLC) testing for transplant compatibility. Required by 42 CFR 493.1262 (specialty histocompatibility).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1278(a)",
+      "label": "Standard: Histocompatibility",
+      "verbatim": "If the laboratory performs histocompatibility testing, the laboratory must, as applicable, meet the requirements specified in 493.1278(b) through (k)."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> performs histocompatibility MLC. Personnel and the medical director or designee.",
+  "policy_statements": [
+    "MLC testing is performed per the validated procedure with documented technologist competency.",
+    "Controls (positive responder, negative responder, autologous control) are run on each MLC plate per the lab's procedure.",
+    "Results are interpreted by qualified personnel per the procedure's interpretation criteria; reported with stimulation index and reference range.",
+    "Records retained per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "Set up MLC per the validated procedure with required controls.",
+    "Read at the procedure-defined time points; calculate stimulation index.",
+    "Interpret per the criteria; report with appropriate clinical comment."
+  ],
+  "definitions": [
+    ["MLC (Mixed Lymphocyte Culture)", "Test of in vitro lymphocyte proliferation when responder and stimulator cells are co-cultured. Used in transplant compatibility assessment."]
+  ]
+}

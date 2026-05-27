@@ -1,0 +1,31 @@
+{
+  "policy_id": "87",
+  "slug": "waived_testing_competency",
+  "policy_name": "Waived Testing Competency Assessment Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> assesses and documents the competency of staff who perform CLIA-waived testing. CLIA at 42 CFR 493.1235 requires competency assessment for staff performing waived, moderate, or high complexity testing.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who perform CLIA-waived testing.",
+  "policy_statements": [
+    "Every staff member performing waived testing is competency-assessed at initial training, six months after initial training, twelve months after the six-month (the first annual), and annually thereafter.",
+    "Competency assessment covers the six CLIA-required elements per 42 CFR 493.1235 scaled to waived complexity: direct observation of test performance, monitoring of result recording and reporting, review of QC records, direct observation of any instrument function checks, blind sample or split-sample performance, and problem-solving skills.",
+    "Assessor for waived testing is the General Supervisor, the Technical Consultant, or the medical director or designee per CMS guidance for waived complexity.",
+    "Completed competency assessments are signed by the staff member and the assessor; filed in the personnel record."
+  ],
+  "procedure_steps": [
+    "At hire, the staff member completes Initial Training on each waived test they will perform; training is documented.",
+    "Six months after initial training, the assessor performs the six-element competency assessment and documents each element on the Waived Competency form.",
+    "One year after the six-month assessment, the first annual is performed; annually thereafter.",
+    "Failed elements trigger retraining and reassessment before the staff member continues independent testing on the affected test.",
+    "Records are filed in the personnel record and retained per the lab's retention schedule."
+  ],
+  "definitions": [
+    ["Waived competency", "CLIA-required six-element competency assessment for staff performing waived testing, on the same cadence as moderate and high complexity."]
+  ]
+}

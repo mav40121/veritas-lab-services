@@ -1,0 +1,51 @@
+{
+  "policy_id": "91",
+  "slug": "laboratory_director_qualifications",
+  "policy_name": "Laboratory Director Qualifications and Responsibilities Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes the qualifications, appointment, and responsibilities of the <<LAB_NAME>> laboratory director. CLIA at 42 CFR 493.1441-1445 (moderate complexity) and 42 CFR 493.1405-1407 (high complexity) define the director qualifications; 42 CFR 493.1445/1407 define the responsibilities the director cannot delegate.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1441",
+      "label": "Condition: Laboratory director (moderate complexity)",
+      "verbatim": "The laboratory performing moderate complexity testing must have a director who meets the qualification requirements of 493.1443 of this subpart and provides overall management and direction in accordance with 493.1445 of this subpart."
+    },
+    {
+      "citation": "42 CFR 493.1443",
+      "label": "Standard: Laboratory director qualifications (moderate complexity)",
+      "verbatim": "The laboratory director must possess a current license as a laboratory director issued by the State in which the laboratory is located, if such licensing is required and must meet one of the following requirements: (a) Be a doctor of medicine, doctor of osteopathy, or doctor of podiatric medicine licensed to practice medicine, osteopathy, or podiatry in the State in which the laboratory is located. (b) Hold an earned doctoral degree in a chemical, physical, biological, or clinical laboratory science from an accredited institution and be certified by a board approved by HHS. (c) Hold a doctor of medicine or doctor of osteopathy degree and have had at least one year of laboratory training during medical residency or have at least two years of experience directing or supervising moderate complexity testing. (d) Hold an earned master's degree in a chemical, physical, biological, or clinical laboratory science from an accredited institution and have at least one year of laboratory training or experience and one year of supervisory laboratory experience. (e) Hold an earned bachelor's degree in a chemical, physical, biological, or clinical laboratory science from an accredited institution and have at least two years of laboratory training or experience and two years of supervisory laboratory experience."
+    },
+    {
+      "citation": "42 CFR 493.1445(a)",
+      "label": "Standard: Laboratory director responsibilities (overall)",
+      "verbatim": "The laboratory director is responsible for the overall operation and administration of the laboratory, including the employment of personnel who are competent to perform test procedures, and record and report test results promptly, accurately and proficiently and for assuring compliance with the applicable regulations."
+    },
+    {
+      "citation": "42 CFR 493.1445(e)",
+      "label": "Standard: Laboratory director responsibilities (specific)",
+      "verbatim": "The laboratory director must (1) Ensure that testing systems developed and used for each of the tests performed in the laboratory provide quality laboratory services for all aspects of test performance, which includes the preanalytic, analytic, and postanalytic phases of testing. (2) Ensure that the physical plant and environmental conditions of the laboratory are appropriate for the testing performed and provide a safe environment in which employees are protected from physical, chemical, and biological hazards. (3) Ensure that (i) The test methodologies selected have the capability of providing the quality of results required for patient care; (ii) Verification procedures used are adequate to determine the accuracy, precision, and other pertinent performance characteristics of the method; and (iii) Laboratory personnel are performing the test methods as required for accurate and reliable results."
+    }
+  ],
+  "scope": "The named medical director of <<LAB_NAME>> and the medical director or designee. Applies to the appointment, qualifications verification, responsibilities, and any change in director.",
+  "policy_statements": [
+    "The medical director of <<LAB_NAME>> meets the applicable CLIA qualification requirements for the highest complexity testing performed by the lab (moderate: 42 CFR 493.1443; high: 42 CFR 493.1405).",
+    "Director qualifications are verified at appointment and the verification (primary-source license, board certification, degree, training, experience) is filed in the director's personnel record.",
+    "The director's responsibilities per 42 CFR 493.1445 (moderate) or 42 CFR 493.1407 (high) are documented in the director's job description, signed and dated by the director at appointment and at any change in responsibilities.",
+    "On any change of director, the lab notifies CMS within 30 days per 42 CFR 493.1775; the new director re-approves all active procedures within 6 months of appointment per the Test Procedure Approval policy.",
+    "The director may delegate specific duties to a qualified designee in writing, but cannot delegate the overall responsibility for laboratory operation and compliance.",
+    "The director provides on-site or remote oversight as required by the testing complexity and CMS guidance; the oversight model (on-site days per month, remote access, on-call coverage) is documented and reviewed annually."
+  ],
+  "procedure_steps": [
+    "At director appointment, HR collects primary-source verification of license, board certification, degree, and required training or experience; the package is filed in the director's personnel record.",
+    "The director signs and dates the job description acknowledging the full set of CLIA responsibilities for the complexity level performed.",
+    "The medical director or designee notifies CMS in writing within 30 days of the change per the Accreditation Body Notification policy.",
+    "Within 6 months of appointment, the new director re-reads, re-signs, and re-dates every active procedure per the Test Procedure Approval and Review policy.",
+    "Any written delegation of specific duties to a designee is documented with the designee's name, the scope of the delegation, the effective date, and both signatures; the delegation is filed in the personnel records.",
+    "The lab's director-oversight model (on-site cadence, remote access, on-call) is reviewed and re-signed annually by the director."
+  ],
+  "definitions": [
+    ["Medical director", "The individual responsible for the overall operation and administration of the laboratory per 42 CFR 493.1441 (moderate complexity) or 42 CFR 493.1405 (high complexity)."],
+    ["Designee", "An individual to whom the medical director has, in writing, delegated specific duties. The medical director retains overall responsibility and cannot delegate that overall responsibility."],
+    ["Director-oversight model", "The lab's documented arrangement for on-site presence, remote access, and on-call coverage by the medical director. Reviewed at least annually."]
+  ]
+}

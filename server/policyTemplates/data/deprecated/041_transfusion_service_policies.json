@@ -1,0 +1,37 @@
+{
+  "policy_id": "41",
+  "slug": "transfusion_service_policies",
+  "policy_name": "Blood Transfusion Service Policies and Procedures",
+  "section": "Specialty Services",
+  "purpose": "This policy is the top-level framework for <<LAB_NAME>> transfusion service operations: scope, governance, and the policy structure for all transfusion-service activities. Required by 42 CFR 493.1271 (immunohematology), 42 CFR 493.1273 (immunohematology QC), and 21 CFR 606 (blood and blood components, FDA cGMP).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1271(a)",
+      "label": "Standard: Immunohematology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+    },
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding. Such procedures shall be available to the personnel for use in the areas where the procedures are performed."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel, the medical director or designee, and any clinical staff who order or administer blood components.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a complete set of written transfusion service procedures covering: specimen requirements, ABO/Rh typing, antibody screen and identification, compatibility testing, component selection, component issue, transfusion monitoring, transfusion reaction investigation, look-back, inventory, storage and transport, and emergency release.",
+    "Every transfusion service procedure is approved, signed, and dated by the medical director or designee before use, and reviewed at least every 2 years.",
+    "Transfusion service personnel meet the applicable CLIA qualifications for high complexity testing (42 CFR 493.1489); the technical supervisor for immunohematology meets 42 CFR 493.1449 with the immunohematology-specific qualifications.",
+    "Transfusion records (specimen, ABO/Rh, antibody, crossmatch, component issued, recipient identification, transfusion outcome, look-back) are retained for at least 10 years per 42 CFR 493.1105(a)(7).",
+    "FDA cGMP requirements at 21 CFR 606 apply to component handling, labeling, storage, and records; the transfusion service maintains current SOPs covering these requirements."
+  ],
+  "procedure_steps": [
+    "At service launch or director change, the medical director or designee reviews and signs every transfusion service procedure before patient care resumes.",
+    "Every transfusion service event (specimen receipt, testing, component issue, transfusion, reaction, look-back) follows the applicable procedure exactly; deviations are logged.",
+    "Records are filed in the transfusion service binder or LIS with the 10-year retention flag.",
+    "Periodic review every 2 years (or sooner on change in test system, reagent, or scope) re-reads and re-approves each procedure."
+  ],
+  "definitions": [
+    ["Transfusion service", "The lab subspecialty that performs pretransfusion testing, selects and issues blood components, and monitors transfusion outcomes."],
+    ["FDA cGMP", "Current Good Manufacturing Practice for blood and blood components, codified at 21 CFR 606. Applies to component manufacture, handling, and recordkeeping."]
+  ]
+}

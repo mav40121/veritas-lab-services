@@ -1,0 +1,120 @@
+{
+  "policy_id": "99",
+  "slug": "blood_component_handling",
+  "policy_name": "Blood Component Handling Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> handles blood and blood components from supplier receipt through final disposition: inventory management, release to internal and external organizations, transport and storage, storage alarm response, reagent criteria and reactivity testing, plasma component processing, irradiation, and leukoreduction. Required by 21 CFR 606 (FDA cGMP), 21 CFR 606.65 (storage), 21 CFR 606.122 (labeling), 42 CFR 493.1252 (specimen and reagent integrity), and 42 CFR 493.1273 (blood bank reagent QC).",
+  "scope": "All <<LAB_NAME>> transfusion service personnel handling blood and blood components, the medical director or designee, and any external organization to which components are released.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains an inventory management system that tracks every blood component from receipt to final disposition (transfused, transferred, discarded, expired, returned to supplier) with unique unit identification.",
+    "Inventory is rotated First Expiry First Out (FEFO) for issue; minimum-on-hand targets by component and ABO/Rh are defined and approved by the medical director or designee, with reorder triggers when on-hand falls below the minimum.",
+    "Components are stored under component-specific conditions: Red Blood Cells at 1 to 6 degrees C; Platelets at 20 to 24 degrees C with continuous gentle agitation; Fresh Frozen Plasma at -18 degrees C or colder; Cryoprecipitate at -18 degrees C or colder. The most stringent of regulatory and manufacturer requirements applies.",
+    "Storage refrigerators, freezers, and platelet incubators have continuous temperature monitoring with audible and visual alarms; alarm thresholds are set inside the regulatory storage range so corrective action begins before excursion. Temperature monitoring records are retained.",
+    "Components issued for transfusion are transported in validated coolers (red cells), unpacked validated containers (platelets), or insulated containers per the component's requirements; transport time and temperature are documented.",
+    "Components returned to inventory are accepted only if they have been continuously in approved conditions: red cells returned within 30 minutes of issue (or longer if validated cooler maintained 1 to 10 degrees C per current standards and component integrity is intact); platelets, FFP, and cryo per the lab's validated return criteria. Returns that do not meet criteria are quarantined and discarded per the Component Disposal procedure.",
+    "Release of components to external organizations follows a written sharing agreement, an emergency request from a recognized facility, or an FDA recall/look-back response; component traceability is maintained end-to-end and the medical director or designee is notified of any emergency external release within 5 business days.",
+    "Blood bank reagents meet manufacturer reactivity criteria; reactivity QC is performed each day of use per 42 CFR 493.1273(a) (reagent red cells confirmed reactive; antisera confirmed reactive with known antigen-positive reference cells; antiglobulin reagent confirmed reactive with IgG-sensitized reference cells; negative controls confirmed non-reactive). New reagent lots are parallel-tested against the prior lot and against patient samples covering the expected range of reactivity; acceptance is documented before placing the new lot into service.",
+    "Plasma components are processed (thawed, pooled, divided) per validated procedures. Thawing is performed in a validated plasma thawer (water bath or dry heat) per the manufacturer's instructions; thaw time and temperature are documented. ABO compatibility for plasma issue: AB plasma is universal; A plasma is compatible with A and O recipients; B plasma is compatible with B and O recipients; O plasma is compatible only with O recipients.",
+    "Irradiated cellular blood components are issued to patients at risk of Transfusion-Associated Graft-Versus-Host Disease (TA-GVHD), including: intrauterine and neonatal transfusion, HLA-matched units, units from biologic relatives, hematologic malignancy, hematopoietic stem cell transplant recipients, congenital immunodeficiency, and other indications per the medical director or designee's approved list.",
+    "Leukoreduced cellular components are issued to patients at risk of CMV transmission, febrile non-hemolytic transfusion reactions, HLA-alloimmunization, or per the medical director or designee's approved indication list. Pre-storage leukoreduction is the standard when supplier-supported; the supplier's certificate of leukoreduction or unit labeling indicating leukoreduced status is verified at receipt and at issue.",
+    "Records of inventory, storage temperature, alarm events, reagent QC, component processing, and component disposition are retained per 42 CFR 493.1105(a)(7) and 21 CFR 606.160."
+  ],
+  "procedure_steps": [
+    "On supplier receipt, verify supplier paperwork against physical units (count, ABO/Rh, expiration); log unit ID, ABO/Rh, expiration, supplier, and receipt temperature; place in validated storage immediately at the FEFO position.",
+    "Daily, transfusion service staff reconcile physical count against the LIS or paper inventory; investigate any discrepancy and document resolution. Units nearing expiration are flagged for use-first or quarantined for disposal if unsuitable.",
+    "Daily, verify refrigerator, freezer, and platelet incubator temperatures against the lab's acceptance range; any out-of-range reading triggers immediate investigation.",
+    "On storage alarm: respond immediately 24/7; verify the temperature on the local display and centralized monitoring; identify the cause (door open, power loss, equipment failure); triage stored components (continue use if storage remained in range; quarantine if exposed to out-of-range temperature beyond validated tolerance); notify the medical director or designee for any quarantine or discard event; document on the Storage Alarm Response log with timestamp, cause, response actions, components affected, and disposition.",
+    "Monthly, the medical director or designee reviews the Storage Alarm Response log to identify trends and prompt equipment replacement or process change.",
+    "On component issue, pack per the component's transport requirements (red cells in validated cooler with monitored temperature; platelets without agitation interruption beyond validated time; FFP frozen); document issue time, courier, and destination.",
+    "On component return, confirm transport conditions (cooler temperature in range, component appearance intact, time-since-issue within validated return window); accept or quarantine per the criteria; document.",
+    "Each day of use, perform reactivity QC per 42 CFR 493.1273(a) before patient testing begins; document results with reagent lot, control material lot, and accept/reject decision; failed QC pauses patient testing on the affected reagent.",
+    "On new reagent lot introduction, perform parallel testing against the prior lot using reference cells and patient samples; document acceptance before placing in service.",
+    "For external release, verify the written agreement is current, obtain medical director or designee authorization for non-routine releases, document component release with recipient organization, unit ID, and expected use; obtain receipt acknowledgment; the medical director or designee reviews emergency releases within 5 business days.",
+    "For plasma processing, thaw in the validated thawer per manufacturer instructions; document thaw time and temperature; verify ABO compatibility (AB universal; A to A and O; B to B and O; O to O only) before issue; apply new expiration time and label per 21 CFR 606.122.",
+    "For irradiation, check the patient's irradiation indication at order receipt; select only irradiated units; verify irradiation evidence (indicator label, supplier documentation); document irradiation status in the transfusion record; flag the patient in the LIS for ongoing future transfusions.",
+    "For leukoreduction, confirm the patient indication; verify leukoreduced status on selected units (supplier documentation or unit label); document leukoreduction status in the transfusion record.",
+    "Periodically reconcile inventory against records; investigate any discrepancy; document resolution. Disposal is logged with unit number, reason, disposal route, and staff member."
+  ],
+  "definitions": [
+    [
+      "Component traceability",
+      "The end-to-end record of a blood component from donor collection through final disposition, including every custody transfer."
+    ],
+    [
+      "FEFO",
+      "First Expiry First Out. Rotation rule that issues the unit with the earliest expiration first, to minimize waste."
+    ],
+    [
+      "Chain of custody",
+      "Documented continuous tracking of a component from supplier to issue with no unaccounted-for time."
+    ],
+    [
+      "Validated cooler",
+      "A transport cooler whose temperature performance has been documented to maintain components within the required range for the validated duration."
+    ],
+    [
+      "Return window",
+      "The lab's defined maximum time during which a transported component may be returned to inventory and remain acceptable for issue."
+    ],
+    [
+      "Storage alarm",
+      "Audible and visual notification that a refrigerator, freezer, or platelet incubator is outside its set acceptance range."
+    ],
+    [
+      "Quarantine",
+      "Hold status placed on a component pending medical director or designee disposition decision after a storage excursion or other deviation."
+    ],
+    [
+      "Reactivity QC",
+      "Daily-of-use quality control on blood bank reagents confirming each reagent performs as expected with known reactive and non-reactive controls per 42 CFR 493.1273(a)."
+    ],
+    [
+      "Antiglobulin reagent (Coombs reagent)",
+      "Reagent containing antibodies to human immunoglobulin used to detect antibody bound to red cells. Polyspecific (anti-IgG plus anti-C3d) is the standard."
+    ],
+    [
+      "Thawed plasma",
+      "Plasma component thawed from frozen and stored at 1 to 6 degrees C for use within the lab's validated stability window."
+    ],
+    [
+      "TA-GVHD",
+      "Transfusion-Associated Graft-Versus-Host Disease; rare but typically fatal complication where donor lymphocytes engraft and attack the recipient. Prevented by irradiation of cellular components for at-risk recipients."
+    ],
+    [
+      "Leukoreduction",
+      "Reduction of white blood cells in a cellular blood component to below an FDA-defined threshold (less than 5 x 10^6 residual leukocytes per unit). Reduces febrile non-hemolytic reactions, HLA alloimmunization, and CMV transmission risk."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding. Such procedures shall be available to the personnel for use in the areas where the procedures are performed."
+    },
+    {
+      "citation": "42 CFR 493.1252(b)",
+      "label": "Standard: Storage conditions",
+      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
+    },
+    {
+      "citation": "21 CFR 606.122",
+      "label": "FDA: Instruction circular",
+      "verbatim": "An instruction circular shall be available for distribution if the product is intended for transfusion. The instruction circular shall provide adequate directions for use, including all information set forth below to the extent that it is applicable to the product."
+    },
+    {
+      "citation": "21 CFR 606.65(d)",
+      "label": "FDA: Supplies and reagents",
+      "verbatim": "Storage of blood and blood components shall be at a temperature that will provide for the maximum length of time during which the blood may be stored, with proper means for the recording and visual display of temperature."
+    },
+    {
+      "citation": "21 CFR 606.160(b)",
+      "label": "FDA: Records (retention)",
+      "verbatim": "Records shall be retained for such interval beyond the expiration date for the blood or blood component as necessary to facilitate the reporting of any unfavorable clinical reactions. You must retain individual product records no less than 10 years after the records of processing are completed or 6 months after the latest expiration date for the individual product, whichever is the later date."
+    },
+    {
+      "citation": "42 CFR 493.1273(a)",
+      "label": "Standard: Immunohematology (control procedures)",
+      "verbatim": "If the laboratory performs ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, or compatibility testing, the laboratory must, at a minimum, do the following: (1) Test reagent red cells to confirm reactivity. (2) Test antiserum (anti-A, anti-B, anti-A,B, anti-D) at the manufacturer's recommended concentration with reference red cells. (3) Test antiglobulin reagent (anti-IgG, polyspecific) for reactivity with IgG-sensitized red cells. (4) Test the negative control."
+    }
+  ]
+}

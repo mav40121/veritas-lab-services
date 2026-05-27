@@ -1,0 +1,31 @@
+{
+  "policy_id": "83",
+  "slug": "transplant_tissue_handling",
+  "policy_name": "Transplant Tissue Handling Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> receives, stores, and supports release of HCT/P tissue products. Required by 21 CFR 1271 (HCT/Ps), 21 CFR 1271.155-170 (donor eligibility), and 42 CFR 493.1232 (specimen integrity).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 1271.155(a)",
+      "label": "FDA: Donor screening (general)",
+      "verbatim": "You must screen a donor of cells or tissue by reviewing the donor's relevant medical records for risk factors for, and clinical evidence of, relevant communicable disease agents and diseases."
+    }
+  ],
+  "scope": "<<LAB_NAME>> personnel receiving, storing, or releasing transplant tissue products.",
+  "policy_statements": [
+    "Tissue products are received with complete donor eligibility documentation per 21 CFR 1271.155-170; products missing eligibility evidence are not accepted.",
+    "Storage follows the tissue product's specific requirements (temperature, container, light); storage is monitored continuously with alarmed devices.",
+    "Release to surgical use requires verified donor eligibility, intact packaging, valid expiration, and recipient/product identification matching the request.",
+    "Adverse events related to tissue products are reported to the supplier and to FDA per 21 CFR 1271.350 (HCT/P deviation reporting).",
+    "Records retained per 21 CFR 1271.270 (10 years past distribution) and 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "On receipt, verify donor eligibility documentation, packaging integrity, expiration, and storage history during transport.",
+    "Store per the product's requirements with alarmed monitoring.",
+    "On release, verify recipient/product match, eligibility, packaging, and expiration; document.",
+    "Report adverse events to the supplier and FDA per regulation; document."
+  ],
+  "definitions": [
+    ["HCT/P deviation", "Departure from manufacturing requirements, applicable regulations, or established specifications for HCT/P products. Reportable to FDA per 21 CFR 1271.350."]
+  ]
+}

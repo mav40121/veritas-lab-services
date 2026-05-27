@@ -1,0 +1,29 @@
+{
+  "policy_id": "57",
+  "slug": "leukoreduction",
+  "policy_name": "Leukoreduction Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> sources and verifies leukoreduced blood components. Required by 21 CFR 606.120, 21 CFR 606.121, and 21 CFR 610.40.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.122",
+      "label": "FDA: Instruction circular",
+      "verbatim": "An instruction circular shall be available for distribution if the product is intended for transfusion. The instruction circular shall provide adequate directions for use, including all information set forth below to the extent that it is applicable to the product."
+    }
+  ],
+  "scope": "<<LAB_NAME>> transfusion service personnel and the medical director or designee.",
+  "policy_statements": [
+    "Leukoreduced cellular components are issued to patients at risk of CMV transmission, febrile non-hemolytic transfusion reactions, HLA-alloimmunization, or per the medical director or designee's approved indication list.",
+    "Leukoreduction may be performed at the supplier (pre-storage filtration with documented compliance to FDA residual leukocyte criteria) or at the bedside via leukoreduction filter; pre-storage leukoreduction is the lab's standard when supplier-supported.",
+    "The supplier's certificate of leukoreduction (or unit labeling indicating leukoreduced status) is verified at receipt and at issue.",
+    "Records of leukoreduction status are retained per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "On order receipt, transfusion service confirms whether the patient indication requires leukoreduction.",
+    "Selected units are verified for leukoreduced status (supplier documentation or unit label).",
+    "Issue and bedside check confirm leukoreduction status."
+  ],
+  "definitions": [
+    ["Leukoreduction", "Reduction of white blood cells in a cellular blood component to below an FDA-defined threshold (<5x10^6 per unit for red cells). Reduces risk of CMV transmission, febrile reactions, and HLA-alloimmunization."]
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "policy_id": "74",
+  "slug": "mohs_frozen_section",
+  "policy_name": "Mohs Surgery Frozen Section Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> performs frozen-section processing in support of Mohs micrographic surgery. Required by 42 CFR 493.1232 (specimen integrity) and 42 CFR 493.1291 (test report).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    }
+  ],
+  "scope": "<<LAB_NAME>> histology personnel supporting Mohs surgery and the Mohs surgeon.",
+  "policy_statements": [
+    "Mohs specimens arrive labeled with the patient identifier, anatomic location, stage (Mohs map number), and orientation marks placed by the Mohs surgeon.",
+    "Histology processes the specimen: embedding to maintain orientation, frozen sectioning, staining, and slide return to the Mohs surgeon for interpretation.",
+    "Turnaround time from receipt to slide-ready is tracked as a quality indicator; the lab's target is set by agreement with the Mohs surgeon.",
+    "Slides and tissue are retained per the agreed retention with the Mohs practice (typically slides 10 years per 42 CFR 493.1105(a)(7); paraffin blocks 2 years; wet tissue per practice protocol).",
+    "Any specimen handling error (orientation lost, specimen damaged, mismatched ID) is reported to the Mohs surgeon immediately."
+  ],
+  "procedure_steps": [
+    "Receive specimen with surgeon-provided map and orientation marks; verify identity.",
+    "Embed maintaining orientation; section per the lab's Mohs procedure (en face en bloc embedding is common).",
+    "Stain and return slide to surgeon for interpretation.",
+    "Track and document turnaround; address any handling errors immediately."
+  ],
+  "definitions": [
+    ["Mohs micrographic surgery", "Skin cancer surgery technique using staged excision with en face frozen section margin assessment between stages."],
+    ["Orientation marks", "Sutures or ink applied by the surgeon to mark anatomic orientation of the excised tissue; preserved by histology embedding."]
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "policy_id": "2",
+  "slug": "public_concern_reporting",
+  "policy_name": "Public Concern Reporting Policy",
+  "section": "Leadership",
+  "purpose": "This policy describes how members of the public, patients, and staff can report concerns about <<LAB_NAME>> directly to CMS or to other regulatory authorities. CLIA at 42 CFR 493.1773 protects the right of any individual to communicate with CMS without lab interference.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1773",
+      "label": "Standard: Inspection",
+      "verbatim": "A laboratory must permit CMS or a CMS agent to conduct an inspection to assess the laboratory's compliance with the requirements of this part. CMS or its agent is authorized to interview any laboratory employee, contractor, or other agent of the laboratory whose activities are subject to this part, and to inspect any laboratory record relevant to compliance with these requirements. A laboratory may not impede, obstruct, hinder, or interfere with any such inspection or interview."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, contractors, vendors, patients, and members of the public who interact with the laboratory.",
+  "policy_statements": [
+    "<<LAB_NAME>> posts in a visible public area, and on the patient-facing portion of its website, the contact information for CMS and the State Agency CLIA office where any individual may file a complaint about laboratory quality, patient safety, or regulatory non-compliance.",
+    "The lab does not require advance notification, internal escalation, or any management approval before a person contacts CMS or the State Agency. The right to contact CMS directly is absolute.",
+    "Any complaint received by the lab is logged on the Concern Report log, assigned to an independent reviewer (not the subject of the complaint), and resolved within 60 days. The complainant, if known and willing, receives a written summary of the outcome.",
+    "Retaliation against any person for reporting a concern to CMS, the State Agency, or any other regulatory authority is prohibited and is itself a reportable event."
+  ],
+  "procedure_steps": [
+    "The medical director or designee posts the CMS complaint contact information (CMS regional office address and phone number, and the State Agency CLIA office) on the public bulletin board in the lab waiting area and on the patient-facing website footer.",
+    "The posting is reviewed annually for accuracy and updated within 30 days of any change to CMS or State Agency contact information.",
+    "If a complaint is received internally first, the receiving staff member logs the complaint on the Concern Report log (date, complainant if known, nature, channel) and notifies the medical director or designee within one business day.",
+    "An independent reviewer who is not the subject of the complaint investigates, documents findings, and presents to the medical director or designee for corrective action.",
+    "A written summary of the outcome is sent to the complainant if they identified themselves and consented to follow-up, within 60 days of complaint receipt."
+  ],
+  "definitions": [
+    ["Public concern", "Any complaint or report about laboratory quality, patient safety, regulatory non-compliance, billing integrity, or ethics, raised by a patient, member of the public, vendor, or staff member."],
+    ["Independent reviewer", "A staff member who is not the subject of the complaint, does not report to the subject of the complaint, and has no conflict of interest in the matter."]
+  ]
+}

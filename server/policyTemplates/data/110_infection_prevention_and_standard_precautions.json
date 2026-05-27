@@ -1,0 +1,104 @@
+{
+  "policy_id": "110",
+  "slug": "infection_prevention_and_standard_precautions",
+  "policy_name": "Infection Prevention and Standard Precautions Policy",
+  "section": "Safety",
+  "purpose": "This policy describes <<LAB_NAME>>'s infection prevention program and the implementation of standard precautions with personal protective equipment (PPE). Required by 42 CFR 493.1101(c) (physical environment and safety) and 29 CFR 1910.1030 (OSHA Bloodborne Pathogens Standard, including Hepatitis B vaccination, PPE provision, exposure control, and post-exposure evaluation and follow-up).",
+  "scope": "All <<LAB_NAME>> laboratory personnel, the Safety Officer, and any non-laboratory staff entering the testing area.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written Exposure Control Plan and infection prevention program covering exposure determination, hand hygiene, PPE, sharps handling, biological spill response, Hepatitis B vaccination, and post-exposure evaluation and follow-up; the program is reviewed at least annually and updated whenever new tasks or procedures introduce new exposure risks.",
+    "Standard precautions are observed for every specimen and every patient interaction; PPE (gloves, lab coats, eye protection, masks as appropriate) is provided by the employer at no cost to the employee and worn whenever the task indicates exposure risk per OSHA 29 CFR 1910.1030(d)(3).",
+    "Eating, drinking, smoking, applying cosmetics or lip balm, handling contact lenses, and mouth pipetting are prohibited in the laboratory work area; food and drink are not stored in refrigerators, freezers, shelves, cabinets, or on counter-tops or bench-tops where blood or other potentially infectious materials are present.",
+    "Hand hygiene is performed before patient contact, before clean or aseptic procedures, after contact with specimens or contaminated surfaces, after removing PPE, and on entering and leaving the laboratory.",
+    "Hepatitis B vaccination is offered at no cost to every staff member with occupational exposure within 10 working days of initial assignment, per 29 CFR 1910.1030(f); declination is documented in writing using the OSHA-mandated declination form and the staff member retains the right to accept the vaccination later at no cost.",
+    "Sharps handling uses safer-engineered sharps wherever feasible; sharps are not bent, recapped, or removed by hand; sharps containers are puncture-resistant, leak-proof, color-coded or labeled, and replaced when the fill line is reached; the Sharps Injury Log is maintained per 29 CFR 1910.1030(h)(5).",
+    "Biological spills are managed per the documented spill response procedure: contain, absorb, disinfect with an EPA-registered tuberculocidal disinfectant per the manufacturer's contact time, dispose as biohazard waste, document on the Spill log; spill kits are stocked and inventoried in every testing area.",
+    "Reusable lab coats and other contaminated garments are sent to a laundry that handles bloodborne-pathogen-contaminated items per the lab's laundry contract; contaminated garments are NOT taken home by staff for laundering.",
+    "On any exposure incident (needlestick, splash to mucous membrane or non-intact skin, contamination), the staff member follows the post-exposure procedure immediately, the source patient is identified and tested per OSHA 29 CFR 1910.1030(f)(3) wherever the source is identifiable and consent is obtained, and the exposed staff member is offered the post-exposure medical evaluation at no cost.",
+    "Exposure incident records and post-exposure evaluation records are maintained for the duration of employment plus 30 years per 29 CFR 1910.1020; the Sharps Injury Log entries are retained for at least 5 years per 29 CFR 1910.1030(h)(5)(iii)."
+  ],
+  "procedure_steps": [
+    "At hire and annually, every staff member with occupational exposure completes OSHA-required Bloodborne Pathogens training covering the Exposure Control Plan, PPE selection and use, engineering and work-practice controls, the Hepatitis B vaccination offer, and exposure reporting; completion is documented in the personnel record.",
+    "Within 10 working days of initial assignment to a position with occupational exposure, the employer offers Hepatitis B vaccination at no cost; the staff member either accepts (vaccination series is initiated and documented) or signs the OSHA declination form (filed in the personnel record).",
+    "Before any specimen handling task, the staff member selects PPE appropriate to the task: gloves and lab coat as baseline; face shield or eye protection if splash potential; respirator (N95 or higher) if respiratory pathogen handling is indicated by the lab's risk assessment.",
+    "PPE is donned per the standard donning sequence (gown, mask or respirator, eye protection, gloves) and doffed per the standard doffing sequence (gloves, gown, eye protection, mask or respirator) with hand hygiene performed before donning and immediately after doffing.",
+    "PPE inventory is maintained at point-of-use; checked at the documented cadence (typically weekly); replenished within one business day of any depletion; substitutions or shortages reported to the Safety Officer.",
+    "On any exposure event: the staff member renders first aid (wash with soap and water for skin exposures; flush mucous membranes with water or saline), notifies the supervisor and the Safety Officer immediately, and is sent to the occupational health provider for post-exposure medical evaluation; the source patient (where identifiable) is identified and the lab requests source-patient testing per OSHA and the lab's procedure; results and PEP recommendations are documented on the Exposure Incident log.",
+    "Maintain the Sharps Injury Log with date, type and brand of device, work area where the injury occurred, and an explanation of the circumstances; review at the documented cadence (typically quarterly) to identify trends and corrective actions.",
+    "Spill response: trained staff don PPE, contain the spill, cover with absorbent material, apply an EPA-registered tuberculocidal disinfectant for the manufacturer's full contact time, dispose of contaminated absorbent and sharps as biohazard waste, document the event on the Spill log; the Spill Kit is restocked.",
+    "Audit infection-prevention practices on the documented cadence (typically quarterly walk-rounds covering PPE use, hand hygiene, food/drink ban, sharps disposal, spill-kit availability, and reusable-garment laundering); document findings and corrective actions.",
+    "Annual review and update of the Exposure Control Plan and infection prevention program by the medical director or designee and the Safety Officer; both sign and date the reviewed plan; the plan is updated whenever a new task or procedure introduces new exposure risk."
+  ],
+  "definitions": [
+    [
+      "Standard precautions",
+      "Infection prevention practices applied to every patient and every specimen regardless of suspected or confirmed infection status."
+    ],
+    [
+      "Exposure Control Plan",
+      "The OSHA-required written plan describing how the laboratory eliminates or minimizes employee exposure to bloodborne pathogens, including the exposure determination, engineering controls, work practice controls, PPE, Hepatitis B vaccination, communication of hazards, recordkeeping, and post-exposure evaluation and follow-up. Required by 29 CFR 1910.1030(c)(1)."
+    ],
+    [
+      "Exposure incident",
+      "A specific eye, mouth, other mucous membrane, non-intact skin, or parenteral contact with blood or other potentially infectious materials resulting from the performance of an employee's duties. Triggers the post-exposure evaluation and follow-up procedure per 29 CFR 1910.1030(f)(3)."
+    ],
+    [
+      "Personal Protective Equipment (PPE)",
+      "Specialized clothing or equipment worn by an employee for protection against infectious materials. Includes gloves, gowns, lab coats, face shields, masks, eye protection, and respirators. Provided by the employer at no cost per 29 CFR 1910.1030(d)(3)."
+    ],
+    [
+      "Spill Kit",
+      "Pre-assembled set of materials for cleaning up blood or body-fluid spills: absorbent material, EPA-registered tuberculocidal disinfectant, biohazard bags, PPE, and a scoop or forceps for picking up broken glass or other sharps."
+    ],
+    [
+      "Hepatitis B vaccination",
+      "Series of vaccinations against the Hepatitis B virus. Offered at no cost by the employer to every employee with occupational exposure within 10 working days of initial assignment per 29 CFR 1910.1030(f); declination is documented in writing on the OSHA-mandated form."
+    ],
+    [
+      "Sharps Injury Log",
+      "OSHA-required log recording each sharps injury: date, type and brand of device involved, work area where the injury occurred, and circumstances. Maintained per 29 CFR 1910.1030(h)(5) and retained at least 5 years."
+    ]
+  ],
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1101(c)",
+      "label": "Standard: Facilities (safety from biological hazards)",
+      "verbatim": "The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+    },
+    {
+      "citation": "29 CFR 1910.1030(c)",
+      "label": "OSHA: Exposure Control Plan",
+      "verbatim": "Each employer having an employee(s) with occupational exposure as defined by paragraph (b) of this section shall establish a written Exposure Control Plan designed to eliminate or minimize employee exposure. The Exposure Control Plan shall contain at least the following elements: (i) The exposure determination required by paragraph (c)(2), (ii) The schedule and method of implementation for paragraphs (d) Methods of Compliance, (e) HIV and HBV Research Laboratories and Production Facilities, (f) Hepatitis B Vaccination and Post-Exposure Evaluation and Follow-up, (g) Communication of Hazards to Employees, and (h) Recordkeeping, of this standard, and (iii) The procedure for the evaluation of circumstances surrounding exposure incidents as required by paragraph (f)(3)(i)."
+    },
+    {
+      "citation": "29 CFR 1910.1030(d)(3)",
+      "label": "OSHA: Personal Protective Equipment",
+      "verbatim": "When there is occupational exposure, the employer shall provide, at no cost to the employee, appropriate personal protective equipment such as, but not limited to, gloves, gowns, laboratory coats, face shields or masks and eye protection, and mouthpieces, resuscitation bags, pocket masks, or other ventilation devices. Personal protective equipment will be considered 'appropriate' only if it does not permit blood or other potentially infectious materials to pass through to or reach the employee's work clothes, street clothes, undergarments, skin, eyes, mouth, or other mucous membranes under normal conditions of use and for the duration of time which the protective equipment will be used."
+    },
+    {
+      "citation": "29 CFR 1910.1030(d)(2)(ix)",
+      "label": "OSHA: Eating, drinking, and personal habits prohibited in work areas",
+      "verbatim": "Eating, drinking, smoking, applying cosmetics or lip balm, and handling contact lenses are prohibited in work areas where there is a reasonable likelihood of occupational exposure."
+    },
+    {
+      "citation": "29 CFR 1910.1030(f)(1)",
+      "label": "OSHA: Hepatitis B vaccination",
+      "verbatim": "The employer shall make available the hepatitis B vaccine and vaccination series to all employees who have occupational exposure, and post-exposure evaluation and follow-up to all employees who have had an exposure incident. The employer shall ensure that all medical evaluations and procedures including the hepatitis B vaccine and vaccination series and post-exposure evaluation and follow-up, including prophylaxis, are: (i) Made available at no cost to the employee; (ii) Made available to the employee at a reasonable time and place; (iii) Performed by or under the supervision of a licensed physician or by or under the supervision of another licensed healthcare professional; and (iv) Provided according to recommendations of the U.S. Public Health Service current at the time these evaluations and procedures take place."
+    },
+    {
+      "citation": "29 CFR 1910.1030(f)(2)",
+      "label": "OSHA: Hepatitis B vaccination offered within 10 working days",
+      "verbatim": "Hepatitis B vaccination shall be made available after the employee has received the training required in paragraph (g)(2)(vii)(I) and within 10 working days of initial assignment to all employees who have occupational exposure unless the employee has previously received the complete hepatitis B vaccination series, antibody testing has revealed that the employee is immune, or the vaccine is contraindicated for medical reasons."
+    },
+    {
+      "citation": "29 CFR 1910.1030(f)(3)",
+      "label": "OSHA: Post-exposure evaluation and follow-up",
+      "verbatim": "Following a report of an exposure incident, the employer shall make immediately available to the exposed employee a confidential medical evaluation and follow-up, including at least the following elements: (i) Documentation of the route(s) of exposure, and the circumstances under which the exposure incident occurred; (ii) Identification and documentation of the source individual, unless the employer can establish that identification is infeasible or prohibited by state or local law; (iii) Collection and testing of blood for HBV and HIV serological status; (iv) Post-exposure prophylaxis, when medically indicated, as recommended by the U.S. Public Health Service; (v) Counseling; and (vi) Evaluation of reported illnesses."
+    },
+    {
+      "citation": "29 CFR 1910.1030(h)(5)",
+      "label": "OSHA: Sharps Injury Log",
+      "verbatim": "The employer shall establish and maintain a sharps injury log for the recording of percutaneous injuries from contaminated sharps. The information in the sharps injury log shall be recorded and maintained in such manner as to protect the confidentiality of the injured employee. The sharps injury log shall contain, at a minimum: (i) The type and brand of device involved in the incident, (ii) The department or work area where the exposure incident occurred, and (iii) An explanation of how the incident occurred."
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "policy_id": "54",
+  "slug": "rhig_administration",
+  "policy_name": "Rh Immune Globulin (RhIG) Administration Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> identifies patients requiring Rh Immune Globulin (RhIG), performs fetomaternal hemorrhage screening when applicable, calculates RhIG dose, and issues RhIG. CLIA at 42 CFR 493.1271 governs immunohematology testing; 21 CFR 606.100 governs SOPs for components including RhIG.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1271(a)",
+      "label": "Standard: Immunohematology",
+      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+    },
+    {
+      "citation": "21 CFR 606.100(b)",
+      "label": "FDA: Standard operating procedures",
+      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel handling RhIG, ordering clinicians (typically obstetric providers and trauma teams), and the medical director or designee.",
+  "policy_statements": [
+    "RhIG is offered to every D-negative woman who is pregnant or postpartum with a D-positive infant, who has had a pregnancy loss or termination, or who has experienced a fetomaternal-hemorrhage event. The indication is determined by the ordering clinician based on patient circumstances.",
+    "Standard antepartum dose is one vial (300 mcg) administered at approximately 28 weeks gestation; the postpartum dose is one vial within 72 hours of delivery of a D-positive infant.",
+    "Fetomaternal hemorrhage (FMH) screening (rosette test or equivalent) is performed on the postpartum maternal sample of every D-negative woman delivering a D-positive infant; positive screens trigger quantitative testing (Kleihauer-Betke or flow cytometry) and dose adjustment.",
+    "RhIG dose calculation for FMH greater than 30 mL fetal whole blood: one additional vial per 30 mL fetal whole blood (or equivalent calculation per the manufacturer's instructions); the calculation is documented and verified by a second technologist or the medical director or designee.",
+    "Every RhIG issue is documented in the transfusion service record with: patient identifier, indication, dose (vial count, lot, expiration), date/time of issue, ordering clinician, technologist, and (where applicable) FMH screen result and calculation.",
+    "RhIG storage follows the manufacturer's instructions; expired RhIG is removed from inventory and not issued.",
+    "Records are retained for at least 10 years per 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "On order receipt, the transfusion service confirms the indication and the patient's D-negative status (current type on file or new type).",
+    "For postpartum issue to a D-negative mother of a D-positive infant: perform rosette test (or equivalent FMH screen) on the maternal sample; if negative, issue one standard vial; if positive, perform quantitative FMH and calculate dose.",
+    "Dose calculation is verified by a second technologist or the medical director or designee and documented.",
+    "Pull the calculated number of vials from inventory; verify lot, expiration, and integrity; document.",
+    "Issue to the patient location with full documentation; the ordering clinician administers and documents the administration in the patient chart.",
+    "File the transfusion service record with the 10-year retention flag."
+  ],
+  "definitions": [
+    ["RhIG (Rh Immune Globulin)", "Concentrated anti-D antibody preparation administered to D-negative individuals to prevent anti-D alloimmunization following exposure to D-positive red cells."],
+    ["Fetomaternal hemorrhage (FMH)", "Transfer of fetal red cells into the maternal circulation, typically at delivery. May exceed the volume covered by a standard RhIG dose, requiring quantitative measurement and dose adjustment."],
+    ["Rosette test", "Qualitative screening test for fetomaternal hemorrhage. Negative result confirms FMH is below the threshold covered by one standard vial of RhIG; positive triggers quantitative testing."]
+  ]
+}

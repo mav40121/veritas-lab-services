@@ -1,0 +1,29 @@
+{
+  "policy_id": "48",
+  "slug": "blood_bank_reagent_reactivity",
+  "policy_name": "Reagent Reactivity Testing Policy (Blood Bank)",
+  "section": "Specialty Services",
+  "purpose": "This policy describes the daily reactivity testing of blood bank reagents required by 42 CFR 493.1273. Distinct from the Blood Bank Reagent Criteria policy in that this policy operationalizes the QC routine.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1273(a)",
+      "label": "Standard: Immunohematology QC",
+      "verbatim": "If the laboratory performs ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, or compatibility testing, the laboratory must, at a minimum, do the following: (1) Test reagent red cells to confirm reactivity. (2) Test antiserum (anti-A, anti-B, anti-A,B, anti-D) at the manufacturer's recommended concentration with reference red cells. (3) Test antiglobulin reagent (anti-IgG, polyspecific) for reactivity with IgG-sensitized red cells. (4) Test the negative control."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel performing immunohematology testing.",
+  "policy_statements": [
+    "Each day of patient immunohematology testing, the technologist performs reactivity QC on every in-use reagent per 42 CFR 493.1273(a) before patient testing begins.",
+    "QC results (positive controls reactive, negative controls non-reactive) are documented on the daily QC log with date, technologist, reagent lot, control material lot, and accept/reject decision.",
+    "Failed QC pauses patient testing on the affected reagent until the issue is resolved (reagent replaced, new lot opened, instrument issue corrected); the resolution is documented.",
+    "QC review by the technical supervisor or designee occurs weekly; the medical director or designee performs the monthly review per the Quality Control Plan policy."
+  ],
+  "procedure_steps": [
+    "At the start of each shift performing immunohematology testing, the technologist runs the required QC: reagent red cells with positive and negative antisera, antisera with known antigen-positive and antigen-negative reference cells, antiglobulin reagent with IgG-sensitized control cells.",
+    "Each QC result is recorded; failed QC triggers immediate investigation and resolution before patient testing.",
+    "Daily QC log is filed; weekly and monthly reviews are documented and signed."
+  ],
+  "definitions": [
+    ["Daily QC", "The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a)."]
+  ]
+}

@@ -95,6 +95,15 @@ buildAll()
     } catch (e) {
       console.warn("Could not copy server/data:", e);
     }
+    // Copy VeritaPolicy JSON templates into dist/ so the DOCX generator can
+    // find them in production. See server/veritapolicyDocx.ts cascade.
+    try {
+      await mkdir("dist/policyTemplates/data", { recursive: true });
+      await cp("server/policyTemplates/data", "dist/policyTemplates/data", { recursive: true });
+      console.log("Copied server/policyTemplates/data -> dist/policyTemplates/data");
+    } catch (e) {
+      console.warn("Could not copy server/policyTemplates/data:", e);
+    }
   })
   .catch((err) => {
     console.error(err);

@@ -1,0 +1,34 @@
+{
+  "policy_id": "65",
+  "slug": "therapeutic_apheresis",
+  "policy_name": "Therapeutic Apheresis Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> performs therapeutic apheresis (plasma exchange, red cell exchange, leukapheresis for therapy, photopheresis). Required by 21 CFR 606.100, 21 CFR 640.20 (apheresis source plasma), and 21 CFR 606.110 (physician supervision).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.110(a)",
+      "label": "FDA: Apheresis physician supervision",
+      "verbatim": "The plateletpheresis, leukapheresis, and plasmapheresis procedures shall be conducted under the supervision of a qualified, licensed physician knowledgeable in the medical procedures and informed of the medical status of the donor, and shall be responsible for any reactions encountered with the procedures."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> performs therapeutic apheresis. Apheresis personnel, supervising physician, and the medical director or designee.",
+  "policy_statements": [
+    "Therapeutic apheresis is performed under physician supervision per 21 CFR 606.110.",
+    "Indication, prescribed regimen (number of procedures, volume, replacement fluid), and informed consent are documented before each procedure.",
+    "Patient is monitored throughout the procedure; vitals, machine alarms, and any adverse reactions are documented; adverse reactions trigger physician notification and intervention.",
+    "Post-procedure care includes return of cellular components (where applicable), monitoring for delayed reactions, and discharge criteria.",
+    "Procedure records, monitoring logs, and adverse events are retained per 21 CFR 606.160 and 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "Verify the physician order, patient identity, indication, and prescribed regimen.",
+    "Verify consent is signed.",
+    "Set up the apheresis machine per the manufacturer's procedure for the indication; verify replacement fluid identity and integrity.",
+    "Perform the procedure with continuous patient monitoring; document vitals on the procedure cadence.",
+    "Address alarms and adverse reactions per the lab's procedure; notify the supervising physician.",
+    "Complete post-procedure care and discharge per the protocol.",
+    "File procedure record with the 10-year retention flag."
+  ],
+  "definitions": [
+    ["Therapeutic apheresis", "Apheresis procedure performed for medical treatment of the patient, not for component collection. Examples: plasma exchange for TTP, red cell exchange for sickle cell crisis, photopheresis for cutaneous T-cell lymphoma."]
+  ]
+}

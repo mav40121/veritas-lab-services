@@ -1,0 +1,41 @@
+{
+  "policy_id": "28",
+  "slug": "lis_validation_verification",
+  "policy_name": "LIS Validation and Verification Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> validates new laboratory information system (LIS) installations and verifies interfaces between the LIS, instruments, and downstream systems (EHR, billing, reference labs). CLIA at 42 CFR 493.1281(c) requires verification that test result transmission is accurate; 42 CFR 493.1253 requires verification of performance specifications, which extends to the data path from instrument to final report.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1281(c)",
+      "label": "Standard: Comparison of test results",
+      "verbatim": "If a laboratory performs the same test using different methodologies or instruments, or performs the same test at multiple testing sites, the laboratory must have a system that twice a year evaluates and defines the relationship between test results using the different methodologies, instruments, or testing sites."
+    },
+    {
+      "citation": "42 CFR 493.1291(a)",
+      "label": "Standard: Test report",
+      "verbatim": "The laboratory must have an adequate manual or electronic system(s) in place to ensure test results and other patient-specific data are accurately and reliably sent from the point of data entry (whether interfaced or entered manually) to final report destination, in a timely manner."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> IT staff, the medical director or designee, and the testing supervisors for affected specialties. Applies to LIS go-live, interface changes, instrument additions or replacements, and EHR upgrades affecting result delivery.",
+  "policy_statements": [
+    "Before any LIS, interface, instrument, or downstream system change goes live, the affected data path is validated end-to-end with documented test cases covering: normal results, abnormal results, critical results, text results, numeric results, units of measure, reference intervals, and result flags.",
+    "Validation test cases use a test patient (not a real patient); the data path is exercised from data entry or instrument output through the LIS to the final destination (EHR, paper report, fax, secure messaging).",
+    "Validation results are documented on the LIS Validation form: test case, expected result, actual result, pass/fail, evidence (screenshots or printouts), corrective action if failed.",
+    "The medical director or designee signs the completed validation before the change goes live; the signed package is filed.",
+    "Twice yearly, the lab evaluates the relationship between results from different methodologies or instruments for the same analyte per 42 CFR 493.1281(c); the comparison is documented.",
+    "On any post-go-live anomaly (result discrepancy, missing result, unit-of-measure error), an incident is opened, root cause is identified, and the validation is repeated for the affected path before the change is considered closed."
+  ],
+  "procedure_steps": [
+    "Before the change is scheduled, the project owner (IT or a testing supervisor) and the medical director or designee define the validation plan: which paths, which test cases, acceptance criteria.",
+    "On the validation date, the test cases are exercised on the change-target system; results are captured with screenshots or printouts; pass/fail is recorded.",
+    "Any failed test case triggers correction and re-test; the change does not go live until all critical test cases pass.",
+    "The completed validation form, evidence, and the medical director or designee signature are filed in the IT change-management binder.",
+    "After go-live, the affected interfaces are monitored for the first business week; any anomaly is investigated.",
+    "Semi-annually, instrument-to-instrument and method-to-method comparisons are performed for analytes with multiple sources of result per 42 CFR 493.1281(c); the comparison is documented."
+  ],
+  "definitions": [
+    ["LIS validation", "Documented confirmation that a laboratory information system or interface change correctly handles every required data type, value, and edge case before being placed into patient use."],
+    ["End-to-end test", "Verification that a data element entered or generated at the source arrives at the final destination unchanged in value, units, or interpretation."],
+    ["Method comparison", "The semi-annual evaluation per 42 CFR 493.1281(c) of result relationships when the same analyte is performed by different methods, instruments, or sites within the lab."]
+  ]
+}

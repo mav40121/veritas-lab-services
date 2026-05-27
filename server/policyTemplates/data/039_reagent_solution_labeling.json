@@ -1,0 +1,30 @@
+{
+  "policy_id": "39",
+  "slug": "reagent_solution_labeling",
+  "policy_name": "Reagent and Solution Labeling Policy",
+  "section": "Testing",
+  "purpose": "This policy describes how <<LAB_NAME>> labels reagents, solutions, control materials, calibrators, and lab-prepared materials. Required by 42 CFR 493.1252(c).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1252(c)",
+      "label": "Standard: Reagent labeling",
+      "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies, as appropriate, must be labeled to indicate the following: (1) Identity and, when significant, titer, strength or concentration. (2) Storage requirements. (3) Preparation and expiration dates. (4) Other pertinent information required for proper use."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel handling reagents, solutions, calibrators, controls, or lab-prepared materials.",
+  "policy_statements": [
+    "Every container of reagent, solution, control, calibrator, or lab-prepared material is labeled at the time of receipt or preparation with: identity (and titer, strength, or concentration when significant), storage requirements, preparation or open-date, expiration date, and the staff member's initials.",
+    "Containers transferred from bulk to working volume retain the original lot identification on the working container; the working container's open-date and expiration date follow the manufacturer's instructions for opened material.",
+    "Lab-prepared materials (working dilutions, custom buffers, stains) include the preparer's initials, the preparation date, the lot or batch identifier, and the expiration date based on the lab's validated stability data or the most-conservative manufacturer guidance.",
+    "Unlabeled or insufficiently labeled materials are removed from service and discarded; the disposal is logged.",
+    "Labels are verified during reagent receipt, before each use, and at monthly inventory review."
+  ],
+  "procedure_steps": [
+    "At receipt or preparation, the staff member applies the label with all required elements per 42 CFR 493.1252(c).",
+    "Before each use, the staff member confirms the label is complete and legible; missing or illegible labels trigger removal from service.",
+    "Monthly inventory review confirms labeling completeness across in-use materials; any deficiency triggers immediate correction."
+  ],
+  "definitions": [
+    ["Lab-prepared material", "Any reagent, solution, calibrator, or control material prepared in the lab from purchased components. Subject to the same labeling requirements as purchased material."]
+  ]
+}

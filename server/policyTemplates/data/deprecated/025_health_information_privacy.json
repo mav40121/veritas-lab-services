@@ -1,0 +1,48 @@
+{
+  "policy_id": "25",
+  "slug": "health_information_privacy",
+  "policy_name": "Health Information Privacy Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> protects patient health information (PHI) in all formats: paper, electronic, verbal, and visual. CLIA at 42 CFR 493.1231 requires confidentiality of patient information; 45 CFR Part 164 (HIPAA Privacy and Security Rules) imposes federal privacy and security obligations on protected health information.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1231",
+      "label": "Standard: Confidentiality of patient information",
+      "verbatim": "The laboratory must ensure confidentiality of patient information throughout all phases of the testing process that are under the laboratory's control."
+    },
+    {
+      "citation": "45 CFR 164.502(a)",
+      "label": "HIPAA Privacy Rule: Uses and disclosures",
+      "verbatim": "A covered entity or business associate may not use or disclose protected health information, except as permitted or required by this subpart or by subpart C of part 160 of this subchapter."
+    },
+    {
+      "citation": "45 CFR 164.502(b)",
+      "label": "HIPAA: Minimum necessary",
+      "verbatim": "When using or disclosing protected health information or when requesting protected health information from another covered entity or business associate, a covered entity or business associate must make reasonable efforts to limit protected health information to the minimum necessary to accomplish the intended purpose of the use, disclosure, or request."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, contractors, and business associates who access, use, or disclose patient health information.",
+  "policy_statements": [
+    "Every staff member completes HIPAA Privacy and Security training at hire and annually thereafter; completion is documented in the personnel record.",
+    "PHI is used and disclosed only for permitted purposes (treatment, payment, health care operations, or other purposes permitted or required by 45 CFR Part 164).",
+    "The minimum-necessary standard applies to every internal use, external disclosure, and request: only the PHI needed for the purpose is accessed or shared.",
+    "Verbal discussions of PHI are conducted in private areas not within earshot of patients or visitors; computer screens displaying PHI face away from public areas; printed reports are not left unattended.",
+    "Patients have the right to access their own results per 45 CFR 164.524 and 42 CFR 493.1291(l); access requests are processed within 30 days.",
+    "Business associate agreements are in place with every vendor, courier, or contractor that creates, receives, maintains, or transmits PHI on the lab's behalf.",
+    "Privacy incidents (unauthorized access, lost paper records, misdirected reports, lost devices) are reported immediately to the privacy officer and documented in the Privacy Incident log; breach determination follows 45 CFR 164.402 and notifications follow 45 CFR 164.404."
+  ],
+  "procedure_steps": [
+    "At hire, every staff member completes HIPAA Privacy and Security training and signs the lab's Confidentiality Agreement; both are filed in the personnel record.",
+    "Annual HIPAA refresher training is delivered to all staff; completion is tracked.",
+    "When PHI is accessed, used, or disclosed, the staff member applies the minimum-necessary standard: only the data needed for the immediate purpose is accessed or shared.",
+    "Patient access requests are routed to the privacy officer; the patient's identity is verified; the requested PHI is provided within 30 days in the form requested where readily producible.",
+    "Privacy incidents are reported by any staff member who observes or causes one; the privacy officer logs the incident, performs breach risk assessment per 45 CFR 164.402, and notifies affected individuals, HHS, and (if 500+ individuals) media per 45 CFR 164.404 when notification is required.",
+    "Business associate agreements are reviewed annually and at vendor change; renewals or amendments are filed."
+  ],
+  "definitions": [
+    ["Protected Health Information (PHI)", "Individually identifiable health information held or transmitted by a covered entity or business associate in any form (paper, electronic, oral). Defined at 45 CFR 160.103."],
+    ["Minimum necessary", "The HIPAA standard requiring that PHI uses, disclosures, and requests be limited to the minimum amount needed to accomplish the intended purpose (45 CFR 164.502(b))."],
+    ["Business Associate Agreement (BAA)", "Written contract required by HIPAA between a covered entity and any vendor that handles PHI on the entity's behalf. Defines permitted uses, safeguards, and breach notification."],
+    ["Breach", "Acquisition, access, use, or disclosure of PHI in a manner not permitted by the HIPAA Privacy Rule that compromises the security or privacy of the PHI (45 CFR 164.402)."]
+  ]
+}

@@ -1,25 +1,3 @@
-// VeritaPolicy master list. 58 rows after Phase 3 consolidation (2026-05-26):
-//   - Original v6 polish landed 96 rows (1 row per source policy).
-//   - Phase 3 PR-A folded Cluster 1 (Transfusion, IDs 41-65) into 6 combined
-//     policies (IDs 97-102). 96 → 77 rows.
-//   - Phase 3 PR-B folded Cluster 2 (Personnel, IDs 17-21 + 91-94) into 3
-//     combined policies (IDs 103-105). 77 → 71 rows.
-//   - Phase 3 PR-C folded Clusters 3-8 (Waived/POCT, Molecular, Health Info
-//     Mgmt true-merge, Leadership Governance, Infection Prevention, HCT/P)
-//     into 6 combined policies (IDs 106-111). 71 → 58 rows.
-//   - Phase 3 PR-D: cosmetic fix to #36 ("Validation" → "Verification" per
-//     CLAUDE.md §3 labs-verify-manufacturers-validate rule) + this header.
-//
-// Each row carries CFR plus per-AO citation columns (TJC, CAP, COLA, AABB).
-// The /api/veritapolicy/master-list/excel route emits only the CFR column
-// plus the column matching the lab's accreditor selection.
-//
-// Source-policy IDs 1-96 that were absorbed (17-23, 25-32, 41-65, 75-77,
-// 82-88, 91-94) no longer appear in this list. Their per-lab status data
-// migrated forward at first boot of each cluster's PR via the Phase 3
-// migration blocks in server/db.ts. The original JSON template files live
-// in server/policyTemplates/data/deprecated/ for audit trail.
-
 export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
   {
     "policy_id": "1",
@@ -644,7 +622,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "Blood Bank / Transfusion",
     "service_line": "blood_bank",
     "description": "Specimen collection, ABO and Rh typing, antibody screen, and compatibility testing for every transfusion recipient. Includes two-identifier verification at draw, forward and reverse ABO grouping, weak D where applicable, and serologic or electronic crossmatch. Repeat ABO/Rh on a second specimen before the first non-O group-specific transfusion unless an electronic patient-identification system is in place.",
-    "cfr_citations": "42 CFR 493.1232; 42 CFR 493.1241; 42 CFR 493.1242; 42 CFR 493.1249; 42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.151; 21 CFR 606.120; 21 CFR 610.42; 21 CFR 640.5; 42 CFR 493.831; 42 CFR 493.857; 42 CFR 493.859; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.60; 21 CFR 606.65; 42 CFR 493.863",
+    "cfr_citations": "42 CFR 493.1232; 42 CFR 493.1241; 42 CFR 493.1242; 42 CFR 493.1249; 42 CFR 493.1271; 42 CFR 493.1273; 42 CFR 493.1103; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 606.151; 21 CFR 606.120; 21 CFR 610.42; 21 CFR 640.5; 42 CFR 493.831; 42 CFR 493.857; 42 CFR 493.859; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.60; 21 CFR 606.65; 42 CFR 493.863; 42 CFR 493.1256",
     "tjc_citations": "DC.01.01.01; QSA.05.07.01; QSA.05.09.01; QSA.05.09.03; QSA.05.23.01; QSA.05.01.01; QSA.05.08.01; QSA.05.04.01; QSA.05.04.03",
     "cap_citations": "GEN.40491; TRM.30550; TRM.30575; TRM.30850; GEN.40016-GEN.40115; IMM.40300; IMM.40440; IMM.41400; TRM.31400; TRM.40050; TRM.31234",
     "cola_citations": "APM 1; ORG 15; PRE 1-PRE 12; PT 1-PT 8; MA 1; QC 1; VER 1",
@@ -700,7 +678,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "Blood Bank / Transfusion",
     "service_line": "blood_bank",
     "description": "Donor operations across two distinct modes: (1) supplier agreements when components are purchased from a collection establishment, and (2) donor screening, collection, and therapeutic apheresis when the lab itself is the collection establishment. Donor eligibility per 21 CFR 630.10; collection per 21 CFR 606.110.",
-    "cfr_citations": "42 CFR 493.1242; 42 CFR 493.1271; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 630.10; 21 CFR 630.15; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.65; 21 CFR 606.120; 21 CFR 606.121; 21 CFR 606.122; 21 CFR 606.140; 21 CFR 606.165; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 610.40; 21 CFR 610.42; 21 CFR 630.20; 21 CFR 630.30; 21 CFR 640.2; 21 CFR 640.3; 21 CFR 640.4; 21 CFR 640.5; 21 CFR 640.10; 21 CFR 640.11; 21 CFR 640.34; 21 CFR 640.51; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.845; 42 CFR 493.857; 42 CFR 493.1103; 42 CFR 493.1105; 42 CFR 493.1267; 45 CFR 164.512; 21 CFR 640.20; 21 CFR 606.110",
+    "cfr_citations": "42 CFR 493.1242; 42 CFR 493.1271; 21 CFR 606.100; 21 CFR 606.160; 21 CFR 630.10; 21 CFR 630.15; 21 CFR 606.20; 21 CFR 606.40; 21 CFR 606.65; 21 CFR 606.120; 21 CFR 606.121; 21 CFR 606.122; 21 CFR 606.140; 21 CFR 606.165; 21 CFR 606.170; 21 CFR 606.171; 21 CFR 610.40; 21 CFR 610.42; 21 CFR 630.20; 21 CFR 630.30; 21 CFR 640.2; 21 CFR 640.3; 21 CFR 640.4; 21 CFR 640.5; 21 CFR 640.10; 21 CFR 640.11; 21 CFR 640.34; 21 CFR 640.51; 42 CFR 416.49; 42 CFR 482.27; 42 CFR 483.50; 42 CFR 493.845; 42 CFR 493.857; 42 CFR 493.1103; 42 CFR 493.1105; 42 CFR 493.1267; 45 CFR 164.512; 21 CFR 640.20; 21 CFR 606.110; 21 CFR 607.20; 21 CFR 630.40",
     "tjc_citations": "DC.01.01.01; QSA.05.04.01; QSA.05.04.03; QSA.05.09.01; QSA.05.23.01; QSA.05.01.01; QSA.05.12.01; QSA.05.17.01; QSA.05.24.01; QSA.05.24.03; EC.02.04.03; QSA.02.14.01; QSA.04.05.01",
     "cap_citations": "COM.30450; GEN.20375; GEN.40491-GEN.40507; IMM.40300; IMM.41400; TRM.31234; TRM.44991; TRM.47500; TRM.46138; TRM.47300; TRM.47400; TRM.47995; TRM.48020; GEN.43040; GEN.73200; GEN.73300; TRM.42213",
     "cola_citations": "APM 1; ORG 15; PRE 7-PRE 12; ORG 1; ORG 2; QC 1; VER 1",
@@ -714,7 +692,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "",
     "service_line": "all",
     "description": "Qualifications, credential verification, and CLIA-defined responsibilities for every personnel role: Laboratory Director, Technical Supervisor (high complexity), General Supervisor (moderate complexity), Technical Consultant where applicable, and Testing Personnel. Credentials are verified from primary source at hire and re-verified on the lab's defined cadence (typically at license renewal).",
-    "cfr_citations": "42 CFR 493.1363; 42 CFR 493.1487; 42 CFR 493.1441; 42 CFR 493.1443; 42 CFR 493.1445; 42 CFR 493.1407; 42 CFR 493.1357; 42 CFR 493.1351; 42 CFR 493.1232; 42 CFR 493.1291; 45 CFR 164.306; 45 CFR 164.308; 45 CFR 164.310; 45 CFR 164.312; 42 CFR 493.1447; 42 CFR 493.1449; 42 CFR 493.1451; 42 CFR 493.1453; 42 CFR 493.1459; 42 CFR 493.1461; 42 CFR 493.1463; 42 CFR 493.1421; 42 CFR 493.1423; 42 CFR 493.1425; 42 CFR 493.1467; 42 CFR 493.1469; 42 CFR 493.1471; 42 CFR 493.1489; 42 CFR 493.1235",
+    "cfr_citations": "42 CFR 493.1363; 42 CFR 493.1487; 42 CFR 493.1441; 42 CFR 493.1443; 42 CFR 493.1445; 42 CFR 493.1407; 42 CFR 493.1357; 42 CFR 493.1351; 42 CFR 493.1232; 42 CFR 493.1291; 45 CFR 164.306; 45 CFR 164.308; 45 CFR 164.310; 45 CFR 164.312; 42 CFR 493.1447; 42 CFR 493.1449; 42 CFR 493.1451; 42 CFR 493.1453; 42 CFR 493.1459; 42 CFR 493.1461; 42 CFR 493.1463; 42 CFR 493.1421; 42 CFR 493.1423; 42 CFR 493.1425; 42 CFR 493.1467; 42 CFR 493.1469; 42 CFR 493.1471; 42 CFR 493.1489; 42 CFR 493.1235; 42 CFR 493.1775",
     "tjc_citations": "HR.01.01.01; HR.01.02.03; HR.01.05.03; EC.02.01.01; LD.04.05.03; LD.04.05.05; LD.04.05.07; LD.04.05.09; DC.01.01.01; DC.01.03.01; DC.02.03.01; DC.02.03.03; QSA.08.01.01; QSA.08.02.01; QSA.08.03.01; QSA.08.07.01",
     "cap_citations": "COM.30980; GEN.54750; GEN.78250-GEN.78350; DRA.10100; DRA.10430; GEN.40509; GEN.40930; GEN.41303; DRA.10200; GEN.41304; GEN.48500; GEN.78250-GEN.78375",
     "cola_citations": "PER 1-PER 5; LDR 1-LDR 3; PER 2; PER 3; LDR 2; LDR 3; LIS 1; LIS 2; ORG 7; PER 1",
@@ -728,7 +706,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "",
     "service_line": "all",
     "description": "Orientation, continuing education, and competency assessment for testing personnel. Competency assessed against the six CLIA-required elements at 42 CFR 493.1235 on the Initial / 6-month / Annual cadence. Evaluator role enforced by complexity (Technical Supervisor for high; Technical Consultant for moderate). Laboratory Director or designee signs the final record.",
-    "cfr_citations": "42 CFR 493.1235; 21 CFR 606.20; 42 CFR 493.1405; 42 CFR 493.1423; 42 CFR 493.1487; 42 CFR 493.1421; 42 CFR 493.1425; 42 CFR 493.1467; 42 CFR 493.1469; 42 CFR 493.1471; 42 CFR 493.1489; 42 CFR 493.15; 42 CFR 493.35",
+    "cfr_citations": "42 CFR 493.1235; 21 CFR 606.20; 42 CFR 493.1405; 42 CFR 493.1423; 42 CFR 493.1487; 42 CFR 493.1421; 42 CFR 493.1425; 42 CFR 493.1467; 42 CFR 493.1469; 42 CFR 493.1471; 42 CFR 493.1489; 42 CFR 493.15; 42 CFR 493.35; 42 CFR 493.1413; 42 CFR 493.1451",
     "tjc_citations": "DC.01.01.01; QSA.05.18.01; QSA.09.01.01; QSA.09.03.01; QSA.09.03.03; HR.01.01.01; HR.01.02.03; HR.01.02.05; HR.01.05.03; QSA.08.01.01; QSA.08.02.01; QSA.08.03.01; QSA.08.07.01",
     "cap_citations": "GEN.54025; GEN.57050; GEN.55499-GEN.57000; GEN.54750; GEN.78250-GEN.78375",
     "cola_citations": "LDR 3; PER 5; LDR 1; PER 1-PER 5",
@@ -756,7 +734,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "Waived / POCT",
     "service_line": "all",
     "description": "Scope of waived tests offered, manufacturer-prescribed quality control, testing personnel competency on the Initial / 6-month / Annual cadence (six elements per 42 CFR 493.1235), and central oversight of POC testing across all sites under the lab's CLIA certificate. Waived tests are performed strictly per the manufacturer's package insert; any deviation reclassifies as non-waived.",
-    "cfr_citations": "42 CFR 493.1291; 42 CFR 493.1235; 42 CFR 493.15; 42 CFR 493.35; 42 CFR 493.1256; 42 CFR 493.1261; 42 CFR 493.1262; 42 CFR 493.1263; 42 CFR 493.1264; 42 CFR 493.1265; 42 CFR 493.1269; 42 CFR 493.1281; 42 CFR 493.1232; 42 CFR 493.1289",
+    "cfr_citations": "42 CFR 493.1291; 42 CFR 493.1235; 42 CFR 493.15; 42 CFR 493.35; 42 CFR 493.1256; 42 CFR 493.1261; 42 CFR 493.1262; 42 CFR 493.1263; 42 CFR 493.1264; 42 CFR 493.1265; 42 CFR 493.1269; 42 CFR 493.1281; 42 CFR 493.1232; 42 CFR 493.1289; 42 CFR 493.17; 42 CFR 493.1775",
     "tjc_citations": "DC.01.01.01; DC.01.03.01; DC.02.03.01; DC.02.03.03; NPSG.01.01.01; QSA.04.03.01; QSA.04.06.01; QSA.11.01.01; QSA.11.02.01; QSA.05.18.01; QSA.09.01.01; QSA.09.03.01; QSA.09.03.03",
     "cap_citations": "COM.30000; COM.30100; COM.30980; GEN.54025; GEN.57050; HEM.35920; MIC.12040; MIC.12060; MIC.18968; MIC.18976; POC.06800; POC.08450",
     "cola_citations": "LDR 3; PER 5; PST 1-PST 3; APM 1; LDR 5; QC 1; QC 5; VER 1; QA 1",
@@ -784,7 +762,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "",
     "service_line": "all",
     "description": "HIPAA privacy and security (administrative, physical, technical safeguards) plus data capture, transmission, and retention. PHI transmitted only through validated encrypted channels; need-to-know access control with periodic review; breach notification per 45 CFR 164.402 onward.",
-    "cfr_citations": "42 CFR 493.1235; 29 CFR 1910.1030; 42 CFR 493.1231; 45 CFR 164.312; 45 CFR 164.402; 42 CFR 493.1232; 42 CFR 493.1291; 42 CFR 493.1105; 45 CFR 164.306; 45 CFR 164.308; 45 CFR 164.310",
+    "cfr_citations": "42 CFR 493.1235; 29 CFR 1910.1030; 42 CFR 493.1231; 45 CFR 164.312; 45 CFR 164.402; 42 CFR 493.1232; 42 CFR 493.1291; 42 CFR 493.1105; 45 CFR 164.306; 45 CFR 164.308; 45 CFR 164.310; 42 CFR 493.1281; 42 CFR 493.1283; 45 CFR 164.502; 45 CFR 164.504; 45 CFR 164.404",
     "tjc_citations": "DC.01.01.01; EC.02.01.01; IC.02.01.01; IM.02.01.01; IM.02.01.03; DC.01.03.01; DC.02.03.01; DC.02.03.03",
     "cap_citations": "GEN.40509; GEN.40930; GEN.41303; GEN.41304; GEN.48500",
     "cola_citations": "FAC 6; FAC 7; LIS 1; LIS 2; ORG 7; CA 9; PRE 1",
@@ -798,7 +776,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "",
     "service_line": "all",
     "description": "Organizational chart and reporting structure, Laboratory Director responsibilities (42 CFR 493.1445), quality program governance (42 CFR 493.1200), culture of safety and quality using just-culture principles, and code of ethical conduct for all personnel. Annual leadership review of the governance structure and code of conduct.",
-    "cfr_citations": "42 CFR 493.1441; 42 CFR 493.1443; 42 CFR 493.1445; 42 CFR 493.1407; 42 CFR 493.1357; 42 CFR 493.1351; 42 CFR 493.1421; 42 CFR 493.1423; 42 CFR 493.1425; 42 CFR 493.1467; 42 CFR 493.1469; 42 CFR 493.1471; 42 CFR 493.1487; 42 CFR 493.1489; 42 CFR 493.1100; 21 CFR 606.20; 42 CFR 493.1232; 42 CFR 493.1291; 45 CFR 164.306; 45 CFR 164.308; 45 CFR 164.310; 45 CFR 164.312; 42 CFR 493.1773; 42 CFR 493.1262",
+    "cfr_citations": "42 CFR 493.1441; 42 CFR 493.1443; 42 CFR 493.1445; 42 CFR 493.1407; 42 CFR 493.1357; 42 CFR 493.1351; 42 CFR 493.1421; 42 CFR 493.1423; 42 CFR 493.1425; 42 CFR 493.1467; 42 CFR 493.1469; 42 CFR 493.1471; 42 CFR 493.1487; 42 CFR 493.1489; 42 CFR 493.1100; 21 CFR 606.20; 42 CFR 493.1232; 42 CFR 493.1291; 45 CFR 164.306; 45 CFR 164.308; 45 CFR 164.310; 45 CFR 164.312; 42 CFR 493.1773; 42 CFR 493.1262; 42 CFR 493.1200; 42 CFR 493.1775",
     "tjc_citations": "HR.01.05.03; LD.04.05.03; LD.04.05.09; LD.04.05.11; LD.04.05.13; EC.02.01.01; DC.01.01.01; DC.01.03.01; DC.02.03.01; DC.02.03.03",
     "cap_citations": "DRA.10430; GEN.54750; GEN.78250; GEN.78300; GEN.78375; GEN.73150; GEN.73800; GEN.73900; GEN.77575; GEN.59980-GEN.60250; GEN.40509; GEN.40930; GEN.41303; GEN.41304; GEN.48500; COM.06100; COM.30000; DRA.10435; DRA.10440-DRA.11485",
     "cola_citations": "LDR 3; PER 1-PER 5; FAC 1-FAC 3; APM 1; LIS 1; LIS 2; ORG 7; PRE 1; LDR 1-LDR 5",
@@ -812,7 +790,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "",
     "service_line": "all",
     "description": "Infection prevention program covering exposure control, hand hygiene, PPE, sharps handling, biological spill response, and post-exposure follow-up. Standard precautions for every specimen and every patient interaction. OSHA Bloodborne Pathogens training at hire and annually for every staff member.",
-    "cfr_citations": "42 CFR 416.51; 42 CFR 482.42; 42 CFR 493.1235; 42 CFR 493.1101; 29 CFR 1910.1030",
+    "cfr_citations": "42 CFR 416.51; 42 CFR 482.42; 42 CFR 493.1235; 42 CFR 493.1101; 29 CFR 1910.1030; 29 CFR 1910.1020",
     "tjc_citations": "IC.01.01.01; IC.01.02.01; IC.01.04.01; IC.01.05.01; IC.02.01.01; DC.01.01.01; EC.02.01.01; EC.02.04.01; EC.02.04.03; EC.02.04.05",
     "cap_citations": "GEN.54025; GEN.57050; GEN.62000; GEN.62020; GEN.73600",
     "cola_citations": "FAC 6; FAC 7; FAC 1-FAC 7",
@@ -826,7 +804,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "subspecialty": "HCT/P",
     "service_line": "hct_p",
     "description": "Donor eligibility determination per 21 CFR 1271.85 before recovery, tissue handling and tracking per 21 CFR 1271.155, and post-distribution adverse reaction reporting to FDA per 21 CFR 1271.350. Tissue records retained at least 10 years post-distribution per 21 CFR 1271.270.",
-    "cfr_citations": "42 CFR 493.1242; 42 CFR 493.1271; 21 CFR 1271.155; 21 CFR 1271.160; 21 CFR 1271.170; 42 CFR 493.1278",
+    "cfr_citations": "42 CFR 493.1242; 42 CFR 493.1271; 21 CFR 1271.155; 21 CFR 1271.160; 21 CFR 1271.170; 42 CFR 493.1278; 21 CFR 1271.85; 21 CFR 1271.270; 21 CFR 1271.350",
     "tjc_citations": "DC.01.01.01; DC.01.03.01; QSA.04.07.01; QSA.05.07.01; QSA.05.08.01; QSA.06.03.01; QSA.06.03.03; QSA.12.01.01; QSA.12.04.01; QSA.12.05.01",
     "cap_citations": "COM.30450; GEN.40491-GEN.40512; IMM.40440; IMM.41500; IMM.41600",
     "cola_citations": "APM 1; PRE 7-PRE 13; QC 1; VER 1",

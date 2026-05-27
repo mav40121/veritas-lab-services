@@ -1,0 +1,39 @@
+{
+  "policy_id": "96",
+  "slug": "reference_laboratory_selection",
+  "policy_name": "Reference Laboratory Selection and Oversight Policy",
+  "section": "Results",
+  "purpose": "This policy describes how <<LAB_NAME>> selects, qualifies, and oversees reference laboratories used to perform tests not offered in-house. Required by 42 CFR 493.1242 (specimen referral) and 42 CFR 493.1291 (test report).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1242(a)",
+      "label": "Standard: Specimen submission, handling, and referral",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral."
+    },
+    {
+      "citation": "42 CFR 493.1291(e)",
+      "label": "Standard: Test report",
+      "verbatim": "If the laboratory transcribes or transmits the results directly or through an intermediary to the authorized person, the laboratory must, upon request, make available promptly to clients the methods used for performance of its laboratory tests and any information regarding the performance specifications established or verified as specified in 493.1253, the data and statistical analyses used in establishing the accuracy and precision of test performance, and any limitations in the test methodology."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel involved in send-out testing, the medical director or designee, and the testing supervisors for affected specialties.",
+  "policy_statements": [
+    "Every reference laboratory used by <<LAB_NAME>> holds a current CLIA certificate appropriate for the testing referred; the certificate is verified at contracting and at each renewal.",
+    "The medical director or designee approves every reference lab; the approval is documented and reviewed annually.",
+    "Reference lab agreements are written, specify the tests covered, turnaround times, courier arrangements, result delivery, billing, and the reference lab's responsibility to report critical values to the lab promptly.",
+    "Send-out specimens are packaged, labeled, and transported per the reference lab's specifications and any applicable shipping regulations.",
+    "Results received from the reference lab are released to the ordering provider with the reference lab's name and CLIA number on the report per 42 CFR 493.1291(c).",
+    "Reference lab performance (turnaround time, critical value notification compliance, error rate) is tracked and reviewed at least annually; recurring issues trigger discussion with the reference lab and may trigger replacement."
+  ],
+  "procedure_steps": [
+    "At reference lab selection, the medical director or designee reviews CLIA certificate, accreditation (if any), test menu, turnaround time, pricing, and references; the selection is documented.",
+    "A written agreement is executed covering the items listed in the policy statements.",
+    "On every send-out, the staff member packages and labels per the reference lab's specs, logs the send-out on the Send-Out log, and tracks for return.",
+    "On result receipt, the result is reviewed for completeness, entered into or interfaced to the LIS, and released with the reference lab's identity per 42 CFR 493.1291(c).",
+    "Reference lab performance is reviewed annually; the review is signed by the medical director or designee and filed."
+  ],
+  "definitions": [
+    ["Reference laboratory", "An outside lab to which <<LAB_NAME>> sends specimens for testing not performed in-house."],
+    ["Send-Out log", "Audit trail of every specimen sent to a reference lab, including courier, date/time, and return-of-result tracking."]
+  ]
+}

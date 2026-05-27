@@ -1,0 +1,43 @@
+{
+  "policy_id": "89",
+  "slug": "cybersecurity_incident_response",
+  "policy_name": "Cybersecurity Incident Response Policy",
+  "section": "Information Systems",
+  "purpose": "This policy describes how <<LAB_NAME>> detects, contains, eradicates, recovers from, and learns from cybersecurity incidents affecting laboratory systems holding ePHI. The HIPAA Security Rule at 45 CFR 164.308(a)(6) requires identification and response to security incidents.",
+  "cfr_text_blocks": [
+    {
+      "citation": "45 CFR 164.308(a)(6)(i)",
+      "label": "HIPAA Security Rule: Security incident procedures (Standard)",
+      "verbatim": "Implement policies and procedures to address security incidents."
+    },
+    {
+      "citation": "45 CFR 164.308(a)(6)(ii)",
+      "label": "HIPAA Security Rule: Response and reporting",
+      "verbatim": "Identify and respond to suspected or known security incidents; mitigate, to the extent practicable, harmful effects of security incidents that are known to the covered entity or business associate; and document security incidents and their outcomes."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, the IT staff supporting LIS and ePHI-containing systems, the security officer, the medical director or designee, and any business associates handling ePHI on behalf of the lab.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a written Cybersecurity Incident Response Plan covering detection, containment, eradication, recovery, and lessons learned.",
+    "Every workforce member is trained to report suspected security incidents (phishing, malware, ransomware, unauthorized access, lost device, suspicious activity) to the security officer immediately.",
+    "On detection, the security officer activates the response: contain the affected system, preserve forensic evidence, assess scope of ePHI involved, and coordinate with IT, the medical director or designee, and external resources (legal, insurance, law enforcement) as needed.",
+    "Patient care continuity during the incident is the priority: the lab activates the System Downtime and Service Interruption procedure for any system taken offline.",
+    "Breach risk assessment is performed per 45 CFR 164.402 to determine whether the incident constitutes a reportable breach; if so, notifications are issued per 45 CFR 164.404 (affected individuals within 60 days, HHS via the breach portal, media if 500+ individuals in a state).",
+    "Every incident is documented on the Security Incident log with timeline, scope, response actions, recovery actions, and lessons learned; reviewed by the medical director or designee within 14 days of closure.",
+    "The Incident Response Plan is tested at least annually through a tabletop exercise; findings drive plan updates."
+  ],
+  "procedure_steps": [
+    "On report of a suspected incident, the security officer logs the report, classifies severity, and convenes the incident response team (IT, medical director or designee, security officer, legal/compliance as needed).",
+    "Containment: the affected system is isolated (network disconnect, account disable, device quarantine) to prevent spread; forensic evidence is preserved (memory captures, log exports).",
+    "Eradication: malware is removed, vulnerabilities are patched, compromised credentials are reset, and unauthorized access is closed.",
+    "Recovery: systems are restored from clean backups, validated end-to-end before return to service, and monitored intensively for the first business week.",
+    "Breach assessment per 45 CFR 164.402 is performed and documented; if breach, notifications are issued within the regulatory timelines.",
+    "Within 14 days of incident closure, the medical director or designee reviews the incident documentation, lessons learned are added to the Incident Response Plan, and any policy or technical changes are implemented.",
+    "Annual tabletop exercise: the response team walks through a scenario, identifies plan gaps, and updates the plan accordingly; the exercise is documented."
+  ],
+  "definitions": [
+    ["Security incident", "Attempted or successful unauthorized access, use, disclosure, modification, or destruction of information or interference with system operations in an information system holding ePHI (45 CFR 164.304)."],
+    ["Containment", "Isolation of the affected system or account to prevent the incident from spreading or causing further harm."],
+    ["Breach risk assessment", "The four-factor analysis required by 45 CFR 164.402 to determine whether a security incident rises to a reportable breach: nature/extent of PHI, unauthorized person involved, whether PHI was acquired or viewed, and extent of risk mitigation."]
+  ]
+}

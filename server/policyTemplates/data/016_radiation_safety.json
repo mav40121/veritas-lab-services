@@ -1,0 +1,41 @@
+{
+  "policy_id": "16",
+  "slug": "radiation_safety",
+  "policy_name": "Radiation Safety Policy",
+  "section": "Safety",
+  "purpose": "This policy describes how <<LAB_NAME>> manages radiation safety when the lab uses radioactive materials, X-ray devices, or accepts specimens containing radioisotopes. Required by 10 CFR 20 (NRC radiation protection) and 21 CFR 1020 (FDA radiation-emitting devices), with CLIA personnel-safety obligations at 42 CFR 493.1101(c).",
+  "cfr_text_blocks": [
+    {
+      "citation": "10 CFR 20.1101(a)",
+      "label": "NRC: Radiation Protection Programs",
+      "verbatim": "Each licensee shall develop, document, and implement a radiation protection program commensurate with the scope and extent of licensed activities and sufficient to ensure compliance with the provisions of this part."
+    },
+    {
+      "citation": "42 CFR 493.1101(c)",
+      "label": "Standard: Facilities (safety from physical hazards)",
+      "verbatim": "The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who handle radioactive materials, operate radiation-emitting devices, or process specimens containing radioisotopes (radioimmunoassay, nuclear medicine bioassay).",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains a Radiation Protection Program (RPP) consistent with 10 CFR 20 and applicable state radiation control regulations when radioactive materials or radiation-emitting devices are in use.",
+    "A named Radiation Safety Officer (RSO) is responsible for program oversight, training, dosimetry, surveys, waste disposal, and record retention.",
+    "All personnel with potential radiation exposure receive initial radiation safety training and annual refresher; training is documented.",
+    "Personal dosimeters are issued to staff whose duties may result in measurable exposure; readings are reviewed monthly; any reading above the lab's action threshold triggers investigation.",
+    "Radioactive materials are stored in secure, labeled, shielded containers; access is restricted; inventory is reconciled monthly.",
+    "Radioactive waste is segregated, decayed-in-storage where applicable, and disposed of per regulation; disposal is documented.",
+    "Radiation surveys (contamination, exposure rate) are performed on the regulatory cadence and after any incident; surveys are documented and retained per 10 CFR 20.2103."
+  ],
+  "procedure_steps": [
+    "RSO maintains the RPP document, training roster, and inventory; reviewed annually.",
+    "Staff receive initial training before handling radioactive materials; annual refresher is delivered and documented.",
+    "Dosimeters are exchanged on the vendor's cycle; readings are reviewed by the RSO monthly; out-of-range readings trigger investigation.",
+    "Radioactive material receipt, use, and disposal are logged.",
+    "Surveys are performed per the RPP; results are filed.",
+    "Annual program review by the RSO with the medical director or designee documents performance against regulatory requirements."
+  ],
+  "definitions": [
+    ["Radiation Safety Officer (RSO)", "Individual designated to oversee the Radiation Protection Program. Qualifications and responsibilities per 10 CFR 20 and applicable state regulation."],
+    ["Dosimeter", "Personal device worn by radiation workers to measure cumulative exposure. Read on a regulatory cadence."]
+  ]
+}

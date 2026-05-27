@@ -1,0 +1,31 @@
+{
+  "policy_id": "82",
+  "slug": "organ_tissue_donation",
+  "policy_name": "Organ, Tissue, and Eye Donation Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> supports organ, tissue, and eye donation: required testing on potential donors, specimen handling, result release. Required by 21 CFR 1271 (Human Cells, Tissues, and Cellular and Tissue-Based Products / HCT/Ps) and 42 CFR 493.1242 (specimen handling) and 42 CFR 493.1271 (immunohematology for transfusion in donor support).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 1271.85(a)",
+      "label": "FDA: HCT/P donor eligibility testing",
+      "verbatim": "You must test a donor specimen for evidence of infection due to relevant communicable disease agents, with the exception of CJD and other transmissible spongiform encephalopathies, listed in 1271.85(a)(1) using appropriate FDA-licensed, approved, or cleared donor screening tests, in accordance with the manufacturer's instructions."
+    }
+  ],
+  "scope": "<<LAB_NAME>> personnel performing donor eligibility testing for organ procurement organizations, tissue banks, or eye banks.",
+  "policy_statements": [
+    "Donor specimens for HCT/P eligibility are tested using FDA-licensed, approved, or cleared donor screening tests per 21 CFR 1271.85.",
+    "Required infectious-disease markers (HIV-1/2, HBV, HCV, HTLV-I/II, syphilis treponemal, others per current FDA list) are tested per the manufacturer's instructions.",
+    "Results are reported to the procuring organization with full specimen identification, test methods, reactive/non-reactive determination, and any limitations.",
+    "Records of donor testing are retained per 21 CFR 1271.270 (typically 10 years past distribution) and 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "Specimens received from organ procurement, tissue bank, or eye bank are accessioned with full traceability to the procuring organization and donor ID.",
+    "Testing is performed using current FDA-cleared donor screening tests per the manufacturer's instructions.",
+    "Results are reported in writing to the procuring organization with all required elements.",
+    "Records are retained per the longer of 21 CFR 1271.270 and 42 CFR 493.1105."
+  ],
+  "definitions": [
+    ["HCT/P", "Human Cells, Tissues, and Cellular and Tissue-Based Products. Regulated by FDA under 21 CFR 1271."],
+    ["Donor eligibility testing", "Infectious disease screening required for HCT/P donors to confirm absence of communicable disease agents per 21 CFR 1271.85."]
+  ]
+}

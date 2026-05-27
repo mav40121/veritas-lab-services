@@ -1,0 +1,32 @@
+{
+  "policy_id": "71",
+  "slug": "radioactive_tissue",
+  "policy_name": "Radioactive Tissue Handling Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> identifies, handles, and disposes of tissue specimens containing radioactive materials (sentinel node mapping with radiotracer, brachytherapy seeds, post-radioisotope therapy samples). Required by 10 CFR 20 (NRC radiation protection), 21 CFR 1271 (tissue handling), and 42 CFR 493.1101(c) (safety from physical hazards).",
+  "cfr_text_blocks": [
+    {
+      "citation": "10 CFR 20.1101(b)",
+      "label": "NRC: Radiation Protection Programs",
+      "verbatim": "The licensee shall use, to the extent practical, procedures and engineering controls based upon sound radiation protection principles to achieve occupational doses and doses to members of the public that are as low as is reasonably achievable (ALARA)."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> anatomic pathology personnel and the Radiation Safety Officer.",
+  "policy_statements": [
+    "Surgical specimens containing radioactive material are flagged at the surgeon's order; the Radiation Safety Officer (RSO) is notified at receipt.",
+    "Specimens are handled per the RSO's protocol with appropriate shielding, dosimetry, and storage in the designated radioactive specimen area.",
+    "Processing (gross, sectioning, special stains) is delayed until the radioisotope has decayed to acceptable levels per the RSO's calculation, OR is performed with documented exposure-control measures.",
+    "Radioactive specimen disposal follows the RSO's protocol per 10 CFR 20 and applicable state regulation; documented.",
+    "Records of radioactive specimens, handling, and disposal are retained per the lab's record retention policy and 10 CFR 20.2103."
+  ],
+  "procedure_steps": [
+    "Receipt staff confirms the radioactive flag on the requisition; notifies the RSO and pathologist.",
+    "Specimen is moved to the designated radioactive specimen area; dosimetry is read.",
+    "RSO calculates decay time and authorizes processing when activity is below the lab's working threshold.",
+    "Disposal follows the RSO's protocol and is documented."
+  ],
+  "definitions": [
+    ["Radioactive specimen", "Tissue or fluid sample containing radioactive material at the time of collection. Includes sentinel node specimens with radiotracer, brachytherapy seeds, and samples from patients within the half-life window after radioisotope therapy."],
+    ["ALARA", "As Low As Reasonably Achievable. The NRC principle for occupational radiation exposure."]
+  ]
+}

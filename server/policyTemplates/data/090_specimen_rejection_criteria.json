@@ -1,0 +1,34 @@
+{
+  "policy_id": "90",
+  "slug": "specimen_rejection_criteria",
+  "policy_name": "Specimen Rejection Criteria Policy",
+  "section": "Specimen Management",
+  "purpose": "This policy defines the conditions under which <<LAB_NAME>> rejects a specimen rather than testing it. Required by 42 CFR 493.1242, which mandates written acceptability and rejection criteria for every test on the lab menu.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1242",
+      "label": "Standard: Specimen submission, handling, and referral",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel involved in specimen receipt, accessioning, and testing.",
+  "policy_statements": [
+    "<<LAB_NAME>> maintains written rejection criteria for every test on the lab menu; criteria are accessible at every specimen-receipt point.",
+    "Rejection categories include: unlabeled or mislabeled specimens (rejected without exception), insufficient volume (rejected unless test allows micro-volume), wrong container or additive, hemolysis/lipemia/icterus exceeding the test's tolerance, clotted specimens for hematology, expired collection time, broken or leaking containers, missing or unauthorized requisition.",
+    "Every rejection is logged with patient identifier, test ordered, reason for rejection, date/time, staff member, and the ordering provider notification (date/time, recipient).",
+    "The ordering provider is notified of the rejection and the need to recollect; the notification is documented.",
+    "Specimens rejected due to mislabeling are NEVER relabeled to make them acceptable; the only resolution is recollect.",
+    "Rejection rates are tracked monthly as a pre-analytic quality indicator and reviewed by the medical director or designee for trend."
+  ],
+  "procedure_steps": [
+    "On specimen receipt, the staff member inspects the specimen against the rejection criteria for the ordered test.",
+    "If any rejection criterion applies, the staff member halts processing, logs the rejection on the Specimen Rejection log, and notifies the ordering provider promptly.",
+    "Notification includes the reason for rejection, the need to recollect, and the recollect instructions; the recipient and date/time are documented.",
+    "The rejected specimen is held or disposed of per the lab's specimen retention policy.",
+    "Monthly, the lab reviews the Specimen Rejection log for trend; recurring rejection reasons (e.g., one unit submitting unlabeled tubes repeatedly) trigger root-cause investigation and corrective action."
+  ],
+  "definitions": [
+    ["Rejection criteria", "The lab's written conditions under which a specimen will not be tested. Defined per test."],
+    ["Specimen Rejection log", "Audit trail of every specimen rejected, including reason, notification of ordering provider, and recollect status."]
+  ]
+}

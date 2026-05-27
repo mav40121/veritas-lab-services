@@ -1,0 +1,54 @@
+{
+  "policy_id": "51",
+  "slug": "compatibility_testing",
+  "policy_name": "Compatibility Testing Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> performs antibody screening, antibody identification, and crossmatching prior to issuing red blood cell components. Required by 42 CFR 493.1271(d) (compatibility testing) and 42 CFR 493.1271(e) (records).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1271(d)",
+      "label": "Standard: Compatibility testing",
+      "verbatim": "The laboratory must perform compatibility testing prior to the issuance of blood and blood products, except as provided for an emergency situation defined in writing by the laboratory. Compatibility testing must include a major crossmatch performed using methods that demonstrate ABO incompatibility and clinically significant antibodies to red cell antigens, and that include an antiglobulin test."
+    },
+    {
+      "citation": "42 CFR 493.1271(c)",
+      "label": "Patient testing (historical comparison)",
+      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel performing antibody screen, antibody identification, or crossmatch.",
+  "policy_statements": [
+    "Every red blood cell component issue is preceded by a major crossmatch that demonstrates ABO compatibility and detects clinically significant antibodies, including an antiglobulin (indirect Coombs) test, UNLESS an emergency release procedure is invoked per the lab's written emergency release policy.",
+    "Every pretransfusion specimen has a current antibody screen performed; positive screens trigger antibody identification before component selection.",
+    "Historical patient records are checked at each crossmatch; any prior antibody is honored regardless of current screen result; the component selected is antigen-negative for any previously identified clinically significant antibody.",
+    "Computer (electronic) crossmatch may substitute for the serologic crossmatch only when the lab meets the criteria defined in writing (current and historical ABO concordance, no clinically significant antibodies current or historical, validated LIS algorithm).",
+    "Compatibility test results are documented with: technologist, date/time, method, donor unit, patient specimen, reactions, and the interpretation (compatible/incompatible).",
+    "Incompatible crossmatch triggers investigation by the technical supervisor or medical director or designee before any component is issued; the investigation is documented."
+  ],
+  "procedure_steps": [
+    "On crossmatch order, the transfusion service confirms the patient has a current type and screen; if not, completes ABO/Rh and antibody screen first.",
+    "Antigen-typed donor units of compatible ABO/Rh are selected; for patients with prior clinically significant antibodies, units are confirmed antigen-negative for the identified antibody.",
+    "Major crossmatch is performed per the active SOP: immediate spin (or computer crossmatch where eligible), antibody-detection phase (incubation at 37 deg C), and antiglobulin phase.",
+    "Reactions are read, recorded as 0, 1+, 2+, 3+, or 4+; any positive reaction triggers investigation and may halt component issue pending resolution.",
+    "Compatible units are reserved for the patient; documentation in the LIS or transfusion service log includes patient, donor unit, technologist, date/time, method, and interpretation.",
+    "If incompatible, the technical supervisor or medical director or designee investigates: review of patient history, repeat testing on fresh specimen, antibody identification or expanded panel, selection of alternate donor units."
+  ],
+  "definitions": [
+    [
+      "Major crossmatch",
+      "Compatibility test between donor red cells and patient plasma or serum to confirm ABO compatibility and detect clinically significant antibodies."
+    ],
+    [
+      "Antibody screen",
+      "Test of patient plasma or serum against screening cells of known antigen profile to detect unexpected red cell antibodies."
+    ],
+    [
+      "Computer (electronic) crossmatch",
+      "Crossmatch performed by an LIS algorithm against current and historical ABO and antibody records, in lieu of serologic crossmatch. Eligible only when the lab's written criteria are met."
+    ],
+    [
+      "Clinically significant antibody",
+      "An unexpected red cell antibody capable of causing transfusion reactions or hemolytic disease of the fetus and newborn. Honored at every subsequent transfusion regardless of current screen result."
+    ]
+  ]
+}

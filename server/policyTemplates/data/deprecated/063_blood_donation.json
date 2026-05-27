@@ -1,0 +1,34 @@
+{
+  "policy_id": "63",
+  "slug": "blood_donation",
+  "policy_name": "Blood Donation Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy applies when <<LAB_NAME>> operates as a blood collection establishment, governing donor recruitment, eligibility screening, consent, and pre-donation testing. Required by 21 CFR 630 (donor requirements) and 21 CFR 606.100 SOPs. Labs that only receive components from suppliers do not apply this policy.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 630.10(a)",
+      "label": "FDA: General donor eligibility requirements",
+      "verbatim": "A donor is eligible to donate blood or a blood component if you determine and document that the donor is in good health and free from transfusion-transmitted infections as required under this subpart, and meets all other applicable requirements under this subpart."
+    }
+  ],
+  "scope": "Applies only when <<LAB_NAME>> operates a blood collection establishment. Personnel involved in donor recruitment, screening, collection, and post-donation follow-up.",
+  "policy_statements": [
+    "Donor eligibility is determined per 21 CFR 630.10 at every donation: in good health, free of transfusion-transmitted infections (per screening questions and required testing), meets demographic and physical criteria, has not received deferral-triggering exposures or treatments.",
+    "Donor consent is obtained in writing before donation; the consent covers the donation process, risks, post-donation testing, and notification of abnormal findings.",
+    "Donor screening uses the current FDA-recognized Donor History Questionnaire; deferrals are applied per the published criteria and documented.",
+    "Post-donation testing for ABO/Rh, antibody screen, and transfusion-transmitted infectious diseases is performed on every collection per 21 CFR 610.40-45.",
+    "Donor notification of abnormal findings is performed per 21 CFR 630.40 with the required information and follow-up resources.",
+    "Records are retained for at least 10 years per 21 CFR 606.160 and 42 CFR 493.1105(a)(7)."
+  ],
+  "procedure_steps": [
+    "Donor presents; identity is verified; consent is obtained; the DHQ is administered.",
+    "Eligibility is determined per the DHQ responses, physical exam findings, and current deferrals; ineligible donors are deferred with documented reason and reentry criteria.",
+    "Collection is performed per the FDA-validated procedure.",
+    "Post-collection testing is completed; results are reviewed; abnormal findings trigger donor notification per 21 CFR 630.40.",
+    "All steps are documented and retained per the 10-year rule."
+  ],
+  "definitions": [
+    ["Donor History Questionnaire (DHQ)", "Standardized questionnaire used to screen blood donors for eligibility. FDA-recognized versions are updated periodically."],
+    ["Deferral", "Temporary or permanent exclusion of a donor from blood donation based on eligibility criteria. Documented with reason and reentry criteria."]
+  ]
+}

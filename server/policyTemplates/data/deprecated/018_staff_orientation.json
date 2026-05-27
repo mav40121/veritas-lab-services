@@ -1,0 +1,34 @@
+{
+  "policy_id": "18",
+  "slug": "staff_orientation",
+  "policy_name": "Staff Orientation Policy",
+  "section": "Personnel",
+  "purpose": "This policy describes how <<LAB_NAME>> orients new testing personnel before they perform patient testing. CLIA at 42 CFR 493.1235 requires the lab to establish and follow written policies for personnel competency, and orientation is the foundation that initial competency builds on.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1235",
+      "label": "Standard: Personnel competency assessment policies",
+      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, including new hires, transferred staff, and consultants. Applies before any patient testing is performed.",
+  "policy_statements": [
+    "Every new testing staff member completes a documented orientation before performing patient testing on any test or test family.",
+    "Orientation covers: lab organizational structure and reporting chain, location of procedures and the procedure manual, location of safety equipment and emergency procedures, HIPAA and patient privacy training, infection prevention and PPE training, specimen handling and identification, downtime procedures, critical value reporting, and incident reporting.",
+    "Orientation is documented on the Orientation Checklist, signed by the new staff member and by the supervisor responsible for orientation, and filed in the personnel record.",
+    "Test-specific orientation (test menu, instrument operation, QC review, result release) is documented per test or test family on the Initial Training record before the staff member runs patient specimens for that test.",
+    "Orientation precedes the initial competency assessment; the initial competency assessment confirms the staff member is ready for independent testing per 42 CFR 493.1235."
+  ],
+  "procedure_steps": [
+    "At hire, HR notifies the medical director or designee and a supervisor is assigned to deliver orientation.",
+    "The supervisor walks the new staff member through each Orientation Checklist item; each item is initialed and dated as completed.",
+    "Test-specific Initial Training is delivered per test or test family, documented on the Initial Training record, and completed before the staff member performs the test on patient specimens.",
+    "On completion of orientation and Initial Training, the supervisor schedules the initial competency assessment per the Staff Competency Assessment policy.",
+    "The completed Orientation Checklist and Initial Training records are filed in the staff member's personnel record and retained per the lab's record retention schedule."
+  ],
+  "definitions": [
+    ["Orientation", "The initial introduction of a new staff member to the laboratory, covering organizational, safety, and procedural foundations. Required before any patient testing."],
+    ["Initial Training", "Test-specific training on a particular test or test family. Documented per test on the Initial Training record."],
+    ["Initial competency assessment", "The first CLIA-required six-element competency assessment, performed after orientation and Initial Training are complete and before the staff member tests patient specimens independently."]
+  ]
+}

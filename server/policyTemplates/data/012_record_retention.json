@@ -1,0 +1,35 @@
+{
+  "policy_id": "12",
+  "slug": "record_retention",
+  "policy_name": "Record Retention Policy",
+  "section": "Quality",
+  "purpose": "This policy describes how <<LAB_NAME>> retains laboratory records, test results, instrument printouts, QC data, calibration records, proficiency testing records, and personnel records for the periods required by CLIA at 42 CFR 493.1105 and related sections.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1105(a)",
+      "label": "Standard: Retention requirements",
+      "verbatim": "The laboratory must retain the records and slides specified in this section for the periods listed. If the laboratory ceases operation, the laboratory must make provisions to ensure that all records are maintained and available for the periods required. The laboratory must retain the following: (1) Test requisitions and authorizations, including any patient chart or medical record used as the test requisition or authorization for a minimum of 2 years. (2) Test procedures and the date(s) on which the procedure is in use, including the dates of initial use and discontinuance, for at least 2 years after a procedure has been discontinued. (3) Analytic systems records, including but not limited to, results of and documentation of: calibration and calibration verification procedures, control procedures, electronic crossover studies, maintenance, and function checks, for at least 2 years. (4) Proficiency testing records for at least 2 years. (5) Quality systems assessment records for at least 2 years. (6) Test reports for at least 2 years after the date of reporting. The laboratory must retain or be able to retrieve a copy of the original report (including final, preliminary, and corrected reports) at least 2 years after the date of reporting. (7) Immunohematology records, blood and blood products records, and transfusion records, as specified in 493.1271, for a period of at least 10 years after the records are made. Records and tissue blocks and slides from cytology and histopathology subspecialties as specified in 493.1274 must be retained as specified in 493.1105(a)(7)(i), (ii), and (iii)."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, IT, and records-management staff. Applies to records in any medium (paper, electronic, microfilm).",
+  "policy_statements": [
+    "Test requisitions, test procedures (including discontinued procedures from date of discontinuance), analytic systems records (calibration, QC, maintenance, function checks), proficiency testing records, quality systems records, and test reports are retained for a minimum of 2 years per 42 CFR 493.1105.",
+    "Immunohematology records, blood and blood products records, and transfusion records are retained for a minimum of 10 years per 42 CFR 493.1105(a)(7).",
+    "Cytology slides are retained for at least 5 years; cytology reports for at least 10 years; histopathology wet tissue for at least 2 weeks after final report; paraffin blocks for at least 2 years; histopathology slides for at least 10 years (42 CFR 493.1105(a)(7)).",
+    "Personnel records for individuals who perform, supervise, or direct testing are retained for the entire time the individual works at the lab plus 2 years after separation.",
+    "Records destroyed at end of retention are logged in the Records Destruction log with date, record type, retention end date, and approval signature from the medical director or designee.",
+    "If <<LAB_NAME>> ceases operation, the medical director or designee arranges for all records to be maintained and accessible for the remainder of the required retention period."
+  ],
+  "procedure_steps": [
+    "All records created by the lab are filed in the lab's records system (paper binder or electronic) with date created, record type, and applicable retention end date.",
+    "On a monthly cadence, records-management staff review the retention queue and identify records whose retention period has elapsed.",
+    "Records flagged for destruction are reviewed by the medical director or designee; approval is documented before destruction.",
+    "Destruction is performed in a manner appropriate to the record type (shredding for paper, secure deletion for electronic, certificate-of-destruction for outsourced destruction); the destruction is logged.",
+    "Electronic records are backed up per the lab's IT backup schedule; backups are stored on a separate medium and retained for the same period as the source record."
+  ],
+  "definitions": [
+    ["Retention period", "The minimum length of time the lab must keep a record before it may be destroyed, set by 42 CFR 493.1105 or by other applicable federal or state regulation, whichever is longer."],
+    ["Records Destruction log", "Audit trail of every record set destroyed at end-of-retention, signed by the medical director or designee."],
+    ["Continuity record", "Records covering testing performed before a change in ownership, director, or location. Retention obligations continue across the change."]
+  ]
+}

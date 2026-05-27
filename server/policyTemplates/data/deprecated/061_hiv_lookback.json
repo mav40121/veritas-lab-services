@@ -1,0 +1,32 @@
+{
+  "policy_id": "61",
+  "slug": "hiv_lookback",
+  "policy_name": "HIV Look-Back Notification Policy (Blood Recipients)",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> responds to notification that a previous blood donor has subsequently tested positive for HIV, identifying recipients of components from that donor and supporting notification of the recipients' treating physicians. Required by 21 CFR 610.46.",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 610.46(a)",
+      "label": "FDA: HIV look-back requirements (transfusion service)",
+      "verbatim": "If you are a transfusion service, you must establish, maintain, and follow an appropriate system for the following actions, when you are notified by the collecting establishment of information indicating the potential risk of transmission of HIV by a blood or blood component you received from the collecting establishment, or, when you perform testing on previous collections from a repeat donor and obtain a reactive screening test result for HIV, or, when you obtain a reactive screening test result on a current donation from a repeat donor, indicating the potential risk of transmission of HIV by a previous blood or blood component you have prepared from the donor."
+    }
+  ],
+  "scope": "<<LAB_NAME>> transfusion service personnel and the medical director or designee.",
+  "policy_statements": [
+    "On notification of HIV look-back from a blood supplier, the transfusion service identifies all components from the implicated donor units received at the lab and determines disposition (transfused, in inventory, discarded).",
+    "Recipients of transfused components are identified from the transfusion service records; the recipient's treating physician (or the physician of record at the time of transfusion if the patient has moved) is notified within the FDA-required timeframe.",
+    "In-inventory components from the implicated donor are quarantined immediately and disposed of per FDA recall guidance.",
+    "Notifications, recipient identifications, and component disposition are documented on the Look-Back log; records are retained per 42 CFR 493.1105(a)(7).",
+    "The medical director or designee reviews every look-back event and signs the final documentation."
+  ],
+  "procedure_steps": [
+    "On supplier notification, log the date of receipt, the implicated donor units, and the supplier's communication.",
+    "Search transfusion service records for components from the implicated donor units; identify transfused recipients with date of transfusion.",
+    "Notify each recipient's treating physician within the FDA-required timeframe; document each notification.",
+    "Quarantine and dispose of in-inventory implicated components per FDA recall guidance; document.",
+    "Submit the completed Look-Back documentation to the medical director or designee for review and signature; file."
+  ],
+  "definitions": [
+    ["Look-back", "Process initiated when a prior blood donor is found to be infectious for HIV (or HCV per 21 CFR 610.47); recipients of prior components from that donor are identified and treating physicians notified."]
+  ]
+}

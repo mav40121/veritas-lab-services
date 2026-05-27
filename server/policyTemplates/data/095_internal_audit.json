@@ -1,0 +1,41 @@
+{
+  "policy_id": "95",
+  "slug": "internal_audit",
+  "policy_name": "Internal Audit Policy",
+  "section": "Quality",
+  "purpose": "This policy describes how <<LAB_NAME>> conducts internal audits of pre-analytic, analytic, and post-analytic processes. Required by 42 CFR 493.1239, 493.1289, and 493.1299 (ongoing assessment of laboratory quality systems).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1239(a)",
+      "label": "Standard: General laboratory systems quality assessment",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the general laboratory systems requirements specified at 493.1101 through 493.1105."
+    },
+    {
+      "citation": "42 CFR 493.1289(a)",
+      "label": "Standard: Postanalytic systems quality assessment",
+      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the postanalytic systems specified at 493.1281 and 493.1283."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> testing personnel, supervisors, the medical director or designee, and the quality coordinator (if assigned).",
+  "policy_statements": [
+    "<<LAB_NAME>> conducts internal audits at least annually covering pre-analytic, analytic, post-analytic, and general laboratory systems.",
+    "Each audit is scoped (which area, which time period, which records); a checklist or audit guide is used; findings are documented with evidence.",
+    "Findings are categorized (compliant, opportunity for improvement, non-conformance) and tracked to closure with assigned owner and due date.",
+    "Auditors do not audit their own work; cross-coverage or external auditor is used to maintain independence.",
+    "Audit results, findings, and corrective actions are reviewed by the medical director or designee and incorporated into the annual quality management review.",
+    "Audit records are retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "The medical director or designee approves the annual audit plan: scope, timing, auditor assignments, and checklists.",
+    "On the audit date, the auditor walks the scoped area, reviews records, observes practice, and interviews staff; findings are recorded in real time.",
+    "Findings are reviewed with the area supervisor at the close of the audit; corrective actions are agreed with owner and due date.",
+    "The completed audit report (scope, findings, evidence, corrective actions) is filed and the medical director or designee is notified.",
+    "Open findings are tracked on the Audit Finding tracker until closed; closure requires verified evidence of corrective action.",
+    "Annual audit results feed the Annual Quality Management Review."
+  ],
+  "definitions": [
+    ["Internal audit", "A systematic, documented review of laboratory processes against the lab's own written procedures, regulatory requirements, and quality standards."],
+    ["Non-conformance", "A finding where the audited practice does not meet the requirement. Requires corrective action."],
+    ["Opportunity for improvement", "A finding where the audited practice meets the requirement but could be strengthened. Tracked but not mandatory."]
+  ]
+}

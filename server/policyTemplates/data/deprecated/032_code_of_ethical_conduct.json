@@ -1,0 +1,44 @@
+{
+  "policy_id": "32",
+  "slug": "code_of_ethical_conduct",
+  "policy_name": "Code of Ethical Conduct Policy",
+  "section": "Leadership",
+  "purpose": "This policy defines the ethical standards governing the conduct of <<LAB_NAME>> personnel, leadership, and contractors. CLIA at 42 CFR 493.1232 requires patient confidentiality; 42 CFR 493.1445 places overall conduct accountability with the medical director or designee.",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1232",
+      "label": "Standard: Specimen identification and integrity",
+      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+    },
+    {
+      "citation": "42 CFR 493.1445(e)(1)",
+      "label": "Standard: Laboratory director responsibilities",
+      "verbatim": "The laboratory director must ensure that testing systems developed and used for each of the tests performed in the laboratory provide quality laboratory services for all aspects of test performance, which includes the preanalytic, analytic, and postanalytic phases of testing."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel, leadership, governance members, and contractors.",
+  "policy_statements": [
+    "Every staff member at <<LAB_NAME>> conducts themselves with integrity, honesty, and respect for patients, colleagues, and the regulatory environment.",
+    "Fabrication of test results, alteration of records, falsification of QC data, falsification of competency assessments, and any other form of fraud are absolute violations resulting in immediate termination and reporting to the appropriate licensing and regulatory authorities.",
+    "Conflicts of interest (financial relationships with vendors, ownership of competing labs, family members in regulatory or referring positions) are disclosed at hire, on change, and annually; the lab's COI committee or medical director or designee reviews and manages.",
+    "Confidentiality of patient data, employee data, and proprietary lab data is maintained at all times per the Health Information Privacy and Security policies.",
+    "Anti-kickback obligations (42 USC 1320a-7b) and Stark Law obligations (42 USC 1395nn) are met; the lab does not solicit or accept anything of value in exchange for referrals.",
+    "Every staff member completes Code of Ethical Conduct training at hire and annually."
+  ],
+  "procedure_steps": [
+    "At hire, every staff member receives and signs the Code of Ethical Conduct; the signed acknowledgment is filed.",
+    "Annual refresher training covers conflicts of interest, anti-fraud, confidentiality, and anti-kickback obligations.",
+    "COI disclosures are collected at hire, annually, and on change; the medical director or designee or the COI committee reviews and manages.",
+    "Suspected violations are reported via the lab's reporting channels (medical director or designee, anonymous hotline, or external authority); investigation follows the Whistleblower policy."
+  ],
+  "definitions": [
+    [
+      "Conflict of interest (COI)",
+      "Any financial, family, or personal relationship that could reasonably appear to influence the staff member's professional judgment."
+    ],
+    [
+      "Anti-kickback",
+      "42 USC 1320a-7b prohibition on soliciting or receiving remuneration in exchange for referrals of federal healthcare program business."
+    ]
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "policy_id": "78",
+  "slug": "parasitology",
+  "policy_name": "Parasitology Testing Procedures Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> performs parasitology testing (ova and parasite exam, antigen tests, malaria preparations, blood parasite smears). Required by 42 CFR 493.1204 (PT subspecialty parasitology), 42 CFR 493.821 (unsuccessful PT response applies to parasitology), and 42 CFR 493.1262 (microbiology QC).",
+  "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1262(a)",
+      "label": "Standard: Bacteriology (general microbiology QC)",
+      "verbatim": "For each batch (i.e., shipment, lot, or in-house preparation) and shipment of media, the laboratory must check media for sterility if sterility is required for testing, ability to support growth, and, as appropriate, selectivity/inhibition and biochemical response."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> microbiology personnel performing parasitology testing.",
+  "policy_statements": [
+    "Stool ova and parasite (O and P) exams use concentration and permanent stain techniques per the validated procedure; multiple specimens are recommended per current clinical guidance to maximize sensitivity.",
+    "Blood parasite testing (thick and thin smears for malaria, Babesia) includes correct staining, examination at the appropriate magnifications, and parasite identification by qualified personnel.",
+    "Antigen tests (rapid malaria, Giardia, Cryptosporidium) are performed per the manufacturer's instructions with documented QC.",
+    "Parasitology specimens with positive findings are reviewed by the technical supervisor or medical director or designee for confirmation before release of clinically significant identifications.",
+    "Records retained per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "Specimen receipt verifies acceptable specimen type and preservation; rejection criteria applied as needed.",
+    "Concentration and stain procedures performed per the validated method.",
+    "Examination by trained personnel; positive findings confirmed by technical supervisor or medical director or designee.",
+    "Reports include the organism identified, the diagnostic stage, and any clinical comment as appropriate."
+  ],
+  "definitions": [
+    ["O and P exam", "Ova and Parasite exam: microscopic examination of concentrated stool for parasite eggs, larvae, cysts, and trophozoites, typically with permanent stain for protozoan identification."]
+  ]
+}

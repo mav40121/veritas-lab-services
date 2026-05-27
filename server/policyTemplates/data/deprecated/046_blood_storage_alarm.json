@@ -1,0 +1,40 @@
+{
+  "policy_id": "46",
+  "slug": "blood_storage_alarm",
+  "policy_name": "Blood Storage Alarm Response Policy",
+  "section": "Specialty Services",
+  "purpose": "This policy describes how <<LAB_NAME>> responds to alarms on refrigerators, freezers, and platelet incubators used to store blood components. Required by 42 CFR 493.1252 (storage conditions) and 21 CFR 606.65 (supplies and reagents storage).",
+  "cfr_text_blocks": [
+    {
+      "citation": "21 CFR 606.65(d)",
+      "label": "FDA: Supplies and reagents",
+      "verbatim": "Storage of blood and blood components shall be at a temperature that will provide for the maximum length of time during which the blood may be stored, with proper means for the recording and visual display of temperature."
+    },
+    {
+      "citation": "42 CFR 493.1252(b)",
+      "label": "Standard: Storage conditions",
+      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> transfusion service personnel and the medical director or designee.",
+  "policy_statements": [
+    "Every refrigerator, freezer, and platelet incubator used for blood component storage has continuous temperature monitoring with audible/visual alarms; alarms trigger immediate response 24/7.",
+    "Alarm thresholds are set inside the regulatory storage range so corrective action begins before the storage range is exceeded.",
+    "On alarm, the responder verifies the temperature, identifies the cause (door open, power loss, equipment failure), and triages stored components (continue use, move to backup, quarantine).",
+    "If components were exposed to out-of-range temperature beyond the validated tolerance, they are quarantined and reviewed by the medical director or designee for disposition.",
+    "Every alarm event is logged on the Storage Alarm Response log with timestamp, cause, response actions, components affected, and disposition.",
+    "Monthly review of the Storage Alarm Response log by the medical director or designee identifies trends and prompts equipment replacement or process change."
+  ],
+  "procedure_steps": [
+    "On alarm, the on-duty technologist responds immediately, verifies the temperature on the local display and the centralized monitoring (if any).",
+    "Cause is identified: door left open (close, allow re-equilibration), power loss (verify backup power), equipment failure (initiate equipment-out-of-service process and move components to backup).",
+    "Components are triaged: if storage remained within range, continue use; if exposed to out-of-range, quarantine.",
+    "Quarantined components are reviewed by the medical director or designee with the alarm data; disposition (return to inventory, discard) is documented.",
+    "The Storage Alarm Response log is completed with timestamp, cause, response, components affected, and disposition.",
+    "Equipment failures trigger an IT/facilities ticket; failed monitoring devices are replaced before storage resumes."
+  ],
+  "definitions": [
+    ["Storage alarm", "Audible/visual notification that a component-storage device is outside its set acceptance range."],
+    ["Quarantine", "Hold status placed on a component pending medical director or designee disposition decision after a temperature excursion or other quality concern."]
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "policy_id": "23",
+  "slug": "standard_precautions_ppe",
+  "policy_name": "Standard Precautions and PPE Policy",
+  "section": "Safety",
+  "purpose": "This policy describes how <<LAB_NAME>> applies Standard Precautions and selects personal protective equipment (PPE) for testing personnel. CLIA at 42 CFR 493.1101(c) requires personnel safety from biological hazards; 29 CFR 1910.1030(d) (OSHA Bloodborne Pathogens) requires specific engineering, work-practice, and PPE controls.",
+  "cfr_text_blocks": [
+    {
+      "citation": "29 CFR 1910.1030(d)(3)",
+      "label": "OSHA: Personal Protective Equipment",
+      "verbatim": "When there is occupational exposure, the employer shall provide, at no cost to the employee, appropriate personal protective equipment such as, but not limited to, gloves, gowns, laboratory coats, face shields or masks and eye protection, and mouthpieces, resuscitation bags, pocket masks, or other ventilation devices. Personal protective equipment will be considered 'appropriate' only if it does not permit blood or other potentially infectious materials to pass through to or reach the employee's work clothes, street clothes, undergarments, skin, eyes, mouth, or other mucous membranes under normal conditions of use and for the duration of time which the protective equipment will be used."
+    }
+  ],
+  "scope": "All <<LAB_NAME>> personnel who handle blood, body fluids, tissue, or other potentially infectious materials. Applies at every testing site under the lab's CLIA certificate.",
+  "policy_statements": [
+    "Standard Precautions apply to every patient specimen and every shared lab surface as if known to be infectious for bloodborne pathogens.",
+    "<<LAB_NAME>> provides at no cost to staff: gloves, lab coats, face shields or masks, eye protection, and other PPE appropriate to the task.",
+    "Minimum PPE: gloves and lab coat at all times when handling specimens; eye protection or face shield when there is potential for splash or aerosol; respirator (N95 or higher) when handling specimens with respiratory pathogens per the lab's risk assessment.",
+    "Eating, drinking, smoking, applying cosmetics or lip balm, handling contact lenses, and mouth pipetting are prohibited in the lab work area.",
+    "PPE is removed and disposed of (or sent to laundry for reusable items) before leaving the lab work area; hands are washed immediately after PPE removal.",
+    "Spills of blood or other potentially infectious materials are cleaned up immediately by trained staff using the lab's Spill Response procedure; spills are logged."
+  ],
+  "procedure_steps": [
+    "Before any specimen handling task, the staff member selects PPE appropriate to the task: gloves and lab coat as baseline; face shield or eye protection if splash potential; respirator if respiratory pathogen handling is required.",
+    "PPE is donned per the standard donning sequence (gown, mask/respirator, eye protection, gloves) and doffed per the standard doffing sequence (gloves, gown, eye protection, mask/respirator) with hand hygiene before and after.",
+    "Single-use PPE is disposed of in the appropriate biohazard or sharps container at the end of each task or when soiled.",
+    "Reusable lab coats are sent to laundry per the lab's laundry contract (NOT taken home); the laundry contract specifies bloodborne-pathogen handling.",
+    "Spills are addressed using the Spill Kit: contain, absorb, disinfect with EPA-registered tuberculocidal disinfectant per the manufacturer's contact time, dispose as biohazard waste, document on the Spill log.",
+    "PPE inventory is maintained so that no staff member is ever without appropriate PPE; the inventory is checked weekly and replenished within one business day of any depletion."
+  ],
+  "definitions": [
+    ["Standard Precautions", "The CDC approach to infection control that treats all human blood and certain body fluids as if known to be infectious for bloodborne pathogens. Applies regardless of patient diagnosis or perceived risk."],
+    ["Personal Protective Equipment (PPE)", "Specialized clothing or equipment worn by an employee for protection against infectious materials. Includes gloves, gowns, lab coats, masks, respirators, and eye protection."],
+    ["Spill Kit", "Pre-assembled set of materials for cleaning up blood or body fluid spills: absorbent material, EPA-registered disinfectant, biohazard bag, gloves, and disposal materials."]
+  ]
+}
