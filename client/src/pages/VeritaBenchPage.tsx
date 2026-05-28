@@ -104,7 +104,7 @@ export default function VeritaBenchPage() {
   const [fNotes, setFNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   async function loadData() {
     try {
