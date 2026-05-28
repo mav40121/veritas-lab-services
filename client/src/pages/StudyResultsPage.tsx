@@ -44,6 +44,9 @@ import {
   type QCRangeDataPoint,
   calculateRefInterval,
   isRefInterval,
+  calculateSensitivity,
+  type SensitivityResults,
+  type SensitivityInput,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
 import { teaLabelFor } from "@/lib/cliaTeaData";
@@ -1795,6 +1798,164 @@ export default function StudyResults() {
 
   // PT/Coag is now unlocked — Coming Soon gate removed (was previously behind
   // `if (false && ...)` after launch and has been verified live).
+
+  // ── Sensitivity (analytical sensitivity, CLSI EP17-A2) ────────────────
+  // Sensitivity studies have a different data shape than the rest of the
+  // results page (no instrument-axis table, no slope/intercept). Render
+  // a minimal LoB/LoD/LoQ + verdict panel here and early-return so the
+  // main results path below does not try to coerce sensitivity data into
+  // a calculator that does not know its shape. Full PDF-parity rendering
+  // ships in a follow-on PR.
+  if (study.studyType === "sensitivity") {
+    let sensitivityResults: SensitivityResults | null = null;
+    let sensitivityError: string | null = null;
+    try {
+      const dp = JSON.parse(study.dataPoints) as { input: SensitivityInput };
+      if (!dp?.input) throw new Error("Sensitivity study data missing 'input' object");
+      sensitivityResults = calculateSensitivity(dp.input);
+    } catch (e: any) {
+      sensitivityError = e?.message || "Unable to compute sensitivity results";
+    }
+    const passColor = sensitivityResults?.overallPass
+      ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+      : "bg-amber-500/10 text-amber-700 border-amber-500/20";
+    const fmt = (n: number | null | undefined, digits = 3) =>
+      n == null || !Number.isFinite(n) ? "—" : n.toFixed(digits);
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Analytical Sensitivity (CLSI EP17-A2)
+            </div>
+            <h1 className="text-2xl font-semibold">{study.testName}</h1>
+            <div className="text-sm text-muted-foreground mt-1">
+              {study.instrument || "—"} · {study.date} · Analyst: {study.analyst || "—"}
+            </div>
+          </div>
+          <Button asChild variant="outline">
+            <Link href={labRoute("/dashboard")}>Back to Dashboard</Link>
+          </Button>
+        </div>
+
+        {sensitivityError ? (
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-destructive font-medium mb-2">Unable to render sensitivity results</p>
+              <p className="text-sm text-muted-foreground">{sensitivityError}</p>
+            </CardContent>
+          </Card>
+        ) : sensitivityResults ? (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+                  <span>Verdict</span>
+                  <Badge variant="outline" className={passColor}>
+                    {sensitivityResults.overallPass ? "PASS" : "FAIL"}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm leading-relaxed">
+                <div className="mb-2">
+                  <span className="font-medium">Mode:</span>{" "}
+                  {sensitivityResults.mode === "establishment" ? "Establishment" : "Manufacturer claim verification"}
+                </div>
+                <div className="text-muted-foreground">{sensitivityResults.summary}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Limits</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left p-2 font-semibold">Parameter</th>
+                      <th className="text-right p-2 font-semibold">Value</th>
+                      <th className="text-left p-2 font-semibold pl-4">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-border">
+                      <td className="p-2 font-medium">LoB (Limit of Blank)</td>
+                      <td className="p-2 text-right font-mono">{fmt(sensitivityResults.lob?.parametric)}</td>
+                      <td className="p-2 pl-4 text-muted-foreground">
+                        Parametric (mean + 1.645·SD); non-parametric (95th percentile) = {fmt(sensitivityResults.lob?.nonParametric)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-border">
+                      <td className="p-2 font-medium">LoD (Limit of Detection)</td>
+                      <td className="p-2 text-right font-mono">{fmt(sensitivityResults.lod?.value)}</td>
+                      <td className="p-2 pl-4 text-muted-foreground">
+                        EP17-A2 single-sample: LoB + cβ·SD(low level)
+                      </td>
+                    </tr>
+                    {sensitivityResults.loq && (
+                      <tr>
+                        <td className="p-2 font-medium">LoQ (Limit of Quantitation)</td>
+                        <td className="p-2 text-right font-mono">{fmt(sensitivityResults.loq.value)}</td>
+                        <td className="p-2 pl-4 text-muted-foreground">
+                          Lowest level meeting CV ≤ {(sensitivityResults.loq.cvThreshold * 100).toFixed(0)}% and
+                          bias ≤ {(sensitivityResults.loq.biasThreshold * 100).toFixed(0)}%
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+
+            {sensitivityResults.manufacturerClaim && sensitivityResults.mode === "verification" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Manufacturer Claim Comparison</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left p-2 font-semibold">Parameter</th>
+                        <th className="text-right p-2 font-semibold">Lab observed</th>
+                        <th className="text-right p-2 font-semibold">Manufacturer claim</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-border">
+                        <td className="p-2 font-medium">LoB</td>
+                        <td className="p-2 text-right font-mono">{fmt(sensitivityResults.lob?.parametric)}</td>
+                        <td className="p-2 text-right font-mono">{fmt(sensitivityResults.manufacturerClaim.lob)}</td>
+                      </tr>
+                      <tr className="border-b border-border">
+                        <td className="p-2 font-medium">LoD</td>
+                        <td className="p-2 text-right font-mono">{fmt(sensitivityResults.lod?.value)}</td>
+                        <td className="p-2 text-right font-mono">{fmt(sensitivityResults.manufacturerClaim.lod)}</td>
+                      </tr>
+                      {sensitivityResults.loq && sensitivityResults.manufacturerClaim.loq != null && (
+                        <tr>
+                          <td className="p-2 font-medium">LoQ</td>
+                          <td className="p-2 text-right font-mono">{fmt(sensitivityResults.loq.value)}</td>
+                          <td className="p-2 text-right font-mono">{fmt(sensitivityResults.manufacturerClaim.loq)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardContent className="p-4 text-xs text-muted-foreground leading-relaxed">
+                This is a minimum-viable rendering for sensitivity studies. Per-lot breakdown, replicate-by-replicate display, and PDF parity ship in a follow-on update. Final approval and clinical determination must be made by the laboratory director or designee.
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   const instrumentNames: string[] = JSON.parse(study.instruments);
   const rawDataPoints = JSON.parse(study.dataPoints);
