@@ -1802,16 +1802,18 @@ export default function StudyResults() {
   // ── Sensitivity (analytical sensitivity, CLSI EP17-A2) ────────────────
   // Sensitivity studies have a different data shape than the rest of the
   // results page (no instrument-axis table, no slope/intercept). Render
-  // a minimal LoB/LoD/LoQ + verdict panel here and early-return so the
-  // main results path below does not try to coerce sensitivity data into
-  // a calculator that does not know its shape. Full PDF-parity rendering
-  // ships in a follow-on PR.
+  // verdict + LoB/LoD/LoQ panels + per-lot breakdown + replicate detail
+  // here and early-return so the main results path below does not try to
+  // coerce sensitivity data into a calculator that does not know its
+  // shape. PDF parity ships in a follow-on PR (#22 PDF workstream).
   if (study.studyType === "sensitivity") {
     let sensitivityResults: SensitivityResults | null = null;
+    let sensitivityInput: SensitivityInput | null = null;
     let sensitivityError: string | null = null;
     try {
       const dp = JSON.parse(study.dataPoints) as { input: SensitivityInput };
       if (!dp?.input) throw new Error("Sensitivity study data missing 'input' object");
+      sensitivityInput = dp.input;
       sensitivityResults = calculateSensitivity(dp.input);
     } catch (e: any) {
       sensitivityError = e?.message || "Unable to compute sensitivity results";
@@ -1821,6 +1823,14 @@ export default function StudyResults() {
       : "bg-amber-500/10 text-amber-700 border-amber-500/20";
     const fmt = (n: number | null | undefined, digits = 3) =>
       n == null || !Number.isFinite(n) ? "—" : n.toFixed(digits);
+    const pct = (n: number | null | undefined, digits = 1) =>
+      n == null || !Number.isFinite(n) ? "—" : `${n.toFixed(digits)}%`;
+    const passFailBadge = (pass: boolean) => (
+      <Badge variant="outline" className={pass
+        ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+        : "bg-amber-500/10 text-amber-700 border-amber-500/20"
+      }>{pass ? "PASS" : "FAIL"}</Badge>
+    );
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-4">
@@ -1847,6 +1857,7 @@ export default function StudyResults() {
           </Card>
         ) : sensitivityResults ? (
           <div className="space-y-4">
+            {/* Verdict */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between flex-wrap gap-2">
@@ -1865,6 +1876,7 @@ export default function StudyResults() {
               </CardContent>
             </Card>
 
+            {/* Limits summary */}
             <Card>
               <CardHeader>
                 <CardTitle>Limits</CardTitle>
@@ -1908,6 +1920,132 @@ export default function StudyResults() {
               </CardContent>
             </Card>
 
+            {/* LoB detail */}
+            <Card>
+              <CardHeader>
+                <CardTitle>LoB detail</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Mean (blank)</div>
+                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lob.meanBlank, 4)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">SD (blank)</div>
+                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lob.sdBlank, 4)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">n (blanks)</div>
+                    <div className="font-mono font-semibold">{sensitivityResults.lob.nBlank}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">LoB (used)</div>
+                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lob.parametric)}</div>
+                  </div>
+                </div>
+                {sensitivityResults.lob.byLot && Object.keys(sensitivityResults.lob.byLot).length > 0 && (
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Per-lot breakdown</div>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/40">
+                          <th className="text-left p-2 font-semibold">Lot</th>
+                          <th className="text-right p-2 font-semibold">n</th>
+                          <th className="text-right p-2 font-semibold">Mean</th>
+                          <th className="text-right p-2 font-semibold">SD</th>
+                          <th className="text-right p-2 font-semibold">LoB (param)</th>
+                          <th className="text-right p-2 font-semibold">LoB (95p)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(sensitivityResults.lob.byLot).map(([lot, data]) => (
+                          <tr key={lot} className="border-b border-border">
+                            <td className="p-2 font-medium">{lot}</td>
+                            <td className="p-2 text-right font-mono">{data.n}</td>
+                            <td className="p-2 text-right font-mono">{fmt(data.mean, 4)}</td>
+                            <td className="p-2 text-right font-mono">{fmt(data.sd, 4)}</td>
+                            <td className="p-2 text-right font-mono">{fmt(data.lobParametric)}</td>
+                            <td className="p-2 text-right font-mono">{fmt(data.lobNonParametric)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* LoD detail */}
+            <Card>
+              <CardHeader>
+                <CardTitle>LoD detail</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground">LoB used</div>
+                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lod.lobUsed)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">cβ (table A1)</div>
+                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lod.cBeta, 3)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">SD (low level)</div>
+                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lod.sdLowLevel, 4)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">n (low level)</div>
+                    <div className="font-mono font-semibold">{sensitivityResults.lod.nLowLevel}</div>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground mt-3">
+                  LoD = LoB + cβ × SD(low level). cβ from EP17-A2 Table A1 (α=β=0.05, one-sided).
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* LoQ per-level breakdown */}
+            {sensitivityResults.loq && sensitivityResults.loq.byLevel.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>LoQ level evaluation</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        <th className="text-left p-2 font-semibold">Expected level</th>
+                        <th className="text-right p-2 font-semibold">Mean observed</th>
+                        <th className="text-right p-2 font-semibold">SD</th>
+                        <th className="text-right p-2 font-semibold">CV</th>
+                        <th className="text-right p-2 font-semibold">Bias %</th>
+                        <th className="text-center p-2 font-semibold">CV ≤ {(sensitivityResults.loq.cvThreshold * 100).toFixed(0)}%</th>
+                        <th className="text-center p-2 font-semibold">Bias ≤ {(sensitivityResults.loq.biasThreshold * 100).toFixed(0)}%</th>
+                        <th className="text-center p-2 font-semibold">Meets LoQ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sensitivityResults.loq.byLevel.map((lv, idx) => (
+                        <tr key={idx} className="border-b border-border">
+                          <td className="p-2 font-mono">{fmt(lv.expectedConcentration, 3)}</td>
+                          <td className="p-2 text-right font-mono">{fmt(lv.meanObserved, 3)}</td>
+                          <td className="p-2 text-right font-mono">{fmt(lv.sd, 4)}</td>
+                          <td className="p-2 text-right font-mono">{pct(lv.cv)}</td>
+                          <td className="p-2 text-right font-mono">{pct(lv.biasPct)}</td>
+                          <td className="p-2 text-center">{passFailBadge(lv.meetsPrecision)}</td>
+                          <td className="p-2 text-center">{passFailBadge(lv.meetsBias)}</td>
+                          <td className="p-2 text-center">{passFailBadge(lv.meetsLoq)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Manufacturer claim comparison */}
             {sensitivityResults.manufacturerClaim && sensitivityResults.mode === "verification" && (
               <Card>
                 <CardHeader>
@@ -1946,9 +2084,117 @@ export default function StudyResults() {
               </Card>
             )}
 
+            {/* Replicate detail */}
+            {sensitivityInput && (sensitivityInput.blanks.length > 0 || sensitivityInput.lowLevel.length > 0) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Replicate data</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {sensitivityInput.blanks.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Blanks ({sensitivityInput.blanks.length} replicates)
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="border-b border-border bg-muted/40">
+                                <th className="text-left p-2 font-semibold">#</th>
+                                <th className="text-right p-2 font-semibold">Value</th>
+                                <th className="text-left p-2 font-semibold">Lot</th>
+                                <th className="text-right p-2 font-semibold">Day</th>
+                                <th className="text-right p-2 font-semibold">Run</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sensitivityInput.blanks.map((r, idx) => (
+                                <tr key={idx} className="border-b border-border">
+                                  <td className="p-2 font-mono text-muted-foreground">{idx + 1}</td>
+                                  <td className="p-2 text-right font-mono">{fmt(r.value, 4)}</td>
+                                  <td className="p-2 font-mono">{r.lot || "—"}</td>
+                                  <td className="p-2 text-right font-mono">{r.day ?? "—"}</td>
+                                  <td className="p-2 text-right font-mono">{r.run ?? "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {sensitivityInput.lowLevel.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Low-level samples ({sensitivityInput.lowLevel.length} replicates, used for LoD)
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="border-b border-border bg-muted/40">
+                                <th className="text-left p-2 font-semibold">#</th>
+                                <th className="text-right p-2 font-semibold">Value</th>
+                                <th className="text-left p-2 font-semibold">Lot</th>
+                                <th className="text-right p-2 font-semibold">Day</th>
+                                <th className="text-right p-2 font-semibold">Run</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sensitivityInput.lowLevel.map((r, idx) => (
+                                <tr key={idx} className="border-b border-border">
+                                  <td className="p-2 font-mono text-muted-foreground">{idx + 1}</td>
+                                  <td className="p-2 text-right font-mono">{fmt(r.value, 4)}</td>
+                                  <td className="p-2 font-mono">{r.lot || "—"}</td>
+                                  <td className="p-2 text-right font-mono">{r.day ?? "—"}</td>
+                                  <td className="p-2 text-right font-mono">{r.run ?? "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {sensitivityInput.loqLevels && sensitivityInput.loqLevels.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          LoQ levels
+                        </div>
+                        {sensitivityInput.loqLevels.map((group, gIdx) => (
+                          <div key={gIdx} className="mb-3">
+                            <div className="text-sm font-medium mb-1">Expected level {fmt(group.expectedConcentration, 3)} ({group.replicates.length} replicates)</div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm border-collapse">
+                                <thead>
+                                  <tr className="border-b border-border bg-muted/40">
+                                    <th className="text-left p-2 font-semibold">#</th>
+                                    <th className="text-right p-2 font-semibold">Value</th>
+                                    <th className="text-left p-2 font-semibold">Lot</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {group.replicates.map((r, idx) => (
+                                    <tr key={idx} className="border-b border-border">
+                                      <td className="p-2 font-mono text-muted-foreground">{idx + 1}</td>
+                                      <td className="p-2 text-right font-mono">{fmt(r.value, 4)}</td>
+                                      <td className="p-2 font-mono">{r.lot || "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Director sign-off + EP17-A2 reference */}
             <Card>
               <CardContent className="p-4 text-xs text-muted-foreground leading-relaxed">
-                This is a minimum-viable rendering for sensitivity studies. Per-lot breakdown, replicate-by-replicate display, and PDF parity ship in a follow-on update. Final approval and clinical determination must be made by the laboratory director or designee.
+                Computed per CLSI EP17-A2 (Evaluation of Detection Capability for Clinical Laboratory Measurement Procedures). Final approval and clinical determination must be made by the laboratory director or designee. PDF parity (printable Sensitivity report) ships in a follow-on update.
               </CardContent>
             </Card>
           </div>
