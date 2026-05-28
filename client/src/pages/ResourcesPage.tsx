@@ -8,6 +8,17 @@ import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const articles = [
   {
+    slug: "cost-per-reportable-test-four-layer-framework",
+    title: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
+    summary: "Most labs answer the cost question with reagent cost alone. CLSI GP11-A defines a four-layer framework (reagents, labor, equipment, overhead) where each layer answers a different financial question. Here is how to match the layer to the question, how to compare configurations honestly, and what to do this quarter.",
+    category: "Lab Economics",
+    readTime: "12 min read",
+    author: "Michael Veri",
+    date: "May 2026",
+    tags: ["CPRT", "CLSI GP11-A", "Lab Economics", "VeritaOps™", "CFO"],
+    featured: true,
+  },
+  {
     slug: "manual-logs-why-most-labs-should-stop",
     title: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop",
     summary: "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that 24-hour review was designed to catch. Here is when to retire it.",
@@ -27,7 +38,7 @@ const articles = [
     author: "Michael Veri",
     date: "March 2026",
     tags: ["Leadership Development", "Lab Director", "CLIA", "VeritaAssure™"],
-    featured: true,
+    featured: false,
   },
   {
     slug: "clia-calibration-verification-method-comparison",
