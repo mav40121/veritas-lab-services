@@ -14467,23 +14467,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // UI ship in Phase 2+; this scaffold returns the draft + registry
   // rows for the client tabs to render.
 
+  // Shared scope check for CMS-116 endpoints. Returns true if the user
+  // owns the lab or is an active member.
+  function userCanAccessLabCms116(userId: number, labId: number): boolean {
+    const isMember = (db as any).$client.prepare(
+      "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+    ).get(labId, userId);
+    const ownsLab = (db as any).$client.prepare(
+      "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+    ).get(labId, userId);
+    return Boolean(isMember || ownsLab);
+  }
+
   // GET /api/labs/:labId/veritalab/cms116-draft — fetch the lab's
   // current CMS-116 draft, or {draft: null} if none exists yet.
   app.get("/api/labs/:labId/veritalab/cms116-draft", authMiddleware, (req: any, res) => {
     const labId = Number(req.params.labId);
     if (!Number.isFinite(labId) || labId <= 0) return res.status(400).json({ error: "Invalid lab id" });
-    // Scope check: the user must be a member of this lab.
-    const isMember = (db as any).$client.prepare(
-      "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
-    ).get(labId, req.userId);
-    const ownsLab = (db as any).$client.prepare(
-      "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-    ).get(labId, req.userId);
-    if (!isMember && !ownsLab) return res.status(403).json({ error: "Not a member of this lab" });
+    if (!userCanAccessLabCms116(req.userId, labId)) return res.status(403).json({ error: "Not a member of this lab" });
     const row = (db as any).$client.prepare(
       "SELECT * FROM cms116_drafts WHERE lab_id = ?"
     ).get(labId);
     res.json({ draft: row || null });
+  });
+
+  // PUT /api/labs/:labId/veritalab/cms116-draft — upsert the lab's
+  // CMS-116 draft. Body shape: { sections: {i, ii, iii, iv, v, vi, vii,
+  // viii, ix, x}, director_signature_name, director_signature_date,
+  // status, notes }. Each section is a free-form JSON blob the client
+  // controls; the server just stringifies and stores.
+  app.put("/api/labs/:labId/veritalab/cms116-draft", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), (req: any, res) => {
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId) || labId <= 0) return res.status(400).json({ error: "Invalid lab id" });
+    if (!userCanAccessLabCms116(req.userId, labId)) return res.status(403).json({ error: "Not a member of this lab" });
+    const body = req.body || {};
+    const sections = body.sections || {};
+    const now = new Date().toISOString();
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare("SELECT id FROM cms116_drafts WHERE lab_id = ?").get(labId) as { id?: number } | undefined;
+    const stringify = (v: any) => (v == null ? null : JSON.stringify(v));
+    const fields = {
+      section_i_json: stringify(sections.i),
+      section_ii_json: stringify(sections.ii),
+      section_iii_json: stringify(sections.iii),
+      section_iv_json: stringify(sections.iv),
+      section_v_json: stringify(sections.v),
+      section_vi_json: stringify(sections.vi),
+      section_vii_json: stringify(sections.vii),
+      section_viii_json: stringify(sections.viii),
+      section_ix_json: stringify(sections.ix),
+      section_x_json: stringify(sections.x),
+      director_signature_name: body.director_signature_name || null,
+      director_signature_date: body.director_signature_date || null,
+      status: (body.status === 'draft' || body.status === 'submitted' || body.status === 'issued') ? body.status : 'draft',
+      notes: body.notes || null,
+    };
+    if (existing && existing.id) {
+      sqlite.prepare(`
+        UPDATE cms116_drafts SET
+          section_i_json=@section_i_json, section_ii_json=@section_ii_json,
+          section_iii_json=@section_iii_json, section_iv_json=@section_iv_json,
+          section_v_json=@section_v_json, section_vi_json=@section_vi_json,
+          section_vii_json=@section_vii_json, section_viii_json=@section_viii_json,
+          section_ix_json=@section_ix_json, section_x_json=@section_x_json,
+          director_signature_name=@director_signature_name,
+          director_signature_date=@director_signature_date,
+          status=@status, notes=@notes, updated_at=@now
+        WHERE lab_id=@labId
+      `).run({ ...fields, now, labId });
+    } else {
+      sqlite.prepare(`
+        INSERT INTO cms116_drafts (
+          lab_id, section_i_json, section_ii_json, section_iii_json,
+          section_iv_json, section_v_json, section_vi_json, section_vii_json,
+          section_viii_json, section_ix_json, section_x_json,
+          director_signature_name, director_signature_date, status, notes,
+          created_at, updated_at
+        ) VALUES (
+          @labId, @section_i_json, @section_ii_json, @section_iii_json,
+          @section_iv_json, @section_v_json, @section_vi_json, @section_vii_json,
+          @section_viii_json, @section_ix_json, @section_x_json,
+          @director_signature_name, @director_signature_date, @status, @notes,
+          @now, @now
+        )
+      `).run({ ...fields, now, labId });
+    }
+    const row = sqlite.prepare("SELECT * FROM cms116_drafts WHERE lab_id = ?").get(labId);
+    res.json({ ok: true, draft: row });
   });
 
   // GET /api/veritalab/state-registry — reference data, served read-only.
