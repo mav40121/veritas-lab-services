@@ -22,7 +22,9 @@ import {
 import {
   Plus, Lock, Users, Award, FileDown, Edit2, Trash2, Upload, Download,
   FileText, AlertTriangle, CheckCircle2, Clock, X,
+  FileSignature, MapPin,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -394,17 +396,37 @@ export default function VeritaLabAppPage() {
         ]}
       />
 
-          <div className="flex gap-2">
-            {certificates.length > 0 && (
-              <Button variant="outline" size="sm" onClick={handleExcelExport}>
-                <FileDown size={14} className="mr-1.5" /> Export Excel
-              </Button>
-            )}
-            <Button size="sm" onClick={openAddModal} disabled={isReadOnly} className="bg-primary hover:bg-primary/90">
-              <Plus size={14} className="mr-1.5" /> Add Certificate
-            </Button>
-          </div>
         </div>
+
+        {/* ── VeritaLab tabs (parking-lot #22 Phase 1 scaffold) ──
+            Certificates: the existing roster.
+            CMS-116: federal CLIA application form-fill (UI in Phase 2).
+            State Registry: per-state licensure authority lookup (data in Phase 2).
+        */}
+        <Tabs defaultValue="certificates" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="certificates" className="gap-1.5">
+              <Award size={14} /> Certificates
+            </TabsTrigger>
+            <TabsTrigger value="cms116" className="gap-1.5">
+              <FileSignature size={14} /> CMS-116
+            </TabsTrigger>
+            <TabsTrigger value="state-registry" className="gap-1.5">
+              <MapPin size={14} /> State Registry
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="certificates">
+            <div className="flex justify-end gap-2 mb-4">
+              {certificates.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleExcelExport}>
+                  <FileDown size={14} className="mr-1.5" /> Export Excel
+                </Button>
+              )}
+              <Button size="sm" onClick={openAddModal} disabled={isReadOnly} className="bg-primary hover:bg-primary/90">
+                <Plus size={14} className="mr-1.5" /> Add Certificate
+              </Button>
+            </div>
 
         {/* Loading */}
         {loading && (
@@ -528,6 +550,54 @@ export default function VeritaLabAppPage() {
             e.target.value = "";
           }}
         />
+          </TabsContent>
+
+          {/* ── CMS-116 tab (Phase 1 scaffold, form-fill UI in Phase 2) ──
+              Federal CLIA application Form CMS-116. Used at lab startup
+              and at certificate-type changes (waived to moderate,
+              moderate to high). Today VeritaLab tracks the resulting
+              certificate; this tab will help author the application.
+          */}
+          <TabsContent value="cms116">
+            <Card className="border-dashed">
+              <CardContent className="p-12 text-center">
+                <FileSignature size={40} className="text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-semibold text-lg mb-2">CMS-116 application support</h3>
+                <p className="text-muted-foreground mb-2 max-w-lg mx-auto">
+                  Federal CLIA application form. Lab startup workflow and certificate-type changes
+                  (waived to moderate, moderate to high) both require filing CMS-116.
+                </p>
+                <p className="text-xs text-muted-foreground max-w-lg mx-auto">
+                  Form-fill UI lands in Phase 2. Drafts will save to your lab, the issued certificate
+                  will wire back to your Certificates roster.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── State Registry tab (Phase 1 scaffold, data + lookup UI in Phase 2) ──
+              Static reference table of per-state laboratory licensure
+              authorities (form URL, fee, renewal cadence). Lab opens the
+              registry, looks up their state, sees the state-specific
+              obligation on top of CLIA.
+          */}
+          <TabsContent value="state-registry">
+            <Card className="border-dashed">
+              <CardContent className="p-12 text-center">
+                <MapPin size={40} className="text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-semibold text-lg mb-2">State licensure registry</h3>
+                <p className="text-muted-foreground mb-2 max-w-lg mx-auto">
+                  Many states require their own laboratory license on top of CLIA. This registry
+                  is the per-state authority, form URL, fee, and renewal cadence.
+                </p>
+                <p className="text-xs text-muted-foreground max-w-lg mx-auto">
+                  Registry data lands in Phase 2 (51 jurisdictions, sourced from agency
+                  publications with citations).
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         {/* Add/Edit Certificate Modal */}
         <Dialog open={showModal} onOpenChange={setShowModal}>

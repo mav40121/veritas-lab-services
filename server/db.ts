@@ -3384,4 +3384,83 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lab_date ON qc_resu
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_violations_result ON qc_rule_violations(qc_result_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_corrective_actions_result ON qc_corrective_actions(qc_result_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_period_reviews_lot_period ON qc_period_reviews(lab_id, control_lot_id, period_year, period_month)`); } catch {}
+
+// ── VeritaLab extension: CMS-116 application drafts + state licensure registry ──
+//
+// Parking-lot #22 Phase 1 scaffolding. Two surfaces land alongside the
+// existing certificate tracker:
+//
+//   1. cms116_drafts: per-lab draft of the federal CLIA application
+//      (CMS Form 116). One draft per lab; updates overwrite the prior
+//      draft. PDF generation is a follow-on phase; this table just
+//      stores the field values so the lab can resume editing.
+//
+//   2. state_lab_licensure_registry: static reference table of per-state
+//      (and DC) laboratory licensure authorities. Seeded read-only from
+//      a follow-on data-author pass. Empty in this scaffold commit.
+//      Rows describe the agency, the form URL, the fee, the renewal
+//      cadence, and any notes. Lab-agnostic; one row per jurisdiction.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS cms116_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    -- Form sections stored as JSON for forward-compat as CMS revises
+    -- the form. Field naming follows the CMS-116 OMB section labels.
+    section_i_json TEXT,        -- General Information
+    section_ii_json TEXT,       -- Type of Certificate Requested
+    section_iii_json TEXT,      -- Type of Laboratory
+    section_iv_json TEXT,       -- Hours of Lab Testing
+    section_v_json TEXT,        -- Multiple Sites
+    section_vi_json TEXT,       -- Waived Testing
+    section_vii_json TEXT,      -- PPM Procedures
+    section_viii_json TEXT,     -- Non-Waived Testing
+    section_ix_json TEXT,       -- Test Volume Estimate
+    section_x_json TEXT,        -- Director Information
+    director_signature_name TEXT,
+    director_signature_date TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',  -- draft | submitted | issued
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id)
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_cms116_drafts_lab ON cms116_drafts(lab_id)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS state_lab_licensure_registry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- USPS two-letter postal code (CA, NY, DC). Unique so each
+    -- jurisdiction has at most one canonical row.
+    state_code TEXT NOT NULL,
+    state_name TEXT NOT NULL,
+    -- "yes" if the state requires its own laboratory license beyond
+    -- CLIA; "no" if CLIA alone is sufficient; "exempt" if the state is
+    -- a CLIA-exempt state (NY, WA) where the state license substitutes
+    -- for CLIA entirely.
+    licensure_required TEXT NOT NULL DEFAULT 'no',
+    authority_name TEXT,
+    authority_url TEXT,
+    application_form_name TEXT,
+    application_form_url TEXT,
+    fee_description TEXT,
+    renewal_cadence TEXT,        -- annual | biennial | triennial | other
+    notes TEXT,
+    source_citation TEXT,        -- URL the row was sourced from
+    last_verified TEXT,          -- YYYY-MM-DD; reauthor pass updates
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(state_code)
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_state_registry_code ON state_lab_licensure_registry(state_code)`); } catch {}
+
+// Migration sentinels (no schema changes yet, but keeps the pattern in
+// place per CLAUDE.md NEW DB TABLE RULE so the next ALTER lands cleanly).
+{
+  const cms116Cols = (sqlite.prepare("PRAGMA table_info(cms116_drafts)").all() as { name: string }[]).map((c) => c.name);
+  void cms116Cols;
+  const stateCols = (sqlite.prepare("PRAGMA table_info(state_lab_licensure_registry)").all() as { name: string }[]).map((c) => c.name);
+  void stateCols;
+}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_settings_lab ON qc_rule_settings(lab_id)`); } catch {}
