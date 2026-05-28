@@ -37,7 +37,7 @@ function bencheLicenseCtx(req: any): LicenseContext {
   };
 }
 
-const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"];
+const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"];
 
 function hasOpsAccess(user: any, lab?: any) {
   const plan = lab?.plan ?? user?.plan;

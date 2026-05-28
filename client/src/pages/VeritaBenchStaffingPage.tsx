@@ -523,7 +523,7 @@ export default function VeritaBenchStaffingPage() {
   const [studyData, setStudyData] = useState<HourlyDataItem[]>([]);
   const [activeTab, setActiveTab] = useState<string>("week1");
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   async function loadStudies() {
     try {

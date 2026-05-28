@@ -644,7 +644,7 @@ export default function VeritaOpsAppPage() {
     return { a, b };
   }, [selectedForComparison, studies]);
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   const listUrl = activeLabId
     ? `${API_BASE}/api/labs/${activeLabId}/veritaops/studies`

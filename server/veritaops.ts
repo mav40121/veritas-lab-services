@@ -110,7 +110,7 @@ function hasOpsAccess(user: any, lab?: any): boolean {
   const plan = lab?.plan ?? user?.plan;
   return [
     "annual", "professional", "lab", "complete",
-    "waived", "community", "hospital", "large_hospital", "enterprise",
+    "waived", "clinic", "community", "hospital", "large_hospital", "enterprise",
   ].includes(plan);
 }
 
