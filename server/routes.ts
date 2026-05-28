@@ -14603,7 +14603,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sections = body.sections || {};
     const now = new Date().toISOString();
     const sqlite = (db as any).$client;
-    const existing = sqlite.prepare("SELECT id FROM cms116_drafts WHERE lab_id = ?").get(labId) as { id?: number } | undefined;
+    const existing = sqlite.prepare("SELECT id, status FROM cms116_drafts WHERE lab_id = ?").get(labId) as { id?: number; status?: string } | undefined;
+    const previousStatus = existing?.status || 'draft';
     const stringify = (v: any) => (v == null ? null : JSON.stringify(v));
     const fields = {
       section_i_json: stringify(sections.i),
@@ -14652,7 +14653,76 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       `).run({ ...fields, now, labId });
     }
     const row = sqlite.prepare("SELECT * FROM cms116_drafts WHERE lab_id = ?").get(labId);
-    res.json({ ok: true, draft: row });
+
+    // Issued-cert wire-back (parking-lot #22 Phase 5). On the transition
+    // from non-issued (draft / submitted / brand new) to 'issued',
+    // auto-create a lab_certificates row of type=clia so the issued
+    // certificate appears on the VeritaLab Certificates roster the next
+    // time the user loads the page. Idempotent: only fires on the
+    // status transition, not on every re-save while status is 'issued'.
+    //
+    // Body may optionally carry `issuedCert: { cliaNumber?, issuedDate?,
+    // expirationDate? }` to override defaults. Without those, falls
+    // back to labs.clia_number, today, and today + 2 years (the standard
+    // CLIA certificate cycle per 42 CFR 493.55).
+    let wiredCertId: number | null = null;
+    if (fields.status === 'issued' && previousStatus !== 'issued') {
+      try {
+        const issuedCert = body.issuedCert || {};
+        const lab = sqlite.prepare("SELECT id, lab_name, clia_number, owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+        if (lab) {
+          const cliaNumber = (issuedCert.cliaNumber || lab.clia_number || '').toString().trim() || null;
+          const issuedDate = issuedCert.issuedDate || now.slice(0, 10);
+          // CLIA certs are issued for a 2-year cycle by default (42 CFR 493.55);
+          // override via body.issuedCert.expirationDate when the State Agency
+          // issues a different term.
+          const computeDefaultExpiration = (issuedISO: string) => {
+            try {
+              const d = new Date(issuedISO);
+              if (!Number.isNaN(d.getTime())) {
+                d.setFullYear(d.getFullYear() + 2);
+                return d.toISOString().slice(0, 10);
+              }
+            } catch {}
+            return null;
+          };
+          const expirationDate = issuedCert.expirationDate || computeDefaultExpiration(issuedDate);
+          // Director name preferred from the signature block, fall back
+          // to section X director_name when missing.
+          let directorName: string | null = fields.director_signature_name as any;
+          if (!directorName) {
+            try {
+              const secX = sections.x || {};
+              directorName = (secX.director_name || null) as any;
+            } catch {}
+          }
+          const insertResult = sqlite.prepare(
+            `INSERT INTO lab_certificates (
+               user_id, cert_type, cert_name, cert_number, issuing_body,
+               issued_date, expiration_date, lab_director, notes,
+               is_auto_populated, is_active, created_at, updated_at
+             ) VALUES (?, 'clia', 'CLIA Certificate', ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`
+          ).run(
+            Number(lab.owner_user_id),
+            cliaNumber,
+            'Centers for Medicare and Medicaid Services (CMS)',
+            issuedDate,
+            expirationDate,
+            directorName,
+            `Auto-created from CMS-116 application on issuance. Lab: ${lab.lab_name || 'unknown'}.`,
+            now, now,
+          );
+          wiredCertId = Number(insertResult.lastInsertRowid);
+          console.log(`[cms116-draft PUT] Issued cert wire-back: lab_id=${labId} cert_id=${wiredCertId} clia=${cliaNumber} expires=${expirationDate}`);
+        }
+      } catch (err: any) {
+        // The cert wire-back is a polish layer; do not 500 the whole PUT
+        // if the certificate insert fails. The draft is still saved.
+        console.error(`[cms116-draft PUT] Issued cert wire-back failed for lab ${labId}:`, err?.message || err);
+      }
+    }
+
+    res.json({ ok: true, draft: row, issuedCertId: wiredCertId });
   });
 
   // GET /api/veritalab/state-registry — reference data, served read-only.
