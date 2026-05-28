@@ -14725,6 +14725,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, draft: row, issuedCertId: wiredCertId });
   });
 
+  // POST /api/admin/seed-state-registry — bulk-insert the per-state
+  // licensure registry from the in-repo seed data. Idempotent via the
+  // state_code UNIQUE constraint plus an UPSERT pattern; safe to re-run
+  // when the seed evolves (e.g. when the operator confirms a row that
+  // was previously licensure_required='unknown').
+  app.post("/api/admin/seed-state-registry", async (req: any, res) => {
+    const { secret } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { STATE_REGISTRY_SEED } = await import("./stateRegistryData");
+    const sqlite = (db as any).$client;
+    let inserted = 0;
+    let updated = 0;
+    const upsert = sqlite.prepare(`
+      INSERT INTO state_lab_licensure_registry (
+        state_code, state_name, licensure_required,
+        authority_name, authority_url,
+        application_form_name, application_form_url,
+        fee_description, renewal_cadence, notes,
+        source_citation, last_verified
+      ) VALUES (
+        @state_code, @state_name, @licensure_required,
+        @authority_name, @authority_url,
+        @application_form_name, @application_form_url,
+        @fee_description, @renewal_cadence, @notes,
+        @source_citation, @last_verified
+      )
+      ON CONFLICT(state_code) DO UPDATE SET
+        state_name = excluded.state_name,
+        licensure_required = excluded.licensure_required,
+        authority_name = excluded.authority_name,
+        authority_url = excluded.authority_url,
+        application_form_name = excluded.application_form_name,
+        application_form_url = excluded.application_form_url,
+        fee_description = excluded.fee_description,
+        renewal_cadence = excluded.renewal_cadence,
+        notes = excluded.notes,
+        source_citation = excluded.source_citation,
+        last_verified = excluded.last_verified,
+        updated_at = datetime('now')
+    `);
+    try {
+      sqlite.exec("BEGIN");
+      for (const row of STATE_REGISTRY_SEED) {
+        const existing = sqlite.prepare("SELECT 1 FROM state_lab_licensure_registry WHERE state_code = ?").get(row.state_code);
+        upsert.run(row);
+        if (existing) updated += 1; else inserted += 1;
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/seed-state-registry] failed:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    const total = sqlite.prepare("SELECT COUNT(*) as n FROM state_lab_licensure_registry").get() as { n: number };
+    console.log(`[admin/seed-state-registry] inserted=${inserted} updated=${updated} total=${total.n}`);
+    res.json({ ok: true, inserted, updated, total: total.n });
+  });
+
   // GET /api/veritalab/state-registry — reference data, served read-only.
   // No lab scope; the same per-state info is identical for every lab.
   // Empty in this scaffold commit; Phase 2 seeds the 51 rows.

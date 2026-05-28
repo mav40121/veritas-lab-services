@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Cms116FormTab } from "@/components/veritalab/Cms116FormTab";
+import { StateRegistryTab } from "@/components/veritalab/StateRegistryTab";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -564,27 +565,13 @@ export default function VeritaLabAppPage() {
             <Cms116FormTab labId={activeLabId ?? null} isReadOnly={isReadOnly} />
           </TabsContent>
 
-          {/* ── State Registry tab (Phase 1 scaffold, data + lookup UI in Phase 2) ──
+          {/* ── State Registry tab (parking-lot #22 Phase 2) ──
               Static reference table of per-state laboratory licensure
-              authorities (form URL, fee, renewal cadence). Lab opens the
-              registry, looks up their state, sees the state-specific
-              obligation on top of CLIA.
+              authorities. Lab opens the registry, looks up their state,
+              sees the state-specific obligation on top of CLIA.
           */}
           <TabsContent value="state-registry">
-            <Card className="border-dashed">
-              <CardContent className="p-12 text-center">
-                <MapPin size={40} className="text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-semibold text-lg mb-2">State licensure registry</h3>
-                <p className="text-muted-foreground mb-2 max-w-lg mx-auto">
-                  Many states require their own laboratory license on top of CLIA. This registry
-                  is the per-state authority, form URL, fee, and renewal cadence.
-                </p>
-                <p className="text-xs text-muted-foreground max-w-lg mx-auto">
-                  Registry data lands in Phase 2 (51 jurisdictions, sourced from agency
-                  publications with citations).
-                </p>
-              </CardContent>
-            </Card>
+            <StateRegistryTab />
           </TabsContent>
         </Tabs>
 
