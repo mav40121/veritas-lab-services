@@ -919,6 +919,44 @@ _(items #34 and #35 closed 2026-05-24; see C23 and C24 below)_
 
 ---
 
+### 37. Marketing one-pager: "Why VeritaCheck" comparative collateral
+
+**Effort:** S (one design pass + four claim paragraphs + PDF + matching marketing-site page in one PR)
+**Importance:** Medium — closes a positioning gap surfaced by six COLA conference attendees attached to a legacy verification tool; converts product-quality advantage into a leave-behind Lisa can hand out.
+
+**What:** Operator-facing collateral to address conference-attendee feedback that prospects want a VeritaCheck offering equivalent to (or better than) the legacy verification tool many of them use today. Four panels: cost ($25/study or $299/year vs. legacy per-seat licensing), time-to-first-study (minutes, no training), integration (8 study types in one tool plus VeritaPolicy / VeritaScan / VeritaComp in the same suite), compliance (signature-on-page-1 PDFs, real CFR citations, audit log). PDF version for Lisa's email follow-ups and conference leave-behinds; web page version for the marketing site.
+
+**Constraint:** Per CLAUDE.md section 3, customer-facing copy must NOT name "EP Evaluator." Use "other evaluation tools" or "legacy verification software." Audience knows what is meant.
+
+**Fix shape:** Design four-panel layout. Write the four claim paragraphs. Draft the disclaimer footer. Produce the .pdf and the matching marketing-site page in one PR.
+
+**Source:** 2026-05-11 / 2026-05-12 conference notes review with Michael. Conference attendees (Whitehead, Odegard, Othman, Molinelli, Kyle, Allred) expressed interest in equivalent / superior product. Michael confirmed product is substantially better and cheaper; positioning gap is the limiting factor, not the tool.
+
+**Status:** Open. Re-parked 2026-05-27 (originally PR #117, abandoned with merge conflicts then closed-and-re-authored at current numbering).
+
+**Pre- vs post-COLA:** Post-COLA, conference-driven.
+
+---
+
+### 38. Screen-capture video: VeritaCheck method comparison in 60 seconds
+
+**Effort:** S for agent prep (storyboard / pre-fill / captions / checklist); ~1 hour of operator time to record + light post-production.
+**Importance:** Medium — operator selected this as the highest-impact positioning artifact during the 2026-05-12 review; pairs with item #37 to give Lisa both a static and a motion asset for follow-ups.
+
+**What:** 30-60 second screen recording demonstrating the "experienced lab tech figures it out in seconds" claim. From blank method-comparison study to completed PDF, no voiceover, no narration, visible cursor motion. Embed autoplay-muted on the marketing site, include in conference follow-up emails.
+
+**Why it parks:** The recording itself has to be done by a human with screen-capture software (Loom, ScreenPal, OBS Studio, Camtasia). The agent cannot drive a live recording. What the agent CAN deliver and will when this item is taken up: storyboard + click-by-click script, demo lab pre-fill state so the take is clean on first try, on-screen caption text, post-production checklist (crop, blur any CLIA number, add CTA card at end).
+
+**Fix shape (when taken up):** Agent ships the recording-prep package (storyboard / pre-fill / captions / checklist). Operator or marketing sits down with Loom and records the take. Total: roughly 1 hour of operator time including a second take if needed.
+
+**Source:** 2026-05-12 conversation. Michael selected the screen-cap video as the highest-impact positioning artifact, then asked the agent to record it. Agent does not have screen-recording capability; option parked rather than fudged.
+
+**Status:** Open. Re-parked 2026-05-27 (originally PR #117, abandoned with merge conflicts then closed-and-re-authored at current numbering). Pending operator decision on whether to record this themselves or pivot to one-pager (item #37).
+
+**Pre- vs post-COLA:** Post-COLA, conference-driven.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
