@@ -961,6 +961,42 @@ try {
   sqlite.prepare(`ALTER TABLE user_seats ADD COLUMN invite_token TEXT`).run();
 } catch {}
 
+// Add lab_id column to user_seats for proper multi-lab scoping.
+// Before this, user_seats was owner-pooled (owner_user_id only), which meant
+// a multi-lab owner saw pending invites for all of their labs on every lab's
+// Members view. With lab_id populated, we can scope pending invites per-lab.
+// Retroactive populate runs once: for active seats, set lab_id from the
+// (single) matching lab_members row; for ambiguous cases (multi-lab owner
+// with shared invitee), leave NULL so the legacy owner-pooled fallback applies.
+{
+  const usCols = (sqlite.prepare("PRAGMA table_info(user_seats)").all() as { name: string }[]).map((c) => c.name);
+  if (!usCols.includes("lab_id")) {
+    try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN lab_id INTEGER"); } catch {}
+    // Retroactive populate: active seats with exactly one matching lab_members row.
+    try {
+      sqlite.exec(`
+        UPDATE user_seats
+        SET lab_id = (
+          SELECT lm.lab_id FROM lab_members lm
+          WHERE lm.user_id = user_seats.seat_user_id AND lm.status = 'active'
+          LIMIT 1
+        )
+        WHERE lab_id IS NULL
+          AND status = 'active'
+          AND seat_user_id IS NOT NULL
+          AND (
+            SELECT COUNT(*) FROM lab_members lm2
+            WHERE lm2.user_id = user_seats.seat_user_id AND lm2.status = 'active'
+          ) = 1
+      `);
+    } catch (e: any) {
+      console.warn("[user_seats lab_id retro-populate] failed:", e?.message);
+    }
+  }
+  // Index for the per-lab pending-invite query.
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_user_seats_lab_owner_status ON user_seats(lab_id, owner_user_id, status)"); } catch {}
+}
+
 // Add VeritaScan item columns if upgrading
 const scanItemCols = sqlite.prepare("PRAGMA table_info(veritascan_items)").all() as { name: string }[];
 const scanColNames = scanItemCols.map((c) => c.name);
