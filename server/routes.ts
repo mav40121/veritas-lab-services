@@ -1455,7 +1455,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // user has zero is_primary_lab=1 memberships elsewhere — that would leave
   // this new comp lab as their only primary and invert the seat math.
   app.post("/api/admin/provision-comp-lab", (req, res) => {
-    const { secret, userId, labName, cliaNumber, plan, accreditationBody } = req.body || {};
+    const { secret, userId, labName, cliaNumber, plan, accreditationBody, expiresAt } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!userId || !labName || !cliaNumber) {
       return res.status(400).json({ error: "userId, labName, cliaNumber required" });
@@ -1468,6 +1468,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const validAccreditors = [null, undefined, "", "CAP", "TJC", "COLA", "AABB"];
     if (!validAccreditors.includes(accreditationBody)) {
       return res.status(400).json({ error: "accreditationBody must be CAP, TJC, COLA, AABB, or omitted" });
+    }
+    // expiresAt: ISO string; defaults to 2099-12-31 (free-forever convention).
+    // Used by 1-year comp grants to set the subscription / plan expiry
+    // explicitly so the system stops allowing usage at the year mark and
+    // forces a renewal decision instead of silently rolling forever.
+    const resolvedExpiresAt = expiresAt || "2099-12-31T00:00:00.000Z";
+    if (typeof resolvedExpiresAt !== "string" || Number.isNaN(Date.parse(resolvedExpiresAt))) {
+      return res.status(400).json({ error: "expiresAt must be an ISO datetime string" });
     }
     const sqlite = (db as any).$client;
     const user = sqlite.prepare("SELECT id, email, name FROM users WHERE id = ?").get(Number(userId)) as any;
@@ -1501,14 +1509,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           plan, subscription_status, subscription_expires_at, plan_expires_at,
           stripe_customer_id, stripe_subscription_id,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', '2099-12-31T00:00:00.000Z', '2099-12-31T00:00:00.000Z', NULL, NULL, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', ?, ?, NULL, NULL, ?, ?)`
       ).run(
         cliaNumber.trim(), labName.trim(), Number(userId),
         accreditationBody === "CAP" ? 1 : 0,
         accreditationBody === "TJC" ? 1 : 0,
         accreditationBody === "COLA" ? 1 : 0,
         accreditationBody === "AABB" ? 1 : 0,
-        resolvedPlan, now, now,
+        resolvedPlan, resolvedExpiresAt, resolvedExpiresAt, now, now,
       );
       newLabId = Number(labResult.lastInsertRowid);
       sqlite.prepare(
