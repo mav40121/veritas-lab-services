@@ -1552,6 +1552,97 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(seats);
   });
 
+  // Admin: create a pending seat invite on behalf of a lab owner without
+  // going through the customer-facing /api/labs/:labId/members POST.
+  // Mirrors that endpoint's logic (user_seats row with invite_token, plus a
+  // lab_members row if the invitee already has an account) but skips the
+  // seat-count gate (comp / overrides) and the transactional email send.
+  // Returns the inviteToken and the prod URL the recipient can use.
+  //
+  // Used to mint invite links for a comped lab where the operator wants
+  // to deliver the link manually instead of relying on Resend (e.g. when
+  // the inviter is not signed in, when the email domain is being moved,
+  // or when the lab is being seeded for a customer who has not yet
+  // accepted their owner login).
+  //
+  // Body: { secret, labId, email, role?='staff', permissionsMode?='view_all' }
+  // permissionsMode is the most common shortcut ('view_all' | 'edit_all' |
+  // 'custom'); the full JSON shape is also accepted via `permissions`.
+  app.post("/api/admin/create-lab-invite", (req: any, res) => {
+    const { secret, labId, email, role, permissions, permissionsMode } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId || !email || !email.includes("@")) {
+      return res.status(400).json({ error: "labId and valid email required" });
+    }
+    const resolvedRole = role === "admin" ? "admin" : "staff";
+    const resolvedPermissions = permissions
+      ? permissions
+      : { mode: permissionsMode === "edit_all" || permissionsMode === "custom" ? permissionsMode : "view_all" };
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const labOwnerId = lab.owner_user_id;
+    const normalizedEmail = String(email).toLowerCase();
+    const existingUser = storage.getUserByEmail(normalizedEmail);
+    const seatUserId = existingUser ? existingUser.id : null;
+    // Duplicate-member check.
+    if (seatUserId) {
+      const dupMember = sqlite.prepare(
+        "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
+      ).get(Number(labId), seatUserId) as any;
+      if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
+    }
+    const dupSeat = sqlite.prepare(
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner" });
+
+    const now = new Date().toISOString();
+    const newStatus = seatUserId ? "active" : "pending";
+    const permJson = JSON.stringify(resolvedPermissions);
+    const inviteToken = crypto.randomUUID();
+    try {
+      sqlite.exec("BEGIN");
+      const deactivated = sqlite.prepare(
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail) as any;
+      if (deactivated) {
+        sqlite.prepare(
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, Number(labId), deactivated.id);
+      } else {
+        sqlite.prepare(
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, Number(labId));
+      }
+      if (seatUserId) {
+        sqlite.prepare(
+          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+           VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
+        ).run(Number(labId), seatUserId, resolvedRole, now, now, now);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/create-lab-invite] DB insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to create invite" });
+    }
+    const seat = sqlite.prepare(
+      "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ?"
+    ).get(labOwnerId, normalizedEmail);
+    const inviteUrl = `https://www.veritaslabservices.com/join?token=${inviteToken}`;
+    console.log(`[admin/create-lab-invite] lab_id=${labId} (${lab.lab_name}) email=${normalizedEmail} token=${inviteToken} status=${newStatus}`);
+    res.json({
+      ok: true,
+      lab: { id: lab.id, name: lab.lab_name },
+      seat,
+      inviteToken,
+      inviteUrl,
+      preexistingUser: Boolean(seatUserId),
+      status: newStatus,
+    });
+  });
+
   // Admin: full dump of lab_members joined to users + labs, ordered by
   // created_at. Read-only forensics endpoint built 2026-05-24 to trace the
   // origin of spurious lab_members rows on Lisa's Milford lab (lab_id=4)
