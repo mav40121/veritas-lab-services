@@ -734,14 +734,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         GROUP BY user_id
       ) act ON act.user_id = u.id
       LEFT JOIN (
-        -- Attribute studies to whoever actually ran them (created_by_user_id),
-        -- falling back to user_id for legacy rows from before that column
-        -- existed. Without this fallback, seat users (e.g. Rodrigo under
-        -- John Hall) would show 0 studies even when they ran most of them.
-        SELECT COALESCE(created_by_user_id, user_id) as actor_id, COUNT(*) as study_count
+        -- Study attribution is finished in JS below (after the SQL fetch) so
+        -- legacy rows (created_by_user_id NULL) can be split across seat
+        -- users via the studies.analyst free-text field. This JOIN just
+        -- seeds study_count = 0 for users with no studies; the JS pass
+        -- overwrites the column with the real (per-user) totals.
+        SELECT user_id as actor_id, 0 as study_count
         FROM studies
-        WHERE COALESCE(created_by_user_id, user_id) IS NOT NULL
-        GROUP BY COALESCE(created_by_user_id, user_id)
+        WHERE 1 = 0
       ) st ON st.actor_id = u.id
     `;
 
@@ -770,6 +770,105 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     try {
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
+
+      // ── Study attribution pass ─────────────────────────────────────────
+      // For each user, sum studies they ran. Two signals:
+      //   1. studies.created_by_user_id (set on rows created since the seat
+      //      attribution fix). One credit, full weight.
+      //   2. studies.analyst free-text (e.g. "RODRIGO GASPAR-TRILLO/EMILY DU")
+      //      fuzzy-matched against the lab's roster (owner + active seat
+      //      users). Each "/"-separated segment that resolves contributes
+      //      1/N of the study. Unresolved studies fall back to the lab
+      //      owner so per-lab totals stay stable.
+      // This replaces the previous SQL JOIN that credited every legacy row
+      // to the lab owner, hiding seat users like Rodrigo who actually ran
+      // the studies.
+      const studyAttribution: Map<number, number> = new Map();
+      try {
+        const studyRows = (db as any).$client.prepare(
+          "SELECT id, user_id, created_by_user_id, analyst FROM studies WHERE user_id IS NOT NULL"
+        ).all() as Array<{ id: number; user_id: number; created_by_user_id: number | null; analyst: string | null }>;
+        const seatLinks = (db as any).$client.prepare(
+          "SELECT owner_user_id, seat_user_id FROM user_seats WHERE status = 'active' AND seat_user_id IS NOT NULL"
+        ).all() as Array<{ owner_user_id: number; seat_user_id: number }>;
+        const allUsers = (db as any).$client.prepare(
+          "SELECT id, name, email FROM users"
+        ).all() as Array<{ id: number; name: string | null; email: string | null }>;
+        const userById = new Map<number, { id: number; name: string | null; email: string | null }>();
+        for (const u of allUsers) userById.set(u.id, u);
+
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const tokenize = (u: { id: number; name: string | null; email: string | null }) => {
+          const out = new Set<string>();
+          if (u.name) for (const t of norm(u.name).split(' ')) if (t.length >= 2) out.add(t);
+          if (u.email) {
+            const local = u.email.split('@')[0] || '';
+            for (const t of norm(local.replace(/[._-]/g, ' ')).split(' ')) if (t.length >= 2) out.add(t);
+          }
+          return Array.from(out);
+        };
+
+        // Per-lab roster: ownerUserId -> [{ id, tokens }] (owner + active seats).
+        const labRoster: Map<number, Array<{ id: number; tokens: string[] }>> = new Map();
+        for (const u of allUsers) {
+          const arr = labRoster.get(u.id) || [];
+          arr.push({ id: u.id, tokens: tokenize(u) });
+          labRoster.set(u.id, arr);
+        }
+        for (const link of seatLinks) {
+          const seatUser = userById.get(link.seat_user_id);
+          if (!seatUser) continue;
+          const arr = labRoster.get(link.owner_user_id) || [];
+          arr.push({ id: seatUser.id, tokens: tokenize(seatUser) });
+          labRoster.set(link.owner_user_id, arr);
+        }
+
+        const resolveSegment = (segment: string, members: Array<{ id: number; tokens: string[] }>): number | null => {
+          const segTokens = new Set(norm(segment).split(' ').filter(t => t.length >= 2));
+          if (segTokens.size === 0) return null;
+          let best: { id: number; score: number } | null = null;
+          for (const m of members) {
+            let score = 0;
+            for (const t of m.tokens) if (segTokens.has(t)) score += 1;
+            if (score > 0 && (!best || score > best.score)) best = { id: m.id, score };
+          }
+          return best ? best.id : null;
+        };
+
+        for (const study of studyRows) {
+          if (study.created_by_user_id) {
+            studyAttribution.set(
+              study.created_by_user_id,
+              (studyAttribution.get(study.created_by_user_id) || 0) + 1
+            );
+            continue;
+          }
+          const members = labRoster.get(study.user_id) || [];
+          const segments = (study.analyst || '').split(/[\/,;&]/).map(s => s.trim()).filter(Boolean);
+          const resolved: number[] = [];
+          for (const seg of segments) {
+            const id = resolveSegment(seg, members);
+            if (id) resolved.push(id);
+          }
+          if (resolved.length === 0) {
+            // Fallback to lab owner so totals stay stable when no segment matches.
+            studyAttribution.set(
+              study.user_id,
+              (studyAttribution.get(study.user_id) || 0) + 1
+            );
+          } else {
+            const share = 1 / resolved.length;
+            for (const id of resolved) {
+              studyAttribution.set(id, (studyAttribution.get(id) || 0) + share);
+            }
+          }
+        }
+      } catch (attrErr) {
+        // Attribution is a polish layer; if it fails, fall back to zero
+        // counts rather than 500ing the whole admin report.
+        console.error('[admin-report] study attribution failed:', attrErr);
+      }
+
       const labs = rows.map((row: any) => {
         const { password_hash, ...rest } = row;
         // On secondary-lab rows (this user is a member, not the lab's primary
@@ -792,6 +891,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return {
           ...rest,
           ...overrides,
+          // Overwrite the SQL-seeded 0 with the JS-computed attribution
+          // (rounded). For users with no studies, this stays 0.
+          study_count: Math.round(studyAttribution.get(rest.id) || 0),
           planDisplayName: PLAN_DISPLAY_NAMES[rest.plan] || rest.plan || "Unknown",
           // Effective lab identity for the UI to render. Prefer lab fields.
           effective_clia_number: rest.lab_clia_number || rest.clia_number || null,
