@@ -3619,21 +3619,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
     `).all(req.scope.labId);
 
-    // Pending invites: user_seats rows scoped to this lab's owner where the
-    // recipient hasn't accepted yet (no matching user account = no lab_members
-    // row exists for them yet). Owner-pooled per the current schema; an owner
-    // with multiple labs will see invites for all of them on each lab's view.
-    // Parking-lot for proper per-lab scoping: add lab_id to user_seats.
+    // Pending invites: user_seats rows scoped to this lab where the recipient
+    // hasn't accepted yet (no matching user account = no lab_members row
+    // exists for them yet).
+    //
+    // Filter: owner matches AND (lab_id matches OR lab_id is NULL). The
+    // NULL case is the legacy back-compat fallback for invites created
+    // before the lab_id column existed, attributing them to whichever lab
+    // the owner is currently viewing. New invites from PR #410 forward
+    // get the correct lab_id at write time.
     let pendingInvites: any[] = [];
     try {
       const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       if (lab) {
         pendingInvites = sqlite.prepare(`
-          SELECT id AS seat_id, seat_email, invited_at, status, invite_token
+          SELECT id AS seat_id, seat_email, invited_at, status, invite_token, lab_id
           FROM user_seats
-          WHERE owner_user_id = ? AND status = 'pending'
+          WHERE owner_user_id = ?
+            AND status = 'pending'
+            AND (lab_id = ? OR lab_id IS NULL)
           ORDER BY invited_at DESC
-        `).all(lab.owner_user_id);
+        `).all(lab.owner_user_id, req.scope.labId);
       }
     } catch (err: any) {
       console.error("[labs/:labId/members GET pendingInvites] query failed:", err.message);
@@ -3757,12 +3763,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(labOwnerId, normalizedEmail) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId);
       }
       // Create lab_members row when the invited user already has an account.
       if (seatUserId) {
