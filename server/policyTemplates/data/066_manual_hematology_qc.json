@@ -3,27 +3,97 @@
   "slug": "manual_hematology_qc",
   "policy_name": "Manual Hematology QC Policy",
   "section": "Specialty Services",
-  "purpose": "This policy describes QC for manual hematology procedures (manual differential, body fluid cell count, manual reticulocyte count, manual platelet estimate). Required by 42 CFR 493.1256 (control procedures) and 42 CFR 493.1261 (general hematology QC).",
+  "purpose": "This policy describes QC for manual hematology procedures performed at <<LAB_NAME>>: manual differential of stained peripheral smear, manual cell counts (CSF, body fluid, manual platelet, manual WBC, manual RBC), manual reticulocyte count, and manual estimates (platelet estimate from smear, WBC estimate from smear). Required by 42 CFR 493.1256 (control procedures), 42 CFR 493.1261 (hematology), 42 CFR 493.1267 (urinalysis where applicable to body-fluid counts), and OSHA 29 CFR 1910.1030 for handling of blood and body fluids during smear preparation and review.",
+  "scope": "All <<LAB_NAME>> hematology testing personnel performing manual hematology procedures, the Technical Supervisor for hematology (high-complexity), and the medical director or designee.",
+  "policy_statements": [
+    "Manual cell counts (CSF, synovial fluid, peritoneal fluid, pleural fluid, manual WBC, manual platelet, manual RBC) have two levels of commercial control material run within each 8 hours of operation and each time a change in reagents occurs, per 42 CFR 493.1261(a). Body-fluid commercial controls (e.g. Streck CBC-XE, Sysmex e-CHECK Body Fluid) are the standard.",
+    "Manual differential review of the stained peripheral smear is performed against the lab's validated reference range; abnormal morphology findings (blasts, schistocytes, malaria, etc.) trigger pathologist review per the lab's smear-review criteria.",
+    "Manual differential count: minimum 100 leukocytes counted (200 when feasible); each technologist's manual differential proficiency is assessed at competency cycles per the Staff Competency Assessment policy, including direct observation, blind sample, and problem-solving for atypical cells.",
+    "Manual reticulocyte counts use either methylene blue or new methylene blue stain; minimum 1000 red cells counted per reticulocyte determination; QC includes a positive reference control and patient duplicate where indicated.",
+    "Body fluid analysis records the fluid source, volume received, gross appearance (color, clarity), cell count with differentiation (when ordered), and any crystals or organisms seen on stained preparation; CSF receives priority handling.",
+    "Smear preparation, staining, and review are performed using validated reagents and stained-slide quality is monitored daily: stain QC slide reviewed for cellular morphology preservation, background, and stain intensity.",
+    "Critical results from manual hematology (CSF white cell count above threshold, blast cell identification, suspected malaria, severe thrombocytopenia, etc.) are reported per the lab's Critical Value Reporting policy.",
+    "QC results are documented on the Manual Hematology QC log with date, time, control identity, lot number, expiration, expected range, observed result, accept/reject decision, technologist initials.",
+    "Failed QC triggers immediate corrective action: investigate (operator technique, control deterioration, stain issue, microscope calibration), document on the QC failure log, re-run QC; patient testing on the affected procedure pauses until QC is in control.",
+    "Reagent and stain QC (Wright-Giemsa or equivalent stain, methylene blue, hemacytometer counting fluids, diluents) is performed each day of use and at each new lot per 42 CFR 493.1252.",
+    "Microscope is on a documented preventive maintenance schedule (annual professional service; daily user check of objectives, condenser, light source); a microscope problem affecting morphology assessment is documented and the affected patient testing is reviewed.",
+    "All standard precautions per OSHA 29 CFR 1910.1030 are observed during slide preparation, staining, and review; sharps used in smear-making (capillary tubes, slide edges) are handled per the Sharps Handling policy.",
+    "Records (QC, smear review, reticulocyte count, body fluid analysis, microscope maintenance) are retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "At the start of each 8-hour shift performing manual cell counts, the technologist runs two levels of commercial control material; results are interpreted against the manufacturer's acceptance criteria and documented on the Manual Hematology QC log.",
+    "Daily, before the first manual differential of the shift, the technologist reviews the stained QC slide for cellular morphology preservation, background, and stain intensity; documented on the Stain QC log. Failed stain QC triggers a fresh batch of stain.",
+    "For each patient body fluid received, the technologist records fluid source, volume, gross appearance, cell count, differential (when ordered), and any cytologic findings; CSF samples are processed within the lab's CSF turnaround target.",
+    "For each manual differential, the technologist counts a minimum of 100 leukocytes (200 when WBC is low or when atypical cells are suspected) and records the differential as percentages; absolute counts are calculated and reported.",
+    "Abnormal morphology findings (blasts, schistocytes, parasites, atypical lymphocytes) trigger the lab's smear-review criteria: hold reporting, escalate to a technologist with morphology expertise or to the medical director or designee.",
+    "For manual reticulocyte counts, the technologist stains a smear with methylene blue or new methylene blue, counts a minimum of 1000 red cells, and reports the reticulocyte percentage; absolute reticulocyte count is calculated.",
+    "Failed QC triggers immediate corrective action: investigate (operator technique, expired control, expired stain, microscope issue, hemacytometer issue), document, re-run QC; patient testing pauses until QC is in control. If unresolved within the lab's defined window, escalate to medical director or designee.",
+    "On reagent lot change or shipment receipt, repeat QC with the new lot in parallel with the prior lot per the Reagent and Solution Labeling policy and 42 CFR 493.1252; new-lot acceptance is documented before placing into service.",
+    "Daily user microscope check: confirm objectives clean, condenser aligned, light source functional; annual professional service per the maintenance schedule.",
+    "Document the technologist's manual differential proficiency at each competency assessment cycle (Initial, 6-month, Annual) per the Staff Competency Assessment policy. The proficiency assessment includes direct observation, blind sample with known cell composition, and problem-solving on atypical morphology.",
+    "Critical values are reported per the Critical Value Reporting policy with date, time, recipient identity, and read-back confirmation.",
+    "QC records, smear review records, reticulocyte counts, body fluid analyses, and microscope maintenance records are retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "definitions": [
+    [
+      "Manual cell count",
+      "Counting of cellular elements by manual hemocytometer (Neubauer chamber or equivalent), used for body fluids and when automated counts are unreliable. Subject to 42 CFR 493.1261(a) two-level, 8-hour control requirement."
+    ],
+    [
+      "Manual differential",
+      "Microscopic evaluation of a stained peripheral blood smear, counting leukocyte subtypes and characterizing red cell and platelet morphology. Minimum 100 cells counted (200 preferred)."
+    ],
+    [
+      "Stain QC slide",
+      "A reference smear with known cellular elements reviewed daily before patient testing to confirm stain quality, background, and morphology preservation."
+    ],
+    [
+      "Reticulocyte count",
+      "Determination of the percentage and absolute number of immature red cells (reticulocytes) on a smear stained with methylene blue or new methylene blue. Minimum 1000 red cells counted."
+    ],
+    [
+      "Body fluid analysis",
+      "Cell count and differential performed on cerebrospinal, synovial, peritoneal, or pleural fluid using manual hemocytometer and stained slide review."
+    ],
+    [
+      "Smear review criteria",
+      "The lab's documented threshold-based rules for when an abnormal manual differential or stained-smear finding triggers pathologist or senior-technologist review."
+    ],
+    [
+      "Hemacytometer",
+      "A counting chamber (typically Neubauer-pattern) used for manual cell counts. Cleaned and visually inspected before each use; counts performed within the validated time window after specimen loading."
+    ]
+  ],
   "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1256(a)",
+      "label": "Standard: Control procedures",
+      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+    },
+    {
+      "citation": "42 CFR 493.1256(d)",
+      "label": "Standard: Control procedures (frequency)",
+      "verbatim": "Unless CMS approves a procedure, specified in Appendix C of the State Operations Manual (CMS Pub. 7), that provides equivalent quality testing, the laboratory must, at a minimum, (1) Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure."
+    },
     {
       "citation": "42 CFR 493.1261(a)",
       "label": "Standard: Hematology",
       "verbatim": "If the laboratory performs automated hematology testing, the laboratory must perform at least two levels of control material each day of testing in accordance with 493.1256(d). If the laboratory performs manual cell counts, the laboratory must perform two controls within each 8 hours of operation and each time a change in reagents occurs."
+    },
+    {
+      "citation": "42 CFR 493.1252(b)",
+      "label": "Standard: Reagent storage conditions",
+      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented."
+    },
+    {
+      "citation": "42 CFR 493.927",
+      "label": "Standard: Hematology proficiency testing",
+      "verbatim": "Failure to attain a score of at least 80 percent on each analyte or subspecialty constitutes unsuccessful performance for a testing event. To be successful for the analyte or subspecialty, the laboratory must obtain a score of at least 80 percent for two consecutive or two out of the last three testing events."
+    },
+    {
+      "citation": "29 CFR 1910.1030(d)(3)",
+      "label": "OSHA: Personal protective equipment",
+      "verbatim": "When there is occupational exposure, the employer shall provide, at no cost to the employee, appropriate personal protective equipment such as, but not limited to, gloves, gowns, laboratory coats, face shields or masks and eye protection, and mouthpieces, resuscitation bags, pocket masks, or other ventilation devices."
     }
-  ],
-  "scope": "All <<LAB_NAME>> hematology testing personnel performing manual hematology procedures.",
-  "policy_statements": [
-    "Manual cell counts (CSF, body fluid, manual platelet, manual differential) have two levels of control material run within each 8-hour shift of operation and each time reagents change per 42 CFR 493.1261(a).",
-    "Manual differential review: standardized review of stained smear, with documented technologist proficiency assessed at competency cycles per the Staff Competency Assessment policy.",
-    "QC results are documented on the manual hematology QC log; failed QC triggers immediate corrective action and pauses patient testing until QC is in control.",
-    "Records retained for at least 2 years per 42 CFR 493.1105."
-  ],
-  "procedure_steps": [
-    "At the start of each 8-hour shift performing manual cell counts, the technologist runs two levels of control material; results are documented.",
-    "Failed QC triggers immediate corrective action: investigate, document, rerun QC; patient testing pauses until in control.",
-    "Manual differential proficiency is assessed at scheduled competency cycles."
-  ],
-  "definitions": [
-    ["Manual cell count", "Counting of cellular elements by manual hemocytometer, used for body fluids and when automated counts are unreliable. Subject to 42 CFR 493.1261(a) two-level, 8-hour control requirement."]
   ]
 }

@@ -3,19 +3,17 @@
 Of the 43 non-combined VeritaPolicy templates, this is a per-template recommendation on enrichment priority. Each is classified ENRICH (worth bringing to combined-template depth), REVIEW (moderate applicability, director call), SPECIALTY (narrow scope, low priority), or OK (already at adequate depth, or already going through a Phase 3 merge into a combined).
 
 **Median score** (statements + steps + defs + cfr_blocks): 15
-**Mean score**: 14.5
+**Mean score**: 15.7
 
 Enriched combineds (#98 etc.) average around score 30-45 after the Phase 3 enrichment pass. Anything here at score 15 or below is meaningfully thinner.
 
 
-## ENRICH (2)
+## ENRICH (0)
 
 Universal-applicability templates that are thin enough to warrant enrichment. Each is ~20 minutes of authoring to bring up to combined depth.
 
 | ID | Policy | Subspecialty | Stmts | Steps | Defs | CFR | Score | Note |
 |---|---|---|---|---|---|---|---|---|
-| 66 | Manual Hematology QC Policy | Hematology | 4 | 3 | 1 | 1 | 9 | Universal-ish: any hematology shop does manual differential. Thin (score 9). |
-| 39 | Reagent and Solution Labeling Policy | — | 5 | 3 | 1 | 1 | 10 | Universal: reagent/solution labeling. Thin (score 10). |
 
 ## REVIEW (6)
 
@@ -46,7 +44,7 @@ Narrow scope (HLA, EM, radioactive, etc.). Most labs will mark these N/A; enrich
 | 74 | Mohs Surgery Frozen Section Policy | Anatomic Pathology | 5 | 4 | 2 | 1 | 12 | Very narrow: Mohs surgery / dermatopathology. |
 | 16 | Radiation Safety Policy | — | 7 | 6 | 2 | 2 | 17 | Narrow: only labs handling radioactive materials. |
 
-## OK (26)
+## OK (28)
 
 Already at adequate depth OR going through Phase 3 merge into a combined (leave as-is).
 
@@ -78,10 +76,12 @@ Already at adequate depth OR going through Phase 3 merge into a combined (leave 
 | 38 | Reagent Management Policy | — | 6 | 6 | 3 | 4 | 19 | Universal: reagent management. |
 | 89 | Cybersecurity Incident Response Policy | — | 7 | 7 | 3 | 2 | 19 | Universal: cybersecurity incident response. |
 | 35 | Quality Control Plan Policy | — | 8 | 6 | 4 | 2 | 20 | Universal: QC plan per 42 CFR 493.1256. |
+| 39 | Reagent and Solution Labeling Policy | — | 11 | 10 | 6 | 6 | 33 | Enriched Phase 4 (was ENRICH at score 10, now ~33). Universal reagent/solution labeling. |
+| 66 | Manual Hematology QC Policy | Hematology | 13 | 12 | 7 | 6 | 38 | Enriched Phase 4 (was ENRICH at score 9, now ~38). Universal manual hematology QC. |
 
 ## Recommended action
 
-1. **Enrich the 2 ENRICH rows** as a Phase 4 content pass. ~40 minutes total. Highest leverage.
+1. **Enrich the 0 ENRICH rows** as a Phase 4 content pass. ~0 minutes total. Highest leverage.
 2. **Spot-check the 6 REVIEW rows** that are NOT going through Phase 3 merges. Some may upgrade to ENRICH after a read.
 3. **Leave SPECIALTY alone** unless a specialty-lab prospect requests it. They're not adding value to the typical Clinic / Community / Hospital customer.
 4. **Do not touch the OK rows currently routing to a Phase 3 merge** (sources #18, #19, #20, #21, #22, #23, #25-32, #82-88) — they get absorbed into the combined templates, separate work won't survive.
