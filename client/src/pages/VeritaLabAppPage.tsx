@@ -25,6 +25,7 @@ import {
   FileSignature, MapPin,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Cms116FormTab } from "@/components/veritalab/Cms116FormTab";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -552,27 +553,15 @@ export default function VeritaLabAppPage() {
         />
           </TabsContent>
 
-          {/* ── CMS-116 tab (Phase 1 scaffold, form-fill UI in Phase 2) ──
+          {/* ── CMS-116 tab (Phase 3: form-fill UI) ──
               Federal CLIA application Form CMS-116. Used at lab startup
               and at certificate-type changes (waived to moderate,
-              moderate to high). Today VeritaLab tracks the resulting
-              certificate; this tab will help author the application.
+              moderate to high). Cms116FormTab renders 10 sections,
+              persists per-lab draft to cms116_drafts. PDF generator
+              and cert-tracker wire-back land in Phase 4 and Phase 5.
           */}
           <TabsContent value="cms116">
-            <Card className="border-dashed">
-              <CardContent className="p-12 text-center">
-                <FileSignature size={40} className="text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-semibold text-lg mb-2">CMS-116 application support</h3>
-                <p className="text-muted-foreground mb-2 max-w-lg mx-auto">
-                  Federal CLIA application form. Lab startup workflow and certificate-type changes
-                  (waived to moderate, moderate to high) both require filing CMS-116.
-                </p>
-                <p className="text-xs text-muted-foreground max-w-lg mx-auto">
-                  Form-fill UI lands in Phase 2. Drafts will save to your lab, the issued certificate
-                  will wire back to your Certificates roster.
-                </p>
-              </CardContent>
-            </Card>
+            <Cms116FormTab labId={activeLabId ?? null} isReadOnly={isReadOnly} />
           </TabsContent>
 
           {/* ── State Registry tab (Phase 1 scaffold, data + lookup UI in Phase 2) ──
