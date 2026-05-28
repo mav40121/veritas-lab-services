@@ -60,6 +60,14 @@ export function LabSwitcher() {
     // chip and any downstream consumer that picks the active lab via
     // memberships.find(m => m.isPrimaryLab) will pick up the change.
     queryClient.invalidateQueries({ queryKey: ["/api/labs/me"] });
+    // Also refresh /api/auth/me so the user-level isSeatUser and
+    // seatPermissions state mirrors the new active lab. Without this,
+    // a user who just accepted a seat invite on a different lab still
+    // sees a stale isSeatUser=false until manual hard refresh, which
+    // makes the read-only resolver (useIsReadOnly) compute against the
+    // wrong seat row and silently disables edit affordances (see
+    // SCAHC Clarence Wesley trash button regression 2026-05-28).
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     setLocation(withLabPrefix(location, m.labId));
   };
 
