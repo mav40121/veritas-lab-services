@@ -14459,6 +14459,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ── VeritaLab CMS-116 + State Registry (parking-lot #22 Phase 1) ──────
+  //
+  // Two new VeritaLab sub-tabs land their endpoints here. CMS-116 is
+  // per-lab (lab-scoped). State Registry is reference data (shared
+  // across labs, served read-only). PDF generation and the form-fill
+  // UI ship in Phase 2+; this scaffold returns the draft + registry
+  // rows for the client tabs to render.
+
+  // GET /api/labs/:labId/veritalab/cms116-draft — fetch the lab's
+  // current CMS-116 draft, or {draft: null} if none exists yet.
+  app.get("/api/labs/:labId/veritalab/cms116-draft", authMiddleware, (req: any, res) => {
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId) || labId <= 0) return res.status(400).json({ error: "Invalid lab id" });
+    // Scope check: the user must be a member of this lab.
+    const isMember = (db as any).$client.prepare(
+      "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+    ).get(labId, req.userId);
+    const ownsLab = (db as any).$client.prepare(
+      "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+    ).get(labId, req.userId);
+    if (!isMember && !ownsLab) return res.status(403).json({ error: "Not a member of this lab" });
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM cms116_drafts WHERE lab_id = ?"
+    ).get(labId);
+    res.json({ draft: row || null });
+  });
+
+  // GET /api/veritalab/state-registry — reference data, served read-only.
+  // No lab scope; the same per-state info is identical for every lab.
+  // Empty in this scaffold commit; Phase 2 seeds the 51 rows.
+  app.get("/api/veritalab/state-registry", authMiddleware, (_req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT state_code, state_name, licensure_required, authority_name, authority_url, application_form_name, application_form_url, fee_description, renewal_cadence, notes, source_citation, last_verified FROM state_lab_licensure_registry ORDER BY state_code"
+    ).all();
+    res.json({ rows, count: rows.length });
+  });
+
   // POST /api/veritalab/check-reminders - check and send due reminders
   app.post("/api/veritalab/check-reminders", (req: any, res) => {
     const adminSecret = req.headers["x-admin-secret"];
