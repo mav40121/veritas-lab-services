@@ -3,28 +3,89 @@
   "slug": "reagent_solution_labeling",
   "policy_name": "Reagent and Solution Labeling Policy",
   "section": "Testing",
-  "purpose": "This policy describes how <<LAB_NAME>> labels reagents, solutions, control materials, calibrators, and lab-prepared materials. Required by 42 CFR 493.1252(c).",
+  "purpose": "This policy describes how <<LAB_NAME>> labels reagents, solutions, control materials, calibrators, and lab-prepared materials. Required by 42 CFR 493.1252(c) (reagent labeling), 42 CFR 493.1252(b) (storage conditions), 21 CFR 606.65 (FDA blood-product reagent requirements where applicable), and 29 CFR 1910.1200 (OSHA Hazard Communication / Right-to-Know labeling for hazardous chemicals).",
+  "scope": "All <<LAB_NAME>> personnel handling reagents, solutions, calibrators, controls, or lab-prepared materials; the medical director or designee; and the Safety Officer (for hazard-classification labeling).",
+  "policy_statements": [
+    "Every container of reagent, solution, control, calibrator, or lab-prepared material is labeled at the time of receipt or preparation with the elements required by 42 CFR 493.1252(c): identity (and titer, strength, or concentration when significant), storage requirements, preparation date or open-date, expiration date, and the staff member's initials.",
+    "Manufacturer's original labels are retained on the primary container; the lab adds the open-date and preparer initials to the original label or an attached sticker without obscuring the manufacturer's identity, lot, or expiration information.",
+    "Containers transferred from bulk to working volume retain the original lot identification on the working container; the working container's open-date and expiration date follow the manufacturer's instructions for opened material or the lab's validated stability data, whichever is more conservative.",
+    "Lab-prepared materials (working dilutions, custom buffers, stains, in-house controls) include: preparer's initials, preparation date, lot or batch identifier, expiration date, and identity of the source materials with their lot numbers for traceability.",
+    "Expiration dates for lab-prepared materials are based on the lab's validated stability data; in the absence of validated data, the lab uses the most conservative manufacturer guidance for the source materials.",
+    "Hazard classification per OSHA 29 CFR 1910.1200 (GHS / HazCom 2012) is communicated either on the manufacturer's label, on a secondary container label with pictogram and signal word, or via the Safety Data Sheet (SDS) accessible to staff; secondary containers used only by the staff member who filled them and emptied at the end of the shift are exempt from the secondary-container labeling requirement.",
+    "Unlabeled or insufficiently labeled materials are removed from service immediately and discarded per the lab's chemical or biohazard waste procedure; the disposal is logged on the Reagent Disposal log.",
+    "Labels are verified at three checkpoints: at reagent receipt by the receiving staff member, before each patient testing event by the testing personnel, and during the documented monthly inventory review by the medical director or designee or a delegated supervisor.",
+    "Reagent lot acceptance testing (parallel comparison of new lot against prior lot using control material) is performed before placing a new lot into patient use; results are documented and signed by the medical director or designee per 42 CFR 493.1252(b)(3).",
+    "Reagent storage conditions per the manufacturer's instructions are continuously monitored where applicable (refrigerator, freezer, room temperature within range) per 42 CFR 493.1252(b); temperature excursions trigger the lab's stored-reagent disposition procedure.",
+    "Records of reagent receipt, lot acceptance, in-use labels, hazard classification, storage temperature, and disposal are retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "procedure_steps": [
+    "At receipt, the staff member verifies the manufacturer's label is intact and shows identity, lot, expiration, and storage requirements; logs the receipt with date, lot, expiration, quantity, and receiving initials on the Reagent Receipt log.",
+    "Place the container in the validated storage location per the manufacturer's instructions; continuously monitored storage (refrigerator, freezer) is documented daily.",
+    "At first use of the container, add a secondary label or annotation with: open-date, initials of the staff member opening it, and the calculated in-use expiration (whichever is sooner: manufacturer's stated open-vial stability or the unopened-product expiration).",
+    "Before each patient testing event, the staff member confirms the in-use container's label is complete and legible. Missing or illegible labels: immediately remove from service, log on the Reagent Disposal log, and notify the supervisor.",
+    "For lab-prepared materials, the preparer applies a label with: identity (and concentration), preparation date, lot/batch ID, expiration date based on validated stability or most-conservative source-material guidance, preparer initials, and source-material lot numbers for traceability.",
+    "On new manufacturer lot introduction, the lab performs parallel testing against the prior lot using reference cells, calibrators, or patient samples per the Method Verification policy; results are documented and signed by the medical director or designee before patient use.",
+    "For hazardous materials, verify the manufacturer's GHS-compliant label is intact OR apply a secondary container label with pictogram, signal word, hazard statement, precautionary statement, and product identifier per 29 CFR 1910.1200(f); SDS is accessible to staff.",
+    "Monthly inventory review: medical director or designee or a delegated supervisor walks the lab, confirms labeling completeness for all in-use materials, removes any expired or unlabeled material, and signs the Monthly Reagent Inventory log.",
+    "Disposal of expired or unlabeled material follows the lab's chemical or biohazard waste procedure; the disposal is logged with date, material, lot, reason, and disposer initials.",
+    "Records (receipt, lot acceptance, monthly inventory, disposal) are retained for at least 2 years per 42 CFR 493.1105."
+  ],
+  "definitions": [
+    [
+      "Lab-prepared material",
+      "Any reagent, solution, calibrator, or control material prepared in the lab from purchased components. Subject to the same labeling requirements as purchased material plus the preparer initials and source-material traceability."
+    ],
+    [
+      "Open-date",
+      "The date the original sealed container is first opened. Triggers the open-vial stability clock per the manufacturer's instructions."
+    ],
+    [
+      "Lot acceptance testing",
+      "Parallel comparison of a new reagent lot against the prior lot using control material before placing the new lot into patient use, per 42 CFR 493.1252(b)(3)."
+    ],
+    [
+      "Secondary container",
+      "A container into which reagent has been transferred from the manufacturer's original container for use. Subject to GHS / HazCom labeling per 29 CFR 1910.1200(f) unless filled and emptied within a single shift by the same staff member."
+    ],
+    [
+      "Safety Data Sheet (SDS)",
+      "Manufacturer-supplied document required by 29 CFR 1910.1200(g) listing hazard classification, handling, storage, and emergency response information. Accessible to staff at the work area."
+    ],
+    [
+      "GHS / HazCom 2012",
+      "Globally Harmonized System of Classification and Labelling of Chemicals, adopted by OSHA in 2012 under 29 CFR 1910.1200. Defines pictograms, signal words, hazard statements, and precautionary statements for chemical hazards."
+    ]
+  ],
   "cfr_text_blocks": [
+    {
+      "citation": "42 CFR 493.1252(b)",
+      "label": "Standard: Storage conditions",
+      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
+    },
     {
       "citation": "42 CFR 493.1252(c)",
       "label": "Standard: Reagent labeling",
       "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies, as appropriate, must be labeled to indicate the following: (1) Identity and, when significant, titer, strength or concentration. (2) Storage requirements. (3) Preparation and expiration dates. (4) Other pertinent information required for proper use."
+    },
+    {
+      "citation": "42 CFR 493.1252(d)",
+      "label": "Standard: Reagent acceptance",
+      "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies must not be used when they have exceeded their expiration date, have deteriorated, or are of substandard quality."
+    },
+    {
+      "citation": "29 CFR 1910.1200(f)",
+      "label": "OSHA HazCom: Labels and other forms of warning",
+      "verbatim": "The chemical manufacturer, importer, or distributor shall ensure that each container of hazardous chemical leaving the workplace is labeled, tagged, or marked. Each label shall include the following: product identifier; signal word; hazard statement(s); pictogram(s); precautionary statement(s); name, address, and telephone number of the chemical manufacturer, importer, or other responsible party."
+    },
+    {
+      "citation": "29 CFR 1910.1200(g)",
+      "label": "OSHA HazCom: Safety Data Sheets",
+      "verbatim": "Chemical manufacturers and importers shall obtain or develop a safety data sheet for each hazardous chemical they produce or import. Employers shall have a safety data sheet in the workplace for each hazardous chemical which they use."
+    },
+    {
+      "citation": "42 CFR 493.1105(a)(2)",
+      "label": "Standard: Reagent records retention",
+      "verbatim": "The laboratory must retain quality system assessment records (including records of reagent, calibrator, and control material lot acceptance and storage condition monitoring) for at least 2 years."
     }
-  ],
-  "scope": "All <<LAB_NAME>> personnel handling reagents, solutions, calibrators, controls, or lab-prepared materials.",
-  "policy_statements": [
-    "Every container of reagent, solution, control, calibrator, or lab-prepared material is labeled at the time of receipt or preparation with: identity (and titer, strength, or concentration when significant), storage requirements, preparation or open-date, expiration date, and the staff member's initials.",
-    "Containers transferred from bulk to working volume retain the original lot identification on the working container; the working container's open-date and expiration date follow the manufacturer's instructions for opened material.",
-    "Lab-prepared materials (working dilutions, custom buffers, stains) include the preparer's initials, the preparation date, the lot or batch identifier, and the expiration date based on the lab's validated stability data or the most-conservative manufacturer guidance.",
-    "Unlabeled or insufficiently labeled materials are removed from service and discarded; the disposal is logged.",
-    "Labels are verified during reagent receipt, before each use, and at monthly inventory review."
-  ],
-  "procedure_steps": [
-    "At receipt or preparation, the staff member applies the label with all required elements per 42 CFR 493.1252(c).",
-    "Before each use, the staff member confirms the label is complete and legible; missing or illegible labels trigger removal from service.",
-    "Monthly inventory review confirms labeling completeness across in-use materials; any deficiency triggers immediate correction."
-  ],
-  "definitions": [
-    ["Lab-prepared material", "Any reagent, solution, calibrator, or control material prepared in the lab from purchased components. Subject to the same labeling requirements as purchased material."]
   ]
 }
