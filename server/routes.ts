@@ -19859,6 +19859,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // QA helper: corrupt or restore the stored sha256 hash for a version so
+  // the tamper-detection code path can be exercised end-to-end against
+  // live prod. Gated by ADMIN_SECRET. Permanent because the alternative
+  // (rewriting the file on the Railway volume) is more invasive. Body:
+  // { secret, versionId, action: 'corrupt' | 'restore', restoreHash? }.
+  app.post("/api/admin/veritapolicy/qa-corrupt-hash", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { versionId, action, restoreHash } = req.body || {};
+    const id = Number(versionId);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "versionId required" });
+    const sqlite = (db as any).$client;
+    const row = sqlite
+      .prepare("SELECT id, file_hash_sha256 FROM policy_versions WHERE id = ?")
+      .get(id) as { id: number; file_hash_sha256: string } | undefined;
+    if (!row) return res.status(404).json({ error: "Version not found" });
+    if (action === "corrupt") {
+      const fakeHash = "f".repeat(64);
+      sqlite
+        .prepare("UPDATE policy_versions SET file_hash_sha256 = ? WHERE id = ?")
+        .run(fakeHash, id);
+      return res.json({ ok: true, action: "corrupt", originalHash: row.file_hash_sha256, newHash: fakeHash });
+    }
+    if (action === "restore") {
+      if (!restoreHash || typeof restoreHash !== "string") {
+        return res.status(400).json({ error: "restoreHash required for restore" });
+      }
+      sqlite
+        .prepare("UPDATE policy_versions SET file_hash_sha256 = ? WHERE id = ?")
+        .run(restoreHash, id);
+      return res.json({ ok: true, action: "restore" });
+    }
+    return res.status(400).json({ error: "action must be 'corrupt' or 'restore'" });
+  });
+
   // ── Phase 6B: admin manual trigger for review reminders ────────────────
   // Defaults to cron-fired at midnight UTC. This endpoint lets an admin
   // (or a verify-*.js script) trigger the run on demand. Body: { secret }.
