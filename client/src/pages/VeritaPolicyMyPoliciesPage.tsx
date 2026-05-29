@@ -322,12 +322,14 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [signDoc, setSignDoc] = useState<PolicyDocument | null>(null);
   const [signAction, setSignAction] = useState<SignAction>("approved");
   const [signTypedName, setSignTypedName] = useState("");
+  const [signPassword, setSignPassword] = useState("");
   const [signComment, setSignComment] = useState("");
 
   const openSign = (doc: PolicyDocument, action: SignAction) => {
     setSignDoc(doc);
     setSignAction(action);
     setSignTypedName(user?.name || "");
+    setSignPassword("");
     setSignComment("");
   };
 
@@ -338,7 +340,11 @@ export default function VeritaPolicyMyPoliciesPage() {
       const res = await apiRequest(
         "POST",
         `/api/labs/${activeLabId}/veritapolicy/documents/${signDoc.id}/${endpoint}`,
-        { typedSignature: signTypedName.trim(), comment: signComment.trim() || undefined }
+        {
+          typedSignature: signTypedName.trim(),
+          password: signPassword,
+          comment: signComment.trim() || undefined,
+        }
       );
       return res.json();
     },
@@ -354,6 +360,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       });
       setSignDoc(null);
       setSignTypedName("");
+      setSignPassword("");
       setSignComment("");
       invalidateAll();
       queryClient.invalidateQueries({
@@ -460,21 +467,32 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewHtml, setViewHtml] = useState<string>("");
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
+  const [viewTampered, setViewTampered] = useState(false);
+  const [viewSignoffs, setViewSignoffs] = useState<any[]>([]);
 
   const openView = async (doc: PolicyDocument) => {
     setViewDoc(doc);
     setViewHtml("");
     setViewPdfUrl("");
+    setViewTampered(false);
+    setViewSignoffs([]);
     setViewLoading(true);
     try {
       const token = localStorage.getItem("veritas_token") || "";
+      // Fire-and-forget signoff history so the audit trail renders alongside.
+      fetch(`/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/signoffs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((body) => setViewSignoffs(body?.signoffs || []))
+        .catch(() => {});
       if (doc.current_file_format === "pdf") {
-        // For PDF, we fetch as blob then create object URL for inline iframe.
         const res = await fetch(
           `/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/render`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!res.ok) throw new Error("Render failed");
+        if (res.headers.get("X-VeritaPolicy-Tamper") === "yes") setViewTampered(true);
         const blob = await res.blob();
         setViewPdfUrl(URL.createObjectURL(blob));
       } else {
@@ -485,6 +503,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         const body = await res.json();
         if (!res.ok) throw new Error(body?.error || "Render failed");
         setViewHtml(body.html || "");
+        if (body.tampered) setViewTampered(true);
       }
     } catch (err: any) {
       toast({
@@ -503,6 +522,8 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewDoc(null);
     setViewHtml("");
     setViewPdfUrl("");
+    setViewTampered(false);
+    setViewSignoffs([]);
   };
 
   // ── Download ────────────────────────────────────────────────────────────
@@ -514,6 +535,14 @@ export default function VeritaPolicyMyPoliciesPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error("Download failed");
+      if (res.headers.get("X-VeritaPolicy-Tamper") === "yes") {
+        toast({
+          title: "Tamper warning",
+          description:
+            "This file does not match the hash captured at upload time. Investigate before using.",
+          variant: "destructive",
+        });
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -963,6 +992,52 @@ export default function VeritaPolicyMyPoliciesPage() {
           <DialogHeader>
             <DialogTitle>{viewDoc?.title || "Policy"}</DialogTitle>
           </DialogHeader>
+          {viewTampered && (
+            <div className="rounded border border-red-300 bg-red-50 text-red-900 p-2 text-xs space-y-1">
+              <div className="font-medium flex items-center gap-1">
+                <XCircle size={14} /> Tamper warning
+              </div>
+              <div>
+                The file on disk does not match the hash captured at upload time. Do not rely on
+                signatures attached to this version. Investigate before approving or distributing.
+              </div>
+            </div>
+          )}
+          {viewSignoffs.length > 0 && (
+            <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
+              <div className="font-medium flex items-center gap-1">
+                <ShieldCheck size={14} /> Signature history ({viewSignoffs.length})
+              </div>
+              <ol className="space-y-1">
+                {viewSignoffs.map((s: any) => (
+                  <li key={s.id} className="flex items-start gap-2 leading-snug">
+                    <span
+                      className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase border ${
+                        s.action === "approved"
+                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                          : "bg-red-100 text-red-900 border-red-300"
+                      }`}
+                    >
+                      {s.action}
+                    </span>
+                    <span className="flex-1">
+                      <span className="font-medium">{s.typed_signature || s.user_name}</span>
+                      {s.step_name && (
+                        <span className="text-muted-foreground"> on {s.step_name}</span>
+                      )}
+                      <span className="text-muted-foreground"> at {fmtDate(s.signed_at)}</span>
+                      {s.comment && (
+                        <div className="italic text-muted-foreground">{s.comment}</div>
+                      )}
+                      <div className="text-[10px] font-mono text-muted-foreground break-all">
+                        sha256: {s.signed_document_hash?.slice(0, 24)}…
+                      </div>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
           {viewLoading ? (
             <div className="p-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" size={14} /> Loading...
@@ -1125,6 +1200,16 @@ export default function VeritaPolicyMyPoliciesPage() {
               />
             </div>
             <div>
+              <Label className="text-xs">Your password (21 CFR Part 11 re-auth)</Label>
+              <Input
+                type="password"
+                value={signPassword}
+                onChange={(e) => setSignPassword(e.target.value)}
+                placeholder="Account password"
+                autoComplete="current-password"
+              />
+            </div>
+            <div>
               <Label className="text-xs">
                 Comment{signAction === "rejected" ? " (recommended)" : " (optional)"}
               </Label>
@@ -1147,7 +1232,11 @@ export default function VeritaPolicyMyPoliciesPage() {
             <Button
               variant={signAction === "approved" ? "default" : "destructive"}
               onClick={() => signMutation.mutate()}
-              disabled={signMutation.isPending || signTypedName.trim().length < 2}
+              disabled={
+                signMutation.isPending ||
+                signTypedName.trim().length < 2 ||
+                signPassword.length < 1
+              }
             >
               {signMutation.isPending && (
                 <Loader2 className="animate-spin mr-1" size={14} />
