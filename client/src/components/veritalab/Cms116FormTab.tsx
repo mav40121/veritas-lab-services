@@ -288,6 +288,34 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
     }
   }
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  async function handleDownloadPdf() {
+    if (!labId) { toast({ title: "No active lab", variant: "destructive" }); return; }
+    setDownloadingPdf(true);
+    try {
+      // Persist any unsaved field edits first so the PDF reflects what the
+      // user just typed, not whatever was last saved to the cms116_drafts row.
+      await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft/pdf`, { headers: authHeaders() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
+      const { token } = await res.json();
+      if (!token) throw new Error("No token returned");
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      toast({ title: "CMS-116 PDF generated" });
+    } catch (e: any) {
+      toast({ title: "PDF generation failed", description: e?.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
   function updateSection<K extends keyof DraftPayload["sections"]>(key: K, patch: Partial<DraftPayload["sections"][K]>) {
     setDraft((d) => ({ ...d, sections: { ...d.sections, [key]: { ...d.sections[key], ...patch } } }));
   }
@@ -308,9 +336,8 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
             <div className="min-w-0">
               <h3 className="font-semibold">CMS Form 116 - CLIA Application for Certification</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                OMB control 0938-0581. After completion, download the PDF (coming in Phase 4),
-                wet-sign, and mail to your State Agency.
-                Director signature is required on Section X.
+                OMB control 0938-0581. After completion, click Download PDF, wet-sign Section X
+                on the printed form, and mail to your State Agency.
               </p>
               {lastSavedAt && (
                 <p className="text-xs text-muted-foreground mt-1">
@@ -327,6 +354,10 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
             }>
               {draft.status === "issued" ? "Issued" : draft.status === "submitted" ? "Submitted" : "Draft"}
             </Badge>
+            <Button size="sm" variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf || saving}>
+              <FileSignature size={14} className="mr-1.5" />
+              {downloadingPdf ? "Generating..." : "Download PDF"}
+            </Button>
             <Button size="sm" onClick={handleSave} disabled={saving || isReadOnly} className="bg-primary hover:bg-primary/90">
               <Save size={14} className="mr-1.5" />
               {saving ? "Saving..." : "Save Draft"}

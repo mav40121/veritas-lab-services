@@ -14725,6 +14725,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, draft: row, issuedCertId: wiredCertId });
   });
 
+  // GET /api/labs/:labId/veritalab/cms116-draft/pdf — render the lab's
+  // current CMS-116 draft to a 5-page print-ready PDF. Director downloads,
+  // wet-signs Section X / signature block, and mails to State Agency.
+  // Returns { token } so the client opens /api/pdf/<token> to download
+  // (same pattern as VeritaCheck / VeritaOps PDFs).
+  app.get("/api/labs/:labId/veritalab/cms116-draft/pdf", authMiddleware, async (req: any, res) => {
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId) || labId <= 0) return res.status(400).json({ error: "Invalid lab id" });
+    if (!userCanAccessLabCms116(req.userId, labId)) return res.status(403).json({ error: "Not a member of this lab" });
+    const sqlite = (db as any).$client;
+    const draftRow = sqlite.prepare("SELECT * FROM cms116_drafts WHERE lab_id = ?").get(labId) as any;
+    if (!draftRow) return res.status(404).json({ error: "No CMS-116 draft saved for this lab yet" });
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const parseSection = (json: string | null) => {
+      if (!json) return undefined;
+      try { return JSON.parse(json); } catch { return undefined; }
+    };
+    const draftForPdf = {
+      sections: {
+        i:    parseSection(draftRow.section_i_json),
+        ii:   parseSection(draftRow.section_ii_json),
+        iii:  parseSection(draftRow.section_iii_json),
+        iv:   parseSection(draftRow.section_iv_json),
+        v:    parseSection(draftRow.section_v_json),
+        vi:   parseSection(draftRow.section_vi_json),
+        vii:  parseSection(draftRow.section_vii_json),
+        viii: parseSection(draftRow.section_viii_json),
+        ix:   parseSection(draftRow.section_ix_json),
+        x:    parseSection(draftRow.section_x_json),
+      },
+      director_signature_name: draftRow.director_signature_name || null,
+      director_signature_date: draftRow.director_signature_date || null,
+      status: draftRow.status || null,
+      notes: draftRow.notes || null,
+    };
+    try {
+      const { generateCms116Pdf } = await import("./cms116Pdf");
+      const pdfBuffer = await generateCms116Pdf(draftForPdf, {
+        labName: lab.lab_name || "",
+        cliaNumber: lab.clia_number || "Pending",
+      });
+      const safeName = (lab.lab_name || "Lab").replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40);
+      const filename = `CMS-116_Draft_${safeName}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token });
+    } catch (err: any) {
+      console.error(`[cms116-draft/pdf] generation failed for lab ${labId}:`, err?.message || err);
+      res.status(500).json({ error: "PDF generation failed", detail: err?.message || String(err) });
+    }
+  });
+
   // POST /api/admin/seed-state-registry — bulk-insert the per-state
   // licensure registry from the in-repo seed data. Idempotent via the
   // state_code UNIQUE constraint plus an UPSERT pattern; safe to re-run
