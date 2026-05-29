@@ -19859,6 +19859,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // QA helper: soft-archive policy documents by lab + title prefix. Used
+  // by the QA test cleanup script to remove accumulated test docs without
+  // hard-deleting the audit trail. Body: { secret, labId, titlePrefix }.
+  app.post("/api/admin/veritapolicy/qa-archive-by-title", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { labId, titlePrefix } = req.body || {};
+    const labIdNum = Number(labId);
+    if (!Number.isFinite(labIdNum)) return res.status(400).json({ error: "labId required" });
+    if (!titlePrefix || typeof titlePrefix !== "string" || titlePrefix.length < 3) {
+      return res.status(400).json({ error: "titlePrefix required (>= 3 chars)" });
+    }
+    const sqlite = (db as any).$client;
+    const result = sqlite
+      .prepare(
+        `UPDATE policy_documents
+           SET archived_at = datetime('now'), updated_at = datetime('now')
+         WHERE lab_id = ?
+           AND title LIKE ?
+           AND archived_at IS NULL`
+      )
+      .run(labIdNum, `${titlePrefix}%`);
+    res.json({ ok: true, archived: result.changes });
+  });
+
   // QA helper: corrupt or restore the stored sha256 hash for a version so
   // the tamper-detection code path can be exercised end-to-end against
   // live prod. Gated by ADMIN_SECRET. Permanent because the alternative
