@@ -894,6 +894,45 @@ _(item #37 closed 2026-05-28; see C28 below)_
 
 ---
 
+### 39. MediaLab parity hardening (VeritaPolicy approval workflow depth)
+
+**Effort:** L (1-2 weeks for the high-value items; each independent feature is M)
+**Importance:** Medium-High — the C29 build shipped the surface MediaLab markets but depth is shallower than their 30-year-hardened version. Closing the gaps converts a "we replicate MediaLab" claim into a "we replace MediaLab" claim at the same price point.
+
+**What:** The VeritaPolicy approval workflow build (C29, 2026-05-29) hit roughly 60-70% MediaLab feature surface. The following gaps remain when comparing against an enterprise MediaLab Document Control deployment:
+
+- **Quizzes on attestations.** Schema columns `quiz_score` and `quiz_total_questions` exist on `policy_attestations` but the quiz authoring + presentation UI was scoped out of Phase 4. MediaLab labs use 5-10 multiple-choice questions per policy to confirm comprehension, not just attestation. Adds compliance defensibility.
+- **PDF watermarking.** MediaLab burns user name + timestamp into every downloaded PDF copy as a deterrent against forwarding. We serve clean originals. Add Puppeteer-style overlay at download time.
+- **Per-policy role mapping at department level.** MediaLab lets a lab say "only Microbiology Lab Director can approve Microbiology policies." Our `required_role` is per-step on the workflow, not per-document-by-manual.
+- **Approval delegation.** When a reviewer is on vacation, MediaLab supports temporary delegation to a designate. We have no delegation model.
+- **In-browser DOCX editing.** MediaLab has a structured editor that creates a Table of Contents from headings. We treat documents as opaque files; revisions require a new upload.
+- **Reviewer-phrase library.** MediaLab provides standard reject phrases ("Section X needs CFR citation"). Our reviewer enters free-text comment.
+- **Cross-policy linking.** MediaLab lets one policy reference another by ID; surveyor can click through. Ours treats each doc as an island.
+- **SSO / Active Directory integration.** Lab IT departments expect AD login. We have email+password only.
+- **Excel export of compliance dashboard.** Surveyors want xlsx with VeritaAssure brand colors and proper headers. Our dashboard is JSON only. Half-day to add per the Excel Standard in CLAUDE.md §6.
+- **Print stylesheet.** MediaLab has a print view. Ours uses default browser print.
+- **Auto-expire cron** (was deferred from Phase 6B). Approved policies past `next_review_date` by 60+ days currently stay status='approved' with a visual red flag. MediaLab auto-flips to expired and locks edits.
+- **Real-time customizable email templates.** Our review reminder emails are hardcoded. MediaLab lets each customer customize subject and body.
+
+**Why it parks:** None of these gaps block customer sign-ups; the build is functional and verified at the API + UI happy-path level (35/35 API + 19/19 UI test pass against live prod per the qa-policy-build.js + qa-policy-ui.js scripts). But they will surface in head-to-head sales calls against MediaLab. Triage by hot prospect feedback.
+
+**Recommended sequence when taken up:**
+1. PDF watermarking (highest "feels enterprise" signal, ~half day)
+2. Quizzes on attestations (compliance defensibility, ~half day)
+3. Excel export of compliance dashboard (surveyor request, ~half day)
+4. Auto-expire cron (closes Phase 6B gap, ~half day)
+5. Print stylesheet (minor polish, ~1 hour)
+
+Items 6+ (SSO, delegation, in-browser editing, etc.) are larger and should be customer-triggered.
+
+**Source:** 2026-05-29 QA pass after C29 shipped (qa-policy-build.js + qa-policy-ui.js: 54/54 happy path verified). Honest depth assessment surfaced by Michael's "how confident are you" question — see C29 entry for full QA receipts.
+
+**Status:** Open, customer-triggered. No urgency until a prospect specifically asks for one of the listed depth items.
+
+**Pre- vs post-COLA:** Post-COLA. Defensive against MediaLab in head-to-head sales calls.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
@@ -1499,6 +1538,36 @@ build same session. PRs #325 through this one.
 Copy avoids naming "EP Evaluator" per CLAUDE.md §3; uses "other evaluation tools" and "legacy verification software." Audience recognition is the leverage.
 
 **Source:** 2026-05-11 / 2026-05-12 conference notes review with Michael. Conference attendees (Whitehead, Odegard, Othman, Molinelli, Kyle, Allred) expressed interest in equivalent / superior product. Shipped 2026-05-28.
+
+---
+
+### C29. VeritaPolicy approval workflow — MediaLab functional mirror
+
+**Effort:** XL (one focused session, 12 PRs landed)
+**Importance:** High — replaces MediaLab Document Control ($752/$2,250 starting price, scaling to $10K-$20K/yr at enterprise per Capterra public data) with an included VeritaPolicy feature; closes a real positioning gap and gives sales a direct comparator line.
+
+**What shipped (12 PRs over the 2026-05-29 session):**
+- #438 Phase 0: 9-table schema (policy_manuals, policy_documents, policy_versions, policy_approval_workflows, policy_approval_steps, policy_signoffs, policy_attestations, policy_review_reminders, policy_audit_log) with PRAGMA migrations.
+- #439 Phase 1: upload + manuals UI at `/labs/:labId/veritapolicy-app/my-policies`. 10 default manuals auto-seeded. DOCX/PDF/HTML upload via multer + mammoth render.
+- #440 Phase 2: workflow engine with state machine (draft → in_review → approved → expired → archived). Default workflow library seeds 1-step LD approval + 2-step TC then LD.
+- #441 Phase 2.1: workflow visibility polish — pending-step badge under in_review status, owner Recall button, eligibility warning in submit dialog.
+- #442 Phase 3: 21 CFR Part 11 hardening — bcrypt password re-auth on approve/reject, sha256 tamper detection on render + download, signature history block in View modal.
+- #443 Phase 4: employee read-and-attest with assign / list pending / complete endpoints; per-user-per-version idempotency.
+- #444 Phase 5: periodic review re-certification with password gate; advances next_review_date by review_interval_months.
+- #445 Phase 6A: compliance dashboard at `/labs/:labId/veritapolicy-app/compliance` with headline tiles, per-manual coverage, overdue + due-soon lists, per-user attestation rate.
+- #446 Phase 6B: daily cron-fired email reminders via Resend (30_day_warning / overdue / final thresholds). Auto-expire deferred to 6C.
+- #447 Phase 7: new-version upload, version history block in View modal, search bar with client-side filter.
+- #448 Phase 8: surveyor public links — lab generates signed URL, surveyor browses approved policies at `/surveyor/:token` without auth. Auto-expires, revokeable, use_count tracked. The MediaLab differentiator.
+- #449 QA helper: admin endpoint `POST /api/admin/veritapolicy/qa-corrupt-hash` so the tamper detection path can be exercised end-to-end without volume access.
+
+**QA verification (2026-05-29):**
+- API suite: 35/35 PASS against live prod via `C:\Users\veril\tooling\playwright-recorder\qa-policy-build.js` (password gate verified, attestation idempotency verified, surveyor token validation verified across short/unknown/revoked/expired states).
+- UI suite: 19/19 PASS via Playwright with three browser contexts (owner, QA approver, anonymous surveyor) at `qa-policy-ui.js`.
+- PDF upload + render + mobile viewport + synthetic tamper test (qa-policy-extras.js) blocked at session end by Railway token re-auth issue; tests written but not executed.
+
+**MediaLab functional gap remains:** see new entry #39 (MediaLab parity hardening) for the 60-70% surface coverage assessment — quizzes on attestations, PDF watermarking, SSO/AD, in-browser DOCX editing, delegated approvals, reviewer-phrase library, cross-policy linking. The build shipped the surface MediaLab markets; depth and edge cases remain shallower than MediaLab's 30-year hardened version.
+
+**Source:** Pricing strategy conversation 2026-05-29 (Michael: "I don't like bolt-ons; we should replicate this") → scoped 8 phases → shipped all 12 PRs in single session. Shipped 2026-05-29.
 
 ---
 
