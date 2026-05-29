@@ -898,9 +898,9 @@ part-time community manager.
 
 **Source:** Pricing analysis doc Decision 3 (2026-05-21); MEDIUM scenario revised 2026-05-29 to retire the "unlimited view-only" claim in favor of capped counts plus add-on.
 
-**Status:** Open. Foundation PR (step 1) ships in the session that locks the policy; steps 2-6 queue for a daylight multi-PR sprint.
+**Status:** Done 2026-05-28. Six-PR sequence shipped: #430 foundation (seat_type column, PLAN_VIEW_ONLY_SEATS scaffolding, admin report counts), #431 invite-flow seat_type, #432 dual-cap counting gates, #433 members page chips + usage breakdown, #434 server gate blocking view-only writes, #435 Stripe add-on env wiring + verify. STRIPE_VIEW_ONLY_ADDON_PRICE remains unset (manual-invoice mode) until Michael creates the recurring $99/yr USD price in the Stripe dashboard.
 
-**Pre- vs post-COLA:** Post-COLA. Sales positioning gap; will close once the foundation ships.
+**Pre- vs post-COLA:** Post-COLA. Sales positioning gap; closed.
 
 ---
 
