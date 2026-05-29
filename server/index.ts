@@ -37,6 +37,30 @@ app.use((req, res, next) => {
   next();
 });
 
+// Security response headers. Improves trust signals for corporate URL reputation
+// crawlers (Microsoft SmartScreen, Cisco Umbrella, Forcepoint, McAfee TrustedSource).
+// Intentionally omits Content-Security-Policy: a wrong CSP can silently break the
+// React app, fonts, GA4, and Stripe Checkout. Add CSP later as a separate scoped
+// task with explicit testing.
+app.use((req, res, next) => {
+  // HSTS: force HTTPS for one year, including subdomains. Cert is Let's Encrypt
+  // and we are 100% HTTPS today, so this is safe to commit to.
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  // Prevent MIME-sniffing.
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Block external sites from iframing us (clickjacking defense). SAMEORIGIN
+  // keeps same-origin embeds working.
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  // Limit referrer leakage on cross-origin navigations.
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  // Explicitly deny powerful browser features the app does not use.
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()",
+  );
+  next();
+});
+
 // CORS - allow requests from the deployed frontend and localhost
 app.use((req, res, next) => {
   const allowedOrigins = new Set([
