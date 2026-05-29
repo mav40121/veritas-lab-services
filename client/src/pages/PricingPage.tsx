@@ -480,7 +480,7 @@ return (
 
         {/* Seat note */}
         <p className="text-xs text-center text-muted-foreground">
-          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. View-only access for medical directors and reviewers is unlimited and not counted against the tier.
+          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. View-only access for medical directors, technical consultants, technical supervisors, and reviewers is included at 1 seat on Clinic, 2 on Community, 3 on Hospital; additional view-only seats are $99 per year.
         </p>
 
         {/* Money-Back Guarantee */}
