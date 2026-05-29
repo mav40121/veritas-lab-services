@@ -19,6 +19,17 @@ const articles = [
     featured: true,
   },
   {
+    slug: "why-veritacheck-vs-legacy-verification",
+    title: "Why VeritaCheck™ vs. Legacy Verification Software",
+    summary: "Side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost ($299 vs. typical $800-$3,000 per seat), time-to-first-study, integration breadth across the VeritaAssure platform, and compliance defensibility under 42 CFR Part 493.",
+    category: "Product Positioning",
+    readTime: "5 min read",
+    author: "Veritas Lab Services",
+    date: "May 2026",
+    tags: ["VeritaCheck™", "Method Verification", "CLIA", "Lab Software"],
+    featured: false,
+  },
+  {
     slug: "manual-logs-why-most-labs-should-stop",
     title: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop",
     summary: "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that 24-hour review was designed to catch. Here is when to retire it.",

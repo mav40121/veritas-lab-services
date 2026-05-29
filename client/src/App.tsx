@@ -39,6 +39,7 @@ import DemoQcPage from "@/pages/DemoQcPage";
 import ResourcesPage from "@/pages/ResourcesPage";
 import ArticlePrecisionInterpretationPage from "@/pages/ArticlePrecisionInterpretationPage";
 import ArticleCostPerReportablePage from "@/pages/ArticleCostPerReportablePage";
+import ArticleWhyVeritaCheckPage from "@/pages/ArticleWhyVeritaCheckPage";
 import FAQPage from "@/pages/FAQPage";
 import PricingPage from "@/pages/PricingPage";
 import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
@@ -317,6 +318,7 @@ function AppContent() {
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route path="/resources/precision-verification-report-interpretation-guide" component={ArticlePrecisionInterpretationPage} />
           <Route path="/resources/cost-per-reportable-test-four-layer-framework" component={ArticleCostPerReportablePage} />
+          <Route path="/resources/why-veritacheck-vs-legacy-verification" component={ArticleWhyVeritaCheckPage} />
           <Route path="/veritascan-app">{wrapLegacy(VeritaScanAppPage)}</Route>
           <Route path="/veritascan-app/:id">{wrapLegacy(VeritaScanScanPage)}</Route>
           <Route path="/veritamap-app">{wrapLegacy(VeritaMapAppPage)}</Route>
