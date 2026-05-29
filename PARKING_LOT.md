@@ -529,38 +529,7 @@ shipped 2026-05-10.
 
 ---
 
-### 22. VeritaLab™ extension: CMS-116 application support + state licensing registry
-
-**Effort:** M (1-2 weeks for v1)
-**Importance:** Medium — competitor (myLabCompliance.io) has this; useful at lab startup and certificate-type changes; not table stakes for existing customers.
-
-**What:** VeritaLab already tracks CLIA, state license, and lab
-director license as cert types in the certificate tracker. The
-missing pieces sit alongside that data:
-- **CMS-116 form support**: the federal CLIA application form. Lab
-  startup workflow and certificate-type changes (waived → moderate,
-  moderate → high) both require filing CMS-116. Today VeritaLab tracks
-  the resulting certificate but does not help author the application.
-- **State licensure registry**: many states require their own license
-  on top of CLIA. VeritaLab tracks the cert when held; the registry
-  piece is the per-state authority, form URL, fee, and renewal cadence
-  so the lab can look up the state-specific obligation.
-
-**Fix shape:** Two new tabs inside VeritaLab (CMS-116 form-fill UX +
-state registry). Reuses the existing certificate tracker as the
-destination for issued artifacts. No new module surface; the existing
-`/veritalab-app` route gains the two sub-tabs.
-
-**Source:** Perplexity competitor analysis (myLabCompliance.io),
-2026-05-10. myLabCompliance.io has this; VeritaAssure does not.
-Reclassified as a VeritaLab extension 2026-05-25 (operator instinct:
-"it belongs with the VeritaLab module").
-
-**Status:** Open. Small build relative to the other competitor-driven
-candidates. Useful at lab startup and at certificate-type changes.
-
-**Pre- vs post-COLA:** Post-COLA. ~1-2 weeks for v1 (CMS-116 form +
-top-10-state licensure registry).
+_(item #22 closed 2026-05-28; see C26 below)_
 
 ---
 
@@ -881,26 +850,7 @@ part-time community manager.
 
 ---
 
-### 33. Active vs view-only seat split
-
-**Effort:** M (~1 week of engineering when prioritized; PR 1 foundation lands as a single session)
-**Importance:** Medium — closes the gap between /pricing copy and product behavior; sets up sales answer for "do you charge for our medical director?"
-
-**What:** Split seats into two types: **active** (techs, supervisors, lab managers who edit data; counted against the tier seat cap at $500/$425/$333 per seat over the included count) and **view-only** (medical director or designee, technical consultant, technical supervisor, general supervisor, reviewers who sign but don't enter). Per-tier included counts: **Clinic 1, Community 2, Hospital 3**; additional view-only seats at **$99/yr** per seat across all tiers. The current schema treats all seats as one bucket, which contradicts the marketing claim that's already on /pricing.
-
-**Fix shape (4-6 PRs):**
-1. **Foundation:** `user_seats` row gains a `seat_type` column ('active' | 'view_only'), default 'active' so existing customers are unchanged. Admin report aggregation gains active and view-only counts alongside the existing total.
-2. Invite-flow UI asks which type at the moment of invitation; default 'active'.
-3. Counting logic in `/api/account/seats` and `/api/labs/:labId/members` enforces both caps (active count vs tier active cap; view-only count vs tier view-only cap).
-4. Lab Members page UI distinguishes the two visually with badges.
-5. View-only seats cannot trigger edit endpoints (server-side gate on `seat_type='view_only'`).
-6. Stripe SKU for the view-only $99/yr add-on; verify pricing helpers don't double-bill.
-
-**Source:** Pricing analysis doc Decision 3 (2026-05-21); MEDIUM scenario revised 2026-05-29 to retire the "unlimited view-only" claim in favor of capped counts plus add-on.
-
-**Status:** Done 2026-05-28. Six-PR sequence shipped: #430 foundation (seat_type column, PLAN_VIEW_ONLY_SEATS scaffolding, admin report counts), #431 invite-flow seat_type, #432 dual-cap counting gates, #433 members page chips + usage breakdown, #434 server gate blocking view-only writes, #435 Stripe add-on env wiring + verify. STRIPE_VIEW_ONLY_ADDON_PRICE remains unset (manual-invoice mode) until Michael creates the recurring $99/yr USD price in the Stripe dashboard.
-
-**Pre- vs post-COLA:** Post-COLA. Sales positioning gap; closed.
+_(item #33 closed 2026-05-28; see C27 below)_
 
 ---
 
@@ -921,22 +871,7 @@ _(items #34 and #35 closed 2026-05-24; see C23 and C24 below)_
 
 ---
 
-### 37. Marketing one-pager: "Why VeritaCheck" comparative collateral
-
-**Effort:** S (one design pass + four claim paragraphs + PDF + matching marketing-site page in one PR)
-**Importance:** Medium — closes a positioning gap surfaced by six COLA conference attendees attached to a legacy verification tool; converts product-quality advantage into a leave-behind Lisa can hand out.
-
-**What:** Operator-facing collateral to address conference-attendee feedback that prospects want a VeritaCheck offering equivalent to (or better than) the legacy verification tool many of them use today. Four panels: cost ($25/study or $299/year vs. legacy per-seat licensing), time-to-first-study (minutes, no training), integration (8 study types in one tool plus VeritaPolicy / VeritaScan / VeritaComp in the same suite), compliance (signature-on-page-1 PDFs, real CFR citations, audit log). PDF version for Lisa's email follow-ups and conference leave-behinds; web page version for the marketing site.
-
-**Constraint:** Per CLAUDE.md section 3, customer-facing copy must NOT name "EP Evaluator." Use "other evaluation tools" or "legacy verification software." Audience knows what is meant.
-
-**Fix shape:** Design four-panel layout. Write the four claim paragraphs. Draft the disclaimer footer. Produce the .pdf and the matching marketing-site page in one PR.
-
-**Source:** 2026-05-11 / 2026-05-12 conference notes review with Michael. Conference attendees (Whitehead, Odegard, Othman, Molinelli, Kyle, Allred) expressed interest in equivalent / superior product. Michael confirmed product is substantially better and cheaper; positioning gap is the limiting factor, not the tool.
-
-**Status:** Open. Re-parked 2026-05-27 (originally PR #117, abandoned with merge conflicts then closed-and-re-authored at current numbering).
-
-**Pre- vs post-COLA:** Post-COLA, conference-driven.
+_(item #37 closed 2026-05-28; see C28 below)_
 
 ---
 
@@ -1519,6 +1454,51 @@ build same session. PRs #325 through this one.
 12/12 evaluator scenarios PASS in `scripts/verify-westgard-rules.js`. CLSI C24 supports lab-configurable bias/trend N via `qc_rule_settings`. Phase 1 is feature-complete; future phases (PT integration, multi-instrument LJ overlays, automated calibrator-lot bridging) deferred.
 
 **Source:** Perplexity competitor analysis 2026-05-10. Scoping confirmed via the build_phase1_mockup.py iterations 2026-05-24. Shipped 2026-05-25.
+
+---
+
+### C26. VeritaLab CMS-116 application support + state licensing registry (formerly #22)
+
+**Effort:** M (1-2 weeks for v1, actual)
+**Importance:** Medium — competitor parity (myLabCompliance.io) plus useful at lab startup and at certificate-type changes.
+
+**What shipped (five phases):** State licensure registry tab in VeritaLab, seeded with all 51 jurisdictions (state authority, form URL, fee, renewal cadence). CMS-116 form-fill UI tab inside VeritaLab. Draft-to-PDF generator producing the federal CLIA application form from the saved draft. Issued-cert wire-back so the generated certificate from a successful submission lands in the existing certificate tracker without manual re-entry. VeritaLab sub-tab plumbing so both surfaces live alongside the cert tracker at `/veritalab-app`.
+
+**Source:** Perplexity competitor analysis (myLabCompliance.io), 2026-05-10. Reclassified as a VeritaLab extension 2026-05-25. Shipped 2026-05-28.
+
+---
+
+### C27. Active vs view-only seat split (formerly #33)
+
+**Effort:** M (~1 week of engineering, actual: shipped in a single multi-PR session)
+**Importance:** Medium — closed the gap between /pricing copy and product behavior; gives sales a clean answer for "do you charge for our medical director?"
+
+**What shipped (six PRs in sequence):**
+- #430 foundation: `user_seats.seat_type` column ('active' | 'view_only', default 'active'), `PLAN_VIEW_ONLY_SEATS` map (Clinic 1, Community 2, Hospital 3, System 5), admin report aggregation gains active and view-only counts alongside the existing total.
+- #431 invite flow: invite UI asks seat type at the moment of invitation; default 'active'; passes through to the lab-scoped POST `/api/labs/:labId/members` and user-level POST `/api/account/seats`.
+- #432 counting gates: dual-cap enforcement at both invite endpoints with `SUM(CASE WHEN COALESCE(seat_type,'active') = ...)` subquery so legacy rows count as active. Owner counts as active. View-only failures return `addOnRatePerYear: 99`; active failures preserve the `nextTier` upgrade hint.
+- #433 members page UI: usage card above the invite form ("Active X of Y used", "View-only X of Y used", $99/yr add-on hint at cap), seat-type chip on every member and pending-invite row, `GET /api/labs/:labId/members` extended to return `seat_type`, `seatLimits`, `seatCounts`.
+- #434 server gate: `authMiddleware` loads `seat_type`, blocks view-only seats from any non-GET / HEAD / OPTIONS method with `403 view_only_seat`. 12/12 PASS in `scripts/verify-view-only-seat-gate.js`.
+- #435 Stripe add-on: `STRIPE_VIEW_ONLY_ADDON_PRICE` env hook, `getViewOnlyAddOnConfig()` helper, `addOnPriceId` exposed on all 402 / GET responses. `scripts/verify-view-only-addon-config.js` runs 3 local assertions + 5 live Stripe assertions when both env vars are present.
+
+`STRIPE_VIEW_ONLY_ADDON_PRICE` remains unset (manual-invoice mode) until Michael creates the recurring $99/yr USD price in the Stripe dashboard.
+
+**Source:** Pricing analysis doc Decision 3 (2026-05-21); MEDIUM scenario revised 2026-05-29 to retire the "unlimited view-only" claim. Shipped 2026-05-28.
+
+---
+
+### C28. "Why VeritaCheck" comparative one-pager (formerly #37)
+
+**Effort:** S (one design pass + four claim paragraphs + PDF + matching marketing-site page, actual)
+**Importance:** Medium — closed a positioning gap surfaced by six COLA conference attendees attached to a legacy verification tool; converts product-quality advantage into a leave-behind Lisa can hand out.
+
+**What shipped (two PRs):**
+- #428: full article page at `/article/why-veritacheck` covering cost, time-to-first-study, suite integration, and compliance; 1-page Puppeteer PDF generator; marketing-site presence so the article surfaces from the homepage navigation.
+- #429: 1-page PDF margin and font fix (margins 12mm → 10mm, fonts shrunk 0.5pt, closing block trimmed) so the PDF holds to a single page instead of overflowing onto page 2.
+
+Copy avoids naming "EP Evaluator" per CLAUDE.md §3; uses "other evaluation tools" and "legacy verification software." Audience recognition is the leverage.
+
+**Source:** 2026-05-11 / 2026-05-12 conference notes review with Michael. Conference attendees (Whitehead, Odegard, Othman, Molinelli, Kyle, Allred) expressed interest in equivalent / superior product. Shipped 2026-05-28.
 
 ---
 
