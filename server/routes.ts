@@ -19446,6 +19446,279 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Phase 4: employee read-and-attest ───────────────────────────────────
+  //
+  // Assignments are per-user per-version. Only approved policies can be
+  // assigned. Completion captures typed signature + password re-auth +
+  // sha256 hash of the version at attest time so the attestation is
+  // non-repudiable per 21 CFR Part 11.
+
+  // POST /documents/:id/attestations — bulk assign.
+  // Body: { assignedToUserIds: number[], dueDate?: string }
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/attestations",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const { assignedToUserIds, dueDate } = req.body || {};
+      if (!Array.isArray(assignedToUserIds) || assignedToUserIds.length === 0) {
+        return res.status(400).json({ error: "assignedToUserIds array required" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare(
+          "SELECT lab_id, status, current_version_id FROM policy_documents WHERE id = ?"
+        )
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.status !== "approved") {
+        return res.status(409).json({ error: "Only approved policies can be assigned for attestation" });
+      }
+      if (!doc.current_version_id) {
+        return res.status(409).json({ error: "Document has no current version" });
+      }
+      // Filter assignedToUserIds to active members of this lab; reject any
+      // that are not (prevents cross-lab assignment via API mucking).
+      const members = sqlite
+        .prepare(
+          "SELECT user_id FROM lab_members WHERE lab_id = ? AND status = 'active'"
+        )
+        .all(req.scope.labId) as { user_id: number }[];
+      const memberIds = new Set(members.map((m) => m.user_id));
+      const valid = assignedToUserIds
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n) && memberIds.has(n));
+      if (valid.length === 0) {
+        return res.status(400).json({ error: "No valid lab members in assignedToUserIds" });
+      }
+      const stmt = sqlite.prepare(
+        `INSERT INTO policy_attestations
+           (document_id, version_id, assigned_to_user_id, assigned_by, assigned_at, due_date)
+         VALUES (?, ?, ?, ?, datetime('now'), ?)`
+      );
+      const insertedIds: number[] = [];
+      for (const uid of valid) {
+        // Skip if an open (incomplete) assignment already exists for this
+        // user+version pair to keep the queue clean.
+        const existing = sqlite
+          .prepare(
+            `SELECT id FROM policy_attestations
+              WHERE document_id = ? AND version_id = ? AND assigned_to_user_id = ?
+                AND completed_at IS NULL
+              LIMIT 1`
+          )
+          .get(id, doc.current_version_id, uid);
+        if (existing) continue;
+        const r = stmt.run(id, doc.current_version_id, uid, req.userId, dueDate || null);
+        insertedIds.push(Number(r.lastInsertRowid));
+        writeAuditLog(sqlite, {
+          labId: req.scope.labId,
+          documentId: id,
+          userId: req.userId,
+          action: "attestation_assigned",
+          details: { assignee_user_id: uid, version_id: doc.current_version_id },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] as string | undefined,
+        });
+      }
+      res.status(201).json({ assigned: insertedIds.length, ids: insertedIds });
+    }
+  );
+
+  // GET /documents/:id/attestations — list assignments + status for a doc.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/attestations",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, current_version_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const rows = sqlite
+        .prepare(
+          `SELECT a.id, a.document_id, a.version_id, a.assigned_to_user_id,
+                  a.assigned_by, a.assigned_at, a.due_date, a.completed_at,
+                  a.attested_document_hash, a.typed_signature,
+                  u.name AS assignee_name, u.email AS assignee_email,
+                  ab.name AS assigner_name
+             FROM policy_attestations a
+             JOIN users u ON u.id = a.assigned_to_user_id
+             LEFT JOIN users ab ON ab.id = a.assigned_by
+            WHERE a.document_id = ?
+            ORDER BY a.assigned_at DESC`
+        )
+        .all(id) as any[];
+      // Flag stale entries: assigned to an old version, not the current.
+      const enriched = rows.map((r) => ({
+        ...r,
+        is_stale_version: doc.current_version_id != null && r.version_id !== doc.current_version_id,
+      }));
+      const total = enriched.length;
+      const completed = enriched.filter((r) => r.completed_at).length;
+      const currentVersion = enriched.filter((r) => r.version_id === doc.current_version_id);
+      const currentTotal = currentVersion.length;
+      const currentCompleted = currentVersion.filter((r) => r.completed_at).length;
+      res.json({
+        attestations: enriched,
+        summary: { total, completed, currentVersionTotal: currentTotal, currentVersionCompleted: currentCompleted },
+      });
+    }
+  );
+
+  // DELETE /documents/:id/attestations/:assignmentId — un-assign.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/documents/:id/attestations/:assignmentId",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      const assignmentId = Number(req.params.assignmentId);
+      if (!Number.isFinite(id) || !Number.isFinite(assignmentId)) {
+        return res.status(400).json({ error: "Bad id" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const att = sqlite
+        .prepare(
+          "SELECT id, completed_at FROM policy_attestations WHERE id = ? AND document_id = ?"
+        )
+        .get(assignmentId, id) as any;
+      if (!att) return res.status(404).json({ error: "Assignment not found" });
+      if (att.completed_at) {
+        return res.status(409).json({ error: "Cannot un-assign a completed attestation" });
+      }
+      sqlite.prepare("DELETE FROM policy_attestations WHERE id = ?").run(assignmentId);
+      res.json({ ok: true });
+    }
+  );
+
+  // GET /pending-attestations — per-user pending list. Mirrors the
+  // shape of /pending-reviews. Stale-version assignments are included so
+  // the user can see "you owe an attestation on v3; current is v5".
+  app.get(
+    "/api/labs/:labId/veritapolicy/pending-attestations",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const rows = sqlite
+        .prepare(
+          `SELECT a.id AS attestation_id, a.document_id, a.version_id,
+                  a.assigned_at, a.due_date,
+                  d.title, d.status, d.current_version_id, d.manual_id,
+                  m.name AS manual_name
+             FROM policy_attestations a
+             JOIN policy_documents d ON d.id = a.document_id
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE a.assigned_to_user_id = ?
+              AND a.completed_at IS NULL
+              AND d.lab_id = ?
+              AND d.archived_at IS NULL
+            ORDER BY (a.due_date IS NULL), a.due_date ASC, a.assigned_at ASC`
+        )
+        .all(req.userId, req.scope.labId) as any[];
+      const enriched = rows.map((r) => ({
+        ...r,
+        is_stale_version: r.current_version_id != null && r.version_id !== r.current_version_id,
+      }));
+      res.json({ pending: enriched });
+    }
+  );
+
+  // POST /attestations/:id/complete — current user attests.
+  // Body: { typedSignature, password }
+  app.post(
+    "/api/labs/:labId/veritapolicy/attestations/:id/complete",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const { typedSignature, password } = req.body || {};
+      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
+        return res.status(400).json({ error: "typedSignature required" });
+      }
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ error: "password required for electronic signature" });
+      }
+      const sqlite = (db as any).$client;
+      const att = sqlite
+        .prepare(
+          `SELECT a.id, a.document_id, a.version_id, a.assigned_to_user_id, a.completed_at,
+                  d.lab_id, v.file_hash_sha256 AS version_hash
+             FROM policy_attestations a
+             JOIN policy_documents d ON d.id = a.document_id
+             LEFT JOIN policy_versions v ON v.id = a.version_id
+            WHERE a.id = ?`
+        )
+        .get(id) as any;
+      if (!att) return res.status(404).json({ error: "Not found" });
+      if (att.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (att.assigned_to_user_id !== req.userId) {
+        return res.status(403).json({ error: "Not your attestation" });
+      }
+      if (att.completed_at) {
+        return res.status(409).json({ error: "Already completed" });
+      }
+      // 21 CFR Part 11 re-auth.
+      const userRow = sqlite
+        .prepare("SELECT password_hash FROM users WHERE id = ?")
+        .get(req.userId) as any;
+      if (!userRow?.password_hash) {
+        return res.status(401).json({ error: "User has no password set" });
+      }
+      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
+      if (!passwordOk) {
+        return res.status(401).json({ error: "Password incorrect; attestation not recorded" });
+      }
+      sqlite
+        .prepare(
+          `UPDATE policy_attestations
+             SET completed_at = datetime('now'),
+                 attested_document_hash = ?,
+                 typed_signature = ?,
+                 ip_address = ?,
+                 user_agent = ?
+           WHERE id = ?`
+        )
+        .run(
+          att.version_hash || "missing",
+          typedSignature.trim(),
+          req.ip || null,
+          (req.headers["user-agent"] as string | undefined) || null,
+          id
+        );
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: att.document_id,
+        userId: req.userId,
+        action: "attestation_completed",
+        details: { attestation_id: id, version_id: att.version_id },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
   // GET /pending-reviews — for the current user, list documents awaiting
   // their action. Useful for a top-of-page "Pending My Review" section.
   app.get(
