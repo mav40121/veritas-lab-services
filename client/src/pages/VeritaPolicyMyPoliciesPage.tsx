@@ -1,13 +1,10 @@
 // VeritaPolicyMyPoliciesPage.tsx
 //
-// VeritaPolicy approval workflow — Phase 1 client surface.
-// Upload + list + inline-render of lab-owned policy documents, organized
-// into manuals (Chemistry, Hematology, Safety, etc.). Backed by the
-// nine-table schema from Phase 0.
-//
-// Phase 1 is read/upload/view only. The multi-step approval workflow UI,
-// signoffs, attestations, periodic reviews, and audit dashboard ship in
-// Phases 2-7.
+// VeritaPolicy approval workflow client surface.
+//   Phase 1: upload + list + inline-render + download.
+//   Phase 2: workflow engine (submit / approve / reject), Pending My Review,
+//            Rename. Typed-signature on approve and reject (Phase 3 will add
+//            password re-auth and tamper-detection on download).
 
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -41,6 +38,11 @@ import {
   Download,
   Eye,
   FolderPlus,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Pencil,
+  ShieldCheck,
 } from "lucide-react";
 
 interface Manual {
@@ -48,6 +50,42 @@ interface Manual {
   name: string;
   description: string | null;
   display_order: number;
+}
+
+interface WorkflowStep {
+  id: number;
+  step_order: number;
+  step_name: string;
+  required_role: string;
+  specific_user_id: number | null;
+  allow_self_approval: number;
+}
+
+interface Workflow {
+  id: number;
+  name: string;
+  description: string | null;
+  is_default: number;
+  steps: WorkflowStep[];
+}
+
+interface PendingReview {
+  document_id: number;
+  title: string;
+  manual_id: number | null;
+  updated_at: string;
+  step_id: number;
+  step_name: string;
+  step_order: number;
+  total_steps: number;
+}
+
+interface PendingStepInfo {
+  step: WorkflowStep | null;
+  totalSteps: number;
+  completedSteps: number;
+  canCurrentUserApprove: boolean;
+  reason: string | null;
 }
 
 interface PolicyDocument {
@@ -131,6 +169,21 @@ export default function VeritaPolicyMyPoliciesPage() {
   const documents = docsData?.documents || [];
   const manuals = manualsData?.manuals || [];
 
+  const { data: workflowsData } = useQuery<{ workflows: Workflow[] }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/workflows`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+  });
+  const workflows = workflowsData?.workflows || [];
+
+  const { data: pendingData } = useQuery<{ pending: PendingReview[] }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-reviews`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+    refetchInterval: 30000,
+  });
+  const pendingReviews = pendingData?.pending || [];
+
   // ── Upload state ────────────────────────────────────────────────────────
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -213,6 +266,127 @@ export default function VeritaPolicyMyPoliciesPage() {
     },
     onError: (err: any) =>
       toast({ title: "Create failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  // ── Phase 2: submit / approve / reject / rename ────────────────────────
+  const [submitDoc, setSubmitDoc] = useState<PolicyDocument | null>(null);
+  const [submitWorkflowId, setSubmitWorkflowId] = useState<string>("");
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      if (!submitDoc) throw new Error("No document");
+      if (!submitWorkflowId) throw new Error("Pick a workflow");
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${submitDoc.id}/submit`,
+        { workflowId: Number(submitWorkflowId) }
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Submitted for review" });
+      setSubmitDoc(null);
+      setSubmitWorkflowId("");
+      invalidateAll();
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-reviews`],
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Submit failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  type SignAction = "approved" | "rejected";
+  const [signDoc, setSignDoc] = useState<PolicyDocument | null>(null);
+  const [signAction, setSignAction] = useState<SignAction>("approved");
+  const [signTypedName, setSignTypedName] = useState("");
+  const [signComment, setSignComment] = useState("");
+
+  const openSign = (doc: PolicyDocument, action: SignAction) => {
+    setSignDoc(doc);
+    setSignAction(action);
+    setSignTypedName(user?.name || "");
+    setSignComment("");
+  };
+
+  const signMutation = useMutation({
+    mutationFn: async () => {
+      if (!signDoc) throw new Error("No document");
+      const endpoint = signAction === "approved" ? "approve" : "reject";
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${signDoc.id}/${endpoint}`,
+        { typedSignature: signTypedName.trim(), comment: signComment.trim() || undefined }
+      );
+      return res.json();
+    },
+    onSuccess: (body: any) => {
+      toast({
+        title: signAction === "approved" ? "Approved" : "Rejected",
+        description:
+          signAction === "approved"
+            ? body?.status === "approved"
+              ? "All steps complete; policy is now approved."
+              : `Next step: ${body?.nextStep || "?"}`
+            : "Returned to draft.",
+      });
+      setSignDoc(null);
+      setSignTypedName("");
+      setSignComment("");
+      invalidateAll();
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-reviews`],
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Action failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  const [renameDoc, setRenameDoc] = useState<PolicyDocument | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renameDescription, setRenameDescription] = useState("");
+  const [renameManualId, setRenameManualId] = useState<string>("");
+
+  const openRename = (doc: PolicyDocument) => {
+    setRenameDoc(doc);
+    setRenameTitle(doc.title);
+    setRenameDescription(doc.description || "");
+    setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
+  };
+
+  const renameMutation = useMutation({
+    mutationFn: async () => {
+      if (!renameDoc) throw new Error("No document");
+      const res = await apiRequest(
+        "PATCH",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${renameDoc.id}`,
+        {
+          title: renameTitle.trim(),
+          description: renameDescription.trim() || null,
+          manualId: renameManualId ? Number(renameManualId) : null,
+        }
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Saved" });
+      setRenameDoc(null);
+      invalidateAll();
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Save failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
   });
 
   // ── View modal ──────────────────────────────────────────────────────────
@@ -343,6 +517,62 @@ export default function VeritaPolicyMyPoliciesPage() {
         </div>
       </div>
 
+      {pendingReviews.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldCheck size={16} className="text-amber-700" />
+              Pending my review ({pendingReviews.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1.5 text-sm">
+              {pendingReviews.map((p) => {
+                const doc = documents.find((d) => d.id === p.document_id);
+                return (
+                  <li
+                    key={p.document_id}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium">{p.title}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        step {p.step_order} of {p.total_steps}: {p.step_name}
+                      </span>
+                    </div>
+                    {doc && (
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openView(doc)}
+                        >
+                          <Eye size={12} className="mr-1" /> View
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => openSign(doc, "approved")}
+                        >
+                          <CheckCircle2 size={12} className="mr-1" /> Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => openSign(doc, "rejected")}
+                        >
+                          <XCircle size={12} className="mr-1" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {docsLoading ? (
         <Card>
           <CardContent className="p-6 flex items-center gap-2 text-muted-foreground">
@@ -433,6 +663,49 @@ export default function VeritaPolicyMyPoliciesPage() {
                           >
                             <Download size={12} className="mr-1" /> Download
                           </Button>
+                          {doc.status === "draft" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSubmitDoc(doc);
+                                  const def = workflows.find((w) => w.is_default) || workflows[0];
+                                  setSubmitWorkflowId(def ? String(def.id) : "");
+                                }}
+                              >
+                                <Send size={12} className="mr-1" /> Submit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openRename(doc)}
+                                title="Rename / edit metadata"
+                              >
+                                <Pencil size={12} />
+                              </Button>
+                            </>
+                          )}
+                          {doc.status === "in_review" &&
+                            pendingReviews.some((p) => p.document_id === doc.id) && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => openSign(doc, "approved")}
+                                >
+                                  <CheckCircle2 size={12} className="mr-1" /> Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={() => openSign(doc, "rejected")}
+                                >
+                                  <XCircle size={12} className="mr-1" /> Reject
+                                </Button>
+                              </>
+                            )}
                         </td>
                       </tr>
                     ))}
@@ -609,6 +882,203 @@ export default function VeritaPolicyMyPoliciesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={closeView}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Submit for review modal ────────────────────────────────── */}
+      <Dialog
+        open={!!submitDoc}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSubmitDoc(null);
+            setSubmitWorkflowId("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Submit for review</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Pick a workflow. The document moves from draft to in_review and
+              the first reviewer is notified.
+            </p>
+            <div>
+              <Label className="text-xs">Workflow</Label>
+              <Select value={submitWorkflowId} onValueChange={setSubmitWorkflowId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick a workflow" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workflows.map((w) => (
+                    <SelectItem key={w.id} value={String(w.id)}>
+                      {w.name} ({w.steps?.length || 0} steps)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {submitWorkflowId &&
+              (() => {
+                const wf = workflows.find((w) => String(w.id) === submitWorkflowId);
+                if (!wf) return null;
+                return (
+                  <div className="text-xs text-muted-foreground border rounded p-2 bg-muted/30">
+                    <div className="font-medium mb-1">{wf.description}</div>
+                    <ol className="list-decimal ml-4 space-y-0.5">
+                      {wf.steps.map((s) => (
+                        <li key={s.id}>
+                          {s.step_name}{" "}
+                          <span className="text-[10px] uppercase tracking-wide opacity-70">
+                            ({s.required_role.replace(/_/g, " ")})
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => submitMutation.mutate()}
+              disabled={!submitWorkflowId || submitMutation.isPending}
+            >
+              {submitMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Sign modal (approve or reject) ──────────────────────────── */}
+      <Dialog
+        open={!!signDoc}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSignDoc(null);
+            setSignTypedName("");
+            setSignComment("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {signAction === "approved" ? "Approve" : "Reject"} this policy
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {signAction === "approved"
+                ? "Your typed name plus a hash of the current version is recorded as your electronic signature for this approval step. 21 CFR Part 11 password re-auth lands in Phase 3."
+                : "Rejecting returns the document to draft. The owner can revise and resubmit."}
+            </p>
+            <div>
+              <Label className="text-xs">Type your full name</Label>
+              <Input
+                value={signTypedName}
+                onChange={(e) => setSignTypedName(e.target.value)}
+                placeholder="e.g., Michael Veri"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">
+                Comment{signAction === "rejected" ? " (recommended)" : " (optional)"}
+              </Label>
+              <Textarea
+                value={signComment}
+                onChange={(e) => setSignComment(e.target.value)}
+                rows={3}
+                placeholder={
+                  signAction === "rejected"
+                    ? "Tell the owner what needs to change."
+                    : "Optional approval note."
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSignDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={signAction === "approved" ? "default" : "destructive"}
+              onClick={() => signMutation.mutate()}
+              disabled={signMutation.isPending || signTypedName.trim().length < 2}
+            >
+              {signMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              {signAction === "approved" ? "Approve" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Rename / edit metadata modal ─────────────────────────────── */}
+      <Dialog
+        open={!!renameDoc}
+        onOpenChange={(open) => {
+          if (!open) setRenameDoc(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit policy details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Title</Label>
+              <Input
+                value={renameTitle}
+                onChange={(e) => setRenameTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Description</Label>
+              <Textarea
+                value={renameDescription}
+                onChange={(e) => setRenameDescription(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Manual</Label>
+              <Select value={renameManualId} onValueChange={setRenameManualId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  {manuals.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => renameMutation.mutate()}
+              disabled={renameMutation.isPending || renameTitle.trim().length < 2}
+            >
+              {renameMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

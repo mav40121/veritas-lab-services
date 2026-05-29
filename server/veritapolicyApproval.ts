@@ -158,6 +158,225 @@ export async function renderDocxToHtml(
   };
 }
 
+// ── Phase 2: workflow engine ────────────────────────────────────────────
+//
+// State machine:
+//
+//     draft ───── submit-for-review ─────> in_review
+//     in_review ─ approve (final step) ──> approved
+//     in_review ─ reject ────────────────> draft
+//     approved ── periodic review trigger > expired (Phase 5)
+//     any state ─ archive ───────────────> archived
+//
+// Self-approval rule: blocked unless step.allow_self_approval = 1.
+// Owner of the document cannot approve a step assigned to them unless the
+// workflow step explicitly allows it.
+//
+// required_role values accepted in Phase 2:
+//   'specific_user'         -> only step.specific_user_id can approve
+//   'any_active_seat'       -> owner, admin, or any user with active seat
+//   'any_view_only_seat'    -> any user with a view-only seat
+//   'medical_director'      -> Phase 3 will tag specific users with this
+//                              CLIA role; in Phase 2 it falls back to
+//                              "any view-only seat".
+//   'technical_consultant'  -> same fallback as medical_director.
+//   'technical_supervisor'  -> same fallback as medical_director.
+//
+// Default workflow library seeded the first time a lab queries workflows.
+export const DEFAULT_WORKFLOWS: {
+  name: string;
+  description: string;
+  steps: { name: string; required_role: string }[];
+}[] = [
+  {
+    name: "Lab Director approval (1 step)",
+    description: "Single-step approval by the medical director or designee.",
+    steps: [
+      {
+        name: "Medical Director or Designee Approval",
+        required_role: "medical_director",
+      },
+    ],
+  },
+  {
+    name: "TC review then LD approval (2 step)",
+    description:
+      "Technical Consultant reviews technical accuracy, then Medical Director or Designee approves.",
+    steps: [
+      { name: "Technical Consultant Review", required_role: "technical_consultant" },
+      { name: "Medical Director or Designee Approval", required_role: "medical_director" },
+    ],
+  },
+];
+
+export function seedDefaultWorkflowsIfEmpty(sqlite: any, labId: number): void {
+  const existing = sqlite
+    .prepare(
+      "SELECT COUNT(*) as cnt FROM policy_approval_workflows WHERE lab_id = ? AND archived_at IS NULL"
+    )
+    .get(labId) as { cnt: number };
+  if (existing && existing.cnt > 0) return;
+  DEFAULT_WORKFLOWS.forEach((wf, idx) => {
+    try {
+      const result = sqlite
+        .prepare(
+          "INSERT INTO policy_approval_workflows (lab_id, name, description, is_default) VALUES (?, ?, ?, ?)"
+        )
+        .run(labId, wf.name, wf.description, idx === 0 ? 1 : 0);
+      const workflowId = Number(result.lastInsertRowid);
+      wf.steps.forEach((step, stepIdx) => {
+        sqlite
+          .prepare(
+            "INSERT INTO policy_approval_steps (workflow_id, step_order, step_name, required_role) VALUES (?, ?, ?, ?)"
+          )
+          .run(workflowId, stepIdx + 1, step.name, step.required_role);
+      });
+    } catch (err: any) {
+      console.error("[veritapolicyApproval seedDefaultWorkflows]", err.message);
+    }
+  });
+}
+
+// Resolve whether a user can approve a given workflow step. Returns
+// { ok: true } or { ok: false, reason } so callers can return a useful
+// 403 message to the client.
+export function canUserApproveStep(
+  sqlite: any,
+  args: {
+    userId: number;
+    labId: number;
+    documentOwnerId: number;
+    stepRow: {
+      required_role: string;
+      specific_user_id: number | null;
+      allow_self_approval: number;
+    };
+  }
+): { ok: true } | { ok: false; reason: string } {
+  const { userId, labId, documentOwnerId, stepRow } = args;
+  // Self-approval guard first: blocks regardless of role match unless
+  // allow_self_approval is explicitly enabled on the step.
+  if (userId === documentOwnerId && !stepRow.allow_self_approval) {
+    return {
+      ok: false,
+      reason: "Self-approval is blocked on this workflow step. Ask a different reviewer.",
+    };
+  }
+  const role = stepRow.required_role;
+  if (role === "specific_user") {
+    if (stepRow.specific_user_id == null)
+      return { ok: false, reason: "Step misconfigured: specific user not set" };
+    return userId === stepRow.specific_user_id
+      ? { ok: true }
+      : { ok: false, reason: "This step is assigned to a specific user other than you." };
+  }
+  // For everything else, check the user's relationship to this lab.
+  const member = sqlite
+    .prepare(
+      `SELECT lm.role, COALESCE(us.seat_type, 'active') AS seat_type
+         FROM lab_members lm
+         LEFT JOIN user_seats us
+           ON us.seat_user_id = lm.user_id
+          AND us.owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)
+          AND us.status = 'active'
+        WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active'
+        LIMIT 1`
+    )
+    .get(labId, userId, labId) as { role?: string; seat_type?: string } | undefined;
+  if (!member) return { ok: false, reason: "Not a member of this lab" };
+  if (role === "any_active_seat") {
+    if (member.seat_type === "active" || member.role === "owner" || member.role === "admin") {
+      return { ok: true };
+    }
+    return { ok: false, reason: "This step requires an active (writer) seat." };
+  }
+  // any_view_only_seat, medical_director, technical_consultant,
+  // technical_supervisor all collapse to "any view-only seat" in Phase 2.
+  // Phase 3 will tag specific users with CLIA roles and tighten this.
+  if (
+    role === "any_view_only_seat" ||
+    role === "medical_director" ||
+    role === "technical_consultant" ||
+    role === "technical_supervisor" ||
+    role === "general_supervisor"
+  ) {
+    if (
+      member.seat_type === "view_only" ||
+      member.seat_type === "active" ||
+      member.role === "owner" ||
+      member.role === "admin"
+    ) {
+      return { ok: true };
+    }
+    return { ok: false, reason: "This step requires a reviewer seat." };
+  }
+  return { ok: false, reason: `Unknown required_role: ${role}` };
+}
+
+// Resolve the current pending step for a document. Returns the step row
+// or null if no step pending (document not in_review, or all steps
+// already approved).
+export function getCurrentPendingStep(
+  sqlite: any,
+  documentId: number
+): {
+  step: {
+    id: number;
+    workflow_id: number;
+    step_order: number;
+    step_name: string;
+    required_role: string;
+    specific_user_id: number | null;
+    allow_self_approval: number;
+  } | null;
+  totalSteps: number;
+  completedSteps: number;
+} {
+  const doc = sqlite
+    .prepare(
+      "SELECT id, workflow_id, status, current_version_id FROM policy_documents WHERE id = ?"
+    )
+    .get(documentId) as any;
+  if (!doc || doc.status !== "in_review" || !doc.workflow_id) {
+    return { step: null, totalSteps: 0, completedSteps: 0 };
+  }
+  const steps = sqlite
+    .prepare(
+      `SELECT id, workflow_id, step_order, step_name, required_role,
+              specific_user_id, allow_self_approval
+         FROM policy_approval_steps
+        WHERE workflow_id = ?
+        ORDER BY step_order ASC`
+    )
+    .all(doc.workflow_id) as any[];
+  if (steps.length === 0) {
+    return { step: null, totalSteps: 0, completedSteps: 0 };
+  }
+  // Find first step that has no 'approved' signoff for the current version.
+  for (const s of steps) {
+    const signoff = sqlite
+      .prepare(
+        `SELECT 1 FROM policy_signoffs
+          WHERE document_id = ?
+            AND version_id = ?
+            AND workflow_step_id = ?
+            AND action = 'approved'
+          LIMIT 1`
+      )
+      .get(documentId, doc.current_version_id, s.id);
+    if (!signoff) {
+      return {
+        step: s,
+        totalSteps: steps.length,
+        completedSteps: steps.findIndex((x) => x.id === s.id),
+      };
+    }
+  }
+  // All steps approved for this version: the caller (approve handler)
+  // should flip the document to status='approved'.
+  return { step: null, totalSteps: steps.length, completedSteps: steps.length };
+}
+
 // Per-lab audit log writer. Used by every Phase 1+ mutation so the
 // audit trail is uniform and 21 CFR Part 11 reviewable.
 export function writeAuditLog(
