@@ -3712,6 +3712,31 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_lab ON policy_aud
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_doc ON policy_audit_log(document_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_user ON policy_audit_log(user_id)`); } catch {}
 
+// Phase 8 — surveyor public-link table. Lab owner generates a signed
+// URL a surveyor can use to browse approved policies without an
+// account. Auto-expires; lab admin can revoke at any time.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_surveyor_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    -- Random UUID stored as canonical text. The token is what appears
+    -- in the public URL; non-guessable.
+    token TEXT NOT NULL UNIQUE,
+    -- Optional human label so the admin can keep multiple links
+    -- straight (e.g., "CAP visit Q3 2026").
+    label TEXT,
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT,
+    -- Audit metrics for "did the surveyor actually use it?" reporting.
+    use_count INTEGER NOT NULL DEFAULT 0,
+    last_used_at TEXT
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_lab ON policy_surveyor_links(lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON policy_surveyor_links(token)`); } catch {}
+
 // Migration sentinel block. Pure read of PRAGMA table_info so the next
 // ALTER TABLE for these tables lands without re-checking column presence.
 // Per CLAUDE.md feedback: NO writes, NO derived-state cascades.
@@ -3732,6 +3757,8 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_user ON policy_au
   void attestCols;
   const remindersCols = (sqlite.prepare("PRAGMA table_info(policy_review_reminders)").all() as { name: string }[]).map((c) => c.name);
   void remindersCols;
+  const surveyorCols = (sqlite.prepare("PRAGMA table_info(policy_surveyor_links)").all() as { name: string }[]).map((c) => c.name);
+  void surveyorCols;
   const auditCols = (sqlite.prepare("PRAGMA table_info(policy_audit_log)").all() as { name: string }[]).map((c) => c.name);
   void auditCols;
 }

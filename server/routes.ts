@@ -19446,6 +19446,245 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Phase 8: surveyor public links ─────────────────────────────────────
+  //
+  // Lab owner / admin generates a signed read-only URL. Surveyor opens it
+  // without an account and sees every approved policy, can view inline,
+  // download originals, see signature timeline. Expires after the
+  // inspection window (default 14 days). Can be revoked at any time.
+
+  // POST /surveyor-links — create. Body: { label?, expiresInDays? (default 14, max 90) }.
+  app.post(
+    "/api/labs/:labId/veritapolicy/surveyor-links",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const { label, expiresInDays } = req.body || {};
+      const days = Math.max(1, Math.min(90, Number(expiresInDays ?? 14)));
+      const token = crypto.randomUUID();
+      const sqlite = (db as any).$client;
+      const result = sqlite
+        .prepare(
+          `INSERT INTO policy_surveyor_links
+             (lab_id, token, label, created_by, expires_at)
+           VALUES (?, ?, ?, ?, datetime('now', '+' || ? || ' days'))`
+        )
+        .run(req.scope.labId, token, label || null, req.userId, days);
+      const id = Number(result.lastInsertRowid);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "surveyor_link_created",
+        details: { link_id: id, label: label || null, expires_in_days: days },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.status(201).json({
+        id,
+        token,
+        url: `${FRONTEND_URL || ""}/surveyor/${token}`,
+        expiresInDays: days,
+      });
+    }
+  );
+
+  // GET /surveyor-links — list active + recent revoked / expired.
+  app.get(
+    "/api/labs/:labId/veritapolicy/surveyor-links",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const rows = sqlite
+        .prepare(
+          `SELECT id, token, label, created_by, created_at, expires_at,
+                  revoked_at, use_count, last_used_at
+             FROM policy_surveyor_links
+            WHERE lab_id = ?
+            ORDER BY created_at DESC
+            LIMIT 50`
+        )
+        .all(req.scope.labId);
+      res.json({ links: rows });
+    }
+  );
+
+  // DELETE /surveyor-links/:id — revoke.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/surveyor-links/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare("SELECT lab_id, revoked_at FROM policy_surveyor_links WHERE id = ?")
+        .get(id) as { lab_id: number; revoked_at: string | null } | undefined;
+      if (!row) return res.status(404).json({ error: "Not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (row.revoked_at) return res.json({ ok: true, alreadyRevoked: true });
+      sqlite
+        .prepare("UPDATE policy_surveyor_links SET revoked_at = datetime('now') WHERE id = ?")
+        .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "surveyor_link_revoked",
+        details: { link_id: id },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
+  // ─── Public surveyor routes (NO auth) ────────────────────────────────
+  // Token-validated. Every hit increments use_count + last_used_at.
+
+  function resolveSurveyorToken(token: string):
+    | { ok: true; labId: number; linkId: number }
+    | { ok: false; status: number; error: string } {
+    if (!token || token.length < 20) {
+      return { ok: false, status: 400, error: "Bad token" };
+    }
+    const sqlite = (db as any).$client;
+    const row = sqlite
+      .prepare(
+        `SELECT id, lab_id, expires_at, revoked_at
+           FROM policy_surveyor_links
+          WHERE token = ?`
+      )
+      .get(token) as { id: number; lab_id: number; expires_at: string; revoked_at: string | null } | undefined;
+    if (!row) return { ok: false, status: 404, error: "Link not found" };
+    if (row.revoked_at) return { ok: false, status: 410, error: "Link revoked" };
+    const expires = new Date(row.expires_at);
+    if (Number.isFinite(expires.getTime()) && expires.getTime() < Date.now()) {
+      return { ok: false, status: 410, error: "Link expired" };
+    }
+    // Tick metrics.
+    try {
+      sqlite
+        .prepare(
+          "UPDATE policy_surveyor_links SET use_count = use_count + 1, last_used_at = datetime('now') WHERE id = ?"
+        )
+        .run(row.id);
+    } catch {}
+    return { ok: true, labId: row.lab_id, linkId: row.id };
+  }
+
+  // GET /api/surveyor/:token/policies — list approved policies in this lab.
+  app.get("/api/surveyor/:token/policies", (req: any, res) => {
+    const r = resolveSurveyorToken(String(req.params.token || ""));
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    const sqlite = (db as any).$client;
+    const lab = sqlite
+      .prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?")
+      .get(r.labId) as { lab_name: string | null; clia_number: string | null } | undefined;
+    const docs = sqlite
+      .prepare(
+        `SELECT d.id, d.title, d.description, d.effective_date, d.next_review_date,
+                d.review_interval_months, v.version_number AS current_version_number,
+                v.file_format AS current_file_format, m.name AS manual_name
+           FROM policy_documents d
+           LEFT JOIN policy_versions v ON v.id = d.current_version_id
+           LEFT JOIN policy_manuals m ON m.id = d.manual_id
+          WHERE d.lab_id = ? AND d.status = 'approved' AND d.archived_at IS NULL
+          ORDER BY m.display_order ASC, m.name ASC, d.title ASC`
+      )
+      .all(r.labId);
+    res.json({ lab, documents: docs });
+  });
+
+  // GET /api/surveyor/:token/policies/:id/render — render approved policy
+  // inline. Same tamper-detection footprint as the authenticated render.
+  app.get("/api/surveyor/:token/policies/:id/render", async (req: any, res) => {
+    const r = resolveSurveyorToken(String(req.params.token || ""));
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+    const sqlite = (db as any).$client;
+    const row = sqlite
+      .prepare(
+        `SELECT d.lab_id, d.status, v.file_path, v.file_format,
+                v.file_hash_sha256 AS expected_hash
+           FROM policy_documents d
+           JOIN policy_versions v ON v.id = d.current_version_id
+          WHERE d.id = ?`
+      )
+      .get(id) as any;
+    if (!row) return res.status(404).json({ error: "Not found" });
+    if (row.lab_id !== r.labId) return res.status(403).json({ error: "Wrong lab" });
+    if (row.status !== "approved") return res.status(403).json({ error: "Not approved" });
+    let buffer: Buffer;
+    try {
+      buffer = readVersionBuffer(row.file_path);
+    } catch (err: any) {
+      return res.status(500).json({ error: "File missing on server" });
+    }
+    const actualHash = hashBuffer(buffer);
+    const tampered = row.expected_hash && actualHash !== row.expected_hash;
+    if (row.file_format === "docx") {
+      try {
+        const rendered = await renderDocxToHtml(buffer);
+        return res.json({
+          format: "html",
+          html: rendered.html,
+          messages: rendered.messages,
+          tampered: !!tampered,
+        });
+      } catch {
+        return res.status(500).json({ error: "Render failed" });
+      }
+    }
+    if (row.file_format === "pdf") {
+      if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
+      res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline");
+      return res.send(buffer);
+    }
+    res.json({
+      format: "html",
+      html: buffer.toString("utf-8"),
+      messages: [],
+      tampered: !!tampered,
+    });
+  });
+
+  // GET /api/surveyor/:token/policies/:id/signoffs — public signature timeline.
+  app.get("/api/surveyor/:token/policies/:id/signoffs", (req: any, res) => {
+    const r = resolveSurveyorToken(String(req.params.token || ""));
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+    const sqlite = (db as any).$client;
+    const doc = sqlite
+      .prepare("SELECT lab_id, status FROM policy_documents WHERE id = ?")
+      .get(id) as any;
+    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (doc.lab_id !== r.labId) return res.status(403).json({ error: "Wrong lab" });
+    if (doc.status !== "approved") return res.status(403).json({ error: "Not approved" });
+    const rows = sqlite
+      .prepare(
+        `SELECT s.id, s.action, s.comment, s.typed_signature,
+                s.signed_document_hash, s.signed_at,
+                u.name AS user_name,
+                st.step_name, st.step_order
+           FROM policy_signoffs s
+           JOIN users u ON u.id = s.user_id
+           LEFT JOIN policy_approval_steps st ON st.id = s.workflow_step_id
+          WHERE s.document_id = ?
+          ORDER BY s.signed_at ASC`
+      )
+      .all(id);
+    res.json({ signoffs: rows });
+  });
+
   // ── Phase 7: new-version upload + history + search ─────────────────────
 
   // POST /documents/:id/versions — upload a new version for an existing

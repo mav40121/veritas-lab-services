@@ -75,6 +75,7 @@ import VeritaQCDailyReviewPage from "@/pages/VeritaQCDailyReviewPage";
 import VeritaPolicyAppPage from "@/pages/VeritaPolicyAppPage";
 import VeritaPolicyMyPoliciesPage from "@/pages/VeritaPolicyMyPoliciesPage";
 import VeritaPolicyCompliancePage from "@/pages/VeritaPolicyCompliancePage";
+import SurveyorViewPage from "@/pages/SurveyorViewPage";
 import VeritaPolicyPage from "@/pages/VeritaPolicyPage";
 import CumsumPage from "@/pages/CumsumPage";
 import RoadmapPage from "@/pages/RoadmapPage";
@@ -362,6 +363,7 @@ function AppContent() {
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/founding-lab/apply" component={FoundingLabApplyPage} />
+          <Route path="/surveyor/:token" component={SurveyorViewPage} />
 
           {/* Multi-Lab Tier 2 — Phase 2b: lab-scoped variants of every workspace page.
               Doc: docs/scoping-multi-lab-tier2.md. The legacy unprefixed routes above
