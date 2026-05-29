@@ -211,6 +211,38 @@ app.use((req, res, next) => {
     console.error("[finding-reminder] Scheduler setup error:", err.message);
   }
 
+  // Schedule daily VeritaPolicy review-reminder dispatch at midnight UTC.
+  // Mirrors the finding-reminder scheduler. Idempotent via
+  // policy_review_reminders UNIQUE constraint on (document_id, version_id,
+  // reminder_type) at the application level; safe to re-run.
+  try {
+    const { runPolicyReviewReminders } = await import("./veritapolicyReminders");
+    const schedulePolicyReminders = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[policy-reminders] Running review-reminder dispatch...");
+        runPolicyReviewReminders().catch((err) =>
+          console.error("[policy-reminders] Run failed:", err?.message || err)
+        );
+        setInterval(() => {
+          console.log("[policy-reminders] Running review-reminder dispatch...");
+          runPolicyReviewReminders().catch((err) =>
+            console.error("[policy-reminders] Run failed:", err?.message || err)
+          );
+        }, 24 * 60 * 60 * 1000);
+      }, msUntilMidnight);
+      console.log(
+        `[policy-reminders] Review-reminder dispatch scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`
+      );
+    };
+    schedulePolicyReminders();
+  } catch (err: any) {
+    console.error("[policy-reminders] Scheduler setup error:", err.message);
+  }
+
   // Schedule nightly off-site database backup at 04:00 UTC. Env-gated:
   // if GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID is unset
   // the run is a no-op. 04:00 chosen to clear the midnight UTC snapshot

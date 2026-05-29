@@ -19446,6 +19446,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Phase 6B: admin manual trigger for review reminders ────────────────
+  // Defaults to cron-fired at midnight UTC. This endpoint lets an admin
+  // (or a verify-*.js script) trigger the run on demand. Body: { secret }.
+  app.post("/api/admin/veritapolicy/run-review-reminders", async (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { runPolicyReviewReminders } = await import("./veritapolicyReminders");
+      const stats = await runPolicyReviewReminders();
+      res.json({ ok: true, stats });
+    } catch (err: any) {
+      console.error("[admin run-review-reminders]", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Phase 6A: compliance dashboard aggregations ────────────────────────
   // Read-only summary of a lab's policy program state. Per-manual
   // approval coverage, overdue/due-soon lists, attestation rates per
