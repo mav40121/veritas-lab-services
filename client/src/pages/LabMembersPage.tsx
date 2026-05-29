@@ -23,6 +23,7 @@ interface LabMember {
   last_active_at: string | null;
   name: string | null;
   email: string;
+  seat_type: "active" | "view_only";
 }
 
 interface PendingInvite {
@@ -31,6 +32,18 @@ interface PendingInvite {
   invited_at: string;
   status: string;
   invite_token: string | null;
+  seat_type: "active" | "view_only";
+}
+
+interface SeatLimits {
+  activeIncluded: number;
+  viewOnlyIncluded: number;
+  addOnRatePerYear: number;
+}
+
+interface SeatCounts {
+  active: number;
+  viewOnly: number;
 }
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
@@ -45,6 +58,25 @@ function roleBadge(role: string) {
       {role === "owner" && <Crown size={11} />}
       {role === "admin" && <ShieldCheck size={11} />}
       {role.charAt(0).toUpperCase() + role.slice(1)}
+    </span>
+  );
+}
+
+// parking-lot #33 PR 4: seat-type chip distinguishes writers (active) from
+// reviewers (view-only). Reviewers are medical director or designee,
+// technical consultant, technical supervisor, general supervisor — they
+// read and approve but do not enter data.
+function seatTypeBadge(seatType: "active" | "view_only") {
+  if (seatType === "view_only") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-violet-100 text-violet-900 border-violet-300">
+        View only
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-emerald-100 text-emerald-900 border-emerald-300">
+      Active
     </span>
   );
 }
@@ -65,13 +97,15 @@ export default function LabMembersPage() {
   const isOwner = myRole === "owner";
   const canManage = myRole === "owner" || myRole === "admin";
 
-  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[] }>({
+  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts }>({
     queryKey: [`/api/labs/${activeLabId}/members`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
   });
   const members = data?.members || [];
   const pendingInvites = data?.pendingInvites || [];
+  const seatLimits = data?.seatLimits;
+  const seatCounts = data?.seatCounts;
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
@@ -184,6 +218,42 @@ export default function LabMembersPage() {
         </p>
       </div>
 
+      {seatLimits && seatCounts && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-3">
+                {seatTypeBadge("active")}
+                <div>
+                  <div className="font-medium">
+                    {seatCounts.active} of {seatLimits.activeIncluded} active seats used
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Writers: techs and supervisors who enter data. Owner counts as 1 active seat.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {seatTypeBadge("view_only")}
+                <div>
+                  <div className="font-medium">
+                    {seatCounts.viewOnly} of {seatLimits.viewOnlyIncluded} view-only seats used
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Reviewers: medical director or designee, technical consultant, technical supervisor. Extras are ${seatLimits.addOnRatePerYear} per year.
+                  </div>
+                </div>
+              </div>
+            </div>
+            {(seatCounts.active >= seatLimits.activeIncluded || seatCounts.viewOnly >= seatLimits.viewOnlyIncluded) && (
+              <div className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                You are at a seat cap. Inviting another seat of that type will require a tier upgrade (active) or a ${seatLimits.addOnRatePerYear} per year add-on (view-only).
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {canManage && (
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserPlus size={16} /> Invite a new member</CardTitle></CardHeader>
@@ -240,6 +310,7 @@ export default function LabMembersPage() {
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Name / Email</th>
                     <th className="py-2 pr-3">Role</th>
+                    <th className="py-2 pr-3">Seat type</th>
                     <th className="py-2 pr-3">Last active</th>
                     <th className="py-2 pr-3 text-right">Actions</th>
                   </tr>
@@ -255,6 +326,7 @@ export default function LabMembersPage() {
                           {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
                         </td>
                         <td className="py-2 pr-3">{roleBadge(m.role)}</td>
+                        <td className="py-2 pr-3">{seatTypeBadge(m.seat_type || "active")}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{fmtDate(m.last_active_at || m.accepted_at)}</td>
                         <td className="py-2 pr-3 text-right space-x-1">
                           {isOwner && !isMemberOwner && m.role === "staff" && (
@@ -297,6 +369,7 @@ export default function LabMembersPage() {
                             {expired ? `Expired (${daysPending}d)` : "Pending invitation"}
                           </span>
                         </td>
+                        <td className="py-2 pr-3">{seatTypeBadge(inv.seat_type || "active")}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{fmtDate(inv.invited_at)}</td>
                         <td className="py-2 pr-3 text-right space-x-1">
                           {canManage && inv.invite_token && !expired && (

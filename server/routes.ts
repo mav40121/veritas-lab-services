@@ -3844,15 +3844,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
+    // parking-lot #33 PR 4: surface seat_type on each member row so the UI
+    // can render writer-vs-reviewer chips. LEFT JOIN user_seats on
+    // (owner_user_id, seat_user_id) so the owner row (no matching seat)
+    // falls back to 'active', which matches the counting-gate rule
+    // (owner always counts against the active cap).
+    const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const ownerUserId = lab?.owner_user_id ?? null;
     const rows = sqlite.prepare(`
       SELECT lm.id AS membership_id, lm.user_id, lm.role, lm.is_primary_lab,
              lm.status, lm.accepted_at, lm.created_at, lm.last_active_at,
-             u.name, u.email
+             u.name, u.email,
+             COALESCE(us.seat_type, 'active') AS seat_type
       FROM lab_members lm
       JOIN users u ON u.id = lm.user_id
+      LEFT JOIN user_seats us
+        ON us.seat_user_id = lm.user_id
+       AND us.owner_user_id = ?
+       AND us.status = 'active'
       WHERE lm.lab_id = ? AND lm.status = 'active'
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
-    `).all(req.scope.labId);
+    `).all(ownerUserId, req.scope.labId);
 
     // Pending invites: user_seats rows scoped to this lab where the recipient
     // hasn't accepted yet (no matching user account = no lab_members row
@@ -3865,10 +3877,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // get the correct lab_id at write time.
     let pendingInvites: any[] = [];
     try {
-      const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       if (lab) {
         pendingInvites = sqlite.prepare(`
-          SELECT id AS seat_id, seat_email, invited_at, status, invite_token, lab_id
+          SELECT id AS seat_id, seat_email, invited_at, status, invite_token, lab_id,
+                 COALESCE(seat_type, 'active') AS seat_type
           FROM user_seats
           WHERE owner_user_id = ?
             AND status = 'pending'
@@ -3880,7 +3892,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[labs/:labId/members GET pendingInvites] query failed:", err.message);
     }
 
-    res.json({ members: rows, pendingInvites });
+    // parking-lot #33 PR 4: surface seat caps + current usage so the
+    // members page can show "Active 2 of 5 included" and the $99/yr
+    // add-on hint without the client having to know plan internals.
+    let seatLimits = { activeIncluded: 1, viewOnlyIncluded: 0, addOnRatePerYear: 99 };
+    let seatCounts = { active: 0, viewOnly: 0 };
+    try {
+      if (lab) {
+        const ownerRow = sqlite.prepare("SELECT plan, seat_count FROM users WHERE id = ?").get(lab.owner_user_id) as any;
+        const ownerPlan = ownerRow?.plan || "free";
+        const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
+        const dbSeats = ownerRow?.seat_count || 0;
+        const activeIncluded = Math.max(dbSeats, planSeatLimit);
+        const viewOnlyIncluded = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
+        seatLimits = { activeIncluded, viewOnlyIncluded, addOnRatePerYear: 99 };
+        const breakdown = sqlite.prepare(
+          `SELECT
+             SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
+             SUM(CASE WHEN COALESCE(seat_type,'active') = 'view_only' THEN 1 ELSE 0 END) as view_only_count
+           FROM user_seats
+           WHERE owner_user_id = ? AND status != 'deactivated'`
+        ).get(lab.owner_user_id) as { active_count: number; view_only_count: number } | undefined;
+        seatCounts = {
+          active: (breakdown?.active_count ?? 0) + 1 /* owner counts as active */,
+          viewOnly: breakdown?.view_only_count ?? 0,
+        };
+      }
+    } catch (err: any) {
+      console.error("[labs/:labId/members GET seatLimits] query failed:", err.message);
+    }
+
+    res.json({ members: rows, pendingInvites, seatLimits, seatCounts });
   });
 
   // POST /api/labs/:labId/seat-invites/:id/reissue
