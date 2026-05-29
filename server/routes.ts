@@ -675,7 +675,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lab_owner.subscription_expires_at as lab_owner_subscription_expires_at,
         lab_owner.plan_expires_at as lab_owner_plan_expires_at,
         COALESCE(lo_seats.active_seats, 0) + (CASE WHEN lab_owner.seat_count > 1 THEN 1 ELSE 0 END) as lab_owner_active_seats,
-        COALESCE(lo_seats.pending_seats, 0) as lab_owner_pending_seats
+        COALESCE(lo_seats.pending_seats, 0) as lab_owner_pending_seats,
+        -- parking-lot #33 PR 1: surface active-writer and view-only counts
+        -- alongside the existing total so the admin report can show the split.
+        -- "+1 owner" added to active_writer matches the existing
+        -- lab_owner_active_seats convention (owner counts as an active seat).
+        COALESCE(lo_seats.active_writer_seats, 0) + (CASE WHEN lab_owner.seat_count > 1 THEN 1 ELSE 0 END) as lab_owner_active_writer_seats,
+        COALESCE(lo_seats.active_view_only_seats, 0) as lab_owner_active_view_only_seats
       FROM users u
       LEFT JOIN lab_members lm ON lm.user_id = u.id AND lm.status = 'active'
       LEFT JOIN labs l ON l.id = lm.lab_id
@@ -692,7 +698,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         SELECT
           owner_user_id,
           SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_seats,
-          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_seats
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_seats,
+          -- parking-lot #33 PR 1: split seat counts by seat_type so the
+          -- admin report can show "active writer" vs "view-only reviewer"
+          -- against the policy locked in CLAUDE.md sec 10 (Clinic 1 /
+          -- Community 2 / Hospital 3 view-only included).
+          SUM(CASE WHEN status = 'active' AND COALESCE(seat_type, 'active') = 'active'    THEN 1 ELSE 0 END) as active_writer_seats,
+          SUM(CASE WHEN status = 'active' AND COALESCE(seat_type, 'active') = 'view_only' THEN 1 ELSE 0 END) as active_view_only_seats
         FROM user_seats
         GROUP BY owner_user_id
       ) lo_seats ON lo_seats.owner_user_id = lab_owner.id
@@ -883,6 +895,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           seat_count: rest.lab_owner_seat_count ?? 0,
           active_seats: rest.lab_owner_active_seats ?? 0,
           pending_seats: rest.lab_owner_pending_seats ?? 0,
+          active_writer_seats: rest.lab_owner_active_writer_seats ?? 0,
+          active_view_only_seats: rest.lab_owner_active_view_only_seats ?? 0,
           subscription_expires_at: rest.lab_owner_subscription_expires_at ?? null,
           plan_expires_at: rest.lab_owner_plan_expires_at ?? null,
         } : {};
