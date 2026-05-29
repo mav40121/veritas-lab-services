@@ -18221,6 +18221,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // /labs/:labId/veritapolicy-app/my-policies (Phase 1 client).
   const {
     seedDefaultManualsIfEmpty,
+    seedDefaultWorkflowsIfEmpty,
     buildVersionRelativePath,
     writeVersionBuffer,
     readVersionBuffer,
@@ -18229,6 +18230,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     extractTitle,
     renderDocxToHtml,
     writeAuditLog,
+    canUserApproveStep,
+    getCurrentPendingStep,
   } = await import("./veritapolicyApproval");
 
   // Multer config: memory buffer + 25 MB cap. We write to /data/policies on
@@ -18652,6 +18655,602 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       // html
       res.json({ format: "html", html: buffer.toString("utf-8"), messages: [] });
+    }
+  );
+
+  // ── VeritaPolicy approval workflow Phase 2: workflow engine ─────────────
+  //
+  // State machine:
+  //   draft ──submit──> in_review ──approve(final)──> approved
+  //                     in_review ──reject──> draft
+  //   (any) ──archive──> archived
+  //
+  // Self-approval blocked unless step.allow_self_approval = 1.
+  // Phase 3 will add password re-auth + tamper-detection-on-download.
+
+  // GET /workflows — list + seed defaults on first call.
+  app.get(
+    "/api/labs/:labId/veritapolicy/workflows",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      seedDefaultWorkflowsIfEmpty(sqlite, labId);
+      const workflows = sqlite
+        .prepare(
+          `SELECT id, name, description, is_default, created_at, updated_at
+             FROM policy_approval_workflows
+            WHERE lab_id = ? AND archived_at IS NULL
+            ORDER BY is_default DESC, name ASC`
+        )
+        .all(labId);
+      // Attach steps to each workflow.
+      const withSteps = workflows.map((wf: any) => ({
+        ...wf,
+        steps: sqlite
+          .prepare(
+            `SELECT id, step_order, step_name, required_role,
+                    specific_user_id, allow_self_approval
+               FROM policy_approval_steps
+              WHERE workflow_id = ?
+              ORDER BY step_order ASC`
+          )
+          .all(wf.id),
+      }));
+      res.json({ workflows: withSteps });
+    }
+  );
+
+  // POST /workflows — create a workflow shell. Steps added via /steps.
+  app.post(
+    "/api/labs/:labId/veritapolicy/workflows",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const { name, description } = req.body || {};
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      const sqlite = (db as any).$client;
+      const result = sqlite
+        .prepare(
+          `INSERT INTO policy_approval_workflows (lab_id, name, description, is_default)
+           VALUES (?, ?, ?, 0)`
+        )
+        .run(req.scope.labId, name.trim(), description || null);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "workflow_created",
+        details: { workflow_id: Number(result.lastInsertRowid), name: name.trim() },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.status(201).json({ id: Number(result.lastInsertRowid) });
+    }
+  );
+
+  // PUT /workflows/:id — rename / redescribe.
+  app.put(
+    "/api/labs/:labId/veritapolicy/workflows/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!row) return res.status(404).json({ error: "Workflow not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const { name, description, isDefault } = req.body || {};
+      sqlite
+        .prepare(
+          `UPDATE policy_approval_workflows
+             SET name = COALESCE(?, name),
+                 description = COALESCE(?, description),
+                 is_default = COALESCE(?, is_default),
+                 updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(
+          name ? String(name).trim() : null,
+          description !== undefined ? description : null,
+          isDefault !== undefined ? (isDefault ? 1 : 0) : null,
+          id
+        );
+      // Ensure only one default per lab.
+      if (isDefault) {
+        sqlite
+          .prepare(
+            "UPDATE policy_approval_workflows SET is_default = 0 WHERE lab_id = ? AND id != ?"
+          )
+          .run(req.scope.labId, id);
+      }
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "workflow_edited",
+        details: { workflow_id: id },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
+  // DELETE /workflows/:id — soft archive.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/workflows/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!row) return res.status(404).json({ error: "Workflow not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      sqlite
+        .prepare(
+          `UPDATE policy_approval_workflows
+             SET archived_at = datetime('now'), updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(id);
+      res.json({ ok: true });
+    }
+  );
+
+  // POST /workflows/:id/steps — append a step.
+  app.post(
+    "/api/labs/:labId/veritapolicy/workflows/:id/steps",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const workflowId = Number(req.params.id);
+      if (!Number.isFinite(workflowId)) return res.status(400).json({ error: "Bad id" });
+      const { stepName, requiredRole, specificUserId, allowSelfApproval } = req.body || {};
+      if (!stepName || typeof stepName !== "string") {
+        return res.status(400).json({ error: "stepName required" });
+      }
+      const validRoles = new Set([
+        "specific_user",
+        "any_active_seat",
+        "any_view_only_seat",
+        "medical_director",
+        "technical_consultant",
+        "technical_supervisor",
+        "general_supervisor",
+      ]);
+      if (!validRoles.has(requiredRole)) {
+        return res.status(400).json({ error: "Invalid requiredRole" });
+      }
+      const sqlite = (db as any).$client;
+      const wf = sqlite
+        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
+        .get(workflowId) as { lab_id: number } | undefined;
+      if (!wf) return res.status(404).json({ error: "Workflow not found" });
+      if (wf.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const nextOrder = (sqlite
+        .prepare(
+          "SELECT COALESCE(MAX(step_order), 0) + 1 AS next FROM policy_approval_steps WHERE workflow_id = ?"
+        )
+        .get(workflowId) as { next: number }).next;
+      const result = sqlite
+        .prepare(
+          `INSERT INTO policy_approval_steps
+             (workflow_id, step_order, step_name, required_role, specific_user_id, allow_self_approval)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          workflowId,
+          nextOrder,
+          String(stepName).trim(),
+          requiredRole,
+          requiredRole === "specific_user" ? Number(specificUserId) : null,
+          allowSelfApproval ? 1 : 0
+        );
+      res.status(201).json({ id: Number(result.lastInsertRowid), step_order: nextOrder });
+    }
+  );
+
+  // DELETE /workflows/:id/steps/:stepId — remove a step.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/workflows/:id/steps/:stepId",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const workflowId = Number(req.params.id);
+      const stepId = Number(req.params.stepId);
+      if (!Number.isFinite(workflowId) || !Number.isFinite(stepId)) {
+        return res.status(400).json({ error: "Bad id" });
+      }
+      const sqlite = (db as any).$client;
+      const wf = sqlite
+        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
+        .get(workflowId) as { lab_id: number } | undefined;
+      if (!wf || wf.lab_id !== req.scope.labId) return res.status(404).json({ error: "Not found" });
+      sqlite
+        .prepare(
+          "DELETE FROM policy_approval_steps WHERE id = ? AND workflow_id = ?"
+        )
+        .run(stepId, workflowId);
+      res.json({ ok: true });
+    }
+  );
+
+  // PATCH /documents/:id — rename, change manual, edit description.
+  app.patch(
+    "/api/labs/:labId/veritapolicy/documents/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const { title, description, manualId, reviewIntervalMonths } = req.body || {};
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET title = COALESCE(?, title),
+                 description = COALESCE(?, description),
+                 manual_id = COALESCE(?, manual_id),
+                 review_interval_months = COALESCE(?, review_interval_months),
+                 updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(
+          title ? String(title).trim() : null,
+          description !== undefined ? description : null,
+          manualId !== undefined ? (manualId === null ? null : Number(manualId)) : null,
+          reviewIntervalMonths !== undefined ? Number(reviewIntervalMonths) : null,
+          id
+        );
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "edited",
+        details: { title: title ?? null, description: description ?? null },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
+  // POST /documents/:id/submit — assign workflow, transition to in_review.
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/submit",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const { workflowId } = req.body || {};
+      const wfId = Number(workflowId);
+      if (!Number.isFinite(wfId)) return res.status(400).json({ error: "workflowId required" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, status, owner_user_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.status !== "draft") {
+        return res.status(409).json({ error: `Document is ${doc.status}; only draft can submit` });
+      }
+      const wf = sqlite
+        .prepare(
+          "SELECT lab_id FROM policy_approval_workflows WHERE id = ? AND archived_at IS NULL"
+        )
+        .get(wfId) as { lab_id: number } | undefined;
+      if (!wf || wf.lab_id !== req.scope.labId) {
+        return res.status(400).json({ error: "Workflow not found in this lab" });
+      }
+      const stepCount = (sqlite
+        .prepare("SELECT COUNT(*) AS cnt FROM policy_approval_steps WHERE workflow_id = ?")
+        .get(wfId) as { cnt: number }).cnt;
+      if (stepCount === 0) {
+        return res.status(400).json({ error: "Workflow has no steps" });
+      }
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET workflow_id = ?, status = 'in_review', updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(wfId, id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "workflow_assigned",
+        details: { workflow_id: wfId, step_count: stepCount },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
+  // GET /documents/:id/pending-step — current pending step (if any).
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/pending-step",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, owner_user_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const pending = getCurrentPendingStep(sqlite, id);
+      if (!pending.step) {
+        return res.json({
+          step: null,
+          totalSteps: pending.totalSteps,
+          completedSteps: pending.completedSteps,
+          canCurrentUserApprove: false,
+          reason: "No pending step",
+        });
+      }
+      const check = canUserApproveStep(sqlite, {
+        userId: req.userId,
+        labId: req.scope.labId,
+        documentOwnerId: doc.owner_user_id,
+        stepRow: pending.step,
+      });
+      res.json({
+        step: pending.step,
+        totalSteps: pending.totalSteps,
+        completedSteps: pending.completedSteps,
+        canCurrentUserApprove: check.ok,
+        reason: check.ok ? null : check.reason,
+      });
+    }
+  );
+
+  // POST /documents/:id/approve — current user approves the pending step.
+  // Body: { typedSignature, comment? }
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/approve",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const { typedSignature, comment } = req.body || {};
+      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
+        return res.status(400).json({ error: "typedSignature required (full name)" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare(
+          "SELECT lab_id, owner_user_id, current_version_id, status FROM policy_documents WHERE id = ?"
+        )
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.status !== "in_review") {
+        return res.status(409).json({ error: `Cannot approve from status ${doc.status}` });
+      }
+      const pending = getCurrentPendingStep(sqlite, id);
+      if (!pending.step) {
+        return res.status(409).json({ error: "No pending step" });
+      }
+      const check = canUserApproveStep(sqlite, {
+        userId: req.userId,
+        labId: req.scope.labId,
+        documentOwnerId: doc.owner_user_id,
+        stepRow: pending.step,
+      });
+      if (!check.ok) return res.status(403).json({ error: check.reason });
+      // Pull the file hash from the current version for non-repudiation.
+      const ver = sqlite
+        .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
+        .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
+      const hash = ver?.file_hash_sha256 || "missing";
+      sqlite
+        .prepare(
+          `INSERT INTO policy_signoffs
+             (document_id, version_id, workflow_step_id, user_id, action,
+              comment, typed_signature, signed_document_hash, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          doc.current_version_id,
+          pending.step.id,
+          req.userId,
+          comment || null,
+          typedSignature.trim(),
+          hash,
+          req.ip || null,
+          (req.headers["user-agent"] as string | undefined) || null
+        );
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "approved",
+        details: {
+          workflow_step_id: pending.step.id,
+          step_order: pending.step.step_order,
+          step_name: pending.step.step_name,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      // If this was the final step, flip document to status='approved' and
+      // compute next_review_date.
+      const after = getCurrentPendingStep(sqlite, id);
+      if (!after.step && after.completedSteps >= after.totalSteps) {
+        sqlite
+          .prepare(
+            `UPDATE policy_documents
+               SET status = 'approved',
+                   effective_date = COALESCE(effective_date, date('now')),
+                   next_review_date = date('now', '+' || review_interval_months || ' months'),
+                   updated_at = datetime('now')
+             WHERE id = ?`
+          )
+          .run(id);
+        return res.json({ ok: true, status: "approved" });
+      }
+      res.json({
+        ok: true,
+        status: "in_review",
+        nextStep: after.step ? after.step.step_name : null,
+      });
+    }
+  );
+
+  // POST /documents/:id/reject — current user rejects, returns to draft.
+  // Body: { typedSignature, comment? }
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/reject",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const { typedSignature, comment } = req.body || {};
+      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
+        return res.status(400).json({ error: "typedSignature required (full name)" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare(
+          "SELECT lab_id, owner_user_id, current_version_id, status FROM policy_documents WHERE id = ?"
+        )
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.status !== "in_review") {
+        return res.status(409).json({ error: `Cannot reject from status ${doc.status}` });
+      }
+      const pending = getCurrentPendingStep(sqlite, id);
+      if (!pending.step) {
+        return res.status(409).json({ error: "No pending step" });
+      }
+      const check = canUserApproveStep(sqlite, {
+        userId: req.userId,
+        labId: req.scope.labId,
+        documentOwnerId: doc.owner_user_id,
+        stepRow: pending.step,
+      });
+      if (!check.ok) return res.status(403).json({ error: check.reason });
+      const ver = sqlite
+        .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
+        .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
+      const hash = ver?.file_hash_sha256 || "missing";
+      sqlite
+        .prepare(
+          `INSERT INTO policy_signoffs
+             (document_id, version_id, workflow_step_id, user_id, action,
+              comment, typed_signature, signed_document_hash, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, 'rejected', ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          doc.current_version_id,
+          pending.step.id,
+          req.userId,
+          comment || null,
+          typedSignature.trim(),
+          hash,
+          req.ip || null,
+          (req.headers["user-agent"] as string | undefined) || null
+        );
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET status = 'draft', updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "rejected",
+        details: { workflow_step_id: pending.step.id, comment: comment || null },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true, status: "draft" });
+    }
+  );
+
+  // GET /pending-reviews — for the current user, list documents awaiting
+  // their action. Useful for a top-of-page "Pending My Review" section.
+  app.get(
+    "/api/labs/:labId/veritapolicy/pending-reviews",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const inReviewDocs = sqlite
+        .prepare(
+          `SELECT id, title, owner_user_id, workflow_id, manual_id, updated_at
+             FROM policy_documents
+            WHERE lab_id = ? AND status = 'in_review' AND archived_at IS NULL`
+        )
+        .all(req.scope.labId) as any[];
+      const pending: any[] = [];
+      for (const d of inReviewDocs) {
+        const p = getCurrentPendingStep(sqlite, d.id);
+        if (!p.step) continue;
+        const check = canUserApproveStep(sqlite, {
+          userId: req.userId,
+          labId: req.scope.labId,
+          documentOwnerId: d.owner_user_id,
+          stepRow: p.step,
+        });
+        if (!check.ok) continue;
+        pending.push({
+          document_id: d.id,
+          title: d.title,
+          manual_id: d.manual_id,
+          updated_at: d.updated_at,
+          step_id: p.step.id,
+          step_name: p.step.step_name,
+          step_order: p.step.step_order,
+          total_steps: p.totalSteps,
+        });
+      }
+      res.json({ pending });
     }
   );
 
