@@ -463,12 +463,16 @@ function authMiddleware(req: any, res: any, next: any) {
 
     // Check if this user is a seat user
     const seatRow = (db as any).$client.prepare(
-      "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+      "SELECT owner_user_id, permissions, seat_type FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
     ).get(req.userId) as any;
 
     if (seatRow) {
       req.isSeatUser = true;
       req.ownerUserId = seatRow.owner_user_id;
+      // parking-lot #33 PR 5: surface seat_type on the request so
+      // mutating routes can be gated. Default 'active' for legacy
+      // rows without the column populated.
+      req.seatType = seatRow.seat_type || 'active';
       // Stored as JSON; tolerate either legacy flat map OR new mode shape.
       // The resolver in requireModuleEdit handles both. Do NOT normalize on
       // read, the DB row stays in whatever shape was last written so a stale
@@ -494,6 +498,25 @@ function authMiddleware(req: any, res: any, next: any) {
       req.isSeatUser = false;
       req.ownerUserId = req.userId;
       req.seatPermissions = null;
+      req.seatType = 'active';
+    }
+
+    // parking-lot #33 PR 5: defense-in-depth gate. View-only seats
+    // (medical director or designee, technical consultant, technical
+    // supervisor) are reviewers, not writers. Block them from mutating
+    // endpoints regardless of permissions JSON. Read methods (GET,
+    // HEAD, OPTIONS) always pass so reviewers can still see data.
+    // Owners never have a user_seats row matching seat_user_id, so they
+    // hit the else branch above and req.seatType stays 'active'.
+    if (
+      req.isSeatUser &&
+      req.seatType === 'view_only' &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+    ) {
+      return res.status(403).json({
+        error: 'view_only_seat',
+        message: 'This seat is view-only. Ask the lab owner to upgrade you to an active (writer) seat to make changes.',
+      });
     }
 
     next();
