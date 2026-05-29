@@ -74,6 +74,7 @@ import VeritaQCAppPage from "@/pages/VeritaQCAppPage";
 import VeritaQCDailyReviewPage from "@/pages/VeritaQCDailyReviewPage";
 import VeritaPolicyAppPage from "@/pages/VeritaPolicyAppPage";
 import VeritaPolicyMyPoliciesPage from "@/pages/VeritaPolicyMyPoliciesPage";
+import VeritaPolicyCompliancePage from "@/pages/VeritaPolicyCompliancePage";
 import VeritaPolicyPage from "@/pages/VeritaPolicyPage";
 import CumsumPage from "@/pages/CumsumPage";
 import RoadmapPage from "@/pages/RoadmapPage";
@@ -393,6 +394,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritaqc-app/review" component={VeritaQCDailyReviewPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
+          <Route path="/labs/:labId/veritapolicy-app/compliance" component={VeritaPolicyCompliancePage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
           <Route path="/labs/:labId/veritastock/snap-order" component={VeritaStockSnapOrderPage} />
