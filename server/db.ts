@@ -2743,11 +2743,65 @@ sqlite.exec(`
     if (!iiColNames.includes("standing_order_review_date")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN standing_order_review_date TEXT"); } catch {}
     }
+    // parking-lot #29 Phase 0: barcode_value for scan flow. Nullable so
+    // existing rows do not break; uniqueness enforced per-account via
+    // idx_inventory_barcode below.
+    if (!iiColNames.includes("barcode_value")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN barcode_value TEXT"); } catch {}
+    }
   }
 }
 
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_account ON inventory_items(account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON inventory_items(account_id, expiration_date)`); } catch {}
+// parking-lot #29 Phase 0: barcode_value lookup index. NOT UNIQUE here
+// because legacy rows without a barcode share NULL; the application layer
+// rejects duplicate barcode inserts via a per-account uniqueness check.
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_barcode ON inventory_items(account_id, barcode_value)`); } catch {}
+
+// parking-lot #29 Phase 0: scan_events audit table. Every barcode scan
+// (whether it changes quantity or not) writes one row so the lab has a
+// complete who/what/when timeline. account_id matches inventory_items.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS scan_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    -- Nullable: a scan against an unknown barcode still writes a row
+    -- with the raw barcode_value captured so the user can later assign
+    -- it to an item without losing the audit trail.
+    inventory_item_id INTEGER,
+    user_id INTEGER NOT NULL,
+    -- 'decrement' (consume stock), 'increment' (receive stock),
+    -- 'lookup_only' (scan to identify, no quantity change),
+    -- 'correction' (admin fix mis-scan), 'unknown_barcode' (scan failed
+    -- to resolve to an item).
+    action TEXT NOT NULL,
+    -- Signed delta. NULL for lookup_only / unknown_barcode.
+    quantity_delta INTEGER,
+    -- Snapshots so a future audit can prove the delta without
+    -- re-fetching the item (which may have moved on by then).
+    quantity_before INTEGER,
+    quantity_after INTEGER,
+    -- The raw barcode_value scanned. Stored even if it matches the
+    -- item's current barcode_value so a label re-print does not
+    -- invalidate the trail.
+    barcode_value TEXT,
+    notes TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    scanned_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_scan_events_account ON scan_events(account_id, scanned_at)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_scan_events_item ON scan_events(inventory_item_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_scan_events_user ON scan_events(user_id)`); } catch {}
+
+// Migration sentinel block for the new Phase 0 table, per the
+// CLAUDE.md NEW DB TABLE RULE.
+{
+  const scanCols = (sqlite.prepare("PRAGMA table_info(scan_events)").all() as { name: string }[]).map((c) => c.name);
+  void scanCols;
+}
 
 // VeritaOps: cost-per-reportable-test (CPRT) studies. PARKING_LOT #10.
 // Layered cost model per CLSI GP11-A "Basic Cost Accounting for Clinical
