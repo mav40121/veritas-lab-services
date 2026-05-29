@@ -18571,6 +18571,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   );
 
   // GET /api/labs/:labId/veritapolicy/documents/:id/download — original file.
+  // Phase 3: re-hash served buffer against policy_versions.file_hash_sha256
+  // and set X-VeritaPolicy-Tamper: yes header on mismatch so the client
+  // can surface a banner. Also logs the mismatch into policy_audit_log.
   app.get(
     "/api/labs/:labId/veritapolicy/documents/:id/download",
     authMiddleware,
@@ -18581,7 +18584,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = (db as any).$client;
       const row = sqlite
         .prepare(
-          `SELECT d.lab_id, d.title, v.file_path, v.file_format
+          `SELECT d.lab_id, d.title, v.file_path, v.file_format,
+                  v.file_hash_sha256 AS expected_hash
              FROM policy_documents d
              JOIN policy_versions v ON v.id = d.current_version_id
             WHERE d.id = ?`
@@ -18596,6 +18600,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         console.error("[policy download readVersionBuffer]", err.message);
         return res.status(500).json({ error: "File missing on server" });
       }
+      // Phase 3: tamper detection.
+      const actualHash = hashBuffer(buffer);
+      const tampered = row.expected_hash && actualHash !== row.expected_hash;
+      if (tampered) {
+        console.error(
+          `[policy download tamper] doc=${id} expected=${row.expected_hash} actual=${actualHash}`
+        );
+        writeAuditLog(sqlite, {
+          labId: req.scope.labId,
+          documentId: id,
+          userId: req.userId,
+          action: "tamper_detected",
+          details: { expected_hash: row.expected_hash, actual_hash: actualHash, surface: "download" },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] as string | undefined,
+        });
+        res.setHeader("X-VeritaPolicy-Tamper", "yes");
+      }
       const mime =
         row.file_format === "pdf"
           ? "application/pdf"
@@ -18608,6 +18630,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Content-Disposition",
         `attachment; filename="${safeTitle}.${row.file_format}"`
       );
+      res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
       writeAuditLog(sqlite, {
         labId: req.scope.labId,
         documentId: id,
@@ -18633,7 +18656,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = (db as any).$client;
       const row = sqlite
         .prepare(
-          `SELECT d.lab_id, v.file_path, v.file_format
+          `SELECT d.lab_id, v.file_path, v.file_format,
+                  v.file_hash_sha256 AS expected_hash
              FROM policy_documents d
              JOIN policy_versions v ON v.id = d.current_version_id
             WHERE d.id = ?`
@@ -18648,6 +18672,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         console.error("[policy render readVersionBuffer]", err.message);
         return res.status(500).json({ error: "File missing on server" });
       }
+      // Phase 3: tamper detection on view too.
+      const actualHash = hashBuffer(buffer);
+      const tampered = row.expected_hash && actualHash !== row.expected_hash;
+      if (tampered) {
+        console.error(
+          `[policy render tamper] doc=${id} expected=${row.expected_hash} actual=${actualHash}`
+        );
+        writeAuditLog(sqlite, {
+          labId: req.scope.labId,
+          documentId: id,
+          userId: req.userId,
+          action: "tamper_detected",
+          details: { expected_hash: row.expected_hash, actual_hash: actualHash, surface: "render" },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] as string | undefined,
+        });
+      }
       writeAuditLog(sqlite, {
         labId: req.scope.labId,
         documentId: id,
@@ -18659,19 +18700,66 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (row.file_format === "docx") {
         try {
           const rendered = await renderDocxToHtml(buffer);
-          return res.json({ format: "html", html: rendered.html, messages: rendered.messages });
+          return res.json({
+            format: "html",
+            html: rendered.html,
+            messages: rendered.messages,
+            tampered: !!tampered,
+          });
         } catch (err: any) {
           console.error("[policy render docx]", err.message);
           return res.status(500).json({ error: "Render failed" });
         }
       }
       if (row.file_format === "pdf") {
+        if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
+        res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", "inline");
         return res.send(buffer);
       }
       // html
-      res.json({ format: "html", html: buffer.toString("utf-8"), messages: [] });
+      res.json({
+        format: "html",
+        html: buffer.toString("utf-8"),
+        messages: [],
+        tampered: !!tampered,
+      });
+    }
+  );
+
+  // GET /documents/:id/signoffs — list all signatures for a document.
+  // Phase 3: surveyors and reviewers can audit who approved, when,
+  // with what hash, and read any comments. Sorted ascending so the
+  // timeline reads top-down.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/signoffs",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const rows = sqlite
+        .prepare(
+          `SELECT s.id, s.document_id, s.version_id, s.workflow_step_id,
+                  s.user_id, s.action, s.comment, s.typed_signature,
+                  s.signed_document_hash, s.ip_address, s.signed_at,
+                  u.name AS user_name, u.email AS user_email,
+                  st.step_name, st.step_order
+             FROM policy_signoffs s
+             JOIN users u ON u.id = s.user_id
+             LEFT JOIN policy_approval_steps st ON st.id = s.workflow_step_id
+            WHERE s.document_id = ?
+            ORDER BY s.signed_at ASC`
+        )
+        .all(id);
+      res.json({ signoffs: rows });
     }
   );
 
@@ -19055,21 +19143,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   );
 
   // POST /documents/:id/approve — current user approves the pending step.
-  // Body: { typedSignature, comment? }
+  // Body: { typedSignature, password, comment? }
+  // Phase 3: password re-auth per FDA CPG 7153.17 minimum.
   app.post(
     "/api/labs/:labId/veritapolicy/documents/:id/approve",
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
     requireModuleEdit("veritapolicy"),
-    (req: any, res) => {
+    async (req: any, res) => {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-      const { typedSignature, comment } = req.body || {};
+      const { typedSignature, password, comment } = req.body || {};
       if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
         return res.status(400).json({ error: "typedSignature required (full name)" });
       }
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ error: "password required for electronic signature" });
+      }
       const sqlite = (db as any).$client;
+      // 21 CFR Part 11 minimum: re-authenticate with password at signing.
+      const userRow = sqlite
+        .prepare("SELECT id, password_hash FROM users WHERE id = ?")
+        .get(req.userId) as any;
+      if (!userRow || !userRow.password_hash) {
+        return res.status(401).json({ error: "User has no password set; cannot sign electronically" });
+      }
+      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
+      if (!passwordOk) {
+        return res.status(401).json({ error: "Password incorrect; signature not recorded" });
+      }
       const doc = sqlite
         .prepare(
           "SELECT lab_id, owner_user_id, current_version_id, status FROM policy_documents WHERE id = ?"
@@ -19152,21 +19255,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   );
 
   // POST /documents/:id/reject — current user rejects, returns to draft.
-  // Body: { typedSignature, comment? }
+  // Body: { typedSignature, password, comment? }
+  // Phase 3: password re-auth here too. Rejection is an electronic
+  // signature in 21 CFR Part 11 terms (an attestation that this version
+  // does not meet standard) and must be non-repudiable.
   app.post(
     "/api/labs/:labId/veritapolicy/documents/:id/reject",
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
     requireModuleEdit("veritapolicy"),
-    (req: any, res) => {
+    async (req: any, res) => {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-      const { typedSignature, comment } = req.body || {};
+      const { typedSignature, password, comment } = req.body || {};
       if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
         return res.status(400).json({ error: "typedSignature required (full name)" });
       }
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ error: "password required for electronic signature" });
+      }
       const sqlite = (db as any).$client;
+      const userRow = sqlite
+        .prepare("SELECT id, password_hash FROM users WHERE id = ?")
+        .get(req.userId) as any;
+      if (!userRow || !userRow.password_hash) {
+        return res.status(401).json({ error: "User has no password set; cannot sign electronically" });
+      }
+      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
+      if (!passwordOk) {
+        return res.status(401).json({ error: "Password incorrect; signature not recorded" });
+      }
       const doc = sqlite
         .prepare(
           "SELECT lab_id, owner_user_id, current_version_id, status FROM policy_documents WHERE id = ?"
