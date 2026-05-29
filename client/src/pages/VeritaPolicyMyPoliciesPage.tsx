@@ -798,6 +798,11 @@ export default function VeritaPolicyMyPoliciesPage() {
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <a href={`/labs/${activeLabId}/veritapolicy-app/compliance`}>
+            <Button variant="outline">
+              <FileText size={14} className="mr-1.5" /> Compliance
+            </Button>
+          </a>
           <Button variant="outline" onClick={() => setNewManualOpen(true)}>
             <FolderPlus size={14} className="mr-1.5" /> New Manual
           </Button>

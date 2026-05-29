@@ -19446,6 +19446,180 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Phase 6A: compliance dashboard aggregations ────────────────────────
+  // Read-only summary of a lab's policy program state. Per-manual
+  // approval coverage, overdue/due-soon lists, attestation rates per
+  // staff member. Phase 6B will add the cron-fired email reminders +
+  // auto-expire.
+  app.get(
+    "/api/labs/:labId/veritapolicy/compliance",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+
+      // Per-manual counts: total documents + by-status counts.
+      const perManual = sqlite
+        .prepare(
+          `SELECT m.id AS manual_id, m.name AS manual_name,
+                  COUNT(d.id) AS total,
+                  SUM(CASE WHEN d.status = 'approved' THEN 1 ELSE 0 END) AS approved,
+                  SUM(CASE WHEN d.status = 'in_review' THEN 1 ELSE 0 END) AS in_review,
+                  SUM(CASE WHEN d.status = 'draft' THEN 1 ELSE 0 END) AS draft,
+                  SUM(CASE WHEN d.status = 'expired' THEN 1 ELSE 0 END) AS expired,
+                  SUM(CASE WHEN d.status = 'approved'
+                            AND d.next_review_date IS NOT NULL
+                            AND date(d.next_review_date) < date('now')
+                           THEN 1 ELSE 0 END) AS overdue,
+                  SUM(CASE WHEN d.status = 'approved'
+                            AND d.next_review_date IS NOT NULL
+                            AND date(d.next_review_date) >= date('now')
+                            AND date(d.next_review_date) <= date('now', '+30 days')
+                           THEN 1 ELSE 0 END) AS due_soon
+             FROM policy_manuals m
+             LEFT JOIN policy_documents d
+               ON d.manual_id = m.id AND d.archived_at IS NULL
+            WHERE m.lab_id = ? AND m.archived_at IS NULL
+            GROUP BY m.id
+            ORDER BY m.display_order ASC, m.name ASC`
+        )
+        .all(labId);
+
+      // Add an "Unassigned" pseudo-row for docs without a manual.
+      const unassigned = sqlite
+        .prepare(
+          `SELECT COUNT(d.id) AS total,
+                  SUM(CASE WHEN d.status = 'approved' THEN 1 ELSE 0 END) AS approved,
+                  SUM(CASE WHEN d.status = 'in_review' THEN 1 ELSE 0 END) AS in_review,
+                  SUM(CASE WHEN d.status = 'draft' THEN 1 ELSE 0 END) AS draft,
+                  SUM(CASE WHEN d.status = 'expired' THEN 1 ELSE 0 END) AS expired,
+                  SUM(CASE WHEN d.status = 'approved'
+                            AND d.next_review_date IS NOT NULL
+                            AND date(d.next_review_date) < date('now')
+                           THEN 1 ELSE 0 END) AS overdue,
+                  SUM(CASE WHEN d.status = 'approved'
+                            AND d.next_review_date IS NOT NULL
+                            AND date(d.next_review_date) >= date('now')
+                            AND date(d.next_review_date) <= date('now', '+30 days')
+                           THEN 1 ELSE 0 END) AS due_soon
+             FROM policy_documents d
+            WHERE d.lab_id = ? AND d.manual_id IS NULL AND d.archived_at IS NULL`
+        )
+        .get(labId) as any;
+
+      // Overdue list: every approved doc past next_review_date.
+      const overdueList = sqlite
+        .prepare(
+          `SELECT d.id, d.title, d.next_review_date, d.manual_id,
+                  m.name AS manual_name
+             FROM policy_documents d
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE d.lab_id = ? AND d.archived_at IS NULL
+              AND d.status = 'approved'
+              AND d.next_review_date IS NOT NULL
+              AND date(d.next_review_date) < date('now')
+            ORDER BY d.next_review_date ASC`
+        )
+        .all(labId);
+
+      // Due-soon list: approved doc with next_review_date in next 30 days.
+      const dueSoonList = sqlite
+        .prepare(
+          `SELECT d.id, d.title, d.next_review_date, d.manual_id,
+                  m.name AS manual_name
+             FROM policy_documents d
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE d.lab_id = ? AND d.archived_at IS NULL
+              AND d.status = 'approved'
+              AND d.next_review_date IS NOT NULL
+              AND date(d.next_review_date) >= date('now')
+              AND date(d.next_review_date) <= date('now', '+30 days')
+            ORDER BY d.next_review_date ASC`
+        )
+        .all(labId);
+
+      // Per-user attestation rate: how many open attestations vs how many
+      // they've completed (all-time).
+      const perUserAttest = sqlite
+        .prepare(
+          `SELECT u.id AS user_id, u.name AS user_name, u.email,
+                  SUM(CASE WHEN a.completed_at IS NULL THEN 1 ELSE 0 END) AS pending,
+                  SUM(CASE WHEN a.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed,
+                  COUNT(a.id) AS total
+             FROM lab_members lm
+             JOIN users u ON u.id = lm.user_id
+             LEFT JOIN policy_attestations a ON a.assigned_to_user_id = lm.user_id
+             LEFT JOIN policy_documents d
+               ON d.id = a.document_id AND d.lab_id = lm.lab_id
+            WHERE lm.lab_id = ? AND lm.status = 'active'
+            GROUP BY u.id
+            ORDER BY pending DESC, u.name ASC`
+        )
+        .all(labId);
+
+      // Pending review by step: which docs are sitting in_review at which step.
+      const pendingReviewList = sqlite
+        .prepare(
+          `SELECT d.id, d.title, d.workflow_id, d.updated_at,
+                  m.name AS manual_name
+             FROM policy_documents d
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE d.lab_id = ? AND d.archived_at IS NULL
+              AND d.status = 'in_review'
+            ORDER BY d.updated_at ASC`
+        )
+        .all(labId) as any[];
+      // Attach pending step info using the same helper as GET /documents.
+      const pendingReviewEnriched = pendingReviewList.map((d) => {
+        const pending = getCurrentPendingStep(sqlite, d.id);
+        return {
+          ...d,
+          pending_step_name: pending.step?.step_name ?? null,
+          pending_step_role: pending.step?.required_role ?? null,
+          pending_step_order: pending.step?.step_order ?? null,
+          pending_total_steps: pending.totalSteps,
+        };
+      });
+
+      // Headline numbers.
+      const headline = sqlite
+        .prepare(
+          `SELECT
+              SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_total,
+              SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) AS in_review_total,
+              SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft_total,
+              SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired_total,
+              COUNT(id) AS doc_total
+             FROM policy_documents
+            WHERE lab_id = ? AND archived_at IS NULL`
+        )
+        .get(labId) as any;
+
+      res.json({
+        headline,
+        perManual: [
+          ...perManual,
+          {
+            manual_id: null,
+            manual_name: "Unassigned",
+            total: unassigned?.total ?? 0,
+            approved: unassigned?.approved ?? 0,
+            in_review: unassigned?.in_review ?? 0,
+            draft: unassigned?.draft ?? 0,
+            expired: unassigned?.expired ?? 0,
+            overdue: unassigned?.overdue ?? 0,
+            due_soon: unassigned?.due_soon ?? 0,
+          },
+        ].filter((m: any) => m.total > 0),
+        overdueList,
+        dueSoonList,
+        perUserAttest,
+        pendingReviewList: pendingReviewEnriched,
+      });
+    }
+  );
+
   // ── Phase 5: periodic review re-certification ──────────────────────────
   //
   // Owner-or-member confirms a policy is still current at its annual /
