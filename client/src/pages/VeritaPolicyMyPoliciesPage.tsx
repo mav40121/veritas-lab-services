@@ -425,6 +425,63 @@ export default function VeritaPolicyMyPoliciesPage() {
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
   };
 
+  // ── Phase 7: search + new-version upload + version history ───────────
+  const [searchQ, setSearchQ] = useState("");
+
+  const [newVersionDoc, setNewVersionDoc] = useState<PolicyDocument | null>(null);
+  const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
+  const [newVersionSummary, setNewVersionSummary] = useState("");
+  const [newVersionUploading, setNewVersionUploading] = useState(false);
+
+  const openNewVersion = (doc: PolicyDocument) => {
+    setNewVersionDoc(doc);
+    setNewVersionFile(null);
+    setNewVersionSummary("");
+  };
+
+  const uploadNewVersion = async () => {
+    if (!newVersionDoc || !newVersionFile) {
+      toast({ title: "Pick a file first", variant: "destructive" });
+      return;
+    }
+    setNewVersionUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", newVersionFile);
+      if (newVersionSummary.trim()) fd.append("change_summary", newVersionSummary.trim());
+      const token = localStorage.getItem("veritas_token") || "";
+      const res = await fetch(
+        `/api/labs/${activeLabId}/veritapolicy/documents/${newVersionDoc.id}/versions`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        }
+      );
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || "Upload failed");
+      toast({
+        title: "New version uploaded",
+        description: `Version ${body?.version_number} now current; status reset to draft.`,
+      });
+      setNewVersionDoc(null);
+      setNewVersionFile(null);
+      setNewVersionSummary("");
+      invalidateAll();
+    } catch (err: any) {
+      toast({
+        title: "Upload failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      });
+    } finally {
+      setNewVersionUploading(false);
+    }
+  };
+
+  // Version history loaded into the View modal alongside signoffs.
+  const [viewVersions, setViewVersions] = useState<any[]>([]);
+
   // ── Phase 5: recertify ─────────────────────────────────────────────────
   // Helper: days until next_review_date, negative if overdue.
   const daysUntil = (iso: string | null | undefined): number | null => {
@@ -671,6 +728,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewPdfUrl("");
     setViewTampered(false);
     setViewSignoffs([]);
+    setViewVersions([]);
     setViewLoading(true);
     try {
       const token = localStorage.getItem("veritas_token") || "";
@@ -680,6 +738,13 @@ export default function VeritaPolicyMyPoliciesPage() {
       })
         .then((r) => r.json())
         .then((body) => setViewSignoffs(body?.signoffs || []))
+        .catch(() => {});
+      // Fire-and-forget version history.
+      fetch(`/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((body) => setViewVersions(body?.versions || []))
         .catch(() => {});
       if (doc.current_file_format === "pdf") {
         const res = await fetch(
@@ -719,6 +784,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewPdfUrl("");
     setViewTampered(false);
     setViewSignoffs([]);
+    setViewVersions([]);
   };
 
   // ── Download ────────────────────────────────────────────────────────────
@@ -757,9 +823,21 @@ export default function VeritaPolicyMyPoliciesPage() {
   };
 
   // ── Group documents by manual for display ──────────────────────────────
+  const filteredDocs = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    if (q.length < 2) return documents;
+    return documents.filter((d) => {
+      return (
+        d.title.toLowerCase().includes(q) ||
+        (d.description || "").toLowerCase().includes(q) ||
+        (d.manual_name || "").toLowerCase().includes(q)
+      );
+    });
+  }, [documents, searchQ]);
+
   const grouped = useMemo(() => {
     const byManual = new Map<string, PolicyDocument[]>();
-    documents.forEach((doc) => {
+    filteredDocs.forEach((doc) => {
       const key = doc.manual_name || "Unassigned";
       if (!byManual.has(key)) byManual.set(key, []);
       byManual.get(key)!.push(doc);
@@ -811,6 +889,17 @@ export default function VeritaPolicyMyPoliciesPage() {
           </Button>
         </div>
       </div>
+
+      {documents.length > 0 && (
+        <div>
+          <Input
+            placeholder="Search policies by title, description, or manual..."
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+      )}
 
       {dueSoonDocs.length > 0 && (
         <Card className="border-amber-300 bg-amber-50/30">
@@ -1101,6 +1190,16 @@ export default function VeritaPolicyMyPoliciesPage() {
                               </Button>
                             </>
                           )}
+                          {doc.owner_user_id === user?.id && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openNewVersion(doc)}
+                              title="Upload a new version; will reset status to draft"
+                            >
+                              <Upload size={12} />
+                            </Button>
+                          )}
                           {doc.status === "in_review" &&
                             pendingReviews.some((p) => p.document_id === doc.id) && (
                               <>
@@ -1327,6 +1426,36 @@ export default function VeritaPolicyMyPoliciesPage() {
                 The file on disk does not match the hash captured at upload time. Do not rely on
                 signatures attached to this version. Investigate before approving or distributing.
               </div>
+            </div>
+          )}
+          {viewVersions.length > 1 && (
+            <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
+              <div className="font-medium flex items-center gap-1">
+                <FileText size={14} /> Version history ({viewVersions.length})
+              </div>
+              <ul className="space-y-0.5">
+                {viewVersions.map((v: any) => (
+                  <li key={v.id} className="flex items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">v{v.version_number}</span>
+                      <span className="ml-2 text-muted-foreground">
+                        {v.file_format?.toUpperCase()}
+                      </span>
+                      <span className="ml-2 text-muted-foreground">
+                        uploaded {fmtDate(v.uploaded_at)}
+                      </span>
+                      {v.change_summary && (
+                        <span className="ml-2 italic text-muted-foreground">
+                          - {v.change_summary}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {v.file_hash_sha256?.slice(0, 12)}…
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           {viewSignoffs.length > 0 && (
@@ -1568,6 +1697,65 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <Loader2 className="animate-spin mr-1" size={14} />
               )}
               {signAction === "approved" ? "Approve" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Upload new version modal ─────────────────────────────── */}
+      <Dialog
+        open={!!newVersionDoc}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNewVersionDoc(null);
+            setNewVersionFile(null);
+            setNewVersionSummary("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload new version: {newVersionDoc?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              The current version becomes the previous version in history. The new version starts as
+              draft and the approval workflow runs again. Attestations on the prior version are
+              marked stale.
+            </p>
+            <div>
+              <Label className="text-xs">File (DOCX, PDF, or HTML)</Label>
+              <Input
+                type="file"
+                accept=".docx,.pdf,.html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(e) => setNewVersionFile(e.target.files?.[0] || null)}
+              />
+              {newVersionFile && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {newVersionFile.name} ({Math.round(newVersionFile.size / 1024)} KB)
+                </div>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs">Change summary (optional)</Label>
+              <Textarea
+                value={newVersionSummary}
+                onChange={(e) => setNewVersionSummary(e.target.value)}
+                rows={2}
+                placeholder="e.g., Updated critical value list per Mayo Q2 2026."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewVersionDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={uploadNewVersion}
+              disabled={!newVersionFile || newVersionUploading}
+            >
+              {newVersionUploading && <Loader2 className="animate-spin mr-1" size={14} />}
+              Upload new version
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -19446,6 +19446,180 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Phase 7: new-version upload + history + search ─────────────────────
+
+  // POST /documents/:id/versions — upload a new version for an existing
+  // document. Increments version_number monotonically, resets document
+  // status to 'draft' so the approval workflow runs again on the new
+  // content. Prior signoffs stay in audit log keyed to their version_id.
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/versions",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    policyUpload.single("file"),
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      if (!req.file) return res.status(400).json({ error: "File required" });
+      const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname);
+      if (!format) {
+        return res.status(400).json({ error: "Only DOCX, PDF, or HTML accepted" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const nextVer = (sqlite
+        .prepare(
+          "SELECT COALESCE(MAX(version_number), 0) + 1 AS n FROM policy_versions WHERE document_id = ?"
+        )
+        .get(id) as { n: number }).n;
+      const relativePath = buildVersionRelativePath(req.scope.labId, id, nextVer, format);
+      try {
+        writeVersionBuffer(relativePath, req.file.buffer);
+      } catch (err: any) {
+        console.error("[policy new-version write]", err.message);
+        return res.status(500).json({ error: "Failed to persist file" });
+      }
+      const fileHash = hashBuffer(req.file.buffer);
+      const verInsert = sqlite
+        .prepare(
+          `INSERT INTO policy_versions
+             (document_id, version_number, file_path, file_format,
+              file_size_bytes, file_hash_sha256, change_summary,
+              uploaded_by, uploaded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+        )
+        .run(
+          id,
+          nextVer,
+          relativePath,
+          format,
+          req.file.size,
+          fileHash,
+          (req.body?.change_summary as string | undefined) || `Version ${nextVer}`,
+          req.userId
+        );
+      const versionId = Number(verInsert.lastInsertRowid);
+      // Flip current_version_id to the new one and reset status to draft.
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET current_version_id = ?,
+                 status = 'draft',
+                 updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(versionId, id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "version_uploaded",
+        details: {
+          version_number: nextVer,
+          file_format: format,
+          file_size_bytes: req.file.size,
+          file_hash_sha256: fileHash,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.status(201).json({ version_id: versionId, version_number: nextVer });
+    }
+  );
+
+  // GET /documents/:id/versions/:versionId/render — render a specific
+  // version. Mirrors /render but reads from the requested version_id
+  // instead of current_version_id.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/versions/:versionId/render",
+    authMiddleware,
+    labScopeMiddleware,
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      const versionId = Number(req.params.versionId);
+      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
+        return res.status(400).json({ error: "Bad id" });
+      }
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare(
+          `SELECT d.lab_id, v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
+             FROM policy_documents d
+             JOIN policy_versions v ON v.id = ?
+            WHERE d.id = ? AND v.document_id = d.id`
+        )
+        .get(versionId, id) as any;
+      if (!row) return res.status(404).json({ error: "Not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      let buffer: Buffer;
+      try {
+        buffer = readVersionBuffer(row.file_path);
+      } catch (err: any) {
+        console.error("[policy version render]", err.message);
+        return res.status(500).json({ error: "File missing on server" });
+      }
+      const actualHash = hashBuffer(buffer);
+      const tampered = row.expected_hash && actualHash !== row.expected_hash;
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "version_viewed",
+        details: { version_id: versionId },
+      });
+      if (row.file_format === "docx") {
+        try {
+          const rendered = await renderDocxToHtml(buffer);
+          return res.json({ format: "html", html: rendered.html, messages: rendered.messages, tampered: !!tampered });
+        } catch (err: any) {
+          return res.status(500).json({ error: "Render failed" });
+        }
+      }
+      if (row.file_format === "pdf") {
+        if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
+        res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "inline");
+        return res.send(buffer);
+      }
+      res.json({ format: "html", html: buffer.toString("utf-8"), messages: [], tampered: !!tampered });
+    }
+  );
+
+  // GET /search?q= — text LIKE across title + description across all
+  // policies in this lab. Phase 7B will add FTS5 across rendered file
+  // content for full-text matches.
+  app.get(
+    "/api/labs/:labId/veritapolicy/search",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const q = String(req.query.q || "").trim();
+      if (q.length < 2) return res.json({ results: [] });
+      const sqlite = (db as any).$client;
+      const pattern = `%${q}%`;
+      const rows = sqlite
+        .prepare(
+          `SELECT d.id, d.title, d.description, d.status, d.manual_id,
+                  m.name AS manual_name
+             FROM policy_documents d
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE d.lab_id = ? AND d.archived_at IS NULL
+              AND (d.title LIKE ? OR COALESCE(d.description, '') LIKE ?)
+            ORDER BY d.updated_at DESC
+            LIMIT 50`
+        )
+        .all(req.scope.labId, pattern, pattern);
+      res.json({ results: rows });
+    }
+  );
+
   // ── Phase 6B: admin manual trigger for review reminders ────────────────
   // Defaults to cron-fired at midnight UTC. This endpoint lets an admin
   // (or a verify-*.js script) trigger the run on demand. Body: { secret }.
