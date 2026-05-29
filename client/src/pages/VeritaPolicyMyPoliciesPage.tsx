@@ -864,7 +864,7 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">My Policies</h1>
           <p className="text-sm text-muted-foreground">
@@ -875,7 +875,7 @@ export default function VeritaPolicyMyPoliciesPage() {
             attestations.
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 sm:shrink-0">
           <a href={`/labs/${activeLabId}/veritapolicy-app/compliance`}>
             <Button variant="outline">
               <FileText size={14} className="mr-1.5" /> Compliance
