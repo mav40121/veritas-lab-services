@@ -1551,6 +1551,24 @@ export const PLAN_SEATS: Record<string, number> = {
   lab: 25,
 };
 
+// parking-lot #33 view-only seat caps per CLAUDE.md sec 10. Clinic 1,
+// Community 2, Hospital 3, with a $99/yr add-on rate for extras. Older
+// plans (waived, per_study, free, veritacheck_only) get 1 to cover the
+// medical director or designee role. Enterprise / large_hospital / lab
+// get 5 since they cover system-scale labs with multiple reviewer roles.
+export const PLAN_VIEW_ONLY_SEATS: Record<string, number> = {
+  clinic: 1,
+  community: 2,
+  hospital: 3,
+  enterprise: 5,
+  large_hospital: 5,
+  lab: 5,
+  waived: 1,
+  veritacheck_only: 1,
+  per_study: 1,
+  free: 0,
+};
+
 export const PLAN_PRICES: Record<string, number> = {
   clinic: 499,
   community: 999,

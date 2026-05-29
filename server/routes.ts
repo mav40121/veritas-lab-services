@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
-import { db, PLAN_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
+import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -3956,20 +3956,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerRow = sqlite.prepare("SELECT id, name, email, plan, seat_count, clia_lab_name, hospital_name FROM users WHERE id = ?").get(labOwnerId) as any;
     if (!ownerRow) return res.status(500).json({ error: "Lab owner user not found" });
 
-    // Seat-count gate (owner-pooled, matches /api/account/seats POST behavior).
+    // parking-lot #33 PR 3: seat-count gate now enforces TWO caps —
+    // active seats against PLAN_SEATS (writers count toward the tier seat
+    // cap), and view-only seats against PLAN_VIEW_ONLY_SEATS (reviewers
+    // capped per tier with a $99/yr add-on for extras). The owner always
+    // counts as an active seat. Existing user_seats rows are 'active' by
+    // default (foundation PR migration), so legacy seat math is unchanged
+    // unless the customer starts inviting view-only seats.
     const ownerPlan = ownerRow.plan || "free";
     const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
     const dbSeats = ownerRow.seat_count || 0;
-    const maxSeats = Math.max(dbSeats, planSeatLimit);
-    const currentInvitees = (sqlite.prepare(
-      "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
-    ).get(labOwnerId) as any).cnt || 0;
-    if (currentInvitees + 1 /* owner */ + 1 /* new */ > maxSeats) {
+    const maxActiveSeats = Math.max(dbSeats, planSeatLimit);
+    const maxViewOnlySeats = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
+    const seatBreakdown = sqlite.prepare(
+      `SELECT
+         SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
+         SUM(CASE WHEN COALESCE(seat_type,'active') = 'view_only' THEN 1 ELSE 0 END) as view_only_count
+       FROM user_seats
+       WHERE owner_user_id = ? AND status != 'deactivated'`
+    ).get(labOwnerId) as { active_count: number; view_only_count: number } | undefined;
+    const currentActive = (seatBreakdown?.active_count ?? 0) + 1 /* owner counts as active */;
+    const currentViewOnly = seatBreakdown?.view_only_count ?? 0;
+    if (seatType === "active" && currentActive + 1 > maxActiveSeats) {
       return res.status(402).json({
         error: "seat_limit_reached",
-        limit: maxSeats,
-        current: currentInvitees + 1,
+        seatType: "active",
+        limit: maxActiveSeats,
+        current: currentActive,
         plan: ownerPlan,
+      });
+    }
+    if (seatType === "view_only" && currentViewOnly + 1 > maxViewOnlySeats) {
+      return res.status(402).json({
+        error: "view_only_seat_limit_reached",
+        seatType: "view_only",
+        limit: maxViewOnlySeats,
+        current: currentViewOnly,
+        plan: ownerPlan,
+        addOnRatePerYear: 99,
       });
     }
 
@@ -13941,36 +13965,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Add a seat (invite)
   app.post("/api/account/seats", authMiddleware, async (req: any, res) => {
-    const { email } = req.body;
+    const { email, seatType: requestedSeatType } = req.body;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+    // parking-lot #33 PR 3: same seat-type split as the lab-scoped endpoint.
+    const seatType = requestedSeatType === "view_only" ? "view_only" : "active";
 
     const userRow = (db as any).$client.prepare("SELECT seat_count, plan FROM users WHERE id = ?").get(req.userId) as any;
     const userPlan = userRow?.plan || "free";
     // Use PLAN_SEATS for new tier plans, fall back to old PLAN_LIMITS for legacy plans
     const planSeatLimit = PLAN_SEATS[userPlan] ?? (PLAN_LIMITS as any)[userPlan]?.maxAnalysts ?? 1;
     const dbSeats = userRow?.seat_count || 0;
-    const maxSeats = Math.max(dbSeats, planSeatLimit);
-    const currentSeats = (db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
-    ).get(req.userId) as any;
-
-    // Owner consumes one of the seats. Block when adding a new invitee
-    // would push total occupants (existing invitees + owner + 1 new)
-    // beyond the plan limit. Example: Enterprise (25) allows up to 24
-    // invitees because 24 invitees + 1 owner = 25 total.
-    const currentInvitees = currentSeats?.cnt || 0;
-    const seatsAfterInvite = currentInvitees + 1 /* owner */ + 1 /* new invitee */;
-    if (seatsAfterInvite > maxSeats) {
-      const nextTier = userPlan === "clinic" ? { label: "Community", price: 999, seats: 5, plan: "community" }
-        : userPlan === "community" ? { label: "Hospital", price: 1999, seats: 15, plan: "hospital" }
-        : userPlan === "hospital" ? { label: "Enterprise", price: 2999, seats: 25, plan: "enterprise" }
-        : null;
+    const maxActiveSeats = Math.max(dbSeats, planSeatLimit);
+    const maxViewOnlySeats = PLAN_VIEW_ONLY_SEATS[userPlan] ?? 0;
+    const seatBreakdown = (db as any).$client.prepare(
+      `SELECT
+         SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
+         SUM(CASE WHEN COALESCE(seat_type,'active') = 'view_only' THEN 1 ELSE 0 END) as view_only_count
+       FROM user_seats
+       WHERE owner_user_id = ? AND status != 'deactivated'`
+    ).get(req.userId) as { active_count: number; view_only_count: number } | undefined;
+    const currentActive = (seatBreakdown?.active_count ?? 0) + 1 /* owner counts as active */;
+    const currentViewOnly = seatBreakdown?.view_only_count ?? 0;
+    const nextTier = userPlan === "clinic" ? { label: "Community", price: 999, seats: 5, plan: "community" }
+      : userPlan === "community" ? { label: "Hospital", price: 1999, seats: 15, plan: "hospital" }
+      : userPlan === "hospital" ? { label: "Enterprise", price: 2999, seats: 25, plan: "enterprise" }
+      : null;
+    if (seatType === "active" && currentActive + 1 > maxActiveSeats) {
       return res.status(402).json({
         error: "seat_limit_reached",
-        limit: maxSeats,
-        current: currentInvitees + 1,  // includes owner
+        seatType: "active",
+        limit: maxActiveSeats,
+        current: currentActive,
         plan: userPlan,
         nextTier,
+      });
+    }
+    if (seatType === "view_only" && currentViewOnly + 1 > maxViewOnlySeats) {
+      return res.status(402).json({
+        error: "view_only_seat_limit_reached",
+        seatType: "view_only",
+        limit: maxViewOnlySeats,
+        current: currentViewOnly,
+        plan: userPlan,
+        addOnRatePerYear: 99,
       });
     }
 
