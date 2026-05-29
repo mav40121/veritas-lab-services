@@ -377,6 +377,69 @@ export function getCurrentPendingStep(
   return { step: null, totalSteps: steps.length, completedSteps: steps.length };
 }
 
+// Count eligible reviewers for a single workflow step, excluding the
+// document owner (because self-approval is blocked unless step
+// explicitly opts in). Phase 2.1: lets the client warn the owner at
+// submit time if a step has zero eligible approvers, which would leave
+// the document stuck in_review forever.
+export function countEligibleReviewersForStep(
+  sqlite: any,
+  args: {
+    labId: number;
+    documentOwnerId: number;
+    stepRow: {
+      required_role: string;
+      specific_user_id: number | null;
+      allow_self_approval: number;
+    };
+  }
+): number {
+  const { labId, documentOwnerId, stepRow } = args;
+  if (stepRow.required_role === "specific_user") {
+    if (stepRow.specific_user_id == null) return 0;
+    if (stepRow.specific_user_id === documentOwnerId && !stepRow.allow_self_approval) return 0;
+    // Confirm the specific user is an active member of this lab.
+    const exists = sqlite
+      .prepare(
+        `SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`
+      )
+      .get(stepRow.specific_user_id, labId);
+    return exists ? 1 : 0;
+  }
+  // Pull all active members on the lab with their seat_type, exclude
+  // owner unless allow_self_approval=1, then filter by role.
+  const members = sqlite
+    .prepare(
+      `SELECT lm.user_id, lm.role, COALESCE(us.seat_type, 'active') AS seat_type
+         FROM lab_members lm
+         LEFT JOIN user_seats us
+           ON us.seat_user_id = lm.user_id
+          AND us.owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)
+          AND us.status = 'active'
+        WHERE lm.lab_id = ? AND lm.status = 'active'`
+    )
+    .all(labId, labId) as { user_id: number; role: string; seat_type: string }[];
+  let count = 0;
+  for (const m of members) {
+    if (m.user_id === documentOwnerId && !stepRow.allow_self_approval) continue;
+    if (stepRow.required_role === "any_active_seat") {
+      if (m.seat_type === "active" || m.role === "owner" || m.role === "admin") count += 1;
+    } else {
+      // any_view_only_seat + CLIA role aliases all accept view_only OR
+      // active OR owner OR admin in Phase 2.
+      if (
+        m.seat_type === "view_only" ||
+        m.seat_type === "active" ||
+        m.role === "owner" ||
+        m.role === "admin"
+      ) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
 // Per-lab audit log writer. Used by every Phase 1+ mutation so the
 // audit trail is uniform and 21 CFR Part 11 reviewable.
 export function writeAuditLog(

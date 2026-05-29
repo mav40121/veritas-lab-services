@@ -18232,6 +18232,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     writeAuditLog,
     canUserApproveStep,
     getCurrentPendingStep,
+    countEligibleReviewersForStep,
   } = await import("./veritapolicyApproval");
 
   // Multer config: memory buffer + 25 MB cap. We write to /data/policies on
@@ -18370,6 +18371,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   );
 
   // GET /api/labs/:labId/veritapolicy/documents — list policies for this lab.
+  // Phase 2.1: in_review rows also include pending_step_name,
+  // pending_step_role, pending_step_order, pending_total_steps so the
+  // client can render "Awaiting step X of Y: <name>" inline.
   app.get(
     "/api/labs/:labId/veritapolicy/documents",
     authMiddleware,
@@ -18392,8 +18396,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             WHERE d.lab_id = ? AND d.archived_at IS NULL
             ORDER BY d.updated_at DESC`
         )
-        .all(req.scope.labId);
-      res.json({ documents: rows });
+        .all(req.scope.labId) as any[];
+      const enriched = rows.map((doc) => {
+        if (doc.status !== "in_review") return doc;
+        const pending = getCurrentPendingStep(sqlite, doc.id);
+        if (!pending.step) return doc;
+        return {
+          ...doc,
+          pending_step_id: pending.step.id,
+          pending_step_name: pending.step.step_name,
+          pending_step_role: pending.step.required_role,
+          pending_step_order: pending.step.step_order,
+          pending_total_steps: pending.totalSteps,
+        };
+      });
+      res.json({ documents: enriched });
     }
   );
 
@@ -19210,6 +19227,103 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userAgent: req.headers["user-agent"] as string | undefined,
       });
       res.json({ ok: true, status: "draft" });
+    }
+  );
+
+  // POST /documents/:id/recall — owner pulls back from in_review to draft.
+  // Phase 2.1: closes the case where the owner submitted but no eligible
+  // reviewer exists (or wants to revise before review starts).
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/recall",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare(
+          "SELECT lab_id, owner_user_id, status FROM policy_documents WHERE id = ?"
+        )
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.owner_user_id !== req.userId) {
+        return res.status(403).json({ error: "Only the owner can recall" });
+      }
+      if (doc.status !== "in_review") {
+        return res.status(409).json({ error: `Cannot recall from status ${doc.status}` });
+      }
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET status = 'draft', updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "recalled",
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true, status: "draft" });
+    }
+  );
+
+  // GET /documents/:id/eligibility?workflowId=N — preview eligible reviewer
+  // counts for each step of a workflow, scoped to this document's owner.
+  // Used by the client at submit time to warn if a step has zero eligible
+  // approvers (which would strand the document in_review).
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/eligibility",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      const workflowId = Number(req.query.workflowId);
+      if (!Number.isFinite(id) || !Number.isFinite(workflowId)) {
+        return res.status(400).json({ error: "Bad id" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, owner_user_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const wf = sqlite
+        .prepare(
+          "SELECT lab_id FROM policy_approval_workflows WHERE id = ? AND archived_at IS NULL"
+        )
+        .get(workflowId) as { lab_id: number } | undefined;
+      if (!wf || wf.lab_id !== req.scope.labId) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      const steps = sqlite
+        .prepare(
+          `SELECT id, step_order, step_name, required_role, specific_user_id, allow_self_approval
+             FROM policy_approval_steps
+            WHERE workflow_id = ?
+            ORDER BY step_order ASC`
+        )
+        .all(workflowId) as any[];
+      const perStep = steps.map((s) => ({
+        step_id: s.id,
+        step_order: s.step_order,
+        step_name: s.step_name,
+        required_role: s.required_role,
+        eligible_count: countEligibleReviewersForStep(sqlite, {
+          labId: req.scope.labId,
+          documentOwnerId: doc.owner_user_id,
+          stepRow: s,
+        }),
+      }));
+      const minCount = perStep.length === 0 ? 0 : perStep.reduce((m, p) => Math.min(m, p.eligible_count), Infinity);
+      res.json({ perStep, minCount });
     }
   );
 
