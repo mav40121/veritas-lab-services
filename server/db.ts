@@ -3493,3 +3493,245 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_state_registry_code ON state_l
   void stateCols;
 }
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_settings_lab ON qc_rule_settings(lab_id)`); } catch {}
+
+// ── VeritaPolicy approval workflow extension (parking-lot policy-approval Phase 0) ──
+// Functional mirror of MediaLab Document Control: upload, multi-step approval,
+// 21 CFR Part 11 audit trail, employee read-and-attest, periodic reviews,
+// version control. Nine new tables; this PR is schema only. UI, upload, and
+// workflow engine ship in Phases 1+ as separate PRs.
+//
+// Lab scoping: tables that carry org-level state (manuals, documents,
+// workflows, audit log) include lab_id. Per-document tables (versions,
+// signoffs, attestations, review_reminders) are lab-scoped transitively
+// through document_id -> policy_documents.lab_id.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_manuals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    -- e.g., "Chemistry", "Hematology", "Safety", "QA". Per-lab configurable.
+    name TEXT NOT NULL,
+    description TEXT,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_manuals_lab ON policy_manuals(lab_id)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    -- Nullable so a freshly-uploaded policy can land in "unassigned"
+    -- until the lab admin sorts it into a manual.
+    manual_id INTEGER,
+    title TEXT NOT NULL,
+    description TEXT,
+    -- FK to policy_versions.id; null on row creation, set after first
+    -- version uploads. Avoids a circular foreign key dependency.
+    current_version_id INTEGER,
+    -- Lifecycle state machine: draft -> in_review -> approved -> expired -> archived.
+    -- Rejection from review returns to draft with comment recorded in
+    -- policy_signoffs.action='rejected'.
+    status TEXT NOT NULL DEFAULT 'draft',
+    -- The lab user who uploaded / owns the policy. Distinct from
+    -- approvers in policy_signoffs.
+    owner_user_id INTEGER NOT NULL,
+    effective_date TEXT,
+    next_review_date TEXT,
+    review_interval_months INTEGER NOT NULL DEFAULT 12,
+    -- FK to policy_approval_workflows.id; null means no workflow
+    -- assigned yet (document sits in draft until workflow chosen).
+    workflow_id INTEGER,
+    archived_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_documents_lab ON policy_documents(lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_documents_manual ON policy_documents(manual_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_documents_status ON policy_documents(status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_documents_next_review ON policy_documents(next_review_date)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    -- Monotonically increasing per document. Server computes max+1 on upload.
+    version_number INTEGER NOT NULL,
+    -- Relative path under /data/policies/. Server resolves at I/O time so
+    -- the volume mount path can change without rewriting rows.
+    -- Format: <lab_id>/<document_id>/v<version_number>/document.<ext>
+    file_path TEXT NOT NULL,
+    file_format TEXT NOT NULL, -- 'docx' | 'pdf' | 'html'
+    file_size_bytes INTEGER NOT NULL,
+    -- SHA-256 of the file content at upload time. Used for tamper detection
+    -- on download and for the signed_document_hash captured at signature.
+    file_hash_sha256 TEXT NOT NULL,
+    change_summary TEXT,
+    uploaded_by INTEGER NOT NULL,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_versions_doc ON policy_versions(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_versions_hash ON policy_versions(file_hash_sha256)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_approval_workflows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    -- e.g., "Single LD approval", "TC then LD", "Author->TC->LD".
+    name TEXT NOT NULL,
+    description TEXT,
+    -- One workflow per lab can be marked default; new documents auto-assign to it.
+    is_default INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_workflows_lab ON policy_approval_workflows(lab_id)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_approval_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflow_id INTEGER NOT NULL,
+    -- 1-indexed ordering. Steps execute in order; each must be approved
+    -- before the next becomes actionable.
+    step_order INTEGER NOT NULL,
+    step_name TEXT NOT NULL,
+    -- Role-based routing: 'medical_director', 'technical_consultant',
+    -- 'technical_supervisor', 'general_supervisor', 'any_view_only_seat',
+    -- 'any_active_seat', 'specific_user'. When 'specific_user', the
+    -- specific_user_id column is populated.
+    required_role TEXT NOT NULL,
+    specific_user_id INTEGER,
+    -- If 0, the workflow blocks self-approval (owner cannot approve their
+    -- own document). Most CLIA workflows want this.
+    allow_self_approval INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_steps_workflow ON policy_approval_steps(workflow_id)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_signoffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    version_id INTEGER NOT NULL,
+    -- Nullable: out-of-band signoffs (e.g., a director signing without
+    -- a workflow step assigned) still get recorded.
+    workflow_step_id INTEGER,
+    user_id INTEGER NOT NULL,
+    -- 'approved' | 'rejected' | 'recused'. Recused means the assigned
+    -- user has a conflict and the step needs reassignment.
+    action TEXT NOT NULL,
+    comment TEXT,
+    -- The typed full name per 21 CFR Part 11 electronic signature
+    -- (FDA Compliance Policy Guide 7153.17). Combined with password
+    -- re-auth at signing time, this is the minimum CLIA-lab signature.
+    typed_signature TEXT NOT NULL,
+    -- SHA-256 of the document version at the moment of signing. Used
+    -- to detect tampering after signature.
+    signed_document_hash TEXT NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    signed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_signoffs_doc ON policy_signoffs(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_signoffs_user ON policy_signoffs(user_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_signoffs_step ON policy_signoffs(workflow_step_id)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_attestations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    -- The specific version the user attested to. Lets compliance reports
+    -- show "Sarah attested to v3; current is v5 since 2026-04-10".
+    version_id INTEGER NOT NULL,
+    assigned_to_user_id INTEGER NOT NULL,
+    assigned_by INTEGER NOT NULL,
+    assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+    due_date TEXT,
+    completed_at TEXT,
+    -- SHA-256 at attest time. Mirror of policy_signoffs hash logic for
+    -- non-repudiation: "I attested to this exact content."
+    attested_document_hash TEXT,
+    typed_signature TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    quiz_score INTEGER, -- 0-100 if attached quiz used; null otherwise
+    quiz_total_questions INTEGER
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_attest_doc ON policy_attestations(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_attest_user ON policy_attestations(assigned_to_user_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_attest_pending ON policy_attestations(completed_at, due_date)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_review_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    -- The date the reminder should fire. Cron job (existing infra) reads
+    -- rows where sent_at IS NULL and reminder_date <= today.
+    reminder_date TEXT NOT NULL,
+    sent_at TEXT,
+    -- '30_day_warning' (30d before next_review_date), 'overdue' (past
+    -- next_review_date), 'final' (60d past next_review_date).
+    reminder_type TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_reminders_doc ON policy_review_reminders(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_reminders_pending ON policy_review_reminders(sent_at, reminder_date)`); } catch {}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    -- Nullable: lab-level actions (e.g., "manual created") have no
+    -- document. Document-level actions populate this FK.
+    document_id INTEGER,
+    user_id INTEGER NOT NULL,
+    -- 'uploaded', 'viewed', 'edited', 'workflow_assigned', 'approved',
+    -- 'rejected', 'attestation_assigned', 'attestation_completed',
+    -- 'archived', 'restored', 'manual_created', 'manual_edited',
+    -- 'workflow_created', 'workflow_edited'.
+    action TEXT NOT NULL,
+    -- JSON object with action-specific metadata (e.g., for 'approved':
+    -- {workflow_step_id, comment}). Shape validated at write time.
+    details TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_lab ON policy_audit_log(lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_doc ON policy_audit_log(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_user ON policy_audit_log(user_id)`); } catch {}
+
+// Migration sentinel block. Pure read of PRAGMA table_info so the next
+// ALTER TABLE for these tables lands without re-checking column presence.
+// Per CLAUDE.md feedback: NO writes, NO derived-state cascades.
+{
+  const manualsCols = (sqlite.prepare("PRAGMA table_info(policy_manuals)").all() as { name: string }[]).map((c) => c.name);
+  void manualsCols;
+  const docsCols = (sqlite.prepare("PRAGMA table_info(policy_documents)").all() as { name: string }[]).map((c) => c.name);
+  void docsCols;
+  const versionsCols = (sqlite.prepare("PRAGMA table_info(policy_versions)").all() as { name: string }[]).map((c) => c.name);
+  void versionsCols;
+  const workflowsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_workflows)").all() as { name: string }[]).map((c) => c.name);
+  void workflowsCols;
+  const stepsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_steps)").all() as { name: string }[]).map((c) => c.name);
+  void stepsCols;
+  const signoffsCols = (sqlite.prepare("PRAGMA table_info(policy_signoffs)").all() as { name: string }[]).map((c) => c.name);
+  void signoffsCols;
+  const attestCols = (sqlite.prepare("PRAGMA table_info(policy_attestations)").all() as { name: string }[]).map((c) => c.name);
+  void attestCols;
+  const remindersCols = (sqlite.prepare("PRAGMA table_info(policy_review_reminders)").all() as { name: string }[]).map((c) => c.name);
+  void remindersCols;
+  const auditCols = (sqlite.prepare("PRAGMA table_info(policy_audit_log)").all() as { name: string }[]).map((c) => c.name);
+  void auditCols;
+}
