@@ -76,18 +76,24 @@ export default function LabMembersPage() {
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "staff">("staff");
+  // parking-lot #33 PR 2: seat-type split at invite time. 'active' = writer
+  // (counts against tier cap); 'view_only' = reviewer (medical director,
+  // technical consultant, supervisor; capped per tier 1/2/3 with $99/yr
+  // add-on for extras). Default 'active'.
+  const [inviteSeatType, setInviteSeatType] = useState<"active" | "view_only">("active");
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/members`] });
 
   const inviteMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, { email: inviteEmail, role: inviteRole });
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, { email: inviteEmail, role: inviteRole, seatType: inviteSeatType });
       return res.json();
     },
     onSuccess: (r) => {
       toast({ title: "Invitation sent", description: r.emailSent ? `Email delivered to ${inviteEmail}` : `Seat created. Email delivery failed — share the invite link manually.` });
       setInviteEmail("");
       setInviteRole("staff");
+      setInviteSeatType("active");
       invalidate();
     },
     onError: (err: any) => toast({ title: "Invite failed", description: String(err?.message || err), variant: "destructive" }),
@@ -182,7 +188,7 @@ export default function LabMembersPage() {
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserPlus size={16} /> Invite a new member</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_160px_auto] gap-2">
               <div>
                 <Label htmlFor="invite-email" className="text-xs">Email</Label>
                 <Input id="invite-email" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="member@example.com" />
@@ -194,6 +200,13 @@ export default function LabMembersPage() {
                   <option value="admin" disabled={!isOwner}>Admin{!isOwner ? " (owner only)" : ""}</option>
                 </select>
               </div>
+              <div>
+                <Label htmlFor="invite-seat-type" className="text-xs">Seat type</Label>
+                <select id="invite-seat-type" value={inviteSeatType} onChange={e => setInviteSeatType(e.target.value as "active" | "view_only")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm">
+                  <option value="active">Active (writer)</option>
+                  <option value="view_only">View-only (reviewer)</option>
+                </select>
+              </div>
               <div className="flex items-end">
                 <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || !inviteEmail.includes("@")}>
                   {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
@@ -201,7 +214,7 @@ export default function LabMembersPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
+              Active seats (writers: techs, supervisors who enter data) count against the tier seat cap. View-only seats (medical director or designee, technical consultant, supervisor reviewers) are included per tier: 1 Clinic, 2 Community, 3 Hospital; additional view-only seats are $99 per year. Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
             </p>
           </CardContent>
         </Card>
