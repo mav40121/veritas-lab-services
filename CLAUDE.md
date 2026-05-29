@@ -296,7 +296,16 @@ Apply to every task, not just large ones.
 - Hospital: **$4,995/yr**, 15 active seats included, additional seats at $333/seat (`price_1TaQXR5dn6rqLgIx5XOqsLKU` base, `price_1TaQXT5dn6rqLgIxxFWywFOy` add-on seat)
 - System: **Custom quote**, triggered by >1 CLIA lab OR 16+ active seats OR SSO/BAA/SLA requirements. No published Stripe price; sales-team negotiated.
 
-**Per-seat additional-seat model:** each tier's $/seat rate applies to seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. View-only seats (medical director, reviewers) are unlimited and free on every tier. The function `getSeatPriceForTier(plan)` in `server/stripe.ts` returns the tier-indexed add-on rate.
+**Per-seat additional-seat model:** each tier's $/seat rate applies to ACTIVE seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. The function `getSeatPriceForTier(plan)` in `server/stripe.ts` returns the tier-indexed add-on rate.
+
+**View-only seats (medical director / designee, technical consultant, technical supervisor, general supervisor, reviewers):** capped per tier, with a low-rate add-on. Included counts:
+
+- Clinic: **1 view-only seat included**
+- Community: **2 view-only seats included**
+- Hospital: **3 view-only seats included**
+- System: negotiated per quote
+
+Additional view-only seats at any tier: **$99/yr per seat**. Add-on Stripe price ID lands in `server/stripe.ts` when the SKU is created; until then, view-only add-ons are billed manually via invoice. The "unlimited view-only" framing from earlier MEDIUM-pricing memos is RETIRED as of 2026-05-29; the included counts above replace it.
 
 **Coupons:**
 
@@ -319,7 +328,7 @@ Apply to every task, not just large ones.
 
 **COLA grandfather policy:** see `project_cola_pricing_grandfather_policy.md` memory. Three layers: COLA2026 code through 2026-12-31, named-contact honored pricing OR Founder terms through 2026-09-30, new pricing for everyone else.
 
-- Pricing tier is selected by the customer based on the number of active (writer) seats they need. View-only seats remain unlimited and free on every tier. No "auto-assignment from specialty count" — that was an earlier pricing concept that was retired.
+- Pricing tier is selected by the customer based on the number of active (writer) seats they need. View-only seats follow the per-tier included counts above (1 / 2 / 3) with a $99/yr add-on for extras. No "auto-assignment from specialty count" — that was an earlier pricing concept that was retired.
 
 ---
 

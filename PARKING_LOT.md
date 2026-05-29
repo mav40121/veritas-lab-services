@@ -883,22 +883,24 @@ part-time community manager.
 
 ### 33. Active vs view-only seat split
 
-**Effort:** M (~1 week of engineering when prioritized)
-**Importance:** Medium — quality-of-life for sales positioning; /pricing copy already claims it; not blocking any current customer.
+**Effort:** M (~1 week of engineering when prioritized; PR 1 foundation lands as a single session)
+**Importance:** Medium — closes the gap between /pricing copy and product behavior; sets up sales answer for "do you charge for our medical director?"
 
-**What:** The pricing analysis doc (2026-05-21 MEDIUM scenario, Decision 3) proposed splitting seats into two types: **active** (techs, supervisors, lab managers who edit data; counted against the tier seat cap) and **view-only** (medical director, administrators, reviewers who sign but don't enter; unlimited and free on every tier). The current schema treats all seats as one bucket.
+**What:** Split seats into two types: **active** (techs, supervisors, lab managers who edit data; counted against the tier seat cap at $500/$425/$333 per seat over the included count) and **view-only** (medical director or designee, technical consultant, technical supervisor, general supervisor, reviewers who sign but don't enter). Per-tier included counts: **Clinic 1, Community 2, Hospital 3**; additional view-only seats at **$99/yr** per seat across all tiers. The current schema treats all seats as one bucket, which contradicts the marketing claim that's already on /pricing.
 
-**Fix shape:**
-- `lab_members` (or `user_seats`) row gains a `seat_type` column ('active' | 'view_only')
-- Invite-flow UI asks which type at the moment of invitation
-- Counting logic in `/api/account/seats` and `/api/labs/:labId/members` only counts active seats toward the tier cap
-- Marketing copy on /pricing already says "active seats included" + "view-only seats unlimited and free" — this entry makes that claim actually true at the data layer
+**Fix shape (4-6 PRs):**
+1. **Foundation:** `user_seats` row gains a `seat_type` column ('active' | 'view_only'), default 'active' so existing customers are unchanged. Admin report aggregation gains active and view-only counts alongside the existing total.
+2. Invite-flow UI asks which type at the moment of invitation; default 'active'.
+3. Counting logic in `/api/account/seats` and `/api/labs/:labId/members` enforces both caps (active count vs tier active cap; view-only count vs tier view-only cap).
+4. Lab Members page UI distinguishes the two visually with badges.
+5. View-only seats cannot trigger edit endpoints (server-side gate on `seat_type='view_only'`).
+6. Stripe SKU for the view-only $99/yr add-on; verify pricing helpers don't double-bill.
 
-**Source:** Pricing analysis doc Decision 3 (2026-05-21); deferred during Phase B Stripe wiring (2026-05-23) because no current customer is constrained by the missing distinction.
+**Source:** Pricing analysis doc Decision 3 (2026-05-21); MEDIUM scenario revised 2026-05-29 to retire the "unlimited view-only" claim in favor of capped counts plus add-on.
 
-**Status:** Open. Real product change, ~1 week of engineering when prioritized. Not blocking any current customer; activate when a prospect explicitly asks "do you charge for our medical director?"
+**Status:** Open. Foundation PR (step 1) ships in the session that locks the policy; steps 2-6 queue for a daylight multi-PR sprint.
 
-**Pre- vs post-COLA:** Post-COLA. Quality-of-life for sales positioning, not table stakes.
+**Pre- vs post-COLA:** Post-COLA. Sales positioning gap; will close once the foundation ships.
 
 ---
 
