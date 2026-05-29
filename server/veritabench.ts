@@ -8,6 +8,7 @@ import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem } from "./orderDocument";
+import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeLabelPdf";
 import { storePdfToken } from "./pdfTokens";
 
 function bencheLicenseCtx(req: any): LicenseContext {
@@ -721,6 +722,79 @@ export function registerVeritaBenchRoutes(
       res.json({ token, totalCount: items.length });
     } catch (err: any) {
       console.error("Snap order PDF generation error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // POST /api/inventory/labels/pdf - parking-lot #29 Phase 1.
+  //
+  // Generate an Avery 5160 sheet of Code 128 barcode labels for inventory
+  // items. Two modes:
+  //   - body.itemIds: number[]  →  labels for those specific items only
+  //   - body.itemIds omitted    →  labels for every item in the account that
+  //                                has a non-null barcode_value
+  //
+  // If a requested item does not yet have a barcode_value, we synthesize a
+  // stable VLS- prefix code from the item id so labels render even before
+  // Phase 2 wiring assigns "real" barcode values. The synthesized value is
+  // NOT persisted - this endpoint is print-only.
+  app.post("/api/inventory/labels/pdf", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const requestedIds = Array.isArray(req.body?.itemIds)
+      ? req.body.itemIds.filter((x: any) => typeof x === "number" && Number.isFinite(x))
+      : null;
+    try {
+      let rows: any[];
+      if (requestedIds && requestedIds.length > 0) {
+        const placeholders = requestedIds.map(() => "?").join(",");
+        rows = sqlite.prepare(
+          `SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE account_id = ? AND id IN (${placeholders}) ORDER BY item_name ASC`
+        ).all(accountId, ...requestedIds) as any[];
+      } else {
+        rows = sqlite.prepare(
+          "SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE account_id = ? AND barcode_value IS NOT NULL AND barcode_value <> '' ORDER BY item_name ASC"
+        ).all(accountId) as any[];
+      }
+      if (rows.length === 0) {
+        return res.status(404).json({ error: "No inventory items found to label. Add items first, or assign barcode values." });
+      }
+
+      const labels: BarcodeLabelInput[] = rows.map((r) => ({
+        barcodeValue: (r.barcode_value && String(r.barcode_value).trim().length > 0)
+          ? String(r.barcode_value)
+          : `VLS-${String(r.id).padStart(8, "0")}`,
+        itemName: r.item_name || "(unnamed)",
+        catalogNumber: r.catalog_number,
+        lotNumber: r.lot_number,
+        storageLocation: r.storage_location,
+      }));
+
+      // Lab identity (footer text on the sheet).
+      let labName: string | null = null;
+      let cliaNumber: string | null = null;
+      const userRow = sqlite.prepare(
+        "SELECT clia_lab_name, clia_number FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      if (userRow) {
+        labName = userRow.clia_lab_name || null;
+        cliaNumber = userRow.clia_number || null;
+      }
+      const labRow = sqlite.prepare(
+        "SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1"
+      ).get(accountId) as any;
+      if (labRow) {
+        labName = labRow.lab_name || labName;
+        cliaNumber = labRow.clia_number || cliaNumber;
+      }
+
+      const pdfBuffer = await generateBarcodeLabelSheetPdf(labels, { labName, cliaNumber });
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = `VeritaStock_Labels_${datestamp}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token, totalCount: labels.length });
+    } catch (err: any) {
+      console.error("Barcode label PDF generation error:", err.message);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
   });
