@@ -2995,6 +2995,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // GET /api/why-veritacheck-pdf — marketing collateral PDF.
+  // No auth required (public marketing asset; lead-magnet downloadable from
+  // the public /resources/why-veritacheck page). Generates a single-page
+  // Letter PDF, stores via storePdfToken, returns { token }. Same client-
+  // side flow as VeritaCheck / VeritaOps PDFs.
+  app.get("/api/why-veritacheck-pdf", async (_req, res) => {
+    try {
+      const { generateWhyVeritaCheckPdf } = await import("./whyVeritaCheckPdf");
+      const pdfBuffer = await generateWhyVeritaCheckPdf();
+      const token = storePdfToken(pdfBuffer, "Why_VeritaCheck.pdf");
+      res.json({ token });
+    } catch (err: any) {
+      console.error("[why-veritacheck-pdf] generation failed:", err?.message || err);
+      res.status(500).json({ error: "PDF generation failed", detail: err?.message || String(err) });
+    }
+  });
+
   // ── TEMPORARY: Debug route list + admin recovery ──────────────────────────
   // Dev-only: returns 404 in production so the surface is not reachable
   // on the live site even if ADMIN_SECRET leaks.
