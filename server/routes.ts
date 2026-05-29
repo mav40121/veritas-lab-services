@@ -1583,7 +1583,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // permissionsMode is the most common shortcut ('view_all' | 'edit_all' |
   // 'custom'); the full JSON shape is also accepted via `permissions`.
   app.post("/api/admin/create-lab-invite", (req: any, res) => {
-    const { secret, labId, email, role, permissions, permissionsMode } = req.body || {};
+    const { secret, labId, email, role, permissions, permissionsMode, seatType: requestedSeatType } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!labId || !email || !email.includes("@")) {
       return res.status(400).json({ error: "labId and valid email required" });
@@ -1592,6 +1592,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const resolvedPermissions = permissions
       ? permissions
       : { mode: permissionsMode === "edit_all" || permissionsMode === "custom" ? permissionsMode : "view_all" };
+    // parking-lot #33 PR 2: seat_type parameter passes through to the
+    // new user_seats row. Default 'active' (writer).
+    const seatType = requestedSeatType === "view_only" ? "view_only" : "active";
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(Number(labId)) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
@@ -1622,12 +1625,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(labOwnerId, normalizedEmail) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, Number(labId), deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, Number(labId), seatType, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, Number(labId));
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, Number(labId), seatType);
       }
       if (seatUserId) {
         sqlite.prepare(
@@ -3934,9 +3937,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // user.plan and existing user_seats count, matching /api/account/seats POST.
   app.post("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
-    const { email, role: requestedRole, permissions } = req.body || {};
+    const { email, role: requestedRole, permissions, seatType: requestedSeatType } = req.body || {};
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
     const role = requestedRole === "admin" ? "admin" : "staff";
+    // parking-lot #33 PR 2: seat_type comes through here so the new
+    // user_seats row carries the writer-vs-reviewer distinction. Default
+    // 'active' (writer) when unspecified so legacy clients keep working.
+    const seatType = requestedSeatType === "view_only" ? "view_only" : "active";
     // Only the owner can grant 'admin' on invite.
     if (role === "admin" && !isLabOwner(req.scope)) {
       return res.status(403).json({ error: "Only the owner can invite a member as admin" });
@@ -3995,12 +4002,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(labOwnerId, normalizedEmail) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType);
       }
       // Create lab_members row when the invited user already has an account.
       if (seatUserId) {
