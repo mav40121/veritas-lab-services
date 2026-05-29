@@ -6,13 +6,34 @@
 // pending-review by step. Phase 6B will add the cron-fired email
 // reminders + auto-expire.
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
-import { getQueryFn } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, AlertTriangle, Clock, ShieldCheck, FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Loader2,
+  ArrowLeft,
+  AlertTriangle,
+  Clock,
+  ShieldCheck,
+  FileText,
+  Link as LinkIcon,
+  Copy,
+  Trash2,
+} from "lucide-react";
 
 interface ManualRow {
   manual_id: number | null;
@@ -82,8 +103,20 @@ function pct(n: number, d: number): string {
   return `${Math.round((100 * n) / d)}%`;
 }
 
+interface SurveyorLink {
+  id: number;
+  token: string;
+  label: string | null;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  use_count: number;
+  last_used_at: string | null;
+}
+
 export default function VeritaPolicyCompliancePage() {
   const activeLabId = useActiveLabId();
+  const { toast } = useToast();
 
   const { data, isLoading } = useQuery<Compliance>({
     queryKey: [`/api/labs/${activeLabId}/veritapolicy/compliance`],
@@ -91,6 +124,72 @@ export default function VeritaPolicyCompliancePage() {
     enabled: !!activeLabId,
     refetchInterval: 60000,
   });
+
+  const { data: linksData } = useQuery<{ links: SurveyorLink[] }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/surveyor-links`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+  });
+  const links = linksData?.links || [];
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLabel, setCreateLabel] = useState("");
+  const [createDays, setCreateDays] = useState("14");
+
+  const createLinkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/surveyor-links`,
+        { label: createLabel.trim() || undefined, expiresInDays: Number(createDays) || 14 }
+      );
+      return res.json();
+    },
+    onSuccess: async (body: any) => {
+      try {
+        await navigator.clipboard.writeText(body.url);
+        toast({ title: "Link copied", description: body.url });
+      } catch {
+        toast({ title: "Link created", description: body.url });
+      }
+      setCreateOpen(false);
+      setCreateLabel("");
+      setCreateDays("14");
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/surveyor-links`],
+      });
+    },
+    onError: (err: any) =>
+      toast({ title: "Create failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  const revokeLinkMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest(
+        "DELETE",
+        `/api/labs/${activeLabId}/veritapolicy/surveyor-links/${id}`
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Link revoked" });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/surveyor-links`],
+      });
+    },
+    onError: (err: any) =>
+      toast({ title: "Revoke failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  const copyLink = async (token: string) => {
+    const url = `${window.location.origin}/surveyor/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Link copied", description: url });
+    } catch {
+      toast({ title: "Could not copy; URL:", description: url });
+    }
+  };
 
   if (!activeLabId) {
     return (
@@ -325,6 +424,150 @@ export default function VeritaPolicyCompliancePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Surveyor public links */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <LinkIcon size={16} /> Surveyor public links
+            </span>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              Create link
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-2">
+            Generate a signed URL a surveyor can use to browse approved policies without
+            authentication. Auto-expires after the window you pick. Revoke any time. Audit
+            captures every hit.
+          </p>
+          {links.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No surveyor links yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                    <th className="py-2 pr-3">Label</th>
+                    <th className="py-2 pr-3">Created</th>
+                    <th className="py-2 pr-3">Expires</th>
+                    <th className="py-2 pr-3 text-right">Uses</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {links.map((l) => {
+                    const isRevoked = !!l.revoked_at;
+                    const isExpired = !isRevoked && new Date(l.expires_at).getTime() < Date.now();
+                    return (
+                      <tr key={l.id} className="border-b last:border-b-0">
+                        <td className="py-2 pr-3 font-medium">{l.label || "(no label)"}</td>
+                        <td className="py-2 pr-3 text-muted-foreground">
+                          {fmtDate(l.created_at)}
+                        </td>
+                        <td className="py-2 pr-3 text-muted-foreground">
+                          {fmtDate(l.expires_at)}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {l.use_count}
+                          {l.last_used_at && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">
+                              (last {fmtDate(l.last_used_at)})
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {isRevoked ? (
+                            <span className="text-xs text-red-700">revoked</span>
+                          ) : isExpired ? (
+                            <span className="text-xs text-zinc-500">expired</span>
+                          ) : (
+                            <span className="text-xs text-emerald-700">active</span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right space-x-1">
+                          {!isRevoked && !isExpired && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => copyLink(l.token)}
+                            >
+                              <Copy size={12} className="mr-1" /> Copy
+                            </Button>
+                          )}
+                          {!isRevoked && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => {
+                                if (
+                                  confirm(`Revoke this surveyor link? The URL stops working.`)
+                                )
+                                  revokeLinkMutation.mutate(l.id);
+                              }}
+                            >
+                              <Trash2 size={12} className="mr-1" /> Revoke
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create surveyor link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Label (optional, helps you track which visit)</Label>
+              <Input
+                value={createLabel}
+                onChange={(e) => setCreateLabel(e.target.value)}
+                placeholder="e.g., CAP visit Q3 2026"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Expires in</Label>
+              <Input
+                type="number"
+                min={1}
+                max={90}
+                value={createDays}
+                onChange={(e) => setCreateDays(e.target.value)}
+              />
+              <div className="text-[10px] text-muted-foreground mt-1">
+                1 to 90 days. Default 14.
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createLinkMutation.mutate()}
+              disabled={createLinkMutation.isPending}
+            >
+              {createLinkMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              Create + copy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Per-user attestation rate */}
       <Card>
