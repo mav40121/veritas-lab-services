@@ -19446,6 +19446,108 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Phase 5: periodic review re-certification ──────────────────────────
+  //
+  // Owner-or-member confirms a policy is still current at its annual /
+  // semi-annual review point. Re-certify keeps status='approved' but
+  // advances next_review_date by review_interval_months. Captures full
+  // 21 CFR Part 11 signature (typed name + password + sha256 hash).
+  // Phase 6 will add the cron-fired email reminders + auto-expire on
+  // overdue. For now Phase 5 ships the manual action + visual state.
+
+  // POST /documents/:id/recertify — confirm still current.
+  // Body: { typedSignature, password, comment? }
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/recertify",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const { typedSignature, password, comment } = req.body || {};
+      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
+        return res.status(400).json({ error: "typedSignature required" });
+      }
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ error: "password required" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare(
+          "SELECT lab_id, status, current_version_id, review_interval_months FROM policy_documents WHERE id = ?"
+        )
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.status !== "approved") {
+        return res.status(409).json({ error: "Only approved policies can be re-certified" });
+      }
+      // Active membership required. Audit log captures who.
+      const member = sqlite
+        .prepare(
+          "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+        )
+        .get(req.scope.labId, req.userId);
+      if (!member) return res.status(403).json({ error: "Not an active member of this lab" });
+      const userRow = sqlite
+        .prepare("SELECT password_hash FROM users WHERE id = ?")
+        .get(req.userId) as any;
+      if (!userRow?.password_hash) {
+        return res.status(401).json({ error: "User has no password set" });
+      }
+      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
+      if (!passwordOk) {
+        return res.status(401).json({ error: "Password incorrect; re-certification not recorded" });
+      }
+      const ver = sqlite
+        .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
+        .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
+      const hash = ver?.file_hash_sha256 || "missing";
+      // Write a signoff row with action='recertified' so the audit
+      // timeline includes the re-certification alongside the original
+      // approvals.
+      sqlite
+        .prepare(
+          `INSERT INTO policy_signoffs
+             (document_id, version_id, workflow_step_id, user_id, action,
+              comment, typed_signature, signed_document_hash, ip_address, user_agent)
+           VALUES (?, ?, NULL, ?, 'recertified', ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          doc.current_version_id,
+          req.userId,
+          comment || null,
+          typedSignature.trim(),
+          hash,
+          req.ip || null,
+          (req.headers["user-agent"] as string | undefined) || null
+        );
+      // Advance next_review_date by review_interval_months. SQLite date
+      // arithmetic handles month boundaries correctly.
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET next_review_date = date('now', '+' || review_interval_months || ' months'),
+                 updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "recertified",
+        details: { interval_months: doc.review_interval_months },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
   // ── Phase 4: employee read-and-attest ───────────────────────────────────
   //
   // Assignments are per-user per-version. Only approved policies can be

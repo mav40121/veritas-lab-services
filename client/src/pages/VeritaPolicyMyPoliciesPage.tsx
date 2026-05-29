@@ -43,6 +43,7 @@ import {
   XCircle,
   Pencil,
   ShieldCheck,
+  Clock,
 } from "lucide-react";
 
 interface Manual {
@@ -424,6 +425,79 @@ export default function VeritaPolicyMyPoliciesPage() {
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
   };
 
+  // ── Phase 5: recertify ─────────────────────────────────────────────────
+  // Helper: days until next_review_date, negative if overdue.
+  const daysUntil = (iso: string | null | undefined): number | null => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (!Number.isFinite(d.getTime())) return null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      d.setHours(0, 0, 0, 0);
+      return Math.round((d.getTime() - today.getTime()) / 86400000);
+    } catch {
+      return null;
+    }
+  };
+
+  const reviewStateLabel = (days: number | null) => {
+    if (days == null) return null;
+    if (days < 0) return { label: `${Math.abs(days)}d overdue`, cls: "text-red-700 font-semibold" };
+    if (days <= 30) return { label: `due in ${days}d`, cls: "text-amber-800 font-medium" };
+    return { label: `due in ${days}d`, cls: "text-muted-foreground" };
+  };
+
+  const [recertifyDoc, setRecertifyDoc] = useState<PolicyDocument | null>(null);
+  const [recertifyTypedName, setRecertifyTypedName] = useState("");
+  const [recertifyPassword, setRecertifyPassword] = useState("");
+  const [recertifyComment, setRecertifyComment] = useState("");
+
+  const openRecertify = (doc: PolicyDocument) => {
+    setRecertifyDoc(doc);
+    setRecertifyTypedName(user?.name || "");
+    setRecertifyPassword("");
+    setRecertifyComment("");
+  };
+
+  const recertifyMutation = useMutation({
+    mutationFn: async () => {
+      if (!recertifyDoc) throw new Error("No document");
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${recertifyDoc.id}/recertify`,
+        {
+          typedSignature: recertifyTypedName.trim(),
+          password: recertifyPassword,
+          comment: recertifyComment.trim() || undefined,
+        }
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Re-certified",
+        description: "Next review date advanced.",
+      });
+      setRecertifyDoc(null);
+      setRecertifyPassword("");
+      setRecertifyComment("");
+      invalidateAll();
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Re-certify failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  const dueSoonDocs = documents.filter((d) => {
+    if (d.status !== "approved") return false;
+    const days = daysUntil(d.next_review_date);
+    return days != null && days <= 30;
+  });
+
   // ── Phase 4: attestation assign + complete ─────────────────────────────
   const [assignDoc, setAssignDoc] = useState<PolicyDocument | null>(null);
   const [assignSelected, setAssignSelected] = useState<Set<number>>(new Set());
@@ -733,6 +807,49 @@ export default function VeritaPolicyMyPoliciesPage() {
         </div>
       </div>
 
+      {dueSoonDocs.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock size={16} className="text-amber-700" />
+              Policies due for review ({dueSoonDocs.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1.5 text-sm">
+              {dueSoonDocs.map((d) => {
+                const days = daysUntil(d.next_review_date);
+                const state = reviewStateLabel(days);
+                return (
+                  <li key={d.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="font-medium">{d.title}</span>
+                      {d.manual_name && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          in {d.manual_name}
+                        </span>
+                      )}
+                      <div className="text-xs">
+                        next review {fmtDate(d.next_review_date)}{" "}
+                        {state && <span className={state.cls}>· {state.label}</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => openView(d)}>
+                        <Eye size={12} className="mr-1" /> View
+                      </Button>
+                      <Button size="sm" onClick={() => openRecertify(d)}>
+                        <ShieldCheck size={12} className="mr-1" /> Confirm Still Current
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {pendingAttestations.length > 0 && (
         <Card className="border-sky-300 bg-sky-50/40">
           <CardHeader className="pb-2">
@@ -916,6 +1033,17 @@ export default function VeritaPolicyMyPoliciesPage() {
                               </div>
                             </div>
                           )}
+                          {doc.status === "approved" && doc.next_review_date && (() => {
+                            const days = daysUntil(doc.next_review_date);
+                            const state = reviewStateLabel(days);
+                            return (
+                              <div className="text-[10px] mt-1 leading-tight">
+                                <span className="text-muted-foreground">next review </span>
+                                <span>{fmtDate(doc.next_review_date)}</span>
+                                {state && <span className={`ml-1 ${state.cls}`}>· {state.label}</span>}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-2 pr-3 text-xs uppercase font-mono text-muted-foreground">
                           {doc.current_file_format || "-"}
@@ -1009,14 +1137,24 @@ export default function VeritaPolicyMyPoliciesPage() {
                               </Button>
                             )}
                           {doc.status === "approved" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openAssign(doc)}
-                              title="Assign staff to read-and-attest"
-                            >
-                              <ShieldCheck size={12} className="mr-1" /> Assign
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openAssign(doc)}
+                                title="Assign staff to read-and-attest"
+                              >
+                                <ShieldCheck size={12} className="mr-1" /> Assign
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openRecertify(doc)}
+                                title="Confirm this policy is still current; advances next review date"
+                              >
+                                Recertify
+                              </Button>
+                            </>
                           )}
                         </td>
                       </tr>
@@ -1425,6 +1563,76 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <Loader2 className="animate-spin mr-1" size={14} />
               )}
               {signAction === "approved" ? "Approve" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Recertify modal ─────────────────────────────────────────── */}
+      <Dialog
+        open={!!recertifyDoc}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRecertifyDoc(null);
+            setRecertifyPassword("");
+            setRecertifyComment("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm still current: {recertifyDoc?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              By submitting this form you attest that this policy remains current and accurate
+              as written. The next review date will advance by{" "}
+              {recertifyDoc?.review_interval_months ?? 12} months. Typed name plus password is
+              your 21 CFR Part 11 electronic signature; a sha256 of the current version is
+              captured at this time.
+            </p>
+            <div>
+              <Label className="text-xs">Type your full name</Label>
+              <Input
+                value={recertifyTypedName}
+                onChange={(e) => setRecertifyTypedName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Your password</Label>
+              <Input
+                type="password"
+                value={recertifyPassword}
+                onChange={(e) => setRecertifyPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Comment (optional)</Label>
+              <Textarea
+                value={recertifyComment}
+                onChange={(e) => setRecertifyComment(e.target.value)}
+                rows={2}
+                placeholder="Optional note for the audit log."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecertifyDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => recertifyMutation.mutate()}
+              disabled={
+                recertifyMutation.isPending ||
+                recertifyTypedName.trim().length < 2 ||
+                recertifyPassword.length < 1
+              }
+            >
+              {recertifyMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              Confirm Still Current
             </Button>
           </DialogFooter>
         </DialogContent>
