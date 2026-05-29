@@ -18215,6 +18215,446 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── VeritaPolicy approval workflow: Phase 1 — upload + manuals ──────────
+  // Routes: manuals CRUD, document upload + list + download + render.
+  // Backed by the 9-table schema from Phase 0 (PR #438). UI lives at
+  // /labs/:labId/veritapolicy-app/my-policies (Phase 1 client).
+  const {
+    seedDefaultManualsIfEmpty,
+    buildVersionRelativePath,
+    writeVersionBuffer,
+    readVersionBuffer,
+    hashBuffer,
+    canonicalFormatFromMimeAndName,
+    extractTitle,
+    renderDocxToHtml,
+    writeAuditLog,
+  } = await import("./veritapolicyApproval");
+
+  // Multer config: memory buffer + 25 MB cap. We write to /data/policies on
+  // disk after validation rather than storing the blob in SQLite (uploads
+  // can grow large with versions; volume storage scales further).
+  const policyUpload = require("multer")({
+    storage: require("multer").memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024 },
+  });
+
+  // GET /api/labs/:labId/veritapolicy/manuals — list lab manuals.
+  // Seeds the 10 default manuals on first call so labs do not start empty.
+  app.get(
+    "/api/labs/:labId/veritapolicy/manuals",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      seedDefaultManualsIfEmpty(sqlite, labId);
+      const rows = sqlite
+        .prepare(
+          `SELECT id, lab_id, name, description, display_order, created_at, updated_at
+             FROM policy_manuals
+            WHERE lab_id = ? AND archived_at IS NULL
+            ORDER BY display_order ASC, name ASC`
+        )
+        .all(labId);
+      res.json({ manuals: rows });
+    }
+  );
+
+  // POST /api/labs/:labId/veritapolicy/manuals — create a manual.
+  app.post(
+    "/api/labs/:labId/veritapolicy/manuals",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const { name, description, displayOrder } = req.body || {};
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      const sqlite = (db as any).$client;
+      const result = sqlite
+        .prepare(
+          `INSERT INTO policy_manuals (lab_id, name, description, display_order)
+           VALUES (?, ?, ?, ?)`
+        )
+        .run(req.scope.labId, name.trim(), description || null, Number(displayOrder ?? 0));
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "manual_created",
+        details: { manual_id: Number(result.lastInsertRowid), name: name.trim() },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.status(201).json({ id: Number(result.lastInsertRowid) });
+    }
+  );
+
+  // PUT /api/labs/:labId/veritapolicy/manuals/:id — rename / re-describe.
+  app.put(
+    "/api/labs/:labId/veritapolicy/manuals/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      const { name, description, displayOrder } = req.body || {};
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare("SELECT lab_id FROM policy_manuals WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!row) return res.status(404).json({ error: "Manual not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      sqlite
+        .prepare(
+          `UPDATE policy_manuals
+             SET name = COALESCE(?, name),
+                 description = COALESCE(?, description),
+                 display_order = COALESCE(?, display_order),
+                 updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(
+          name ? String(name).trim() : null,
+          description !== undefined ? description : null,
+          displayOrder !== undefined ? Number(displayOrder) : null,
+          id
+        );
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "manual_edited",
+        details: { manual_id: id },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true });
+    }
+  );
+
+  // DELETE /api/labs/:labId/veritapolicy/manuals/:id — archive (soft-delete).
+  app.delete(
+    "/api/labs/:labId/veritapolicy/manuals/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare("SELECT lab_id FROM policy_manuals WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!row) return res.status(404).json({ error: "Manual not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      // Soft archive. Existing documents keep their manual_id pointer but
+      // the manual disappears from the picker.
+      sqlite
+        .prepare(
+          `UPDATE policy_manuals
+             SET archived_at = datetime('now'),
+                 updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(id);
+      res.json({ ok: true });
+    }
+  );
+
+  // GET /api/labs/:labId/veritapolicy/documents — list policies for this lab.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const rows = sqlite
+        .prepare(
+          `SELECT d.id, d.lab_id, d.manual_id, d.title, d.description, d.status,
+                  d.owner_user_id, d.effective_date, d.next_review_date,
+                  d.review_interval_months, d.workflow_id, d.current_version_id,
+                  d.created_at, d.updated_at,
+                  v.version_number AS current_version_number,
+                  v.file_format AS current_file_format,
+                  v.uploaded_at AS current_uploaded_at,
+                  m.name AS manual_name
+             FROM policy_documents d
+             LEFT JOIN policy_versions v ON v.id = d.current_version_id
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE d.lab_id = ? AND d.archived_at IS NULL
+            ORDER BY d.updated_at DESC`
+        )
+        .all(req.scope.labId);
+      res.json({ documents: rows });
+    }
+  );
+
+  // POST /api/labs/:labId/veritapolicy/documents — upload a new policy.
+  // Multipart: file (required), title (optional, overrides extracted),
+  // description, manual_id, review_interval_months.
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    policyUpload.single("file"),
+    async (req: any, res) => {
+      if (!req.file) return res.status(400).json({ error: "File required" });
+      const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname);
+      if (!format) {
+        return res
+          .status(400)
+          .json({ error: "Only DOCX, PDF, or HTML files are accepted" });
+      }
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      seedDefaultManualsIfEmpty(sqlite, labId);
+
+      const titleOverride = (req.body?.title as string | undefined)?.trim();
+      const description = (req.body?.description as string | undefined) || null;
+      const manualIdRaw = req.body?.manual_id;
+      const manualId =
+        manualIdRaw !== undefined && manualIdRaw !== "" ? Number(manualIdRaw) : null;
+      const reviewIntervalMonths = Number(req.body?.review_interval_months ?? 12);
+
+      const title =
+        titleOverride && titleOverride.length > 0
+          ? titleOverride
+          : await extractTitle(req.file.buffer, format, req.file.originalname);
+
+      // Validate manual_id belongs to this lab (if provided).
+      if (manualId !== null && !Number.isNaN(manualId)) {
+        const manualRow = sqlite
+          .prepare("SELECT lab_id FROM policy_manuals WHERE id = ?")
+          .get(manualId) as { lab_id: number } | undefined;
+        if (!manualRow || manualRow.lab_id !== labId) {
+          return res.status(400).json({ error: "Manual does not belong to this lab" });
+        }
+      }
+
+      // Two-phase insert: document row first (without current_version_id),
+      // then version row pointing back, then UPDATE document with version id.
+      const docInsert = sqlite
+        .prepare(
+          `INSERT INTO policy_documents
+             (lab_id, manual_id, title, description, status, owner_user_id,
+              review_interval_months, workflow_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'draft', ?, ?, NULL, datetime('now'), datetime('now'))`
+        )
+        .run(
+          labId,
+          manualId,
+          title,
+          description,
+          req.userId,
+          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : 12
+        );
+      const documentId = Number(docInsert.lastInsertRowid);
+      const versionNumber = 1;
+      const relativePath = buildVersionRelativePath(labId, documentId, versionNumber, format);
+      try {
+        writeVersionBuffer(relativePath, req.file.buffer);
+      } catch (err: any) {
+        // Best-effort cleanup of the document row if the disk write fails so
+        // we do not leave an orphan document with no version.
+        sqlite.prepare("DELETE FROM policy_documents WHERE id = ?").run(documentId);
+        console.error("[policy upload writeVersionBuffer]", err.message);
+        return res.status(500).json({ error: "Failed to persist file" });
+      }
+      const fileHash = hashBuffer(req.file.buffer);
+      const verInsert = sqlite
+        .prepare(
+          `INSERT INTO policy_versions
+             (document_id, version_number, file_path, file_format, file_size_bytes,
+              file_hash_sha256, change_summary, uploaded_by, uploaded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+        )
+        .run(
+          documentId,
+          versionNumber,
+          relativePath,
+          format,
+          req.file.size,
+          fileHash,
+          (req.body?.change_summary as string | undefined) || "Initial upload",
+          req.userId
+        );
+      const versionId = Number(verInsert.lastInsertRowid);
+      sqlite
+        .prepare(
+          `UPDATE policy_documents
+             SET current_version_id = ?, updated_at = datetime('now')
+           WHERE id = ?`
+        )
+        .run(versionId, documentId);
+      writeAuditLog(sqlite, {
+        labId,
+        documentId,
+        userId: req.userId,
+        action: "uploaded",
+        details: {
+          version_number: versionNumber,
+          file_format: format,
+          file_size_bytes: req.file.size,
+          file_hash_sha256: fileHash,
+          original_filename: req.file.originalname,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.status(201).json({ id: documentId, version_id: versionId, title });
+    }
+  );
+
+  // GET /api/labs/:labId/veritapolicy/documents/:id — single document detail.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare(
+          `SELECT d.*, v.version_number AS current_version_number,
+                  v.file_format AS current_file_format,
+                  v.file_size_bytes AS current_file_size_bytes,
+                  v.file_hash_sha256 AS current_file_hash_sha256,
+                  v.uploaded_at AS current_uploaded_at,
+                  m.name AS manual_name
+             FROM policy_documents d
+             LEFT JOIN policy_versions v ON v.id = d.current_version_id
+             LEFT JOIN policy_manuals m ON m.id = d.manual_id
+            WHERE d.id = ?`
+        )
+        .get(id) as any;
+      if (!row) return res.status(404).json({ error: "Not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const versions = sqlite
+        .prepare(
+          `SELECT id, version_number, file_format, file_size_bytes,
+                  file_hash_sha256, change_summary, uploaded_by, uploaded_at
+             FROM policy_versions
+            WHERE document_id = ?
+            ORDER BY version_number DESC`
+        )
+        .all(id);
+      res.json({ document: row, versions });
+    }
+  );
+
+  // GET /api/labs/:labId/veritapolicy/documents/:id/download — original file.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/download",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare(
+          `SELECT d.lab_id, d.title, v.file_path, v.file_format
+             FROM policy_documents d
+             JOIN policy_versions v ON v.id = d.current_version_id
+            WHERE d.id = ?`
+        )
+        .get(id) as any;
+      if (!row) return res.status(404).json({ error: "Not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      let buffer: Buffer;
+      try {
+        buffer = readVersionBuffer(row.file_path);
+      } catch (err: any) {
+        console.error("[policy download readVersionBuffer]", err.message);
+        return res.status(500).json({ error: "File missing on server" });
+      }
+      const mime =
+        row.file_format === "pdf"
+          ? "application/pdf"
+          : row.file_format === "docx"
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : "text/html";
+      const safeTitle = String(row.title || "policy").replace(/[^A-Za-z0-9_-]+/g, "_");
+      res.setHeader("Content-Type", mime);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${safeTitle}.${row.file_format}"`
+      );
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "downloaded",
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.send(buffer);
+    }
+  );
+
+  // GET /api/labs/:labId/veritapolicy/documents/:id/render — inline view.
+  // DOCX is converted to HTML via mammoth. PDF returns the file inline.
+  // HTML returns as-is.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/render",
+    authMiddleware,
+    labScopeMiddleware,
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite
+        .prepare(
+          `SELECT d.lab_id, v.file_path, v.file_format
+             FROM policy_documents d
+             JOIN policy_versions v ON v.id = d.current_version_id
+            WHERE d.id = ?`
+        )
+        .get(id) as any;
+      if (!row) return res.status(404).json({ error: "Not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      let buffer: Buffer;
+      try {
+        buffer = readVersionBuffer(row.file_path);
+      } catch (err: any) {
+        console.error("[policy render readVersionBuffer]", err.message);
+        return res.status(500).json({ error: "File missing on server" });
+      }
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "viewed",
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      if (row.file_format === "docx") {
+        try {
+          const rendered = await renderDocxToHtml(buffer);
+          return res.json({ format: "html", html: rendered.html, messages: rendered.messages });
+        } catch (err: any) {
+          console.error("[policy render docx]", err.message);
+          return res.status(500).json({ error: "Render failed" });
+        }
+      }
+      if (row.file_format === "pdf") {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "inline");
+        return res.send(buffer);
+      }
+      // html
+      res.json({ format: "html", html: buffer.toString("utf-8"), messages: [] });
+    }
+  );
+
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');
   registerVeritaTrackRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);

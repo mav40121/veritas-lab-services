@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight, FileText } from "lucide-react";
+import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight, FileText, FolderOpen } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { Link } from "wouter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface PolicySettings {
@@ -470,6 +471,13 @@ export default function VeritaPolicyAppPage() {
       />
 
         <div className="flex items-center gap-2">
+          {activeLabId && (
+            <Link href={`/labs/${activeLabId}/veritapolicy-app/my-policies`}>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <FolderOpen size={14} /> My Policies
+              </Button>
+            </Link>
+          )}
           <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
             <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}
           </Button>
