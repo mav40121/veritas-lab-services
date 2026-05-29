@@ -995,6 +995,17 @@ try {
   }
   // Index for the per-lab pending-invite query.
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_user_seats_lab_owner_status ON user_seats(lab_id, owner_user_id, status)"); } catch {}
+
+  // Seat-type split (parking-lot #33 PR 1 foundation). Defaults every
+  // existing row to 'active' so behavior is unchanged for current
+  // customers. The counting gate (only active seats counted against
+  // the tier cap, view-only seats capped per tier with a $99/yr add-on
+  // for extras) ships in a later PR; this commit only adds the column
+  // so the invite flow and counting logic can reference it cleanly.
+  if (!usCols.includes("seat_type")) {
+    try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN seat_type TEXT NOT NULL DEFAULT 'active'"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_user_seats_owner_type_status ON user_seats(owner_user_id, seat_type, status)"); } catch {}
 }
 
 // Add VeritaScan item columns if upgrading
