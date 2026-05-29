@@ -116,6 +116,28 @@ interface PolicyDocument {
   pending_total_steps?: number;
 }
 
+interface PendingAttestation {
+  attestation_id: number;
+  document_id: number;
+  version_id: number;
+  assigned_at: string;
+  due_date: string | null;
+  title: string;
+  current_version_id: number | null;
+  manual_id: number | null;
+  manual_name: string | null;
+  is_stale_version: boolean;
+}
+
+interface LabMemberLite {
+  membership_id: number;
+  user_id: number;
+  role: string;
+  name: string | null;
+  email: string;
+  seat_type?: string;
+}
+
 interface EligibilityPreview {
   perStep: {
     step_id: number;
@@ -201,6 +223,21 @@ export default function VeritaPolicyMyPoliciesPage() {
     refetchInterval: 30000,
   });
   const pendingReviews = pendingData?.pending || [];
+
+  const { data: pendingAttestData } = useQuery<{ pending: PendingAttestation[] }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-attestations`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+    refetchInterval: 30000,
+  });
+  const pendingAttestations = pendingAttestData?.pending || [];
+
+  const { data: membersData } = useQuery<{ members: LabMemberLite[] }>({
+    queryKey: [`/api/labs/${activeLabId}/members`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+  });
+  const labMembers = membersData?.members || [];
 
   // ── Upload state ────────────────────────────────────────────────────────
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -386,6 +423,90 @@ export default function VeritaPolicyMyPoliciesPage() {
     setRenameDescription(doc.description || "");
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
   };
+
+  // ── Phase 4: attestation assign + complete ─────────────────────────────
+  const [assignDoc, setAssignDoc] = useState<PolicyDocument | null>(null);
+  const [assignSelected, setAssignSelected] = useState<Set<number>>(new Set());
+  const [assignDueDate, setAssignDueDate] = useState<string>("");
+
+  const openAssign = (doc: PolicyDocument) => {
+    setAssignDoc(doc);
+    setAssignSelected(new Set());
+    setAssignDueDate("");
+  };
+
+  const assignMutation = useMutation({
+    mutationFn: async () => {
+      if (!assignDoc) throw new Error("No document");
+      const ids = Array.from(assignSelected);
+      if (ids.length === 0) throw new Error("Pick at least one person");
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${assignDoc.id}/attestations`,
+        { assignedToUserIds: ids, dueDate: assignDueDate || undefined }
+      );
+      return res.json();
+    },
+    onSuccess: (body: any) => {
+      toast({
+        title: "Assigned",
+        description: `${body?.assigned ?? 0} attestation(s) created.`,
+      });
+      setAssignDoc(null);
+      setAssignSelected(new Set());
+      setAssignDueDate("");
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-attestations`],
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Assign failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  // Completion modal
+  const [attestTarget, setAttestTarget] = useState<PendingAttestation | null>(null);
+  const [attestTypedName, setAttestTypedName] = useState("");
+  const [attestPassword, setAttestPassword] = useState("");
+
+  const openAttest = (p: PendingAttestation) => {
+    setAttestTarget(p);
+    setAttestTypedName(user?.name || "");
+    setAttestPassword("");
+  };
+
+  const attestCompleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!attestTarget) throw new Error("No attestation");
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/attestations/${attestTarget.attestation_id}/complete`,
+        {
+          typedSignature: attestTypedName.trim(),
+          password: attestPassword,
+        }
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Attestation recorded" });
+      setAttestTarget(null);
+      setAttestTypedName("");
+      setAttestPassword("");
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-attestations`],
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Attestation failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
 
   // ── Phase 2.1: recall ──────────────────────────────────────────────────
   const recallMutation = useMutation({
@@ -612,6 +733,58 @@ export default function VeritaPolicyMyPoliciesPage() {
         </div>
       </div>
 
+      {pendingAttestations.length > 0 && (
+        <Card className="border-sky-300 bg-sky-50/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText size={16} className="text-sky-700" />
+              Pending my attestations ({pendingAttestations.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1.5 text-sm">
+              {pendingAttestations.map((p) => (
+                <li
+                  key={p.attestation_id}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium">{p.title}</span>
+                    {p.manual_name && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        in {p.manual_name}
+                      </span>
+                    )}
+                    <div className="text-xs text-muted-foreground">
+                      assigned {fmtDate(p.assigned_at)}
+                      {p.due_date && <> · due {fmtDate(p.due_date)}</>}
+                      {p.is_stale_version && (
+                        <span className="ml-2 text-amber-700">
+                          (a newer version is now current; this attestation is stale)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    {(() => {
+                      const doc = documents.find((d) => d.id === p.document_id);
+                      return doc ? (
+                        <Button size="sm" variant="outline" onClick={() => openView(doc)}>
+                          <Eye size={12} className="mr-1" /> View
+                        </Button>
+                      ) : null;
+                    })()}
+                    <Button size="sm" onClick={() => openAttest(p)}>
+                      <CheckCircle2 size={12} className="mr-1" /> Attest
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {pendingReviews.length > 0 && (
         <Card className="border-amber-300 bg-amber-50/40">
           <CardHeader className="pb-2">
@@ -835,6 +1008,16 @@ export default function VeritaPolicyMyPoliciesPage() {
                                 Recall
                               </Button>
                             )}
+                          {doc.status === "approved" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openAssign(doc)}
+                              title="Assign staff to read-and-attest"
+                            >
+                              <ShieldCheck size={12} className="mr-1" /> Assign
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1242,6 +1425,142 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <Loader2 className="animate-spin mr-1" size={14} />
               )}
               {signAction === "approved" ? "Approve" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Assign attestations modal ───────────────────────────────── */}
+      <Dialog
+        open={!!assignDoc}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssignDoc(null);
+            setAssignSelected(new Set());
+            setAssignDueDate("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Assign for attestation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Pick the staff who must read and attest to{" "}
+              <span className="font-medium">{assignDoc?.title}</span>. Each assignment is per
+              version; if you upload a new version they will need to re-attest.
+            </p>
+            <div className="border rounded max-h-64 overflow-y-auto divide-y">
+              {labMembers.length === 0 ? (
+                <div className="p-3 text-xs text-muted-foreground">No lab members yet.</div>
+              ) : (
+                labMembers.map((m) => (
+                  <label
+                    key={m.membership_id}
+                    className="flex items-center gap-2 p-2 text-sm hover:bg-muted/30 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={assignSelected.has(m.user_id)}
+                      onChange={(e) => {
+                        const next = new Set(assignSelected);
+                        if (e.target.checked) next.add(m.user_id);
+                        else next.delete(m.user_id);
+                        setAssignSelected(next);
+                      }}
+                    />
+                    <span className="flex-1">
+                      <span className="font-medium">{m.name || m.email}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {m.role}
+                        {m.seat_type && ` · ${m.seat_type.replace(/_/g, " ")}`}
+                      </span>
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div>
+              <Label className="text-xs">Due date (optional)</Label>
+              <Input
+                type="date"
+                value={assignDueDate}
+                onChange={(e) => setAssignDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => assignMutation.mutate()}
+              disabled={assignMutation.isPending || assignSelected.size === 0}
+            >
+              {assignMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              Assign ({assignSelected.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Complete attestation modal ─────────────────────────────── */}
+      <Dialog
+        open={!!attestTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAttestTarget(null);
+            setAttestTypedName("");
+            setAttestPassword("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Attest to: {attestTarget?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              By submitting this form you confirm that you have read and understood the current
+              version of this policy. Typed name plus password is your 21 CFR Part 11 electronic
+              signature; a sha256 of the current version is captured at attest time.
+            </p>
+            <div>
+              <Label className="text-xs">Type your full name</Label>
+              <Input
+                value={attestTypedName}
+                onChange={(e) => setAttestTypedName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Your password</Label>
+              <Input
+                type="password"
+                value={attestPassword}
+                onChange={(e) => setAttestPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttestTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => attestCompleteMutation.mutate()}
+              disabled={
+                attestCompleteMutation.isPending ||
+                attestTypedName.trim().length < 2 ||
+                attestPassword.length < 1
+              }
+            >
+              {attestCompleteMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              I attest
             </Button>
           </DialogFooter>
         </DialogContent>
