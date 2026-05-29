@@ -107,6 +107,24 @@ interface PolicyDocument {
   manual_name: string | null;
   created_at: string;
   updated_at: string;
+  // Phase 2.1: in_review rows include these so the UI can render
+  // "Awaiting step X of Y: <name>" inline.
+  pending_step_id?: number;
+  pending_step_name?: string;
+  pending_step_role?: string;
+  pending_step_order?: number;
+  pending_total_steps?: number;
+}
+
+interface EligibilityPreview {
+  perStep: {
+    step_id: number;
+    step_order: number;
+    step_name: string;
+    required_role: string;
+    eligible_count: number;
+  }[];
+  minCount: number;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -360,6 +378,54 @@ export default function VeritaPolicyMyPoliciesPage() {
     setRenameTitle(doc.title);
     setRenameDescription(doc.description || "");
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
+  };
+
+  // ── Phase 2.1: recall ──────────────────────────────────────────────────
+  const recallMutation = useMutation({
+    mutationFn: async (docId: number) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${docId}/recall`,
+        {}
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Recalled", description: "Document returned to draft." });
+      invalidateAll();
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-reviews`],
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Recall failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  // ── Phase 2.1: eligibility preview at submit time ─────────────────────
+  const [eligibility, setEligibility] = useState<EligibilityPreview | null>(null);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+
+  // Refetch eligibility whenever the user picks a workflow in the submit dialog.
+  const fetchEligibility = async (docId: number, workflowId: number) => {
+    setEligibility(null);
+    setEligibilityLoading(true);
+    try {
+      const token = localStorage.getItem("veritas_token") || "";
+      const res = await fetch(
+        `/api/labs/${activeLabId}/veritapolicy/documents/${docId}/eligibility?workflowId=${workflowId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const body = await res.json();
+      if (res.ok) setEligibility(body);
+    } catch {
+      // Non-fatal: warning just doesn't render.
+    } finally {
+      setEligibilityLoading(false);
+    }
   };
 
   const renameMutation = useMutation({
@@ -636,6 +702,18 @@ export default function VeritaPolicyMyPoliciesPage() {
                         </td>
                         <td className="py-2 pr-3">
                           <StatusBadge status={doc.status} />
+                          {doc.status === "in_review" && doc.pending_step_name && (
+                            <div className="text-[10px] text-amber-800 mt-1 leading-tight">
+                              Step {doc.pending_step_order} of {doc.pending_total_steps}:{" "}
+                              <span className="font-medium">{doc.pending_step_name}</span>
+                              <div className="text-[10px] text-muted-foreground">
+                                awaiting{" "}
+                                {doc.pending_step_role
+                                  ? doc.pending_step_role.replace(/_/g, " ")
+                                  : "reviewer"}
+                              </div>
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-xs uppercase font-mono text-muted-foreground">
                           {doc.current_file_format || "-"}
@@ -671,7 +749,9 @@ export default function VeritaPolicyMyPoliciesPage() {
                                 onClick={() => {
                                   setSubmitDoc(doc);
                                   const def = workflows.find((w) => w.is_default) || workflows[0];
-                                  setSubmitWorkflowId(def ? String(def.id) : "");
+                                  const wfId = def ? String(def.id) : "";
+                                  setSubmitWorkflowId(wfId);
+                                  if (def) fetchEligibility(doc.id, def.id);
                                 }}
                               >
                                 <Send size={12} className="mr-1" /> Submit
@@ -705,6 +785,26 @@ export default function VeritaPolicyMyPoliciesPage() {
                                   <XCircle size={12} className="mr-1" /> Reject
                                 </Button>
                               </>
+                            )}
+                          {doc.status === "in_review" &&
+                            doc.owner_user_id === user?.id && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Recall "${doc.title}" from review and return it to draft?`
+                                    )
+                                  ) {
+                                    recallMutation.mutate(doc.id);
+                                  }
+                                }}
+                                disabled={recallMutation.isPending}
+                                title="Pull back from review and return to draft"
+                              >
+                                Recall
+                              </Button>
                             )}
                         </td>
                       </tr>
@@ -894,6 +994,7 @@ export default function VeritaPolicyMyPoliciesPage() {
           if (!open) {
             setSubmitDoc(null);
             setSubmitWorkflowId("");
+            setEligibility(null);
           }
         }}
       >
@@ -908,7 +1009,13 @@ export default function VeritaPolicyMyPoliciesPage() {
             </p>
             <div>
               <Label className="text-xs">Workflow</Label>
-              <Select value={submitWorkflowId} onValueChange={setSubmitWorkflowId}>
+              <Select
+                value={submitWorkflowId}
+                onValueChange={(v) => {
+                  setSubmitWorkflowId(v);
+                  if (submitDoc && v) fetchEligibility(submitDoc.id, Number(v));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Pick a workflow" />
                 </SelectTrigger>
@@ -921,6 +1028,33 @@ export default function VeritaPolicyMyPoliciesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {eligibility && eligibility.minCount === 0 && (
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 space-y-1">
+                <div className="font-medium">No eligible reviewer exists for at least one step.</div>
+                <div>
+                  Submitting this workflow now will leave the document stuck in review until you
+                  invite a reviewer (or recall it). Steps with zero eligible reviewers:
+                </div>
+                <ul className="list-disc ml-4">
+                  {eligibility.perStep
+                    .filter((p) => p.eligible_count === 0)
+                    .map((p) => (
+                      <li key={p.step_id}>
+                        Step {p.step_order} — {p.step_name} (
+                        {p.required_role.replace(/_/g, " ")})
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+            {eligibility && eligibility.minCount > 0 && eligibilityLoading === false && (
+              <div className="text-[10px] text-muted-foreground">
+                Eligible reviewers per step:{" "}
+                {eligibility.perStep
+                  .map((p) => `${p.step_order}=${p.eligible_count}`)
+                  .join(", ")}
+              </div>
+            )}
             {submitWorkflowId &&
               (() => {
                 const wf = workflows.find((w) => String(w.id) === submitWorkflowId);
