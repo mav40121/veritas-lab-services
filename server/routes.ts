@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
-import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON } from "./stripe";
+import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
@@ -3918,7 +3918,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // parking-lot #33 PR 4: surface seat caps + current usage so the
     // members page can show "Active 2 of 5 included" and the $99/yr
     // add-on hint without the client having to know plan internals.
-    let seatLimits = { activeIncluded: 1, viewOnlyIncluded: 0, addOnRatePerYear: 99 };
+    let seatLimits: { activeIncluded: number; viewOnlyIncluded: number; addOnRatePerYear: number; addOnPriceId: string | null } = { activeIncluded: 1, viewOnlyIncluded: 0, addOnRatePerYear: 99, addOnPriceId: null };
     let seatCounts = { active: 0, viewOnly: 0 };
     try {
       if (lab) {
@@ -3928,7 +3928,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const dbSeats = ownerRow?.seat_count || 0;
         const activeIncluded = Math.max(dbSeats, planSeatLimit);
         const viewOnlyIncluded = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
-        seatLimits = { activeIncluded, viewOnlyIncluded, addOnRatePerYear: 99 };
+        const addon = getViewOnlyAddOnConfig();
+        seatLimits = { activeIncluded, viewOnlyIncluded, addOnRatePerYear: addon.ratePerYear, addOnPriceId: addon.priceId };
         const breakdown = sqlite.prepare(
           `SELECT
              SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
@@ -4052,13 +4053,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     if (seatType === "view_only" && currentViewOnly + 1 > maxViewOnlySeats) {
+      const addon = getViewOnlyAddOnConfig();
       return res.status(402).json({
         error: "view_only_seat_limit_reached",
         seatType: "view_only",
         limit: maxViewOnlySeats,
         current: currentViewOnly,
         plan: ownerPlan,
-        addOnRatePerYear: 99,
+        addOnRatePerYear: addon.ratePerYear,
+        addOnPriceId: addon.priceId,
       });
     }
 
@@ -14066,13 +14069,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     if (seatType === "view_only" && currentViewOnly + 1 > maxViewOnlySeats) {
+      const addon = getViewOnlyAddOnConfig();
       return res.status(402).json({
         error: "view_only_seat_limit_reached",
         seatType: "view_only",
         limit: maxViewOnlySeats,
         current: currentViewOnly,
         plan: userPlan,
-        addOnRatePerYear: 99,
+        addOnRatePerYear: addon.ratePerYear,
+        addOnPriceId: addon.priceId,
       });
     }
 

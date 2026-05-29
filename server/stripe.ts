@@ -50,6 +50,26 @@ export const SEAT_PRICES_BY_TIER: Record<string, { pricePerSeat: number; priceId
 // Y1 = $299 (Y2+ = $499 list). $200 off, duration: once.
 export const VC_UNLIMITED_FIRST_YEAR_COUPON = "VCFIRSTYEAR";
 
+// parking-lot #33 PR 6: view-only seat add-on (medical director or designee,
+// technical consultant, technical supervisor; capped per tier 1/2/3 with this
+// add-on for extras). Price is $99/yr/seat per CLAUDE.md sec 10. The Stripe
+// price ID is read from env so Michael can create the product in the dashboard
+// without a code change. Until STRIPE_VIEW_ONLY_ADDON_PRICE is set, view-only
+// add-ons are billed manually via invoice and getViewOnlyAddOnPriceId returns
+// null.
+export const VIEW_ONLY_ADDON_UNIT_AMOUNT_CENTS = 9900;
+export const VIEW_ONLY_ADDON_RATE_PER_YEAR = 99;
+export function getViewOnlyAddOnPriceId(): string | null {
+  return process.env.STRIPE_VIEW_ONLY_ADDON_PRICE || null;
+}
+export function getViewOnlyAddOnConfig(): { priceId: string | null; ratePerYear: number; unitAmountCents: number } {
+  return {
+    priceId: getViewOnlyAddOnPriceId(),
+    ratePerYear: VIEW_ONLY_ADDON_RATE_PER_YEAR,
+    unitAmountCents: VIEW_ONLY_ADDON_UNIT_AMOUNT_CENTS,
+  };
+}
+
 // Legacy band-based seat add-on Stripe IDs. Preserved for any callsite that
 // hasn't been migrated to SEAT_PRICES_BY_TIER. Existing subscriptions with
 // these line items keep working at renewal.
