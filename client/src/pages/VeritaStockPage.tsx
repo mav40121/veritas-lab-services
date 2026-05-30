@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
@@ -581,7 +581,7 @@ export default function VeritaStockInventoryPage() {
   // Acrobat's extension doesn't hijack a blob URL. The Excel flow streams
   // the xlsx inline because purchasing edits the file before sending and
   // the binary blob is exactly what they need to save.
-  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel" | "labels">(null);
+  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel" | "labels" | "count">(null);
   // Build the reorder URL with current client-side filters as query params
   // so the generated document only includes items the user can currently
   // see in the table. Status filter is intentionally omitted -- the reorder
@@ -693,6 +693,49 @@ export default function VeritaStockInventoryPage() {
       });
     } catch {
       toast({ title: "Could not generate labels", description: "Network error", variant: "destructive" });
+    } finally {
+      setGeneratingOrderDoc(null);
+    }
+  };
+
+  // Generate the Inventory Count workbook for the periodic physical
+  // inventory. Same filter scoping as Order PDF/XLSX (department,
+  // category, vendor). Streamed inline as an xlsx, not token-based,
+  // because the counter edits the file once they get it.
+  const generateCountSheet = async () => {
+    setGeneratingOrderDoc("count");
+    try {
+      const base = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/inventory/count-sheet/excel`
+        : `${API_BASE}/api/inventory/count-sheet/excel`;
+      const params = new URLSearchParams();
+      if (filterDept !== "All") params.set("department", filterDept);
+      if (filterCat !== "All") params.set("category", filterCat);
+      if (filterVendor !== "All") params.set("vendor", filterVendor);
+      const qs = params.toString();
+      const url = qs ? `${base}?${qs}` : base;
+      const res = await fetch(url, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not generate count sheet", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = cd.match(/filename="?([^";]+)"?/i);
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = m?.[1] || `VeritaStock_Count_${datestamp}.xlsx`;
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      toast({ title: "Inventory Count workbook downloaded", description: "Counted Qty, Counted By, Count Date, and Notes columns are unlocked." });
+    } catch {
+      toast({ title: "Could not generate count sheet", description: "Network error", variant: "destructive" });
     } finally {
       setGeneratingOrderDoc(null);
     }
@@ -1077,6 +1120,30 @@ export default function VeritaStockInventoryPage() {
           >
             <Tag size={14} className="mr-1.5" />
             {generatingOrderDoc === "labels" ? "Generating..." : "Print Labels"}
+          </Button>
+          {/* Inventory Count workbook for the periodic physical inventory.
+              Streamed inline as .xlsx, not a PDF token, because the counter
+              writes into the workbook. Locked identity / system columns,
+              unlocked Counted Qty / Counted By / Count Date / Notes,
+              Discrepancy is an in-cell formula. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={generateCountSheet}
+            disabled={generatingOrderDoc !== null || readOnly}
+            title={
+              activeFilterLabels.length > 0
+                ? `Generate Inventory Count workbook scoped to: ${activeFilterLabels.join(", ")}`
+                : "Generate Inventory Count workbook for a physical inventory walk-through"
+            }
+            data-testid="generate-count-sheet-button"
+          >
+            <ClipboardCheck size={14} className="mr-1.5" />
+            {generatingOrderDoc === "count"
+              ? "Generating..."
+              : activeFilterLabels.length > 0
+              ? `Count Sheet (${activeFilterLabels.join(", ")})`
+              : "Count Sheet"}
           </Button>
           <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
             <Plus size={14} className="mr-1.5" />Add Item
