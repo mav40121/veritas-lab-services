@@ -799,6 +799,110 @@ export function registerVeritaBenchRoutes(
     }
   });
 
+  // POST /api/inventory/scan - parking-lot #29 Phase 2.
+  //
+  // Record a barcode scan event and (optionally) adjust the bound
+  // inventory item's quantity_on_hand. All scans are logged to
+  // scan_events for audit, including unknown-barcode misses.
+  //
+  // Body:
+  //   { barcode_value: string (required, trimmed),
+  //     action?: "decrement" | "increment" | "lookup_only" | "correction",
+  //     quantity_delta?: number  (only honored for action="correction";
+  //                               must be a finite integer, signed),
+  //     notes?: string }
+  //
+  // Defaults: action="decrement", quantity_delta=-1 for decrement,
+  // +1 for increment, 0 for lookup_only.
+  //
+  // Response on hit:
+  //   { ok: true, action, item, scan_event_id, quantity_before,
+  //     quantity_after, needs_reorder, reorder_point, order_to_qty }
+  // Response on miss (404, but scan still logged):
+  //   { ok: false, action: "unknown_barcode", scan_event_id, barcode_value }
+  //
+  // The whole SELECT-UPDATE-INSERT runs in a sqlite transaction so two
+  // concurrent scans of the same barcode can't read stale quantities.
+  app.post("/api/inventory/scan", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const rawBarcode = req.body?.barcode_value;
+    const requestedAction = req.body?.action ?? "decrement";
+    const correctionDelta = Number(req.body?.quantity_delta);
+    const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+    if (typeof rawBarcode !== "string" || rawBarcode.trim() === "") {
+      return res.status(400).json({ error: "barcode_value is required and must be a non-empty string." });
+    }
+    const ALLOWED_ACTIONS = ["decrement", "increment", "lookup_only", "correction"] as const;
+    if (!(ALLOWED_ACTIONS as readonly string[]).includes(requestedAction)) {
+      return res.status(400).json({ error: `action must be one of ${ALLOWED_ACTIONS.join(", ")}` });
+    }
+    if (requestedAction === "correction" && !Number.isFinite(correctionDelta)) {
+      return res.status(400).json({ error: "action=correction requires a finite quantity_delta number." });
+    }
+    const barcode = rawBarcode.trim();
+    const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
+    const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
+    const ua = typeof req?.headers?.["user-agent"] === "string" ? (req.headers["user-agent"] as string).slice(0, 500) : null;
+    const userId = req.userId;
+    try {
+      const txn = sqlite.transaction(() => {
+        const row = sqlite.prepare(
+          "SELECT * FROM inventory_items WHERE account_id = ? AND barcode_value IS NOT NULL AND barcode_value = ?"
+        ).get(accountId, barcode) as any;
+        if (!row) {
+          const ins = sqlite.prepare(`
+            INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, quantity_delta, quantity_before, quantity_after, barcode_value, notes, ip_address, user_agent)
+            VALUES (?, NULL, ?, 'unknown_barcode', NULL, NULL, NULL, ?, ?, ?, ?)
+          `).run(accountId, userId, barcode, notes, ip, ua);
+          return { hit: false as const, scanEventId: Number(ins.lastInsertRowid) };
+        }
+        const qtyBefore = Number(row.quantity_on_hand ?? 0);
+        let delta = 0;
+        if (requestedAction === "decrement") delta = -1;
+        else if (requestedAction === "increment") delta = 1;
+        else if (requestedAction === "lookup_only") delta = 0;
+        else if (requestedAction === "correction") delta = Math.trunc(correctionDelta);
+        const qtyAfter = Math.max(0, qtyBefore + delta);
+        // Recompute the actual signed delta we'll record (zero-clamp can
+        // make the stored delta smaller in magnitude than the requested
+        // delta on a decrement past zero).
+        const actualDelta = qtyAfter - qtyBefore;
+        if (requestedAction !== "lookup_only" && actualDelta !== 0) {
+          const now = new Date().toISOString();
+          sqlite.prepare(
+            "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ? AND account_id = ?"
+          ).run(qtyAfter, now, row.id, accountId);
+        }
+        const ins = sqlite.prepare(`
+          INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, quantity_delta, quantity_before, quantity_after, barcode_value, notes, ip_address, user_agent)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(accountId, row.id, userId, requestedAction, actualDelta, qtyBefore, qtyAfter, barcode, notes, ip, ua);
+        return { hit: true as const, scanEventId: Number(ins.lastInsertRowid), itemId: row.id, qtyBefore, qtyAfter };
+      });
+      const result = txn();
+      if (!result.hit) {
+        return res.status(404).json({ ok: false, action: "unknown_barcode", scan_event_id: result.scanEventId, barcode_value: barcode });
+      }
+      const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(result.itemId) as any;
+      const decorated = decorateInventoryItem(fresh);
+      return res.json({
+        ok: true,
+        action: requestedAction,
+        item: decorated,
+        scan_event_id: result.scanEventId,
+        quantity_before: result.qtyBefore,
+        quantity_after: result.qtyAfter,
+        needs_reorder: !!decorated.needs_reorder,
+        reorder_point: decorated.reorder_point ?? null,
+        order_to_qty: decorated.order_to_qty ?? null,
+      });
+    } catch (err: any) {
+      console.error("Scan endpoint error:", err.message);
+      return res.status(500).json({ error: "Scan failed", detail: err.message });
+    }
+  });
+
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -829,13 +933,30 @@ export function registerVeritaBenchRoutes(
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
     if (!existing) return res.status(404).json({ error: "Item not found" });
-    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date } = req.body;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value } = req.body;
     const now = new Date().toISOString();
+    // parking-lot #29 Phase 2: normalize the incoming barcode_value.
+    // "" or whitespace -> NULL (clears the binding). Anything else is
+    // trimmed and account-scope-uniqueness-checked before write.
+    let normalizedBarcode: string | null;
+    if (barcode_value === undefined) {
+      normalizedBarcode = (existing as any).barcode_value ?? null;
+    } else if (barcode_value === null || (typeof barcode_value === "string" && barcode_value.trim() === "")) {
+      normalizedBarcode = null;
+    } else {
+      normalizedBarcode = String(barcode_value).trim();
+      const collision = sqlite.prepare(
+        "SELECT id FROM inventory_items WHERE account_id = ? AND barcode_value = ? AND id <> ?"
+      ).get(accountId, normalizedBarcode, id) as any;
+      if (collision) {
+        return res.status(409).json({ error: `Barcode "${normalizedBarcode}" is already bound to a different item in this account.` });
+      }
+    }
     try {
       sqlite.prepare(`
-        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, updated_at = ?
+        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, barcode_value = ?, updated_at = ?
         WHERE id = ? AND account_id = ?
-      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, now, id, accountId);
+      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, now, id, accountId);
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
       res.json(row);
     } catch (err: any) {
