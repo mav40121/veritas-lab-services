@@ -752,12 +752,18 @@ export function registerVeritaBenchRoutes(
           `SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE account_id = ? AND id IN (${placeholders}) ORDER BY item_name ASC`
         ).all(accountId, ...requestedIds) as any[];
       } else {
+        // Print labels for every item in the account. Items without a
+        // bound barcode_value get a synthesized VLS-<id> placeholder
+        // below (see labels.map). The whole point of the placeholder
+        // is to let the lab print labels BEFORE assigning barcodes,
+        // so the previous "WHERE barcode_value IS NOT NULL" filter
+        // was directly contradicting that path; dropped 2026-05-29.
         rows = sqlite.prepare(
-          "SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE account_id = ? AND barcode_value IS NOT NULL AND barcode_value <> '' ORDER BY item_name ASC"
+          "SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
         ).all(accountId) as any[];
       }
       if (rows.length === 0) {
-        return res.status(404).json({ error: "No inventory items found to label. Add items first, or assign barcode values." });
+        return res.status(404).json({ error: "No inventory items found in this account. Add at least one item before printing labels." });
       }
 
       const labels: BarcodeLabelInput[] = rows.map((r) => ({
