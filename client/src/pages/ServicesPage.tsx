@@ -204,19 +204,17 @@ export default function ServicesPage() {
             Who you will be working with
           </h2>
           <div className="grid sm:grid-cols-3 gap-8">
-            {/* Photo column: placeholder for the operator to drop in */}
+            {/* Photo column: 900x991 portrait, served from /public */}
             <div>
-              <div
-                className="w-full aspect-[3/4] rounded-lg bg-secondary/40 border border-border flex items-center justify-center text-muted-foreground"
-                data-testid="bio-photo-placeholder"
-              >
-                {/* TODO Michael: drop your professional photo into /public
-                    and replace this placeholder with an <img>. Recommended
-                    aspect ratio 3:4, minimum 600x800. */}
-                <span className="text-xs uppercase tracking-wider">
-                  Photo
-                </span>
-              </div>
+              <img
+                src="/michael-veri.jpg"
+                alt="Michael Veri, MS, MBA, MLS(ASCP), CPHQ"
+                className="w-full aspect-[3/4] object-cover rounded-lg border border-border shadow-sm"
+                width={900}
+                height={991}
+                loading="lazy"
+                data-testid="bio-photo"
+              />
             </div>
             <div className="sm:col-span-2 space-y-4">
               <p className="text-muted-foreground leading-relaxed">
