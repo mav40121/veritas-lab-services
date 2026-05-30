@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
@@ -54,6 +54,7 @@ interface InventoryItem {
   desired_days_of_stock: number;
   standing_order: number;
   standing_order_review_date: string | null;
+  barcode_value?: string | null;    // parking-lot #29 Phase 0
   // Calculated fields from API (decorateInventoryItem in server/veritabench.ts)
   reorder_point: number;            // burn × (lead + safety) — trigger threshold
   order_to_qty: number;             // burn × desired_days — TARGET inventory level
@@ -307,6 +308,22 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
               <div className="space-y-1.5">
                 <Label>Storage Location</Label>
                 <Input value={form.storage_location ?? ""} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
+              </div>
+              {/* parking-lot #29 Phase 3A: optional barcode binding.
+                  Leave blank, and the label sheet will print a synthesized
+                  VLS-<id> placeholder for this item. Camera-driven binding
+                  arrives in Phase 3B. */}
+              <div className="col-span-2 space-y-1.5">
+                <Label>Barcode (optional)</Label>
+                <Input
+                  value={form.barcode_value ?? ""}
+                  onChange={(e) => setForm({ ...form, barcode_value: e.target.value })}
+                  placeholder="Type or paste the barcode value (any Code 128 string)"
+                  data-testid="barcode-value-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Bind this item to a printed barcode so scans decrement it directly. Leave blank to use the printed placeholder. Must be unique within this account.
+                </p>
               </div>
             </div>
           </div>
@@ -564,7 +581,7 @@ export default function VeritaStockInventoryPage() {
   // Acrobat's extension doesn't hijack a blob URL. The Excel flow streams
   // the xlsx inline because purchasing edits the file before sending and
   // the binary blob is exactly what they need to save.
-  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel">(null);
+  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel" | "labels">(null);
   // Build the reorder URL with current client-side filters as query params
   // so the generated document only includes items the user can currently
   // see in the table. Status filter is intentionally omitted -- the reorder
@@ -645,6 +662,37 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Order workbook downloaded", description: "Confirmed Qty + Notes columns are unlocked for purchasing." });
     } catch {
       toast({ title: "Could not generate Excel", description: "Network error", variant: "destructive" });
+    } finally {
+      setGeneratingOrderDoc(null);
+    }
+  };
+
+  // parking-lot #29 Phase 3A: generate the Avery 5160 barcode label
+  // sheet for every inventory item in the account that has a
+  // barcode_value (or, when none are bound yet, the synthesized
+  // VLS-<id> placeholders so the user can print labels and apply
+  // them to physical items before the camera scanner lands in 3B).
+  const generateLabelsPdf = async () => {
+    setGeneratingOrderDoc("labels");
+    try {
+      const res = await fetch(`${API_BASE}/api/inventory/labels/pdf`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not generate labels", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token, totalCount } = await res.json();
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      toast({
+        title: `Label sheet generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
+        description: "Print on Avery 5160 label stock (30 labels per sheet).",
+      });
+    } catch {
+      toast({ title: "Could not generate labels", description: "Network error", variant: "destructive" });
     } finally {
       setGeneratingOrderDoc(null);
     }
@@ -1015,6 +1063,20 @@ export default function VeritaStockInventoryPage() {
           >
             <FileSpreadsheet size={14} className="mr-1.5" />
             {generatingOrderDoc === "excel" ? "Generating..." : "Order XLSX"}
+          </Button>
+          {/* parking-lot #29 Phase 3A: Avery 5160 barcode label sheet.
+              Endpoint is at POST /api/inventory/labels/pdf. The scanner
+              page lands in Phase 3B alongside the camera widget. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={generateLabelsPdf}
+            disabled={generatingOrderDoc !== null || readOnly}
+            title="Generate Avery 5160 barcode label sheet (30 per page)"
+            data-testid="generate-labels-pdf-button"
+          >
+            <Tag size={14} className="mr-1.5" />
+            {generatingOrderDoc === "labels" ? "Generating..." : "Print Labels"}
           </Button>
           <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
             <Plus size={14} className="mr-1.5" />Add Item
