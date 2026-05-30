@@ -122,7 +122,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -605,7 +605,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplay],
             ["Analyst", study.analyst],
             ["Date", study.date],

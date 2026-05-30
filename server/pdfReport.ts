@@ -677,7 +677,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
     ? `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`
     : "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I.";
   const specs: any[][] = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26-A)" : study.studyType === "ref_interval" ? "Reference Range Verification" : "Correlation / Method Comparison"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26-A)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : "Correlation / Method Comparison"],
     ["Test Name", study.testName],
     [criterionRowLabel, teaStr],
     [cfrReferenceLabel, cfrReferenceValue],
