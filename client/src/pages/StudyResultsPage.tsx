@@ -80,7 +80,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
@@ -1737,6 +1737,11 @@ export default function StudyResults() {
   // unauth flows and stale caches still resolve.
   const labId = useActiveLabId();
   const labRoute = useLabRoute();
+  // Hooks for the Sensitivity branch's Download PDF + Export CSV buttons.
+  // Declared here so they sit above the conditional render paths below
+  // (React requires hooks to be called in the same order every render).
+  const { toast } = useToast();
+  const [sensitivityPdfLoading, setSensitivityPdfLoading] = useState(false);
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
     queryKey: [studyUrl],
@@ -1805,7 +1810,9 @@ export default function StudyResults() {
   // verdict + LoB/LoD/LoQ panels + per-lot breakdown + replicate detail
   // here and early-return so the main results path below does not try to
   // coerce sensitivity data into a calculator that does not know its
-  // shape. PDF parity ships in a follow-on PR (#22 PDF workstream).
+  // shape. PDF parity is live: server/pdfReport.ts:buildSensitivityHTML
+  // dispatches when study.studyType==="sensitivity"; the header buttons
+  // below call the same /api/generate-pdf endpoint as the main branch.
   if (study.studyType === "sensitivity") {
     let sensitivityResults: SensitivityResults | null = null;
     let sensitivityInput: SensitivityInput | null = null;
@@ -1843,9 +1850,47 @@ export default function StudyResults() {
               {study.instrument || "—"} · {study.date} · Analyst: {study.analyst || "—"}
             </div>
           </div>
-          <Button asChild variant="outline">
-            <Link href={labRoute("/dashboard")}>Back to Dashboard</Link>
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button asChild variant="outline" size="sm">
+              <Link href={labRoute("/dashboard")}>Back to Dashboard</Link>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const csv = studyToCsv(study);
+                if (!csv) {
+                  toast({ title: "CSV export unavailable", description: "No source data found on this study.", variant: "destructive" });
+                  return;
+                }
+                downloadCsv(csv, defaultCsvFilename(study));
+              }}
+              data-testid="button-export-csv-sensitivity"
+            >
+              <FileSpreadsheet size={14} className="mr-1.5" />
+              Export CSV
+            </Button>
+            <Button
+              size="sm"
+              disabled={sensitivityPdfLoading || !sensitivityResults}
+              onClick={async () => {
+                if (!sensitivityResults) return;
+                setSensitivityPdfLoading(true);
+                try {
+                  await downloadPDF(study, sensitivityResults as unknown as StudyResults);
+                } catch {
+                  toast({ title: "PDF generation failed", description: "Please try again.", variant: "destructive" });
+                } finally {
+                  setSensitivityPdfLoading(false);
+                }
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              data-testid="button-download-pdf-sensitivity"
+            >
+              {sensitivityPdfLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <FileDown size={14} className="mr-1.5" />}
+              {sensitivityPdfLoading ? "Generating…" : "Download PDF"}
+            </Button>
+          </div>
         </div>
 
         {sensitivityError ? (
@@ -2194,7 +2239,7 @@ export default function StudyResults() {
             {/* Director sign-off + EP17-A2 reference */}
             <Card>
               <CardContent className="p-4 text-xs text-muted-foreground leading-relaxed">
-                Computed per CLSI EP17-A2 (Evaluation of Detection Capability for Clinical Laboratory Measurement Procedures). Final approval and clinical determination must be made by the laboratory director or designee. PDF parity (printable Sensitivity report) ships in a follow-on update.
+                Computed per CLSI EP17-A2 (Evaluation of Detection Capability for Clinical Laboratory Measurement Procedures). Final approval and clinical determination must be made by the laboratory director or designee. Use the Download PDF button above for the printable, director-signable report.
               </CardContent>
             </Card>
           </div>
