@@ -1610,6 +1610,67 @@ export function registerVeritaBenchRoutes(
       }
     });
 
+    // POST /api/labs/:labId/inventory/count-sheet/excel — lab-scoped
+    // Inventory Count workbook. Same shape as the legacy
+    // /api/inventory/count-sheet/excel above; differs only in how items
+    // are scoped (lab_id, not account_id) and where lab identity is read
+    // (the labs row for this labId, not the requester's default lab).
+    app.post("/api/labs/:labId/inventory/count-sheet/excel", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      try {
+        const rows = sqlite.prepare(
+          "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+        ).all(req.scope.labId);
+        const filtered = applyReorderFilters(rows as any[], req.query);
+        if (filtered.length === 0) {
+          return res.status(404).json({ error: "No inventory items in the current scope. Clear filters or add items before generating a count sheet." });
+        }
+        const items: InventoryCountItem[] = filtered.map((r: any) => ({
+          storage_location: r.storage_location,
+          department: r.department,
+          item_name: r.item_name,
+          category: r.category,
+          catalog_number: r.catalog_number,
+          lot_number: r.lot_number,
+          expiration_date: r.expiration_date,
+          vendor: r.vendor,
+          quantity_on_hand: Number(r.quantity_on_hand ?? 0),
+          unit: r.unit ?? r.usage_unit ?? null,
+        }));
+
+        const labRow = sqlite.prepare(
+          "SELECT lab_name, clia_number FROM labs WHERE id = ?"
+        ).get(req.scope.labId) as any;
+        const userRow = sqlite.prepare(
+          "SELECT name, email FROM users WHERE id = ?"
+        ).get(req.userId) as any;
+
+        const ctxFilters = reorderFilterContext(req.query);
+        const filterLabelParts: string[] = [];
+        if (ctxFilters.filterDepartment) filterLabelParts.push(ctxFilters.filterDepartment);
+        if (ctxFilters.filterCategory) filterLabelParts.push(ctxFilters.filterCategory);
+        if (ctxFilters.filterVendor) filterLabelParts.push(ctxFilters.filterVendor);
+        const filterLabel = filterLabelParts.length > 0 ? filterLabelParts.join(" / ") : null;
+
+        const xlsxBuffer = await generateInventoryCountExcel(items, {
+          labName: labRow?.lab_name || null,
+          cliaNumber: labRow?.clia_number || null,
+          preparedBy: userRow?.name || userRow?.email || null,
+          filterLabel,
+        });
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+        const filename = `VeritaStock_Count_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", xlsxBuffer.length);
+        res.send(xlsxBuffer);
+      } catch (err: any) {
+        console.error("Inventory count workbook generation error (lab-scoped):", err.message);
+        res.status(500).json({ error: "Workbook generation failed", detail: err.message });
+      }
+    });
+
     // POST /api/labs/:labId/inventory/snap-order/pdf — lab-scoped snap order
     // PDF. Same shape as the legacy variant; differs only in how items are
     // scoped (by lab_id rather than account_id) and where the lab identity
