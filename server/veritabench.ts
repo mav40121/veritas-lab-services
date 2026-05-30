@@ -9,6 +9,7 @@ import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem } from "./orderDocument";
 import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeLabelPdf";
+import { generateInventoryCountExcel, type InventoryCountItem } from "./inventoryCountExcel";
 import { storePdfToken } from "./pdfTokens";
 
 function bencheLicenseCtx(req: any): LicenseContext {
@@ -802,6 +803,85 @@ export function registerVeritaBenchRoutes(
     } catch (err: any) {
       console.error("Barcode label PDF generation error:", err.message);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // POST /api/inventory/count-sheet/excel - Inventory Count workbook.
+  //
+  // Designed for the periodic physical inventory: counter walks the
+  // shelves with the printed workbook (or a tablet open to it),
+  // writing counted quantities next to system quantities. Sheet is
+  // protected so identity / system columns cannot be edited; only
+  // the counter-input columns (Counted Qty, Counted By, Count Date,
+  // Notes) are unlocked. Discrepancy is an in-cell formula that
+  // populates when Counted Qty is entered.
+  //
+  // Filters: department / category / vendor — same query-param
+  // shape as the reorder routes — so the user can produce a
+  // Chemistry-only or a Bio-Rad-only count sheet.
+  //
+  // Streamed inline (no PDF token store) because the workbook is
+  // edited by the counter; the binary is the deliverable.
+  app.post("/api/inventory/count-sheet/excel", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    try {
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
+      ).all(accountId);
+      const filtered = applyReorderFilters(rows as any[], req.query);
+      if (filtered.length === 0) {
+        return res.status(404).json({ error: "No inventory items in the current scope. Clear filters or add items before generating a count sheet." });
+      }
+      const items: InventoryCountItem[] = filtered.map((r: any) => ({
+        storage_location: r.storage_location,
+        department: r.department,
+        item_name: r.item_name,
+        category: r.category,
+        catalog_number: r.catalog_number,
+        lot_number: r.lot_number,
+        expiration_date: r.expiration_date,
+        vendor: r.vendor,
+        quantity_on_hand: Number(r.quantity_on_hand ?? 0),
+        unit: r.unit ?? r.usage_unit ?? null,
+      }));
+
+      let labName: string | null = null;
+      let cliaNumber: string | null = null;
+      let preparedBy: string | null = null;
+      const userRow = sqlite.prepare(
+        "SELECT name, email, clia_lab_name, clia_number FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      if (userRow) {
+        preparedBy = userRow.name || userRow.email || null;
+        labName = userRow.clia_lab_name || null;
+        cliaNumber = userRow.clia_number || null;
+      }
+      const labRow = sqlite.prepare(
+        "SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1"
+      ).get(accountId) as any;
+      if (labRow) {
+        labName = labRow.lab_name || labName;
+        cliaNumber = labRow.clia_number || cliaNumber;
+      }
+
+      const ctxFilters = reorderFilterContext(req.query);
+      const filterLabelParts: string[] = [];
+      if (ctxFilters.filterDepartment) filterLabelParts.push(ctxFilters.filterDepartment);
+      if (ctxFilters.filterCategory) filterLabelParts.push(ctxFilters.filterCategory);
+      if (ctxFilters.filterVendor) filterLabelParts.push(ctxFilters.filterVendor);
+      const filterLabel = filterLabelParts.length > 0 ? filterLabelParts.join(" / ") : null;
+
+      const xlsxBuffer = await generateInventoryCountExcel(items, { labName, cliaNumber, preparedBy, filterLabel });
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = `VeritaStock_Count${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", xlsxBuffer.length);
+      res.send(xlsxBuffer);
+    } catch (err: any) {
+      console.error("Inventory count workbook generation error:", err.message);
+      res.status(500).json({ error: "Workbook generation failed", detail: err.message });
     }
   });
 
