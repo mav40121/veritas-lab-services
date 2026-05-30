@@ -53,10 +53,14 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   // Limit referrer leakage on cross-origin navigations.
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  // Explicitly deny powerful browser features the app does not use.
+  // Explicitly deny powerful browser features the app does not use,
+  // except camera which is needed by VeritaStock barcode scanning
+  // (parking-lot #29 Phase 3). camera=(self) lets our own origin
+  // request camera access; third-party iframes embedded on our pages
+  // still cannot.
   res.setHeader(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()",
+    "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()",
   );
   next();
 });
