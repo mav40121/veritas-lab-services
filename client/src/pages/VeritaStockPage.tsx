@@ -26,8 +26,9 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode,
 } from "lucide-react";
+import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
 
@@ -445,6 +446,8 @@ export default function VeritaStockInventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  // parking-lot #29 Phase 3B: camera scanner modal state.
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
 
@@ -1145,6 +1148,21 @@ export default function VeritaStockInventoryPage() {
               ? `Count Sheet (${activeFilterLabels.join(", ")})`
               : "Count Sheet"}
           </Button>
+          {/* parking-lot #29 Phase 3B: camera scanner.
+              Opens the BarcodeScannerModal in scan mode. Permissions-
+              Policy was relaxed to camera=(self) in Phase 3A so the
+              browser will offer to grant the camera permission. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setScannerOpen(true)}
+            disabled={readOnly}
+            title="Open the camera scanner to decrement, increment, or look up inventory items"
+            data-testid="open-scanner-button"
+          >
+            <QrCode size={14} className="mr-1.5" />
+            Scan Mode
+          </Button>
           <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
             <Plus size={14} className="mr-1.5" />Add Item
           </Button>
@@ -1395,6 +1413,21 @@ export default function VeritaStockInventoryPage() {
         onSave={handleSave}
         editItem={editItem}
         inventory={items}
+      />
+
+      {/* parking-lot #29 Phase 3B: camera scanner modal.
+          Reuses the existing API_BASE + authHeaders + activeLabId, and
+          passes the live inventory list down so the "bind to item"
+          picker on unknown barcodes can filter for unbound items. */}
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        mode="scan"
+        apiBase={API_BASE}
+        authHeaders={authHeaders}
+        inventory={items}
+        activeLabId={activeLabId}
+        onScanComplete={loadItems}
       />
 
       {/* Delete Confirmation */}
