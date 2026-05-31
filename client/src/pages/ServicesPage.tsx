@@ -197,6 +197,28 @@ export default function ServicesPage() {
         </div>
       </section>
 
+      {/* ─── Current Availability callout (live status, update as schedule shifts) ── */}
+      <section className="border-b border-border bg-primary/5">
+        <div className="container-default py-6">
+          <Card className="border-primary/30 bg-card">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <Calendar size={20} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="font-serif text-lg font-bold mb-1 text-primary">
+                    Current Availability
+                  </h2>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Currently engaged through September 2026. Now accepting
+                    inquiries for onsite engagements beginning October 2026.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
       {/* ─── Who you'll be working with ───────────────────────────── */}
       <section className="section-padding border-b border-border">
         <div className="container-default">
@@ -410,10 +432,10 @@ export default function ServicesPage() {
                   Availability
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Currently accepting engagements nationally. Typical lead time
-                  for on-site work is 4 to 6 weeks. Remote oversight roles can
-                  start within 2 weeks. Expedited engagements available for
-                  imminent survey visits.
+                  Currently engaged through September 2026, with onsite
+                  engagement capacity opening mid-October 2026. Inquiries for
+                  the queue are open now. Remote oversight roles considered
+                  case by case.
                 </p>
               </CardContent>
             </Card>
