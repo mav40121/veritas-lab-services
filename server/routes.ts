@@ -20540,6 +20540,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerVeritaOpsRoutes } = await import('./veritaops');
   registerVeritaOpsRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
+  // Scheduling routes (Phase 1): consulting scoping-call booking flow
+  const { registerSchedulingRoutes } = await import('./scheduling_routes');
+  registerSchedulingRoutes(app);
+
   console.log('[routes] All routes registered successfully (176 routes)');
   return httpServer;
 }

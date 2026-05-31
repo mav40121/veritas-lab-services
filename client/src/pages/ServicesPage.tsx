@@ -563,7 +563,7 @@ export default function ServicesPage() {
               size="lg"
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
             >
-              <Link href="/contact">Schedule a scoping call</Link>
+              <Link href="/book/scoping-call">Schedule a scoping call</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/veritacheck">Explore the software suite</Link>

@@ -16,6 +16,8 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ChevronUp } from "lucide-react";
 import HomePage from "@/pages/HomePage";
 import ServicesPage from "@/pages/ServicesPage";
+import BookScopingCallPage from "@/pages/BookScopingCallPage";
+import AdminSchedulingPage from "@/pages/AdminSchedulingPage";
 import TeamPage from "@/pages/TeamPage";
 import VeritaCheckPage from "@/pages/VeritaCheckPage";
 import StudyResultsPage from "@/pages/StudyResultsPage";
@@ -280,6 +282,8 @@ function AppContent() {
         <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/services" component={ServicesPage} />
+          <Route path="/book/scoping-call" component={BookScopingCallPage} />
+          <Route path="/admin/scheduling" component={AdminSchedulingPage} />
           <Route path="/team" component={TeamPage} />
           <Route path="/veritacheck" component={VeritaCheckPage} />
           <Route path="/study/new">{wrapLegacy(VeritaCheckPage)}</Route>
