@@ -3816,3 +3816,101 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   const auditCols = (sqlite.prepare("PRAGMA table_info(policy_audit_log)").all() as { name: string }[]).map((c) => c.name);
   void auditCols;
 }
+
+// ─── Scheduling (Phase 1) ────────────────────────────────────────────────
+// Self-hosted booking system for the consulting scoping call CTA on
+// /services. Phase 1 covers the booking flow with manual rule + blackout
+// management. Phase 2 adds Google Calendar OAuth so busy times subtract
+// from availability and bookings push to the operator's calendar.
+//
+// Single calendar owner: the operator (Michael). Single timezone of
+// record: America/Phoenix per CLAUDE.md §0. UI renders in the booker's
+// browser tz; storage is operator-tz to avoid DST drift across rules.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS schedule_event_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL DEFAULT 30,
+    description TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS schedule_availability_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type_id INTEGER NOT NULL,
+    -- 0 = Sunday, 6 = Saturday in operator local tz
+    day_of_week INTEGER NOT NULL,
+    -- "HH:MM" in 24h operator local tz
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS schedule_blackouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- One-off blocks. Date format: YYYY-MM-DD in operator tz.
+    blackout_date TEXT NOT NULL,
+    -- Optional time range. NULL start/end means the whole day is blocked.
+    start_time TEXT,
+    end_time TEXT,
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS schedule_bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type_id INTEGER NOT NULL,
+    -- Slot in operator tz
+    slot_date TEXT NOT NULL,
+    slot_start TEXT NOT NULL,
+    slot_end TEXT NOT NULL,
+    -- Booker tz captured for the confirmation email so the booker sees
+    -- their own time, not operator tz
+    booker_tz TEXT,
+    booker_name TEXT NOT NULL,
+    booker_email TEXT NOT NULL,
+    booker_phone TEXT,
+    lab_name TEXT,
+    role TEXT,
+    topic TEXT,
+    message TEXT,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    confirmation_token TEXT NOT NULL UNIQUE,
+    -- Phase 2 wires this to the Google Calendar event id. NULL until then.
+    google_event_id TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    cancelled_at TEXT
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_schedule_avail_event ON schedule_availability_rules(event_type_id, day_of_week)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_schedule_blackouts_date ON schedule_blackouts(blackout_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_schedule_bookings_slot ON schedule_bookings(slot_date, slot_start)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_schedule_bookings_token ON schedule_bookings(confirmation_token)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_schedule_bookings_email ON schedule_bookings(booker_email)`); } catch {}
+
+// Seed the scoping-call event type if missing.
+try {
+  const existing = sqlite.prepare("SELECT id FROM schedule_event_types WHERE slug = ?").get("scoping-call") as any;
+  if (!existing) {
+    sqlite.prepare(`INSERT INTO schedule_event_types (slug, title, duration_minutes, description, active) VALUES (?, ?, ?, ?, 1)`).run(
+      "scoping-call",
+      "30-Minute Consulting Scoping Call",
+      30,
+      "No-cost, no-obligation 30-minute call to confirm whether the engagement fits, identify the right scope, and give a clear price before any paper changes hands."
+    );
+  }
+} catch {}
+
+// Migration sentinel block per CLAUDE.md NEW DB TABLE RULE.
+{
+  const eventCols = (sqlite.prepare("PRAGMA table_info(schedule_event_types)").all() as { name: string }[]).map((c) => c.name);
+  void eventCols;
+  const ruleCols = (sqlite.prepare("PRAGMA table_info(schedule_availability_rules)").all() as { name: string }[]).map((c) => c.name);
+  void ruleCols;
+  const blackoutCols = (sqlite.prepare("PRAGMA table_info(schedule_blackouts)").all() as { name: string }[]).map((c) => c.name);
+  void blackoutCols;
+  const bookingCols = (sqlite.prepare("PRAGMA table_info(schedule_bookings)").all() as { name: string }[]).map((c) => c.name);
+  void bookingCols;
+}
