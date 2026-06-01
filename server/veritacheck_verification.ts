@@ -53,6 +53,196 @@ export const CLSI_GUIDANCE: Record<string, { protocol: string; min_samples: stri
   },
 };
 
+// ── Per-study statistical appendix renderer ──────────────────────────────────
+// Renders the actual numbers from a linked study's stored data_points blob as
+// an inline appendix block under the per-element summary. Keeps the bundled
+// verification deliverable as one PDF rather than relying on separately
+// downloaded per-study reports.
+// Defensive: any malformed or unknown data falls back to a brief note so the
+// cover page always renders.
+function renderStudyAppendix(slot: any, teal: string): string {
+  if (!slot?.study_id || !slot?.studyType) return "";
+  let dp: any;
+  try {
+    dp = slot.studyDataPoints ? JSON.parse(slot.studyDataPoints) : null;
+  } catch { return ""; }
+  if (!dp) return "";
+
+  let instNames: string[] = [];
+  try {
+    instNames = slot.studyInstrumentsJson ? JSON.parse(slot.studyInstrumentsJson) : [];
+  } catch {}
+
+  const meta = `
+    <div style="font-size:11px;color:#374151;margin-bottom:8px">
+      Instrument: <strong>${slot.studyInstrument || "Not recorded"}</strong>
+      &nbsp;&nbsp;Analyst: <strong>${slot.studyAnalyst || "Not recorded"}</strong>
+      &nbsp;&nbsp;Date: <strong>${slot.studyDate || ""}</strong>
+    </div>`;
+
+  const wrap = (title: string, inner: string) => `
+    <div style="margin-top:10px;padding:12px;border:1px solid #e5e7eb;border-radius:4px;background:#fafafa">
+      <div style="font-size:12px;font-weight:600;color:${teal};margin-bottom:6px">${title}</div>
+      ${meta}
+      ${inner}
+    </div>`;
+
+  try {
+    if (slot.studyType === "precision") {
+      // dp = [{ level, levelName, values?, days? }]
+      if (!Array.isArray(dp)) return "";
+      const rows = dp.map((p: any) => {
+        const vals: number[] = (p.days ? p.days.flat() : p.values || [])
+          .filter((v: any) => v !== null && v !== undefined && !isNaN(v));
+        const n = vals.length;
+        if (n < 2) return `<tr><td>${p.levelName || p.level}</td><td>${n}</td><td colspan="3" style="color:#6b7280">Insufficient data</td></tr>`;
+        const mean = vals.reduce((a, b) => a + b, 0) / n;
+        const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1);
+        const sd = Math.sqrt(variance);
+        const cv = mean !== 0 ? (sd / mean) * 100 : 0;
+        return `<tr>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">${p.levelName || p.level}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:center">${n}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${mean.toFixed(2)}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${sd.toFixed(3)}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${cv.toFixed(2)}%</td>
+        </tr>`;
+      }).join("");
+      const inner = `
+        <table style="font-size:11px;width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:4px 8px;text-align:left">Level</th>
+            <th style="padding:4px 8px;text-align:center">N</th>
+            <th style="padding:4px 8px;text-align:right">Mean</th>
+            <th style="padding:4px 8px;text-align:right">SD</th>
+            <th style="padding:4px 8px;text-align:right">CV%</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      return wrap(`Statistical Detail (CLSI EP15-A3 Precision)`, inner);
+    }
+
+    if (slot.studyType === "cal_ver") {
+      // dp = [{ level, assignedValue?, expectedValue?, instrumentValues: {name: value} }]
+      if (!Array.isArray(dp)) return "";
+      const teaPct = (slot.studyTea ?? 0) * 100;
+      const rows = dp.map((p: any) => {
+        const assigned = p.assignedValue ?? p.expectedValue ?? 0;
+        const vals = instNames.length > 0
+          ? instNames.map(n => p.instrumentValues?.[n]).filter((v: any) => v !== null && v !== undefined && !isNaN(v))
+          : Object.values(p.instrumentValues || {}).filter((v: any) => v !== null && v !== undefined && !isNaN(v));
+        if (vals.length === 0) return `<tr><td>${p.level}</td><td>${assigned}</td><td colspan="3" style="color:#6b7280">No values</td></tr>`;
+        const mean = (vals as number[]).reduce((a, b) => a + b, 0) / vals.length;
+        const pctRecovery = assigned !== 0 ? (mean / assigned) * 100 : 100;
+        const pctDiff = Math.abs(pctRecovery - 100);
+        const pass = teaPct > 0 ? pctDiff <= teaPct : true;
+        return `<tr>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">${p.level}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${assigned}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${mean.toFixed(2)}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${pctRecovery.toFixed(1)}%</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:center;color:${pass ? "#059669" : "#dc2626"}">${pass ? "Pass" : "Fail"}</td>
+        </tr>`;
+      }).join("");
+      const inner = `
+        <table style="font-size:11px;width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:4px 8px;text-align:left">Level</th>
+            <th style="padding:4px 8px;text-align:right">Assigned</th>
+            <th style="padding:4px 8px;text-align:right">Mean Measured</th>
+            <th style="padding:4px 8px;text-align:right">% Recovery</th>
+            <th style="padding:4px 8px;text-align:center">Verdict (TEa +/-${teaPct.toFixed(1)}%)</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      return wrap(`Statistical Detail (CLSI EP06 Calibration Verification / Linearity)`, inner);
+    }
+
+    if (slot.studyType === "method_comparison" || slot.studyType === "correlation") {
+      // dp = [{ expectedValue, instrumentValues: {name: value} }]
+      if (!Array.isArray(dp)) return "";
+      const comparisonNames = instNames.slice(1).length > 0 ? instNames.slice(1) : instNames;
+      const compName = comparisonNames[0] || "Comparison";
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (const p of dp) {
+        const x = p.expectedValue;
+        const y = p.instrumentValues?.[compName];
+        if (x !== null && x !== undefined && !isNaN(x) && y !== null && y !== undefined && !isNaN(y)) {
+          xs.push(x); ys.push(y);
+        }
+      }
+      const n = xs.length;
+      if (n < 2) return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, `<div style="font-size:11px;color:#6b7280">Insufficient paired data (n=${n}).</div>`);
+      const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+      const xm = mean(xs), ym = mean(ys);
+      const sxx = xs.reduce((s, x) => s + (x - xm) ** 2, 0);
+      const sxy = xs.reduce((s, x, i) => s + (x - xm) * (ys[i] - ym), 0);
+      const syy = ys.reduce((s, y) => s + (y - ym) ** 2, 0);
+      const slope = sxx === 0 ? 1 : sxy / sxx;
+      const intercept = ym - slope * xm;
+      const r2 = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
+      const r = Math.sqrt(Math.max(0, r2));
+      const inner = `
+        <table style="font-size:11px;width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:4px 8px;text-align:left">Metric</th>
+            <th style="padding:4px 8px;text-align:right">Value</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">N (paired specimens)</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${n}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Slope</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${slope.toFixed(4)}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Intercept</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${intercept.toFixed(3)}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Correlation r</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${r.toFixed(4)}</td></tr>
+            <tr><td style="padding:4px 8px">r-squared</td><td style="padding:4px 8px;text-align:right">${r2.toFixed(4)}</td></tr>
+          </tbody>
+        </table>`;
+      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner);
+    }
+
+    if (slot.studyType === "ref_interval") {
+      // dp = { specimens: [{specimenId, value}], refLow, refHigh, analyte, units }
+      const specimens = Array.isArray((dp as any).specimens) ? (dp as any).specimens : [];
+      const refLow = (dp as any).refLow ?? 0;
+      const refHigh = (dp as any).refHigh ?? 0;
+      const units = (dp as any).units || "";
+      const valid = specimens.filter((s: any) => s.value !== null && s.value !== undefined && !isNaN(s.value));
+      const n = valid.length;
+      const outsideCount = valid.filter((s: any) => s.value < refLow || s.value > refHigh).length;
+      const outsidePct = n > 0 ? (outsideCount / n) * 100 : 0;
+      const inner = `
+        <div style="font-size:11px;margin-bottom:8px">
+          Reference Range: <strong>${refLow} to ${refHigh} ${units}</strong> &nbsp;
+          N=<strong>${n}</strong> &nbsp;
+          Outside Range: <strong>${outsideCount}</strong> (${outsidePct.toFixed(1)}%) &nbsp;
+          CLSI EP28-A3c criterion: &le;10% outside permitted &nbsp;
+          Verdict: <strong style="color:${outsidePct <= 10 && n >= 20 ? "#059669" : "#dc2626"}">${outsidePct <= 10 && n >= 20 ? "Pass" : "Fail"}</strong>
+        </div>
+        <table style="font-size:10px;width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:3px 6px;text-align:left">Specimen ID</th>
+            <th style="padding:3px 6px;text-align:right">Value</th>
+            <th style="padding:3px 6px;text-align:center">In Range</th>
+          </tr></thead>
+          <tbody>${valid.slice(0, 30).map((s: any) => {
+            const inRange = s.value >= refLow && s.value <= refHigh;
+            return `<tr>
+              <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0">${s.specimenId ?? ""}</td>
+              <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0;text-align:right">${s.value}</td>
+              <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0;text-align:center;color:${inRange ? "#059669" : "#dc2626"}">${inRange ? "Yes" : "No"}</td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>
+        ${valid.length > 30 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px">(Showing first 30 of ${valid.length} specimens; full list in the underlying study report.)</div>` : ""}`;
+      return wrap(`Statistical Detail (CLSI EP28-A3c Reference Interval Verification)`, inner);
+    }
+  } catch (err) {
+    console.error("[verification-pdf] renderStudyAppendix error:", err);
+    return "";
+  }
+  return "";
+}
+
 // ── Auth middleware reference (imported from routes context) ──────────────────
 export function registerVeritaCheckVerificationRoutes(
   app: Express,
@@ -301,7 +491,13 @@ export function registerVeritaCheckVerificationRoutes(
 
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id) as any[];
     const studies = sqlite.prepare(`
-      SELECT vs.*, s.test_name AS testName, s.study_type AS studyType
+      SELECT vs.*,
+        s.test_name AS testName, s.study_type AS studyType,
+        s.instrument AS studyInstrument, s.analyst AS studyAnalyst, s.date AS studyDate,
+        s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
+        s.clia_allowable_error AS studyTea,
+        s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
+        s.clia_absolute_floor AS studyAbsFloor
       FROM veritacheck_verification_studies vs
       LEFT JOIN studies s ON s.id = vs.study_id
       WHERE vs.verification_id = ?
@@ -389,6 +585,7 @@ export function registerVeritaCheckVerificationRoutes(
           <div style="font-size:12px;color:#6b7280;margin-top:6px">Justification: ${elementReasons[el.key] || "Not documented"}</div>
         </div>`;
       }
+      const appendix = slot ? renderStudyAppendix(slot, teal) : "";
       return `<div style="margin-bottom:28px">
         <div style="font-weight:700;font-size:14px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:4px;margin-bottom:12px">${el.label} (${el.protocol})</div>
         ${slot?.analyte ? `<div style="font-size:12px;margin-bottom:6px"><strong>Analyte:</strong> ${slot.analyte}</div>` : ""}
@@ -400,6 +597,7 @@ export function registerVeritaCheckVerificationRoutes(
           <strong>Result:</strong>
           ${slot?.passed === 1 ? "<span style='color:#059669;font-weight:700'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:700'>FAIL</span>" : "<span style='color:#d97706'>Pending evaluation</span>"}
         </div>
+        ${appendix}
       </div>`;
     }).join("");
 
