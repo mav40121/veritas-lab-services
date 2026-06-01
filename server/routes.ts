@@ -4303,8 +4303,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).get(payload.userId) as any;
         const dataUserId = seatRow ? seatRow.owner_user_id : payload.userId;
         // Return only studies owned by this user (or owner)
+        // 2026-06-01: drafts pin to the top of the dashboard regardless of id,
+        // then completed studies sort by id DESC.
         const userStudies = storage.getStudiesByUser(dataUserId);
-        userStudies.sort((a, b) => b.id - a.id);
+        userStudies.sort((a, b) => {
+          const aDraft = a.status === 'draft' ? 1 : 0;
+          const bDraft = b.status === 'draft' ? 1 : 0;
+          if (aDraft !== bDraft) return bDraft - aDraft;
+          return b.id - a.id;
+        });
         return res.json(userStudies);
       } catch {}
     }
@@ -4952,8 +4959,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   };
 
   app.get("/api/labs/:labId/studies", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    // 2026-06-01: drafts pin to the top of the dashboard regardless of
+    // createdAt, then completed studies sort by id (createdAt proxy) DESC.
+    // SQLite returns boolean comparisons as 1/0; DESC on (status='draft')
+    // puts the 1's first.
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM studies WHERE lab_id = ? ORDER BY id DESC"
+      "SELECT * FROM studies WHERE lab_id = ? ORDER BY (status = 'draft') DESC, id DESC"
     ).all(req.scope.labId);
     res.json(rows.map(studyRowToClient));
   });
