@@ -16058,11 +16058,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/account/settings", authMiddleware, (req: any, res) => {
     try {
-      const isSeat = !!req.isSeatUser;
+      // 2026-06-01: Resolve the active lab from the URL context, same as
+      // the GET above. The global req.isSeatUser flag is set in
+      // authMiddleware by matching user_seats with no lab scope, which
+      // mis-flags an owner of one lab as a seat user simply because they
+      // hold a seat in some other lab. Re-derive seat-status per-lab
+      // before applying the write gate.
+      let activeLabId: number | null = null;
+      if (req.query?.labId) {
+        const n = Number(req.query.labId);
+        if (Number.isFinite(n) && n > 0) activeLabId = n;
+      }
+      if (!activeLabId && req.headers.referer) {
+        const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+        if (m) activeLabId = Number(m[1]);
+      }
+      if (activeLabId) {
+        const isMember = (db as any).$client.prepare(
+          "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+        ).get(activeLabId, req.userId);
+        if (!isMember) activeLabId = null;
+      }
 
-      // Seat users cannot write lab fields at all
-      if (isSeat) {
-        const ownerRow = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(req.ownerUserId) as any;
+      // Per-lab seat check: only block when the caller is a seat user in
+      // the lab they are trying to modify. Owners of the active lab pass.
+      let isSeatInActiveLab = false;
+      let activeLabOwnerId: number | null = null;
+      if (activeLabId) {
+        const activeLab = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(activeLabId) as any;
+        if (activeLab && activeLab.owner_user_id !== req.userId) {
+          const seatRow = (db as any).$client.prepare(
+            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+          ).get(req.userId, activeLabId) as any;
+          if (seatRow) {
+            isSeatInActiveLab = true;
+            activeLabOwnerId = seatRow.owner_user_id;
+          }
+        }
+      }
+
+      if (isSeatInActiveLab) {
+        const ownerRow = activeLabOwnerId
+          ? (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(activeLabOwnerId) as any
+          : null;
         const ownerDisplayName = ownerRow?.name || "the lab owner";
         return res.status(403).json({ error: `Lab settings are managed by the lab owner (${ownerDisplayName}).` });
       }
@@ -16084,8 +16122,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         normalizedClia = v.normalized;
       }
 
-      // Resolve or create lab row for this owner
-      let lab = resolveLabForUser(req.userId);
+      // Resolve the lab to update: prefer the active lab from URL context,
+      // fall back to legacy resolveLabForUser for backward compat. This
+      // is the same pattern as the GET handler above and ensures the
+      // accreditation save writes to the lab the user is currently
+      // viewing, not the static users.lab_id pointer.
+      let lab: any = null;
+      if (activeLabId) {
+        lab = (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(activeLabId);
+      }
+      if (!lab) {
+        lab = resolveLabForUser(req.userId);
+      }
       if (!lab) {
         // Owner doesn't have a lab yet -- create one
         const now = new Date().toISOString();
