@@ -1117,7 +1117,24 @@ export default function VeritaCheckPage() {
         : (activeLabId
             ? `${API_BASE}/api/labs/${activeLabId}/studies`
             : `${API_BASE}/api/studies`);
-      return fetch(url, { method: isEditing ? "PUT" : "POST", headers, body: JSON.stringify(study) });
+      // Surface non-2xx responses as errors so React Query routes them to
+      // onError (toast). Previously we returned the raw Response, which made
+      // any 4xx/5xx silently fall through to onSuccess, where data.id was
+      // undefined and the redirect built /labs/<id>/study/undefined/results.
+      const response = await fetch(url, { method: isEditing ? "PUT" : "POST", headers, body: JSON.stringify(study) });
+      if (!response.ok) {
+        let serverMessage = `Server returned ${response.status}`;
+        try {
+          const errBody = await response.json();
+          if (errBody?.error) {
+            serverMessage = typeof errBody.error === "string" ? errBody.error : JSON.stringify(errBody.error);
+          }
+        } catch {
+          // response had no JSON body; fall back to the status code message
+        }
+        throw new Error(serverMessage);
+      }
+      return response;
     },
     onSuccess: async (res) => {
       const data = await res.json();
@@ -1147,7 +1164,10 @@ export default function VeritaCheckPage() {
         navigate(resultsBase);
       }
     },
-    onError: () => toast({ title: "Failed to save study", variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.message || "Failed to save study";
+      toast({ title: msg, variant: "destructive" });
+    },
   });
 
   // Save as draft: bypass the strict client validation in handleSubmit and
