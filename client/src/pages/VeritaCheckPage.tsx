@@ -377,12 +377,13 @@ export default function VeritaCheckPage() {
     "ref_interval": "ref_interval",
     "reference_interval": "ref_interval",
     "reportable_range": "cal_ver",
+    "carryover": "carryover",
   };
   const rawInitialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -608,6 +609,14 @@ export default function VeritaCheckPage() {
   const [refNumSpecimens, setRefNumSpecimens] = useState(20);
   const [refData, setRefData] = useState<RefIntervalDataPoint[]>(
     Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, value: null }))
+  );
+
+  // Carryover state (CLSI EP10-A3). Standard 21-specimen pattern:
+  // L,L,H,H,L,L,H,L,H,H,L,L,L,L,H,H,L,L,H,L,L
+  const CARRYOVER_DEFAULT_PATTERN: ("L" | "H")[] = ["L","L","H","H","L","L","H","L","H","H","L","L","L","L","H","H","L","L","H","L","L"];
+  const [coUnits, setCoUnits] = useState("");
+  const [coData, setCoData] = useState<{ sequence: number; sample_type: "L" | "H"; value: number | null }[]>(
+    CARRYOVER_DEFAULT_PATTERN.map((t, i) => ({ sequence: i + 1, sample_type: t, value: null }))
   );
 
   // PT/Coag state
@@ -1082,6 +1091,8 @@ export default function VeritaCheckPage() {
     ? refData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
     : studyType === "sensitivity"
     ? sensBlanksText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length
+    : studyType === "carryover"
+    ? coData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
     : studyType === "method_comparison" && assayType !== "quantitative"
     ? dataPoints.filter(dp => dp.expectedCategory && instrumentNames.slice(1).some(n => dp.instrumentCategories?.[n])).length
     : studyType === "method_comparison"
@@ -1347,6 +1358,75 @@ export default function VeritaCheckPage() {
         dataPoints: JSON.stringify({ specimens: refData.map(d => ({ specimenId: d.specimenId, value: d.value })), refLow: lo, refHigh: hi, analyte: refAnalyte, units: refUnits }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "carryover") {
+      const valid = coData.filter(dp => dp.value !== null && !isNaN(dp.value as number));
+      if (valid.length < 12) { toast({ title: `Please enter at least 12 specimen values (${valid.length} entered). EP10-A3 standard is 21.`, variant: "destructive" }); return; }
+      const lValues = valid.filter(d => d.sample_type === "L").map(d => d.value as number);
+      const hValues = valid.filter(d => d.sample_type === "H").map(d => d.value as number);
+      const ll: number[] = [], lh: number[] = [];
+      const classifications: string[] = [];
+      for (let i = 0; i < valid.length; i++) {
+        const dp = valid[i];
+        let cls = "";
+        if (i > 0) {
+          const prev = valid[i - 1];
+          if (dp.sample_type === "L") {
+            if (prev.sample_type === "L") { ll.push(dp.value as number); cls = "L-after-L"; }
+            else { lh.push(dp.value as number); cls = "L-after-H"; }
+          } else {
+            cls = prev.sample_type === "H" ? "H-after-H" : "H-after-L";
+          }
+        }
+        classifications.push(cls);
+      }
+      if (ll.length < 2 || lh.length < 1) { toast({ title: `Need at least 2 L-after-L and 1 L-after-H specimens to compute carryover (have LL=${ll.length}, LH=${lh.length})`, variant: "destructive" }); return; }
+      const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+      const sd = (a: number[]) => {
+        if (a.length < 2) return 0;
+        const m = mean(a);
+        return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1));
+      };
+      const meanL = lValues.length ? mean(lValues) : 0;
+      const meanH = hValues.length ? mean(hValues) : 0;
+      const meanLL = mean(ll), meanLH = mean(lh);
+      const sdLL = sd(ll), sdLH = sd(lh);
+      const carryoverAbs = Math.abs(meanLH - meanLL);
+      const carryoverPct = (meanH - meanL) !== 0 ? ((meanLH - meanLL) / (meanH - meanL)) * 100 : null;
+      const errorLimit = 3 * sdLL;
+      const overallPass = carryoverAbs <= errorLimit;
+      const results = {
+        type: "carryover",
+        analyte: testName.trim(),
+        units: coUnits,
+        specimens: valid.map((d, i) => ({ sequence: d.sequence, sample_type: d.sample_type, value: d.value, classification: classifications[i] })),
+        mean_L: meanL, mean_H: meanH,
+        n_LL: ll.length, n_LH: lh.length,
+        mean_LL: meanLL, mean_LH: meanLH,
+        sd_LL: sdLL, sd_LH: sdLH,
+        carryover_absolute: carryoverAbs,
+        carryover_pct: carryoverPct,
+        error_limit: errorLimit,
+        overallPass,
+        summary: overallPass
+          ? `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits} did not exceed the Error Limit of ${errorLimit.toFixed(3)} ${coUnits} (3 x SD of L-after-L specimens). Carryover is within the noise floor.`
+          : `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits} exceeded the Error Limit of ${errorLimit.toFixed(3)} ${coUnits} (3 x SD of L-after-L specimens). Investigate sampling system contamination.`,
+      };
+      const study: InsertStudy = {
+        testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
+        date, studyType: "carryover", cliaAllowableError: 0.01,
+        teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
+        dataPoints: JSON.stringify({
+          specimens: valid.map(d => ({ sequence: d.sequence, sample_type: d.sample_type, value: d.value })),
+          units: coUnits,
+        }),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
+        status: overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
       };
       saveMutation.mutate(study);
@@ -1697,6 +1777,7 @@ return (
                           <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison, Coag (CLSI EP26-A)</SelectItem>
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
+                          <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -2641,6 +2722,98 @@ return (
                     </div>
                   </CardContent>
                 </Card>
+              ) : studyType === "carryover" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Carryover Verification Data Entry (CLSI EP10-A3)</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                      <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                      <span>CLSI EP10-A3: run a defined alternating sequence of Low and High material specimens. The pattern is pre-loaded with the standard 21-specimen EP10 sequence; you can override the Material column on any row. The study passes when absolute carryover (|mean L-after-H minus mean L-after-L|) does not exceed the Error Limit (3 x SD of L-after-L specimens).</span>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Glucose" value={testName} onChange={e => setTestName(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mg/dL" value={coUnits} onChange={e => setCoUnits(e.target.value)} /></div>
+                      <div className="space-y-1.5 flex flex-col"><Label>Specimens Pre-loaded</Label><span className="text-xs text-muted-foreground pt-2">{CARRYOVER_DEFAULT_PATTERN.length} rows (EP10-A3 standard pattern)</span></div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Specimen Sequence</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-border">
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-12">#</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium w-24">Material</th>
+                            <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">Measured Value</th>
+                            <th className="text-left py-2 text-xs text-muted-foreground font-medium">Classification</th>
+                          </tr></thead>
+                          <tbody>
+                            {coData.map((dp, idx) => {
+                              const prev = idx > 0 ? coData[idx - 1] : null;
+                              let cls = "";
+                              if (dp.sample_type === "L" && prev) cls = prev.sample_type === "L" ? "L-after-L" : "L-after-H";
+                              else if (dp.sample_type === "H" && prev) cls = prev.sample_type === "H" ? "H-after-H" : "H-after-L";
+                              return (
+                                <tr key={idx} className="border-b border-border/50">
+                                  <td className="py-1.5 pr-4 font-mono text-xs">{dp.sequence}</td>
+                                  <td className="py-1.5 pr-4">
+                                    <Select
+                                      value={dp.sample_type}
+                                      onValueChange={v => { const d = [...coData]; d[idx] = { ...d[idx], sample_type: v as "L" | "H" }; setCoData(d); }}
+                                    >
+                                      <SelectTrigger className="h-8 w-20 text-sm"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="L">Low</SelectItem>
+                                        <SelectItem value="H">High</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </td>
+                                  <td className="py-1.5 pr-4">
+                                    <Input
+                                      type="number"
+                                      step="any"
+                                      placeholder="-"
+                                      value={dp.value ?? ""}
+                                      onChange={e => { const d = [...coData]; d[idx] = { ...d[idx], value: e.target.value === "" ? null : parseFloat(e.target.value) }; setCoData(d); }}
+                                      className="h-8 text-sm w-32"
+                                    />
+                                  </td>
+                                  <td className="py-1.5 text-xs text-muted-foreground">{cls}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {(() => {
+                        const valid = coData.filter(d => d.value !== null && !isNaN(d.value as number));
+                        const ll: number[] = [], lh: number[] = [];
+                        for (let i = 1; i < valid.length; i++) {
+                          if (valid[i].sample_type !== "L") continue;
+                          const prev = valid[i - 1];
+                          if (prev.sample_type === "L") ll.push(valid[i].value as number);
+                          else if (prev.sample_type === "H") lh.push(valid[i].value as number);
+                        }
+                        if (ll.length < 2 || lh.length < 1) {
+                          return <div className="text-xs text-muted-foreground italic mt-2">Need at least 2 L-after-L and 1 L-after-H specimen values to compute carryover. Currently: LL={ll.length}, LH={lh.length}.</div>;
+                        }
+                        const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+                        const sd = (a: number[]) => {
+                          if (a.length < 2) return 0;
+                          const m = mean(a);
+                          return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1));
+                        };
+                        const meanLL = mean(ll), meanLH = mean(lh), sdLL = sd(ll);
+                        const co = Math.abs(meanLH - meanLL);
+                        const errorLimit = 3 * sdLL;
+                        const pass = co <= errorLimit;
+                        return (
+                          <div className={`text-xs mt-2 font-medium ${pass ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                            Carryover (absolute) = {co.toFixed(3)} {coUnits} | Error Limit (3 x SD-LL) = {errorLimit.toFixed(3)} {coUnits} | {pass ? "PASS" : "FAIL"}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : studyType === "sensitivity" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base">Analytical Sensitivity Data Entry</CardTitle></CardHeader>
@@ -3083,7 +3256,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>

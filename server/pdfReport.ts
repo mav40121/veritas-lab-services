@@ -787,7 +787,7 @@ function directorReviewHTML(): string {
 
 
 // ─── Regulatory Compliance References box ───────────────────────────────────
-type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity";
+type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover";
 export type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 
 interface RegulatoryRefs {
@@ -871,6 +871,14 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     aabb: ["5.6.1"],
     clsi: ["EP17-A2"],
     cfr:  ["42 CFR §493.1253(b)(2)(iii)", "42 CFR §493.1253(b)(1)"],
+  },
+  carryover: {
+    cap:  ["COM.40000", "GEN.40455"],
+    tjc:  ["QSA.02.02.01"],
+    cola: ["LAB.022"],
+    aabb: ["5.6.3"],
+    clsi: ["EP10-A3"],
+    cfr:  ["42 CFR §493.1253(b)(2)"],
   },
 };
 
@@ -2161,6 +2169,76 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+function buildCarryoverHTML(study: Study, results: any): string {
+  // Results shape: { specimens: [{sequence, sample_type, value, classification}],
+  //   mean_L, mean_H, n_LL, n_LH, mean_LL, mean_LH, sd_LL, sd_LH,
+  //   carryover_absolute, carryover_pct, error_limit, overallPass, summary,
+  //   units }
+  const units = results.units || "";
+  const analyte = study.testName;
+  const specimens = (results.specimens || []) as { sequence: number; sample_type: "L" | "H"; value: number; classification?: string }[];
+  const overallPass = !!results.overallPass;
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass ? "Meets CLSI EP10-A3 criteria" : "Does not meet CLSI EP10-A3 criteria";
+
+  const cliaStatement = overallPass
+    ? `<b>The carryover verification for ${analyte} meets the criteria per 42 CFR §493.1253(b)(2) and CLSI EP10-A3.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The carryover verification for ${analyte} does not meet the criteria per 42 CFR §493.1253(b)(2) and CLSI EP10-A3.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+
+  const dataRows = specimens.map((s, i) => {
+    const cls = s.classification || "";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td class="text-right">${s.sequence}</td>
+      <td>${s.sample_type === "L" ? "Low" : "High"}</td>
+      <td class="text-right">${sf(s.value, 4)}${units ? " " + units : ""}</td>
+      <td>${cls}</td>
+    </tr>`;
+  }).join("");
+
+  const fmtNum = (v: any, d = 3) => (v === null || v === undefined || isNaN(v)) ? "&mdash;" : Number(v).toFixed(d);
+  const fmtPct = (v: any) => (v === null || v === undefined || isNaN(v)) ? "&mdash;" : Number(v).toFixed(3) + "%";
+
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">Specimens Run</div><div class="stat-value">${specimens.length}</div></div>
+      <div class="stat-item"><div class="stat-label">Low Material Mean</div><div class="stat-value">${fmtNum(results.mean_L)}</div></div>
+      <div class="stat-item"><div class="stat-label">High Material Mean</div><div class="stat-value">${fmtNum(results.mean_H)}</div></div>
+      <div class="stat-item"><div class="stat-label">N (L-after-L)</div><div class="stat-value">${results.n_LL || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">N (L-after-H)</div><div class="stat-value">${results.n_LH || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">Mean L-after-L</div><div class="stat-value">${fmtNum(results.mean_LL)}</div></div>
+      <div class="stat-item"><div class="stat-label">Mean L-after-H</div><div class="stat-value">${fmtNum(results.mean_LH)}</div></div>
+      <div class="stat-item"><div class="stat-label">SD L-after-L</div><div class="stat-value">${fmtNum(results.sd_LL)}</div></div>
+      <div class="stat-item"><div class="stat-label">SD L-after-H</div><div class="stat-value">${fmtNum(results.sd_LH)}</div></div>
+      <div class="stat-item"><div class="stat-label">Carryover (absolute)</div><div class="stat-value">${fmtNum(results.carryover_absolute)}</div></div>
+      <div class="stat-item"><div class="stat-label">Carryover (%)</div><div class="stat-value">${fmtPct(results.carryover_pct)}</div></div>
+      <div class="stat-item"><div class="stat-label">Error Limit (3 x SD-LL)</div><div class="stat-value">${fmtNum(results.error_limit)}</div></div>
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary || ""} ${cliaStatement}</p>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck™ - Carryover Verification - ${study.testName}</title><style>${CSS}</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
+  ${summaryStats}
+  ${narrative}
+  ${regulatoryComplianceBoxHTML("carryover", (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  <div class="page-break"></div>
+  <div class="section-heading">Individual Specimen Sequence</div>
+  <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP10-A3 protocol: 21 alternating Low/High specimens. Each Low specimen is classified by the type of the immediately preceding specimen. L-after-L specimens reflect intrinsic precision; L-after-H specimens capture any carryover contamination from the preceding High aspiration.</p>
+  <table>
+    <thead><tr><th class="text-right">#</th><th>Material</th><th class="text-right">Value</th><th>Classification</th></tr></thead>
+    <tbody>${dataRows}</tbody>
+  </table>
+  </body></html>`;
+}
+
 function buildSensitivityHTML(study: Study, results: any): string {
   // EP17-A2 results shape: { mode, lob: {parametric, nonParametric, meanBlank, sdBlank,
   // nBlank, byLot?}, lod: {value, lobUsed, cBeta, sdLowLevel, nLowLevel}, loq: {value,
@@ -2930,6 +3008,8 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildRefIntervalHTML(study, results)
     : study.studyType === "sensitivity"
     ? buildSensitivityHTML(study, results)
+    : study.studyType === "carryover"
+    ? buildCarryoverHTML(study, results)
     : isQualResult
     ? buildQualitativeHTML(study, results)
     : isSemiQuantResult

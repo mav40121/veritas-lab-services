@@ -200,6 +200,51 @@ function renderStudyAppendix(slot: any, teal: string): string {
       return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner);
     }
 
+    if (slot.studyType === "carryover") {
+      // dp = { specimens: [{sequence, sample_type, value}], units }
+      const specs = Array.isArray((dp as any).specimens) ? (dp as any).specimens : [];
+      const units = (dp as any).units || "";
+      const valid = specs.filter((s: any) => s && (s.sample_type === "L" || s.sample_type === "H") && s.value !== null && s.value !== undefined && !isNaN(s.value));
+      const ll: number[] = [], lh: number[] = [];
+      for (let i = 1; i < valid.length; i++) {
+        if (valid[i].sample_type !== "L") continue;
+        const prev = valid[i - 1];
+        if (prev.sample_type === "L") ll.push(valid[i].value);
+        else if (prev.sample_type === "H") lh.push(valid[i].value);
+      }
+      const mean = (a: number[]) => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
+      const sd = (a: number[]) => {
+        if (a.length < 2) return 0;
+        const m = mean(a);
+        return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1));
+      };
+      const meanLL = mean(ll), meanLH = mean(lh), sdLL = sd(ll);
+      const co = Math.abs(meanLH - meanLL);
+      const errorLimit = 3 * sdLL;
+      const pass = ll.length >= 2 && lh.length >= 1 && co <= errorLimit;
+      const inner = `
+        <div style="font-size:11px;margin-bottom:6px">
+          Specimens: <strong>${valid.length}</strong>
+          &nbsp;&nbsp;N (L-after-L): <strong>${ll.length}</strong>
+          &nbsp;&nbsp;N (L-after-H): <strong>${lh.length}</strong>
+        </div>
+        <table style="font-size:11px;width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:4px 8px;text-align:left">Metric</th>
+            <th style="padding:4px 8px;text-align:right">Value</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Mean L-after-L</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${meanLL.toFixed(3)} ${units}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Mean L-after-H</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${meanLH.toFixed(3)} ${units}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">SD L-after-L</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${sdLL.toFixed(4)} ${units}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Carryover (absolute)</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${co.toFixed(3)} ${units}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Error Limit (3 x SD-LL)</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${errorLimit.toFixed(3)} ${units}</td></tr>
+            <tr><td style="padding:4px 8px">CLSI EP10-A3 Verdict</td><td style="padding:4px 8px;text-align:right;color:${pass ? "#059669" : "#dc2626"};font-weight:600">${pass ? "Pass" : "Fail"}</td></tr>
+          </tbody>
+        </table>`;
+      return wrap(`Statistical Detail (CLSI EP10-A3 Carryover)`, inner);
+    }
+
     if (slot.studyType === "ref_interval") {
       // dp = { specimens: [{specimenId, value}], refLow, refHigh, analyte, units }
       const specimens = Array.isArray((dp as any).specimens) ? (dp as any).specimens : [];

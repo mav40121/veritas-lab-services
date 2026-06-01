@@ -138,7 +138,7 @@ const ELEMENT_TO_STUDY_TYPE: Record<string, string[]> = {
   reportable_range: ["cal_ver"],
   reference_interval: ["ref_interval"],
   method_comparison: ["method_comparison", "correlation"],
-  carryover: [],
+  carryover: ["carryover"],
 };
 
 // Maps element key -> studyType param for /study/new

@@ -342,6 +342,35 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return outsidePct <= 10 ? "pass" : "fail";
     }
 
+    if (studyType === "carryover") {
+      // CLSI EP10-A3: Walk specimens in test order. Classify each L specimen by
+      // the preceding specimen type. Carryover absolute = mean(L-after-H) -
+      // mean(L-after-L). Error Limit = 3 x SD(L-after-L). Pass when
+      // |Carryover| <= Error Limit (the COPC interpretation).
+      const specs = rawData?.specimens as { sequence: number; sample_type: "L" | "H"; value: number }[];
+      if (!Array.isArray(specs) || specs.length < 6) return "fail";
+      const valid = specs.filter(s => s && (s.sample_type === "L" || s.sample_type === "H") && s.value !== null && !isNaN(s.value));
+      const ll: number[] = [], lh: number[] = [];
+      for (let i = 0; i < valid.length; i++) {
+        if (valid[i].sample_type !== "L") continue;
+        if (i === 0) continue; // first specimen has no predecessor
+        const prev = valid[i - 1];
+        if (prev.sample_type === "L") ll.push(valid[i].value);
+        else if (prev.sample_type === "H") lh.push(valid[i].value);
+      }
+      if (ll.length < 2 || lh.length < 1) return "fail";
+      const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+      const sd = (a: number[]) => {
+        if (a.length < 2) return 0;
+        const m = mean(a);
+        const variance = a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1);
+        return Math.sqrt(variance);
+      };
+      const carryoverAbs = Math.abs(mean(lh) - mean(ll));
+      const errorLimit = 3 * sd(ll);
+      return carryoverAbs <= errorLimit ? "pass" : "fail";
+    }
+
     // pt_coag or unknown: trust client value (pt_coag is gated anyway)
     return "fail";
   } catch (err) {
@@ -4369,6 +4398,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         case "qc_range": return "QC Lot Verification (C24-Ed4)";
         case "multi_analyte_coag": return "Multi-Analyte Lot Comparison";
         case "cumsum": return "CUMSUM";
+        case "carryover": return "Carryover Verification (EP10-A3)";
         default: return st;
       }
     };
@@ -5205,7 +5235,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtxFromReq(req));
-      const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity" };
+      const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity", carryover: "Carryover" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
       const pdfToken = storePdfToken(pdfBuffer, filename);
