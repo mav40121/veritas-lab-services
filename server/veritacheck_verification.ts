@@ -45,6 +45,12 @@ export const CLSI_GUIDANCE: Record<string, { protocol: string; min_samples: stri
     rationale:
       "CLSI EP09-A3 recommends a minimum of 20 paired patient specimens compared between the new method and an established or reference method. Specimens should span the clinically relevant range to evaluate slope, intercept, and correlation.",
   },
+  carryover: {
+    protocol: "CLSI EP10-A3",
+    min_samples: "21 alternating Low/High specimens in a defined sequence (e.g. L,L,H,H,L,L,H,L,H,H,L,L,L,L,H,H,L,L,H,L,L)",
+    rationale:
+      "CLSI EP10-A3 evaluates carryover by running Low and High specimens in a defined alternating pattern and comparing the SD of Low-after-High readings to an Error Limit derived from 3x the Low-after-Low SD. Carryover passes when Low-High SD does not exceed the Error Limit. Most modern closed-tube analyzers achieve this without intervention; many labs document Carryover as Not Performed with manufacturer carryover claim citation when the analyzer is new and unmodified.",
+  },
 };
 
 // ── Auth middleware reference (imported from routes context) ──────────────────
@@ -123,7 +129,7 @@ export function registerVeritaCheckVerificationRoutes(
     const now = new Date().toISOString();
     const elemArr = (Array.isArray(elements) && elements.length > 0)
       ? elements
-      : ["accuracy", "precision", "reportable_range", "reference_interval", "method_comparison"];
+      : ["accuracy", "precision", "reportable_range", "reference_interval", "method_comparison", "carryover"];
     const result = sqlite.prepare(`
       INSERT INTO veritacheck_verifications
         (user_id, lab_id, instrument_name, manufacturer, trigger_type, map_instrument_id,
@@ -311,6 +317,7 @@ export function registerVeritaCheckVerificationRoutes(
       { key: "reportable_range",   label: "Reportable Range",   protocol: "CLSI EP06" },
       { key: "reference_interval", label: "Reference Range",    protocol: "CLSI EP28-A3c" },
       { key: "method_comparison",  label: "Method Comparison",  protocol: "CLSI EP09-A3" },
+      { key: "carryover",          label: "Carryover",          protocol: "CLSI EP10-A3" },
     ];
 
     const triggerLabels: Record<string, string> = {

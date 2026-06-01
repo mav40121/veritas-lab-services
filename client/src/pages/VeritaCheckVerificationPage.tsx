@@ -123,6 +123,13 @@ const ALL_ELEMENTS = [
     samples: "20 paired patient specimens spanning the reportable range",
     rationale: "CLSI EP09-A3 recommends a minimum of 20 paired patient specimens compared between the new method and an established or reference method. Specimens should span the clinically relevant range to evaluate slope, intercept, and correlation.",
   },
+  {
+    key: "carryover",
+    label: "Carryover",
+    protocol: "CLSI EP10-A3",
+    samples: "21 alternating Low/High specimens in a defined sequence (e.g. L,L,H,H,L,L,H,L,H,H,L,L,L,L,H,H,L,L,H,L,L)",
+    rationale: "CLSI EP10-A3 evaluates carryover by running Low and High specimens in a defined alternating pattern. Pass criterion is Low-after-High SD does not exceed 3x the Low-after-Low SD (the Error Limit). Most modern closed-tube analyzers achieve this without intervention; many labs document Carryover as Not Performed with reference to the manufacturer's carryover claim when the analyzer is new and unmodified.",
+  },
 ];
 
 const ELEMENT_TO_STUDY_TYPE: Record<string, string[]> = {
@@ -131,6 +138,7 @@ const ELEMENT_TO_STUDY_TYPE: Record<string, string[]> = {
   reportable_range: ["cal_ver"],
   reference_interval: ["ref_interval"],
   method_comparison: ["method_comparison", "correlation"],
+  carryover: [],
 };
 
 // Maps element key -> studyType param for /study/new
@@ -140,6 +148,7 @@ const ELEMENT_STUDY_PARAM: Record<string, string> = {
   reportable_range:   "reportable_range",
   reference_interval: "ref_interval",
   method_comparison:  "method_comparison",
+  carryover:          "carryover",
 };
 
 const ELEMENT_STUDY_LABEL: Record<string, string> = {
@@ -148,6 +157,7 @@ const ELEMENT_STUDY_LABEL: Record<string, string> = {
   reportable_range:   "Calibration Verification / Linearity",
   reference_interval: "Reference Range Verification",
   method_comparison:  "Method Comparison (EP09)",
+  carryover:          "Carryover (EP10)",
 };
 
 const ELEMENT_LABELS: Record<string, string> = {
@@ -156,6 +166,7 @@ const ELEMENT_LABELS: Record<string, string> = {
   reportable_range: "Reportable Range",
   reference_interval: "Reference Range",
   method_comparison: "Method Comparison",
+  carryover: "Carryover",
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
