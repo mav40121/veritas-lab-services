@@ -39,6 +39,12 @@ export const CLSI_GUIDANCE: Record<string, { protocol: string; min_samples: stri
     rationale:
       "CLSI EP28-A3c allows adoption of a manufacturer's reference range with verification using a minimum of 20 reference subjects. De novo establishment requires at least 120 subjects.",
   },
+  method_comparison: {
+    protocol: "CLSI EP09-A3",
+    min_samples: "20 paired patient specimens spanning the reportable range",
+    rationale:
+      "CLSI EP09-A3 recommends a minimum of 20 paired patient specimens compared between the new method and an established or reference method. Specimens should span the clinically relevant range to evaluate slope, intercept, and correlation.",
+  },
 };
 
 // ── Auth middleware reference (imported from routes context) ──────────────────
@@ -117,7 +123,7 @@ export function registerVeritaCheckVerificationRoutes(
     const now = new Date().toISOString();
     const elemArr = (Array.isArray(elements) && elements.length > 0)
       ? elements
-      : ["accuracy", "precision", "reportable_range", "reference_interval"];
+      : ["accuracy", "precision", "reportable_range", "reference_interval", "method_comparison"];
     const result = sqlite.prepare(`
       INSERT INTO veritacheck_verifications
         (user_id, lab_id, instrument_name, manufacturer, trigger_type, map_instrument_id,
@@ -303,7 +309,8 @@ export function registerVeritaCheckVerificationRoutes(
       { key: "accuracy",           label: "Accuracy / Bias",    protocol: "CLSI EP15-A3" },
       { key: "precision",          label: "Precision",          protocol: "CLSI EP15-A3" },
       { key: "reportable_range",   label: "Reportable Range",   protocol: "CLSI EP06" },
-      { key: "reference_interval", label: "Reference Range", protocol: "CLSI EP28-A3c" },
+      { key: "reference_interval", label: "Reference Range",    protocol: "CLSI EP28-A3c" },
+      { key: "method_comparison",  label: "Method Comparison",  protocol: "CLSI EP09-A3" },
     ];
 
     const triggerLabels: Record<string, string> = {

@@ -116,6 +116,13 @@ const ALL_ELEMENTS = [
     samples: "20 reference subjects (adoption); 120 subjects (de novo establishment)",
     rationale: "CLSI EP28-A3c allows adoption of a manufacturer's reference range with verification using a minimum of 20 reference subjects. De novo establishment requires at least 120 subjects.",
   },
+  {
+    key: "method_comparison",
+    label: "Method Comparison",
+    protocol: "CLSI EP09-A3",
+    samples: "20 paired patient specimens spanning the reportable range",
+    rationale: "CLSI EP09-A3 recommends a minimum of 20 paired patient specimens compared between the new method and an established or reference method. Specimens should span the clinically relevant range to evaluate slope, intercept, and correlation.",
+  },
 ];
 
 const ELEMENT_TO_STUDY_TYPE: Record<string, string[]> = {
@@ -123,6 +130,7 @@ const ELEMENT_TO_STUDY_TYPE: Record<string, string[]> = {
   precision: ["precision"],
   reportable_range: ["cal_ver"],
   reference_interval: ["ref_interval"],
+  method_comparison: ["method_comparison", "correlation"],
 };
 
 // Maps element key -> studyType param for /study/new
@@ -131,6 +139,7 @@ const ELEMENT_STUDY_PARAM: Record<string, string> = {
   precision:          "precision",
   reportable_range:   "reportable_range",
   reference_interval: "ref_interval",
+  method_comparison:  "method_comparison",
 };
 
 const ELEMENT_STUDY_LABEL: Record<string, string> = {
@@ -138,6 +147,7 @@ const ELEMENT_STUDY_LABEL: Record<string, string> = {
   precision:          "Precision (EP15)",
   reportable_range:   "Calibration Verification / Linearity",
   reference_interval: "Reference Range Verification",
+  method_comparison:  "Method Comparison (EP09)",
 };
 
 const ELEMENT_LABELS: Record<string, string> = {
@@ -145,6 +155,7 @@ const ELEMENT_LABELS: Record<string, string> = {
   precision: "Precision",
   reportable_range: "Reportable Range",
   reference_interval: "Reference Range",
+  method_comparison: "Method Comparison",
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -445,7 +456,7 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Performance Elements</CardTitle>
-          <p className="text-xs text-muted-foreground">All four elements are required by default. You may exclude an element only with documented justification.</p>
+          <p className="text-xs text-muted-foreground">All performance elements are required by default. You may exclude an element only with documented justification.</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {ALL_ELEMENTS.map(el => {
