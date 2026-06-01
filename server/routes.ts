@@ -15980,13 +15980,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
         if (m) activeLabId = Number(m[1]);
       }
-      // Verify the user is a member of this lab before honoring the param.
-      // Never trust an arbitrary URL — could leak another tenant's data.
+      // Verify the user has access to this lab before honoring the param.
+      // Access can come from three sources: (a) labs.owner_user_id direct
+      // ownership, (b) lab_members row, or (c) user_seats row. Owners are
+      // NOT necessarily in lab_members (the previous version of this check
+      // only inspected lab_members and rejected legitimate owners, which
+      // caused a fallback to resolveLabForUser() and surfaced as Milford
+      // data on Michaels Lab settings). Never trust an arbitrary URL.
       if (activeLabId) {
-        const isMember = (db as any).$client.prepare(
-          "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
-        ).get(activeLabId, req.userId);
-        if (!isMember) activeLabId = null;
+        const hasAccess = (db as any).$client.prepare(`
+          SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ?
+          UNION ALL
+          SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'
+          UNION ALL
+          SELECT 1 FROM user_seats WHERE lab_id = ? AND seat_user_id = ? AND status = 'active'
+          LIMIT 1
+        `).get(activeLabId, req.userId, activeLabId, req.userId, activeLabId, req.userId);
+        if (!hasAccess) activeLabId = null;
       }
 
       let lab: any = null;
@@ -16104,10 +16114,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (m) activeLabId = Number(m[1]);
       }
       if (activeLabId) {
-        const isMember = (db as any).$client.prepare(
-          "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
-        ).get(activeLabId, req.userId);
-        if (!isMember) activeLabId = null;
+        // Same access check as the GET handler above: owner OR lab_member
+        // OR seat. Owners are NOT in lab_members; the previous version of
+        // this check only inspected lab_members and incorrectly rejected
+        // legitimate owners, which caused PUT to fall through to legacy
+        // and trigger the seat-block message on the owner's own lab.
+        const hasAccess = (db as any).$client.prepare(`
+          SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ?
+          UNION ALL
+          SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'
+          UNION ALL
+          SELECT 1 FROM user_seats WHERE lab_id = ? AND seat_user_id = ? AND status = 'active'
+          LIMIT 1
+        `).get(activeLabId, req.userId, activeLabId, req.userId, activeLabId, req.userId);
+        if (!hasAccess) activeLabId = null;
       }
 
       // Per-lab seat check: only block when the caller is a seat user in
