@@ -4707,6 +4707,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
         cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
         instrumentMeta: req.body.instrumentMeta,
+        // 2026-06-01: createdAt is required NOT NULL in the studies table.
+        // Same fix as the lab-scoped POST handler below.
+        createdAt: req.body.createdAt ?? new Date().toISOString(),
         // Phase 1 simple-precision parity inputs (optional).
         vendorSd: req.body.vendorSd,
         vendorSdConcentration: req.body.vendorSdConcentration,
@@ -5000,6 +5003,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         reagentLot: req.body.reagentLot,
         comment: req.body.comment,
         resultUnits: req.body.resultUnits,
+        // 2026-06-01: createdAt is required NOT NULL in the studies table.
+        // The non-draft path picks it up via insertStudySchema, but the
+        // manual draft picker omitted it, causing every Save Draft POST to
+        // throw "NOT NULL constraint failed: studies.created_at". Default
+        // to now if the client did not send one.
+        createdAt: req.body.createdAt ?? new Date().toISOString(),
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);
