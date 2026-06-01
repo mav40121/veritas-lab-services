@@ -15935,8 +15935,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT lab_id, preferred_pt_vendor FROM users WHERE id = ?"
       ).get(req.userId) as any;
 
-      const lab = resolveLabForUser(req.userId);
-      const isSeat = !!req.isSeatUser;
+      // 2026-06-01: Resolve the active lab from the URL context, not from
+      // users.lab_id. The frontend lab switcher navigates to /labs/<id>/...
+      // routes, but this legacy endpoint was always reading users.lab_id —
+      // a single static pointer — which caused the settings page to display
+      // a different lab's CLIA/name than the one the user had selected.
+      // Priority order: explicit query param > Referer URL > legacy fallback.
+      let activeLabId: number | null = null;
+      if (req.query?.labId) {
+        const n = Number(req.query.labId);
+        if (Number.isFinite(n) && n > 0) activeLabId = n;
+      }
+      if (!activeLabId && req.headers.referer) {
+        const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+        if (m) activeLabId = Number(m[1]);
+      }
+      // Verify the user is a member of this lab before honoring the param.
+      // Never trust an arbitrary URL — could leak another tenant's data.
+      if (activeLabId) {
+        const isMember = (db as any).$client.prepare(
+          "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+        ).get(activeLabId, req.userId);
+        if (!isMember) activeLabId = null;
+      }
+
+      let lab: any = null;
+      if (activeLabId) {
+        lab = (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(activeLabId);
+      }
+      if (!lab) {
+        lab = resolveLabForUser(req.userId);
+      }
+
+      // Per-lab seat detection: the global req.isSeatUser flag is set in
+      // authMiddleware by checking user_seats with NO lab scope, which
+      // mis-flags an owner of one lab as a seat user simply because they
+      // hold a seat in someone else's lab. Determine seat-status for the
+      // SPECIFIC active lab instead.
+      let isSeat = false;
+      let resolvedOwnerUserId: number | null = null;
+      if (lab) {
+        if (lab.owner_user_id === req.userId) {
+          isSeat = false;
+          resolvedOwnerUserId = req.userId;
+        } else {
+          const seatRow = (db as any).$client.prepare(
+            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+          ).get(req.userId, lab.id) as any;
+          if (seatRow) {
+            isSeat = true;
+            resolvedOwnerUserId = seatRow.owner_user_id;
+          }
+        }
+      }
 
       // Derive preferred_standards array from accreditation flags on labs row
       // (kept for backward compatibility with older clients).
@@ -15977,10 +16028,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         accreditationChoice = "CLIA";
       }
 
-      // If seat user, look up owner display name
+      // If seat user, look up owner display name. Use the per-lab resolved
+      // owner (resolvedOwnerUserId), not the global req.ownerUserId from
+      // authMiddleware — the global value points to whichever lab the user
+      // happens to be a seat in, which is not necessarily the active lab.
       let ownerName: string | null = null;
-      if (isSeat && req.ownerUserId) {
-        const ownerRow = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(req.ownerUserId) as any;
+      if (isSeat && resolvedOwnerUserId) {
+        const ownerRow = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(resolvedOwnerUserId) as any;
         ownerName = ownerRow?.name || null;
       }
 
