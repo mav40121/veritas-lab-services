@@ -1028,7 +1028,7 @@ export default function VeritaCheckPage() {
   };
 
   const addInstrument = () => {
-    const maxInst = studyType === "method_comparison" ? 5 : 3;
+    const maxInst = studyType === "method_comparison" ? 10 : 5;
     if (instrumentNames.length >= maxInst) { toast({ title: `Maximum ${maxInst} instruments supported` }); return; }
     const newName = studyType === "method_comparison"
       ? `Comparison ${instrumentNames.length}`
@@ -1768,8 +1768,8 @@ return (
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cal_ver">Calibration Verification / Linearity (CLSI EP06)</SelectItem>
-                          <SelectItem value="method_comparison">Correlation / Method Comparison (CLSI EP09)</SelectItem>
+                          <SelectItem value="cal_ver">Calibration Verification / Linearity / Reportable Range (CLSI EP06)</SelectItem>
+                          <SelectItem value="method_comparison">Accuracy / Bias / Correlation / Method Comparison (CLSI EP09 + EP15-A3)</SelectItem>
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
                           <SelectItem value="pt_coag">PT/INR Geometric Mean Calculator (CLSI H47)</SelectItem>
@@ -1794,7 +1794,7 @@ return (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                   {studyType === "method_comparison" ? "Instruments / Methods" : "Instruments / Methods"}
-                  <Button variant="outline" size="sm" onClick={addInstrument} disabled={instrumentNames.length >= (studyType === "method_comparison" ? 5 : 3)}><PlusCircle size={13} className="mr-1" />{studyType === "method_comparison" ? "Add Instrument" : "Add"}</Button>
+                  <Button variant="outline" size="sm" onClick={addInstrument} disabled={instrumentNames.length >= (studyType === "method_comparison" ? 10 : 5)}><PlusCircle size={13} className="mr-1" />{studyType === "method_comparison" ? "Add Instrument" : "Add"}</Button>
                 </CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   {studyType === "method_comparison" ? (
@@ -3256,7 +3256,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>
