@@ -38,6 +38,7 @@ export function defaultCsvFilename(study: Study): string {
     sensitivity: "Sensitivity",
     qualitative: "Qualitative",
     semi_quantitative: "SemiQuant",
+    carryover: "Carryover",
   };
   const typeTag = typeMap[study.studyType] ?? "Study";
   const safeName = String(study.testName ?? "")
@@ -95,6 +96,22 @@ function serializeRefInterval(dataPoints: RefIntervalDP[]): string {
     { key: "value", header: "Value", format: (r) => r.value ?? "" },
   ];
   return toCsv(dataPoints as unknown as Record<string, unknown>[], cols);
+}
+
+// Carryover (CLSI EP10-A3) source-data CSV: sequence, material (L/H), value.
+// Computed metrics (mean LL/LH, carryover, error limit) live in the PDF and on
+// the results page; the CSV is for the analyst's raw inputs only.
+type CarryoverDP = { sequence: number; sample_type: "L" | "H"; value: number | null };
+type CarryoverInput = { specimens?: CarryoverDP[]; units?: string };
+
+function serializeCarryover(input: CarryoverInput): string {
+  const specimens: CarryoverDP[] = Array.isArray(input?.specimens) ? input.specimens : [];
+  const cols: CsvColumn<CarryoverDP>[] = [
+    { key: "sequence", header: "Sequence", format: (r) => r.sequence ?? "" },
+    { key: "sample_type", header: "Material", format: (r) => r.sample_type === "H" ? "High" : "Low" },
+    { key: "value", header: `Value${input?.units ? ` (${input.units})` : ""}`, format: (r) => r.value ?? "" },
+  ];
+  return toCsv(specimens as unknown as Record<string, unknown>[], cols as unknown as CsvColumn<Record<string, unknown>>[]);
 }
 
 type QCRangeDP = {
@@ -217,6 +234,8 @@ export function studyToCsv(study: Study): string {
       return serializeSemiQuant(raw as SemiQuantDP[]);
     case "sensitivity":
       return serializeSensitivity(raw as SensitivityInput);
+    case "carryover":
+      return serializeCarryover(raw as CarryoverInput);
     case "cal_ver":
     case "method_comparison":
     case "lot_to_lot":

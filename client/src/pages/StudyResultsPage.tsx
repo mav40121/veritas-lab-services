@@ -80,7 +80,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
@@ -122,7 +122,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -605,7 +605,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplay],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -1551,6 +1551,81 @@ function RefIntervalReport({ study, results }: { study: Study; results: RefInter
   );
 }
 
+// ─── CARRYOVER (CLSI EP10-A3) results ───────────────────────────────────────
+// Wires the per-study compute output to a screen render. Results shape
+// authored in PR #477 and consumed by the server's buildCarryoverHTML.
+function CarryoverReport({ study, results }: { study: Study; results: any }) {
+  const fmt = (n: any, d = 3) => (n === null || n === undefined || isNaN(n)) ? "-" : Number(n).toFixed(d);
+  const units = results.units || "";
+  const specimens = (results.specimens || []) as Array<{ sequence: number; sample_type: "L" | "H"; value: number; classification?: string }>;
+  const overallPass = !!results.overallPass;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Specimens Run", value: String(specimens.length) },
+          { label: "Carryover (absolute)", value: `${fmt(results.carryover_absolute)} ${units}` },
+          { label: "Error Limit (3 x SD-LL)", value: `${fmt(results.error_limit)} ${units}` },
+          { label: "Verdict", value: overallPass ? "PASS" : "FAIL" },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Carryover Statistics</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
+            <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
+            <div><div className="text-muted-foreground">Mean L (overall)</div><div className="font-mono">{fmt(results.mean_L)} {units}</div></div>
+            <div><div className="text-muted-foreground">Mean H (overall)</div><div className="font-mono">{fmt(results.mean_H)} {units}</div></div>
+            <div><div className="text-muted-foreground">N (L-after-L)</div><div className="font-mono">{results.n_LL}</div></div>
+            <div><div className="text-muted-foreground">N (L-after-H)</div><div className="font-mono">{results.n_LH}</div></div>
+            <div><div className="text-muted-foreground">Mean L-after-L</div><div className="font-mono">{fmt(results.mean_LL)} {units}</div></div>
+            <div><div className="text-muted-foreground">Mean L-after-H</div><div className="font-mono">{fmt(results.mean_LH)} {units}</div></div>
+            <div><div className="text-muted-foreground">SD L-after-L</div><div className="font-mono">{fmt(results.sd_LL, 4)} {units}</div></div>
+            <div><div className="text-muted-foreground">SD L-after-H</div><div className="font-mono">{fmt(results.sd_LH, 4)} {units}</div></div>
+            <div><div className="text-muted-foreground">Carryover %</div><div className="font-mono">{results.carryover_pct !== null && results.carryover_pct !== undefined ? `${Number(results.carryover_pct).toFixed(3)}%` : "-"}</div></div>
+          </div>
+          {results.summary && (
+            <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Individual Specimen Sequence</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border">
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium w-12">#</th>
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Material</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Value</th>
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Classification</th>
+              </tr></thead>
+              <tbody>
+                {specimens.map((s, i) => (
+                  <tr key={i} className="border-b border-border/40">
+                    <td className="py-2 pr-3 font-mono text-right">{s.sequence}</td>
+                    <td className="py-2 pr-3">{s.sample_type === "L" ? "Low" : "High"}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmt(s.value, 4)} {units}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{s.classification || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 // ─── PT/COAG NEW LOT VALIDATION results ─────────────────────────────────────
 function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults }) {
   const { module1, module2, module3 } = results;
@@ -2291,6 +2366,65 @@ export default function StudyResults() {
   } else if (study.studyType === "ref_interval") {
     const { specimens, refLow, refHigh, analyte, units } = rawDataPoints;
     results = calculateRefInterval(specimens, refLow, refHigh, analyte || study.testName, units || "");
+  } else if (study.studyType === "carryover") {
+    // CLSI EP10-A3 carryover: walk specimens in test order, classify each
+    // Low specimen by predecessor type, compute mean/SD for LL and LH
+    // pools, return the same results shape the server's buildCarryoverHTML
+    // expects (added in PR #477). The shape is the authoritative reference
+    // for both the screen render and the PDF render.
+    const { specimens: coSpecs, units: coUnits } = (rawDataPoints as { specimens: Array<{ sequence: number; sample_type: "L" | "H"; value: number }>; units?: string });
+    const valid = (coSpecs || []).filter(s => s && (s.sample_type === "L" || s.sample_type === "H") && s.value !== null && !isNaN(s.value as number));
+    const lValues = valid.filter(d => d.sample_type === "L").map(d => d.value);
+    const hValues = valid.filter(d => d.sample_type === "H").map(d => d.value);
+    const ll: number[] = [], lh: number[] = [];
+    const classifications: string[] = [];
+    for (let i = 0; i < valid.length; i++) {
+      const dp = valid[i];
+      let cls = "";
+      if (i > 0) {
+        const prev = valid[i - 1];
+        if (dp.sample_type === "L") {
+          if (prev.sample_type === "L") { ll.push(dp.value); cls = "L-after-L"; }
+          else { lh.push(dp.value); cls = "L-after-H"; }
+        } else {
+          cls = prev.sample_type === "H" ? "H-after-H" : "H-after-L";
+        }
+      }
+      classifications.push(cls);
+    }
+    const _mean = (a: number[]) => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
+    const _sd = (a: number[]) => {
+      if (a.length < 2) return 0;
+      const m = _mean(a);
+      return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1));
+    };
+    const meanL = _mean(lValues);
+    const meanH = _mean(hValues);
+    const meanLL = _mean(ll);
+    const meanLH = _mean(lh);
+    const sdLL = _sd(ll);
+    const sdLH = _sd(lh);
+    const carryoverAbs = Math.abs(meanLH - meanLL);
+    const carryoverPct = (meanH - meanL) !== 0 ? ((meanLH - meanLL) / (meanH - meanL)) * 100 : null;
+    const errorLimit = 3 * sdLL;
+    const overallPass = ll.length >= 2 && lh.length >= 1 && carryoverAbs <= errorLimit;
+    results = {
+      type: "carryover",
+      analyte: study.testName,
+      units: coUnits || "",
+      specimens: valid.map((d, i) => ({ sequence: d.sequence, sample_type: d.sample_type, value: d.value, classification: classifications[i] })),
+      mean_L: meanL, mean_H: meanH,
+      n_LL: ll.length, n_LH: lh.length,
+      mean_LL: meanLL, mean_LH: meanLH,
+      sd_LL: sdLL, sd_LH: sdLH,
+      carryover_absolute: carryoverAbs,
+      carryover_pct: carryoverPct,
+      error_limit: errorLimit,
+      overallPass,
+      summary: overallPass
+        ? `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits || ""} did not exceed the Error Limit of ${errorLimit.toFixed(3)} ${coUnits || ""} (3 x SD of L-after-L specimens). Carryover is within the noise floor.`
+        : `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits || ""} exceeded the Error Limit of ${errorLimit.toFixed(3)} ${coUnits || ""} (3 x SD of L-after-L specimens). Investigate sampling system contamination.`,
+    } as any;
   } else if (study.studyType === "method_comparison") {
     // Check if this is qualitative or semi-quantitative data
     if (rawDataPoints.assayType === "qualitative") {
@@ -2366,6 +2500,7 @@ export default function StudyResults() {
       {isQCRange(results) && <QCRangeReport study={study} results={results} />}
       {isMultiAnalyteCoag(results) && <MultiAnalyteCoagReport study={study} results={results} />}
       {isRefInterval(results) && <RefIntervalReport study={study} results={results} />}
+      {(results as any).type === "carryover" && <CarryoverReport study={study} results={results as any} />}
 
       {/* Related Tools for PT/Coag studies */}
       {(study.studyType === "pt_coag" || study.studyType === "multi_analyte_coag" || study.studyType === "qc_range") && (
