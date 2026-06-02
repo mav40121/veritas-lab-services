@@ -2216,7 +2216,7 @@ return (
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
                           <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
-                          <SelectItem value="accuracy_bias">Accuracy / Bias (CLSI EP15-A3)</SelectItem>
+                          <SelectItem value="accuracy_bias">Accuracy / Bias / Trueness (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="linearity">Linearity (CLSI EP06)</SelectItem>
                           <SelectItem value="reportable_range">Reportable Range / AMR Verification (CLIA §493.1255)</SelectItem>
                         </SelectContent>
