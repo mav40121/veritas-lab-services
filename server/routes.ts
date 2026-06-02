@@ -7908,6 +7908,102 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, count: items.length });
   });
 
+  // ── VeritaScan evidence links (link-only, no file uploads — link-only by
+  // policy to keep VeritaAssure on the PHI-free side of the architectural
+  // boundary). Multi-URL per item, each entry has a label and a no-PHI
+  // attestation flag. Lab-scoped. ──────────────────────────────────────────
+
+  // GET all evidence for a scan, grouped by client into per-item lists.
+  app.get("/api/labs/:labId/veritascan/scans/:id/evidence", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const rows = (db as any).$client.prepare(
+      `SELECT e.id, e.item_id, e.url, e.label, e.added_by_user_id, e.added_at, u.name AS added_by_name
+       FROM veritascan_evidence e
+       LEFT JOIN users u ON u.id = e.added_by_user_id
+       WHERE e.scan_id = ?
+       ORDER BY e.added_at DESC`
+    ).all(req.params.id);
+    res.json(rows);
+  });
+
+  // POST add a new evidence link to an item.
+  app.post("/api/labs/:labId/veritascan/scans/:id/items/:itemId/evidence", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+
+    const { url, label, attested_no_phi } = req.body || {};
+    if (typeof url !== "string" || !url.trim()) return res.status(400).json({ error: "url required" });
+    if (typeof label !== "string" || !label.trim()) return res.status(400).json({ error: "label required" });
+    if (label.trim().length > 200) return res.status(400).json({ error: "label too long (max 200 chars)" });
+    if (url.length > 2000) return res.status(400).json({ error: "url too long (max 2000 chars)" });
+    // URL scheme allowlist: only http(s). Reject javascript:, data:, file:, etc.
+    const trimmedUrl = url.trim();
+    if (!/^https?:\/\//i.test(trimmedUrl)) {
+      return res.status(400).json({ error: "url must start with http:// or https://" });
+    }
+    if (!attested_no_phi) {
+      return res.status(400).json({ error: "no-PHI attestation required" });
+    }
+
+    const userId = req.ownerUserId ?? req.user.userId;
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(`
+      INSERT INTO veritascan_evidence (scan_id, item_id, lab_id, url, label, added_by_user_id, attested_no_phi, added_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+    `).run(req.params.id, req.params.itemId, req.scope.labId, trimmedUrl, label.trim(), userId, now);
+
+    (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+
+    // Audit log (with no-PHI attestation flag captured in after_json)
+    try {
+      logAudit({
+        userId,
+        module: "veritascan",
+        action: "create",
+        entityType: "scan_item_evidence",
+        entityId: (result as any).lastInsertRowid,
+        entityLabel: label.trim(),
+        after: { scan_id: Number(req.params.id), item_id: Number(req.params.itemId), url: trimmedUrl, label: label.trim(), attested_no_phi: true, lab_id: req.scope.labId },
+        ipAddress: req.ip,
+      });
+    } catch { /* audit best-effort */ }
+
+    res.json({ id: (result as any).lastInsertRowid, ok: true });
+  });
+
+  // DELETE an evidence link by id (lab-scoped check).
+  app.delete("/api/labs/:labId/veritascan/evidence/:evidenceId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const row = (db as any).$client.prepare(
+      "SELECT id, scan_id, item_id, lab_id FROM veritascan_evidence WHERE id = ?"
+    ).get(req.params.evidenceId) as any;
+    if (!row) return res.status(404).json({ error: "Evidence not found" });
+    if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Evidence belongs to another lab" });
+    (db as any).$client.prepare("DELETE FROM veritascan_evidence WHERE id = ?").run(req.params.evidenceId);
+
+    const userId = req.ownerUserId ?? req.user.userId;
+    try {
+      logAudit({
+        userId,
+        module: "veritascan",
+        action: "delete",
+        entityType: "scan_item_evidence",
+        entityId: req.params.evidenceId,
+        before: { scan_id: row.scan_id, item_id: row.item_id, lab_id: row.lab_id },
+        ipAddress: req.ip,
+      });
+    } catch { /* audit best-effort */ }
+
+    res.json({ ok: true });
+  });
+
   // Legacy GET scan-by-id (added for the existing page useQuery that was
   // previously hitting 404). userCanAccessScan checks user_id OR lab_members.
   app.get("/api/veritascan/scans/:id", authMiddleware, (req: any, res) => {

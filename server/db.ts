@@ -190,6 +190,21 @@ sqlite.exec(`
     UNIQUE(scan_id, item_id)
   );
 
+  CREATE TABLE IF NOT EXISTS veritascan_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    url TEXT NOT NULL,
+    label TEXT NOT NULL,
+    added_by_user_id INTEGER NOT NULL,
+    attested_no_phi INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_veritascan_evidence_scan_item
+    ON veritascan_evidence(scan_id, item_id);
+
   CREATE TABLE IF NOT EXISTS newsletter_subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE,
@@ -1014,6 +1029,15 @@ const scanColNames = scanItemCols.map((c) => c.name);
 if (!scanColNames.includes("completion_source")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_source TEXT DEFAULT 'manual'");
 if (!scanColNames.includes("completion_link")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_link TEXT");
 if (!scanColNames.includes("completion_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_note TEXT");
+
+// veritascan_evidence: link-only attached documents per scan item. New
+// table; the CREATE statement earlier in this file handles cold start.
+// PRAGMA-guarded ALTER block here for forward column compat on existing
+// live DBs (required by the repo audit rule).
+const scanEvidenceCols = sqlite.prepare("PRAGMA table_info(veritascan_evidence)").all() as { name: string }[];
+const scanEvidenceColNames = scanEvidenceCols.map((c) => c.name);
+if (!scanEvidenceColNames.includes("lab_id")) sqlite.exec("ALTER TABLE veritascan_evidence ADD COLUMN lab_id INTEGER");
+if (!scanEvidenceColNames.includes("attested_no_phi")) sqlite.exec("ALTER TABLE veritascan_evidence ADD COLUMN attested_no_phi INTEGER NOT NULL DEFAULT 0");
 
 // Add specimen_info column to competency_assessment_items if upgrading
 const compItemCols = sqlite.prepare("PRAGMA table_info(competency_assessment_items)").all() as { name: string }[];

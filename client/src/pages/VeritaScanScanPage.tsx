@@ -62,6 +62,16 @@ interface ItemState {
   completionNote?: string;
 }
 
+interface EvidenceItem {
+  id: number;
+  item_id: number;
+  url: string;
+  label: string;
+  added_by_user_id: number;
+  added_by_name?: string | null;
+  added_at: string;
+}
+
 // Global running-tally ordinal map. Iterates DOMAINS in display order,
 // then items within each domain in array order, assigning a sequential
 // 1-based number. Per operator preference (2026-05-10): users want a
@@ -220,13 +230,19 @@ function CitationRow({
 function ItemRow({
   item,
   state,
+  evidence,
   onChange,
+  onAddEvidence,
+  onDeleteEvidence,
   accreditationChoice,
   displayNumber,
 }: {
   item: ScanItem;
   state: ItemState;
+  evidence: EvidenceItem[];
   onChange: (patch: Partial<ItemState>) => void;
+  onAddEvidence?: (url: string, label: string) => Promise<void>;
+  onDeleteEvidence?: (evidenceId: number) => Promise<void>;
   accreditationChoice: string;
   // Domain-relative ordinal (1, 2, 3...) for the visible row label.
   // Underlying item.id is still the persistence key; this is rendering only.
@@ -234,9 +250,46 @@ function ItemRow({
 }) {
   const [citExpanded, setCitExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false);
+  const [addEvidenceOpen, setAddEvidenceOpen] = useState(false);
+  const [newEvidenceUrl, setNewEvidenceUrl] = useState("");
+  const [newEvidenceLabel, setNewEvidenceLabel] = useState("");
+  const [attestedNoPhi, setAttestedNoPhi] = useState(false);
+  const [addEvidenceError, setAddEvidenceError] = useState<string | null>(null);
+  const [addEvidenceSubmitting, setAddEvidenceSubmitting] = useState(false);
 
   const showDueDate =
     state.status === "Needs Attention" || state.status === "Immediate Action";
+
+  const resetEvidenceModal = () => {
+    setAddEvidenceOpen(false);
+    setNewEvidenceUrl("");
+    setNewEvidenceLabel("");
+    setAttestedNoPhi(false);
+    setAddEvidenceError(null);
+    setAddEvidenceSubmitting(false);
+  };
+
+  const submitNewEvidence = async () => {
+    if (!onAddEvidence) return;
+    const url = newEvidenceUrl.trim();
+    const label = newEvidenceLabel.trim();
+    if (!url) { setAddEvidenceError("Evidence URL is required."); return; }
+    if (!/^https?:\/\//i.test(url)) { setAddEvidenceError("URL must start with http:// or https://"); return; }
+    if (!label) { setAddEvidenceError("Label is required (e.g., 'Critical Value Policy')."); return; }
+    if (label.length > 200) { setAddEvidenceError("Label must be 200 characters or fewer."); return; }
+    if (!attestedNoPhi) { setAddEvidenceError("You must confirm the linked document contains no PHI."); return; }
+    setAddEvidenceSubmitting(true);
+    setAddEvidenceError(null);
+    try {
+      await onAddEvidence(url, label);
+      resetEvidenceModal();
+      setEvidenceExpanded(true);
+    } catch (err: any) {
+      setAddEvidenceError(err.message || "Failed to add evidence.");
+      setAddEvidenceSubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -347,6 +400,19 @@ function ItemRow({
             >
               {notesExpanded ? "Hide notes" : state.notes ? "Notes ●" : "Notes"}
             </button>
+
+            {/* Evidence toggle (lab-scoped feature; hidden when no
+                onAddEvidence handler is provided, e.g. legacy routes). */}
+            {onAddEvidence && (
+              <button
+                type="button"
+                onClick={() => setEvidenceExpanded((p) => !p)}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md bg-background hover:bg-muted transition-colors"
+                title="Link to supporting policies, SOPs, or compliance documents"
+              >
+                {evidenceExpanded ? "Hide evidence" : evidence.length > 0 ? `Evidence (${evidence.length})` : "Evidence"}
+              </button>
+            )}
           </div>
 
           {/* Notes textarea */}
@@ -358,8 +424,150 @@ function ItemRow({
               onChange={(e) => onChange({ notes: e.target.value })}
             />
           )}
+
+          {/* Evidence section (expanded) */}
+          {evidenceExpanded && onAddEvidence && (
+            <div className="mt-2 border border-border rounded-md p-2.5 bg-muted/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground">Evidence Links</span>
+                <button
+                  type="button"
+                  onClick={() => setAddEvidenceOpen(true)}
+                  className="h-6 px-2 text-[11px] font-medium text-primary hover:text-primary/80 border border-primary/30 rounded-md bg-background hover:bg-primary/5 transition-colors"
+                >
+                  + Add evidence
+                </button>
+              </div>
+              {evidence.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground italic">
+                  No evidence linked yet. Link to your written policies, SOPs, or compliance documents stored in your own document system (SharePoint, OneDrive, Google Drive, etc.).
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {evidence.map((e) => (
+                    <li key={e.id} className="flex items-center gap-2 group">
+                      <a
+                        href={e.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-primary hover:underline truncate flex-1"
+                        title={e.url}
+                      >
+                        {e.label}
+                      </a>
+                      <span className="text-[10px] text-muted-foreground/70 shrink-0">
+                        {e.added_by_name || "—"} · {new Date(e.added_at).toLocaleDateString()}
+                      </span>
+                      {onDeleteEvidence && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Remove evidence link "${e.label}"?`)) {
+                              onDeleteEvidence(e.id);
+                            }
+                          }}
+                          className="text-[10px] text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          title="Remove evidence link"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Add Evidence modal (PHI warning prominent; lab-scoped) */}
+      {addEvidenceOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget && !addEvidenceSubmitting) resetEvidenceModal(); }}
+        >
+          <div className="bg-background border border-border rounded-lg max-w-lg w-full p-5 shadow-xl">
+            <h3 className="text-base font-semibold mb-3">Link evidence to this item</h3>
+
+            {/* PHI warning — large and unmissable */}
+            <div className="border-2 border-red-500/60 bg-red-500/10 rounded-md p-3 mb-4">
+              <p className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
+                Do NOT upload PHI to VeritaAssure.
+              </p>
+              <p className="text-xs text-red-700/90 dark:text-red-300/90 leading-relaxed">
+                VeritaAssure does not accept files containing patient identifiers, medical record numbers, dates of birth, or test results. Link to documents stored in your own secure document system (SharePoint, OneDrive, Google Drive, your EHR document repository). We store the URL only; the file stays on your infrastructure.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Evidence URL <span className="text-red-500">*</span></label>
+                <Input
+                  type="url"
+                  placeholder="https://yourcompany.sharepoint.com/policies/critical-values.pdf"
+                  value={newEvidenceUrl}
+                  onChange={(e) => setNewEvidenceUrl(e.target.value)}
+                  className="text-sm h-9"
+                  disabled={addEvidenceSubmitting}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Must start with http:// or https://</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1">Label <span className="text-red-500">*</span></label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Critical Value Notification Policy v3.2"
+                  value={newEvidenceLabel}
+                  onChange={(e) => setNewEvidenceLabel(e.target.value)}
+                  className="text-sm h-9"
+                  maxLength={200}
+                  disabled={addEvidenceSubmitting}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">A short, human-readable name (max 200 chars).</p>
+              </div>
+
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={attestedNoPhi}
+                  onChange={(e) => setAttestedNoPhi(e.target.checked)}
+                  className="mt-0.5"
+                  disabled={addEvidenceSubmitting}
+                />
+                <span className="text-xs text-foreground leading-snug">
+                  I confirm the linked document contains no patient names, medical record numbers, dates of birth, or test results. <span className="text-red-600 dark:text-red-400">(required)</span>
+                </span>
+              </label>
+
+              {addEvidenceError && (
+                <div className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/30 rounded p-2">
+                  {addEvidenceError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end mt-5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetEvidenceModal}
+                disabled={addEvidenceSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={submitNewEvidence}
+                disabled={addEvidenceSubmitting || !attestedNoPhi || !newEvidenceUrl.trim() || !newEvidenceLabel.trim()}
+              >
+                {addEvidenceSubmitting ? "Saving…" : "Add evidence link"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -368,13 +576,19 @@ function ItemRow({
 function DomainSection({
   domain,
   items,
+  evidenceByItem,
   onChange,
+  onAddEvidence,
+  onDeleteEvidence,
   sectionRef,
   accreditationChoice,
 }: {
   domain: ScanDomain;
   items: Record<number, ItemState>;
+  evidenceByItem: Record<number, EvidenceItem[]>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
+  onAddEvidence?: (itemId: number, url: string, label: string) => Promise<void>;
+  onDeleteEvidence?: (evidenceId: number) => Promise<void>;
   sectionRef?: (el: HTMLDivElement | null) => void;
   accreditationChoice: string;
 }) {
@@ -437,7 +651,10 @@ function DomainSection({
               owner: "",
               dueDate: "",
             }}
+            evidence={evidenceByItem[item.id] || []}
             onChange={(patch) => onChange(item.id, patch)}
+            onAddEvidence={onAddEvidence ? (url, label) => onAddEvidence(item.id, url, label) : undefined}
+            onDeleteEvidence={onDeleteEvidence}
             accreditationChoice={accreditationChoice}
           />
         ))}
@@ -455,11 +672,17 @@ function DomainSection({
 // them to the bottom keeps the active domains uncluttered.
 function ParkedItemsSection({
   items,
+  evidenceByItem,
   onChange,
+  onAddEvidence,
+  onDeleteEvidence,
   accreditationChoice,
 }: {
   items: Record<number, ItemState>;
+  evidenceByItem: Record<number, EvidenceItem[]>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
+  onAddEvidence?: (itemId: number, url: string, label: string) => Promise<void>;
+  onDeleteEvidence?: (evidenceId: number) => Promise<void>;
   accreditationChoice: string;
 }) {
   const naByDomain: Partial<Record<ScanDomain, ScanItem[]>> = {};
@@ -519,7 +742,10 @@ function ParkedItemsSection({
                     owner: "",
                     dueDate: "",
                   }}
+                  evidence={evidenceByItem[item.id] || []}
                   onChange={(patch) => onChange(item.id, patch)}
+                  onAddEvidence={onAddEvidence ? (url, label) => onAddEvidence(item.id, url, label) : undefined}
+                  onDeleteEvidence={onDeleteEvidence}
                   accreditationChoice={accreditationChoice}
                 />
               ))}
@@ -612,6 +838,12 @@ export default function VeritaScanScanPage() {
   const scanItemsUrl = activeLabId
     ? `/api/labs/${activeLabId}/veritascan/scans/${scanId}/items`
     : `/api/veritascan/scans/${scanId}/items`;
+  // Evidence endpoints are lab-scoped only. Link-only by policy (no file
+  // uploads) so VeritaAssure stays on the PHI-free side of the architectural
+  // boundary documented in CLAUDE.md and project_veritaassure_hipaa_free.
+  const scanEvidenceUrl = activeLabId
+    ? `/api/labs/${activeLabId}/veritascan/scans/${scanId}/evidence`
+    : null;
 
   // ── Fetch scan meta ─────────────────────────────────────────────────────
   const { data: scanMeta, isLoading: metaLoading } = useQuery<ScanMeta>({
@@ -658,6 +890,59 @@ export default function VeritaScanScanPage() {
       return next;
     });
   }, [rawItemData]);
+
+  // ── Fetch evidence links for the scan (lab-scoped only). The server
+  // returns a flat list ordered by added_at DESC; group by item_id client-
+  // side for ItemRow consumption. ─────────────────────────────────────────
+  const { data: evidenceList = [] } = useQuery<EvidenceItem[]>({
+    queryKey: [scanEvidenceUrl],
+    enabled: !!scanEvidenceUrl && !isNaN(scanId),
+    staleTime: 0,
+  });
+  const evidenceByItem: Record<number, EvidenceItem[]> = {};
+  for (const e of evidenceList) {
+    if (!evidenceByItem[e.item_id]) evidenceByItem[e.item_id] = [];
+    evidenceByItem[e.item_id].push(e);
+  }
+
+  // Add evidence: POST { url, label, attested_no_phi } per item.
+  const addEvidenceMutation = useMutation({
+    mutationFn: async (payload: { itemId: number; url: string; label: string }) => {
+      if (!scanEvidenceUrl) throw new Error("Lab context required to add evidence");
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/veritascan/scans/${scanId}/items/${payload.itemId}/evidence`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ url: payload.url, label: payload.label, attested_no_phi: true }),
+        }
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to add evidence");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      if (scanEvidenceUrl) qc.invalidateQueries({ queryKey: [scanEvidenceUrl] });
+    },
+  });
+
+  // Delete evidence: DELETE by id (lab-scoped).
+  const deleteEvidenceMutation = useMutation({
+    mutationFn: async (evidenceId: number) => {
+      if (!activeLabId) throw new Error("Lab context required to delete evidence");
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/veritascan/evidence/${evidenceId}`,
+        { method: "DELETE", headers: authHeaders() }
+      );
+      if (!res.ok) throw new Error("Failed to delete evidence");
+      return res.json();
+    },
+    onSuccess: () => {
+      if (scanEvidenceUrl) qc.invalidateQueries({ queryKey: [scanEvidenceUrl] });
+    },
+  });
 
   // ── Auto-save logic ─────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -1083,7 +1368,10 @@ export default function VeritaScanScanPage() {
             key={domain}
             domain={domain}
             items={items}
+            evidenceByItem={evidenceByItem}
             onChange={handleItemChange}
+            onAddEvidence={activeLabId ? async (itemId, url, label) => { await addEvidenceMutation.mutateAsync({ itemId, url, label }); } : undefined}
+            onDeleteEvidence={activeLabId ? async (evidenceId) => { await deleteEvidenceMutation.mutateAsync(evidenceId); } : undefined}
             sectionRef={(el) => {
               sectionRefs.current[domain] = el;
             }}
@@ -1096,7 +1384,10 @@ export default function VeritaScanScanPage() {
             them disappear from active work without losing the audit trail. */}
         <ParkedItemsSection
           items={items}
+          evidenceByItem={evidenceByItem}
           onChange={handleItemChange}
+          onAddEvidence={activeLabId ? async (itemId, url, label) => { await addEvidenceMutation.mutateAsync({ itemId, url, label }); } : undefined}
+          onDeleteEvidence={activeLabId ? async (evidenceId) => { await deleteEvidenceMutation.mutateAsync(evidenceId); } : undefined}
           accreditationChoice={accreditationChoice}
         />
       </div>
