@@ -29,8 +29,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ExternalLink, Archive, Pencil, Plus, Search, Link2, X } from "lucide-react";
+import { ExternalLink, Archive, Pencil, Plus, Search, Link2, X, FileCheck2 } from "lucide-react";
 import { SCAN_ITEMS } from "@/lib/veritaScanData";
+import { Link as RouterLink } from "wouter";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 const API_BASE = "";
 
@@ -97,6 +99,7 @@ function reviewStatus(due: string | null): { tone: "ok" | "amber" | "red" | "non
 
 export default function VeritaScanDocumentLibraryPage() {
   const labId = useActiveLabId();
+  const labRoute = useLabRoute();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -232,9 +235,16 @@ export default function VeritaScanDocumentLibraryPage() {
             Link external documents that satisfy your accreditation checklists. URLs only — files stay in your SharePoint, Drive, OneDrive, or network share.
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)} data-testid="button-add-document">
-          <Plus size={14} className="mr-1.5" />Add Document
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" data-testid="button-inspection-proof">
+            <RouterLink href={labRoute("/veritascan/inspection-proof")}>
+              <FileCheck2 size={14} className="mr-1.5" />Inspection Proof View
+            </RouterLink>
+          </Button>
+          <Button onClick={() => setAddOpen(true)} data-testid="button-add-document">
+            <Plus size={14} className="mr-1.5" />Add Document
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="library">

@@ -56,6 +56,7 @@ import TeaLookupPage from "@/pages/TeaLookupPage";
 import VeritaScanAppPage from "@/pages/VeritaScanAppPage";
 import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
 import VeritaScanDocumentLibraryPage from "@/pages/VeritaScanDocumentLibraryPage";
+import VeritaScanInspectionProofPage from "@/pages/VeritaScanInspectionProofPage";
 import VeritaMapAppPage from "@/pages/VeritaMapAppPage";
 import VeritaMapBuildPage from "@/pages/VeritaMapBuildPage";
 import VeritaMapMapPage from "@/pages/VeritaMapMapPage";
@@ -384,6 +385,8 @@ function AppContent() {
           <Route path="/labs/:labId/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/labs/:labId/veritascan/documents" component={VeritaScanDocumentLibraryPage} />
           <Route path="/veritascan/documents">{wrapLegacy(VeritaScanDocumentLibraryPage)}</Route>
+          <Route path="/labs/:labId/veritascan/inspection-proof" component={VeritaScanInspectionProofPage} />
+          <Route path="/veritascan/inspection-proof">{wrapLegacy(VeritaScanInspectionProofPage)}</Route>
           <Route path="/labs/:labId/veritascan-app/:id" component={VeritaScanScanPage} />
           <Route path="/labs/:labId/veritamap-app" component={VeritaMapAppPage} />
           <Route path="/labs/:labId/veritamap-app/resources" component={VeritaMapResourcesPage} />
