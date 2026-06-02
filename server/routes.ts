@@ -8235,11 +8235,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaScan_Evidence_Redesign_Design_v3.md for the architectural decision
   // and locked design choices.
   //
-  // Plan allowlist (EXPLICIT, never blocklist) per CLAUDE.md §8:
-  const EVIDENCE_LIBRARY_PLAN_ALLOWLIST = ["clinic", "community", "hospital", "enterprise", "per_study"];
+  // Plan gate: Evidence Library is a VeritaScan submodule and uses the same
+  // plan allowlist as VeritaScan scans (hasScanAccess defined earlier in this
+  // section). That helper has an EXPLICIT allowlist of legacy and current
+  // plan names per CLAUDE.md §8. Reusing it ensures that any lab with
+  // VeritaScan access also has Evidence Library access, and that demo /
+  // legacy plan strings on existing labs do not silently get blocked.
   function hasEvidenceLibraryAccess(lab?: any, user?: any): boolean {
-    const plan = lab?.plan ?? user?.plan;
-    return EVIDENCE_LIBRARY_PLAN_ALLOWLIST.includes(String(plan || ""));
+    return hasScanAccess(user, lab);
   }
 
   const VALID_DOCUMENT_TYPES = ["policy", "procedure", "training_record", "competency", "validation_study", "equipment_log", "regulatory_record", "other"];
@@ -8252,7 +8255,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Query params: ?type=policy, ?status=active, ?q=critical, ?include_archived=1
   app.get("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     const sqlite = (db as any).$client;
     const filters: string[] = ["lab_id = ?"];
@@ -8289,7 +8292,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // auto-fill from lab_document_type_defaults.
   app.post("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     const { title, description, document_type, display_label, external_url, storage_provider, version, effective_date, review_due_date } = req.body || {};
     if (!title || typeof title !== "string" || !title.trim()) return res.status(400).json({ error: "title required" });
@@ -8344,7 +8347,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/labs/:labId/veritascan/documents/:docId — detail
   app.get("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     const row = (db as any).$client.prepare(
       "SELECT * FROM lab_documents WHERE id = ? AND lab_id = ?"
@@ -8356,7 +8359,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PATCH /api/labs/:labId/veritascan/documents/:docId — edit metadata
   app.patch("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
@@ -8401,7 +8404,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE /api/labs/:labId/veritascan/documents/:docId — soft delete only
   app.delete("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
@@ -8424,7 +8427,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/labs/:labId/veritascan/document-type-defaults — list defaults
   app.get("/api/labs/:labId/veritascan/document-type-defaults", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     const rows = (db as any).$client.prepare(
       "SELECT document_type, default_review_days FROM lab_document_type_defaults WHERE lab_id = ?"
@@ -8436,7 +8439,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Body: { default_review_days: number | null }
   app.put("/api/labs/:labId/veritascan/document-type-defaults/:type", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
     if (!VALID_DOCUMENT_TYPES.includes(req.params.type)) {
       return res.status(400).json({ error: `type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
