@@ -2556,6 +2556,326 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, corrective_action_id: newId, excluded_from_baseline: !!exclude_from_baseline });
   });
 
+  // ─── VeritaQC → VeritaCheck Verification Import (Phase A: Precision) ─────
+  // Pulls daily QC results from veritaqc and reshapes them as Precision
+  // Verification (CLSI EP15-A3) replicates. Design doc v2 locked decisions:
+  //   #1 multi-lot date ranges: require ONE control lot (reagent_lot
+  //      deferred — qc_results does not currently store reagent lot per
+  //      result; the verification study still captures it post-import)
+  //   #2 instrument: required for multi-analyzer labs, inferred otherwise
+  //   #3 level mapping: sticky per (lab, analyte); user overrides in modal
+  //   #4 Westgard-flagged results: included with was_westgard_flagged: true
+  //   #5 audit trail: data_points.imported_from_veritaqc + import_source
+  //
+  // Plan gate is the explicit allowlist of plans that include BOTH
+  // VeritaCheck (destination) and VeritaQC (source) by tier. Mirrors the
+  // hasCheckAccess pattern, minus the "only" carve-outs that ship one
+  // module without the other.
+  function hasQcImportAccess(user: any, lab?: any): boolean {
+    const plan = lab?.plan ?? user?.plan;
+    return [
+      "annual", "starter", "professional", "lab", "complete",
+      "waived", "community", "hospital", "large_hospital", "enterprise",
+    ].includes(plan) || (user?.userId && user.userId <= 11);
+  }
+
+  // GET /api/labs/:labId/qc/import-candidates
+  //   Required query: analyte
+  //   Optional query: instrument, start_date, end_date, control_lot_id
+  // Returns: { analyte, instrument_options, control_lot_options,
+  //   multi_lot_warning, levels: [{ qc_level, control_lot, target_value,
+  //   target_sd, result_count, latest_result_date }] }
+  // The shape is what the modal needs to populate filters and render the
+  // per-level preview before the user commits.
+  app.get("/api/labs/:labId/qc/import-candidates", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasQcImportAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+    }
+    const analyte = String(req.query.analyte || "").trim();
+    if (!analyte) return res.status(400).json({ error: "analyte required" });
+
+    const instrument = req.query.instrument ? String(req.query.instrument).trim() : null;
+    const startDate = req.query.start_date ? String(req.query.start_date).trim() : null;
+    const endDate = req.query.end_date ? String(req.query.end_date).trim() : null;
+    const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;
+
+    const sqlite = (db as any).$client;
+
+    // Eligible control lots for this (lab, analyte). Includes retired lots
+    // so a tech can pull historical data for a prior-quarter study.
+    const lots = sqlite.prepare(
+      "SELECT id, level, lot_number, manufacturer, mfr_mean, mfr_sd, status FROM qc_control_lots WHERE lab_id = ? AND analyte = ? ORDER BY (status = 'active') DESC, id DESC"
+    ).all(req.scope.labId, analyte) as any[];
+
+    if (lots.length === 0) {
+      return res.json({
+        analyte, instrument_options: [], control_lot_options: [],
+        multi_lot_warning: null, levels: [],
+      });
+    }
+
+    const lotIds = lots.map(l => l.id);
+    const lotPlaceholders = lotIds.map(() => "?").join(",");
+
+    // Distinct instruments seen in matching results — drives the modal's
+    // instrument dropdown. For single-analyzer labs there will be 1 (or 0
+    // if the field is null on historical rows from before instrument was
+    // tracked).
+    const instrumentRows = sqlite.prepare(
+      `SELECT DISTINCT instrument FROM qc_results
+       WHERE lab_id = ? AND control_lot_id IN (${lotPlaceholders})
+         AND instrument IS NOT NULL AND instrument != ''
+       ORDER BY instrument ASC`
+    ).all(req.scope.labId, ...lotIds) as any[];
+    const instrumentOptions = instrumentRows.map(r => r.instrument);
+
+    // Filter the results query by every supplied filter. Skipped filters
+    // pass through (e.g. no instrument filter -> include all instruments).
+    const filterClauses: string[] = [
+      "r.lab_id = ?",
+      `r.control_lot_id IN (${lotPlaceholders})`,
+    ];
+    const filterArgs: any[] = [req.scope.labId, ...lotIds];
+    if (instrument) {
+      filterClauses.push("r.instrument = ?");
+      filterArgs.push(instrument);
+    }
+    if (startDate) {
+      filterClauses.push("r.result_date >= ?");
+      filterArgs.push(startDate);
+    }
+    if (endDate) {
+      filterClauses.push("r.result_date <= ?");
+      filterArgs.push(endDate);
+    }
+    if (controlLotId) {
+      filterClauses.push("r.control_lot_id = ?");
+      filterArgs.push(controlLotId);
+    }
+
+    // Per-lot counts so the modal can warn before the user commits if the
+    // date range spans multiple control lots (locked decision #1).
+    const perLot = sqlite.prepare(
+      `SELECT r.control_lot_id, COUNT(*) AS n, MAX(r.result_date) AS latest
+       FROM qc_results r
+       WHERE ${filterClauses.join(" AND ")}
+       GROUP BY r.control_lot_id`
+    ).all(...filterArgs) as any[];
+
+    let multiLotWarning: any = null;
+    if (!controlLotId && perLot.length > 1) {
+      multiLotWarning = {
+        message: "Date range spans " + perLot.length +
+          " control lots. Select one control lot before importing.",
+        lot_counts: perLot.map(p => ({ control_lot_id: p.control_lot_id, n: p.n })),
+      };
+    }
+
+    // Per-level summary tiles. Group by lot.level (low / mid / high) and
+    // join in target_value + target_sd from the lot. The modal renders
+    // these as "Level 1 (QC Low): target 50 mg/dL, N=22 results".
+    const levels = perLot.map(row => {
+      const lot = lots.find(l => l.id === row.control_lot_id)!;
+      return {
+        qc_level: lot.level,
+        control_lot_id: lot.id,
+        control_lot: lot.lot_number,
+        manufacturer: lot.manufacturer,
+        target_value: lot.mfr_mean,
+        target_sd: lot.mfr_sd,
+        result_count: row.n,
+        latest_result_date: row.latest,
+      };
+    });
+
+    res.json({
+      analyte,
+      instrument_options: instrumentOptions,
+      control_lot_options: lots.map(l => ({
+        id: l.id, lot_number: l.lot_number, level: l.level,
+        manufacturer: l.manufacturer, status: l.status,
+      })),
+      multi_lot_warning: multiLotWarning,
+      levels,
+    });
+  });
+
+  // POST /api/labs/:labId/qc/import-preview
+  //   body: { analyte, instrument?, start_date?, end_date?,
+  //           control_lot_id?, replicates_per_level, subsample_strategy }
+  // Returns the verification-study payload shape ready to merge into the
+  // VeritaCheckPage Precision state:
+  //   { levels: [{ name, values: [...], qc_level, control_lot,
+  //                was_westgard_flagged_count }],
+  //     import_source: { date_range, instrument_id, control_lot_id,
+  //                      reagent_lot: null, result_ids: [...] },
+  //     westgard_flag_summary: { total: N, flagged: M } }
+  // The client persists import_source verbatim into the saved study's
+  // data_points JSON so the audit trail survives all later edits.
+  app.post("/api/labs/:labId/qc/import-preview", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasQcImportAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+    }
+    const {
+      analyte, instrument, start_date, end_date, control_lot_id,
+      replicates_per_level, subsample_strategy,
+    } = req.body || {};
+
+    if (!analyte || typeof analyte !== "string" || !analyte.trim()) {
+      return res.status(400).json({ error: "analyte required" });
+    }
+    if (!control_lot_id) {
+      return res.status(400).json({ error: "control_lot_id required (one control lot per import)" });
+    }
+    const repN = Math.max(1, Math.min(40, Number(replicates_per_level) || 20));
+    const strategy = ["most_recent", "random", "all"].includes(subsample_strategy)
+      ? subsample_strategy : "most_recent";
+
+    const sqlite = (db as any).$client;
+
+    // Re-confirm the lot belongs to this lab + analyte before we read its
+    // results. Same defensive pattern as the existing qc routes.
+    const lot = sqlite.prepare(
+      "SELECT id, level, lot_number, mfr_mean, mfr_sd, manufacturer FROM qc_control_lots WHERE id = ? AND lab_id = ? AND analyte = ?"
+    ).get(Number(control_lot_id), req.scope.labId, String(analyte).trim()) as any;
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab for this analyte" });
+
+    // Build the results query with the same filter shape as the candidates
+    // endpoint, plus mandatory control_lot_id (we're committing now).
+    const where: string[] = ["r.lab_id = ?", "r.control_lot_id = ?"];
+    const args: any[] = [req.scope.labId, lot.id];
+    if (instrument) { where.push("r.instrument = ?"); args.push(String(instrument).trim()); }
+    if (start_date) { where.push("r.result_date >= ?"); args.push(String(start_date).trim()); }
+    if (end_date)   { where.push("r.result_date <= ?"); args.push(String(end_date).trim()); }
+
+    const orderBy = strategy === "random"
+      ? "RANDOM()"
+      : "r.result_date DESC, r.id DESC";
+    const limitClause = strategy === "all" ? "" : "LIMIT " + repN;
+
+    const rows = sqlite.prepare(
+      `SELECT r.id, r.result_value, r.result_date, r.instrument,
+              r.accepted_for_reporting,
+              EXISTS(SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id) AS was_westgard_flagged
+       FROM qc_results r
+       WHERE ${where.join(" AND ")}
+       ORDER BY ${orderBy}
+       ${limitClause}`
+    ).all(...args) as any[];
+
+    // Sticky level-name mapping: if (lab, analyte, qc_level) has a saved
+    // override, prefer it. Otherwise default to a humanized label derived
+    // from the level. The modal lets the user override + save back.
+    const mappingRow = sqlite.prepare(
+      "SELECT study_level_name FROM veritaqc_import_mappings WHERE lab_id = ? AND analyte = ? AND qc_level = ?"
+    ).get(req.scope.labId, String(analyte).trim(), lot.level) as any;
+    const defaultLevelName: Record<string, string> = {
+      low: "Level 1 (QC Low)",
+      mid: "Level 2 (QC Mid)",
+      high: "Level 3 (QC High)",
+    };
+    const studyLevelName = mappingRow?.study_level_name
+      || defaultLevelName[String(lot.level || "mid").toLowerCase()]
+      || ("QC " + lot.level);
+
+    const flaggedCount = rows.filter(r => !!r.was_westgard_flagged).length;
+
+    const values = rows.map(r => Number(r.result_value)).filter(v => Number.isFinite(v));
+    const resultIds = rows.map(r => r.id);
+
+    const reagentLotPayload = req.body?.reagent_lot && typeof req.body.reagent_lot === "string"
+      ? req.body.reagent_lot.trim()
+      : null;
+
+    res.json({
+      analyte: String(analyte).trim(),
+      levels: [{
+        name: studyLevelName,
+        values,
+        qc_level: lot.level,
+        control_lot_id: lot.id,
+        control_lot: lot.lot_number,
+        manufacturer: lot.manufacturer,
+        target_value: lot.mfr_mean,
+        target_sd: lot.mfr_sd,
+        was_westgard_flagged_count: flaggedCount,
+      }],
+      import_source: {
+        date_range: { start: start_date || null, end: end_date || null },
+        instrument_id: instrument || null,
+        control_lot_id: lot.id,
+        control_lot_number: lot.lot_number,
+        reagent_lot: reagentLotPayload,
+        result_ids: resultIds,
+        subsample_strategy: strategy,
+        replicates_per_level_requested: repN,
+        replicates_per_level_imported: values.length,
+        imported_at: new Date().toISOString(),
+      },
+      westgard_flag_summary: {
+        total: rows.length,
+        flagged: flaggedCount,
+      },
+    });
+  });
+
+  // GET /api/labs/:labId/qc/import-mappings/:analyte — read sticky
+  // (qc_level -> study_level_name) overrides for this lab + analyte.
+  app.get("/api/labs/:labId/qc/import-mappings/:analyte", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasQcImportAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+    }
+    const analyte = String(req.params.analyte || "").trim();
+    if (!analyte) return res.status(400).json({ error: "analyte required" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      "SELECT qc_level, study_level_name, updated_at FROM veritaqc_import_mappings WHERE lab_id = ? AND analyte = ? ORDER BY qc_level ASC"
+    ).all(req.scope.labId, analyte) as any[];
+    res.json({ analyte, mappings: rows });
+  });
+
+  // PUT /api/labs/:labId/qc/import-mappings/:analyte — upsert sticky
+  // mappings. Body: { mappings: [{ qc_level, study_level_name }, ...] }
+  // Each row is upserted by (lab_id, analyte, qc_level). Sending an empty
+  // array does nothing (no destructive clear).
+  app.put("/api/labs/:labId/qc/import-mappings/:analyte", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasQcImportAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+    }
+    const analyte = String(req.params.analyte || "").trim();
+    if (!analyte) return res.status(400).json({ error: "analyte required" });
+    const { mappings } = req.body || {};
+    if (!Array.isArray(mappings)) return res.status(400).json({ error: "mappings array required" });
+
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const upsert = sqlite.prepare(
+      `INSERT INTO veritaqc_import_mappings (lab_id, analyte, qc_level, study_level_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(lab_id, analyte, qc_level) DO UPDATE SET
+         study_level_name = excluded.study_level_name,
+         updated_at = excluded.updated_at`
+    );
+    const tx = sqlite.transaction((rows: any[]) => {
+      for (const m of rows) {
+        const lvl = String(m?.qc_level || "").trim();
+        const studyLvl = String(m?.study_level_name || "").trim();
+        if (!lvl || !studyLvl) continue;
+        upsert.run(req.scope.labId, analyte, lvl, studyLvl, now, now);
+      }
+    });
+    try {
+      tx(mappings);
+    } catch (err: any) {
+      console.error("[qc/import-mappings PUT] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Mapping save failed" });
+    }
+    const updated = sqlite.prepare(
+      "SELECT qc_level, study_level_name, updated_at FROM veritaqc_import_mappings WHERE lab_id = ? AND analyte = ? ORDER BY qc_level ASC"
+    ).all(req.scope.labId, analyte) as any[];
+    res.json({ ok: true, analyte, mappings: updated });
+  });
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
