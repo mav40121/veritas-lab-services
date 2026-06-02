@@ -1711,6 +1711,176 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
   );
 }
 
+// ─── SVG chart helpers (twin of server/pdfReport.ts so the screen render
+// matches the PDF byte-for-byte) ────────────────────────────────────────────
+interface ChartPoint { x: number; y: number; verdict: "pass" | "fail" | "incomplete"; name: string }
+
+function pointColor(v: "pass" | "fail" | "incomplete"): string {
+  return v === "pass" ? "#437A22" : v === "fail" ? "#A12C7B" : "#7A7974";
+}
+
+function niceTicks(min: number, max: number, count = 5): number[] {
+  if (!isFinite(min) || !isFinite(max) || max === min) return [min];
+  const step = (max - min) / count;
+  return Array.from({ length: count + 1 }, (_, i) => min + step * i);
+}
+
+function fmtTick(v: number): string {
+  if (!isFinite(v)) return "";
+  if (Math.abs(v) >= 100) return v.toFixed(0);
+  if (Math.abs(v) >= 10) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+function linearityChartSVG(
+  points: ChartPoint[],
+  slope: number,
+  intercept: number,
+  r2: number,
+  units: string,
+): string {
+  if (points.length === 0) return "";
+  const padL = 70, padR = 20, padT = 40, padB = 60;
+  const W = 700, H = 440;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys, xMin), yMax = Math.max(...ys, xMax);
+  const xRange = xMax - xMin || 1;
+  const yRange = yMax - yMin || 1;
+  const xLo = xMin - xRange * 0.05, xHi = xMax + xRange * 0.05;
+  const yLo = yMin - yRange * 0.05, yHi = yMax + yRange * 0.05;
+  const sx = (x: number) => padL + ((x - xLo) / (xHi - xLo)) * plotW;
+  const sy = (y: number) => padT + plotH - ((y - yLo) / (yHi - yLo)) * plotH;
+  const xTicks = niceTicks(xLo, xHi, 5);
+  const yTicks = niceTicks(yLo, yHi, 5);
+
+  const xAxis = `
+    <line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" stroke="#28251D" stroke-width="1"/>
+    ${xTicks.map(t => `<line x1="${sx(t)}" y1="${padT + plotH}" x2="${sx(t)}" y2="${padT + plotH + 4}" stroke="#28251D" stroke-width="1"/><text x="${sx(t)}" y="${padT + plotH + 18}" text-anchor="middle" font-size="10" fill="#28251D" font-family="Arial">${fmtTick(t)}</text>`).join("")}
+    <text x="${padL + plotW / 2}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#28251D" font-family="Arial" font-weight="600">Assigned${units ? " (" + units + ")" : ""}</text>
+  `;
+  const yAxis = `
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#28251D" stroke-width="1"/>
+    ${yTicks.map(t => `<line x1="${padL - 4}" y1="${sy(t)}" x2="${padL}" y2="${sy(t)}" stroke="#28251D" stroke-width="1"/><text x="${padL - 8}" y="${sy(t) + 3}" text-anchor="end" font-size="10" fill="#28251D" font-family="Arial">${fmtTick(t)}</text>`).join("")}
+    <text x="20" y="${padT + plotH / 2}" text-anchor="middle" font-size="11" fill="#28251D" font-family="Arial" font-weight="600" transform="rotate(-90, 20, ${padT + plotH / 2})">Measured Mean${units ? " (" + units + ")" : ""}</text>
+  `;
+  const identityXa = Math.max(xLo, yLo);
+  const identityXb = Math.min(xHi, yHi);
+  const identityLine = identityXa < identityXb
+    ? `<line x1="${sx(identityXa)}" y1="${sy(identityXa)}" x2="${sx(identityXb)}" y2="${sy(identityXb)}" stroke="#7A7974" stroke-width="1.2" stroke-dasharray="4,3"/>`
+    : "";
+  const regYa = slope * xLo + intercept;
+  const regYb = slope * xHi + intercept;
+  const regLine = `<line x1="${sx(xLo)}" y1="${sy(regYa)}" x2="${sx(xHi)}" y2="${sy(regYb)}" stroke="#01696F" stroke-width="2"/>`;
+
+  const dots = points.map(p =>
+    `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="5" fill="${pointColor(p.verdict)}" stroke="#28251D" stroke-width="1"/>
+     <title>${p.name}: assigned ${p.x.toFixed(2)}, measured ${p.y.toFixed(2)}</title>`
+  ).join("");
+
+  const legend = `
+    <g transform="translate(${padL + plotW - 180}, ${padT + 8})">
+      <rect x="0" y="0" width="170" height="64" fill="white" fill-opacity="0.9" stroke="#D4D1CA" stroke-width="1" rx="3"/>
+      <line x1="8" y1="14" x2="28" y2="14" stroke="#01696F" stroke-width="2"/><text x="34" y="17" font-size="10" font-family="Arial" fill="#28251D">Regression line</text>
+      <line x1="8" y1="30" x2="28" y2="30" stroke="#7A7974" stroke-width="1.2" stroke-dasharray="4,3"/><text x="34" y="33" font-size="10" font-family="Arial" fill="#28251D">Identity (y = x)</text>
+      <text x="8" y="50" font-size="10" font-family="Arial" fill="#28251D">Slope: ${slope.toFixed(4)}, r²: ${r2.toFixed(4)}</text>
+    </g>
+  `;
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:700px;display:block;">
+    <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="#FAFAF8" stroke="#D4D1CA" stroke-width="1"/>
+    ${xAxis}${yAxis}${identityLine}${regLine}${dots}${legend}
+  </svg>`;
+}
+
+function reportableRangeChartSVG(
+  points: ChartPoint[],
+  teaIsPercentage: boolean,
+  tea: number,
+  absoluteFloor: number | null,
+  absoluteUnit: string,
+  claimedLow: number | null,
+  claimedHigh: number | null,
+  units: string,
+): string {
+  if (points.length === 0) return "";
+  const padL = 70, padR = 20, padT = 40, padB = 60;
+  const W = 700, H = 440;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const allX = [...xs, ...(claimedLow !== null ? [claimedLow] : []), ...(claimedHigh !== null ? [claimedHigh] : [])];
+  const xMin = Math.min(...allX), xMax = Math.max(...allX);
+  const yMin = Math.min(...ys, xMin), yMax = Math.max(...ys, xMax);
+  const xRange = xMax - xMin || 1;
+  const yRange = yMax - yMin || 1;
+  const xLo = xMin - xRange * 0.05, xHi = xMax + xRange * 0.05;
+  const yLo = yMin - yRange * 0.05, yHi = yMax + yRange * 0.05;
+  const sx = (x: number) => padL + ((x - xLo) / (xHi - xLo)) * plotW;
+  const sy = (y: number) => padT + plotH - ((y - yLo) / (yHi - yLo)) * plotH;
+
+  const bandX = niceTicks(Math.max(xLo, 0), xHi, 20);
+  const upperPts: string[] = [];
+  const lowerPts: string[] = [];
+  for (const x of bandX) {
+    const pctAllow = teaIsPercentage ? Math.abs(x) * tea : 0;
+    const absAllow = teaIsPercentage ? (absoluteFloor ?? 0) : tea;
+    const allow = Math.max(pctAllow, absAllow);
+    upperPts.push(`${sx(x)},${sy(x + allow)}`);
+    lowerPts.unshift(`${sx(x)},${sy(x - allow)}`);
+  }
+  const band = `<polygon points="${upperPts.join(" ")} ${lowerPts.join(" ")}" fill="#01696F" fill-opacity="0.10" stroke="none"/>`;
+  const identityXa = Math.max(xLo, yLo);
+  const identityXb = Math.min(xHi, yHi);
+  const identityLine = identityXa < identityXb
+    ? `<line x1="${sx(identityXa)}" y1="${sy(identityXa)}" x2="${sx(identityXb)}" y2="${sy(identityXb)}" stroke="#01696F" stroke-width="1.5" stroke-dasharray="4,3"/>`
+    : "";
+  const clMarker = claimedLow !== null
+    ? `<line x1="${sx(claimedLow)}" y1="${padT}" x2="${sx(claimedLow)}" y2="${padT + plotH}" stroke="#964219" stroke-width="1.2" stroke-dasharray="2,3"/><text x="${sx(claimedLow)}" y="${padT - 6}" text-anchor="middle" font-size="9" fill="#964219" font-family="Arial">Claimed Low: ${claimedLow}</text>`
+    : "";
+  const chMarker = claimedHigh !== null
+    ? `<line x1="${sx(claimedHigh)}" y1="${padT}" x2="${sx(claimedHigh)}" y2="${padT + plotH}" stroke="#964219" stroke-width="1.2" stroke-dasharray="2,3"/><text x="${sx(claimedHigh)}" y="${padT - 6}" text-anchor="middle" font-size="9" fill="#964219" font-family="Arial">Claimed High: ${claimedHigh}</text>`
+    : "";
+
+  const xTicks = niceTicks(xLo, xHi, 5);
+  const yTicks = niceTicks(yLo, yHi, 5);
+  const xAxis = `
+    <line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" stroke="#28251D" stroke-width="1"/>
+    ${xTicks.map(t => `<line x1="${sx(t)}" y1="${padT + plotH}" x2="${sx(t)}" y2="${padT + plotH + 4}" stroke="#28251D" stroke-width="1"/><text x="${sx(t)}" y="${padT + plotH + 18}" text-anchor="middle" font-size="10" fill="#28251D" font-family="Arial">${fmtTick(t)}</text>`).join("")}
+    <text x="${padL + plotW / 2}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#28251D" font-family="Arial" font-weight="600">Assigned${units ? " (" + units + ")" : ""}</text>
+  `;
+  const yAxis = `
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#28251D" stroke-width="1"/>
+    ${yTicks.map(t => `<line x1="${padL - 4}" y1="${sy(t)}" x2="${padL}" y2="${sy(t)}" stroke="#28251D" stroke-width="1"/><text x="${padL - 8}" y="${sy(t) + 3}" text-anchor="end" font-size="10" fill="#28251D" font-family="Arial">${fmtTick(t)}</text>`).join("")}
+    <text x="20" y="${padT + plotH / 2}" text-anchor="middle" font-size="11" fill="#28251D" font-family="Arial" font-weight="600" transform="rotate(-90, 20, ${padT + plotH / 2})">Measured Mean${units ? " (" + units + ")" : ""}</text>
+  `;
+  const dots = points.map(p =>
+    `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="5" fill="${pointColor(p.verdict)}" stroke="#28251D" stroke-width="1"/>
+     <title>${p.name}: assigned ${p.x.toFixed(2)}, measured ${p.y.toFixed(2)}</title>`
+  ).join("");
+
+  const teaLabel = teaIsPercentage
+    ? `±${(tea * 100).toFixed(1)}%${absoluteFloor ? ` or ±${absoluteFloor} ${absoluteUnit}` : ""}`
+    : `±${tea} ${absoluteUnit}`;
+  const legend = `
+    <g transform="translate(${padL + plotW - 190}, ${padT + 8})">
+      <rect x="0" y="0" width="180" height="62" fill="white" fill-opacity="0.92" stroke="#D4D1CA" stroke-width="1" rx="3"/>
+      <rect x="8" y="6" width="20" height="10" fill="#01696F" fill-opacity="0.10" stroke="#01696F" stroke-width="0.5"/><text x="34" y="15" font-size="10" font-family="Arial" fill="#28251D">TEa band: ${teaLabel}</text>
+      <line x1="8" y1="30" x2="28" y2="30" stroke="#964219" stroke-width="1.2" stroke-dasharray="2,3"/><text x="34" y="33" font-size="10" font-family="Arial" fill="#28251D">Claimed range</text>
+      <line x1="8" y1="46" x2="28" y2="46" stroke="#01696F" stroke-width="1.5" stroke-dasharray="4,3"/><text x="34" y="49" font-size="10" font-family="Arial" fill="#28251D">Identity (y = x)</text>
+    </g>
+  `;
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:700px;display:block;">
+    <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="#FAFAF8" stroke="#D4D1CA" stroke-width="1"/>
+    ${band}${xAxis}${yAxis}${identityLine}${clMarker}${chMarker}${dots}${legend}
+  </svg>`;
+}
+
 // ─── LINEARITY (CLSI EP06) results ─────────────────────────────────────────
 // OLS regression of per-level means vs assigned targets. Acceptance:
 // |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. Per-level table shows the same
@@ -1759,6 +1929,21 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Regression Plot</CardTitle></CardHeader>
+        <CardContent>
+          <div dangerouslySetInnerHTML={{ __html: linearityChartSVG(
+            levels
+              .filter(l => l.assigned_value !== null && l.mean !== null)
+              .map(l => ({ x: l.assigned_value as number, y: l.mean as number, verdict: l.verdict, name: l.name })),
+            slope,
+            intercept,
+            r2,
+            units,
+          )}} />
         </CardContent>
       </Card>
 
@@ -1842,6 +2027,24 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Recovery Plot</CardTitle></CardHeader>
+        <CardContent>
+          <div dangerouslySetInnerHTML={{ __html: reportableRangeChartSVG(
+            levels
+              .filter(l => l.assigned_value !== null && l.mean !== null)
+              .map(l => ({ x: l.assigned_value as number, y: l.mean as number, verdict: l.verdict, name: l.name })),
+            results.teaIsPercentage !== false,
+            Number(results.tea) || 0,
+            results.absoluteFloor ?? null,
+            results.absoluteUnit || "",
+            (results.claimed_range_low ?? null) as number | null,
+            (results.claimed_range_high ?? null) as number | null,
+            units,
+          )}} />
         </CardContent>
       </Card>
 
