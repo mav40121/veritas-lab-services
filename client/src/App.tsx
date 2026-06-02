@@ -401,6 +401,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
           <Route path="/labs/:labId/veritapolicy-app/compliance" component={VeritaPolicyCompliancePage} />
+          <Route path="/labs/:labId/veritacheck" component={VeritaCheckPage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
           <Route path="/labs/:labId/veritastock/snap-order" component={VeritaStockSnapOrderPage} />
