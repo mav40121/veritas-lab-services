@@ -5,15 +5,27 @@
 import { db } from "./db";
 
 // Study type → VeritaScan item keyword mapping
+//
+// Rewired 2026-06-02 after the cal_ver split (PRs #485 / #487 / #488 / #489):
+// "Linearity" now routes to its own `linearity` study type instead of cal_ver,
+// and reportable_range / accuracy_bias / carryover join the map with their
+// own keyword arrays. cal_ver narrows to Calibration Verification only.
+// accuracy_bias uses specific phrasing ("Accuracy / Bias", "Trueness") to
+// avoid colliding with `precision` which legitimately matches bare "Accuracy"
+// / "accuracy" / "bias" for accuracy within precision studies.
 const STUDY_TYPE_KEYWORDS: Record<string, string[]> = {
   method_comparison: ["Correlation", "Method Comparison", "correlation"],
-  cal_ver: ["Calibration Verification", "Calibration verification", "calibration verification", "Linearity"],
+  cal_ver: ["Calibration Verification", "Calibration verification", "calibration verification"],
   precision: ["Accuracy", "Precision", "accuracy", "precision", "bias"],
   lot_to_lot: ["Lot", "Reagent", "lot", "reagent"],
   pt_coag: ["PT", "PTT", "coagulation", "Coagulation"],
   qc_range: [],
   multi_analyte_coag: [],
   inr: [],
+  linearity: ["Linearity", "linearity"],
+  reportable_range: ["Reportable Range", "Reportable range", "reportable range", "AMR Verification", "AMR verification"],
+  accuracy_bias: ["Accuracy / Bias", "Accuracy/Bias", "accuracy/bias", "Trueness", "trueness"],
+  carryover: ["Carryover", "carryover"],
 };
 
 /**
