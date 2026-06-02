@@ -190,6 +190,51 @@ sqlite.exec(`
     UNIQUE(scan_id, item_id)
   );
 
+  -- VeritaScan Evidence Redesign Phase A (2026-06-02)
+  -- URL pointers only. No file content ever lands on VeritaAssure.
+  -- See project_veritascan_url_pointers_only memory for the architectural
+  -- decision and VeritaScan_Evidence_Redesign_Design_v3.md for the build doc.
+  CREATE TABLE IF NOT EXISTS lab_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    document_type TEXT NOT NULL,
+    display_label TEXT,
+    external_url TEXT NOT NULL,
+    storage_provider TEXT,
+    version TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    superseded_by_document_id INTEGER,
+    effective_date TEXT,
+    review_due_date TEXT,
+    linked_at TEXT NOT NULL,
+    linked_by_user_id INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS document_checklist_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    accreditor TEXT NOT NULL,
+    checklist_item_id TEXT NOT NULL,
+    notes TEXT,
+    linked_by_user_id INTEGER NOT NULL,
+    linked_at TEXT NOT NULL,
+    UNIQUE(document_id, accreditor, checklist_item_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS lab_document_type_defaults (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_type TEXT NOT NULL,
+    default_review_days INTEGER,
+    UNIQUE(lab_id, document_type)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_lab_documents_lab_status ON lab_documents(lab_id, status);
+  CREATE INDEX IF NOT EXISTS idx_lab_documents_lab_type   ON lab_documents(lab_id, document_type);
+  CREATE INDEX IF NOT EXISTS idx_doc_links_accreditor     ON document_checklist_links(accreditor, checklist_item_id);
+
   CREATE TABLE IF NOT EXISTS newsletter_subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE,
@@ -1014,6 +1059,32 @@ const scanColNames = scanItemCols.map((c) => c.name);
 if (!scanColNames.includes("completion_source")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_source TEXT DEFAULT 'manual'");
 if (!scanColNames.includes("completion_link")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_link TEXT");
 if (!scanColNames.includes("completion_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_note TEXT");
+
+// VeritaScan Evidence Phase A migration safety net (2026-06-02)
+// The three new tables (lab_documents, document_checklist_links,
+// lab_document_type_defaults) are created via CREATE TABLE IF NOT EXISTS
+// above. The PRAGMA blocks below catch the case where an older Railway
+// volume already has the table from a prior deploy but is missing a
+// column added later. Per NEW DB TABLE RULE (CLAUDE.md §8).
+const labDocCols = (sqlite.prepare("PRAGMA table_info(lab_documents)").all() as { name: string }[]).map(c => c.name);
+const labDocColumnDefs: [string, string][] = [
+  ["display_label", "TEXT"],
+  ["storage_provider", "TEXT"],
+  ["version", "TEXT"],
+  ["superseded_by_document_id", "INTEGER"],
+  ["effective_date", "TEXT"],
+  ["review_due_date", "TEXT"],
+  ["description", "TEXT"],
+];
+for (const [col, type] of labDocColumnDefs) {
+  if (!labDocCols.includes(col)) sqlite.exec(`ALTER TABLE lab_documents ADD COLUMN ${col} ${type}`);
+}
+
+const docLinkCols = (sqlite.prepare("PRAGMA table_info(document_checklist_links)").all() as { name: string }[]).map(c => c.name);
+if (!docLinkCols.includes("notes")) sqlite.exec("ALTER TABLE document_checklist_links ADD COLUMN notes TEXT");
+
+const docDefaultsCols = (sqlite.prepare("PRAGMA table_info(lab_document_type_defaults)").all() as { name: string }[]).map(c => c.name);
+if (!docDefaultsCols.includes("default_review_days")) sqlite.exec("ALTER TABLE lab_document_type_defaults ADD COLUMN default_review_days INTEGER");
 
 // Add specimen_info column to competency_assessment_items if upgrading
 const compItemCols = sqlite.prepare("PRAGMA table_info(competency_assessment_items)").all() as { name: string }[];

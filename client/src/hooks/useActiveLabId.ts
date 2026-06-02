@@ -11,6 +11,7 @@ const LAB_SCOPABLE_PATHS: readonly string[] = [
   "/dashboard",
   "/study/",
   "/veritascan-app",
+  "/veritascan/documents",
   "/veritamap-app",
   "/veritatrack-app",
   "/veritacomp-app",
