@@ -3486,6 +3486,24 @@ sqlite.exec(`
     UNIQUE(lab_id, analyte)
   );
 
+  -- VeritaQC -> VeritaCheck import: sticky per-(lab, analyte) level-name
+  -- mapping. When a tech runs VeritaQC -> Precision Verification import for
+  -- (lab 3, analyte "Glucose"), VeritaQC's control_lot.level "Bio-Rad
+  -- Multiqual L1" is mapped to the verification study's level_name "QC Low".
+  -- Mapping is sticky so the next import on the same (lab, analyte) reuses
+  -- it. Tech can edit + re-save to override. Per design doc v2 decision #3.
+  CREATE TABLE IF NOT EXISTS veritaqc_import_mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    qc_level TEXT NOT NULL,
+    study_level_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE(lab_id, analyte, qc_level)
+  );
+
   -- PDF download tokens. Browser claims a token via GET /api/pdf/:token after
   -- a server-side POST mints it; the GET delivers the PDF buffer and deletes
   -- the row (one-time use). Persisted to SQLite (not an in-memory Map) so the
@@ -3552,6 +3570,14 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_period_reviews", "review_notes",             "ALTER TABLE qc_period_reviews ADD COLUMN review_notes TEXT");
 
   ensure("qc_rule_settings", "analyte",                    "ALTER TABLE qc_rule_settings ADD COLUMN analyte TEXT");
+
+  // veritaqc_import_mappings: new in VeritaQC Import Phase A. All five
+  // columns are in the CREATE TABLE above; ensure() block is the migration
+  // anchor per CLAUDE.md §8.
+  ensure("veritaqc_import_mappings", "study_level_name",
+         "ALTER TABLE veritaqc_import_mappings ADD COLUMN study_level_name TEXT NOT NULL DEFAULT ''");
+  ensure("veritaqc_import_mappings", "updated_at",
+         "ALTER TABLE veritaqc_import_mappings ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))");
   ensure("qc_rule_settings", "bias_consecutive_count",     "ALTER TABLE qc_rule_settings ADD COLUMN bias_consecutive_count INTEGER NOT NULL DEFAULT 10");
   ensure("qc_rule_settings", "trend_consecutive_count",    "ALTER TABLE qc_rule_settings ADD COLUMN trend_consecutive_count INTEGER NOT NULL DEFAULT 7");
   ensure("qc_rule_settings", "enabled_rules_json",         "ALTER TABLE qc_rule_settings ADD COLUMN enabled_rules_json TEXT NOT NULL DEFAULT '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]'");
