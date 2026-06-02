@@ -8228,6 +8228,234 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, count: items.length });
   });
 
+  // ── VERITASCAN EVIDENCE LIBRARY (Phase A, 2026-06-02) ────────────────────
+  //
+  // URL-pointers-only document library. No file content ever lands on
+  // VeritaAssure. See project_veritascan_url_pointers_only memory entry and
+  // VeritaScan_Evidence_Redesign_Design_v3.md for the architectural decision
+  // and locked design choices.
+  //
+  // Plan allowlist (EXPLICIT, never blocklist) per CLAUDE.md §8:
+  const EVIDENCE_LIBRARY_PLAN_ALLOWLIST = ["clinic", "community", "hospital", "enterprise", "per_study"];
+  function hasEvidenceLibraryAccess(lab?: any, user?: any): boolean {
+    const plan = lab?.plan ?? user?.plan;
+    return EVIDENCE_LIBRARY_PLAN_ALLOWLIST.includes(String(plan || ""));
+  }
+
+  const VALID_DOCUMENT_TYPES = ["policy", "procedure", "training_record", "competency", "validation_study", "equipment_log", "regulatory_record", "other"];
+  const VALID_STORAGE_PROVIDERS = ["sharepoint", "google_drive", "onedrive", "network_share", "dropbox", "box", "internal_url", "other"];
+  const VALID_DOCUMENT_STATUSES = ["active", "archived", "superseded", "draft"];
+  // Accreditors enum lives elsewhere in routes.ts and is reused by Phase B.
+  // Intentionally not redeclared here.
+
+  // GET /api/labs/:labId/veritascan/documents — list documents for this lab
+  // Query params: ?type=policy, ?status=active, ?q=critical, ?include_archived=1
+  app.get("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    const sqlite = (db as any).$client;
+    const filters: string[] = ["lab_id = ?"];
+    const params: any[] = [req.scope.labId];
+    if (req.query.type && VALID_DOCUMENT_TYPES.includes(String(req.query.type))) {
+      filters.push("document_type = ?");
+      params.push(String(req.query.type));
+    }
+    if (req.query.status && VALID_DOCUMENT_STATUSES.includes(String(req.query.status))) {
+      filters.push("status = ?");
+      params.push(String(req.query.status));
+    } else if (req.query.include_archived !== "1") {
+      // Default: exclude archived
+      filters.push("status != 'archived'");
+    }
+    if (req.query.q) {
+      filters.push("(title LIKE ? OR description LIKE ? OR display_label LIKE ?)");
+      const pattern = `%${String(req.query.q)}%`;
+      params.push(pattern, pattern, pattern);
+    }
+    const rows = sqlite.prepare(
+      `SELECT id, lab_id, title, description, document_type, display_label, external_url,
+              storage_provider, version, status, superseded_by_document_id,
+              effective_date, review_due_date, linked_at, linked_by_user_id
+       FROM lab_documents
+       WHERE ${filters.join(" AND ")}
+       ORDER BY linked_at DESC`
+    ).all(...params);
+    res.json(rows);
+  });
+
+  // POST /api/labs/:labId/veritascan/documents — create new document row
+  // If review_due_date is NOT provided AND lab has a default for this type,
+  // auto-fill from lab_document_type_defaults.
+  app.post("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    const { title, description, document_type, display_label, external_url, storage_provider, version, effective_date, review_due_date } = req.body || {};
+    if (!title || typeof title !== "string" || !title.trim()) return res.status(400).json({ error: "title required" });
+    if (!document_type || !VALID_DOCUMENT_TYPES.includes(document_type)) {
+      return res.status(400).json({ error: `document_type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
+    }
+    if (!external_url || typeof external_url !== "string" || !external_url.trim()) {
+      return res.status(400).json({ error: "external_url required (URL pointer to your document in SharePoint, Drive, OneDrive, etc.)" });
+    }
+    if (storage_provider && !VALID_STORAGE_PROVIDERS.includes(storage_provider)) {
+      return res.status(400).json({ error: `storage_provider must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
+    }
+    const sqlite = (db as any).$client;
+    // Auto-fill review_due_date from lab default if not supplied
+    let resolvedReviewDue: string | null = review_due_date || null;
+    if (!resolvedReviewDue) {
+      const defaultRow = sqlite.prepare(
+        "SELECT default_review_days FROM lab_document_type_defaults WHERE lab_id = ? AND document_type = ?"
+      ).get(req.scope.labId, document_type) as any;
+      if (defaultRow?.default_review_days) {
+        const days = Number(defaultRow.default_review_days);
+        if (Number.isFinite(days) && days > 0) {
+          const due = new Date();
+          due.setDate(due.getDate() + days);
+          resolvedReviewDue = due.toISOString().slice(0, 10);
+        }
+      }
+    }
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      `INSERT INTO lab_documents
+       (lab_id, title, description, document_type, display_label, external_url,
+        storage_provider, version, status, effective_date, review_due_date,
+        linked_at, linked_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`
+    ).run(
+      req.scope.labId, title.trim(), description?.trim() || null, document_type,
+      display_label?.trim() || null, external_url.trim(),
+      storage_provider || null, version?.trim() || null,
+      effective_date || null, resolvedReviewDue, now, req.userId,
+    );
+    const created = sqlite.prepare("SELECT * FROM lab_documents WHERE id = ?").get(Number(ins.lastInsertRowid));
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritascan", action: "create", entityType: "document",
+      entityId: String(ins.lastInsertRowid), entityLabel: title.trim(),
+      after: created, ipAddress: req.ip,
+    });
+    res.json(created);
+  });
+
+  // GET /api/labs/:labId/veritascan/documents/:docId — detail
+  app.get("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM lab_documents WHERE id = ? AND lab_id = ?"
+    ).get(Number(req.params.docId), req.scope.labId);
+    if (!row) return res.status(404).json({ error: "Document not found in this lab" });
+    res.json(row);
+  });
+
+  // PATCH /api/labs/:labId/veritascan/documents/:docId — edit metadata
+  app.patch("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare(
+      "SELECT * FROM lab_documents WHERE id = ? AND lab_id = ?"
+    ).get(Number(req.params.docId), req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Document not found in this lab" });
+
+    const allowed = ["title", "description", "document_type", "display_label", "external_url", "storage_provider", "version", "status", "effective_date", "review_due_date"];
+    const updates: string[] = [];
+    const params: any[] = [];
+    for (const field of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+        const val = req.body[field];
+        if (field === "document_type" && val && !VALID_DOCUMENT_TYPES.includes(val)) {
+          return res.status(400).json({ error: `document_type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
+        }
+        if (field === "storage_provider" && val && !VALID_STORAGE_PROVIDERS.includes(val)) {
+          return res.status(400).json({ error: `storage_provider must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
+        }
+        if (field === "status" && val && !VALID_DOCUMENT_STATUSES.includes(val)) {
+          return res.status(400).json({ error: `status must be one of: ${VALID_DOCUMENT_STATUSES.join(", ")}` });
+        }
+        updates.push(`${field} = ?`);
+        params.push(typeof val === "string" ? val.trim() || null : val);
+      }
+    }
+    if (updates.length === 0) return res.json(existing);
+    params.push(Number(req.params.docId), req.scope.labId);
+    sqlite.prepare(
+      `UPDATE lab_documents SET ${updates.join(", ")} WHERE id = ? AND lab_id = ?`
+    ).run(...params);
+    const updated = sqlite.prepare("SELECT * FROM lab_documents WHERE id = ?").get(Number(req.params.docId));
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritascan", action: "update", entityType: "document",
+      entityId: String(req.params.docId), entityLabel: existing.title,
+      before: existing, after: updated, ipAddress: req.ip,
+    });
+    res.json(updated);
+  });
+
+  // DELETE /api/labs/:labId/veritascan/documents/:docId — soft delete only
+  app.delete("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare(
+      "SELECT * FROM lab_documents WHERE id = ? AND lab_id = ?"
+    ).get(Number(req.params.docId), req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Document not found in this lab" });
+    sqlite.prepare("UPDATE lab_documents SET status = 'archived' WHERE id = ?").run(Number(req.params.docId));
+    // Soft-delete semantics: logged as "delete" since AuditAction does not
+    // carry an archive variant. The persisted row carries status='archived'
+    // for distinguishing soft from hard at query time.
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritascan", action: "delete", entityType: "document",
+      entityId: String(req.params.docId), entityLabel: existing.title,
+      before: existing, ipAddress: req.ip,
+    });
+    res.json({ ok: true, archived: true });
+  });
+
+  // GET /api/labs/:labId/veritascan/document-type-defaults — list defaults
+  app.get("/api/labs/:labId/veritascan/document-type-defaults", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    const rows = (db as any).$client.prepare(
+      "SELECT document_type, default_review_days FROM lab_document_type_defaults WHERE lab_id = ?"
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+
+  // PUT /api/labs/:labId/veritascan/document-type-defaults/:type — set/clear
+  // Body: { default_review_days: number | null }
+  app.put("/api/labs/:labId/veritascan/document-type-defaults/:type", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ Evidence Library requires Clinic plan or above" });
+    }
+    if (!VALID_DOCUMENT_TYPES.includes(req.params.type)) {
+      return res.status(400).json({ error: `type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
+    }
+    const days = req.body?.default_review_days;
+    const cleanDays = days === null || days === undefined || days === "" ? null : Number(days);
+    if (cleanDays !== null && (!Number.isFinite(cleanDays) || cleanDays < 0 || cleanDays > 3650)) {
+      return res.status(400).json({ error: "default_review_days must be a positive integer up to 3650, or null to clear" });
+    }
+    const sqlite = (db as any).$client;
+    // Upsert
+    sqlite.prepare(
+      `INSERT INTO lab_document_type_defaults (lab_id, document_type, default_review_days)
+       VALUES (?, ?, ?)
+       ON CONFLICT(lab_id, document_type) DO UPDATE SET default_review_days = excluded.default_review_days`
+    ).run(req.scope.labId, req.params.type, cleanDays);
+    res.json({ ok: true, document_type: req.params.type, default_review_days: cleanDays });
+  });
+
   // ── VERITASCAN EXCEL EXPORT ──────────────────────────────────────────────
   // Shared handler factory for VeritaScan Excel + PDF exports. Lab-scoped
   // routes pass through labScopeMiddleware first, which sets req.scope.lab
