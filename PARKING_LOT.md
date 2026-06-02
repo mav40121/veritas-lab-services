@@ -933,22 +933,7 @@ Items 6+ (SSO, delegation, in-browser editing, etc.) are larger and should be cu
 
 ---
 
-### 40. VeritaCheck Accuracy / Bias module: "Simple Accuracy" vs "Method Comparison" mode toggle (Longstreth ask)
-
-**Effort:** M (~half-day: add mode selector to accuracy_bias study type, branch the data-entry form to a Precision-style replicate grid with per-level target value when "Simple Accuracy" is picked, leave existing multi-instrument correlation flow intact for "Method Comparison" mode).
-**Importance:** Medium-High. Direct ask from a heavy EP Evaluator user who is otherwise sold on the cal_ver split work. Closes the last conceptual friction point for EP-to-Veritas migrators, which Longstreth flagged as "a big selling point" for transition labs.
-
-Longstreth's 2026-06-02 reply on the Precision + cal_ver split work was strongly positive: "the functionality I was looking for is there and it is alot more intuitive," "something I could easily transition to from EP and something I could easily train others how to use." His one remaining friction is the Accuracy / Bias study type. Today the module is built around correlation between instruments against a Gold Standard, which is the right shape for accuracy-during-method-comparison. He wants a second mode for accuracy-during-validation: replicates of varying levels measured on one instrument vs a defined target value per level, with no correlation analysis. Functionally it would look like Precision's per-level replicate grid plus a target value field per level, evaluated as bias (observed mean - target) vs acceptance criterion. This stays inside the existing accuracy_bias study type as an "Accuracy mode" selector at the top of the form, not a new study type. Same plan gate, same PDF skeleton, branched evaluator and data-entry shape downstream of the mode pick.
-
-**Why it parks:** Phase A of VeritaQC Import just shipped; sequencing this against the assess-and-then-Phase-B path locked in Q1 ★ earlier today (task #77 → #78 → #79) keeps the current Longstreth-feedback arc clean. Pick it up after VeritaQC Phase B lands and the assessment checkpoint is done, OR jump the queue if Longstreth's Teams demo is scheduled inside the next 7-10 days and we want this in his hands first.
-
-**Source:** Longstreth email reply 2026-06-02 (chat parking-lot turn). Build authorization not yet given.
-
-**Status:** Open, sequencing-dependent. Pre- vs post-COLA: indifferent; this is feature work, not pricing or onboarding.
-
----
-
-### 41. VeritaQC Import Phase A: human-in-the-loop Gate 3 click-through (deferred)
+### 40. VeritaQC Import Phase A: human-in-the-loop Gate 3 click-through (deferred)
 
 **Effort:** XS (~5 minutes of Michael's time on a live URL).
 **Importance:** Low. Backend contract is fully verified via 35/35 passing offline contract checks (`scripts/verify-veritaqc-import.js`) plus three live-API smoke checks against prod (candidates, preview, mappings PUT/GET) on Riverside Regional with seed lot `SEED-1780436709094` (18 Glucose results). The browser-driven click was not run because Claude-in-Chrome's renderer froze repeatedly on the Radix Select inside VeritaCheckPage, not on Phase A code itself. Risk of a UX bug surviving to a customer is small but not zero.
