@@ -369,7 +369,6 @@ export default function VeritaCheckPage() {
     "cal_ver": "cal_ver",
     "calibration-verification": "cal_ver",
     "precision": "precision",
-    "accuracy": "precision",
     "lot_to_lot": "lot_to_lot",
     "lot-to-lot": "lot_to_lot",
     "pt_coag": "pt_coag",
@@ -378,12 +377,14 @@ export default function VeritaCheckPage() {
     "reference_interval": "ref_interval",
     "reportable_range": "cal_ver",
     "carryover": "carryover",
+    "accuracy_bias": "accuracy_bias",
+    "accuracy": "accuracy_bias",
   };
   const rawInitialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -511,6 +512,31 @@ export default function VeritaCheckPage() {
         }
         if (typeof (dpParsed as any).units === "string") setCoUnits((dpParsed as any).units);
       }
+      // Accuracy / Bias (EP15-A3) rehydration. Persisted shape is
+      // { analyte, units, levels: [{ name, assigned_value, replicates }] }.
+      if (studyTypeForHydrate === "accuracy_bias" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).levels)) {
+        const a = (dpParsed as any).analyte;
+        const u = (dpParsed as any).units;
+        if (typeof a === "string") setAbAnalyte(a);
+        if (typeof u === "string") setAbUnits(u);
+        const persistedLevels = (dpParsed as any).levels as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
+        if (persistedLevels.length > 0) {
+          setAbLevels(persistedLevels.map((lv, i) => ({
+            name: typeof lv.name === "string" && lv.name ? lv.name : `Level ${i + 1}`,
+            assignedValue: lv.assigned_value === null || lv.assigned_value === undefined ? null : Number(lv.assigned_value),
+          })));
+          const repMap: Record<string, number[]> = {};
+          let maxReps = 0;
+          for (const lv of persistedLevels) {
+            const name = typeof lv.name === "string" && lv.name ? lv.name : "";
+            const reps = Array.isArray(lv.replicates) ? lv.replicates.map(v => Number(v)) : [];
+            if (name) repMap[name] = reps;
+            if (reps.length > maxReps) maxReps = reps.length;
+          }
+          setAbRunData(repMap);
+          if (maxReps > 0) setAbReplicatesPerLevel(maxReps);
+        }
+      }
       editHydratedRef.current = true;
     } catch (err) {
       console.warn("[veritacheck edit] hydrate failed", err);
@@ -634,6 +660,20 @@ export default function VeritaCheckPage() {
   const [coData, setCoData] = useState<{ sequence: number; sample_type: "L" | "H"; value: number | null }[]>(
     CARRYOVER_DEFAULT_PATTERN.map((t, i) => ({ sequence: i + 1, sample_type: t, value: null }))
   );
+
+  // Accuracy / Bias (CLSI EP15-A3 §6) state. First study type in the
+  // cal_ver architectural split. Per-level replicate model: each level has
+  // a name + assigned value (the QC material's certified target); replicates
+  // are entered per level in a qc_range-style input grid. EP15-A3 §6 calls
+  // for at least 10 replicates per level across at least 2 levels.
+  const [abAnalyte, setAbAnalyte] = useState("");
+  const [abUnits, setAbUnits] = useState("");
+  const [abLevels, setAbLevels] = useState<{ name: string; assignedValue: number | null }[]>([
+    { name: "QC Low",  assignedValue: null },
+    { name: "QC High", assignedValue: null },
+  ]);
+  const [abReplicatesPerLevel, setAbReplicatesPerLevel] = useState(10);
+  const [abRunData, setAbRunData] = useState<Record<string, number[]>>({});
 
   // PT/Coag state
   const [ptInstrumentName, setPtInstrumentName] = useState("ACL TOP 351");
@@ -1109,6 +1149,11 @@ export default function VeritaCheckPage() {
     ? sensBlanksText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length
     : studyType === "carryover"
     ? coData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
+    : studyType === "accuracy_bias"
+    ? abLevels.filter(lv => {
+        const reps = abRunData[lv.name] || [];
+        return lv.assignedValue !== null && reps.filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 5;
+      }).length
     : studyType === "method_comparison" && assayType !== "quantitative"
     ? dataPoints.filter(dp => dp.expectedCategory && instrumentNames.slice(1).some(n => dp.instrumentCategories?.[n])).length
     : studyType === "method_comparison"
@@ -1443,6 +1488,70 @@ export default function VeritaCheckPage() {
         }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
+    if (studyType === "accuracy_bias") {
+      if (!abAnalyte.trim()) { toast({ title: "Enter the analyte name", variant: "destructive" }); return; }
+      const tea = CLIA_PRESETS[cliaPreset]?.value && CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
+      const builtLevels = abLevels.map(lv => {
+        const reps = (abRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
+        return { name: lv.name, assigned_value: lv.assignedValue, replicates: reps };
+      });
+      const usableLevels = builtLevels.filter(lv => lv.assigned_value !== null && lv.replicates.length >= 5);
+      if (usableLevels.length < 2) {
+        toast({ title: `Need at least 2 levels with assigned value and 5+ replicates each (have ${usableLevels.length})`, variant: "destructive" });
+        return;
+      }
+      let allPass = true;
+      const perLevel = builtLevels.map(lv => {
+        const reps = lv.replicates;
+        const n = reps.length;
+        const assigned = lv.assigned_value;
+        if (n === 0 || assigned === null || assigned === 0) {
+          return { name: lv.name, assigned_value: assigned, n, mean: null as number | null, sd: null as number | null, pctRecovery: null as number | null, absBiasPct: null as number | null, verdict: "incomplete" as const };
+        }
+        const mean = reps.reduce((s, v) => s + v, 0) / n;
+        const variance = n > 1 ? reps.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
+        const sdv = Math.sqrt(variance);
+        const pctRecovery = (mean / assigned) * 100;
+        const absBiasPct = Math.abs(mean - assigned) / Math.abs(assigned) * 100;
+        const pass = absBiasPct / 100 <= tea;
+        if (!pass) allPass = false;
+        return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, verdict: pass ? "pass" as const : "fail" as const };
+      });
+      const results = {
+        type: "accuracy_bias",
+        analyte: abAnalyte.trim(),
+        units: abUnits.trim(),
+        tea,
+        levels: perLevel,
+        overallPass: allPass,
+        summary: allPass
+          ? `All levels met the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${abAnalyte.trim()}.`
+          : `One or more levels exceeded the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${abAnalyte.trim()}.`,
+      };
+      const study: InsertStudy = {
+        testName: testName.trim() || abAnalyte.trim(),
+        instrument: instrumentNames[0] || "-",
+        analyst: analyst.trim() || "-",
+        date,
+        studyType: "accuracy_bias",
+        cliaAllowableError: tea,
+        teaIsPercentage: 1,
+        teaUnit: '%',
+        cliaAbsoluteFloor: null,
+        cliaAbsoluteUnit: null,
+        dataPoints: JSON.stringify({
+          analyte: abAnalyte.trim(),
+          units: abUnits.trim(),
+          levels: builtLevels,
+        }),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
+        status: allPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
       };
       saveMutation.mutate(study);
@@ -1794,6 +1903,7 @@ return (
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
                           <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
+                          <SelectItem value="accuracy_bias">Accuracy / Bias (CLSI EP15-A3)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -2830,6 +2940,119 @@ return (
                     </div>
                   </CardContent>
                 </Card>
+              ) : studyType === "accuracy_bias" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Accuracy / Bias Data Entry (CLSI EP15-A3)</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                      <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                      <span>CLSI EP15-A3 §6: measure material with a known assigned value (commercial control, PT specimen with consensus mean, or reference material) at 2-3 levels, 5 replicates per level minimum. The study passes when the percent absolute bias (|mean - assigned| / assigned) does not exceed the CLIA total allowable error at every level.</span>
+                    </div>
+                    <div className="grid sm:grid-cols-4 gap-4">
+                      <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Glucose" value={abAnalyte} onChange={e => setAbAnalyte(e.target.value)} data-testid="input-ab-analyte" /></div>
+                      <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mg/dL" value={abUnits} onChange={e => setAbUnits(e.target.value)} data-testid="input-ab-units" /></div>
+                      <div className="space-y-1.5"><Label>Levels</Label>
+                        <Select value={String(abLevels.length)} onValueChange={v => {
+                          const n = parseInt(v);
+                          setAbLevels(prev => {
+                            if (n === prev.length) return prev;
+                            if (n > prev.length) {
+                              const additions = Array.from({ length: n - prev.length }, (_, i) => ({ name: `Level ${prev.length + i + 1}`, assignedValue: null as number | null }));
+                              return [...prev, ...additions];
+                            }
+                            return prev.slice(0, n);
+                          });
+                        }}>
+                          <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2">2</SelectItem>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="4">4</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5"><Label>Replicates / Level</Label>
+                        <Select value={String(abReplicatesPerLevel)} onValueChange={v => setAbReplicatesPerLevel(parseInt(v))}>
+                          <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {abLevels.map((lv, levelIdx) => {
+                        const reps = abRunData[lv.name] || [];
+                        const filled = reps.filter(v => v !== undefined && v !== null && !isNaN(v));
+                        return (
+                          <div key={levelIdx} className="rounded-md border border-border p-3 space-y-2">
+                            <div className="grid sm:grid-cols-3 gap-3 items-end">
+                              <div className="space-y-1"><Label className="text-xs">Level Name</Label>
+                                <Input
+                                  value={lv.name}
+                                  onChange={e => {
+                                    const newName = e.target.value;
+                                    const oldName = lv.name;
+                                    setAbLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, name: newName } : p));
+                                    if (oldName !== newName) {
+                                      setAbRunData(prev => {
+                                        if (!(oldName in prev)) return prev;
+                                        const { [oldName]: arr, ...rest } = prev;
+                                        return { ...rest, [newName]: arr };
+                                      });
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-1"><Label className="text-xs">Assigned Value ({abUnits || "units"})</Label>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  value={lv.assignedValue ?? ""}
+                                  onChange={e => {
+                                    const num = e.target.value === "" ? null : parseFloat(e.target.value);
+                                    setAbLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, assignedValue: num } : p));
+                                  }}
+                                  placeholder="e.g. 100"
+                                  className="h-9 text-sm"
+                                />
+                              </div>
+                              <div className="text-xs text-muted-foreground pb-2">{filled.length} / {abReplicatesPerLevel} replicates entered</div>
+                            </div>
+                            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                              {Array.from({ length: abReplicatesPerLevel }).map((_, repIdx) => {
+                                const val = reps[repIdx];
+                                return (
+                                  <Input
+                                    key={repIdx}
+                                    type="number"
+                                    step="any"
+                                    placeholder={`#${repIdx + 1}`}
+                                    value={val === undefined || val === null || isNaN(val) ? "" : val}
+                                    onChange={e => {
+                                      const raw = e.target.value;
+                                      const num = raw === "" ? NaN : parseFloat(raw);
+                                      setAbRunData(prev => {
+                                        const existing = prev[lv.name] ? [...prev[lv.name]] : [];
+                                        while (existing.length <= repIdx) existing.push(NaN);
+                                        existing[repIdx] = num;
+                                        return { ...prev, [lv.name]: existing };
+                                      });
+                                    }}
+                                    className="h-9 text-sm font-mono"
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : studyType === "sensitivity" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base">Analytical Sensitivity Data Entry</CardTitle></CardHeader>
@@ -3272,7 +3495,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>

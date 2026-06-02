@@ -378,7 +378,24 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     // so a study created via API/seed before its evaluator is wired marks
     // as failing rather than silently passing.
     if (studyType === "accuracy_bias") {
-      return "fail"; // TODO PR 2: implement per-level |mean - assigned| / assigned <= TEa
+      // CLSI EP15-A3 § 6 trueness / bias estimation.
+      // Per level, evaluate |mean - assigned| / |assigned| against the
+      // selected TEa. All levels must pass for the study to pass.
+      // Data shape: { analyte, units, levels: [{ name, assigned_value,
+      // replicates: number[] }] }
+      const levels = (rawData?.levels || []) as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
+      if (!Array.isArray(levels) || levels.length === 0) return "fail";
+      const tea = cliaAllowableError; // stored as decimal fraction (e.g. 0.10 for 10%)
+      let allPass = true;
+      for (const lvl of levels) {
+        const assigned = Number(lvl?.assigned_value ?? NaN);
+        const reps = (lvl?.replicates || []).filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[];
+        if (!isFinite(assigned) || assigned === 0 || reps.length === 0) { allPass = false; continue; }
+        const mean = reps.reduce((s, v) => s + v, 0) / reps.length;
+        const absBias = Math.abs(mean - assigned) / Math.abs(assigned);
+        if (absBias > tea) { allPass = false; }
+      }
+      return allPass ? "pass" : "fail";
     }
     if (studyType === "linearity") {
       return "fail"; // TODO PR 3: implement regression with |slope - 1| * 100 <= TEa AND r^2 >= 0.95
