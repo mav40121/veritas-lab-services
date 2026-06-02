@@ -787,7 +787,7 @@ function directorReviewHTML(): string {
 
 
 // ─── Regulatory Compliance References box ───────────────────────────────────
-type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover";
+type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range";
 export type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 
 interface RegulatoryRefs {
@@ -878,6 +878,34 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     cola: ["LAB.022"],
     aabb: ["5.6.3"],
     clsi: ["EP10-A3"],
+    cfr:  ["42 CFR §493.1253(b)(2)"],
+  },
+  // ── cal_ver split (PR 1: skeleton entries) ───────────────────────────────
+  // Three new study types replacing the bundled cal_ver. Regulatory refs
+  // match the CLSI standard each subtype was always supposed to cite.
+  // Per-type PDF builders ship in PR 2 / PR 3 / PR 4.
+  accuracy_bias: {
+    cap:  ["COM.40000", "GEN.40460"],
+    tjc:  ["QSA.02.02.01"],
+    cola: ["LAB.020"],
+    aabb: ["5.6.1"],
+    clsi: ["EP15-A3"],
+    cfr:  ["42 CFR §493.1253(b)(1)(i)"],
+  },
+  linearity: {
+    cap:  ["COM.40000", "COM.40620"],
+    tjc:  ["QSA.02.02.01"],
+    cola: ["LAB.020"],
+    aabb: ["5.6.1"],
+    clsi: ["EP06"],
+    cfr:  ["42 CFR §493.1253(b)(2)"],
+  },
+  reportable_range: {
+    cap:  ["COM.40620", "GEN.40450"],
+    tjc:  ["QSA.02.02.01"],
+    cola: ["LAB.020"],
+    aabb: ["5.6.1"],
+    clsi: ["EP06"],
     cfr:  ["42 CFR §493.1253(b)(2)"],
   },
 };
@@ -3010,6 +3038,18 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildSensitivityHTML(study, results)
     : study.studyType === "carryover"
     ? buildCarryoverHTML(study, results)
+    // ── cal_ver split (PR 1: skeleton dispatch) ─────────────────────────
+    // Per-type builders ship in PR 2 / PR 3 / PR 4. Explicit throws here
+    // are intentional. Forward-safe: any caller (admin API, demo seed,
+    // future codepath) creating a study with one of these types before
+    // its builder is wired fails loudly instead of silently rendering as
+    // a method comparison via the default fallthrough below.
+    : study.studyType === "accuracy_bias"
+    ? (() => { throw new Error("accuracy_bias PDF builder ships in PR 2 of the cal_ver split"); })()
+    : study.studyType === "linearity"
+    ? (() => { throw new Error("linearity PDF builder ships in PR 3 of the cal_ver split"); })()
+    : study.studyType === "reportable_range"
+    ? (() => { throw new Error("reportable_range PDF builder ships in PR 4 of the cal_ver split"); })()
     : isQualResult
     ? buildQualitativeHTML(study, results)
     : isSemiQuantResult
