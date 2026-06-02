@@ -2295,6 +2295,95 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+// CLSI EP06 verification: linearity of the analytical measurement range via
+// OLS regression of per-level measured-mean vs assigned target. Results shape
+// matches what StudyResultsPage computes + handleSubmit persists. Acceptance:
+// |slope - 1| * 100 <= TEa% AND r^2 >= 0.95.
+function buildLinearityHTML(study: Study, results: any): string {
+  const analyte = results.analyte || study.testName;
+  const units = results.units || "";
+  const levels = (results.levels || []) as Array<{
+    name: string;
+    assigned_value: number | null;
+    n: number;
+    mean: number | null;
+    sd: number | null;
+    pctRecovery: number | null;
+    verdict: "pass" | "fail" | "incomplete";
+  }>;
+  const overallPass = !!results.overallPass;
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass ? "Meets CLSI EP06 criteria" : "Does not meet CLSI EP06 criteria";
+
+  const cliaStatement = overallPass
+    ? `<b>The Linearity verification for ${analyte} meets the criteria per 42 CFR §493.1253(b)(1)(ii) and CLSI EP06.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The Linearity verification for ${analyte} does not meet the criteria per 42 CFR §493.1253(b)(1)(ii) and CLSI EP06.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+
+  const slope = Number(results.slope ?? 0);
+  const intercept = Number(results.intercept ?? 0);
+  const r2 = Number(results.r2 ?? 0);
+  const slopeBiasPct = Number(results.slopeBiasPct ?? 0);
+  const teaIsPercentage = results.teaIsPercentage !== false;
+  const teaRaw = study.cliaAllowableError ?? 0;
+  const teaPctTxt = teaIsPercentage ? `${(teaRaw * 100).toFixed(1)}%` : `${teaRaw} ${units}`;
+
+  const dataRows = levels.map((l, i) => {
+    const pfClass = l.verdict === "pass" ? "pass" : l.verdict === "fail" ? "fail" : "";
+    const verdictLabel = l.verdict === "pass" ? "Pass" : l.verdict === "fail" ? "Fail" : "Incomplete";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${l.name || `L${i + 1}`}</td>
+      <td class="text-right">${l.assigned_value === null ? "-" : sf(l.assigned_value, 3)}</td>
+      <td class="text-right">${l.n}</td>
+      <td class="text-right">${l.mean === null ? "-" : sf(l.mean, 3)}</td>
+      <td class="text-right">${l.sd === null ? "-" : sf(l.sd, 4)}</td>
+      <td class="text-right">${l.pctRecovery === null ? "-" : sf(l.pctRecovery, 2) + "%"}</td>
+      <td class="text-right ${pfClass}">${verdictLabel}</td>
+    </tr>`;
+  }).join("");
+
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">Levels</div><div class="stat-value">${levels.length}</div></div>
+      <div class="stat-item"><div class="stat-label">Slope</div><div class="stat-value">${sf(slope, 4)}</div></div>
+      <div class="stat-item"><div class="stat-label">Intercept</div><div class="stat-value">${sf(intercept, 3)}</div></div>
+      <div class="stat-item"><div class="stat-label">r²</div><div class="stat-value">${sf(r2, 4)}</div></div>
+      <div class="stat-item"><div class="stat-label">|Slope - 1|</div><div class="stat-value">${sf(slopeBiasPct, 2)}%</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">±${teaPctTxt}</div></div>
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary || ""} ${cliaStatement}</p>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck™ - Linearity Verification - ${study.testName}</title><style>${CSS}</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
+  ${summaryStats}
+  ${narrative}
+  ${regulatoryComplianceBoxHTML("linearity", (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  <div class="page-break"></div>
+  <div class="section-heading">Per-Level Linearity Results</div>
+  <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP06: linearity of the analytical measurement range. Acceptance: |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. Per-level verdict reflects bias against TEa at the level mean.</p>
+  <table>
+    <thead><tr>
+      <th>Level</th>
+      <th class="text-right">Assigned${units ? " (" + units + ")" : ""}</th>
+      <th class="text-right">N</th>
+      <th class="text-right">Mean</th>
+      <th class="text-right">SD</th>
+      <th class="text-right">% Recovery</th>
+      <th class="text-right">Verdict</th>
+    </tr></thead>
+    <tbody>${dataRows}</tbody>
+  </table>
+  </body></html>`;
+}
+
 function buildCarryoverHTML(study: Study, results: any): string {
   // Results shape: { specimens: [{sequence, sample_type, value, classification}],
   //   mean_L, mean_H, n_LL, n_LH, mean_LL, mean_LH, sd_LL, sd_LH,
@@ -3145,7 +3234,7 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     : study.studyType === "accuracy_bias"
     ? buildAccuracyBiasHTML(study, results)
     : study.studyType === "linearity"
-    ? (() => { throw new Error("linearity PDF builder ships in PR 3 of the cal_ver split"); })()
+    ? buildLinearityHTML(study, results)
     : study.studyType === "reportable_range"
     ? (() => { throw new Error("reportable_range PDF builder ships in PR 4 of the cal_ver split"); })()
     : isQualResult
