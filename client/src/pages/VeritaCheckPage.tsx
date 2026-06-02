@@ -2254,7 +2254,7 @@ return (
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cal_ver">Calibration Verification (CLSI EP06)</SelectItem>
-                          <SelectItem value="method_comparison">Accuracy / Bias / Correlation / Method Comparison (CLSI EP09 + EP15-A3)</SelectItem>
+                          <SelectItem value="method_comparison">Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)</SelectItem>
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
                           <SelectItem value="pt_coag">PT/INR Geometric Mean Calculator (CLSI H47)</SelectItem>
@@ -2263,7 +2263,7 @@ return (
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
                           <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
-                          <SelectItem value="accuracy_bias">Accuracy / Bias / Trueness (CLSI EP15-A3)</SelectItem>
+                          <SelectItem value="accuracy_bias">Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="linearity">Linearity (CLSI EP06)</SelectItem>
                           <SelectItem value="reportable_range">Reportable Range / AMR Verification (CLIA §493.1255)</SelectItem>
                         </SelectContent>
@@ -2272,6 +2272,18 @@ return (
                         <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                           <Info size={13} className="text-primary shrink-0 mt-0.5" />
                           <span>Calibration verification is required by CLIA even when your analyzer uses manufacturer-assigned calibration. VeritaCheck documents the verification process, not the calibration itself, which is what 42 CFR {"\u00A7"}493.1255 actually requires.</span>
+                        </div>
+                      )}
+                      {studyType === "accuracy_bias" && (
+                        <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                          <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                          <span>Use this study type when verifying a single instrument against known target values per CLSI EP15-A3. Replicates at multiple levels are compared to assigned values from QC material, proficiency testing samples, or certified reference material. For comparing one instrument to a reference method or another analyzer, pick Method Comparison instead.</span>
+                        </div>
+                      )}
+                      {studyType === "method_comparison" && (
+                        <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                          <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                          <span>Use this study type when comparing a new instrument to a reference method or comparing multiple instruments to a Gold Standard per CLSI EP09. Paired patient samples are analyzed for correlation, slope, intercept, and bias. For single-instrument accuracy against assigned target values, pick Accuracy / Bias instead.</span>
                         </div>
                       )}
                       {studyType === "precision" && activeLabId ? (
