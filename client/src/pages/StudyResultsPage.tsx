@@ -80,7 +80,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
@@ -122,7 +122,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias (EP15-A3)" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -605,7 +605,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias (EP15-A3)" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplay],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -1626,6 +1626,91 @@ function CarryoverReport({ study, results }: { study: Study; results: any }) {
   );
 }
 
+// ─── ACCURACY / BIAS (CLSI EP15-A3) results ─────────────────────────────────
+// Per-level mean / SD / %recovery / |bias|%, with PASS/FAIL gated by
+// %abs-bias against CLIA TEa. Mirrors the server-side buildAccuracyBiasHTML
+// PDF layout so the screen view and the report stay in sync.
+function AccuracyBiasReport({ study, results }: { study: Study; results: any }) {
+  const fmt = (n: any, d = 3) => (n === null || n === undefined || isNaN(n)) ? "-" : Number(n).toFixed(d);
+  const fmtPct = (n: any, d = 2) => (n === null || n === undefined || isNaN(n)) ? "-" : `${Number(n).toFixed(d)}%`;
+  const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBiasPct: number | null; verdict: "pass" | "fail" | "incomplete" }>;
+  const units = results.units || "";
+  const overallPass = !!results.overallPass;
+  const teaPct = (Number(results.tea) || 0) * 100;
+  const recoveries = levels.map(l => l.pctRecovery).filter((v): v is number => v !== null && !isNaN(v));
+  const maxRec = recoveries.length ? Math.max(...recoveries) : null;
+  const minRec = recoveries.length ? Math.min(...recoveries) : null;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Analyte", value: results.analyte || study.testName },
+          { label: "Levels Tested", value: String(levels.length) },
+          { label: "Max % Recovery", value: maxRec !== null ? fmtPct(maxRec) : "-" },
+          { label: "Verdict", value: overallPass ? "PASS" : "FAIL" },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Accuracy / Bias Summary</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
+            <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
+            <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
+            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}</div></div>
+            <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
+            <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
+            <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
+          </div>
+          {results.summary && (
+            <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Per-Level Results</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border">
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Level</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Assigned</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">N</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Mean</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SD</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">% Recovery</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">|Bias| %</th>
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Verdict</th>
+              </tr></thead>
+              <tbody>
+                {levels.map((lv, i) => (
+                  <tr key={i} className="border-b border-border/40">
+                    <td className="py-2 pr-3">{lv.name}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{lv.assigned_value === null ? "-" : fmt(lv.assigned_value)} {units}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{lv.n}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmt(lv.mean)} {units}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmt(lv.sd, 4)} {units}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmtPct(lv.pctRecovery)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmtPct(lv.absBiasPct)}</td>
+                    <td className={`py-2 pr-3 font-medium ${lv.verdict === "pass" ? "text-green-600 dark:text-green-400" : lv.verdict === "fail" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>{lv.verdict.toUpperCase()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 // ─── PT/COAG NEW LOT VALIDATION results ─────────────────────────────────────
 function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults }) {
   const { module1, module2, module3 } = results;
@@ -2425,6 +2510,46 @@ export default function StudyResults() {
         ? `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits || ""} did not exceed the Error Limit of ${errorLimit.toFixed(3)} ${coUnits || ""} (3 x SD of L-after-L specimens). Carryover is within the noise floor.`
         : `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits || ""} exceeded the Error Limit of ${errorLimit.toFixed(3)} ${coUnits || ""} (3 x SD of L-after-L specimens). Investigate sampling system contamination.`,
     } as any;
+  } else if (study.studyType === "accuracy_bias") {
+    // CLSI EP15-A3 §6 accuracy/bias: per-level |mean - assigned| / |assigned|
+    // versus TEa. All levels must pass for overall pass. Results shape mirrors
+    // the server evaluator and buildAccuracyBiasHTML PDF generator.
+    const { analyte, units, levels } = (rawDataPoints as {
+      analyte?: string;
+      units?: string;
+      levels?: Array<{ name: string; assigned_value: number | null; replicates: number[] }>;
+    });
+    const tea = study.cliaAllowableError;
+    const inLevels = Array.isArray(levels) ? levels : [];
+    let allPass = inLevels.length > 0;
+    const perLevel = inLevels.map(lv => {
+      const reps = (lv.replicates || []).filter(v => v !== undefined && v !== null && !isNaN(v as number)) as number[];
+      const n = reps.length;
+      const assigned = lv.assigned_value;
+      if (n === 0 || assigned === null || assigned === undefined || assigned === 0) {
+        allPass = false;
+        return { name: lv.name, assigned_value: assigned ?? null, n, mean: null, sd: null, pctRecovery: null, absBiasPct: null, verdict: "incomplete" };
+      }
+      const mean = reps.reduce((s, v) => s + v, 0) / n;
+      const variance = n > 1 ? reps.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
+      const sdv = Math.sqrt(variance);
+      const pctRecovery = (mean / assigned) * 100;
+      const absBiasPct = Math.abs(mean - assigned) / Math.abs(assigned) * 100;
+      const pass = absBiasPct / 100 <= tea;
+      if (!pass) allPass = false;
+      return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, verdict: pass ? "pass" : "fail" };
+    });
+    results = {
+      type: "accuracy_bias",
+      analyte: analyte || study.testName,
+      units: units || "",
+      tea,
+      levels: perLevel,
+      overallPass: allPass,
+      summary: allPass
+        ? `All levels met the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${analyte || study.testName}.`
+        : `One or more levels exceeded the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${analyte || study.testName}.`,
+    } as any;
   } else if (study.studyType === "method_comparison") {
     // Check if this is qualitative or semi-quantitative data
     if (rawDataPoints.assayType === "qualitative") {
@@ -2501,6 +2626,7 @@ export default function StudyResults() {
       {isMultiAnalyteCoag(results) && <MultiAnalyteCoagReport study={study} results={results} />}
       {isRefInterval(results) && <RefIntervalReport study={study} results={results} />}
       {(results as any).type === "carryover" && <CarryoverReport study={study} results={results as any} />}
+      {(results as any).type === "accuracy_bias" && <AccuracyBiasReport study={study} results={results as any} />}
 
       {/* Related Tools for PT/Coag studies */}
       {(study.studyType === "pt_coag" || study.studyType === "multi_analyte_coag" || study.studyType === "qc_range") && (

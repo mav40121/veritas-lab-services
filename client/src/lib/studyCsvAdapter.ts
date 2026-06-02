@@ -39,6 +39,7 @@ export function defaultCsvFilename(study: Study): string {
     qualitative: "Qualitative",
     semi_quantitative: "SemiQuant",
     carryover: "Carryover",
+    accuracy_bias: "AccuracyBias",
   };
   const typeTag = typeMap[study.studyType] ?? "Study";
   const safeName = String(study.testName ?? "")
@@ -215,6 +216,36 @@ function serializeSensitivity(input: SensitivityInput): string {
   ]);
 }
 
+// Accuracy / Bias (CLSI EP15-A3) source-data CSV: per-level rows with the
+// assigned (target) value, replicate index, and replicate value. Per-level
+// stats (mean, SD, % recovery, |bias|%) are recomputed by the results page
+// and the PDF builder from these raw inputs.
+type AccuracyBiasLevel = { name: string; assigned_value: number | null; replicates: number[] };
+type AccuracyBiasInput = { analyte?: string; units?: string; levels?: AccuracyBiasLevel[] };
+
+function serializeAccuracyBias(input: AccuracyBiasInput): string {
+  const levels = Array.isArray(input?.levels) ? input.levels : [];
+  const units = input?.units || "";
+  const rows: Array<{ level: string; assigned: number | string; replicate: number; value: number | string }> = [];
+  for (const lv of levels) {
+    const reps = Array.isArray(lv.replicates) ? lv.replicates : [];
+    if (reps.length === 0) {
+      rows.push({ level: lv.name, assigned: lv.assigned_value ?? "", replicate: 0, value: "" });
+      continue;
+    }
+    reps.forEach((v, i) => {
+      rows.push({ level: lv.name, assigned: lv.assigned_value ?? "", replicate: i + 1, value: v });
+    });
+  }
+  const cols: CsvColumn<typeof rows[number]>[] = [
+    { key: "level", header: "Level", format: (r) => r.level ?? "" },
+    { key: "assigned", header: `Assigned${units ? ` (${units})` : ""}`, format: (r) => r.assigned ?? "" },
+    { key: "replicate", header: "Replicate #", format: (r) => r.replicate ?? "" },
+    { key: "value", header: `Value${units ? ` (${units})` : ""}`, format: (r) => r.value ?? "" },
+  ];
+  return toCsv(rows as unknown as Record<string, unknown>[], cols as unknown as CsvColumn<Record<string, unknown>>[]);
+}
+
 // ─── Public entry point ──────────────────────────────────────────────────────
 
 export function studyToCsv(study: Study): string {
@@ -236,6 +267,8 @@ export function studyToCsv(study: Study): string {
       return serializeSensitivity(raw as SensitivityInput);
     case "carryover":
       return serializeCarryover(raw as CarryoverInput);
+    case "accuracy_bias":
+      return serializeAccuracyBias(raw as AccuracyBiasInput);
     case "cal_ver":
     case "method_comparison":
     case "lot_to_lot":

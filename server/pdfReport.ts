@@ -2197,6 +2197,82 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+// CLSI EP15-A3 § 6 Accuracy / Bias verification PDF builder.
+// Results shape (computed client-side from data_points {analyte, units, levels}):
+//   { type: "accuracy_bias", analyte, units,
+//     levels: [{ name, assignedValue, mean, sd, pctRecovery, absBias, pass }],
+//     maxPctRecovery, minPctRecovery, overallPass, passCount, totalCount, summary }
+function buildAccuracyBiasHTML(study: Study, results: any): string {
+  const analyte = results.analyte || study.testName;
+  const units = results.units || "";
+  const levels = (results.levels || []) as Array<{ name: string; assignedValue: number; mean: number; sd: number; pctRecovery: number; absBias: number; pass: boolean }>;
+  const overallPass = !!results.overallPass;
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass ? "Meets CLSI EP15-A3 criteria" : "Does not meet CLSI EP15-A3 criteria";
+
+  const cliaStatement = overallPass
+    ? `<b>The Accuracy / Bias verification for ${analyte} meets the criteria per 42 CFR §493.1253(b)(1)(i) and CLSI EP15-A3 § 6.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The Accuracy / Bias verification for ${analyte} does not meet the criteria per 42 CFR §493.1253(b)(1)(i) and CLSI EP15-A3 § 6.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+
+  const teaPct = (study.cliaAllowableError ?? 0) * 100;
+  const repsPerLevel = levels[0]?.mean !== undefined
+    ? (levels.reduce((s, l: any) => s + ((l.replicates as number[] | undefined)?.length || 0), 0) / Math.max(1, levels.length))
+    : 0;
+
+  const dataRows = levels.map((l, i) => {
+    const pfClass = l.pass ? "pass" : "fail";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${l.name || `L${i + 1}`}</td>
+      <td class="text-right">${sf(l.assignedValue, 3)}</td>
+      <td class="text-right">${sf(l.mean, 3)}</td>
+      <td class="text-right">${sf(l.sd, 4)}</td>
+      <td class="text-right">${sf(l.pctRecovery, 2)}%</td>
+      <td class="text-right">${sf(l.absBias * 100, 2)}%</td>
+      <td class="text-right ${pfClass}">${l.pass ? "Pass" : "Fail"}</td>
+    </tr>`;
+  }).join("");
+
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">Levels</div><div class="stat-value">${levels.length}</div></div>
+      <div class="stat-item"><div class="stat-label">Max % Recovery</div><div class="stat-value">${sf(results.maxPctRecovery ?? 0, 2)}%</div></div>
+      <div class="stat-item"><div class="stat-label">Min % Recovery</div><div class="stat-value">${sf(results.minPctRecovery ?? 0, 2)}%</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">±${teaPct.toFixed(1)}%</div></div>
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary || ""} ${cliaStatement}</p>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck™ - Accuracy / Bias Verification - ${study.testName}</title><style>${CSS}</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
+  ${summaryStats}
+  ${narrative}
+  ${regulatoryComplianceBoxHTML("accuracy_bias", (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  <div class="page-break"></div>
+  <div class="section-heading">Per-Level Accuracy / Bias Results</div>
+  <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP15-A3 § 6: bias estimation by comparison of mean measured value to the assigned reference value. Pass criterion: |observed bias| ≤ stated allowable error (TEa).</p>
+  <table>
+    <thead><tr>
+      <th>Level</th>
+      <th class="text-right">Assigned${units ? " (" + units + ")" : ""}</th>
+      <th class="text-right">Mean</th>
+      <th class="text-right">SD</th>
+      <th class="text-right">% Recovery</th>
+      <th class="text-right">|Bias|</th>
+      <th class="text-right">Verdict</th>
+    </tr></thead>
+    <tbody>${dataRows}</tbody>
+  </table>
+  </body></html>`;
+}
+
 function buildCarryoverHTML(study: Study, results: any): string {
   // Results shape: { specimens: [{sequence, sample_type, value, classification}],
   //   mean_L, mean_H, n_LL, n_LH, mean_LL, mean_LH, sd_LL, sd_LH,
@@ -3045,7 +3121,7 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     // its builder is wired fails loudly instead of silently rendering as
     // a method comparison via the default fallthrough below.
     : study.studyType === "accuracy_bias"
-    ? (() => { throw new Error("accuracy_bias PDF builder ships in PR 2 of the cal_ver split"); })()
+    ? buildAccuracyBiasHTML(study, results)
     : study.studyType === "linearity"
     ? (() => { throw new Error("linearity PDF builder ships in PR 3 of the cal_ver split"); })()
     : study.studyType === "reportable_range"
