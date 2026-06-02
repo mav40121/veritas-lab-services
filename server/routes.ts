@@ -4468,11 +4468,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (auth?.startsWith("Bearer ")) {
       try {
         const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-        // Check if seat user, use owner's data
-        const seatRow = (db as any).$client.prepare(
-          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-        ).get(payload.userId) as any;
-        const dataUserId = seatRow ? seatRow.owner_user_id : payload.userId;
+        // 2026-06-02 lab-scoped seat check (matches PR #482 pattern at
+        // line 4935). Derive active lab from Referer URL since this is
+        // the legacy unscoped GET. Owners of the active lab return their
+        // own studies; seat holders in the active lab return the owner's
+        // studies; no active-lab context falls back to legacy global
+        // seat lookup.
+        let getActiveLabId: number | null = null;
+        if (req.headers.referer) {
+          const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+          if (m) getActiveLabId = Number(m[1]);
+        }
+        let dataUserId = payload.userId;
+        if (getActiveLabId) {
+          const ownsLab = (db as any).$client.prepare(
+            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+          ).get(getActiveLabId, payload.userId);
+          if (!ownsLab) {
+            const seatRow = (db as any).$client.prepare(
+              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+            ).get(payload.userId, getActiveLabId) as any;
+            if (seatRow) dataUserId = seatRow.owner_user_id;
+          }
+        } else {
+          // Legacy fallback: no active-lab context. Preserve global behavior.
+          const seatRow = (db as any).$client.prepare(
+            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+          ).get(payload.userId) as any;
+          if (seatRow) dataUserId = seatRow.owner_user_id;
+        }
         // Return only studies owned by this user (or owner)
         // 2026-06-01: drafts pin to the top of the dashboard regardless of id,
         // then completed studies sort by id DESC.
@@ -4505,11 +4529,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(401).json({ error: "Invalid or expired session" });
     }
 
-    // Resolve seat user to owner for data scoping
-    const seatRow = (db as any).$client.prepare(
-      "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-    ).get(payload.userId) as any;
-    const dataUserId = seatRow ? seatRow.owner_user_id : payload.userId;
+    // Resolve seat user to owner for data scoping. 2026-06-02 lab-scoped
+    // (same pattern as the GET /api/studies list above and PR #482's
+    // POST /api/studies handler). For multi-lab owners holding a seat in
+    // someone else's lab, the unscoped seat lookup would otherwise export
+    // the wrong owner's studies.
+    let exportActiveLabId: number | null = null;
+    if (req.headers.referer) {
+      const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+      if (m) exportActiveLabId = Number(m[1]);
+    }
+    let dataUserId = payload.userId;
+    if (exportActiveLabId) {
+      const ownsLab = (db as any).$client.prepare(
+        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+      ).get(exportActiveLabId, payload.userId);
+      if (!ownsLab) {
+        const seatRow = (db as any).$client.prepare(
+          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+        ).get(payload.userId, exportActiveLabId) as any;
+        if (seatRow) dataUserId = seatRow.owner_user_id;
+      }
+    } else {
+      const seatRow = (db as any).$client.prepare(
+        "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+      ).get(payload.userId) as any;
+      if (seatRow) dataUserId = seatRow.owner_user_id;
+    }
 
     // Plan allowlist (EXPLICIT, never blocklist)
     const ownerUser = storage.getUserById(dataUserId);
@@ -4848,10 +4894,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       try {
         const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-        const seatRow = (db as any).$client.prepare(
-          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-        ).get(payload.userId) as any;
-        const effectiveUserId = seatRow ? seatRow.owner_user_id : payload.userId;
+        // 2026-06-02 lab-scoped seat check (same pattern as PR #482 and
+        // sibling fixes in this PR). For a multi-lab owner holding a seat
+        // in someone else's lab, the unscoped seat lookup would map
+        // effectiveUserId to the wrong owner — denying access to their
+        // own studies, or worse, authorizing access to studies in the
+        // other lab. Resolve active lab from Referer.
+        let getActiveLabId: number | null = null;
+        if (req.headers.referer) {
+          const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+          if (m) getActiveLabId = Number(m[1]);
+        }
+        let effectiveUserId = payload.userId;
+        if (getActiveLabId) {
+          const ownsLab = (db as any).$client.prepare(
+            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+          ).get(getActiveLabId, payload.userId);
+          if (!ownsLab) {
+            const seatRow = (db as any).$client.prepare(
+              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+            ).get(payload.userId, getActiveLabId) as any;
+            if (seatRow) effectiveUserId = seatRow.owner_user_id;
+          }
+        } else {
+          // Legacy fallback: no active-lab context.
+          const seatRow = (db as any).$client.prepare(
+            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+          ).get(payload.userId) as any;
+          if (seatRow) effectiveUserId = seatRow.owner_user_id;
+        }
         if (effectiveUserId !== study.userId) {
           return res.status(403).json({ error: "Access denied" });
         }
