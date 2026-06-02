@@ -379,21 +379,25 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     // as failing rather than silently passing.
     if (studyType === "accuracy_bias") {
       // CLSI EP15-A3 § 6 trueness / bias estimation.
-      // Per level, evaluate |mean - assigned| / |assigned| against the
-      // selected TEa. All levels must pass for the study to pass.
+      // Per level, evaluate |mean - assigned| against the dual-criterion
+      // S493 allowance: max(percent_allowance, absolute_floor). All levels
+      // must pass for the study to pass.
       // Data shape: { analyte, units, levels: [{ name, assigned_value,
       // replicates: number[] }] }
       const levels = (rawData?.levels || []) as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
       if (!Array.isArray(levels) || levels.length === 0) return "fail";
-      const tea = cliaAllowableError; // stored as decimal fraction (e.g. 0.10 for 10%)
+      const FP_EPS = 1e-9;
       let allPass = true;
       for (const lvl of levels) {
         const assigned = Number(lvl?.assigned_value ?? NaN);
         const reps = (lvl?.replicates || []).filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[];
         if (!isFinite(assigned) || assigned === 0 || reps.length === 0) { allPass = false; continue; }
         const mean = reps.reduce((s, v) => s + v, 0) / reps.length;
-        const absBias = Math.abs(mean - assigned) / Math.abs(assigned);
-        if (absBias > tea) { allPass = false; }
+        const diff = Math.abs(mean - assigned);
+        const pctAllowance = teaIsPercentage ? Math.abs(assigned) * cliaAllowableError : 0;
+        const absAllowance = teaIsPercentage ? (cliaAbsoluteFloor ?? 0) : cliaAllowableError;
+        const allowance = Math.max(pctAllowance, absAllowance);
+        if (diff > allowance + FP_EPS) { allPass = false; }
       }
       return allPass ? "pass" : "fail";
     }

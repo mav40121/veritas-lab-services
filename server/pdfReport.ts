@@ -2205,7 +2205,21 @@ function buildRefIntervalHTML(study: Study, results: any): string {
 function buildAccuracyBiasHTML(study: Study, results: any): string {
   const analyte = results.analyte || study.testName;
   const units = results.units || "";
-  const levels = (results.levels || []) as Array<{ name: string; assignedValue: number; mean: number; sd: number; pctRecovery: number; absBias: number; pass: boolean }>;
+  // Shape produced by StudyResultsPage compute branch and VeritaCheckPage
+  // handleSubmit: per level we get name / assigned_value / n / mean / sd /
+  // pctRecovery / absBiasPct / absBias / allowance / verdict.
+  const levels = (results.levels || []) as Array<{
+    name: string;
+    assigned_value: number | null;
+    n: number;
+    mean: number | null;
+    sd: number | null;
+    pctRecovery: number | null;
+    absBiasPct: number | null;
+    absBias: number | null;
+    allowance: number | null;
+    verdict: "pass" | "fail" | "incomplete";
+  }>;
   const overallPass = !!results.overallPass;
   const passClass = overallPass ? "pass" : "fail";
   const verdictText = overallPass ? "Meets CLSI EP15-A3 criteria" : "Does not meet CLSI EP15-A3 criteria";
@@ -2214,21 +2228,29 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
     ? `<b>The Accuracy / Bias verification for ${analyte} meets the criteria per 42 CFR §493.1253(b)(1)(i) and CLSI EP15-A3 § 6.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
     : `<b>The Accuracy / Bias verification for ${analyte} does not meet the criteria per 42 CFR §493.1253(b)(1)(i) and CLSI EP15-A3 § 6.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
-  const teaPct = (study.cliaAllowableError ?? 0) * 100;
-  const repsPerLevel = levels[0]?.mean !== undefined
-    ? (levels.reduce((s, l: any) => s + ((l.replicates as number[] | undefined)?.length || 0), 0) / Math.max(1, levels.length))
-    : 0;
+  const teaIsPercentage = results.teaIsPercentage !== false;
+  const absFloor: number | null = results.absoluteFloor ?? (study as any).cliaAbsoluteFloor ?? null;
+  const absUnit: string = results.absoluteUnit || (study as any).cliaAbsoluteUnit || "";
+  const teaRaw = study.cliaAllowableError ?? 0;
+  const teaPctTxt = teaIsPercentage
+    ? `±${(teaRaw * 100).toFixed(1)}%${absFloor ? ` or ±${absFloor} ${absUnit}` : ""}`
+    : `±${teaRaw} ${absUnit}`;
+
+  const recoveries = levels.map(l => l.pctRecovery).filter((v): v is number => v !== null && !isNaN(v));
+  const maxRecovery = recoveries.length ? Math.max(...recoveries) : 0;
+  const minRecovery = recoveries.length ? Math.min(...recoveries) : 0;
 
   const dataRows = levels.map((l, i) => {
-    const pfClass = l.pass ? "pass" : "fail";
+    const pfClass = l.verdict === "pass" ? "pass" : l.verdict === "fail" ? "fail" : "";
+    const verdictLabel = l.verdict === "pass" ? "Pass" : l.verdict === "fail" ? "Fail" : "Incomplete";
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
       <td>${l.name || `L${i + 1}`}</td>
-      <td class="text-right">${sf(l.assignedValue, 3)}</td>
-      <td class="text-right">${sf(l.mean, 3)}</td>
-      <td class="text-right">${sf(l.sd, 4)}</td>
-      <td class="text-right">${sf(l.pctRecovery, 2)}%</td>
-      <td class="text-right">${sf(l.absBias * 100, 2)}%</td>
-      <td class="text-right ${pfClass}">${l.pass ? "Pass" : "Fail"}</td>
+      <td class="text-right">${l.assigned_value === null ? "-" : sf(l.assigned_value, 3)}</td>
+      <td class="text-right">${l.mean === null ? "-" : sf(l.mean, 3)}</td>
+      <td class="text-right">${l.sd === null ? "-" : sf(l.sd, 4)}</td>
+      <td class="text-right">${l.pctRecovery === null ? "-" : sf(l.pctRecovery, 2) + "%"}</td>
+      <td class="text-right">${l.absBiasPct === null ? "-" : sf(l.absBiasPct, 2) + "%"}</td>
+      <td class="text-right ${pfClass}">${verdictLabel}</td>
     </tr>`;
   }).join("");
 
@@ -2236,9 +2258,9 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
     <div class="key-stats">
       <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Levels</div><div class="stat-value">${levels.length}</div></div>
-      <div class="stat-item"><div class="stat-label">Max % Recovery</div><div class="stat-value">${sf(results.maxPctRecovery ?? 0, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">Min % Recovery</div><div class="stat-value">${sf(results.minPctRecovery ?? 0, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">±${teaPct.toFixed(1)}%</div></div>
+      <div class="stat-item"><div class="stat-label">Max % Recovery</div><div class="stat-value">${sf(maxRecovery, 2)}%</div></div>
+      <div class="stat-item"><div class="stat-label">Min % Recovery</div><div class="stat-value">${sf(minRecovery, 2)}%</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 

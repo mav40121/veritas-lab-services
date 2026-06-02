@@ -1663,7 +1663,7 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}</div></div>
+            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
             <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
             <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
@@ -2511,44 +2511,58 @@ export default function StudyResults() {
         : `Absolute carryover ${carryoverAbs.toFixed(3)} ${coUnits || ""} exceeded the Error Limit of ${errorLimit.toFixed(3)} ${coUnits || ""} (3 x SD of L-after-L specimens). Investigate sampling system contamination.`,
     } as any;
   } else if (study.studyType === "accuracy_bias") {
-    // CLSI EP15-A3 §6 accuracy/bias: per-level |mean - assigned| / |assigned|
-    // versus TEa. All levels must pass for overall pass. Results shape mirrors
-    // the server evaluator and buildAccuracyBiasHTML PDF generator.
+    // CLSI EP15-A3 §6 accuracy/bias: per-level |mean - assigned| versus the
+    // dual-criterion S493 allowance: max(percent_allowance, absolute_floor).
+    // All levels must pass for overall pass. Results shape mirrors the server
+    // evaluator and buildAccuracyBiasHTML PDF generator.
     const { analyte, units, levels } = (rawDataPoints as {
       analyte?: string;
       units?: string;
       levels?: Array<{ name: string; assigned_value: number | null; replicates: number[] }>;
     });
     const tea = study.cliaAllowableError;
+    const teaIsPercentage = (study as any).teaIsPercentage !== 0;
+    const absFloor = ((study as any).cliaAbsoluteFloor ?? null) as number | null;
+    const absUnit = ((study as any).cliaAbsoluteUnit ?? null) as string | null;
     const inLevels = Array.isArray(levels) ? levels : [];
     let allPass = inLevels.length > 0;
+    const FP_EPS = 1e-9;
     const perLevel = inLevels.map(lv => {
       const reps = (lv.replicates || []).filter(v => v !== undefined && v !== null && !isNaN(v as number)) as number[];
       const n = reps.length;
       const assigned = lv.assigned_value;
       if (n === 0 || assigned === null || assigned === undefined || assigned === 0) {
         allPass = false;
-        return { name: lv.name, assigned_value: assigned ?? null, n, mean: null, sd: null, pctRecovery: null, absBiasPct: null, verdict: "incomplete" };
+        return { name: lv.name, assigned_value: assigned ?? null, n, mean: null, sd: null, pctRecovery: null, absBiasPct: null, absBias: null, allowance: null, verdict: "incomplete" };
       }
       const mean = reps.reduce((s, v) => s + v, 0) / n;
       const variance = n > 1 ? reps.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
       const sdv = Math.sqrt(variance);
       const pctRecovery = (mean / assigned) * 100;
-      const absBiasPct = Math.abs(mean - assigned) / Math.abs(assigned) * 100;
-      const pass = absBiasPct / 100 <= tea;
+      const absBias = Math.abs(mean - assigned);
+      const absBiasPct = absBias / Math.abs(assigned) * 100;
+      const pctAllowance = teaIsPercentage ? Math.abs(assigned) * tea : 0;
+      const absAllowance = teaIsPercentage ? (absFloor ?? 0) : tea;
+      const allowance = Math.max(pctAllowance, absAllowance);
+      const pass = absBias <= allowance + FP_EPS;
       if (!pass) allPass = false;
-      return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, verdict: pass ? "pass" : "fail" };
+      return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" : "fail" };
     });
+    const teaPctTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${absUnit || ""}`.trim();
+    const floorTxt = teaIsPercentage && absFloor ? ` or ${absFloor} ${absUnit || ""}, whichever is greater` : "";
     results = {
       type: "accuracy_bias",
       analyte: analyte || study.testName,
       units: units || "",
       tea,
+      teaIsPercentage,
+      absoluteFloor: absFloor,
+      absoluteUnit: absUnit,
       levels: perLevel,
       overallPass: allPass,
       summary: allPass
-        ? `All levels met the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${analyte || study.testName}.`
-        : `One or more levels exceeded the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${analyte || study.testName}.`,
+        ? `All levels met the CLIA total allowable error criterion of ${teaPctTxt}${floorTxt} for ${analyte || study.testName}.`
+        : `One or more levels exceeded the CLIA total allowable error criterion of ${teaPctTxt}${floorTxt} for ${analyte || study.testName}.`,
     } as any;
   } else if (study.studyType === "method_comparison") {
     // Check if this is qualitative or semi-quantitative data
