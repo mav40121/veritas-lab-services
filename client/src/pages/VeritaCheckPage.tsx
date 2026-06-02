@@ -495,6 +495,22 @@ export default function VeritaCheckPage() {
       }
       const tea = editStudy.clia_allowable_error ?? editStudy.cliaAllowableError;
       if (typeof tea === "number") setCustomClia(tea);
+      // Carryover-specific rehydration. The generic Array.isArray() guard
+      // above skips because carryover's data_points is an OBJECT shape
+      // { specimens, units }. Without this block, reopening a saved carryover
+      // study would silently land the user on an empty data-entry form.
+      const studyTypeForHydrate = editStudy.study_type ?? editStudy.studyType;
+      if (studyTypeForHydrate === "carryover" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).specimens)) {
+        const persistedSpecs = (dpParsed as any).specimens as Array<{ sequence: number; sample_type: "L" | "H"; value: number | null }>;
+        if (persistedSpecs.length > 0) {
+          setCoData(persistedSpecs.map(s => ({
+            sequence: typeof s.sequence === "number" ? s.sequence : 0,
+            sample_type: s.sample_type === "H" ? "H" : "L",
+            value: s.value === null || s.value === undefined ? null : Number(s.value),
+          })));
+        }
+        if (typeof (dpParsed as any).units === "string") setCoUnits((dpParsed as any).units);
+      }
       editHydratedRef.current = true;
     } catch (err) {
       console.warn("[veritacheck edit] hydrate failed", err);
