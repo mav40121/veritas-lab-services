@@ -2384,6 +2384,99 @@ function buildLinearityHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+// Reportable Range / AMR Verification per CLIA 493.1255. Reports the lab's
+// declared claimed range alongside per-level recovery/bias. Acceptance is the
+// dual-criterion S493 allowance at every level.
+function buildReportableRangeHTML(study: Study, results: any): string {
+  const analyte = results.analyte || study.testName;
+  const units = results.units || "";
+  const levels = (results.levels || []) as Array<{
+    name: string;
+    assigned_value: number | null;
+    n: number;
+    mean: number | null;
+    sd: number | null;
+    pctRecovery: number | null;
+    absBiasPct: number | null;
+    verdict: "pass" | "fail" | "incomplete";
+  }>;
+  const overallPass = !!results.overallPass;
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass ? "Meets CLIA §493.1255 criteria" : "Does not meet CLIA §493.1255 criteria";
+  const claimedLow = results.claimed_range_low;
+  const claimedHigh = results.claimed_range_high;
+  const claimedRangeTxt = (claimedLow !== null && claimedLow !== undefined && claimedHigh !== null && claimedHigh !== undefined)
+    ? `${claimedLow} to ${claimedHigh}${units ? " " + units : ""}`
+    : "Not specified";
+
+  const cliaStatement = overallPass
+    ? `<b>The Reportable Range verification for ${analyte} meets the criteria per 42 CFR §493.1255 and verifies the laboratory's claimed analytical measurement range of ${claimedRangeTxt}.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The Reportable Range verification for ${analyte} does not meet the criteria per 42 CFR §493.1255 against the laboratory's claimed analytical measurement range of ${claimedRangeTxt}.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+
+  const teaIsPercentage = results.teaIsPercentage !== false;
+  const absFloor: number | null = results.absoluteFloor ?? (study as any).cliaAbsoluteFloor ?? null;
+  const absUnit: string = results.absoluteUnit || (study as any).cliaAbsoluteUnit || "";
+  const teaRaw = study.cliaAllowableError ?? 0;
+  const teaPctTxt = teaIsPercentage
+    ? `±${(teaRaw * 100).toFixed(1)}%${absFloor ? ` or ±${absFloor} ${absUnit}` : ""}`
+    : `±${teaRaw} ${absUnit}`;
+
+  const dataRows = levels.map((l, i) => {
+    const pfClass = l.verdict === "pass" ? "pass" : l.verdict === "fail" ? "fail" : "";
+    const verdictLabel = l.verdict === "pass" ? "Pass" : l.verdict === "fail" ? "Fail" : "Incomplete";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${l.name || `L${i + 1}`}</td>
+      <td class="text-right">${l.assigned_value === null ? "-" : sf(l.assigned_value, 3)}</td>
+      <td class="text-right">${l.n}</td>
+      <td class="text-right">${l.mean === null ? "-" : sf(l.mean, 3)}</td>
+      <td class="text-right">${l.sd === null ? "-" : sf(l.sd, 4)}</td>
+      <td class="text-right">${l.pctRecovery === null ? "-" : sf(l.pctRecovery, 2) + "%"}</td>
+      <td class="text-right">${l.absBiasPct === null ? "-" : sf(l.absBiasPct, 2) + "%"}</td>
+      <td class="text-right ${pfClass}">${verdictLabel}</td>
+    </tr>`;
+  }).join("");
+
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">Claimed Reportable Range</div><div class="stat-value">${claimedRangeTxt}</div></div>
+      <div class="stat-item"><div class="stat-label">Levels Tested</div><div class="stat-value">${levels.length}</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}</div></div>
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary || ""} ${cliaStatement}</p>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck™ - Reportable Range Verification - ${study.testName}</title><style>${CSS}</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
+  ${summaryStats}
+  ${narrative}
+  ${regulatoryComplianceBoxHTML("reportable_range", (study as any)._preferredStandards)}
+  ${directorReviewHTML()}
+  <div class="page-break"></div>
+  <div class="section-heading">Per-Level Reportable Range Results</div>
+  <p style="font-size:8pt;color:#666;margin:0 0 8px;">CLIA §493.1255: verification of the analytical measurement range claimed by the laboratory. Acceptance: per-level |observed bias| ≤ stated allowable error (TEa) using the dual-criterion (percent or absolute) allowance.</p>
+  <table>
+    <thead><tr>
+      <th>Level</th>
+      <th class="text-right">Assigned${units ? " (" + units + ")" : ""}</th>
+      <th class="text-right">N</th>
+      <th class="text-right">Mean</th>
+      <th class="text-right">SD</th>
+      <th class="text-right">% Recovery</th>
+      <th class="text-right">|Bias| %</th>
+      <th class="text-right">Verdict</th>
+    </tr></thead>
+    <tbody>${dataRows}</tbody>
+  </table>
+  </body></html>`;
+}
+
 function buildCarryoverHTML(study: Study, results: any): string {
   // Results shape: { specimens: [{sequence, sample_type, value, classification}],
   //   mean_L, mean_H, n_LL, n_LH, mean_LL, mean_LH, sd_LL, sd_LH,
@@ -3236,7 +3329,7 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     : study.studyType === "linearity"
     ? buildLinearityHTML(study, results)
     : study.studyType === "reportable_range"
-    ? (() => { throw new Error("reportable_range PDF builder ships in PR 4 of the cal_ver split"); })()
+    ? buildReportableRangeHTML(study, results)
     : isQualResult
     ? buildQualitativeHTML(study, results)
     : isSemiQuantResult
