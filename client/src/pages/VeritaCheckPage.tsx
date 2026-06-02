@@ -379,12 +379,13 @@ export default function VeritaCheckPage() {
     "carryover": "carryover",
     "accuracy_bias": "accuracy_bias",
     "accuracy": "accuracy_bias",
+    "linearity": "linearity",
   };
   const rawInitialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -537,6 +538,31 @@ export default function VeritaCheckPage() {
           if (maxReps > 0) setAbReplicatesPerLevel(maxReps);
         }
       }
+      // Linearity (EP06) rehydration. Same persisted shape as accuracy_bias:
+      // { analyte, units, levels: [{ name, assigned_value, replicates }] }.
+      if (studyTypeForHydrate === "linearity" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).levels)) {
+        const a = (dpParsed as any).analyte;
+        const u = (dpParsed as any).units;
+        if (typeof a === "string") setLinAnalyte(a);
+        if (typeof u === "string") setLinUnits(u);
+        const persistedLevels = (dpParsed as any).levels as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
+        if (persistedLevels.length > 0) {
+          setLinLevels(persistedLevels.map((lv, i) => ({
+            name: typeof lv.name === "string" && lv.name ? lv.name : `Level ${i + 1}`,
+            assignedValue: lv.assigned_value === null || lv.assigned_value === undefined ? null : Number(lv.assigned_value),
+          })));
+          const repMap: Record<string, number[]> = {};
+          let maxReps = 0;
+          for (const lv of persistedLevels) {
+            const name = typeof lv.name === "string" && lv.name ? lv.name : "";
+            const reps = Array.isArray(lv.replicates) ? lv.replicates.map(v => Number(v)) : [];
+            if (name) repMap[name] = reps;
+            if (reps.length > maxReps) maxReps = reps.length;
+          }
+          setLinRunData(repMap);
+          if (maxReps > 0) setLinReplicatesPerLevel(maxReps);
+        }
+      }
       editHydratedRef.current = true;
     } catch (err) {
       console.warn("[veritacheck edit] hydrate failed", err);
@@ -674,6 +700,22 @@ export default function VeritaCheckPage() {
   ]);
   const [abReplicatesPerLevel, setAbReplicatesPerLevel] = useState(10);
   const [abRunData, setAbRunData] = useState<Record<string, number[]>>({});
+
+  // Linearity state (CLSI EP06). Per Longstreth's email: N=3 replicates per
+  // level, typically 4 levels spanning the AMR. Same data shape as
+  // accuracy_bias (analyte, units, per-level name + assigned + replicates)
+  // but different defaults and a different evaluator (OLS regression with
+  // slope / intercept / r² acceptance versus per-level bias).
+  const [linAnalyte, setLinAnalyte] = useState("");
+  const [linUnits, setLinUnits] = useState("");
+  const [linLevels, setLinLevels] = useState<{ name: string; assignedValue: number | null }[]>([
+    { name: "Level 1", assignedValue: null },
+    { name: "Level 2", assignedValue: null },
+    { name: "Level 3", assignedValue: null },
+    { name: "Level 4", assignedValue: null },
+  ]);
+  const [linReplicatesPerLevel, setLinReplicatesPerLevel] = useState(3);
+  const [linRunData, setLinRunData] = useState<Record<string, number[]>>({});
 
   // PT/Coag state
   const [ptInstrumentName, setPtInstrumentName] = useState("ACL TOP 351");
@@ -1154,6 +1196,11 @@ export default function VeritaCheckPage() {
         const reps = abRunData[lv.name] || [];
         return lv.assignedValue !== null && reps.filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 5;
       }).length
+    : studyType === "linearity"
+    ? linLevels.filter(lv => {
+        const reps = linRunData[lv.name] || [];
+        return lv.assignedValue !== null && reps.filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 2;
+      }).length
     : studyType === "method_comparison" && assayType !== "quantitative"
     ? dataPoints.filter(dp => dp.expectedCategory && instrumentNames.slice(1).some(n => dp.instrumentCategories?.[n])).length
     : studyType === "method_comparison"
@@ -1576,6 +1623,104 @@ export default function VeritaCheckPage() {
       return;
     }
 
+    if (studyType === "linearity") {
+      if (!linAnalyte.trim()) { toast({ title: "Enter the analyte name", variant: "destructive" }); return; }
+      const selectedPreset = CLIA_PRESETS[cliaPreset];
+      const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
+      const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
+      const presetAbsFloor: number | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteFloor ?? null) : null;
+      const presetAbsUnit: string | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteUnit ?? null) : null;
+      const FP_EPS = 1e-9;
+      const builtLevels = linLevels.map(lv => {
+        const reps = (linRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
+        return { name: lv.name, assigned_value: lv.assignedValue, replicates: reps };
+      });
+      const usableLevels = builtLevels.filter(lv => lv.assigned_value !== null && lv.replicates.length >= 2);
+      if (usableLevels.length < 3) {
+        toast({ title: `Need at least 3 levels with assigned value and 2+ replicates each (have ${usableLevels.length})`, variant: "destructive" });
+        return;
+      }
+      // OLS regression on per-level means
+      const pts = usableLevels.map(lv => ({
+        x: lv.assigned_value as number,
+        y: (lv.replicates.reduce((s, v) => s + v, 0) / lv.replicates.length),
+      }));
+      const n = pts.length;
+      const meanX = pts.reduce((s, p) => s + p.x, 0) / n;
+      const meanY = pts.reduce((s, p) => s + p.y, 0) / n;
+      const ssXX = pts.reduce((s, p) => s + (p.x - meanX) ** 2, 0);
+      const ssYY = pts.reduce((s, p) => s + (p.y - meanY) ** 2, 0);
+      const ssXY = pts.reduce((s, p) => s + (p.x - meanX) * (p.y - meanY), 0);
+      const slope = ssXX > 0 ? ssXY / ssXX : 0;
+      const intercept = meanY - slope * meanX;
+      const r2 = (ssXX > 0 && ssYY > 0) ? (ssXY * ssXY) / (ssXX * ssYY) : 0;
+      const slopeBiasPct = Math.abs(slope - 1) * 100;
+      const teaPct = presetIsPercentage ? tea * 100 : 100;
+      const slopePass = slopeBiasPct <= teaPct + FP_EPS;
+      const r2Pass = r2 >= 0.95 - FP_EPS;
+      const overallPass = slopePass && r2Pass;
+      // Per-level rows: mean, SD, %recovery, individual verdict against TEa
+      const perLevel = builtLevels.map(lv => {
+        const reps = lv.replicates;
+        const nReps = reps.length;
+        const assigned = lv.assigned_value;
+        if (nReps === 0 || assigned === null || assigned === 0) {
+          return { name: lv.name, assigned_value: assigned, n: nReps, mean: null as number | null, sd: null as number | null, pctRecovery: null as number | null, absBias: null as number | null, allowance: null as number | null, verdict: "incomplete" as const };
+        }
+        const meanV = reps.reduce((s, v) => s + v, 0) / nReps;
+        const variance = nReps > 1 ? reps.reduce((s, v) => s + (v - meanV) ** 2, 0) / (nReps - 1) : 0;
+        const sdv = Math.sqrt(variance);
+        const pctRecovery = (meanV / assigned) * 100;
+        const absBias = Math.abs(meanV - assigned);
+        const pctAllowance = presetIsPercentage ? Math.abs(assigned) * tea : 0;
+        const absAllowance = presetIsPercentage ? (presetAbsFloor ?? 0) : tea;
+        const allowance = Math.max(pctAllowance, absAllowance);
+        const pass = absBias <= allowance + FP_EPS;
+        return { name: lv.name, assigned_value: assigned, n: nReps, mean: meanV, sd: sdv, pctRecovery, absBias, allowance, verdict: pass ? "pass" as const : "fail" as const };
+      });
+      const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${presetAbsUnit || ""}`.trim();
+      const results = {
+        type: "linearity",
+        analyte: linAnalyte.trim(),
+        units: linUnits.trim(),
+        tea,
+        teaIsPercentage: presetIsPercentage,
+        absoluteFloor: presetAbsFloor,
+        absoluteUnit: presetAbsUnit,
+        slope,
+        intercept,
+        r2,
+        slopeBiasPct,
+        levels: perLevel,
+        overallPass,
+        summary: overallPass
+          ? `Linearity verified across ${pts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
+          : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
+      };
+      const study: InsertStudy = {
+        testName: testName.trim() || linAnalyte.trim(),
+        instrument: instrumentNames[0] || "-",
+        analyst: analyst.trim() || "-",
+        date,
+        studyType: "linearity",
+        cliaAllowableError: tea,
+        teaIsPercentage: presetIsPercentage ? 1 : 0,
+        teaUnit: presetIsPercentage ? '%' : (presetAbsUnit || linUnits.trim() || null),
+        cliaAbsoluteFloor: presetAbsFloor,
+        cliaAbsoluteUnit: presetAbsUnit,
+        dataPoints: JSON.stringify({
+          analyte: linAnalyte.trim(),
+          units: linUnits.trim(),
+          levels: builtLevels,
+        }),
+        instruments: JSON.stringify(instrumentNames.slice(0, 1)),
+        status: overallPass ? "pass" : "fail",
+        createdAt: new Date().toISOString(),
+      };
+      saveMutation.mutate(study);
+      return;
+    }
+
     if (studyType === "sensitivity") {
       // Parse a sensitivity textarea: one replicate per line, "value" or "value,lot".
       const parseSens = (text: string): { value: number; lot?: string }[] =>
@@ -1922,6 +2067,7 @@ return (
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
                           <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
                           <SelectItem value="accuracy_bias">Accuracy / Bias (CLSI EP15-A3)</SelectItem>
+                          <SelectItem value="linearity">Linearity (CLSI EP06)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -3071,6 +3217,119 @@ return (
                     </div>
                   </CardContent>
                 </Card>
+              ) : studyType === "linearity" ? (
+                <Card>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Linearity Data Entry (CLSI EP06)</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
+                      <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                      <span>CLSI EP06: run 3-5 levels across the reportable range with at least 2-3 replicates per level. The study passes when |slope - 1| × 100 does not exceed the CLIA total allowable error AND r² is at least 0.95 over the per-level means.</span>
+                    </div>
+                    <div className="grid sm:grid-cols-4 gap-4">
+                      <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Glucose" value={linAnalyte} onChange={e => setLinAnalyte(e.target.value)} data-testid="input-lin-analyte" /></div>
+                      <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mg/dL" value={linUnits} onChange={e => setLinUnits(e.target.value)} data-testid="input-lin-units" /></div>
+                      <div className="space-y-1.5"><Label>Levels</Label>
+                        <Select value={String(linLevels.length)} onValueChange={v => {
+                          const n = parseInt(v);
+                          setLinLevels(prev => {
+                            if (n === prev.length) return prev;
+                            if (n > prev.length) {
+                              const additions = Array.from({ length: n - prev.length }, (_, i) => ({ name: `Level ${prev.length + i + 1}`, assignedValue: null as number | null }));
+                              return [...prev, ...additions];
+                            }
+                            return prev.slice(0, n);
+                          });
+                        }}>
+                          <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="4">4</SelectItem>
+                            <SelectItem value="5">5</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5"><Label>Replicates / Level</Label>
+                        <Select value={String(linReplicatesPerLevel)} onValueChange={v => setLinReplicatesPerLevel(parseInt(v))}>
+                          <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2">2</SelectItem>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="5">5</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {linLevels.map((lv, levelIdx) => {
+                        const reps = linRunData[lv.name] || [];
+                        const filled = reps.filter(v => v !== undefined && v !== null && !isNaN(v));
+                        return (
+                          <div key={levelIdx} className="rounded-md border border-border p-3 space-y-2">
+                            <div className="grid sm:grid-cols-3 gap-3 items-end">
+                              <div className="space-y-1"><Label className="text-xs">Level Name</Label>
+                                <Input
+                                  value={lv.name}
+                                  onChange={e => {
+                                    const newName = e.target.value;
+                                    const oldName = lv.name;
+                                    setLinLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, name: newName } : p));
+                                    if (oldName !== newName) {
+                                      setLinRunData(prev => {
+                                        if (!(oldName in prev)) return prev;
+                                        const { [oldName]: arr, ...rest } = prev;
+                                        return { ...rest, [newName]: arr };
+                                      });
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-1"><Label className="text-xs">Assigned Value ({linUnits || "units"})</Label>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  value={lv.assignedValue ?? ""}
+                                  onChange={e => {
+                                    const num = e.target.value === "" ? null : parseFloat(e.target.value);
+                                    setLinLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, assignedValue: num } : p));
+                                  }}
+                                  placeholder="e.g. 50"
+                                  className="h-9 text-sm"
+                                />
+                              </div>
+                              <div className="text-xs text-muted-foreground pb-2">{filled.length} / {linReplicatesPerLevel} replicates entered</div>
+                            </div>
+                            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                              {Array.from({ length: linReplicatesPerLevel }).map((_, repIdx) => {
+                                const val = reps[repIdx];
+                                return (
+                                  <Input
+                                    key={repIdx}
+                                    type="number"
+                                    step="any"
+                                    placeholder={`#${repIdx + 1}`}
+                                    value={val === undefined || val === null || isNaN(val) ? "" : val}
+                                    onChange={e => {
+                                      const raw = e.target.value;
+                                      const num = raw === "" ? NaN : parseFloat(raw);
+                                      setLinRunData(prev => {
+                                        const existing = prev[lv.name] ? [...prev[lv.name]] : [];
+                                        while (existing.length <= repIdx) existing.push(NaN);
+                                        existing[repIdx] = num;
+                                        return { ...prev, [lv.name]: existing };
+                                      });
+                                    }}
+                                    className="h-9 text-sm font-mono"
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : studyType === "sensitivity" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base">Analytical Sensitivity Data Entry</CardTitle></CardHeader>
@@ -3513,7 +3772,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>

@@ -402,7 +402,35 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return allPass ? "pass" : "fail";
     }
     if (studyType === "linearity") {
-      return "fail"; // TODO PR 3: implement regression with |slope - 1| * 100 <= TEa AND r^2 >= 0.95
+      // CLSI EP06 verification: ordinary-least-squares regression of per-level
+      // measured-mean vs assigned target. Pass when |slope - 1| * 100 <= TEa%
+      // AND r^2 >= 0.95. Replicates per level (Longstreth practice: N=3)
+      // collapse to the per-level mean before regression.
+      // Data shape: { analyte, units, levels: [{ name, assigned_value,
+      // replicates: number[] }] }.
+      const levels = (rawData?.levels || []) as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
+      if (!Array.isArray(levels) || levels.length < 3) return "fail";
+      const pts: { x: number; y: number }[] = [];
+      for (const lvl of levels) {
+        const assigned = Number(lvl?.assigned_value ?? NaN);
+        const reps = (lvl?.replicates || []).filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[];
+        if (!isFinite(assigned) || reps.length === 0) continue;
+        const mean = reps.reduce((s, v) => s + v, 0) / reps.length;
+        pts.push({ x: assigned, y: mean });
+      }
+      if (pts.length < 3) return "fail";
+      const n = pts.length;
+      const meanX = pts.reduce((s, p) => s + p.x, 0) / n;
+      const meanY = pts.reduce((s, p) => s + p.y, 0) / n;
+      const ssXX = pts.reduce((s, p) => s + (p.x - meanX) ** 2, 0);
+      const ssYY = pts.reduce((s, p) => s + (p.y - meanY) ** 2, 0);
+      const ssXY = pts.reduce((s, p) => s + (p.x - meanX) * (p.y - meanY), 0);
+      if (ssXX === 0 || ssYY === 0) return "fail";
+      const slope = ssXY / ssXX;
+      const r2 = (ssXY * ssXY) / (ssXX * ssYY);
+      const slopeBiasPct = Math.abs(slope - 1) * 100;
+      const teaPct = teaIsPercentage ? cliaAllowableError * 100 : 100;
+      return (slopeBiasPct <= teaPct && r2 >= 0.95) ? "pass" : "fail";
     }
     if (studyType === "reportable_range") {
       return "fail"; // TODO PR 4: implement per-level recovery vs claimed AMR
