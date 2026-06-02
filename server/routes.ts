@@ -561,6 +561,59 @@ function authMiddleware(req: any, res: any, next: any) {
 // returns 403, which is exactly the symptom David hit. See shared/schema.ts.
 function requireModuleEdit(module: string) {
   return (req: any, res: any, next: any) => {
+    // 2026-06-01 lab-scoped seat check (mirrors PR #479's account-settings
+    // pattern). The req.isSeatUser flag is set globally by authMiddleware
+    // by matching user_seats with no lab scope, which mis-flags an owner
+    // of one lab as a seat user simply because they hold a seat in some
+    // other lab. Re-derive the seat-status for the SPECIFIC active lab
+    // before applying the write gate.
+    //
+    // Resolve active lab:
+    //   1. req.scope.labId (set by labScopeMiddleware on /api/labs/:labId/* routes)
+    //   2. ?labId query param (explicit caller intent)
+    //   3. /labs/<id>/ in the Referer URL (frontend lab-switcher routes)
+    //
+    // If the active lab cannot be determined, fall back to legacy global
+    // behavior so unprefixed callers do not regress.
+    let activeLabId: number | null = null;
+    if (req.scope?.labId) {
+      activeLabId = Number(req.scope.labId);
+    } else if (req.query?.labId) {
+      const n = Number(req.query.labId);
+      if (Number.isFinite(n) && n > 0) activeLabId = n;
+    } else if (req.headers.referer) {
+      const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+      if (m) activeLabId = Number(m[1]);
+    }
+
+    if (activeLabId) {
+      // Owners of the active lab always pass through.
+      const ownsLab = (db as any).$client.prepare(
+        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+      ).get(activeLabId, req.userId);
+      if (ownsLab) return next();
+
+      // Otherwise check if the caller has an active seat IN THIS lab.
+      const seatRow = (db as any).$client.prepare(
+        "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+      ).get(req.userId, activeLabId) as any;
+      if (!seatRow) return next(); // no seat in this lab -> not a seat user here -> pass
+      let labSeatPermissions: SeatPermissions = {} as SeatPermissions;
+      try { labSeatPermissions = JSON.parse(seatRow.permissions || '{}') as SeatPermissions; } catch {}
+      const perm = resolveSeatPermission(labSeatPermissions, module);
+      if (perm !== 'edit') {
+        return res.status(403).json({
+          error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
+        });
+      }
+      return next();
+    }
+
+    // Legacy fallback: no active-lab context. Preserve the global behavior
+    // so unprefixed unauth flows do not regress. This branch is the source
+    // of the pre-fix bug for multi-lab owners on lab-scoped frontend
+    // routes; with the resolution above, that case now uses the Referer
+    // and falls into the lab-scoped branch instead.
     if (req.isSeatUser && req.seatPermissions) {
       const perm = resolveSeatPermission(req.seatPermissions as SeatPermissions, module);
       if (perm !== 'edit') {
@@ -4769,15 +4822,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (auth?.startsWith("Bearer ")) {
       try {
         const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-        // Check seat permissions for veritacheck write access
-        const seatRow = (db as any).$client.prepare(
-          "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-        ).get(payload.userId) as any;
-        if (seatRow) {
-          let perms: Record<string, string> = {};
-          try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-          if ((perms.veritacheck || 'view') !== 'edit') {
-            return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
+        // 2026-06-01 lab-scoped seat check (same fix as requireModuleEdit
+        // and PR #479's account-settings pattern). The legacy unscoped
+        // POST has no labScopeMiddleware, so derive the active lab from
+        // the Referer URL. Owners of the active lab pass through. If no
+        // active lab can be resolved, fall back to the legacy global
+        // seat check.
+        let postActiveLabId: number | null = null;
+        if (req.headers.referer) {
+          const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
+          if (m) postActiveLabId = Number(m[1]);
+        }
+        let seatRow: any = null;
+        if (postActiveLabId) {
+          const ownsLab = (db as any).$client.prepare(
+            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+          ).get(postActiveLabId, payload.userId);
+          if (!ownsLab) {
+            seatRow = (db as any).$client.prepare(
+              "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+            ).get(payload.userId, postActiveLabId) as any;
+            if (seatRow) {
+              let perms: Record<string, string> = {};
+              try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
+              if ((perms.veritacheck || 'view') !== 'edit') {
+                return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
+              }
+            }
+          }
+        } else {
+          // Legacy fallback: no active-lab context. Preserve global behavior.
+          seatRow = (db as any).$client.prepare(
+            "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+          ).get(payload.userId) as any;
+          if (seatRow) {
+            let perms: Record<string, string> = {};
+            try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
+            if ((perms.veritacheck || 'view') !== 'edit') {
+              return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
+            }
           }
         }
         userId = seatRow ? seatRow.owner_user_id : payload.userId;
