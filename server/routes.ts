@@ -4530,7 +4530,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Helpers
     const studyTypeLabel = (st: string): string => {
       switch (st) {
-        case "cal_ver": return "Calibration Verification / Linearity";
+        case "cal_ver": return "Calibration Verification (CLSI EP06)";
         case "method_comparison":
         case "correlation": return "Correlation / Method Comparison";
         case "precision": return "Precision (EP15)";

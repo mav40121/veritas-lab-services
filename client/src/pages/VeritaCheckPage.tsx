@@ -2191,7 +2191,7 @@ return (
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cal_ver">Calibration Verification / Linearity / Reportable Range (CLSI EP06)</SelectItem>
+                          <SelectItem value="cal_ver">Calibration Verification (CLSI EP06)</SelectItem>
                           <SelectItem value="method_comparison">Accuracy / Bias / Correlation / Method Comparison (CLSI EP09 + EP15-A3)</SelectItem>
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
