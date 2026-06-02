@@ -1496,7 +1496,16 @@ export default function VeritaCheckPage() {
 
     if (studyType === "accuracy_bias") {
       if (!abAnalyte.trim()) { toast({ title: "Enter the analyte name", variant: "destructive" }); return; }
-      const tea = CLIA_PRESETS[cliaPreset]?.value && CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
+      const selectedPreset = CLIA_PRESETS[cliaPreset];
+      const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
+      // Dual-criterion S493: when the selected CLIA preset carries an absolute
+      // floor (e.g. Sodium ±4 mmol/L, ALT/SGPT ±15% or ±6 U/L), persist it so
+      // the server evaluator + screen render + PDF can apply
+      // max(percent_allowance, absolute_floor) at every level.
+      const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
+      const presetAbsFloor: number | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteFloor ?? null) : null;
+      const presetAbsUnit: string | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteUnit ?? null) : null;
+      const FP_EPS = 1e-9;
       const builtLevels = abLevels.map(lv => {
         const reps = (abRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
         return { name: lv.name, assigned_value: lv.assignedValue, replicates: reps };
@@ -1512,27 +1521,36 @@ export default function VeritaCheckPage() {
         const n = reps.length;
         const assigned = lv.assigned_value;
         if (n === 0 || assigned === null || assigned === 0) {
-          return { name: lv.name, assigned_value: assigned, n, mean: null as number | null, sd: null as number | null, pctRecovery: null as number | null, absBiasPct: null as number | null, verdict: "incomplete" as const };
+          return { name: lv.name, assigned_value: assigned, n, mean: null as number | null, sd: null as number | null, pctRecovery: null as number | null, absBiasPct: null as number | null, absBias: null as number | null, allowance: null as number | null, verdict: "incomplete" as const };
         }
         const mean = reps.reduce((s, v) => s + v, 0) / n;
         const variance = n > 1 ? reps.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
         const sdv = Math.sqrt(variance);
         const pctRecovery = (mean / assigned) * 100;
-        const absBiasPct = Math.abs(mean - assigned) / Math.abs(assigned) * 100;
-        const pass = absBiasPct / 100 <= tea;
+        const absBias = Math.abs(mean - assigned);
+        const absBiasPct = absBias / Math.abs(assigned) * 100;
+        const pctAllowance = presetIsPercentage ? Math.abs(assigned) * tea : 0;
+        const absAllowance = presetIsPercentage ? (presetAbsFloor ?? 0) : tea;
+        const allowance = Math.max(pctAllowance, absAllowance);
+        const pass = absBias <= allowance + FP_EPS;
         if (!pass) allPass = false;
-        return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, verdict: pass ? "pass" as const : "fail" as const };
+        return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" as const : "fail" as const };
       });
+      const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${presetAbsUnit || ""}`.trim();
+      const floorTxt = presetIsPercentage && presetAbsFloor ? ` or ${presetAbsFloor} ${presetAbsUnit || ""}, whichever is greater` : "";
       const results = {
         type: "accuracy_bias",
         analyte: abAnalyte.trim(),
         units: abUnits.trim(),
         tea,
+        teaIsPercentage: presetIsPercentage,
+        absoluteFloor: presetAbsFloor,
+        absoluteUnit: presetAbsUnit,
         levels: perLevel,
         overallPass: allPass,
         summary: allPass
-          ? `All levels met the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${abAnalyte.trim()}.`
-          : `One or more levels exceeded the CLIA total allowable error criterion of ${(tea * 100).toFixed(1)}% for ${abAnalyte.trim()}.`,
+          ? `All levels met the CLIA total allowable error criterion of ${teaTxt}${floorTxt} for ${abAnalyte.trim()}.`
+          : `One or more levels exceeded the CLIA total allowable error criterion of ${teaTxt}${floorTxt} for ${abAnalyte.trim()}.`,
       };
       const study: InsertStudy = {
         testName: testName.trim() || abAnalyte.trim(),
@@ -1541,10 +1559,10 @@ export default function VeritaCheckPage() {
         date,
         studyType: "accuracy_bias",
         cliaAllowableError: tea,
-        teaIsPercentage: 1,
-        teaUnit: '%',
-        cliaAbsoluteFloor: null,
-        cliaAbsoluteUnit: null,
+        teaIsPercentage: presetIsPercentage ? 1 : 0,
+        teaUnit: presetIsPercentage ? '%' : (presetAbsUnit || abUnits.trim() || null),
+        cliaAbsoluteFloor: presetAbsFloor,
+        cliaAbsoluteUnit: presetAbsUnit,
         dataPoints: JSON.stringify({
           analyte: abAnalyte.trim(),
           units: abUnits.trim(),
