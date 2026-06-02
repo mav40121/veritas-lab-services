@@ -433,7 +433,31 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return (slopeBiasPct <= teaPct && r2 >= 0.95) ? "pass" : "fail";
     }
     if (studyType === "reportable_range") {
-      return "fail"; // TODO PR 4: implement per-level recovery vs claimed AMR
+      // Reportable Range / AMR Verification per CLIA 493.1255. Lab declares
+      // a claimed range (claimed_range_low / claimed_range_high) and runs
+      // material at >= 2 levels spanning the range. Per Longstreth practice:
+      // N=2 replicates per level minimum. Pass when every level's
+      // |mean - assigned| <= max(percent_allowance, absolute_floor).
+      // Claimed range fields are documentation only — the per-level bias
+      // gate is the regulatory criterion.
+      // Data shape: { analyte, units, claimed_range_low, claimed_range_high,
+      // levels: [{ name, assigned_value, replicates: number[] }] }.
+      const levels = (rawData?.levels || []) as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
+      if (!Array.isArray(levels) || levels.length < 2) return "fail";
+      const FP_EPS = 1e-9;
+      let allPass = true;
+      for (const lvl of levels) {
+        const assigned = Number(lvl?.assigned_value ?? NaN);
+        const reps = (lvl?.replicates || []).filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[];
+        if (!isFinite(assigned) || assigned === 0 || reps.length === 0) { allPass = false; continue; }
+        const mean = reps.reduce((s, v) => s + v, 0) / reps.length;
+        const diff = Math.abs(mean - assigned);
+        const pctAllowance = teaIsPercentage ? Math.abs(assigned) * cliaAllowableError : 0;
+        const absAllowance = teaIsPercentage ? (cliaAbsoluteFloor ?? 0) : cliaAllowableError;
+        const allowance = Math.max(pctAllowance, absAllowance);
+        if (diff > allowance + FP_EPS) { allPass = false; }
+      }
+      return allPass ? "pass" : "fail";
     }
 
     // pt_coag or unknown: trust client value (pt_coag is gated anyway)

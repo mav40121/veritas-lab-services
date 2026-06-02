@@ -80,7 +80,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
@@ -122,7 +122,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : "Correlation / Method Comparison"}
+            {study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Correlation / Method Comparison"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -605,7 +605,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : "Correlation / Method Comparison"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification / Linearity" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Correlation / Method Comparison"],
             [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplay],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -1797,6 +1797,91 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
   );
 }
 
+// ─── REPORTABLE RANGE / AMR VERIFICATION results ───────────────────────────
+// Same per-level structure as accuracy_bias plus a top KPI for the lab's
+// declared claimed range. Per-level dual-criterion bias against TEa.
+function ReportableRangeReport({ study, results }: { study: Study; results: any }) {
+  const fmt = (n: any, d = 3) => (n === null || n === undefined || isNaN(n)) ? "-" : Number(n).toFixed(d);
+  const fmtPct = (n: any, d = 2) => (n === null || n === undefined || isNaN(n)) ? "-" : `${Number(n).toFixed(d)}%`;
+  const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBiasPct: number | null; verdict: "pass" | "fail" | "incomplete" }>;
+  const units = results.units || "";
+  const overallPass = !!results.overallPass;
+  const teaPct = (Number(results.tea) || 0) * 100;
+  const cl = results.claimed_range_low;
+  const ch = results.claimed_range_high;
+  const claimedTxt = (cl !== null && cl !== undefined && ch !== null && ch !== undefined)
+    ? `${cl} to ${ch} ${units}`.trim()
+    : "Not specified";
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Analyte", value: results.analyte || study.testName },
+          { label: "Claimed Range", value: claimedTxt },
+          { label: "Levels Tested", value: String(levels.length) },
+          { label: "Verdict", value: overallPass ? "PASS" : "FAIL" },
+        ].map(({ label, value }) => (
+          <Card key={label}><CardContent className="p-4">
+            <div className="text-lg font-bold">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Reportable Range Summary</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
+            <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
+            <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
+            <div><div className="text-muted-foreground">Claimed Range</div><div className="font-mono">{claimedTxt}</div></div>
+            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}</div></div>
+            <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
+          </div>
+          {results.summary && (
+            <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Per-Level Results</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border">
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Level</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Assigned</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">N</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Mean</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SD</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">% Recovery</th>
+                <th className="text-right py-2 pr-3 text-muted-foreground font-medium">|Bias| %</th>
+                <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Verdict</th>
+              </tr></thead>
+              <tbody>
+                {levels.map((lv, i) => (
+                  <tr key={i} className="border-b border-border/40">
+                    <td className="py-2 pr-3">{lv.name}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{lv.assigned_value === null ? "-" : fmt(lv.assigned_value)} {units}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{lv.n}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmt(lv.mean)} {units}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmt(lv.sd, 4)} {units}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmtPct(lv.pctRecovery)}</td>
+                    <td className="text-right py-2 pr-3 font-mono">{fmtPct(lv.absBiasPct)}</td>
+                    <td className={`py-2 pr-3 font-medium ${lv.verdict === "pass" ? "text-green-600 dark:text-green-400" : lv.verdict === "fail" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>{lv.verdict.toUpperCase()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 // ─── PT/COAG NEW LOT VALIDATION results ─────────────────────────────────────
 function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults }) {
   const { module1, module2, module3 } = results;
@@ -2723,6 +2808,66 @@ export default function StudyResults() {
         ? `Linearity verified across ${usablePts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
         : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
     } as any;
+  } else if (study.studyType === "reportable_range") {
+    // CLIA §493.1255 AMR verification. Per-level dual-criterion bias against
+    // TEa identical to accuracy_bias. Adds claimed_range_low / claimed_range_high
+    // as documentation fields surfaced on the report.
+    const { analyte, units, levels, claimed_range_low, claimed_range_high } = (rawDataPoints as {
+      analyte?: string;
+      units?: string;
+      levels?: Array<{ name: string; assigned_value: number | null; replicates: number[] }>;
+      claimed_range_low?: number | null;
+      claimed_range_high?: number | null;
+    });
+    const tea = study.cliaAllowableError;
+    const teaIsPercentage = (study as any).teaIsPercentage !== 0;
+    const absFloor = ((study as any).cliaAbsoluteFloor ?? null) as number | null;
+    const absUnit = ((study as any).cliaAbsoluteUnit ?? null) as string | null;
+    const inLevels = Array.isArray(levels) ? levels : [];
+    let allPass = inLevels.length > 0;
+    const FP_EPS = 1e-9;
+    const perLevel = inLevels.map(lv => {
+      const reps = (lv.replicates || []).filter(v => v !== undefined && v !== null && !isNaN(v as number)) as number[];
+      const n = reps.length;
+      const assigned = lv.assigned_value;
+      if (n === 0 || assigned === null || assigned === undefined || assigned === 0) {
+        allPass = false;
+        return { name: lv.name, assigned_value: assigned ?? null, n, mean: null, sd: null, pctRecovery: null, absBiasPct: null, absBias: null, allowance: null, verdict: "incomplete" };
+      }
+      const mean = reps.reduce((s, v) => s + v, 0) / n;
+      const variance = n > 1 ? reps.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
+      const sdv = Math.sqrt(variance);
+      const pctRecovery = (mean / assigned) * 100;
+      const absBias = Math.abs(mean - assigned);
+      const absBiasPct = absBias / Math.abs(assigned) * 100;
+      const pctAllowance = teaIsPercentage ? Math.abs(assigned) * tea : 0;
+      const absAllowance = teaIsPercentage ? (absFloor ?? 0) : tea;
+      const allowance = Math.max(pctAllowance, absAllowance);
+      const pass = absBias <= allowance + FP_EPS;
+      if (!pass) allPass = false;
+      return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" : "fail" };
+    });
+    const teaPctTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${absUnit || ""}`.trim();
+    const floorTxt = teaIsPercentage && absFloor ? ` or ${absFloor} ${absUnit || ""}, whichever is greater` : "";
+    const rangeTxt = (claimed_range_low !== null && claimed_range_low !== undefined && claimed_range_high !== null && claimed_range_high !== undefined)
+      ? ` for a claimed reportable range of ${claimed_range_low} to ${claimed_range_high} ${units || "units"}`
+      : "";
+    results = {
+      type: "reportable_range",
+      analyte: analyte || study.testName,
+      units: units || "",
+      tea,
+      teaIsPercentage,
+      absoluteFloor: absFloor,
+      absoluteUnit: absUnit,
+      claimed_range_low: claimed_range_low ?? null,
+      claimed_range_high: claimed_range_high ?? null,
+      levels: perLevel,
+      overallPass: allPass,
+      summary: allPass
+        ? `All ${perLevel.length} levels met the CLIA total allowable error criterion of ${teaPctTxt}${floorTxt} for ${analyte || study.testName}${rangeTxt}.`
+        : `One or more levels exceeded the CLIA total allowable error criterion of ${teaPctTxt}${floorTxt} for ${analyte || study.testName}${rangeTxt}.`,
+    } as any;
   } else if (study.studyType === "method_comparison") {
     // Check if this is qualitative or semi-quantitative data
     if (rawDataPoints.assayType === "qualitative") {
@@ -2801,6 +2946,7 @@ export default function StudyResults() {
       {(results as any).type === "carryover" && <CarryoverReport study={study} results={results as any} />}
       {(results as any).type === "accuracy_bias" && <AccuracyBiasReport study={study} results={results as any} />}
       {(results as any).type === "linearity" && <LinearityReport study={study} results={results as any} />}
+      {(results as any).type === "reportable_range" && <ReportableRangeReport study={study} results={results as any} />}
 
       {/* Related Tools for PT/Coag studies */}
       {(study.studyType === "pt_coag" || study.studyType === "multi_analyte_coag" || study.studyType === "qc_range") && (

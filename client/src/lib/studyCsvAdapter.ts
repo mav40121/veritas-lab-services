@@ -41,6 +41,7 @@ export function defaultCsvFilename(study: Study): string {
     carryover: "Carryover",
     accuracy_bias: "AccuracyBias",
     linearity: "Linearity",
+    reportable_range: "ReportableRange",
   };
   const typeTag = typeMap[study.studyType] ?? "Study";
   const safeName = String(study.testName ?? "")
@@ -276,6 +277,46 @@ function serializeLinearity(input: LinearityInput): string {
   return toCsv(rows as unknown as Record<string, unknown>[], cols as unknown as CsvColumn<Record<string, unknown>>[]);
 }
 
+// Reportable Range source-data CSV: same per-level rows as accuracy_bias /
+// linearity, with the claimed range emitted as a leading header comment so
+// it round-trips when the lab archives the raw data.
+type ReportableRangeInput = {
+  analyte?: string;
+  units?: string;
+  claimed_range_low?: number | null;
+  claimed_range_high?: number | null;
+  levels?: Array<{ name: string; assigned_value: number | null; replicates: number[] }>;
+};
+
+function serializeReportableRange(input: ReportableRangeInput): string {
+  const levels = Array.isArray(input?.levels) ? input.levels : [];
+  const units = input?.units || "";
+  const cl = input?.claimed_range_low ?? null;
+  const ch = input?.claimed_range_high ?? null;
+  const rows: Array<{ level: string; assigned: number | string; replicate: number; value: number | string }> = [];
+  for (const lv of levels) {
+    const reps = Array.isArray(lv.replicates) ? lv.replicates : [];
+    if (reps.length === 0) {
+      rows.push({ level: lv.name, assigned: lv.assigned_value ?? "", replicate: 0, value: "" });
+      continue;
+    }
+    reps.forEach((v, i) => {
+      rows.push({ level: lv.name, assigned: lv.assigned_value ?? "", replicate: i + 1, value: v });
+    });
+  }
+  const cols: CsvColumn<typeof rows[number]>[] = [
+    { key: "level", header: "Level", format: (r) => r.level ?? "" },
+    { key: "assigned", header: `Assigned${units ? ` (${units})` : ""}`, format: (r) => r.assigned ?? "" },
+    { key: "replicate", header: "Replicate #", format: (r) => r.replicate ?? "" },
+    { key: "value", header: `Value${units ? ` (${units})` : ""}`, format: (r) => r.value ?? "" },
+  ];
+  const dataCsv = toCsv(rows as unknown as Record<string, unknown>[], cols as unknown as CsvColumn<Record<string, unknown>>[]);
+  const rangeHeader = (cl !== null && ch !== null)
+    ? `# Claimed Reportable Range: ${cl} to ${ch}${units ? " " + units : ""}\n`
+    : "";
+  return rangeHeader + dataCsv;
+}
+
 // ─── Public entry point ──────────────────────────────────────────────────────
 
 export function studyToCsv(study: Study): string {
@@ -301,6 +342,8 @@ export function studyToCsv(study: Study): string {
       return serializeAccuracyBias(raw as AccuracyBiasInput);
     case "linearity":
       return serializeLinearity(raw as LinearityInput);
+    case "reportable_range":
+      return serializeReportableRange(raw as ReportableRangeInput);
     case "cal_ver":
     case "method_comparison":
     case "lot_to_lot":
