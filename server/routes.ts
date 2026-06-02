@@ -8459,6 +8459,125 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, document_type: req.params.type, default_review_days: cleanDays });
   });
 
+  // ── VERITASCAN EVIDENCE LIBRARY — Phase B linking (2026-06-02) ───────────
+  //
+  // Wire document_checklist_links endpoints. Item IDs reference the flat
+  // SCAN_ITEMS numeric ID space in client/src/lib/veritaScanData.ts.
+  // accreditor is NOT a property of the link because each SCAN_ITEMS row
+  // already carries citations across all 5 accreditors (tjc/cap/cfr/aabb/cola)
+  // as fields on the row.
+
+  // POST /api/labs/:labId/veritascan/documents/:docId/links
+  // Body: { checklist_item_id: number, notes?: string }
+  app.post("/api/labs/:labId/veritascan/documents/:docId/links", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const sqlite = (db as any).$client;
+    const doc = sqlite.prepare(
+      "SELECT id FROM lab_documents WHERE id = ? AND lab_id = ?"
+    ).get(Number(req.params.docId), req.scope.labId);
+    if (!doc) return res.status(404).json({ error: "Document not found in this lab" });
+    const itemId = Number(req.body?.checklist_item_id);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: "checklist_item_id required (positive integer)" });
+    }
+    const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : null;
+    const now = new Date().toISOString();
+    try {
+      const ins = sqlite.prepare(
+        `INSERT INTO document_checklist_links (document_id, checklist_item_id, notes, linked_by_user_id, linked_at)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(Number(req.params.docId), itemId, notes, req.userId, now);
+      const created = sqlite.prepare("SELECT * FROM document_checklist_links WHERE id = ?").get(Number(ins.lastInsertRowid));
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+        module: "veritascan", action: "create", entityType: "document_link",
+        entityId: String(ins.lastInsertRowid),
+        entityLabel: `doc ${req.params.docId} -> item ${itemId}`,
+        after: created, ipAddress: req.ip,
+      });
+      res.json(created);
+    } catch (err: any) {
+      if (String(err.message || "").includes("UNIQUE")) {
+        return res.status(409).json({ error: "This document is already linked to this checklist item" });
+      }
+      console.error("[veritascan/links] insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Insert failed" });
+    }
+  });
+
+  // DELETE /api/labs/:labId/veritascan/documents/:docId/links/:linkId
+  app.delete("/api/labs/:labId/veritascan/documents/:docId/links/:linkId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const sqlite = (db as any).$client;
+    const link = sqlite.prepare(
+      `SELECT l.* FROM document_checklist_links l
+       JOIN lab_documents d ON d.id = l.document_id
+       WHERE l.id = ? AND l.document_id = ? AND d.lab_id = ?`
+    ).get(Number(req.params.linkId), Number(req.params.docId), req.scope.labId) as any;
+    if (!link) return res.status(404).json({ error: "Link not found" });
+    sqlite.prepare("DELETE FROM document_checklist_links WHERE id = ?").run(Number(req.params.linkId));
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritascan", action: "delete", entityType: "document_link",
+      entityId: String(req.params.linkId),
+      entityLabel: `doc ${req.params.docId} -> item ${link.checklist_item_id}`,
+      before: link, ipAddress: req.ip,
+    });
+    res.json({ ok: true });
+  });
+
+  // GET /api/labs/:labId/veritascan/documents/:docId/links
+  // Returns link rows for this document. Client renders item metadata
+  // from the static SCAN_ITEMS list.
+  app.get("/api/labs/:labId/veritascan/documents/:docId/links", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const sqlite = (db as any).$client;
+    const doc = sqlite.prepare(
+      "SELECT id FROM lab_documents WHERE id = ? AND lab_id = ?"
+    ).get(Number(req.params.docId), req.scope.labId);
+    if (!doc) return res.status(404).json({ error: "Document not found in this lab" });
+    const links = sqlite.prepare(
+      `SELECT id, document_id, checklist_item_id, notes, linked_by_user_id, linked_at
+       FROM document_checklist_links
+       WHERE document_id = ?
+       ORDER BY checklist_item_id ASC`
+    ).all(Number(req.params.docId));
+    res.json(links);
+  });
+
+  // GET /api/labs/:labId/veritascan/checklist/items/:itemId/documents
+  // Reverse lookup: which documents in this lab cover this checklist item?
+  // Phase C consumes this for the Inspection Proof view.
+  app.get("/api/labs/:labId/veritascan/checklist/items/:itemId/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const itemId = Number(req.params.itemId);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return res.status(400).json({ error: "Invalid checklist item ID" });
+    }
+    const includeArchived = req.query.include_archived === "1";
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT d.id, d.title, d.description, d.document_type, d.display_label,
+              d.external_url, d.storage_provider, d.version, d.status,
+              d.effective_date, d.review_due_date,
+              l.id AS link_id, l.notes AS link_notes, l.linked_at, l.linked_by_user_id
+       FROM document_checklist_links l
+       JOIN lab_documents d ON d.id = l.document_id
+       WHERE d.lab_id = ? AND l.checklist_item_id = ?
+         ${includeArchived ? "" : "AND d.status != 'archived'"}
+       ORDER BY d.linked_at DESC`
+    ).all(req.scope.labId, itemId);
+    res.json(rows);
+  });
+
   // ── VERITASCAN EXCEL EXPORT ──────────────────────────────────────────────
   // Shared handler factory for VeritaScan Excel + PDF exports. Lab-scoped
   // routes pass through labScopeMiddleware first, which sets req.scope.lab

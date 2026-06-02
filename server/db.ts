@@ -212,15 +212,20 @@ sqlite.exec(`
     linked_by_user_id INTEGER NOT NULL
   );
 
+  -- Phase B (2026-06-02): the accreditor column from Phase A's first cut was
+  -- wrong. Each VeritaScan SCAN_ITEMS row is a single numeric id that carries
+  -- citations across all 5 accreditors (tjc, cap, cfr, aabb, cola) as fields
+  -- on the row. Accreditor is a property of the item's citation, not of the
+  -- link. Schema migration below drops the prior table if it has the old
+  -- accreditor column (safe because Phase A landed the table empty).
   CREATE TABLE IF NOT EXISTS document_checklist_links (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_id INTEGER NOT NULL,
-    accreditor TEXT NOT NULL,
-    checklist_item_id TEXT NOT NULL,
+    checklist_item_id INTEGER NOT NULL,
     notes TEXT,
     linked_by_user_id INTEGER NOT NULL,
     linked_at TEXT NOT NULL,
-    UNIQUE(document_id, accreditor, checklist_item_id)
+    UNIQUE(document_id, checklist_item_id)
   );
 
   CREATE TABLE IF NOT EXISTS lab_document_type_defaults (
@@ -233,7 +238,8 @@ sqlite.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_lab_documents_lab_status ON lab_documents(lab_id, status);
   CREATE INDEX IF NOT EXISTS idx_lab_documents_lab_type   ON lab_documents(lab_id, document_type);
-  CREATE INDEX IF NOT EXISTS idx_doc_links_accreditor     ON document_checklist_links(accreditor, checklist_item_id);
+  CREATE INDEX IF NOT EXISTS idx_doc_links_item            ON document_checklist_links(checklist_item_id);
+  CREATE INDEX IF NOT EXISTS idx_doc_links_doc             ON document_checklist_links(document_id);
 
   CREATE TABLE IF NOT EXISTS newsletter_subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1080,8 +1086,28 @@ for (const [col, type] of labDocColumnDefs) {
   if (!labDocCols.includes(col)) sqlite.exec(`ALTER TABLE lab_documents ADD COLUMN ${col} ${type}`);
 }
 
-const docLinkCols = (sqlite.prepare("PRAGMA table_info(document_checklist_links)").all() as { name: string }[]).map(c => c.name);
-if (!docLinkCols.includes("notes")) sqlite.exec("ALTER TABLE document_checklist_links ADD COLUMN notes TEXT");
+// Phase B (2026-06-02) schema fix: drop the prior table if it carries the
+// pre-Phase-B accreditor column, because the new shape removed accreditor.
+// Safe because Phase A landed an empty table in prod that nothing yet
+// references. The CREATE TABLE above re-creates the correct shape on this
+// same boot pass.
+const docLinkColsRaw = sqlite.prepare("PRAGMA table_info(document_checklist_links)").all() as { name: string }[];
+const docLinkCols = docLinkColsRaw.map(c => c.name);
+if (docLinkCols.includes("accreditor")) {
+  sqlite.exec("DROP TABLE document_checklist_links");
+  // Re-create with the new shape so we do not need a second boot pass.
+  sqlite.exec(`CREATE TABLE document_checklist_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    checklist_item_id INTEGER NOT NULL,
+    notes TEXT,
+    linked_by_user_id INTEGER NOT NULL,
+    linked_at TEXT NOT NULL,
+    UNIQUE(document_id, checklist_item_id)
+  )`);
+}
+const docLinkColsFinal = (sqlite.prepare("PRAGMA table_info(document_checklist_links)").all() as { name: string }[]).map(c => c.name);
+if (!docLinkColsFinal.includes("notes")) sqlite.exec("ALTER TABLE document_checklist_links ADD COLUMN notes TEXT");
 
 const docDefaultsCols = (sqlite.prepare("PRAGMA table_info(lab_document_type_defaults)").all() as { name: string }[]).map(c => c.name);
 if (!docDefaultsCols.includes("default_review_days")) sqlite.exec("ALTER TABLE lab_document_type_defaults ADD COLUMN default_review_days INTEGER");

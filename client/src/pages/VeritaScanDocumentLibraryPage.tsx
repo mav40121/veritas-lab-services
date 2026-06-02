@@ -29,7 +29,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ExternalLink, Archive, Pencil, Plus, Search } from "lucide-react";
+import { ExternalLink, Archive, Pencil, Plus, Search, Link2, X } from "lucide-react";
+import { SCAN_ITEMS } from "@/lib/veritaScanData";
 
 const API_BASE = "";
 
@@ -613,11 +614,8 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
             <Label>Description</Label>
             <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </div>
-          {/* Phase B placeholder */}
-          <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">
-            Linked checklist items appear here once Phase B ships. For now, link manually in your QMS document.
+          <LinkedItemsSection docId={doc.id} />
           </div>
-        </div>
         <DialogFooter className="justify-between">
           <Button variant="outline" onClick={onArchive} disabled={pending || doc.status === "archived"}>
             <Archive size={13} className="mr-1.5" />Archive
@@ -645,3 +643,173 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
     </Dialog>
   );
 }
+
+// ─── Phase B: linked checklist items section in the edit drawer ─────────────
+function LinkedItemsSection({ docId }: { docId: number }) {
+  const labId = useActiveLabId();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const linksQuery = useQuery<{ id: number; checklist_item_id: number; notes: string | null; linked_at: string }[]>({
+    queryKey: [`/api/labs/${labId}/veritascan/documents/${docId}/links`],
+    enabled: !!labId,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents/${docId}/links`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load links (${res.status})`);
+      return res.json();
+    },
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async (checklistItemId: number) => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents/${docId}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ checklist_item_id: checklistItemId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Link failed (${res.status})`);
+      }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`/api/labs/${labId}/veritascan/documents/${docId}/links`] }),
+    onError: (err: Error) => toast({ title: "Could not link item", description: err.message, variant: "destructive" }),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (linkId: number) => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents/${docId}/links/${linkId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Unlink failed (${res.status})`);
+      }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [`/api/labs/${labId}/veritascan/documents/${docId}/links`] }),
+    onError: (err: Error) => toast({ title: "Could not unlink item", description: err.message, variant: "destructive" }),
+  });
+
+  const links = linksQuery.data || [];
+  const linkedIds = useMemo(() => new Set(links.map(l => l.checklist_item_id)), [links]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm">Linked Checklist Items <span className="text-muted-foreground text-xs">({links.length})</span></Label>
+        <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)} data-testid="button-open-link-picker">
+          <Link2 size={13} className="mr-1.5" />Link Items
+        </Button>
+      </div>
+      {links.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">No checklist items linked yet.</p>
+      )}
+      <div className="space-y-1.5">
+        {links.map(link => {
+          const item = SCAN_ITEMS.find(i => i.id === link.checklist_item_id);
+          return (
+            <div key={link.id} className="flex items-start gap-2 p-2 rounded border bg-muted/30">
+              <div className="flex-1 text-xs">
+                <div className="font-medium">#{link.checklist_item_id} <span className="text-muted-foreground">[{item?.domain || "?"}]</span></div>
+                <div className="text-muted-foreground line-clamp-2">{item?.question || "Item not found"}</div>
+                <div className="text-muted-foreground mt-1 text-[10px]">
+                  {item ? `TJC: ${item.tjc} | CAP: ${item.cap} | CFR: ${item.cfr} | AABB: ${item.aabb} | COLA: ${item.cola}` : ""}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-${link.id}`}>
+                <X size={13} />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+      {pickerOpen && (
+        <ChecklistItemPicker
+          alreadyLinkedIds={linkedIds}
+          onPick={(itemId) => {
+            linkMutation.mutate(itemId);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Phase B: multi-select-style picker for the SCAN_ITEMS list ─────────────
+function ChecklistItemPicker({ alreadyLinkedIds, onPick, onClose }: {
+  alreadyLinkedIds: Set<number>;
+  onPick: (itemId: number) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [domain, setDomain] = useState<string>("all");
+  const domains = useMemo(() => Array.from(new Set(SCAN_ITEMS.map(i => i.domain))), []);
+  const filtered = useMemo(() => {
+    const lower = search.toLowerCase();
+    return SCAN_ITEMS.filter(it => {
+      if (alreadyLinkedIds.has(it.id)) return false;
+      if (domain !== "all" && it.domain !== domain) return false;
+      if (lower) {
+        return it.question.toLowerCase().includes(lower) ||
+          String(it.id).includes(lower) ||
+          it.tjc.toLowerCase().includes(lower) ||
+          it.cap.toLowerCase().includes(lower) ||
+          it.cfr.toLowerCase().includes(lower) ||
+          it.aabb.toLowerCase().includes(lower) ||
+          it.cola.toLowerCase().includes(lower);
+      }
+      return true;
+    });
+  }, [search, domain, alreadyLinkedIds]);
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Link a Checklist Item</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input placeholder="Search by question text, citation, or item #" value={search} onChange={e => setSearch(e.target.value)} className="h-9" data-testid="input-picker-search" />
+            <Select value={domain} onValueChange={setDomain}>
+              <SelectTrigger className="h-9 w-56"><SelectValue placeholder="All domains" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All domains</SelectItem>
+                {domains.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-xs text-muted-foreground">{filtered.length} matching items (already-linked items hidden)</div>
+          <div className="max-h-[50vh] overflow-y-auto space-y-1">
+            {filtered.map(it => (
+              <button
+                key={it.id}
+                onClick={() => onPick(it.id)}
+                className="w-full text-left p-2 rounded border hover:bg-muted/50 transition-colors"
+                data-testid={`button-pick-${it.id}`}
+              >
+                <div className="text-xs font-medium">#{it.id} <span className="text-muted-foreground">[{it.domain}]</span></div>
+                <div className="text-xs">{it.question}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  TJC: {it.tjc} | CAP: {it.cap} | CFR: {it.cfr} | AABB: {it.aabb} | COLA: {it.cola}
+                </div>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="text-xs text-muted-foreground italic py-4 text-center">No matching items.</p>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
