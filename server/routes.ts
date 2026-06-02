@@ -8551,6 +8551,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(links);
   });
 
+  // GET /api/labs/:labId/veritascan/coverage
+  // Returns all active document<->checklist links for the lab in one shot.
+  // The Inspection Proof view (Phase C) aggregates client-side to drive a
+  // per-accreditor coverage rollup over the static SCAN_ITEMS list.
+  // Includes document metadata so the view can render a doc title and the
+  // overdue-review status without a second round trip per link.
+  app.get("/api/labs/:labId/veritascan/coverage", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const includeArchived = req.query.include_archived === "1";
+    const rows = (db as any).$client.prepare(
+      `SELECT d.id AS document_id, d.title, d.display_label, d.document_type,
+              d.external_url, d.storage_provider, d.status, d.review_due_date,
+              l.id AS link_id, l.checklist_item_id, l.notes AS link_notes, l.linked_at
+       FROM document_checklist_links l
+       JOIN lab_documents d ON d.id = l.document_id
+       WHERE d.lab_id = ?
+         ${includeArchived ? "" : "AND d.status != 'archived'"}
+       ORDER BY l.checklist_item_id ASC, d.linked_at DESC`
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+
   // GET /api/labs/:labId/veritascan/checklist/items/:itemId/documents
   // Reverse lookup: which documents in this lab cover this checklist item?
   // Phase C consumes this for the Inspection Proof view.
