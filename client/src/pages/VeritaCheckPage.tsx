@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Activity, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import CLIALookupModal from "@/components/CLIALookupModal";
+import { VeritaQcImportModal, type VeritaQcImportPayload } from "@/components/VeritaQcImportModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -668,6 +669,32 @@ export default function VeritaCheckPage() {
   const [precisionReagentLot, setPrecisionReagentLot] = useState("");
   const [precisionComment, setPrecisionComment] = useState("");
   const [precisionResultUnits, setPrecisionResultUnits] = useState("");
+
+  // VeritaQC → VeritaCheck Verification Import (Phase A: Precision).
+  // The modal opens when the tech clicks "Import from VeritaQC…" on the
+  // Precision Data Entry card. On import, we fan the payload into the
+  // existing precision state vars + stash the audit metadata in
+  // `precisionImportSource` for persistence at save time (decision #5).
+  const [qcImportOpen, setQcImportOpen] = useState(false);
+  const [precisionImportSource, setPrecisionImportSource] = useState<any | null>(null);
+
+  function handleVeritaQcImport(payload: VeritaQcImportPayload) {
+    const { level, import_source } = payload;
+    setPrecisionMode("simple"); // imported data is one pool per level
+    setPrecisionLevels(1);
+    setPrecisionLevelNames([level.name, "Level 2 (High)", "Level 3 (Mid)"]);
+    setPrecisionValues([level.values, [], []]);
+    setPrecisionReps(level.values.length);
+    if (level.control_lot) setPrecisionControlLot(level.control_lot);
+    setPrecisionImportSource(import_source);
+    if (payload.analyte && !testName.trim()) setTestName(payload.analyte);
+    toast({
+      title: `Imported ${level.values.length} replicates from VeritaQC™`,
+      description: payload.westgard_flag_summary.flagged > 0
+        ? `${payload.westgard_flag_summary.flagged} of ${payload.westgard_flag_summary.total} flagged in VeritaQC; director reviews.`
+        : `Level "${level.name}", control lot ${level.control_lot}`,
+    });
+  }
 
   // Sensitivity (EP17) state. Two paste-friendly textareas hold the blank and low-level
   // replicate values respectively; one value per line, optional ",lot" suffix per line for
@@ -1941,6 +1968,17 @@ export default function VeritaCheckPage() {
           };
         }
       });
+      // VeritaQC Import audit trail (design doc v2 decision #5). When the
+      // tech ran "Import from VeritaQC…" earlier in this session, augment
+      // level 0 of the persisted precDataPoints with importedFromVeritaqc +
+      // importSource. The calculator and PDF builder ignore these extra
+      // keys; the director-review surface and any future inspection-export
+      // can read them off data_points. Drops to no-op if the user typed the
+      // values by hand (no import was run).
+      if (precisionImportSource && precDataPoints.length > 0) {
+        (precDataPoints[0] as any).importedFromVeritaqc = true;
+        (precDataPoints[0] as any).importSource = precisionImportSource;
+      }
       // Phase 3 simple-precision parity: parse optional EE-style inputs from
       // text state, omit any empty / non-numeric field so the calculator
       // skips that branch (e.g. no targetMean -> no bias / %bias output).
@@ -2066,6 +2104,15 @@ export default function VeritaCheckPage() {
     useSEO({ title: "VeritaCheck™ | CLIA Performance Verification Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
 return (
     <div>
+      {activeLabId ? (
+        <VeritaQcImportModal
+          open={qcImportOpen}
+          onOpenChange={setQcImportOpen}
+          labId={activeLabId}
+          defaultAnalyte={testName.trim() || undefined}
+          onImport={handleVeritaQcImport}
+        />
+      ) : null}
       {!isLoggedIn ? (
         <>
           {/* Landing Hero for unauthenticated visitors */}
@@ -2227,6 +2274,23 @@ return (
                           <span>Calibration verification is required by CLIA even when your analyzer uses manufacturer-assigned calibration. VeritaCheck documents the verification process, not the calibration itself, which is what 42 CFR {"\u00A7"}493.1255 actually requires.</span>
                         </div>
                       )}
+                      {studyType === "precision" && activeLabId ? (
+                        <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs leading-relaxed">
+                          <span className="text-muted-foreground">
+                            Already running daily QC for this analyte? Skip manual entry and pull replicates from VeritaQC\u2122.
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs shrink-0"
+                            onClick={() => setQcImportOpen(true)}
+                            data-testid="button-veritaqc-import-setup"
+                          >
+                            Start from VeritaQC\u2122\u2026
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
@@ -3686,6 +3750,18 @@ return (
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                     <span>Precision Data Entry</span>
                     <div className="flex items-center gap-2">
+                      {activeLabId ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setQcImportOpen(true)}
+                          data-testid="button-veritaqc-import"
+                        >
+                          Import from VeritaQC™…
+                        </Button>
+                      ) : null}
                       <span className="text-xs text-muted-foreground font-normal">Mode:</span>
                       <Select value={precisionMode} onValueChange={v => setPrecisionMode(v as "simple" | "advanced")}>
                         <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
