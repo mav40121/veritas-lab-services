@@ -2289,7 +2289,7 @@ return (
                       {studyType === "precision" && activeLabId ? (
                         <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs leading-relaxed">
                           <span className="text-muted-foreground">
-                            Already running daily QC for this analyte? Skip manual entry and pull replicates from VeritaQC\u2122.
+                            Already running daily QC for this analyte? Skip manual entry and pull replicates from VeritaQC{"\u2122"}.
                           </span>
                           <Button
                             type="button"
@@ -2299,7 +2299,7 @@ return (
                             onClick={() => setQcImportOpen(true)}
                             data-testid="button-veritaqc-import-setup"
                           >
-                            Start from VeritaQC\u2122\u2026
+                            Start from VeritaQC{"\u2122\u2026"}
                           </Button>
                         </div>
                       ) : null}
@@ -2354,12 +2354,12 @@ return (
                                 </SelectContent>
                               </Select>
                               {idx === 0 && hasAmbiguousDuplicates && (
-                                <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap\u2122 to tell them apart.</p>
+                                <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap{"\u2122"} to tell them apart.</p>
                               )}
                               {linkedInstruments[idx] && (
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
                                   <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
-                                  <span>Linked to VeritaMap\u2122</span>
+                                  <span>Linked to VeritaMap{"\u2122"}</span>
                                   {linkedInstruments[idx]!.serial_number && <span className="font-mono">S/N {linkedInstruments[idx]!.serial_number}</span>}
                                 </div>
                               )}
@@ -2405,12 +2405,12 @@ return (
                               </SelectContent>
                             </Select>
                             {idx === 0 && hasAmbiguousDuplicates && (
-                              <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap\u2122 to tell them apart.</p>
+                              <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap{"\u2122"} to tell them apart.</p>
                             )}
                             {linkedInstruments[idx] && (
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
                                 <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
-                                <span>Linked to VeritaMap\u2122</span>
+                                <span>Linked to VeritaMap{"\u2122"}</span>
                                 {linkedInstruments[idx]!.serial_number && <span className="font-mono">S/N {linkedInstruments[idx]!.serial_number}</span>}
                               </div>
                             )}
