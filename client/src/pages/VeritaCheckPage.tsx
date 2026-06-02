@@ -220,8 +220,12 @@ export default function VeritaCheckPage() {
   // and pulls from the URL; declaring once at the top for use by both the
   // pre-populate fetch (below) and the saveMutation (below).
   const editingLabId = useActiveLabId();
-  const editStudyUrl = isEditing
-    ? (editingLabId ? `/api/labs/${editingLabId}/studies/${editId}` : `/api/studies/${editId}`)
+  // Read uses the lab-scoped path only. The legacy unprefixed /api/studies/:id
+  // fallback was removed alongside the POST fallback (see saveMutation below)
+  // because /veritacheck is lab-scopable, so activeLabId is always resolved on
+  // any flow that legitimately renders this page in edit mode.
+  const editStudyUrl = isEditing && editingLabId
+    ? `/api/labs/${editingLabId}/studies/${editId}`
     : null;
   const { data: editStudy } = useQuery<any>({
     queryKey: editStudyUrl ? [editStudyUrl] : ["__skip_edit_fetch__"],
@@ -1279,13 +1283,24 @@ export default function VeritaCheckPage() {
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
       // PUT when editing an existing study (draft or completed) so we update
       // the row instead of creating a duplicate. POST when new.
+      //
+      // Multi-Lab Tier 2 Phase 3 cleanup (2026-06-02): the legacy unprefixed
+      // /api/studies path is GONE from this code path. The previous fallback
+      // (`activeLabId ? lab-scoped : /api/studies`) was a transitional dual-
+      // write that relied on the server backfilling lab_id from the user
+      // record. For multi-lab owners that backfill could route a study to
+      // the wrong lab. With /veritacheck now in LAB_SCOPABLE_PATHS (PR #483),
+      // activeLabId is always resolved on legitimate flows; if it ever is
+      // not, fail loudly so the bug is visible instead of silently writing
+      // to whichever lab the server backfill picks.
+      if (!activeLabId) {
+        throw new Error(
+          "Active lab not resolved — cannot save study. Pick a lab in the NavBar switcher and retry."
+        );
+      }
       const url = isEditing
-        ? (activeLabId
-            ? `${API_BASE}/api/labs/${activeLabId}/studies/${editId}`
-            : `${API_BASE}/api/studies/${editId}`)
-        : (activeLabId
-            ? `${API_BASE}/api/labs/${activeLabId}/studies`
-            : `${API_BASE}/api/studies`);
+        ? `${API_BASE}/api/labs/${activeLabId}/studies/${editId}`
+        : `${API_BASE}/api/labs/${activeLabId}/studies`;
       // Surface non-2xx responses as errors so React Query routes them to
       // onError (toast). Previously we returned the raw Response, which made
       // any 4xx/5xx silently fall through to onSuccess, where data.id was
