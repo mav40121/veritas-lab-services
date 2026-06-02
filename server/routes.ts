@@ -371,6 +371,22 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return carryoverAbs <= errorLimit ? "pass" : "fail";
     }
 
+    // ── cal_ver split (PR 1: skeleton stubs) ───────────────────────────────
+    // accuracy_bias / linearity / reportable_range register as new study
+    // types here so the server can label and persist them. Real evaluator
+    // logic ships in the per-type PRs (PR 2-4). Default 'fail' until then
+    // so a study created via API/seed before its evaluator is wired marks
+    // as failing rather than silently passing.
+    if (studyType === "accuracy_bias") {
+      return "fail"; // TODO PR 2: implement per-level |mean - assigned| / assigned <= TEa
+    }
+    if (studyType === "linearity") {
+      return "fail"; // TODO PR 3: implement regression with |slope - 1| * 100 <= TEa AND r^2 >= 0.95
+    }
+    if (studyType === "reportable_range") {
+      return "fail"; // TODO PR 4: implement per-level recovery vs claimed AMR
+    }
+
     // pt_coag or unknown: trust client value (pt_coag is gated anyway)
     return "fail";
   } catch (err) {
@@ -4452,6 +4468,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         case "multi_analyte_coag": return "Multi-Analyte Lot Comparison";
         case "cumsum": return "CUMSUM";
         case "carryover": return "Carryover Verification (EP10-A3)";
+        case "accuracy_bias": return "Accuracy / Bias Verification (CLSI EP15-A3)";
+        case "linearity": return "Linearity Verification (CLSI EP06)";
+        case "reportable_range": return "Reportable Range Verification (CLSI EP06)";
         default: return st;
       }
     };
