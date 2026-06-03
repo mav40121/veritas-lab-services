@@ -26,11 +26,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export type SubsampleStrategy = "most_recent" | "random" | "all";
 
+export type VeritaQcImportStudyMode = "precision" | "accuracy_bias";
+
 export interface VeritaQcImportPayload {
   analyte: string;
-  // Precision Phase A always lands one level per import (one control lot
-  // → one qc_level). Tech can run the modal multiple times to stack
-  // multiple levels into the same study.
+  // Phase A (precision) + Phase B (accuracy_bias) always land one level
+  // per import (one control lot → one qc_level). Tech can run the modal
+  // multiple times to stack multiple levels into the same study.
   level: {
     name: string;
     values: number[];
@@ -40,6 +42,11 @@ export interface VeritaQcImportPayload {
     manufacturer?: string;
     target_value?: number;
     target_sd?: number;
+    // Phase B: assigned value for accuracy/bias studies. Defaults to
+    // the lot's mfr_mean; user can override before commit. Always
+    // present in the payload so the parent does not need to look it up.
+    assigned_value?: number;
+    assigned_value_source?: "control_lot_mean" | "user_typed";
     was_westgard_flagged_count: number;
   };
   import_source: any;
@@ -69,8 +76,13 @@ interface Props {
   labId: number;
   // Pre-fill analyte from the parent's current study state, if known.
   defaultAnalyte?: string;
+  // Phase B: which study type the parent is wiring the import into.
+  // Default "precision" preserves Phase A behaviour. "accuracy_bias"
+  // surfaces an editable assigned-value field per level (defaulting to
+  // the picked control lot's mfr_mean).
+  studyMode?: VeritaQcImportStudyMode;
   // Callback fired once the user clicks "Import to verification study".
-  // Parent merges this payload into Precision state.
+  // Parent merges this payload into the relevant study-type state.
   onImport: (payload: VeritaQcImportPayload) => void;
 }
 
@@ -88,7 +100,7 @@ function isoDaysAgo(days: number): string {
   return d.toISOString().split("T")[0];
 }
 
-export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte, onImport }: Props) {
+export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte, studyMode = "precision", onImport }: Props) {
   const [analyte, setAnalyte] = useState(defaultAnalyte || "");
   const [analyteInput, setAnalyteInput] = useState(defaultAnalyte || "");
   const [instrument, setInstrument] = useState<string>("");
@@ -96,9 +108,15 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [controlLotId, setControlLotId] = useState<string>("");
-  const [replicates, setReplicates] = useState<number>(20);
+  const [replicates, setReplicates] = useState<number>(studyMode === "accuracy_bias" ? 10 : 20);
   const [strategy, setStrategy] = useState<SubsampleStrategy>("most_recent");
   const [studyLevelName, setStudyLevelName] = useState<string>("");
+  // Phase B: editable assigned-value override. Empty string means "use
+  // the lot's mfr_mean as the default" — the import payload still
+  // carries the value, just sourced as control_lot_mean rather than
+  // user_typed. Re-keyed on the picked control lot so a fresh pick
+  // resets the override.
+  const [assignedValueInput, setAssignedValueInput] = useState<string>("");
 
   const [candidates, setCandidates] = useState<Candidate | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -126,7 +144,15 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
     setPreview(null);
     setError(null);
     setCandidates(null);
+    setAssignedValueInput("");
   }, [open, defaultAnalyte]);
+
+  // Phase B: reset assigned-value override when the picked control lot
+  // changes, so the user re-confirms the override against the new lot's
+  // mfr_mean default.
+  useEffect(() => {
+    setAssignedValueInput("");
+  }, [controlLotId]);
 
   // Fetch candidates whenever analyte (committed) or filters change.
   useEffect(() => {
@@ -219,6 +245,19 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
       // Apply the user's level-name override before stashing the preview.
       if (studyLevelName && data?.levels?.[0]) {
         data.levels[0].name = studyLevelName;
+      }
+      // Phase B: apply the assigned-value override if the user typed one.
+      // Default to the lot's mfr_mean returned by the server; track whether
+      // the user explicitly entered a different number for the audit trail.
+      if (studyMode === "accuracy_bias" && data?.levels?.[0]) {
+        const typed = assignedValueInput.trim();
+        const typedNum = typed === "" ? NaN : Number(typed);
+        if (Number.isFinite(typedNum)) {
+          data.levels[0].assigned_value = typedNum;
+          data.levels[0].assigned_value_source = "user_typed";
+        } else {
+          data.levels[0].assigned_value_source = "control_lot_mean";
+        }
       }
       setPreview({
         analyte: data.analyte,
@@ -400,6 +439,24 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
               />
             </div>
           </div>
+
+          {/* Phase B: assigned value (for accuracy_bias) */}
+          {studyMode === "accuracy_bias" && (
+            <div className="space-y-1">
+              <Label className="text-xs">Assigned value (target) for this level</Label>
+              <Input
+                type="number"
+                step="any"
+                value={assignedValueInput}
+                onChange={(e) => setAssignedValueInput(e.target.value)}
+                placeholder={selectedLevel ? String(selectedLevel.target_value) : "Lot mean will be used if blank"}
+                className="h-8 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Defaults to the control lot{"'"}s manufacturer mean ({selectedLevel ? selectedLevel.target_value : "n/a"}). Override if your verification target is a certified reference or PT consensus value rather than the QC lot mean.
+              </p>
+            </div>
+          )}
 
           {/* Preview output */}
           {preview && (

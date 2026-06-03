@@ -676,18 +676,52 @@ export default function VeritaCheckPage() {
   // existing precision state vars + stash the audit metadata in
   // `precisionImportSource` for persistence at save time (decision #5).
   const [qcImportOpen, setQcImportOpen] = useState(false);
+  const [qcImportMode, setQcImportMode] = useState<"precision" | "accuracy_bias">("precision");
   const [precisionImportSource, setPrecisionImportSource] = useState<any | null>(null);
+  const [accuracyBiasImportSource, setAccuracyBiasImportSource] = useState<any | null>(null);
 
   function handleVeritaQcImport(payload: VeritaQcImportPayload) {
     const { level, import_source } = payload;
-    setPrecisionMode("simple"); // imported data is one pool per level
-    setPrecisionLevels(1);
-    setPrecisionLevelNames([level.name, "Level 2 (High)", "Level 3 (Mid)"]);
-    setPrecisionValues([level.values, [], []]);
-    setPrecisionReps(level.values.length);
-    if (level.control_lot) setPrecisionControlLot(level.control_lot);
-    setPrecisionImportSource(import_source);
-    if (payload.analyte && !testName.trim()) setTestName(payload.analyte);
+    if (qcImportMode === "accuracy_bias") {
+      // Phase B: import into accuracy_bias state. Each modal run lands ONE
+      // level with name + assignedValue + replicates; tech can rerun the
+      // modal to stack additional levels (Low/Mid/High) on the study.
+      if (payload.analyte) setAbAnalyte(payload.analyte);
+      const assigned = typeof level.assigned_value === "number" && Number.isFinite(level.assigned_value)
+        ? level.assigned_value : null;
+      setAbLevels(prev => {
+        // Replace any existing level entry that already shares this name
+        // (re-import overrides). Otherwise append.
+        const idx = prev.findIndex(p => p.name === level.name);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { name: level.name, assignedValue: assigned };
+          return next;
+        }
+        // If the existing first slot has no assigned value AND its name
+        // is the auto-generated default, replace it. Otherwise append.
+        const firstIsBlank = prev.length > 0 && prev[0].assignedValue === null && /^(QC (Low|Mid|High)|Level \d+( \(.*\))?)$/.test(prev[0].name);
+        if (firstIsBlank) {
+          const next = [...prev];
+          next[0] = { name: level.name, assignedValue: assigned };
+          return next;
+        }
+        return [...prev, { name: level.name, assignedValue: assigned }];
+      });
+      setAbRunData(prev => ({ ...prev, [level.name]: level.values }));
+      setAccuracyBiasImportSource(import_source);
+      if (payload.analyte && !testName.trim()) setTestName(payload.analyte);
+    } else {
+      // Phase A: precision import.
+      setPrecisionMode("simple");
+      setPrecisionLevels(1);
+      setPrecisionLevelNames([level.name, "Level 2 (High)", "Level 3 (Mid)"]);
+      setPrecisionValues([level.values, [], []]);
+      setPrecisionReps(level.values.length);
+      if (level.control_lot) setPrecisionControlLot(level.control_lot);
+      setPrecisionImportSource(import_source);
+      if (payload.analyte && !testName.trim()) setTestName(payload.analyte);
+    }
     toast({
       title: `Imported ${level.values.length} replicates from VeritaQC™`,
       description: payload.westgard_flag_summary.flagged > 0
@@ -1706,6 +1740,14 @@ export default function VeritaCheckPage() {
           analyte: abAnalyte.trim(),
           units: abUnits.trim(),
           levels: builtLevels,
+          // Phase B audit trail: when the user populated the form via the
+          // VeritaQC import modal, persist the provenance object so the
+          // director-review surface and any future inspection-export can
+          // surface it. Calculator + PDF builder ignore unknown keys.
+          ...(accuracyBiasImportSource ? {
+            importedFromVeritaqc: true,
+            importSource: accuracyBiasImportSource,
+          } : {}),
         }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: allPass ? "pass" : "fail",
@@ -2109,7 +2151,8 @@ return (
           open={qcImportOpen}
           onOpenChange={setQcImportOpen}
           labId={activeLabId}
-          defaultAnalyte={testName.trim() || undefined}
+          defaultAnalyte={(qcImportMode === "accuracy_bias" ? abAnalyte.trim() : testName.trim()) || undefined}
+          studyMode={qcImportMode}
           onImport={handleVeritaQcImport}
         />
       ) : null}
@@ -2286,7 +2329,7 @@ return (
                           <span>Use this study type when comparing a new instrument to a reference method or comparing multiple instruments to a Gold Standard per CLSI EP09. Paired patient samples are analyzed for correlation, slope, intercept, and bias. For single-instrument accuracy against assigned target values, pick Accuracy / Bias instead.</span>
                         </div>
                       )}
-                      {studyType === "precision" && activeLabId ? (
+                      {(studyType === "precision" || studyType === "accuracy_bias") && activeLabId ? (
                         <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs leading-relaxed">
                           <span className="text-muted-foreground">
                             Already running daily QC for this analyte? Skip manual entry and pull replicates from VeritaQC{"\u2122"}.
@@ -2296,7 +2339,10 @@ return (
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs shrink-0"
-                            onClick={() => setQcImportOpen(true)}
+                            onClick={() => {
+                              setQcImportMode(studyType === "accuracy_bias" ? "accuracy_bias" : "precision");
+                              setQcImportOpen(true);
+                            }}
                             data-testid="button-veritaqc-import-setup"
                           >
                             Start from VeritaQC{"\u2122\u2026"}
@@ -3333,7 +3379,24 @@ return (
                 </Card>
               ) : studyType === "accuracy_bias" ? (
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Accuracy / Bias Data Entry (CLSI EP15-A3)</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
+                    <span>Accuracy / Bias Data Entry (CLSI EP15-A3)</span>
+                    {activeLabId ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setQcImportMode("accuracy_bias");
+                          setQcImportOpen(true);
+                        }}
+                        data-testid="button-veritaqc-import-ab"
+                      >
+                        Import from VeritaQC{"™…"}
+                      </Button>
+                    ) : null}
+                  </CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
@@ -3768,10 +3831,13 @@ return (
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs"
-                          onClick={() => setQcImportOpen(true)}
+                          onClick={() => {
+                            setQcImportMode("precision");
+                            setQcImportOpen(true);
+                          }}
                           data-testid="button-veritaqc-import"
                         >
-                          Import from VeritaQC™…
+                          Import from VeritaQC{"™…"}
                         </Button>
                       ) : null}
                       <span className="text-xs text-muted-foreground font-normal">Mode:</span>
