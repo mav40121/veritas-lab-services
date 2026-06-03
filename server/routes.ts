@@ -19350,6 +19350,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     canUserApproveStep,
     getCurrentPendingStep,
     countEligibleReviewersForStep,
+    isPolicyExpired,
+    POLICY_EXPIRED_RESPONSE,
   } = await import("./veritapolicyApproval");
 
   // Multer config: memory buffer + 25 MB cap. We write to /data/policies on
@@ -20132,6 +20134,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .get(id) as { lab_id: number } | undefined;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (isPolicyExpired(sqlite, id)) return res.status(409).json(POLICY_EXPIRED_RESPONSE);
       const { title, description, manualId, reviewIntervalMonths } = req.body || {};
       sqlite
         .prepare(
@@ -21130,6 +21133,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             ORDER BY id DESC LIMIT 1`
         )
         .get(subject.id) as { id: number; user_id: number; action: string; details: string } | undefined;
+      // Edit-lock verification: simulate the guard the PATCH / attestation
+      // complete paths now run. After the auto-expire flip we expect
+      // isPolicyExpired to return true. This proves the helper installed
+      // on those routes will refuse mutations on expired docs.
+      const editLockTriggers = isPolicyExpired(sqlite, subject.id);
       if (synthetic) {
         // Synthetic test row: delete entirely along with any audit rows
         // referencing it. Cleanup must include both ascending and
@@ -21156,6 +21164,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         audit_row_user_id: auditRow?.user_id,
         audit_row_action: auditRow?.action,
         audit_row_details: auditRow ? JSON.parse(auditRow.details) : null,
+        edit_lock_triggers: editLockTriggers,
         cleaned_up: true,
       });
     } catch (err: any) {
@@ -21686,7 +21695,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const att = sqlite
         .prepare(
           `SELECT a.id, a.document_id, a.version_id, a.assigned_to_user_id, a.completed_at,
-                  d.lab_id, v.file_hash_sha256 AS version_hash
+                  d.lab_id, d.status AS doc_status, v.file_hash_sha256 AS version_hash
              FROM policy_attestations a
              JOIN policy_documents d ON d.id = a.document_id
              LEFT JOIN policy_versions v ON v.id = a.version_id
@@ -21695,6 +21704,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .get(id) as any;
       if (!att) return res.status(404).json({ error: "Not found" });
       if (att.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (att.doc_status === "expired") return res.status(409).json(POLICY_EXPIRED_RESPONSE);
       if (att.assigned_to_user_id !== req.userId) {
         return res.status(403).json({ error: "Not your attestation" });
       }
