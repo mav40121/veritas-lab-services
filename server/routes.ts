@@ -21052,6 +21052,86 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // QA harness for PR #510. Picks an existing approved policy on the
+  // given lab, time-travels its next_review_date 70 days into the past
+  // (eligible window), runs the auto-expire cron, asserts the flip +
+  // audit-log write, then restores the original state and removes the
+  // audit-log row so the test leaves no permanent change. The same
+  // pattern as qa-corrupt-hash above: ADMIN_SECRET-gated QA helper
+  // that exists in prod code permanently because customers never
+  // reach it. Used for Gate 3 end-to-end verification of PR #510.
+  app.post("/api/admin/veritapolicy/qa-auto-expire-test", async (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const labId = Number(req.body?.labId) || 1;
+    const sqlite = (db as any).$client;
+    const subject = sqlite
+      .prepare(
+        `SELECT id, status, next_review_date
+           FROM policy_documents
+          WHERE lab_id = ?
+            AND status = 'approved'
+            AND archived_at IS NULL
+          LIMIT 1`
+      )
+      .get(labId) as { id: number; status: string; next_review_date: string | null } | undefined;
+    if (!subject) {
+      return res.status(404).json({
+        error: "No approved policy on this lab to use as test subject. Create one first via the normal flow.",
+        labId,
+      });
+    }
+    const originalNextReviewDate = subject.next_review_date;
+    const seventyDaysAgo = new Date();
+    seventyDaysAgo.setDate(seventyDaysAgo.getDate() - 70);
+    const isoSeventy = seventyDaysAgo.toISOString().split("T")[0];
+    try {
+      sqlite
+        .prepare("UPDATE policy_documents SET next_review_date = ? WHERE id = ?")
+        .run(isoSeventy, subject.id);
+      const { runPolicyAutoExpire } = await import("./veritapolicyReminders");
+      const stats = runPolicyAutoExpire();
+      const after = sqlite
+        .prepare("SELECT status FROM policy_documents WHERE id = ?")
+        .get(subject.id) as { status: string } | undefined;
+      const auditRow = sqlite
+        .prepare(
+          `SELECT id, user_id, action, details
+             FROM policy_audit_log
+            WHERE document_id = ? AND action = 'auto_expired'
+            ORDER BY id DESC LIMIT 1`
+        )
+        .get(subject.id) as { id: number; user_id: number; action: string; details: string } | undefined;
+      // Restore original status + next_review_date.
+      sqlite
+        .prepare("UPDATE policy_documents SET status = 'approved', next_review_date = ? WHERE id = ?")
+        .run(originalNextReviewDate, subject.id);
+      // Remove the test audit-log row so the trail stays clean.
+      if (auditRow) {
+        sqlite.prepare("DELETE FROM policy_audit_log WHERE id = ?").run(auditRow.id);
+      }
+      return res.json({
+        ok: true,
+        subject_doc_id: subject.id,
+        cron_stats: stats,
+        flipped_to_expired: after?.status === "expired",
+        audit_row_written: !!auditRow,
+        audit_row_user_id: auditRow?.user_id,
+        audit_row_action: auditRow?.action,
+        audit_row_details: auditRow ? JSON.parse(auditRow.details) : null,
+        restored: true,
+      });
+    } catch (err: any) {
+      try {
+        sqlite
+          .prepare("UPDATE policy_documents SET status = 'approved', next_review_date = ? WHERE id = ?")
+          .run(originalNextReviewDate, subject.id);
+      } catch {}
+      console.error("[qa-auto-expire-test]", err.message);
+      return res.status(500).json({ error: err.message, attempted_restore: true });
+    }
+  });
+
   // Sibling endpoint to the reminder cron. Sweeps approved policies past
   // their next_review_date by the AUTO_EXPIRE_GRACE_DAYS window and flips
   // them to status='expired' with a policy_audit_log entry per flip.
