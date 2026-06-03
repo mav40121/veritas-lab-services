@@ -3661,9 +3661,9 @@ return (
                         }}>
                           <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="3">3</SelectItem>
-                            <SelectItem value="4">4</SelectItem>
-                            <SelectItem value="5">5</SelectItem>
+                            {Array.from({ length: MAX_LEVELS - 3 + 1 }, (_, i) => i + 3).map(n => (
+                              <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -3799,10 +3799,9 @@ return (
                         }}>
                           <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="2">2</SelectItem>
-                            <SelectItem value="3">3</SelectItem>
-                            <SelectItem value="4">4</SelectItem>
-                            <SelectItem value="5">5</SelectItem>
+                            {Array.from({ length: MAX_LEVELS - 2 + 1 }, (_, i) => i + 2).map(n => (
+                              <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
