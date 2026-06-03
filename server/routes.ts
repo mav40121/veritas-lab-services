@@ -21052,6 +21052,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Sibling endpoint to the reminder cron. Sweeps approved policies past
+  // their next_review_date by the AUTO_EXPIRE_GRACE_DAYS window and flips
+  // them to status='expired' with a policy_audit_log entry per flip.
+  // Idempotent (re-runs are no-ops because the WHERE clause filters on
+  // status='approved'). Per parking-lot #39 sub-item deferred from
+  // Phase 6B; ships 2026-06-02.
+  app.post("/api/admin/veritapolicy/run-auto-expire", async (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { runPolicyAutoExpire } = await import("./veritapolicyReminders");
+      const stats = runPolicyAutoExpire();
+      res.json({ ok: true, stats });
+    } catch (err: any) {
+      console.error("[admin run-auto-expire]", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Phase 6A: compliance dashboard aggregations ────────────────────────
   // Read-only summary of a lab's policy program state. Per-manual
   // approval coverage, overdue/due-soon lists, attestation rates per
