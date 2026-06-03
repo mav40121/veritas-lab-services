@@ -13,10 +13,17 @@
 // any row already sent. A new version upload invalidates the chain
 // because version_id changes.
 //
-// Auto-expire intentionally NOT in this PR. Visual red flag on the
-// dashboard + emails is the conservative ship; flipping a customer's
-// approved policy to expired without their action would surprise them.
-// Phase 6C can add it if customers ask.
+// Auto-expire: shipped 2026-06-02 (parking-lot #39 sub-item, deferred
+// from Phase 6B). Policies past their next_review_date by 60+ days
+// auto-flip from 'approved' to 'expired'. The 60-day buffer is one
+// 'final' reminder cycle after due; that gives the owner three escalating
+// emails (30-day warning, overdue, final) before any state change. Every
+// auto-flip writes a policy_audit_log row with action='auto_expired'
+// so a surveyor can trace the change. Idempotent: the WHERE clause
+// filters status='approved', so once a row is flipped it cannot
+// re-trigger. Write-path locking on status='expired' (preventing edits
+// on an expired doc) is a separate hardening item — this PR ships the
+// state machine flip, not the permission gate.
 
 import { Resend } from "resend";
 import { db } from "./db";
@@ -141,6 +148,83 @@ export async function runPolicyReviewReminders(): Promise<{
       });
     } catch (err: any) {
       console.error("[policy-reminders] resend failed:", err.message);
+      stats.errors += 1;
+    }
+  }
+  return stats;
+}
+
+// Sweep approved policies past next_review_date by AUTO_EXPIRE_GRACE_DAYS
+// and flip them to status='expired'. Per the module-doc auto-expire
+// block: idempotent (the WHERE clause filters 'approved'), writes an
+// audit-log row per flip, and uses a system user id (-1) for the
+// audit.user_id because no human triggered it.
+//
+// Designed to run from the same daily cron entry-point as
+// runPolicyReviewReminders. Returns the same stats shape so the
+// admin endpoint can surface both passes uniformly.
+const AUTO_EXPIRE_GRACE_DAYS = 60;
+const SYSTEM_USER_ID = -1;
+
+export function runPolicyAutoExpire(): {
+  scanned: number;
+  flipped: number;
+  skipped: number;
+  errors: number;
+} {
+  const sqlite = (db as any).$client;
+  const stats = { scanned: 0, flipped: 0, skipped: 0, errors: 0 };
+
+  // Find every approved doc whose next_review_date is at least
+  // AUTO_EXPIRE_GRACE_DAYS in the past. Date math is done in SQL so
+  // the comparison stays consistent with how the dashboard query
+  // computes "overdue" + "due_soon."
+  const rows = sqlite
+    .prepare(
+      `SELECT d.id, d.lab_id, d.title, d.owner_user_id, d.next_review_date
+         FROM policy_documents d
+        WHERE d.archived_at IS NULL
+          AND d.status = 'approved'
+          AND d.next_review_date IS NOT NULL
+          AND date(d.next_review_date) < date('now', '-' || ? || ' days')`
+    )
+    .all(AUTO_EXPIRE_GRACE_DAYS) as any[];
+
+  for (const r of rows) {
+    stats.scanned += 1;
+    try {
+      // Idempotent: re-runs cannot pick up this row again because the
+      // WHERE clause filters status='approved'. No need for a separate
+      // "already flipped" check.
+      const result = sqlite
+        .prepare(
+          `UPDATE policy_documents
+              SET status = 'expired',
+                  updated_at = datetime('now')
+            WHERE id = ?
+              AND status = 'approved'`
+        )
+        .run(r.id);
+      if (result.changes !== 1) {
+        // Race with a concurrent approval / manual edit. Skip silently.
+        stats.skipped += 1;
+        continue;
+      }
+      stats.flipped += 1;
+      writeAuditLog(sqlite, {
+        labId: r.lab_id,
+        documentId: r.id,
+        userId: SYSTEM_USER_ID,
+        action: "auto_expired",
+        details: {
+          previous_status: "approved",
+          next_review_date: r.next_review_date,
+          grace_days: AUTO_EXPIRE_GRACE_DAYS,
+          reason: "next_review_date past by more than grace window",
+        },
+      });
+    } catch (err: any) {
+      console.error("[policy-auto-expire] flip failed for doc", r.id, err.message);
       stats.errors += 1;
     }
   }
