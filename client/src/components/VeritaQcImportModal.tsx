@@ -27,7 +27,7 @@ import { authHeaders } from "@/lib/auth";
 
 export type SubsampleStrategy = "most_recent" | "random" | "all";
 
-export type VeritaQcImportStudyMode = "precision" | "accuracy_bias";
+export type VeritaQcImportStudyMode = "precision" | "accuracy_bias" | "linearity" | "reportable_range";
 
 export interface VeritaQcImportPayload {
   analyte: string;
@@ -109,7 +109,12 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [controlLotId, setControlLotId] = useState<string>("");
-  const [replicates, setReplicates] = useState<number>(studyMode === "accuracy_bias" ? 10 : 20);
+  // Phase B + C: study types that take a per-level assigned value (accuracy_bias,
+  // linearity, reportable_range) default to a smaller replicate count because
+  // CLSI EP15-A3 / EP06 / CLIA AMR call for ~3-10 reps per level, not the 20
+  // used for precision pooling.
+  const modeNeedsAssignedValue = studyMode === "accuracy_bias" || studyMode === "linearity" || studyMode === "reportable_range";
+  const [replicates, setReplicates] = useState<number>(modeNeedsAssignedValue ? 10 : 20);
   const [strategy, setStrategy] = useState<SubsampleStrategy>("most_recent");
   const [studyLevelName, setStudyLevelName] = useState<string>("");
   // Phase B: editable assigned-value override. Empty string means "use
@@ -250,7 +255,7 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
       // Phase B: apply the assigned-value override if the user typed one.
       // Default to the lot's mfr_mean returned by the server; track whether
       // the user explicitly entered a different number for the audit trail.
-      if (studyMode === "accuracy_bias" && data?.levels?.[0]) {
+      if (modeNeedsAssignedValue && data?.levels?.[0]) {
         const typed = assignedValueInput.trim();
         const typedNum = typed === "" ? NaN : Number(typed);
         if (Number.isFinite(typedNum)) {
@@ -442,7 +447,7 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
           </div>
 
           {/* Phase B: assigned value (for accuracy_bias) */}
-          {studyMode === "accuracy_bias" && (
+          {modeNeedsAssignedValue && (
             <div className="space-y-1">
               <Label className="text-xs">Assigned value (target) for this level</Label>
               <Input

@@ -676,30 +676,30 @@ export default function VeritaCheckPage() {
   // existing precision state vars + stash the audit metadata in
   // `precisionImportSource` for persistence at save time (decision #5).
   const [qcImportOpen, setQcImportOpen] = useState(false);
-  const [qcImportMode, setQcImportMode] = useState<"precision" | "accuracy_bias">("precision");
+  const [qcImportMode, setQcImportMode] = useState<"precision" | "accuracy_bias" | "linearity" | "reportable_range">("precision");
   const [precisionImportSource, setPrecisionImportSource] = useState<any | null>(null);
   const [accuracyBiasImportSource, setAccuracyBiasImportSource] = useState<any | null>(null);
+  const [linearityImportSource, setLinearityImportSource] = useState<any | null>(null);
+  const [reportableRangeImportSource, setReportableRangeImportSource] = useState<any | null>(null);
 
   function handleVeritaQcImport(payload: VeritaQcImportPayload) {
     const { level, import_source } = payload;
-    if (qcImportMode === "accuracy_bias") {
-      // Phase B: import into accuracy_bias state. Each modal run lands ONE
-      // level with name + assignedValue + replicates; tech can rerun the
-      // modal to stack additional levels (Low/Mid/High) on the study.
-      if (payload.analyte) setAbAnalyte(payload.analyte);
+    // Phase B + C: study types that take a per-level assigned value share
+    // the same import shape. They differ only in which state vars the
+    // payload lands in.
+    if (qcImportMode === "accuracy_bias" || qcImportMode === "linearity" || qcImportMode === "reportable_range") {
       const assigned = typeof level.assigned_value === "number" && Number.isFinite(level.assigned_value)
         ? level.assigned_value : null;
-      setAbLevels(prev => {
-        // Replace any existing level entry that already shares this name
-        // (re-import overrides). Otherwise append.
+      // Helper closes over the level/assigned/import_source vars and applies
+      // the shared replace-or-append logic to whichever {levels, runData}
+      // state pair the caller passes.
+      const mergeLevels = (prev: { name: string; assignedValue: number | null }[]) => {
         const idx = prev.findIndex(p => p.name === level.name);
         if (idx >= 0) {
           const next = [...prev];
           next[idx] = { name: level.name, assignedValue: assigned };
           return next;
         }
-        // If the existing first slot has no assigned value AND its name
-        // is the auto-generated default, replace it. Otherwise append.
         const firstIsBlank = prev.length > 0 && prev[0].assignedValue === null && /^(QC (Low|Mid|High)|Level \d+( \(.*\))?)$/.test(prev[0].name);
         if (firstIsBlank) {
           const next = [...prev];
@@ -707,9 +707,24 @@ export default function VeritaCheckPage() {
           return next;
         }
         return [...prev, { name: level.name, assignedValue: assigned }];
-      });
-      setAbRunData(prev => ({ ...prev, [level.name]: level.values }));
-      setAccuracyBiasImportSource(import_source);
+      };
+      if (qcImportMode === "accuracy_bias") {
+        if (payload.analyte) setAbAnalyte(payload.analyte);
+        setAbLevels(mergeLevels);
+        setAbRunData(prev => ({ ...prev, [level.name]: level.values }));
+        setAccuracyBiasImportSource(import_source);
+      } else if (qcImportMode === "linearity") {
+        if (payload.analyte) setLinAnalyte(payload.analyte);
+        setLinLevels(mergeLevels);
+        setLinRunData(prev => ({ ...prev, [level.name]: level.values }));
+        setLinearityImportSource(import_source);
+      } else {
+        // reportable_range
+        if (payload.analyte) setRrAnalyte(payload.analyte);
+        setRrLevels(mergeLevels);
+        setRrRunData(prev => ({ ...prev, [level.name]: level.values }));
+        setReportableRangeImportSource(import_source);
+      }
       if (payload.analyte && !testName.trim()) setTestName(payload.analyte);
     } else {
       // Phase A: precision import.
@@ -1846,6 +1861,12 @@ export default function VeritaCheckPage() {
           analyte: linAnalyte.trim(),
           units: linUnits.trim(),
           levels: builtLevels,
+          // Phase C audit trail: persist VeritaQC provenance when the import
+          // path was used. Calculator + PDF ignore unknown keys.
+          ...(linearityImportSource ? {
+            importedFromVeritaqc: true,
+            importSource: linearityImportSource,
+          } : {}),
         }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: overallPass ? "pass" : "fail",
@@ -1931,6 +1952,12 @@ export default function VeritaCheckPage() {
           claimed_range_low: cl,
           claimed_range_high: ch,
           levels: builtLevels,
+          // Phase C audit trail: persist VeritaQC provenance when the import
+          // path was used. Calculator + PDF ignore unknown keys.
+          ...(reportableRangeImportSource ? {
+            importedFromVeritaqc: true,
+            importSource: reportableRangeImportSource,
+          } : {}),
         }),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: allPass ? "pass" : "fail",
@@ -2151,7 +2178,12 @@ return (
           open={qcImportOpen}
           onOpenChange={setQcImportOpen}
           labId={activeLabId}
-          defaultAnalyte={(qcImportMode === "accuracy_bias" ? abAnalyte.trim() : testName.trim()) || undefined}
+          defaultAnalyte={(
+            qcImportMode === "accuracy_bias" ? abAnalyte.trim()
+            : qcImportMode === "linearity" ? linAnalyte.trim()
+            : qcImportMode === "reportable_range" ? rrAnalyte.trim()
+            : testName.trim()
+          ) || undefined}
           studyMode={qcImportMode}
           onImport={handleVeritaQcImport}
         />
@@ -2329,7 +2361,7 @@ return (
                           <span>Use this study type when comparing a new instrument to a reference method or comparing multiple instruments to a Gold Standard per CLSI EP09. Paired patient samples are analyzed for correlation, slope, intercept, and bias. For single-instrument accuracy against assigned target values, pick Accuracy / Bias instead.</span>
                         </div>
                       )}
-                      {(studyType === "precision" || studyType === "accuracy_bias") && activeLabId ? (
+                      {(studyType === "precision" || studyType === "accuracy_bias" || studyType === "linearity" || studyType === "reportable_range") && activeLabId ? (
                         <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs leading-relaxed">
                           <span className="text-muted-foreground">
                             Already running daily QC for this analyte? Skip manual entry and pull replicates from VeritaQC{"\u2122"}.
@@ -2340,7 +2372,11 @@ return (
                             variant="outline"
                             className="h-7 text-xs shrink-0"
                             onClick={() => {
-                              setQcImportMode(studyType === "accuracy_bias" ? "accuracy_bias" : "precision");
+                              const mode = studyType === "accuracy_bias" ? "accuracy_bias"
+                                : studyType === "linearity" ? "linearity"
+                                : studyType === "reportable_range" ? "reportable_range"
+                                : "precision";
+                              setQcImportMode(mode);
                               setQcImportOpen(true);
                             }}
                             data-testid="button-veritaqc-import-setup"
@@ -3509,7 +3545,24 @@ return (
                 </Card>
               ) : studyType === "linearity" ? (
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Linearity Data Entry (CLSI EP06)</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
+                    <span>Linearity Data Entry (CLSI EP06)</span>
+                    {activeLabId ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setQcImportMode("linearity");
+                          setQcImportOpen(true);
+                        }}
+                        data-testid="button-veritaqc-import-lin"
+                      >
+                        Import from VeritaQC{"™…"}
+                      </Button>
+                    ) : null}
+                  </CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
@@ -3622,7 +3675,24 @@ return (
                 </Card>
               ) : studyType === "reportable_range" ? (
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Reportable Range / AMR Verification Data Entry (CLIA §493.1255)</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
+                    <span>Reportable Range / AMR Verification Data Entry (CLIA §493.1255)</span>
+                    {activeLabId ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setQcImportMode("reportable_range");
+                          setQcImportOpen(true);
+                        }}
+                        data-testid="button-veritaqc-import-rr"
+                      >
+                        Import from VeritaQC{"™…"}
+                      </Button>
+                    ) : null}
+                  </CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
