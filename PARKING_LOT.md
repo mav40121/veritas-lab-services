@@ -920,7 +920,7 @@ _(item #37 closed 2026-05-28; see C28 below)_
 1. PDF watermarking (highest "feels enterprise" signal, ~half day)
 2. Quizzes on attestations (compliance defensibility, ~half day)
 3. Excel export of compliance dashboard (surveyor request, ~half day)
-4. Auto-expire cron (closes Phase 6B gap, ~half day)
+4. ~~Auto-expire cron (closes Phase 6B gap, ~half day)~~ **SHIPPED 2026-06-02.** PR #510 = state-machine flip with audit log + admin endpoint. PR #514 = write-path edit-lock guards on PATCH /documents/:id and POST /attestations/:id/complete (other paths already had state-machine guards). End-to-end verified on prod via qa-auto-expire-test harness (PR #511 + #512 + #513 + the harness extension in #514).
 5. Print stylesheet (minor polish, ~1 hour)
 
 Items 6+ (SSO, delegation, in-browser editing, etc.) are larger and should be customer-triggered.
@@ -943,6 +943,31 @@ What's deferred: the actual user flow at `https://www.veritaslabservices.com/lab
 **Source:** task #77 stalled at Gate 3 step 8 on 2026-06-02. PR #500 squash-merged at commit `17a91ff`, prod /api/health confirmed ACTIVE on that commit at 20:43 UTC.
 
 **Status:** Open, awaiting Michael's 5-minute click test. Will move task #77 to completed only after he reports the user-visible result.
+
+---
+
+### 41. Verify-script convention backfill (CLAUDE.md §2)
+
+**Effort:** L (8 backfill scripts, each ~2-4 hours, total ~3-5 working days if done as one focused sweep).
+**Importance:** Medium-High. Procedural-debt cleanup against a NON-NEGOTIABLE convention. CLAUDE.md §2 verify-*.js: every math/logic change ships with a paired script that exercises every meaningful branch. The audit run on 2026-06-02 found 31 of 35 math/logic commits in the last 90 days violated the convention. Some are exempt (renames, citation swaps, copy changes) but at least 8 introduced new math or fixed math defects and should have shipped with verification.
+
+The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_coverage.py` (run with default --since 90 days):
+- EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations
+- Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method
+- CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit
+- Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation
+- Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics
+- Precision Verification EP15 ANOVA simple + advanced modes (#9643934) — variance decomposition
+- Qualitative + semi-quantitative method comparison (#4e14d1a) — categorical comparison logic
+- TEa boundary comparison fix (#6e02c0d) — boundary math fix without verification
+
+**What stays exempt:** renames (e.g. "Reference Interval" -> "Reference Range" relabel), CFR citation swaps, copy authorship, label tweaks. The convention applies to math + branching logic, not text.
+
+**Why it parks:** the audit tool ships in PR #519. Backfill is a multi-PR sweep (one script per candidate). Ideal cadence is one backfill script per session as low-priority procedural fill behind customer-driven work. Lower urgency than feature work because the math has run in prod for 60-90 days without verified defects surfacing; backfill closes the gap for future regression detection, not active bug repair.
+
+**Source:** scripts/audit_verify_script_coverage.py output, run 2026-06-02. Captured as the formal lookback that surfaced the gap.
+
+**Status:** Open. Pre- vs post-COLA: indifferent.
 
 ---
 
