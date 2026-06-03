@@ -2979,19 +2979,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           .all(...args) as any[];
 
         const instruments = instrumentsRows.map((row: any) => {
+          // D-1.1 (2026-06-03): added per-replicate Westgard flag via a
+          // correlated EXISTS so the modal can offer an "exclude flagged"
+          // toggle. Kept replicate_values as a parallel number[] for
+          // backwards compat with any non-modal consumer of D-1; the new
+          // replicate_flags array is index-aligned to it. Same ORDER BY
+          // applies, so flags[i] is the flag for values[i].
           const valueRows = sqlite
             .prepare(
-              `SELECT r.result_value FROM qc_results r
+              `SELECT r.result_value,
+                      (CASE WHEN EXISTS(
+                        SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id
+                      ) THEN 1 ELSE 0 END) AS was_flagged
+                 FROM qc_results r
                 WHERE ${where} AND r.instrument = ?
                 ORDER BY r.result_date DESC, r.id DESC`
             )
             .all(...args, row.instrument) as any[];
+          const aligned = valueRows
+            .map((v: any) => ({ value: Number(v.result_value), flagged: Number(v.was_flagged) === 1 }))
+            .filter((p) => Number.isFinite(p.value));
           return {
             instrument: row.instrument,
             result_count: row.result_count,
             latest_result_date: row.latest_result_date,
             was_westgard_flagged_count: row.was_westgard_flagged_count,
-            replicate_values: valueRows.map((v: any) => Number(v.result_value)).filter((v: number) => Number.isFinite(v)),
+            replicate_values: aligned.map((p) => p.value),
+            replicate_flags: aligned.map((p) => p.flagged),
           };
         });
 

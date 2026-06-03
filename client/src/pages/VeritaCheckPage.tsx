@@ -725,11 +725,14 @@ export default function VeritaCheckPage() {
     }
     setQcRangeImportSource(import_source);
     if (analyte && !testName.trim()) setTestName(analyte);
+    const excluded = westgard_flag_summary.excluded ?? 0;
     toast({
       title: `Imported ${cells.length} cell${cells.length === 1 ? "" : "s"} from VeritaQC™`,
-      description: westgard_flag_summary.flagged > 0
-        ? `${westgard_flag_summary.flagged} of ${westgard_flag_summary.total} replicates were Westgard-flagged in VeritaQC; director reviews.`
-        : `Routed to ${routing === "prior_lot" ? "prior-lot grid" : "new-lot grid"}.`,
+      description: payload.exclude_westgard_flagged && excluded > 0
+        ? `Excluded ${excluded} Westgard-flagged replicate${excluded === 1 ? "" : "s"}; routed to ${routing === "prior_lot" ? "prior-lot grid" : "new-lot grid"}.`
+        : westgard_flag_summary.flagged > 0
+          ? `${westgard_flag_summary.flagged} of ${westgard_flag_summary.total} replicates were Westgard-flagged in VeritaQC; director reviews.`
+          : `Routed to ${routing === "prior_lot" ? "prior-lot grid" : "new-lot grid"}.`,
     });
   }
 
