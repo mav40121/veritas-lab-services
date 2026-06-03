@@ -638,7 +638,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
   const recoveryData = levelResults.map((r) => ({
     expected: r.assignedValue,
     recovery: parseFloat(r.pctRecovery.toFixed(2)),
-    name: `L${r.level}`,
+    name: (r as any).customLabel ? String((r as any).customLabel) : `L${r.level}`,
   }));
 
   return (

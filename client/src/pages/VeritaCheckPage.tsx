@@ -4097,7 +4097,14 @@ return (
                         <tbody>
                           {dataPoints.map((dp, idx) => (
                             <tr key={idx} className="border-b border-border/50">
-                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">S{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Input
+                                  value={dp.customLabel ?? `S${dp.level}`}
+                                  onChange={e => { const d = [...dataPoints]; d[idx] = { ...d[idx], customLabel: e.target.value }; setDataPoints(d); }}
+                                  className="h-8 text-xs font-mono w-24"
+                                  data-testid={`input-sample-label-${idx}`}
+                                />
+                              </td>
                               <td className="py-1.5 pr-4">
                                 <Select value={dp.expectedCategory || ""} onValueChange={v => updateCategoricalDataPoint(idx, "expectedCategory", v)}>
                                   <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
@@ -4132,7 +4139,14 @@ return (
                         <tbody>
                           {dataPoints.map((dp, idx) => (
                             <tr key={idx} className="border-b border-border/50">
-                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">S{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Input
+                                  value={dp.customLabel ?? `S${dp.level}`}
+                                  onChange={e => { const d = [...dataPoints]; d[idx] = { ...d[idx], customLabel: e.target.value }; setDataPoints(d); }}
+                                  className="h-8 text-xs font-mono w-24"
+                                  data-testid={`input-sample-label-mc-${idx}`}
+                                />
+                              </td>
                               {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
                             </tr>
                           ))}
@@ -4148,7 +4162,14 @@ return (
                         <tbody>
                           {dataPoints.map((dp, idx) => (
                             <tr key={idx} className="border-b border-border/50">
-                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Input
+                                  value={dp.customLabel ?? `L${dp.level}`}
+                                  onChange={e => { const d = [...dataPoints]; d[idx] = { ...d[idx], customLabel: e.target.value }; setDataPoints(d); }}
+                                  className="h-8 text-xs font-mono w-24"
+                                  data-testid={`input-level-label-${idx}`}
+                                />
+                              </td>
                               <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
                               {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                             </tr>
@@ -4184,7 +4205,55 @@ return (
             </TabsContent>
           </Tabs>
 
-          <div className="mt-8 flex items-center justify-between">
+          {/* Longstreth UX 1: explicit "what's blocking" panel so the
+              tech does not have to guess why the Generate button is
+              disabled. Renders only when the button is disabled for a
+              non-pending reason. */}
+          {(() => {
+            const minLevels = studyType === "ref_interval" ? 20
+              : studyType === "sensitivity" ? 5
+              : studyType === "carryover" ? 12
+              : studyType === "qc_range" ? 2
+              : studyType === "accuracy_bias" ? 2
+              : studyType === "linearity" ? 3
+              : studyType === "reportable_range" ? 2
+              : 3;
+            const unit = studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen"
+              : studyType === "sensitivity" ? "blank replicate"
+              : studyType === "method_comparison" ? "sample"
+              : "level";
+            const studyTypeLabel = studyType === "cal_ver" ? "Calibration Verification"
+              : studyType === "method_comparison" ? "Method Comparison"
+              : studyType === "precision" ? "Precision Verification"
+              : studyType === "lot_to_lot" ? "Reagent Lot Verification"
+              : studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator"
+              : studyType === "qc_range" ? "QC Lot Verification"
+              : studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison"
+              : studyType === "ref_interval" ? "Reference Range Verification"
+              : studyType === "sensitivity" ? "Sensitivity Verification"
+              : studyType === "carryover" ? "Carryover Verification"
+              : studyType === "accuracy_bias" ? "Accuracy / Bias"
+              : studyType === "linearity" ? "Linearity"
+              : studyType === "reportable_range" ? "Reportable Range / AMR Verification"
+              : "this study type";
+            const reasons: string[] = [];
+            if (!testName.trim()) reasons.push("Enter the Test Name on the Setup tab.");
+            if (filledLevels < minLevels) {
+              const need = minLevels - filledLevels;
+              reasons.push(`Fill ${need} more ${unit}${need !== 1 ? "s" : ""} on the Data Entry tab (${minLevels} ${unit}s required for ${studyTypeLabel}).`);
+            }
+            if (reasons.length === 0) return null;
+            return (
+              <div className="mt-8 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs space-y-1.5" data-testid="panel-generate-blocking-reasons">
+                <p className="font-medium text-amber-800 dark:text-amber-300">Before you can generate the report:</p>
+                <ul className="list-disc list-inside text-amber-700 dark:text-amber-400 space-y-0.5">
+                  {reasons.map((r, i) => (<li key={i}>{r}</li>))}
+                </ul>
+              </div>
+            );
+          })()}
+
+          <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
               {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "sensitivity" ? "blank replicate" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3} minimum filled</span>}
             </div>
