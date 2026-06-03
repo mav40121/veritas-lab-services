@@ -264,7 +264,7 @@ return (
               </li>
               <li className="flex items-start gap-2 text-sm">
                 <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span><strong>24-month price lock</strong>: your renewal rate stays where it starts</span>
+                <span><strong>Locked rate, annual at-will mutual renewal</strong>: Year 1 minimum commitment, then 60 days' written notice to decline at any anniversary</span>
               </li>
               <li className="flex items-start gap-2 text-sm">
                 <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />

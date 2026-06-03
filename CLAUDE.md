@@ -327,7 +327,7 @@ Additional view-only seats at any tier: **$99/yr per seat**. Add-on Stripe price
 
 - Seat bands: 2-5 = $199, 6-10 = $179, 11-25 = $159, 26+ = $139
 
-**Founding Lab Program:** charter customer cohort, limited size, application-gated at `/founding-lab/apply`. Benefits: confidential discount, 24-month price lock, facility name on Founding Labs page, priority support Year 1. Exchange: up to 2 reference calls per month (30 min, Veritas not present). Discount amount is never published; negotiated per applicant.
+**Founding Lab Program:** charter customer cohort, limited size, application-gated at `/founding-lab/apply`. Benefits: confidential discount, locked rate with annual at-will mutual renewal (Year 1 minimum commitment, 60 days' written notice to decline at any anniversary), facility name on Founding Labs page, priority support Year 1. Exchange: up to 2 reference calls per month (30 min, Veritas not present). Discount amount is never published; negotiated per applicant. The earlier "24-month price lock" framing was retired 2026-06-03 in favor of annual at-will mutual renewal at the locked rate.
 
 **COLA grandfather policy:** see `project_cola_pricing_grandfather_policy.md` memory. Three layers: COLA2026 code through 2026-12-31, named-contact honored pricing OR Founder terms through 2026-09-30, new pricing for everyone else.
 
