@@ -67,11 +67,13 @@ export default function FoundingLabApplyPage() {
         <h1 className="text-3xl font-bold">Founding Lab Program</h1>
         <p className="text-muted-foreground mt-3 leading-relaxed">
           Apply to become one of our charter customer cohort. As a Founding Lab you
-          receive a discount on your annual subscription, a 24-month price lock,
-          your facility name on our Founding Labs page, and priority support during
-          your first year. In exchange, you agree to take up to two 30-minute
-          reference calls per month from prospective customers. Veritas is not
-          present on those calls; you share your honest experience.
+          receive a discount on your annual subscription, a locked rate with annual
+          at-will mutual renewal (Year 1 minimum commitment, 60 days' written notice
+          to decline at any anniversary), your facility name on our Founding Labs
+          page, and priority support during your first year. In exchange, you agree
+          to take up to two 30-minute reference calls per month from prospective
+          customers. Veritas is not present on those calls; you share your honest
+          experience.
         </p>
         <p className="text-sm text-muted-foreground mt-2">
           Limited cohort. Applications are reviewed individually.
