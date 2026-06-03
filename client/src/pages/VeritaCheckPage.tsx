@@ -18,6 +18,7 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import CLIALookupModal from "@/components/CLIALookupModal";
 import { VeritaQcImportModal, type VeritaQcImportPayload } from "@/components/VeritaQcImportModal";
+import { VeritaQcBulkImportModal, type VeritaQcBulkImportPayload } from "@/components/VeritaQcBulkImportModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -681,6 +682,56 @@ export default function VeritaCheckPage() {
   const [accuracyBiasImportSource, setAccuracyBiasImportSource] = useState<any | null>(null);
   const [linearityImportSource, setLinearityImportSource] = useState<any | null>(null);
   const [reportableRangeImportSource, setReportableRangeImportSource] = useState<any | null>(null);
+  // Phase D-2: QC Lot Verification bulk import (separate modal, separate
+  // handler, because the cube shape is structurally different from the
+  // flat-list precision/accuracy/linearity/reportable-range path).
+  const [qcBulkImportOpen, setQcBulkImportOpen] = useState(false);
+  const [qcBulkImportAnalyte, setQcBulkImportAnalyte] = useState<string>("");
+  const [qcRangeImportSource, setQcRangeImportSource] = useState<any | null>(null);
+
+  function handleVeritaQcBulkImport(payload: VeritaQcBulkImportPayload) {
+    const { analyte, cells, routing, import_source, westgard_flag_summary } = payload;
+    if (!cells || cells.length === 0) return;
+    // Append-if-missing: grow qcAnalytes, qcLevels, qcAnalyzers so the parent
+    // grid surfaces every imported cell. User can rename labels post-import.
+    if (analyte && !qcAnalytes.includes(analyte)) {
+      setQcAnalytes(prev => prev.includes(analyte) ? prev : [...prev, analyte]);
+    }
+    const newLevels = Array.from(new Set(cells.map(c => c.qc_level)));
+    const newInstruments = Array.from(new Set(cells.map(c => c.instrument)));
+    setQcLevels(prev => {
+      const next = [...prev];
+      for (const lvl of newLevels) if (!next.includes(lvl)) next.push(lvl);
+      return next;
+    });
+    setQcAnalyzers(prev => {
+      const next = [...prev];
+      for (const inst of newInstruments) if (!next.includes(inst)) next.push(inst);
+      return next;
+    });
+    // Merge replicates into the right grid. Replace-by-key: re-importing the
+    // same cell overwrites the prior values rather than appending, so the
+    // grid stays bounded at qcNumRuns cells per analyte/level/analyzer.
+    const updates: Record<string, number[]> = {};
+    for (const cell of cells) {
+      const key = `${analyte}|${cell.qc_level}|${cell.instrument}`;
+      updates[key] = cell.values.slice(0, qcNumRuns);
+    }
+    if (routing === "prior_lot") {
+      setQcPriorLotRuns(prev => ({ ...prev, ...updates }));
+      setQcShowPriorLot(true);
+    } else {
+      setQcRunData(prev => ({ ...prev, ...updates }));
+    }
+    setQcRangeImportSource(import_source);
+    if (analyte && !testName.trim()) setTestName(analyte);
+    toast({
+      title: `Imported ${cells.length} cell${cells.length === 1 ? "" : "s"} from VeritaQC™`,
+      description: westgard_flag_summary.flagged > 0
+        ? `${westgard_flag_summary.flagged} of ${westgard_flag_summary.total} replicates were Westgard-flagged in VeritaQC; director reviews.`
+        : `Routed to ${routing === "prior_lot" ? "prior-lot grid" : "new-lot grid"}.`,
+    });
+  }
 
   function handleVeritaQcImport(payload: VeritaQcImportPayload) {
     const { level, import_source } = payload;
@@ -1553,6 +1604,8 @@ export default function VeritaCheckPage() {
           priorLotRuns: qcPriorLotRuns,
           vendorValues: qcVendorValues,
           showPriorLot: qcShowPriorLot, showVendor: qcShowVendor,
+          importedFromVeritaqc: !!qcRangeImportSource,
+          importSource: qcRangeImportSource,
         }),
         instruments: JSON.stringify(qcAnalyzers),
         status: results.overallPass ? "pass" : "fail",
@@ -2186,6 +2239,15 @@ return (
           ) || undefined}
           studyMode={qcImportMode}
           onImport={handleVeritaQcImport}
+        />
+      ) : null}
+      {activeLabId ? (
+        <VeritaQcBulkImportModal
+          open={qcBulkImportOpen}
+          onOpenChange={setQcBulkImportOpen}
+          labId={activeLabId}
+          defaultAnalyte={qcBulkImportAnalyte || undefined}
+          onImport={handleVeritaQcBulkImport}
         />
       ) : null}
       {!isLoggedIn ? (
@@ -3057,7 +3119,18 @@ return (
                   {/* Data entry grids per analyte/level/analyzer */}
                   {qcAnalytes.map(analyte => (
                     <Card key={analyte}>
-                      <CardHeader className="pb-3"><CardTitle className="text-base">{analyte}: QC Run Data</CardTitle></CardHeader>
+                      <CardHeader className="pb-3 flex flex-row items-center justify-between gap-3">
+                        <CardTitle className="text-base">{analyte}: QC Run Data</CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => { setQcBulkImportAnalyte(analyte); setQcBulkImportOpen(true); }}
+                          data-testid={`button-veritaqc-bulk-import-${analyte}`}
+                        >
+                          <Upload size={12} className="mr-1" /> Import from VeritaQC{"™"}...
+                        </Button>
+                      </CardHeader>
                       <CardContent className="space-y-4">
                         {qcLevels.map(level => {
                           const vendorKey = `${analyte}|${level}`;
