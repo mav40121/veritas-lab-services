@@ -440,6 +440,29 @@ export function countEligibleReviewersForStep(
   return count;
 }
 
+// Edit-lock helper for status='expired' policies. Used by every write
+// path that should refuse to mutate a doc whose state machine has
+// already terminated. The recovery path (uploading a new version) is
+// NOT routed through this guard; that operation creates a fresh
+// policy_versions row and re-enters the workflow.
+//
+// Returns 409 Conflict with a body that the client can show as a
+// recovery hint. The 409 status (not 403) reflects that the failure
+// is a state-machine condition, not a permission denial.
+export function isPolicyExpired(sqlite: any, documentId: number): boolean {
+  const row = sqlite
+    .prepare("SELECT status FROM policy_documents WHERE id = ?")
+    .get(documentId) as { status: string } | undefined;
+  return row?.status === "expired";
+}
+
+export const POLICY_EXPIRED_RESPONSE = {
+  error: "Policy is expired",
+  message:
+    "This policy is expired and cannot be edited or further actioned. To revise it, upload a new version, which restarts the approval workflow.",
+  code: "POLICY_EXPIRED",
+};
+
 // Per-lab audit log writer. Used by every Phase 1+ mutation so the
 // audit trail is uniform and 21 CFR Part 11 reviewable.
 export function writeAuditLog(
