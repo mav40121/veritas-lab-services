@@ -3626,6 +3626,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(code, discountPct || 0, trialDays || null, partnerName || null, appliesTo || 'all', maxUses || null, new Date().toISOString());
         return res.json({ ok: true, code });
       }
+      if (action === 'delete-discount-code') {
+        // Sibling cleanup action so the end-to-end test of the create
+        // path can verify the fix without leaving a test row in
+        // discount_codes. Hard delete: no soft-archive semantics on
+        // this admin path.
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ error: 'code required' });
+        const result = (db as any).$client.prepare(
+          'DELETE FROM discount_codes WHERE code = ?'
+        ).run(code);
+        return res.json({ ok: true, deleted: result.changes });
+      }
       return res.status(400).json({ error: 'Unknown action' });
     } catch (err: any) {
       console.error('[admin-restore] Error:', err.message);
