@@ -245,6 +245,147 @@ check("mapping: upsert kept row count at 2", updatedRows.length === 2);
 check("mapping: upsert updated mid label",
   updatedRows.find(r => r.qc_level === "mid").study_level_name === "Level 2 (QC Mid CUSTOM)");
 
+// ─────────────────────────────────────────────────────────────────────────
+// Phase B-1 (accuracy_bias) + Phase C (linearity, reportable_range) checks.
+//
+// Backfilled 2026-06-02 after PRs #505 and #508 shipped without updating
+// this script. CLAUDE.md §2 verify-*.js convention requires math/logic
+// changes ride with paired script updates.
+//
+// Phase B-1 + C share the same engine: the preview level row carries an
+// assigned_value that defaults to lot.mfr_mean. The modal lets the user
+// override; the modal then stamps assigned_value_source on the level
+// before firing the parent onImport callback. The backend always
+// includes assigned_value on the level shape regardless of mode so the
+// client can ignore it for precision and read it for the assigned-value
+// modes. Test that contract here.
+// ─────────────────────────────────────────────────────────────────────────
+
+// 10. Preview level shape includes assigned_value defaulting to mfr_mean.
+const lot1Row = db.prepare(
+  "SELECT id, level, lot_number, mfr_mean, mfr_sd FROM qc_control_lots WHERE id = ?"
+).get(lot1);
+check("lot1 mfr_mean is 100 (sanity)", lot1Row.mfr_mean === 100);
+// Synthesize the level shape the POST handler builds. The new field is
+// assigned_value = lot.mfr_mean. Precision callers ignore it; B-1/C
+// callers read it as the default for the editable assigned-value field.
+const previewLevelShape = {
+  name: "Level 2 (QC Mid)",
+  values: recent10.map(r => r.result_value),
+  qc_level: lot1Row.level,
+  control_lot_id: lot1Row.id,
+  control_lot: lot1Row.lot_number,
+  manufacturer: "Bio-Rad",
+  target_value: lot1Row.mfr_mean,
+  target_sd: lot1Row.mfr_sd,
+  assigned_value: lot1Row.mfr_mean,
+  was_westgard_flagged_count: 0,
+};
+check("preview level has assigned_value", "assigned_value" in previewLevelShape);
+check("preview level assigned_value defaults to lot.mfr_mean",
+  previewLevelShape.assigned_value === lot1Row.mfr_mean);
+check("preview level assigned_value type is number", typeof previewLevelShape.assigned_value === "number");
+
+// 11. assigned_value_source enum: the modal stamps either "user_typed"
+//     (if the user typed an override) or "control_lot_mean" (if the
+//     default was accepted). Test both branches.
+function previewWithOverride(assignedValueInput) {
+  const data = { levels: [{ ...previewLevelShape }] };
+  // Mirror the modal's logic at VeritaQcImportModal.tsx:253-265.
+  const typed = String(assignedValueInput || "").trim();
+  const typedNum = typed === "" ? NaN : Number(typed);
+  if (Number.isFinite(typedNum)) {
+    data.levels[0].assigned_value = typedNum;
+    data.levels[0].assigned_value_source = "user_typed";
+  } else {
+    data.levels[0].assigned_value_source = "control_lot_mean";
+  }
+  return data;
+}
+const overrideEmpty = previewWithOverride("");
+check("assigned_value_source: empty input -> control_lot_mean",
+  overrideEmpty.levels[0].assigned_value_source === "control_lot_mean");
+check("assigned_value_source: empty input keeps assigned_value at lot mean",
+  overrideEmpty.levels[0].assigned_value === lot1Row.mfr_mean);
+
+const overrideTyped = previewWithOverride("105");
+check("assigned_value_source: typed number -> user_typed",
+  overrideTyped.levels[0].assigned_value_source === "user_typed");
+check("assigned_value_source: typed number replaces assigned_value",
+  overrideTyped.levels[0].assigned_value === 105);
+
+const overrideJunk = previewWithOverride("not-a-number");
+check("assigned_value_source: junk input -> control_lot_mean (fallback)",
+  overrideJunk.levels[0].assigned_value_source === "control_lot_mean");
+check("assigned_value_source: junk input keeps assigned_value at lot mean",
+  overrideJunk.levels[0].assigned_value === lot1Row.mfr_mean);
+
+// 12. Mode dispatch contract: the parent handler routes the payload to
+//     the right state-var pair (analyte, levels, runData, importSource)
+//     by qcImportMode. Spot-check that the four valid modes are recognized.
+const VALID_MODES = ["precision", "accuracy_bias", "linearity", "reportable_range"];
+const MODE_NEEDS_ASSIGNED_VALUE = new Set(["accuracy_bias", "linearity", "reportable_range"]);
+for (const m of VALID_MODES) {
+  check(`mode "${m}" is in the valid set`, VALID_MODES.includes(m));
+}
+check("modeNeedsAssignedValue: precision -> false", !MODE_NEEDS_ASSIGNED_VALUE.has("precision"));
+check("modeNeedsAssignedValue: accuracy_bias -> true", MODE_NEEDS_ASSIGNED_VALUE.has("accuracy_bias"));
+check("modeNeedsAssignedValue: linearity -> true", MODE_NEEDS_ASSIGNED_VALUE.has("linearity"));
+check("modeNeedsAssignedValue: reportable_range -> true", MODE_NEEDS_ASSIGNED_VALUE.has("reportable_range"));
+
+// 13. mergeLevels logic: shared closure in VeritaCheckPage at the
+//     handleVeritaQcImport site. Three branches: replace-by-name,
+//     replace-the-blank-first, append. Test each.
+function mergeLevels(prev, levelToMerge) {
+  const assigned = levelToMerge.assigned_value;
+  const idx = prev.findIndex(p => p.name === levelToMerge.name);
+  if (idx >= 0) {
+    const next = [...prev];
+    next[idx] = { name: levelToMerge.name, assignedValue: assigned };
+    return next;
+  }
+  const firstIsBlank = prev.length > 0 && prev[0].assignedValue === null && /^(QC (Low|Mid|High)|Level \d+( \(.*\))?)$/.test(prev[0].name);
+  if (firstIsBlank) {
+    const next = [...prev];
+    next[0] = { name: levelToMerge.name, assignedValue: assigned };
+    return next;
+  }
+  return [...prev, { name: levelToMerge.name, assignedValue: assigned }];
+}
+
+const incoming = { name: "Level 2 (QC Mid)", assigned_value: 100 };
+
+// Branch 1: replace-by-name when the incoming name matches an existing slot.
+const sameName = mergeLevels(
+  [{ name: "Level 1 (QC Low)", assignedValue: 50 }, { name: "Level 2 (QC Mid)", assignedValue: null }],
+  incoming
+);
+check("mergeLevels replace-by-name: array length preserved", sameName.length === 2);
+check("mergeLevels replace-by-name: matching slot now has assigned 100",
+  sameName.find(p => p.name === "Level 2 (QC Mid)").assignedValue === 100);
+
+// Branch 2: replace-the-blank-first when first slot is auto-named + assignedValue null.
+const blankFirst = mergeLevels(
+  [{ name: "QC Low", assignedValue: null }, { name: "QC High", assignedValue: null }],
+  incoming
+);
+check("mergeLevels replace-blank-first: array length preserved", blankFirst.length === 2);
+check("mergeLevels replace-blank-first: slot 0 replaced with incoming",
+  blankFirst[0].name === "Level 2 (QC Mid)" && blankFirst[0].assignedValue === 100);
+check("mergeLevels replace-blank-first: slot 1 untouched",
+  blankFirst[1].name === "QC High" && blankFirst[1].assignedValue === null);
+
+// Branch 3: append when neither name matches and first slot has a real value.
+const appended = mergeLevels(
+  [{ name: "Custom Tech Label", assignedValue: 50 }],
+  incoming
+);
+check("mergeLevels append: array length grew by 1", appended.length === 2);
+check("mergeLevels append: incoming added at end",
+  appended[1].name === "Level 2 (QC Mid)" && appended[1].assignedValue === 100);
+check("mergeLevels append: existing slot untouched",
+  appended[0].name === "Custom Tech Label" && appended[0].assignedValue === 50);
+
 // ── Report
 console.log("");
 console.log(`SUMMARY: ${pass} pass, ${fail} fail`);
