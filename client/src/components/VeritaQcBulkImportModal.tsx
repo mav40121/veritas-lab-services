@@ -23,11 +23,11 @@ import { authHeaders } from "@/lib/auth";
 //      Labels can be renamed post-import.
 //   2. Routing radio: imported cells go to the new-lot grid (default) or
 //      the prior-lot grid (used for the optional crossover bias check).
-//   3. Exclude-Westgard-flagged toggle. When on, the parent receives the
-//      WESTGARD_FLAG_SUMMARY but the values arrays exclude flagged points.
-//      v1 ships without server-side exclusion (the D-1 endpoint returns
-//      replicate_values but not the per-replicate flag), so the toggle is
-//      surfaced but disabled with an explanatory tooltip until D-1.1 lands.
+//   3. Exclude-Westgard-flagged toggle. Default OFF. When ON, the modal
+//      filters values + flags client-side using the per-replicate
+//      replicate_flags array returned by D-1.1 (server change shipped
+//      2026-06-03) and the payload's values array omits flagged points.
+//      westgard_flag_summary.excluded surfaces the count in the toast.
 //   4. Date range filter passes through to D-1.
 
 export interface VeritaQcBulkImportCell {
@@ -58,7 +58,8 @@ export interface VeritaQcBulkImportPayload {
     start_date: string | null;
     end_date: string | null;
   };
-  westgard_flag_summary: { total: number; flagged: number };
+  westgard_flag_summary: { total: number; flagged: number; excluded: number };
+  exclude_westgard_flagged: boolean;
 }
 
 interface BulkLevel {
@@ -74,6 +75,10 @@ interface BulkLevel {
     latest_result_date: string;
     was_westgard_flagged_count: number;
     replicate_values: number[];
+    // D-1.1 (server, 2026-06-03): per-replicate Westgard flag, 1:1 aligned to replicate_values.
+    // Older D-1 responses (pre-D-1.1) may omit this field; the modal treats absent as
+    // "all unflagged" so the exclude toggle is a no-op rather than dropping data.
+    replicate_flags?: boolean[];
   }>;
 }
 
@@ -115,6 +120,7 @@ export function VeritaQcBulkImportModal({ open, onOpenChange, labId, defaultAnal
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [routing, setRouting] = useState<VeritaQcBulkImportRouting>("new_lot");
+  const [excludeFlagged, setExcludeFlagged] = useState<boolean>(false);
 
   const [candidates, setCandidates] = useState<BulkCandidates | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -139,6 +145,7 @@ export function VeritaQcBulkImportModal({ open, onOpenChange, labId, defaultAnal
     setSelected({});
     setError(null);
     setRouting("new_lot");
+    setExcludeFlagged(false);
   }, [open, defaultAnalyte]);
 
   // Fetch the cube whenever analyte (committed) or date filters change.
@@ -220,11 +227,36 @@ export function VeritaQcBulkImportModal({ open, onOpenChange, labId, defaultAnal
     if (!candidates || selectedCount === 0) return;
     setImporting(true);
     try {
+      let excludedTotal = 0;
       const cells: VeritaQcBulkImportCell[] = [];
       for (const lvl of candidates.levels) {
         for (const inst of lvl.instruments) {
           if (!selected[cellKey(lvl.qc_level, inst.instrument)]) continue;
           if (inst.result_count === 0) continue;
+          // D-1.1 exclude-flagged filter: drop values where the index-aligned
+          // flag is true. Absent flags array (pre-D-1.1 server) means no
+          // exclusion possible, so the toggle becomes a no-op and zero
+          // points are dropped. Defensive: if the lengths disagree, treat
+          // missing flag indices as unflagged rather than guessing.
+          const flagsArr = inst.replicate_flags;
+          let values: number[];
+          if (excludeFlagged && Array.isArray(flagsArr) && flagsArr.length > 0) {
+            values = [];
+            for (let i = 0; i < inst.replicate_values.length; i++) {
+              const flag = i < flagsArr.length ? flagsArr[i] : false;
+              if (flag) {
+                excludedTotal++;
+              } else {
+                values.push(inst.replicate_values[i]);
+              }
+            }
+          } else {
+            values = inst.replicate_values.slice();
+          }
+          // If every replicate in this cell was Westgard-flagged AND the
+          // exclude toggle is on, the cell has zero values left. Skip it
+          // rather than push an empty array into the parent's grid.
+          if (values.length === 0) continue;
           cells.push({
             qc_level: lvl.qc_level,
             instrument: inst.instrument,
@@ -233,7 +265,7 @@ export function VeritaQcBulkImportModal({ open, onOpenChange, labId, defaultAnal
             manufacturer: lvl.manufacturer,
             target_value: lvl.target_value,
             target_sd: lvl.target_sd,
-            values: inst.replicate_values.slice(),
+            values,
             result_count: inst.result_count,
             latest_result_date: inst.latest_result_date,
             was_westgard_flagged_count: inst.was_westgard_flagged_count,
@@ -252,7 +284,8 @@ export function VeritaQcBulkImportModal({ open, onOpenChange, labId, defaultAnal
           start_date: startDate,
           end_date: endDate,
         },
-        westgard_flag_summary: { total: totalResults, flagged: totalFlagged },
+        westgard_flag_summary: { total: totalResults, flagged: totalFlagged, excluded: excludedTotal },
+        exclude_westgard_flagged: excludeFlagged,
       };
       onImport(payload);
       onOpenChange(false);
@@ -334,6 +367,22 @@ export function VeritaQcBulkImportModal({ open, onOpenChange, labId, defaultAnal
               </label>
             </div>
           </div>
+
+          {/* Westgard exclude toggle (D-1.1, default OFF -- the director chooses to drop data, not the software). */}
+          <label className="flex items-start gap-2 text-xs cursor-pointer select-none rounded-md border p-3">
+            <Checkbox
+              checked={excludeFlagged}
+              onCheckedChange={(v) => setExcludeFlagged(!!v)}
+              className="mt-0.5"
+              data-testid="checkbox-veritaqc-exclude-flagged"
+            />
+            <div>
+              <div className="font-medium">Exclude Westgard-flagged replicates</div>
+              <div className="text-muted-foreground">
+                Drops individual results that failed Westgard rules in VeritaQC. Standard CLSI C24-Ed4 practice when establishing a new lot's range. The count of dropped points is recorded with the imported study for the audit trail.
+              </div>
+            </div>
+          </label>
 
           {fetching && (
             <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">Loading candidates from VeritaQC...</div>

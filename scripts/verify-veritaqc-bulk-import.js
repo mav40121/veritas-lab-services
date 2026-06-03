@@ -117,15 +117,25 @@ function bulkCandidates(analyte, { instrument = null, startDate = null, endDate 
       )
       .all();
     const instruments = instrumentsRows.map(row => {
-      const values = db
-        .prepare(`SELECT r.result_value FROM qc_results r WHERE ${where} AND r.instrument = '${row.instrument}' ORDER BY r.result_date DESC, r.id DESC`)
+      // D-1.1: per-replicate Westgard flag via correlated EXISTS, index-aligned to replicate_values.
+      const valueRows = db
+        .prepare(
+          `SELECT r.result_value,
+                  (CASE WHEN EXISTS(SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id) THEN 1 ELSE 0 END) AS was_flagged
+             FROM qc_results r WHERE ${where} AND r.instrument = '${row.instrument}'
+            ORDER BY r.result_date DESC, r.id DESC`
+        )
         .all();
+      const aligned = valueRows
+        .map(v => ({ value: Number(v.result_value), flagged: Number(v.was_flagged) === 1 }))
+        .filter(p => Number.isFinite(p.value));
       return {
         instrument: row.instrument,
         result_count: row.result_count,
         latest_result_date: row.latest_result_date,
         was_westgard_flagged_count: row.was_westgard_flagged_count,
-        replicate_values: values.map(v => Number(v.result_value)).filter(v => Number.isFinite(v)),
+        replicate_values: aligned.map(p => p.value),
+        replicate_flags: aligned.map(p => p.flagged),
       };
     });
     return {
@@ -193,6 +203,37 @@ check("date filter (last 10 days) shrinks mid results count",
 // 8. replicate_values is ordered desc by date
 check("replicate_values length matches result_count",
   mid.instruments[0].replicate_values.length === mid.instruments[0].result_count);
+
+// 9. D-1.1 per-replicate Westgard flag is present and 1:1 aligned to values
+check("mid c503 has replicate_flags array",
+  Array.isArray(mid.instruments[0].replicate_flags));
+check("mid c503 replicate_flags length matches replicate_values length",
+  mid.instruments[0].replicate_flags.length === mid.instruments[0].replicate_values.length);
+
+// 10. Flag-positive sanity: the two oldest mid+c503 results were Westgard-flagged
+// in the seed. ORDER BY r.result_date DESC, r.id DESC puts oldest at the END of
+// the array, so the last two flags should be true and the rest false. Confirms
+// alignment between values + flags (not just length parity).
+const midFlags = mid.instruments[0].replicate_flags;
+const tailTwo = midFlags.slice(-2);
+const headRest = midFlags.slice(0, -2);
+check("last two flags are TRUE (oldest two Westgard-flagged results)",
+  tailTwo.length === 2 && tailTwo.every(f => f === true),
+  `tail=${JSON.stringify(tailTwo)}`);
+check("all earlier flags are FALSE (none of the recent results flagged)",
+  headRest.every(f => f === false),
+  `non-tail flagged count: ${headRest.filter(f => f).length}`);
+
+// 11. Flag-summary count matches the truthy-flag count (cross-check that the
+// per-replicate flag and the GROUP BY count agree).
+const trueCount = midFlags.filter(f => f).length;
+check("replicate_flags TRUE count matches was_westgard_flagged_count",
+  trueCount === mid.instruments[0].was_westgard_flagged_count,
+  `flags-true=${trueCount} aggregate=${mid.instruments[0].was_westgard_flagged_count}`);
+
+// 12. Low c702 should have all-false flags (no violations seeded on c702)
+check("low c702 replicate_flags all FALSE",
+  lowC702.replicate_flags.every(f => f === false));
 
 console.log("");
 console.log(`SUMMARY: ${pass} pass, ${fail} fail`);
