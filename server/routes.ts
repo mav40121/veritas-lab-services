@@ -2798,6 +2798,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         manufacturer: lot.manufacturer,
         target_value: lot.mfr_mean,
         target_sd: lot.mfr_sd,
+        // Phase B (accuracy_bias): the control lot's mfr_mean is the
+        // default assigned value for the verification study. Client uses
+        // it as the editable default; user can override before commit.
+        // For precision studies the field is unused.
+        assigned_value: lot.mfr_mean,
         was_westgard_flagged_count: flaggedCount,
       }],
       import_source: {
