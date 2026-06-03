@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { authHeaders } from "@/lib/auth";
 
 // VeritaQC → VeritaCheck Verification Import modal (Phase A: Precision).
 //
@@ -168,7 +169,7 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
         if (startDate) params.set("start_date", startDate);
         if (endDate) params.set("end_date", endDate);
         if (controlLotId) params.set("control_lot_id", controlLotId);
-        const r = await fetch(`/api/labs/${labId}/qc/import-candidates?` + params.toString(), { signal: ctrl.signal });
+        const r = await fetch(`/api/labs/${labId}/qc/import-candidates?` + params.toString(), { signal: ctrl.signal, headers: authHeaders() });
         if (!r.ok) {
           const j = await r.json().catch(() => ({}));
           setError(j?.error || `Failed to fetch candidates (HTTP ${r.status})`);
@@ -233,7 +234,7 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
       if (endDate) body.end_date = endDate;
       const r = await fetch(`/api/labs/${labId}/qc/import-preview`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(body),
       });
       if (!r.ok) {
@@ -283,7 +284,7 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
         try {
           await fetch(`/api/labs/${labId}/qc/import-mappings/${encodeURIComponent(analyte.trim())}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({
               mappings: [{ qc_level: selectedLevel.qc_level, study_level_name: studyLevelName }],
             }),
