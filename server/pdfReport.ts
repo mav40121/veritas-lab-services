@@ -17,6 +17,19 @@ import {
 } from "./licenseStamp";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
 
+// HTML-escape user-provided strings before they land in the rendered
+// PDF body. Used for customLabel and any other field that originates
+// in the data-entry form. Kept local to avoid a server-wide helper
+// import for one call site.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ─── Acceptance-criterion wording helpers (parking-lot #1) ───────────────────
 // For analytes with a canonical 42 CFR §493 Subpart I PT criterion, narratives
 // say "adopted ... CLIA TEa" and cite §493. For analytes without one (Lipase,
@@ -1233,7 +1246,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
     }).join("");
     const pfClass = r.passFailMean === "Pass" ? "pass" : "fail";
     return `<tr class="${ri % 2 === 1 ? "stripe" : ""}">
-      <td>L${r.level}</td>
+      <td>${(r as any).customLabel ? escapeHtml(String((r as any).customLabel)) : `L${r.level}`}</td>
       <td class="text-right">${sf(r.assignedValue, 3)}</td>
       <td class="text-right">${sf(r.mean, 3)}</td>
       <td class="text-right">${sf(r.pctRecovery, 1)}%</td>
@@ -1713,7 +1726,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
       ];
     }).join("");
     return `<tr class="${ri % 2 === 1 ? "stripe" : ""}">
-      <td>S${r.level}</td>
+      <td>${(r as any).customLabel ? escapeHtml(String((r as any).customLabel)) : `S${r.level}`}</td>
       <td class="text-right">${sf(r.referenceValue, 3)}</td>
       ${instrCells}
     </tr>`;

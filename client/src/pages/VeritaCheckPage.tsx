@@ -4097,7 +4097,14 @@ return (
                         <tbody>
                           {dataPoints.map((dp, idx) => (
                             <tr key={idx} className="border-b border-border/50">
-                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">S{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Input
+                                  value={dp.customLabel ?? `S${dp.level}`}
+                                  onChange={e => { const d = [...dataPoints]; d[idx] = { ...d[idx], customLabel: e.target.value }; setDataPoints(d); }}
+                                  className="h-8 text-xs font-mono w-24"
+                                  data-testid={`input-sample-label-${idx}`}
+                                />
+                              </td>
                               <td className="py-1.5 pr-4">
                                 <Select value={dp.expectedCategory || ""} onValueChange={v => updateCategoricalDataPoint(idx, "expectedCategory", v)}>
                                   <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
@@ -4132,7 +4139,14 @@ return (
                         <tbody>
                           {dataPoints.map((dp, idx) => (
                             <tr key={idx} className="border-b border-border/50">
-                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">S{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Input
+                                  value={dp.customLabel ?? `S${dp.level}`}
+                                  onChange={e => { const d = [...dataPoints]; d[idx] = { ...d[idx], customLabel: e.target.value }; setDataPoints(d); }}
+                                  className="h-8 text-xs font-mono w-24"
+                                  data-testid={`input-sample-label-mc-${idx}`}
+                                />
+                              </td>
                               {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
                             </tr>
                           ))}
@@ -4148,7 +4162,14 @@ return (
                         <tbody>
                           {dataPoints.map((dp, idx) => (
                             <tr key={idx} className="border-b border-border/50">
-                              <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">L{dp.level}</span></td>
+                              <td className="py-1.5 pr-4">
+                                <Input
+                                  value={dp.customLabel ?? `L${dp.level}`}
+                                  onChange={e => { const d = [...dataPoints]; d[idx] = { ...d[idx], customLabel: e.target.value }; setDataPoints(d); }}
+                                  className="h-8 text-xs font-mono w-24"
+                                  data-testid={`input-level-label-${idx}`}
+                                />
+                              </td>
                               <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
                               {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                             </tr>

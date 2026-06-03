@@ -7,6 +7,11 @@ export interface DataPoint {
   // Qualitative / semi-quantitative categorical fields (used INSTEAD of numeric fields)
   expectedCategory?: string | null;
   instrumentCategories?: { [key: string]: string | null };
+  // Optional user-entered specimen / sample / level label. When empty the
+  // UI falls back to "S{level}" or "L{level}" (default behaviour). Useful
+  // for paired-comparison runs post-troubleshooting where the tech needs
+  // to match real specimen IDs across instruments and the saved PDF.
+  customLabel?: string;
 }
 
 // ─── Math helpers ────────────────────────────────────────────────────────────
@@ -209,6 +214,7 @@ export interface RegressionResult {
 
 export interface CalVerLevelResult {
   level: number;
+  customLabel?: string;    // optional user-typed label (e.g. real specimen ID)
   assignedValue: number;
   mean: number;
   pctRecovery: number;
@@ -285,6 +291,7 @@ export function calculateCalVer(
 
     return {
       level: dp.level,
+      ...(dp.customLabel ? { customLabel: dp.customLabel } : {}),
       assignedValue: assigned,
       mean: meanVal,
       pctRecovery,
@@ -350,6 +357,7 @@ export function calculateCalVer(
 
 export interface MethodCompLevelResult {
   level: number;
+  customLabel?: string;    // optional user-typed label (e.g. real specimen ID)
   referenceValue: number; // primary instrument value
   instruments: {
     [name: string]: {
@@ -414,7 +422,7 @@ export function calculateMethodComparison(
         instruments[n] = { value: v, difference: diff, pctDifference: pctDiff, passFail: passed ? "Pass" : "Fail" };
       }
     });
-    return { level: dp.level, referenceValue: ref, instruments };
+    return { level: dp.level, ...(dp.customLabel ? { customLabel: dp.customLabel } : {}), referenceValue: ref, instruments };
   });
 
   // Result ranges
