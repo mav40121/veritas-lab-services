@@ -3617,7 +3617,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       if (action === 'create-discount-code') {
         const { code, discountPct, trialDays, partnerName, appliesTo, maxUses } = req.body;
-        (db as any).$client.prepare('INSERT INTO discount_codes (code, discount_pct, trial_days, partner_name, applies_to, max_uses, active) VALUES (?, ?, ?, ?, ?, ?, 1)').run(code, discountPct || 0, trialDays || null, partnerName || null, appliesTo || 'all', maxUses || null);
+        // discount_codes.created_at is NOT NULL with no DEFAULT, so the
+        // previous shape (column omitted) failed the constraint on every
+        // call and returned a silent 500. Caught by the NULL-into-NOT-NULL
+        // audit sweep on 2026-06-02; fix is to pass an ISO timestamp.
+        (db as any).$client.prepare(
+          'INSERT INTO discount_codes (code, discount_pct, trial_days, partner_name, applies_to, max_uses, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)'
+        ).run(code, discountPct || 0, trialDays || null, partnerName || null, appliesTo || 'all', maxUses || null, new Date().toISOString());
         return res.json({ ok: true, code });
       }
       return res.status(400).json({ error: 'Unknown action' });
