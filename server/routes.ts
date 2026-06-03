@@ -21082,14 +21082,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // entirely (along with its audit-log row). The synthetic row is
       // never visible to real users between the INSERT and the DELETE.
       synthetic = true;
+      // policy_documents.owner_user_id is NOT NULL. Pick any active
+      // member of the lab as the synthetic owner so the INSERT passes.
+      const labOwner = sqlite
+        .prepare(
+          `SELECT user_id FROM lab_members WHERE lab_id = ? AND status = 'active' LIMIT 1`
+        )
+        .get(labId) as { user_id: number } | undefined;
+      if (!labOwner) {
+        return res.status(404).json({
+          error: "No active lab member on this lab to use as synthetic owner.",
+          labId,
+        });
+      }
       const seedNow = new Date().toISOString();
       const ins = sqlite
         .prepare(
           `INSERT INTO policy_documents
              (lab_id, title, status, owner_user_id, next_review_date, archived_at, created_at, updated_at)
-           VALUES (?, ?, 'approved', NULL, ?, NULL, ?, ?)`
+           VALUES (?, ?, 'approved', ?, ?, NULL, ?, ?)`
         )
-        .run(labId, "QA auto-expire test (synthetic, delete me)", null, seedNow, seedNow);
+        .run(labId, "QA auto-expire test (synthetic, delete me)", labOwner.user_id, null, seedNow, seedNow);
       subject = {
         id: Number(ins.lastInsertRowid),
         status: "approved",
