@@ -21065,7 +21065,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const labId = Number(req.body?.labId) || 1;
     const sqlite = (db as any).$client;
-    const subject = sqlite
+    let subject = sqlite
       .prepare(
         `SELECT id, status, next_review_date
            FROM policy_documents
@@ -21075,11 +21075,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           LIMIT 1`
       )
       .get(labId) as { id: number; status: string; next_review_date: string | null } | undefined;
+    let synthetic = false;
     if (!subject) {
-      return res.status(404).json({
-        error: "No approved policy on this lab to use as test subject. Create one first via the normal flow.",
-        labId,
-      });
+      // No approved policy exists on this lab. Fall back to synthesizing
+      // one. We INSERT a minimal row, run the test, then DELETE it
+      // entirely (along with its audit-log row). The synthetic row is
+      // never visible to real users between the INSERT and the DELETE.
+      synthetic = true;
+      const seedNow = new Date().toISOString();
+      const ins = sqlite
+        .prepare(
+          `INSERT INTO policy_documents
+             (lab_id, title, status, owner_user_id, next_review_date, archived_at, created_at, updated_at)
+           VALUES (?, ?, 'approved', NULL, ?, NULL, ?, ?)`
+        )
+        .run(labId, "QA auto-expire test (synthetic, delete me)", null, seedNow, seedNow);
+      subject = {
+        id: Number(ins.lastInsertRowid),
+        status: "approved",
+        next_review_date: null,
+      };
     }
     const originalNextReviewDate = subject.next_review_date;
     const seventyDaysAgo = new Date();
@@ -21102,16 +21117,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             ORDER BY id DESC LIMIT 1`
         )
         .get(subject.id) as { id: number; user_id: number; action: string; details: string } | undefined;
-      // Restore original status + next_review_date.
-      sqlite
-        .prepare("UPDATE policy_documents SET status = 'approved', next_review_date = ? WHERE id = ?")
-        .run(originalNextReviewDate, subject.id);
-      // Remove the test audit-log row so the trail stays clean.
-      if (auditRow) {
-        sqlite.prepare("DELETE FROM policy_audit_log WHERE id = ?").run(auditRow.id);
+      if (synthetic) {
+        // Synthetic test row: delete entirely along with any audit rows
+        // referencing it. Cleanup must include both ascending and
+        // descending audit rows so nothing dangles.
+        sqlite.prepare("DELETE FROM policy_audit_log WHERE document_id = ?").run(subject.id);
+        sqlite.prepare("DELETE FROM policy_documents WHERE id = ?").run(subject.id);
+      } else {
+        // Real subject row: restore status + next_review_date and
+        // remove only the audit row this test created.
+        sqlite
+          .prepare("UPDATE policy_documents SET status = 'approved', next_review_date = ? WHERE id = ?")
+          .run(originalNextReviewDate, subject.id);
+        if (auditRow) {
+          sqlite.prepare("DELETE FROM policy_audit_log WHERE id = ?").run(auditRow.id);
+        }
       }
       return res.json({
         ok: true,
+        synthetic,
         subject_doc_id: subject.id,
         cron_stats: stats,
         flipped_to_expired: after?.status === "expired",
@@ -21119,16 +21143,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         audit_row_user_id: auditRow?.user_id,
         audit_row_action: auditRow?.action,
         audit_row_details: auditRow ? JSON.parse(auditRow.details) : null,
-        restored: true,
+        cleaned_up: true,
       });
     } catch (err: any) {
       try {
-        sqlite
-          .prepare("UPDATE policy_documents SET status = 'approved', next_review_date = ? WHERE id = ?")
-          .run(originalNextReviewDate, subject.id);
+        if (synthetic) {
+          sqlite.prepare("DELETE FROM policy_audit_log WHERE document_id = ?").run(subject.id);
+          sqlite.prepare("DELETE FROM policy_documents WHERE id = ?").run(subject.id);
+        } else {
+          sqlite
+            .prepare("UPDATE policy_documents SET status = 'approved', next_review_date = ? WHERE id = ?")
+            .run(originalNextReviewDate, subject.id);
+        }
       } catch {}
       console.error("[qa-auto-expire-test]", err.message);
-      return res.status(500).json({ error: err.message, attempted_restore: true });
+      return res.status(500).json({ error: err.message, attempted_cleanup: true });
     }
   });
 
