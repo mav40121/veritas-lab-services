@@ -951,7 +951,7 @@ What's deferred: the actual user flow at `https://www.veritaslabservices.com/lab
 **Effort:** L (8 backfill scripts, each ~2-4 hours, total ~3-5 working days if done as one focused sweep).
 **Importance:** Medium-High. Procedural-debt cleanup against a NON-NEGOTIABLE convention. CLAUDE.md §2 verify-*.js: every math/logic change ships with a paired script that exercises every meaningful branch. The audit run on 2026-06-02 found 31 of 35 math/logic commits in the last 90 days violated the convention. Some are exempt (renames, citation swaps, copy changes) but at least 8 introduced new math or fixed math defects and should have shipped with verification.
 
-The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_coverage.py` (run with default --since 90 days):
+The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_coverage.py` (run with default --since 90 days). Strike-through = backfill landed.
 - EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations
 - Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method
 - CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit
@@ -959,7 +959,7 @@ The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_c
 - Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics
 - Precision Verification EP15 ANOVA simple + advanced modes (#9643934) — variance decomposition
 - Qualitative + semi-quantitative method comparison (#4e14d1a) — categorical comparison logic
-- TEa boundary comparison fix (#6e02c0d) — boundary math fix without verification
+- ~~TEa boundary comparison fix (#6e02c0d) — boundary math fix without verification~~ ✅ backfilled 2026-06-03 in `scripts/verify-tea-boundary.js` (19/19 PASS).
 
 **What stays exempt:** renames (e.g. "Reference Interval" -> "Reference Range" relabel), CFR citation swaps, copy authorship, label tweaks. The convention applies to math + branching logic, not text.
 
