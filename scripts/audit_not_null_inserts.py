@@ -81,9 +81,9 @@ def parse_schema(db_text: str) -> dict[str, set[str]]:
     return table_to_required
 
 
-def find_inserts(text: str) -> list[tuple[int, str, list[str], str]]:
+def find_inserts(text: str) -> list[tuple[int, int, str, list[str], str]]:
     """Find INSERT INTO statements. Returns list of
-    (line_no, table_name, column_list, snippet)."""
+    (start_offset, line_no, table_name, column_list, snippet)."""
     results = []
     # Tolerant pattern: INSERT INTO <table> (col1, col2, ...) VALUES ...
     # Allows newlines inside the parens. Captures column list only when
@@ -100,12 +100,50 @@ def find_inserts(text: str) -> list[tuple[int, str, list[str], str]]:
             # INSERT...SELECT statements: skip, column source is dynamic.
             continue
         cols = [c.strip() for c in cols_text.split(",") if c.strip()]
-        # Line number where the match starts.
         line_no = text[: m.start()].count("\n") + 1
-        # Brief snippet for context.
         snippet = text[m.start() : m.start() + 100].replace("\n", " ")
-        results.append((line_no, table, cols, snippet))
+        results.append((m.start(), line_no, table, cols, snippet))
     return results
+
+
+def find_route_starts(text: str) -> list[int]:
+    """Return sorted list of byte offsets where Express route registrations
+    start. Matches app.<verb>( with the standard handler verbs."""
+    pattern = re.compile(r"\bapp\.(get|post|put|patch|delete)\s*\(", re.IGNORECASE)
+    return sorted(m.start() for m in pattern.finditer(text))
+
+
+def is_dev_only_route(text: str, route_start: int, next_route_start: int) -> bool:
+    """Return True if the route body contains a NODE_ENV production 404 /
+    Forbidden gate. Looks for the typical shape:
+        if (process.env.NODE_ENV === "production") return res.status(404)...
+    Tolerant of single/double quotes and minor formatting variation."""
+    body = text[route_start:next_route_start]
+    # Match within ~600 chars of the route start; deeper than that and the
+    # gate would be after substantive logic, not a top-of-handler guard.
+    body = body[:800]
+    pattern = re.compile(
+        r"process\.env\.NODE_ENV\s*===?\s*['\"]production['\"][^{]*"
+        r"return\s+res\.status\s*\(\s*404\s*\)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    return bool(pattern.search(body))
+
+
+def classify(text: str, route_starts: list[int], insert_offset: int) -> str:
+    """Return 'dev-only', 'customer-reachable', or 'outside-route'."""
+    enclosing = None
+    for s in route_starts:
+        if s <= insert_offset:
+            enclosing = s
+        else:
+            next_start = s
+            break
+    else:
+        next_start = len(text)
+    if enclosing is None:
+        return "outside-route"
+    return "dev-only" if is_dev_only_route(text, enclosing, next_start) else "customer-reachable"
 
 
 def main():
@@ -117,26 +155,44 @@ def main():
     findings = []
     for ts_path in sorted(SERVER_DIR.rglob("*.ts")):
         text = ts_path.read_text(encoding="utf-8")
-        for line_no, table, cols, snippet in find_inserts(text):
+        route_starts = find_route_starts(text)
+        for start_offset, line_no, table, cols, snippet in find_inserts(text):
             required = table_to_required.get(table)
             if not required:
                 continue
             cols_set = set(cols)
             missing = required - cols_set
             if missing:
-                findings.append((ts_path, line_no, table, missing, snippet))
+                reachability = classify(text, route_starts, start_offset)
+                findings.append((ts_path, line_no, table, missing, snippet, reachability))
 
     if not findings:
         print("No INSERT omits a NOT NULL-without-DEFAULT column. Codebase is clean for this bug class.")
         return 0
 
-    print(f"Found {len(findings)} INSERT statements that omit a NOT NULL column:")
-    print()
-    for path, line_no, table, missing, snippet in findings:
-        rel = path.relative_to(REPO).as_posix()
-        print(f"{rel}:{line_no}  table={table}  missing_not_null={sorted(missing)}")
-        print(f"  snippet: {snippet[:100]}")
+    # Group findings by reachability so the customer-impact picture is
+    # not muddied by dev-only false positives that look serious but
+    # cannot be hit on the live site.
+    by_class: dict[str, list] = {"customer-reachable": [], "dev-only": [], "outside-route": []}
+    for f in findings:
+        by_class[f[5]].append(f)
+
+    for cls in ("customer-reachable", "dev-only", "outside-route"):
+        items = by_class[cls]
+        if not items:
+            continue
+        print(f"=== {cls.upper()} ({len(items)} INSERT{'s' if len(items) != 1 else ''}) ===")
+        for path, line_no, table, missing, snippet, _ in items:
+            rel = path.relative_to(REPO).as_posix()
+            print(f"  {rel}:{line_no}  table={table}  missing_not_null={sorted(missing)}")
+            print(f"    snippet: {snippet[:100]}")
         print()
+
+    real = len(by_class["customer-reachable"])
+    if real == 0:
+        print("No CUSTOMER-REACHABLE INSERT omits a NOT NULL column. Real-impact bug count: 0.")
+    else:
+        print(f"CUSTOMER-REACHABLE INSERTs with NOT NULL omissions: {real}. Fix these.")
     return 0
 
 
