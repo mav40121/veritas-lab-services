@@ -2881,6 +2881,135 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, analyte, mappings: updated });
   });
 
+  // GET /api/labs/:labId/qc/import-analyte-bulk-candidates
+  //   Required query: analyte
+  //   Optional query: start_date, end_date, instrument
+  // Returns the full (level x instrument) cube for ONE analyte. Used by the
+  // Phase D-1 qc_range bulk-import path (parking-lot #39 Option D from
+  // 2026-06-02). Where Phase A/B/C returned a single level at a time,
+  // qc_range studies span many analytes x levels x instruments at once.
+  // This endpoint lets the modal pull every (level, instrument) cell for
+  // one analyte in one shot; tech runs once per analyte to populate the
+  // qc_range cube.
+  //
+  // Response shape:
+  //   {
+  //     analyte,
+  //     levels: [
+  //       {
+  //         qc_level,            // "low" | "mid" | "high"
+  //         control_lot,         // lot_number string
+  //         control_lot_id,
+  //         manufacturer,
+  //         target_value,        // mfr_mean
+  //         target_sd,
+  //         instruments: [
+  //           {
+  //             instrument,
+  //             result_count,
+  //             latest_result_date,
+  //             was_westgard_flagged_count,
+  //             replicate_values: [...]
+  //           }
+  //         ]
+  //       }
+  //     ]
+  //   }
+  //
+  // Multi-lot note: if a lab has two active control lots at the same level
+  // (e.g. mid old + mid new during lot transition), both surface as
+  // separate level entries. The modal disambiguates in D-2.
+  app.get(
+    "/api/labs/:labId/qc/import-analyte-bulk-candidates",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      if (!hasQcImportAccess(req.user, req.scope?.lab)) {
+        return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+      }
+      const analyte = String(req.query.analyte || "").trim();
+      if (!analyte) return res.status(400).json({ error: "analyte required" });
+      const instrument = req.query.instrument ? String(req.query.instrument).trim() : null;
+      const startDate = req.query.start_date ? String(req.query.start_date).trim() : null;
+      const endDate = req.query.end_date ? String(req.query.end_date).trim() : null;
+
+      const sqlite = (db as any).$client;
+      const lots = sqlite
+        .prepare(
+          "SELECT id, level, lot_number, manufacturer, mfr_mean, mfr_sd FROM qc_control_lots WHERE lab_id = ? AND analyte = ? ORDER BY (status = 'active') DESC, id DESC"
+        )
+        .all(req.scope.labId, analyte) as any[];
+      if (lots.length === 0) {
+        return res.json({ analyte, levels: [] });
+      }
+
+      const buildWhere = (lotId: number) => {
+        const clauses: string[] = ["r.lab_id = ?", "r.control_lot_id = ?"];
+        const args: any[] = [req.scope.labId, lotId];
+        if (instrument) {
+          clauses.push("r.instrument = ?");
+          args.push(instrument);
+        }
+        if (startDate) {
+          clauses.push("r.result_date >= ?");
+          args.push(startDate);
+        }
+        if (endDate) {
+          clauses.push("r.result_date <= ?");
+          args.push(endDate);
+        }
+        return { where: clauses.join(" AND "), args };
+      };
+
+      const levels = lots.map((lot: any) => {
+        const { where, args } = buildWhere(lot.id);
+        const instrumentsRows = sqlite
+          .prepare(
+            `SELECT r.instrument, COUNT(*) AS result_count,
+                    MAX(r.result_date) AS latest_result_date,
+                    SUM(CASE WHEN EXISTS(
+                      SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id
+                    ) THEN 1 ELSE 0 END) AS was_westgard_flagged_count
+               FROM qc_results r
+              WHERE ${where}
+                AND r.instrument IS NOT NULL AND r.instrument != ''
+              GROUP BY r.instrument
+              ORDER BY r.instrument ASC`
+          )
+          .all(...args) as any[];
+
+        const instruments = instrumentsRows.map((row: any) => {
+          const valueRows = sqlite
+            .prepare(
+              `SELECT r.result_value FROM qc_results r
+                WHERE ${where} AND r.instrument = ?
+                ORDER BY r.result_date DESC, r.id DESC`
+            )
+            .all(...args, row.instrument) as any[];
+          return {
+            instrument: row.instrument,
+            result_count: row.result_count,
+            latest_result_date: row.latest_result_date,
+            was_westgard_flagged_count: row.was_westgard_flagged_count,
+            replicate_values: valueRows.map((v: any) => Number(v.result_value)).filter((v: number) => Number.isFinite(v)),
+          };
+        });
+
+        return {
+          qc_level: lot.level,
+          control_lot: lot.lot_number,
+          control_lot_id: lot.id,
+          manufacturer: lot.manufacturer,
+          target_value: lot.mfr_mean,
+          target_sd: lot.mfr_sd,
+          instruments,
+        };
+      });
+
+      res.json({ analyte, levels });
+    }
+  );
+
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
     const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
