@@ -48,11 +48,18 @@ const CLIA_PRESETS = [
   { label: "Bilirubin, Total (±20% or ±0.4 mg/dL)",   value: 0.20,  absoluteFloor: 0.4, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
   { label: "BNP (±30%)",                               value: 0.30,  cfr: "42 CFR §493.931" },
   { label: "proBNP (±30%)",                            value: 0.30,  cfr: "42 CFR §493.931" },
+  // CO2/Bicarbonate sits above pCO2 by intent: bench vernacular for the chemistry
+  // analyte is "CO2," and the first CO2-shaped entry a user scans hits is the
+  // one they typically want. Keeping the chemistry entry first eliminates the
+  // muscle-memory crosswire path that the earlier "Blood Gas pCO2 first" order
+  // produced. Index-stability: this swap only affects positions 8-12; the demo
+  // button at the bottom of the page targets index 19 (Creatinine), which sits
+  // below this block and is unaffected. (2026-06-03)
+  { label: "Carbon Dioxide / Serum CO2 / Bicarbonate (±20%)", value: 0.20,  cfr: "42 CFR §493.931" },
   { label: "pCO2, Blood Gas Analyzer (±8% or ±5 mm Hg)", value: 0.08,  absoluteFloor: 5, absoluteUnit: "mm Hg", cfr: "42 CFR §493.931" },
   { label: "Blood Gas pO2 (±15% or ±15 mmHg)",         value: 0.15,  absoluteFloor: 15, absoluteUnit: "mmHg", cfr: "42 CFR §493.931" },
   { label: "Blood Gas pH (±0.04)",                     value: 0.04,  isPercentage: false, unit: "pH units", cfr: "42 CFR §493.931" },
   { label: "Calcium, Total (±1.0 mg/dL)",              value: 1.0,   isPercentage: false, unit: "mg/dL",    cfr: "42 CFR §493.931" },
-  { label: "Carbon Dioxide / Serum CO2 / Bicarbonate (±20%)", value: 0.20,  cfr: "42 CFR §493.931" },
   { label: "Chloride (±5%)",                           value: 0.05,  cfr: "42 CFR §493.931" },
   { label: "Cholesterol, Total (±10%)",                value: 0.10,  cfr: "42 CFR §493.931" },
   { label: "Cholesterol, HDL (±20% or ±6 mg/dL)",     value: 0.20,  absoluteFloor: 6, absoluteUnit: "mg/dL", cfr: "42 CFR §493.931" },
