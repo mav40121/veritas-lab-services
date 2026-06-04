@@ -952,7 +952,7 @@ What's deferred: the actual user flow at `https://www.veritaslabservices.com/lab
 **Importance:** Medium-High. Procedural-debt cleanup against a NON-NEGOTIABLE convention. CLAUDE.md §2 verify-*.js: every math/logic change ships with a paired script that exercises every meaningful branch. The audit run on 2026-06-02 found 31 of 35 math/logic commits in the last 90 days violated the convention. Some are exempt (renames, citation swaps, copy changes) but at least 8 introduced new math or fixed math defects and should have shipped with verification.
 
 The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_coverage.py` (run with default --since 90 days). Strike-through = backfill landed.
-- EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations
+- ~~EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep17-sensitivity.js` (34/34 PASS).
 - Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method
 - CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit
 - Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation
