@@ -2316,6 +2316,24 @@ try {
   console.warn(`[migration] Phase 3.11 (inventory_items) skipped (table not yet created on fresh DB):`, err?.message);
 }
 
+// One-shot barcode_value backfill (2026-06-04). Previously the print-labels
+// endpoint synthesized VLS-<padded id> at render time without persisting,
+// which left the canonical barcode at the mercy of any future change to the
+// synthesis algorithm. This backfill locks in the current synthesized value
+// as a stored column so labels printed once stay valid forever. Gated by
+// WHERE barcode_value IS NULL OR = '' so subsequent boots are no-ops (per
+// the boot-migration-no-cascading-writes rule).
+try {
+  const sb = sqlite.prepare(`
+    UPDATE inventory_items
+    SET barcode_value = 'VLS-' || printf('%08d', id)
+    WHERE barcode_value IS NULL OR barcode_value = ''
+  `).run();
+  if (sb.changes > 0) console.log(`[migration] Inventory barcode persistence: backfilled barcode_value on ${sb.changes} row(s)`);
+} catch (err: any) {
+  console.warn(`[migration] Inventory barcode backfill skipped (table or column not yet ready):`, err?.message);
+}
+
 // Multi-Lab Tier 2 — Phase 3.9 (VeritaStaff module):
 // staff_labs / staff_employees / staff_roles already carry a lab_id column
 // but it references staff_labs(id), NOT the new multi-lab labs(id). Add a

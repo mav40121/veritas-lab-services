@@ -1534,6 +1534,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(500).json({ error: err.message || "Insert failed", inserted: 0 });
     }
 
+    // Persist canonical barcode_value (VLS-<padded id>) on every freshly
+    // imported row that lacks one. The boot-time migration handles existing
+    // rows; this handles the import burst that just landed.
+    try {
+      const sb = sqlite.prepare(
+        "UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE lab_id = ? AND (barcode_value IS NULL OR barcode_value = '')"
+      ).run(Number(labId));
+      if (sb.changes > 0) console.log(`[admin/import-inventory] Backfilled barcode_value on ${sb.changes} fresh row(s) in lab_id=${labId}`);
+    } catch {}
+
     console.log(`[admin/import-inventory] Inserted ${inserted} items into lab_id=${labId} (owner_user_id=${accountId})`);
     res.json({ ok: true, inserted, errors });
   });

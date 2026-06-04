@@ -1005,6 +1005,13 @@ export function registerVeritaBenchRoutes(
       try {
         sqlite.prepare("UPDATE inventory_items SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(accountId, result.lastInsertRowid);
       } catch {}
+      // Persist canonical barcode_value (VLS-<padded id>) at creation so
+      // the label code never changes across runtime/algorithm shifts. Gated
+      // by the WHERE clause so a user-supplied value (added via a future
+      // edit endpoint) is preserved.
+      try {
+        sqlite.prepare("UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE id = ? AND (barcode_value IS NULL OR barcode_value = '')").run(result.lastInsertRowid);
+      } catch {}
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(Number(result.lastInsertRowid));
       res.json(row);
     } catch (err: any) {
@@ -1809,6 +1816,11 @@ export function registerVeritaBenchRoutes(
           INSERT INTO inventory_items (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(accountId, req.scope.labId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, now, now);
+        // Persist canonical barcode_value (VLS-<padded id>) at creation so
+        // the label code never changes across runtime/algorithm shifts.
+        try {
+          sqlite.prepare("UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE id = ? AND (barcode_value IS NULL OR barcode_value = '')").run(result.lastInsertRowid);
+        } catch {}
         const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(Number(result.lastInsertRowid));
         res.json(row);
       } catch (err: any) {

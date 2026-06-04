@@ -90,7 +90,8 @@ type ToggleableColumnKey =
   | "days_remaining"
   | "stock_status"
   | "expiration_date"
-  | "vendor";
+  | "vendor"
+  | "barcode";
 
 const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
   { key: "category",           label: "Category" },
@@ -102,6 +103,7 @@ const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
   { key: "stock_status",       label: "Stock Status" },
   { key: "expiration_date",    label: "Expiration" },
   { key: "vendor",             label: "Vendor" },
+  { key: "barcode",            label: "Barcode" },
 ];
 
 function getExpirationStatus(expDate: string | null): { label: string; color: string; priority: number } {
@@ -1344,6 +1346,7 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("stock_status") && <SortHeader field="stock_status">Stock Status</SortHeader>}
                 {isColumnVisible("expiration_date") && <SortHeader field="expiration_date">Expiration</SortHeader>}
                 {isColumnVisible("vendor") && <SortHeader field="vendor" className="hidden lg:table-cell">Vendor</SortHeader>}
+                {isColumnVisible("barcode") && <SortHeader field="barcode_value" className="hidden xl:table-cell">Barcode</SortHeader>}
                 <th className="text-center px-3 py-2 font-medium w-[80px]">Actions</th>
               </tr>
             </thead>
@@ -1388,6 +1391,11 @@ export default function VeritaStockInventoryPage() {
                   )}
                   {isColumnVisible("vendor") && (
                     <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
+                  )}
+                  {isColumnVisible("barcode") && (
+                    <td className="px-3 py-2 font-mono text-xs hidden xl:table-cell whitespace-nowrap">
+                      {(item as any).barcode_value || <span className="text-muted-foreground">-</span>}
+                    </td>
                   )}
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center justify-center gap-1">
