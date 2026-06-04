@@ -955,7 +955,7 @@ The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_c
 - ~~EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep17-sensitivity.js` (34/34 PASS).
 - Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method
 - CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit
-- Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation
+- ~~Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep28-reference-interval.js` (31/31 PASS).
 - Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics
 - Precision Verification EP15 ANOVA simple + advanced modes (#9643934) — variance decomposition
 - Qualitative + semi-quantitative method comparison (#4e14d1a) — categorical comparison logic
