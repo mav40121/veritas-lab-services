@@ -678,7 +678,14 @@ export default function VeritaStockInventoryPage() {
   const generateLabelsPdf = async () => {
     setGeneratingOrderDoc("labels");
     try {
-      const res = await fetch(`${API_BASE}/api/inventory/labels/pdf`, {
+      // Lab-scoped URL when activeLabId is known. The legacy
+      // /api/inventory/labels/pdf endpoint queries by account_id and misses
+      // items added under seat users; the lab-scoped endpoint queries by
+      // lab_id and is the correct behavior for any multi-lab account.
+      const url = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/inventory/labels/pdf`
+        : `${API_BASE}/api/inventory/labels/pdf`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({}),

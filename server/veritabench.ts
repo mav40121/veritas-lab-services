@@ -1671,6 +1671,63 @@ export function registerVeritaBenchRoutes(
       }
     });
 
+    // POST /api/labs/:labId/inventory/labels/pdf — lab-scoped barcode label
+    // sheet. Same shape as the legacy /api/inventory/labels/pdf above; differs
+    // only in how items are scoped (lab_id, not account_id) and where lab
+    // identity is read (the labs row for THIS labId). Fixes the cross-lab
+    // bleed where items added under a seat user (account_id != owner.id) were
+    // invisible to the legacy endpoint's account-scoped query, producing a
+    // partial label sheet that looked like "only one label printed when the
+    // lab has many items." Same bug class as the count-sheet lab-scoping fix
+    // above. (2026-06-04, customer report on Michaels Lab.)
+    app.post("/api/labs/:labId/inventory/labels/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const requestedIds = Array.isArray(req.body?.itemIds)
+        ? req.body.itemIds.filter((x: any) => typeof x === "number" && Number.isFinite(x))
+        : null;
+      try {
+        let rows: any[];
+        if (requestedIds && requestedIds.length > 0) {
+          const placeholders = requestedIds.map(() => "?").join(",");
+          rows = sqlite.prepare(
+            `SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE lab_id = ? AND id IN (${placeholders}) ORDER BY item_name ASC`
+          ).all(req.scope.labId, ...requestedIds) as any[];
+        } else {
+          rows = sqlite.prepare(
+            "SELECT id, item_name, catalog_number, lot_number, storage_location, barcode_value FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+          ).all(req.scope.labId) as any[];
+        }
+        if (rows.length === 0) {
+          return res.status(404).json({ error: "No inventory items in this lab. Add at least one item before printing labels." });
+        }
+
+        const labels: BarcodeLabelInput[] = rows.map((r) => ({
+          barcodeValue: (r.barcode_value && String(r.barcode_value).trim().length > 0)
+            ? String(r.barcode_value)
+            : `VLS-${String(r.id).padStart(8, "0")}`,
+          itemName: r.item_name || "(unnamed)",
+          catalogNumber: r.catalog_number,
+          lotNumber: r.lot_number,
+          storageLocation: r.storage_location,
+        }));
+
+        const labRow = sqlite.prepare(
+          "SELECT lab_name, clia_number FROM labs WHERE id = ?"
+        ).get(req.scope.labId) as any;
+        const labName: string | null = labRow?.lab_name || null;
+        const cliaNumber: string | null = labRow?.clia_number || null;
+
+        const pdfBuffer = await generateBarcodeLabelSheetPdf(labels, { labName, cliaNumber });
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const filename = `VeritaStock_Labels_${datestamp}.pdf`;
+        const token = storePdfToken(pdfBuffer, filename);
+        res.json({ token, totalCount: labels.length });
+      } catch (err: any) {
+        console.error("Barcode label PDF generation error (lab-scoped):", err.message);
+        res.status(500).json({ error: "PDF generation failed", detail: err.message });
+      }
+    });
+
     // POST /api/labs/:labId/inventory/snap-order/pdf — lab-scoped snap order
     // PDF. Same shape as the legacy variant; differs only in how items are
     // scoped (by lab_id rather than account_id) and where the lab identity
