@@ -878,6 +878,14 @@ export default function VeritaCheckPage() {
   // slope / intercept / r² acceptance versus per-level bias).
   const [linAnalyte, setLinAnalyte] = useState("");
   const [linUnits, setLinUnits] = useState("");
+  // Optional manufacturer claimed AMR. When present, the Linearity PDF gains
+  // a Coverage Summary block surfacing verified range vs claimed AMR + the
+  // unverified gap, so the director's adjudication on coverage adequacy is
+  // visible on the page they sign. Per the Longstreth/COPCP feedback thread
+  // 2026-06-03: CLIA does not require fail-by-default on coverage gaps; the
+  // director resolves the gap. This block makes the gap impossible to miss.
+  const [linClaimedLow, setLinClaimedLow] = useState<number | "">("");
+  const [linClaimedHigh, setLinClaimedHigh] = useState<number | "">("");
   const [linLevels, setLinLevels] = useState<{ name: string; assignedValue: number | null }[]>([
     { name: "Level 1", assignedValue: null },
     { name: "Level 2", assignedValue: null },
@@ -1891,6 +1899,40 @@ export default function VeritaCheckPage() {
         return { name: lv.name, assigned_value: assigned, n: nReps, mean: meanV, sd: sdv, pctRecovery, absBias, allowance, verdict: pass ? "pass" as const : "fail" as const };
       });
       const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${presetAbsUnit || ""}`.trim();
+      // Coverage Summary computation (only when both bounds present). Verdict
+      // logic is untouched -- this is informational only, surfacing the gap
+      // between the verified range and the manufacturer's claimed AMR so the
+      // director's adjudication on coverage adequacy is visible on the PDF.
+      const linCL: number | null = linClaimedLow === "" ? null : Number(linClaimedLow);
+      const linCH: number | null = linClaimedHigh === "" ? null : Number(linClaimedHigh);
+      let coverage: any = null;
+      if (linCL !== null && linCH !== null && linCH > linCL) {
+        const verifiedAssigned = usableLevels
+          .map(lv => lv.assigned_value as number)
+          .filter(v => Number.isFinite(v));
+        if (verifiedAssigned.length >= 2) {
+          const verifiedLow = Math.min(...verifiedAssigned);
+          const verifiedHigh = Math.max(...verifiedAssigned);
+          const claimedSpan = linCH - linCL;
+          // Negative gap = calibrators reached past the claimed bound; clamp to 0.
+          const upperGapAbs = Math.max(0, linCH - verifiedHigh);
+          const lowerGapAbs = Math.max(0, verifiedLow - linCL);
+          const upperGapPct = (upperGapAbs / claimedSpan) * 100;
+          const lowerGapPct = (lowerGapAbs / claimedSpan) * 100;
+          const verifiedCoveragePct = Math.max(0, 100 - upperGapPct - lowerGapPct);
+          coverage = {
+            claimed_low: linCL,
+            claimed_high: linCH,
+            verified_low: verifiedLow,
+            verified_high: verifiedHigh,
+            upper_gap_abs: upperGapAbs,
+            lower_gap_abs: lowerGapAbs,
+            upper_gap_pct: upperGapPct,
+            lower_gap_pct: lowerGapPct,
+            verified_coverage_pct: verifiedCoveragePct,
+          };
+        }
+      }
       const results = {
         type: "linearity",
         analyte: linAnalyte.trim(),
@@ -1905,6 +1947,9 @@ export default function VeritaCheckPage() {
         slopeBiasPct,
         levels: perLevel,
         overallPass,
+        claimed_range_low: linCL,
+        claimed_range_high: linCH,
+        coverage,
         summary: overallPass
           ? `Linearity verified across ${pts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
           : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
@@ -1924,6 +1969,9 @@ export default function VeritaCheckPage() {
           analyte: linAnalyte.trim(),
           units: linUnits.trim(),
           levels: builtLevels,
+          claimed_range_low: linCL,
+          claimed_range_high: linCH,
+          coverage,
           // Phase C audit trail: persist VeritaQC provenance when the import
           // path was used. Calculator + PDF ignore unknown keys.
           ...(linearityImportSource ? {
@@ -3685,6 +3733,35 @@ return (
                         </Select>
                       </div>
                     </div>
+                    {/* Optional manufacturer claimed AMR. When both bounds are
+                        present, the Linearity PDF gains a Coverage Summary block
+                        surfacing the unverified gap (CLIA does not require fail
+                        on coverage; director adjudicates). Leave blank to skip. */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label>Manufacturer Claimed AMR Low ({linUnits || "units"}) <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                        <Input
+                          type="number" step="any" placeholder="e.g. 5"
+                          value={linClaimedLow}
+                          onChange={e => setLinClaimedLow(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                          data-testid="input-lin-claimed-low"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Manufacturer Claimed AMR High ({linUnits || "units"}) <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                        <Input
+                          type="number" step="any" placeholder="e.g. 500"
+                          value={linClaimedHigh}
+                          onChange={e => setLinClaimedHigh(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                          data-testid="input-lin-claimed-high"
+                        />
+                      </div>
+                    </div>
+                    {(linClaimedLow !== "" || linClaimedHigh !== "") && (
+                      <p className="text-xs text-muted-foreground italic">
+                        When both bounds are entered, the report adds a Coverage Summary that compares the verified range against the manufacturer's claimed AMR. CLIA does not require a coverage threshold; the medical director adjudicates whether the verified range is acceptable.
+                      </p>
+                    )}
                     <div className="space-y-3">
                       {linLevels.map((lv, levelIdx) => {
                         const reps = linRunData[lv.name] || [];

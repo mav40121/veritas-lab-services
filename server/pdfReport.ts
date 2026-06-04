@@ -2572,6 +2572,37 @@ function buildLinearityHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
+  // Coverage Summary block (informational, only when claimed AMR provided).
+  // Surfaces verified range vs claimed AMR plus the unverified gap so the
+  // director's adjudication on coverage adequacy is visible on the signed
+  // page. Per 42 CFR §493.1255 + CLSI EP06: CLIA does not impose a numerical
+  // coverage threshold; the lab may report to a narrower verified range
+  // than the manufacturer's claim with director sign-off.
+  const cov = (results as any).coverage;
+  let coverageBlock = "";
+  if (cov && typeof cov === "object"
+      && Number.isFinite(cov.claimed_low) && Number.isFinite(cov.claimed_high)
+      && Number.isFinite(cov.verified_low) && Number.isFinite(cov.verified_high)) {
+    const cLowTxt = sf(cov.claimed_low, 3);
+    const cHighTxt = sf(cov.claimed_high, 3);
+    const vLowTxt = sf(cov.verified_low, 3);
+    const vHighTxt = sf(cov.verified_high, 3);
+    const upperGapPct = Number(cov.upper_gap_pct ?? 0);
+    const lowerGapPct = Number(cov.lower_gap_pct ?? 0);
+    const totalGapPct = upperGapPct + lowerGapPct;
+    const gapBadge = totalGapPct <= 0
+      ? `<span style="color:#437A22;font-weight:700">Full claimed AMR verified</span>`
+      : `<span style="color:#964219;font-weight:700">${sf(totalGapPct, 1)}% of claimed AMR not verified by this study</span>`;
+    const gapDetail = totalGapPct <= 0
+      ? `The verified range matches or exceeds the manufacturer's claimed AMR. No coverage gap to adjudicate.`
+      : `Verified range is ${vLowTxt} to ${vHighTxt} ${units || "units"}; manufacturer's claimed AMR is ${cLowTxt} to ${cHighTxt} ${units || "units"}. Upper unverified portion: ${sf(upperGapPct, 1)}%. Lower unverified portion: ${sf(lowerGapPct, 1)}%. The medical director or designee adjudicates whether the verified range is acceptable for clinical reporting, whether the lab's reportable range should be narrowed to match the verified bounds, or whether a follow-up study with material spanning the gap is needed. CLIA (42 CFR §493.1255) and CLSI EP06 do not impose a numerical coverage threshold; coverage adequacy is a clinical judgment.`;
+    coverageBlock = `<div style="margin-top:10px;padding:10px 12px;background:#EBF3F8;border:1px solid #01696F;border-radius:5px;">
+      <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Coverage Summary</div>
+      <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0 0 4px;">${gapBadge}</p>
+      <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${gapDetail}</p>
+    </div>`;
+  }
+
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary || ""} ${cliaStatement}</p>
@@ -2582,6 +2613,7 @@ function buildLinearityHTML(study: Study, results: any): string {
   ${headerHTML(study, (study as any)._cliaNumber)}
   <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
   ${summaryStats}
+  ${coverageBlock}
   ${narrative}
   ${regulatoryComplianceBoxHTML("linearity", (study as any)._preferredStandards)}
   ${directorReviewHTML()}
