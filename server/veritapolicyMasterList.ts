@@ -1,3 +1,22 @@
+// Row shape inferred from the data set below. Declared inline because no
+// shared type was defined when this file was generated; the TypeScript
+// compiler reported `Cannot find name 'VeritaPolicyMasterRow'` (TS2304)
+// until this declaration was added.
+export interface VeritaPolicyMasterRow {
+  policy_id: string;
+  policy_name: string;
+  section: string;
+  subspecialty: string;
+  service_line: string;
+  description: string;
+  cfr_citations: string;
+  tjc_citations: string;
+  cap_citations: string;
+  cola_citations: string;
+  aabb_citations: string;
+  notes: string;
+}
+
 export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
   {
     "policy_id": "1",

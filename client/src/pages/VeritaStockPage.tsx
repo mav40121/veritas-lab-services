@@ -74,7 +74,7 @@ const DEPARTMENTS = ["Core Lab", "Chemistry", "Hematology", "Blood Bank", "Micro
 const ORDER_UNITS = ["each", "box", "case", "kit", "pack", "bottle", "bag"];
 const USAGE_UNITS = ["each", "test", "cartridge", "strip", "slide", "tube", "vial", "tip", "glove", "bottle", "mL", "roll", "set"];
 
-type SortField = "item_name" | "category" | "department" | "quantity_on_hand" | "burn_rate" | "reorder_point" | "days_remaining" | "stock_status" | "expiration_date" | "vendor";
+type SortField = "item_name" | "category" | "department" | "quantity_on_hand" | "burn_rate" | "reorder_point" | "days_remaining" | "stock_status" | "expiration_date" | "vendor" | "barcode_value";
 type SortDir = "asc" | "desc";
 
 // Per-user column visibility (Pfizer demo follow-up 2026-05-19).
@@ -484,7 +484,7 @@ export default function VeritaStockInventoryPage() {
     if (!isLoggedIn) return;
     fetch(`${API_BASE}/api/account/ui-preferences`, { headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : {}))
-      .then((prefs) => {
+      .then((prefs: { veritastock_hidden_columns?: unknown; veritastock_scope?: unknown }) => {
         const hidden = (prefs && Array.isArray(prefs.veritastock_hidden_columns))
           ? prefs.veritastock_hidden_columns
           : [];

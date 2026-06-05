@@ -2119,14 +2119,17 @@ export default function VeritaCheckPage() {
 
     if (studyType === "sensitivity") {
       // Parse a sensitivity textarea: one replicate per line, "value" or "value,lot".
+      // flatMap with [] for skips avoids the typed-predicate + null-filter dance
+      // that triggered TS2322/TS2677 against an optional-vs-undefined property.
       const parseSens = (text: string): { value: number; lot?: string }[] =>
-        text.split(/\r?\n/).map(line => {
+        text.split(/\r?\n/).flatMap(line => {
           const parts = line.split(/[,\t]/).map(p => p.trim()).filter(p => p.length > 0);
-          if (parts.length === 0) return null;
+          if (parts.length === 0) return [];
           const val = parseFloat(parts[0]);
-          if (isNaN(val)) return null;
-          return { value: val, lot: parts[1] || undefined };
-        }).filter((x): x is { value: number; lot?: string } => x !== null);
+          if (isNaN(val)) return [];
+          const lot = parts[1];
+          return [lot ? { value: val, lot } : { value: val }];
+        });
 
       const blanks = parseSens(sensBlanksText);
       const lowLevel = parseSens(sensLowLevelText);
