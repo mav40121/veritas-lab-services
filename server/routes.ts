@@ -14946,11 +14946,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab links the credential URL from their SharePoint/Drive; we store
   // metadata only. doc_type allowlist locked to the seven enum values from
   // the deep-dive (license/diploma/certification/training/ascp/ce/other).
+  // Note (2026-06-05 hotfix): staff_employees has two lab-scope columns,
+  // `lab_id` (original single-lab ownership) and `tier2_lab_id` (Tier 2
+  // multi-lab transfer target). Every existing /api/labs/:labId/staff/*
+  // endpoint resolves by `tier2_lab_id` because that is what the in-app
+  // navigation maps to (Michael at /labs/2/... routes to San Carlos's
+  // tier2_lab_id=2, while the employee's original lab_id might be 7).
+  // Mirror that pattern here so my new document endpoints accept the same
+  // employees the rest of VeritaStaff already accepts.
   app.post("/api/labs/:labId/staff/employees/:id/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const emp = (db as any).$client.prepare(
-      "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?"
+      "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.id, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const { docType, title, url, storageProvider, expirationDate } = req.body || {};
@@ -14971,7 +14979,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const emp = (db as any).$client.prepare(
-      "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?"
+      "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.id, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const docs = (db as any).$client.prepare(
@@ -14989,7 +14997,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const doc = (db as any).$client.prepare(
       `SELECT d.id FROM staff_employee_documents d
        JOIN staff_employees e ON d.employee_id = e.id
-       WHERE d.id = ? AND e.lab_id = ?`
+       WHERE d.id = ? AND e.tier2_lab_id = ?`
     ).get(req.params.docId, labId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
     (db as any).$client.prepare("DELETE FROM staff_employee_documents WHERE id = ?").run(req.params.docId);
