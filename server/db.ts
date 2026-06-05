@@ -1196,6 +1196,72 @@ for (const [col, colType] of newCompAsmtCols) {
   }
 }
 
+// PR C of the VeritaComp customer-blockers wave (2026-06-05, items #2 + #7):
+// per-element document links on assessments + per-employee credential links
+// on staff_employees. URL-pointer architecture only (locked memory: VeritaScan
+// 2026-06-02): the lab keeps the file in their own SharePoint/Drive/OneDrive
+// and we store metadata + URL. This hard-keeps VeritaAssure's no-PHI promise.
+//
+// The two tables share a near-identical shape because they share a single
+// DocumentLinkDialog component on the client; the only divergence is the
+// parent-row foreign key (assessment+element vs employee).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_element_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL,
+    element_number INTEGER NOT NULL,
+    doc_type TEXT NOT NULL,
+    title TEXT,
+    url TEXT NOT NULL,
+    storage_provider TEXT,
+    expiration_date TEXT,
+    created_at TEXT NOT NULL,
+    created_by_user_id INTEGER,
+    FOREIGN KEY (assessment_id) REFERENCES competency_assessments(id)
+  );
+`);
+const compDocCols = (sqlite.prepare("PRAGMA table_info(competency_element_documents)").all() as { name: string }[]).map(c => c.name);
+const newCompDocCols: [string, string][] = [
+  ["doc_type", "TEXT"],
+  ["title", "TEXT"],
+  ["storage_provider", "TEXT"],
+  ["expiration_date", "TEXT"],
+  ["created_by_user_id", "INTEGER"],
+];
+for (const [col, colType] of newCompDocCols) {
+  if (!compDocCols.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE competency_element_documents ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staff_employee_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    doc_type TEXT NOT NULL,
+    title TEXT,
+    url TEXT NOT NULL,
+    storage_provider TEXT,
+    expiration_date TEXT,
+    created_at TEXT NOT NULL,
+    created_by_user_id INTEGER,
+    FOREIGN KEY (employee_id) REFERENCES staff_employees(id)
+  );
+`);
+const staffDocCols = (sqlite.prepare("PRAGMA table_info(staff_employee_documents)").all() as { name: string }[]).map(c => c.name);
+const newStaffDocCols: [string, string][] = [
+  ["doc_type", "TEXT"],
+  ["title", "TEXT"],
+  ["storage_provider", "TEXT"],
+  ["expiration_date", "TEXT"],
+  ["created_by_user_id", "INTEGER"],
+];
+for (const [col, colType] of newStaffDocCols) {
+  if (!staffDocCols.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE staff_employee_documents ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
 // Create competency_quizzes table
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS competency_quizzes (

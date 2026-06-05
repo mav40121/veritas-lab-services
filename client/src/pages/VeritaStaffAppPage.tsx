@@ -24,10 +24,11 @@ import {
 import {
   Plus, Trash2, ChevronLeft, Users, Lock, FileDown, Building2,
   CheckCircle2, AlertTriangle, Clock, UserPlus, Edit2, Calendar,
-  Download, X, Upload, FileSpreadsheet,
+  Download, X, Upload, FileSpreadsheet, FileText, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Lab {
@@ -1070,6 +1071,9 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
             </CardContent>
           </Card>
         )}
+
+        {/* PR C: Credentials / Documents card. Linked URLs only; files stay in the lab's own storage. */}
+        <EmployeeDocumentsCard employeeId={employee.id} />
       </div>
 
       {showCompetency && (
@@ -1081,6 +1085,138 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
         />
       )}
     </div>
+  );
+}
+
+// EmployeeDocumentsCard
+//
+// PR C of the VeritaComp customer-blockers wave (2026-06-05, item #7).
+// Surveyor-defensible credential storage by URL pointer. The lab links
+// the file from their own SharePoint / Drive; we keep metadata only.
+// Renders a list with expiration badge so the lab can spot a license
+// that is expiring before TJC asks about it.
+type EmployeeDocument = {
+  id: number;
+  employee_id: number;
+  doc_type: string;
+  title: string | null;
+  url: string;
+  storage_provider: string | null;
+  expiration_date: string | null;
+  created_at: string;
+};
+
+function EmployeeDocumentsCard({ employeeId }: { employeeId: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const readOnly = useIsReadOnly('veritastaff');
+  const [linkOpen, setLinkOpen] = useState(false);
+
+  const listUrl = activeLabId ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/documents` : null;
+  const { data: docs } = useQuery<EmployeeDocument[]>({
+    queryKey: [listUrl ?? "no-employee-docs"],
+    queryFn: async () => {
+      if (!listUrl) return [];
+      const r = await fetch(`${API_BASE}${listUrl}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!listUrl,
+  });
+
+  async function deleteDoc(id: number) {
+    if (!activeLabId) return;
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employee-documents/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      toast({ title: "Delete failed", description: err.error || `HTTP ${r.status}`, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Document unlinked" });
+    queryClient.invalidateQueries({ queryKey: [listUrl] });
+  }
+
+  async function createDoc(payload: { docType: string; title: string; url: string; storageProvider: string; expirationDate: string }) {
+    if (!activeLabId) throw new Error("Active lab required");
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees/${employeeId}/documents`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    toast({ title: "Document linked" });
+    queryClient.invalidateQueries({ queryKey: [listUrl] });
+  }
+
+  const docTypeLabel = (v: string) => STAFF_DOC_TYPES.find(t => t.value === v)?.label || v;
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardContent className="p-5">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-primary" />
+            <h3 className="font-semibold">Credentials &amp; Documents</h3>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)} disabled={readOnly}>
+            <Plus size={14} className="mr-1.5" /> Link Document
+          </Button>
+        </div>
+        {(docs?.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No documents linked yet. Link state licenses, ASCP cards, diplomas, or training certificates so they are at hand during a survey. Files stay in your own SharePoint or Drive; we store only the URL.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {docs!.map(d => {
+              const status = expirationStatus(d.expiration_date);
+              const tone = status.tone === "expired" ? "text-red-700 bg-red-500/10 border-red-500/30"
+                : status.tone === "due_soon" ? "text-amber-700 bg-amber-500/10 border-amber-500/30"
+                : status.tone === "active" ? "text-emerald-700 bg-emerald-500/10 border-emerald-500/30"
+                : "";
+              return (
+                <div key={d.id} className="flex items-center gap-2 border border-border rounded-md p-2">
+                  <Badge variant="outline" className="text-[10px]">{docTypeLabel(d.doc_type)}</Badge>
+                  <div className="flex-1 min-w-0">
+                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline truncate inline-flex items-center gap-1">
+                      <ExternalLink size={12} />
+                      {d.title || d.url}
+                    </a>
+                    {status.label && (
+                      <Badge variant="outline" className={`ml-2 text-[10px] border ${tone}`}>{status.label}</Badge>
+                    )}
+                  </div>
+                  <ConfirmDialog
+                    title="Unlink document?"
+                    message="This removes the link from VeritaStaff. The underlying file in your own storage is not affected."
+                    confirmLabel="Unlink"
+                    onConfirm={() => deleteDoc(d.id)}
+                  >
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" disabled={readOnly} title="Unlink">
+                      <Trash2 size={12} />
+                    </Button>
+                  </ConfirmDialog>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <DocumentLinkDialog
+          open={linkOpen}
+          onOpenChange={setLinkOpen}
+          title="Link Credential / Document"
+          docTypes={STAFF_DOC_TYPES}
+          onSubmit={createDoc}
+        />
+      </CardContent>
+    </Card>
   );
 }
 
