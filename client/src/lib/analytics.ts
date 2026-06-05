@@ -1,4 +1,4 @@
-type GA4EventName = 'begin_checkout' | 'select_item' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click' | 'invoice_request_card_link_click';
+type GA4EventName = 'begin_checkout' | 'select_item' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click' | 'invoice_request_card_link_click' | 'system_quote_request_band_click';
 
 interface GA4EventParams {
   // begin_checkout / purchase / select_item
@@ -20,6 +20,8 @@ interface GA4EventParams {
   tier?: string;
   seats?: number;
   has_promo?: boolean;
+  // system_quote_request_band_click
+  source?: string;
 }
 
 export function trackEvent(name: GA4EventName, params: GA4EventParams = {}) {
