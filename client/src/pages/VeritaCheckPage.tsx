@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -2817,7 +2817,24 @@ return (
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Routine Chemistry §493.931</SelectLabel>
-                              {CLIA_PRESETS.slice(0, 37).map((p, i) => <SelectItem key={i} value={String(i)}>{p.label}</SelectItem>)}
+                              {/*
+                               * Adjacency-slip mitigation (Tier 2, 2026-06-04). The CO2 cluster at
+                               * positions 6-9 caused a customer to pick the pCO2 row (±8% / ±5 mm Hg)
+                               * thinking it was Carbon Dioxide / Serum CO2 / Bicarbonate (±20%). The
+                               * dropdown rendered them back-to-back with no visual separation.
+                               * SelectSeparator on either side of the Carbon Dioxide row forces the eye
+                               * to slow down at the danger zone. Hard-coded indices are intentional:
+                               * this matches a real adjacency bug, not an algorithmic one. The
+                               * companion verify script scripts/verify-tea-dropdown-co2-cluster-indices.js
+                               * pins positions 6-10 so any future reorder of CLIA_PRESETS fails the
+                               * script and forces re-checking the separator placement.
+                               */}
+                              {CLIA_PRESETS.slice(0, 8).map((p, i) => <SelectItem key={i} value={String(i)}>{p.label}</SelectItem>)}
+                              <SelectSeparator />
+                              <SelectItem key={8} value={String(8)}>{CLIA_PRESETS[8].label}</SelectItem>
+                              <SelectSeparator />
+                              <SelectItem key={9} value={String(9)}>{CLIA_PRESETS[9].label}</SelectItem>
+                              {CLIA_PRESETS.slice(10, 37).map((p, i) => <SelectItem key={10+i} value={String(10+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Endocrinology §493.933</SelectLabel>
                               {CLIA_PRESETS.slice(37, 55).map((p, i) => <SelectItem key={37+i} value={String(37+i)}>{p.label}</SelectItem>)}
