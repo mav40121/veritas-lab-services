@@ -143,10 +143,17 @@ export default function VeritaResponseFindingPage() {
   const [, navigate] = useLocation();
   const id = params.id;
   // Multi-Lab Tier 2 Phase 3.10b: lab-scoped finding fetch.
+  // Falls back to the legacy /api/findings/:id endpoint (still mounted at
+  // routes.ts line 12294) when activeLabId hasn't resolved yet. The prior
+  // implementation had `: findingUrl` as the else branch, which is a
+  // self-reference to a const that is in the TDZ at that point — every
+  // render with a falsy activeLabId threw `Cannot access 'findingUrl'
+  // before initialization` and crashed the page. Same class as the PR
+  // #534 TDZ on VeritaCheckPage. Customer report 2026-06-04.
   const activeLabId = useActiveLabId();
   const findingUrl = activeLabId
     ? `${API_BASE}/api/labs/${activeLabId}/findings/${id}`
-    : findingUrl;
+    : `${API_BASE}/api/findings/${id}`;
 
   // Lab-aware accreditor gating: filter the dropdown to bodies the active
   // lab claims, plus always-allowed CMS/Other, plus the finding's current
