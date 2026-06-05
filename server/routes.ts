@@ -15004,6 +15004,86 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── EMPLOYEE INSTRUMENT ASSIGNMENT (PR D, 2026-06-05) ──────────────────
+  //
+  // Many-to-many between staff_employees and veritamap_instruments. Lets the
+  // lab director declare which instruments an employee actually runs so a
+  // supervisor sees that context in the New Assessment dialog. The autoload
+  // of method-group tabs from this assignment is a separate follow-up PR.
+  //
+  // Employee lookup uses tier2_lab_id (PR #559 hotfix lesson). Instruments
+  // are scoped via veritamap_maps.lab_id which is the correct column for
+  // that table (no tier2 mirror).
+  app.get("/api/labs/:labId/staff/employees/:id/instruments", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const emp = (db as any).$client.prepare(
+      "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+    ).get(req.params.id, labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const rows = (db as any).$client.prepare(
+      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.category, i.map_id, m.name AS map_name
+       FROM staff_employee_instruments j
+       JOIN veritamap_instruments i ON j.instrument_id = i.id
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE j.employee_id = ? AND m.lab_id = ?
+       ORDER BY m.name, i.instrument_name, i.id`
+    ).all(req.params.id, labId);
+    res.json(rows);
+  });
+
+  // PUT sync — accepts {instrumentIds: number[]} and rewrites the join in a
+  // single transaction so a partial failure can not leave drift behind.
+  // Instrument ids are validated against the active lab's maps before insert.
+  app.put("/api/labs/:labId/staff/employees/:id/instruments", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const emp = (db as any).$client.prepare(
+      "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+    ).get(req.params.id, labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const raw = (req.body && Array.isArray(req.body.instrumentIds)) ? req.body.instrumentIds : [];
+    const ids: number[] = raw.map((v: any) => parseInt(String(v), 10)).filter((n: number) => Number.isFinite(n) && n > 0);
+    let validIds: number[] = [];
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => "?").join(",");
+      const valid = (db as any).$client.prepare(
+        `SELECT i.id FROM veritamap_instruments i
+         JOIN veritamap_maps m ON i.map_id = m.id
+         WHERE i.id IN (${placeholders}) AND m.lab_id = ?`
+      ).all(...ids, labId) as Array<{ id: number }>;
+      validIds = valid.map(r => Number(r.id));
+    }
+    const now = new Date().toISOString();
+    const client = (db as any).$client;
+    const txn = client.transaction(() => {
+      client.prepare("DELETE FROM staff_employee_instruments WHERE employee_id = ?").run(req.params.id);
+      const ins = client.prepare(
+        "INSERT INTO staff_employee_instruments (employee_id, instrument_id, created_at, created_by_user_id) VALUES (?, ?, ?, ?)"
+      );
+      for (const iid of validIds) {
+        ins.run(req.params.id, iid, now, req.userId ?? null);
+      }
+    });
+    txn();
+    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length });
+  });
+
+  // GET flat list of every instrument across the lab's VeritaMaps for the
+  // assignment picker dialog. Grouped client-side by map_name.
+  app.get("/api/labs/:labId/veritamap/instruments-flat", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const rows = (db as any).$client.prepare(
+      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.category, i.map_id, m.name AS map_name
+       FROM veritamap_instruments i
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE m.lab_id = ?
+       ORDER BY m.name, i.instrument_name, i.id`
+    ).all(labId);
+    res.json(rows);
+  });
+
   // VeritaMap department suggestions, scoped to the active lab's maps
   app.get("/api/labs/:labId/staff/veritamap-suggestions", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
