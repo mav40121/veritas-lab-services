@@ -287,7 +287,7 @@ function AppContent() {
           <Route path="/book/scoping-call" component={BookScopingCallPage} />
           <Route path="/admin/scheduling" component={AdminSchedulingPage} />
           <Route path="/team" component={TeamPage} />
-          <Route path="/veritacheck" component={VeritaCheckPage} />
+          <Route path="/veritacheck">{wrapLegacy(VeritaCheckPage)}</Route>
           <Route path="/study/new">{wrapLegacy(VeritaCheckPage)}</Route>
           <Route path="/study/:id/edit">{wrapLegacy(VeritaCheckPage)}</Route>
           <Route path="/study/:id/results">{wrapLegacy(StudyResultsPage)}</Route>
