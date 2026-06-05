@@ -1267,16 +1267,6 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN tea_unit TEXT DEFAULT '%'"); }
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_floor REAL"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_absolute_unit TEXT"); } catch {}
 
-// Add clia_preset_label to make TEa adjacency-slip mistakes visible on the report.
-// Customer report 2026-06-04: picked the pCO2 row (8% / 5 mm Hg) thinking it was
-// Carbon Dioxide / Serum CO2 / Bicarbonate (20%). The two rows are adjacent in the
-// dropdown and the report only printed the TEa VALUE, not the preset NAME, so the
-// crosswire was invisible after the fact. Persist the picked preset label
-// (frozen at study-create time) so the report can show
-// "CLIA TEa: 8% or 5 mm Hg (pCO2, Blood Gas Analyzer)" and any future slip is
-// caught at report-review time. NULL on legacy rows -> render the old way.
-try { sqlite.exec("ALTER TABLE studies ADD COLUMN clia_preset_label TEXT"); } catch {}
-
 // Add instrument_meta column for VeritaMap-linked instrument data (JSON)
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN instrument_meta TEXT"); } catch {}
 
