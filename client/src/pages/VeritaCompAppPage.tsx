@@ -1126,6 +1126,40 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
   };
 
+  // Sign & Complete: stamp completion_date + lock the assessment. Customer-
+  // blockers wave 2026-06-05 (item #4). Once locked, the assessment row in
+  // the list shows the completion badge and edits are refused server-side.
+  const signComplete = async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/competency/assessments/${id}/sign`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Sign failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Assessment signed and locked" });
+    qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
+  };
+
+  // Unlock: owner/admin only. Reopens a locked assessment so a mistake can
+  // be corrected. Endpoint enforces role check server-side.
+  const unlock = async (id: number) => {
+    if (!activeLabId) return;
+    const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/assessments/${id}/unlock`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Unlock failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Assessment unlocked" });
+    qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
+  };
+
   if (assessments.length === 0) {
     return (
       <div className="text-center py-12 border border-dashed border-border rounded-xl">
@@ -1156,15 +1190,33 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                     <span className="font-semibold text-sm">{a.employee_name}</span>
                     <Badge variant="outline" className={`text-[10px] ${passColor}`}>{passLabel}</Badge>
                     <span className="text-xs text-muted-foreground">{a.assessment_type.replace("_", " ")}</span>
+                    {(a as any).locked === 1 && (a as any).completion_date && (
+                      <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-500/10 border-emerald-500/30">
+                        Signed {String((a as any).completion_date).split("T")[0]}
+                      </Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {a.assessment_date} {"\u00B7"} Evaluator: {a.evaluator_name || "N/A"} {"\u00B7"} {a.items?.length || 0} item(s)
+                    {(a as any).review_period_start && (a as any).review_period_end && (
+                      <> {"\u00B7"} Review: {(a as any).review_period_start} to {(a as any).review_period_end}</>
+                    )}
                   </div>
                   {a.remediation_plan && (
                     <div className="text-xs text-amber-600 mt-1">Remediation: {a.remediation_plan}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {(a as any).locked !== 1 && (
+                    <Button variant="outline" size="sm" className="h-8 px-2" title="Sign and lock this assessment" onClick={() => signComplete(a.id)}>
+                      Sign & Complete
+                    </Button>
+                  )}
+                  {(a as any).locked === 1 && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" title="Unlock (owner / admin only)" onClick={() => unlock(a.id)}>
+                      Unlock
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)}>
                     <FileDown className="h-4 w-4" />
                   </Button>
@@ -1515,6 +1567,14 @@ function NewAssessmentDialog({
   const [employeeId, setEmployeeId] = useState<number | null>(selectedEmployee?.id || null);
   const [assessmentType, setAssessmentType] = useState("initial");
   const [assessmentDate, setAssessmentDate] = useState(new Date().toISOString().split("T")[0]);
+  // Customer-blockers wave 2026-06-05: review period (item #5 from VeritaComp
+  // deep-dive). Defaults: end = assessment date, start = end minus 365 days.
+  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(new Date().toISOString().split("T")[0]);
+  const [reviewPeriodStart, setReviewPeriodStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 365);
+    return d.toISOString().split("T")[0];
+  });
   const [evaluatorName, setEvaluatorName] = useState("");
   const [evaluatorTitle, setEvaluatorTitle] = useState("");
   const [evaluatorTitleOther, setEvaluatorTitleOther] = useState("");
@@ -1789,6 +1849,8 @@ function NewAssessmentDialog({
           remediationPlan: status === "remediation" ? remediationPlan : null,
           employeeAcknowledged: !!(empPrintName && empInitials),
           supervisorAcknowledged: !!(supPrintName && supInitials),
+          reviewPeriodStart,
+          reviewPeriodEnd,
           items,
         }),
       });
@@ -1864,6 +1926,23 @@ function NewAssessmentDialog({
               <div>
                 <label className="text-xs font-medium block mb-1">Assessment Date</label>
                 <Input type="date" value={assessmentDate} onChange={e => setAssessmentDate(e.target.value)} />
+              </div>
+            </div>
+            {/*
+              * Review period: the window of patient-test activity this
+              * competency covers. Distinct from the assessment date (when
+              * the supervisor signed it). Customer report 2026-06-05 from
+              * San Carlos: they need to document "this competency reviews
+              * 2026-01-01 through 2026-12-31" for the annual cycle.
+              */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Review Period Start</label>
+                <Input type="date" value={reviewPeriodStart} onChange={e => setReviewPeriodStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Review Period End</label>
+                <Input type="date" value={reviewPeriodEnd} onChange={e => setReviewPeriodEnd(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">

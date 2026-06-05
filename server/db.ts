@@ -1165,6 +1165,32 @@ for (const [col, colType] of newCompItemCols) {
   }
 }
 
+// VeritaComp Customer-Blockers Wave (2026-06-05): completion sign-off and
+// review-period columns on competency_assessments. Customer report from
+// San Carlos: no way to mark an assessment as "fully signed off and done"
+// (so they can't close out the 2026 cycle), and no place to record the
+// review period that the competency covers. Adds:
+//   - completion_date: stamped when a supervisor clicks "Sign & Complete"
+//   - final_signed_by_user_id: user_id that clicked Sign & Complete (audit)
+//   - locked: 1 once signed-off; PUT handler refuses edits while locked.
+//     Owner/admin can flip back to 0 via a separate Unlock endpoint.
+//   - review_period_start / review_period_end: the time window the
+//     competency covers (e.g., "calendar year 2026"). Default end is the
+//     assessment_date; default start is end minus 365 days.
+const compAsmtCols = (sqlite.prepare("PRAGMA table_info(competency_assessments)").all() as { name: string }[]).map(c => c.name);
+const newCompAsmtCols: [string, string][] = [
+  ["completion_date", "TEXT"],
+  ["final_signed_by_user_id", "INTEGER"],
+  ["locked", "INTEGER NOT NULL DEFAULT 0"],
+  ["review_period_start", "TEXT"],
+  ["review_period_end", "TEXT"],
+];
+for (const [col, colType] of newCompAsmtCols) {
+  if (!compAsmtCols.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE competency_assessments ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
 // Create competency_quizzes table
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS competency_quizzes (
