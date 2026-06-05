@@ -54,7 +54,11 @@ import {
   X,
   ClipboardList,
   Upload,
+  FileText,
+  ExternalLink,
+  Paperclip,
 } from "lucide-react";
+import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1173,6 +1177,8 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
   const assessments = program.assessments || [];
+  // PR C: per-assessment element-document linker. null = closed; number = assessment id.
+  const [docsAssessmentId, setDocsAssessmentId] = useState<number | null>(null);
 
   const downloadPdf = async (assessmentId: number) => {
     // Lab-scoped URL when activeLabId is set, so lab MEMBERS (not just the
@@ -1319,6 +1325,9 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                       Unlock
                     </Button>
                   )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Linked documents" onClick={() => setDocsAssessmentId(a.id)}>
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)}>
                     <FileDown className="h-4 w-4" />
                   </Button>
@@ -1398,7 +1407,160 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
           </div>
         </div>
       ))}
+      {docsAssessmentId !== null && (
+        <AssessmentDocumentsDialog
+          assessmentId={docsAssessmentId}
+          onClose={() => setDocsAssessmentId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// AssessmentDocumentsDialog
+//
+// PR C of the VeritaComp wave (2026-06-05, item #2). Per-element URL-pointer
+// linker for an existing assessment. Lab director picks one of the 6 CLIA
+// elements, links a URL to evidence stored in their own SharePoint / Drive,
+// the link appears under that element. Element 6 is the customer's primary
+// pain point (quiz scans) but every element gets the same affordance.
+type AssessmentElementDocument = {
+  id: number;
+  assessment_id: number;
+  element_number: number;
+  doc_type: string;
+  title: string | null;
+  url: string;
+  storage_provider: string | null;
+  expiration_date: string | null;
+  created_at: string;
+};
+
+const ELEMENT_NAMES: Record<number, string> = {
+  1: "Direct Observation of Routine Patient Test Performance",
+  2: "Monitoring, Recording and Reporting of Test Results",
+  3: "QC Performance",
+  4: "Direct Observation of Instrument Maintenance",
+  5: "Blind / PT Sample Performance",
+  6: "Problem-Solving Assessment (Quiz)",
+};
+
+function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: number; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const [linkElement, setLinkElement] = useState<number | null>(null);
+
+  const listUrl = activeLabId
+    ? `/api/labs/${activeLabId}/competency/assessments/${assessmentId}/element-documents`
+    : null;
+  const { data: docs } = useQuery<AssessmentElementDocument[]>({
+    queryKey: [listUrl ?? "no-element-docs"],
+    queryFn: async () => {
+      if (!listUrl) return [];
+      const r = await fetch(`${API_BASE}${listUrl}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!listUrl,
+  });
+
+  async function createDoc(payload: { docType: string; title: string; url: string; storageProvider: string; expirationDate: string }) {
+    if (!activeLabId || linkElement === null) throw new Error("Active lab and element required");
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/assessments/${assessmentId}/elements/${linkElement}/documents`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    toast({ title: "Document linked" });
+    queryClient.invalidateQueries({ queryKey: [listUrl] });
+  }
+
+  async function deleteDoc(id: number) {
+    if (!activeLabId) return;
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/element-documents/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      toast({ title: "Delete failed", description: err.error || `HTTP ${r.status}`, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Document unlinked" });
+    queryClient.invalidateQueries({ queryKey: [listUrl] });
+  }
+
+  const docTypeLabel = (v: string) => COMP_DOC_TYPES.find(t => t.value === v)?.label || v;
+  const byElement = (n: number) => (docs ?? []).filter(d => d.element_number === n);
+
+  return (
+    <>
+      <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Linked Documents</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Link evidence per CLIA element. Quiz scans, observation notes, QC records — anything a surveyor would ask to see. VeritaAssure stores only the URL; your file stays in your SharePoint, Drive, or other lab-controlled storage.
+          </p>
+          <div className="space-y-4 pt-2">
+            {[1, 2, 3, 4, 5, 6].map(n => {
+              const list = byElement(n);
+              return (
+                <div key={n} className="border border-border rounded-md p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-muted-foreground shrink-0">Element {n}</span>
+                      <span className="text-xs truncate">{ELEMENT_NAMES[n]}</span>
+                    </div>
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setLinkElement(n)}>
+                      <Plus size={12} className="mr-1" /> Link
+                    </Button>
+                  </div>
+                  {list.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No documents linked.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {list.map(d => (
+                        <div key={d.id} className="flex items-center gap-2 text-xs">
+                          <Badge variant="outline" className="text-[10px] shrink-0">{docTypeLabel(d.doc_type)}</Badge>
+                          <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate inline-flex items-center gap-1 min-w-0">
+                            <ExternalLink size={11} />
+                            {d.title || d.url}
+                          </a>
+                          <ConfirmDialog
+                            title="Unlink document?"
+                            message="This removes the link from VeritaComp. The underlying file in your own storage is not affected."
+                            confirmLabel="Unlink"
+                            onConfirm={() => deleteDoc(d.id)}
+                          >
+                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto text-muted-foreground hover:text-destructive shrink-0" title="Unlink">
+                              <Trash2 size={11} />
+                            </Button>
+                          </ConfirmDialog>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <DocumentLinkDialog
+        open={linkElement !== null}
+        onOpenChange={(v) => { if (!v) setLinkElement(null); }}
+        title={linkElement !== null ? `Link Document — Element ${linkElement}` : "Link Document"}
+        docTypes={COMP_DOC_TYPES}
+        onSubmit={createDoc}
+      />
+    </>
   );
 }
 

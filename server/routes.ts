@@ -13830,7 +13830,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: assessment ? `${assessment.employee_name ?? ''} - ${assessment.program_name ?? ''}`.trim() : undefined, before: { assessment, items: delAssessItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_element_documents WHERE assessment_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ── DOCUMENT LINKERS (PR C, customer-blockers wave 2026-06-05) ─────────
+  //
+  // URL-pointer architecture only (locked memory: VeritaScan 2026-06-02).
+  // The lab keeps the file in their own SharePoint/Drive/OneDrive; we store
+  // metadata + URL. This shared validator enforces the http(s) protocol so
+  // a lab can not link javascript:/data:/file: URIs and create an XSS or
+  // exfiltration risk in either the in-app render or the future PDF appendix.
+  function validateDocUrl(url: any): string | null {
+    if (typeof url !== "string") return null;
+    const trimmed = url.trim();
+    if (!/^https?:\/\//i.test(trimmed)) return null;
+    if (trimmed.length > 2048) return null;
+    return trimmed;
+  }
+  const COMP_DOC_TYPES = new Set([
+    "quiz_scan", "observation_notes", "qc_record", "pt_report", "blind_sample_record", "evidence_other",
+  ]);
+  const STAFF_DOC_TYPES = new Set([
+    "license", "diploma", "certification", "training_certificate", "ascp_card", "ce_credit", "other",
+  ]);
+
+  // POST per-element document on an assessment (multi-doc supported via
+  // repeated calls; client builds the list and submits one-by-one for
+  // simplicity vs. a bulk endpoint).
+  app.post("/api/labs/:labId/competency/assessments/:id/elements/:el/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, labId);
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    const elementNumber = parseInt(String(req.params.el), 10);
+    if (!Number.isFinite(elementNumber) || elementNumber < 1 || elementNumber > 6) {
+      return res.status(400).json({ error: "element must be 1..6" });
+    }
+    const { docType, title, url, storageProvider, expirationDate } = req.body || {};
+    if (!docType || !COMP_DOC_TYPES.has(String(docType))) {
+      return res.status(400).json({ error: "docType invalid", allowed: Array.from(COMP_DOC_TYPES) });
+    }
+    const cleanUrl = validateDocUrl(url);
+    if (!cleanUrl) return res.status(400).json({ error: "url must be an http(s) URL" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      `INSERT INTO competency_element_documents (assessment_id, element_number, doc_type, title, url, storage_provider, expiration_date, created_at, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(req.params.id, elementNumber, String(docType), typeof title === "string" ? title.trim() || null : null, cleanUrl, typeof storageProvider === "string" ? storageProvider.trim() || null : null, typeof expirationDate === "string" ? expirationDate.trim() || null : null, now, req.userId ?? null);
+    res.json({ id: Number(result.lastInsertRowid) });
+  });
+
+  // GET all element documents for one assessment (the client groups by
+  // element_number for rendering).
+  app.get("/api/labs/:labId/competency/assessments/:id/element-documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, labId);
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    const docs = (db as any).$client.prepare(
+      `SELECT id, assessment_id, element_number, doc_type, title, url, storage_provider, expiration_date, created_at
+       FROM competency_element_documents
+       WHERE assessment_id = ?
+       ORDER BY element_number, created_at`
+    ).all(req.params.id);
+    res.json(docs);
+  });
+
+  app.delete("/api/labs/:labId/competency/element-documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const doc = (db as any).$client.prepare(
+      `SELECT d.id FROM competency_element_documents d
+       JOIN competency_assessments a ON d.assessment_id = a.id
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE d.id = ? AND p.lab_id = ?`
+    ).get(req.params.docId, labId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    (db as any).$client.prepare("DELETE FROM competency_element_documents WHERE id = ?").run(req.params.docId);
     res.json({ ok: true });
   });
 
@@ -14849,8 +14935,65 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastaff", action: "delete", entityType: "employee", entityId: req.params.id, entityLabel: emp ? `${emp.first_name} ${emp.last_name}` : undefined, before: { employee: emp, roles: delRoles }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM staff_competency_schedules WHERE employee_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM staff_employee_documents WHERE employee_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
     res.json({ ok: true, deleted: req.params.id });
+  });
+
+  // ── EMPLOYEE DOCUMENT LINKERS (PR C, customer-blockers wave 2026-06-05) ──
+  //
+  // Same URL-pointer pattern as the competency element documents above. The
+  // lab links the credential URL from their SharePoint/Drive; we store
+  // metadata only. doc_type allowlist locked to the seven enum values from
+  // the deep-dive (license/diploma/certification/training/ascp/ce/other).
+  app.post("/api/labs/:labId/staff/employees/:id/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const emp = (db as any).$client.prepare(
+      "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const { docType, title, url, storageProvider, expirationDate } = req.body || {};
+    if (!docType || !STAFF_DOC_TYPES.has(String(docType))) {
+      return res.status(400).json({ error: "docType invalid", allowed: Array.from(STAFF_DOC_TYPES) });
+    }
+    const cleanUrl = validateDocUrl(url);
+    if (!cleanUrl) return res.status(400).json({ error: "url must be an http(s) URL" });
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(
+      `INSERT INTO staff_employee_documents (employee_id, doc_type, title, url, storage_provider, expiration_date, created_at, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(req.params.id, String(docType), typeof title === "string" ? title.trim() || null : null, cleanUrl, typeof storageProvider === "string" ? storageProvider.trim() || null : null, typeof expirationDate === "string" ? expirationDate.trim() || null : null, now, req.userId ?? null);
+    res.json({ id: Number(result.lastInsertRowid) });
+  });
+
+  app.get("/api/labs/:labId/staff/employees/:id/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const emp = (db as any).$client.prepare(
+      "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const docs = (db as any).$client.prepare(
+      `SELECT id, employee_id, doc_type, title, url, storage_provider, expiration_date, created_at
+       FROM staff_employee_documents
+       WHERE employee_id = ?
+       ORDER BY created_at DESC`
+    ).all(req.params.id);
+    res.json(docs);
+  });
+
+  app.delete("/api/labs/:labId/staff/employee-documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const doc = (db as any).$client.prepare(
+      `SELECT d.id FROM staff_employee_documents d
+       JOIN staff_employees e ON d.employee_id = e.id
+       WHERE d.id = ? AND e.lab_id = ?`
+    ).get(req.params.docId, labId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    (db as any).$client.prepare("DELETE FROM staff_employee_documents WHERE id = ?").run(req.params.docId);
+    res.json({ ok: true });
   });
 
   // VeritaMap department suggestions, scoped to the active lab's maps
