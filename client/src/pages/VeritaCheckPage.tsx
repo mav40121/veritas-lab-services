@@ -1536,6 +1536,12 @@ export default function VeritaCheckPage() {
       toast({ title: "Add a test name before saving a draft", variant: "destructive" });
       return;
     }
+    // dataPoints and instruments must be JSON-stringified before send: the
+    // server stores them as TEXT columns and drizzle's better-sqlite3
+    // binding rejects raw arrays/objects with "Too few parameter values
+    // were provided" (verified 2026-06-04 on prod). handleSubmit already
+    // does this everywhere it builds an InsertStudy; the draft path
+    // omitted it and was therefore unusable in production.
     const draft: any = {
       testName: testName.trim(),
       instrument: instrumentNames[0] || "",
@@ -1543,8 +1549,8 @@ export default function VeritaCheckPage() {
       date,
       studyType,
       cliaAllowableError: cliaValue,
-      dataPoints,
-      instruments: instrumentNames,
+      dataPoints: JSON.stringify(dataPoints),
+      instruments: JSON.stringify(instrumentNames),
       teaIsPercentage: 1,
       teaUnit: "%",
       cliaPresetLabel,
