@@ -226,13 +226,31 @@ export default function VeritaStaffAppPage() {
   // ── Employee Detail View ──
   if (selectedEmployee) {
     return (
-      <EmployeeDetailView
-        employee={selectedEmployee}
-        lab={lab!}
-        onBack={() => navigate(activeLabId ? `/labs/${activeLabId}/veritastaff-app` : "/veritastaff-app")}
-        onEdit={() => setEditingEmployee(selectedEmployee)}
-        onCompetency={() => setShowCompetency(selectedEmployee)}
-      />
+      <>
+        <EmployeeDetailView
+          employee={selectedEmployee}
+          lab={lab!}
+          onBack={() => navigate(activeLabId ? `/labs/${activeLabId}/veritastaff-app` : "/veritastaff-app")}
+          onEdit={() => setEditingEmployee(selectedEmployee)}
+          onCompetency={() => setShowCompetency(selectedEmployee)}
+        />
+        {/* Edit dialog — must be mounted here so the Edit button inside the detail view actually opens it. */}
+        <EmployeeDialog
+          open={!!editingEmployee}
+          onOpenChange={(open) => { if (!open) setEditingEmployee(null); }}
+          employee={editingEmployee}
+          lab={lab ?? null}
+        />
+        {/* Competency dialog — same reasoning: detail-view's onCompetency only works if it is mounted in this branch. */}
+        {showCompetency && (
+          <CompetencyDialog
+            open={!!showCompetency}
+            onOpenChange={(open) => { if (!open) setShowCompetency(null); }}
+            employee={showCompetency}
+            lab={lab!}
+          />
+        )}
+      </>
     );
   }
 
