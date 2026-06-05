@@ -1,0 +1,48 @@
+name: Typecheck
+
+# Hard CI gate: every PR to main must pass `npx tsc --noEmit`. Pairs with
+# the Gate 3 step 8 UI-evidence guard. Together they enforce the two rules
+# that PR #534 and PR #544 broke tonight:
+#   - tsc would have caught the TDZ on both at PR-open time (TS2448 +
+#     TS7022 are real compile errors that tsc reports today, but CI did not
+#     promote that report into the merge button).
+#   - Gate 3 step 8 would have caught the runtime-only bugs (PR #286 PDF
+#     token race, PR #534 instrument-fetch crash) via the browser-click
+#     requirement.
+#
+# To make this block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass before merging -> select "typecheck".
+#
+# No agent-side escape hatch. If a hotfix legitimately can't typecheck
+# (e.g. a known-broken external type), bypass via GitHub branch-protection
+# admin override and document the bypass in the PR.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tsc --noEmit
+        run: npx tsc --noEmit
