@@ -42,14 +42,6 @@ export const studies = sqliteTable("studies", {
   teaUnit: text("tea_unit").default("%"),
   cliaAbsoluteFloor: real("clia_absolute_floor"),
   cliaAbsoluteUnit: text("clia_absolute_unit"),
-  // The CLIA TEa preset label the user picked at study-create time, e.g.
-  // "pCO2, Blood Gas Analyzer (±8% or ±5 mm Hg)". Surfaced on the report so a
-  // preset crosswire (e.g. picking pCO2 thinking it is Serum CO2) is visible
-  // at review time. NULL for legacy studies and for the "Use custom TEa"
-  // branch (those show "Lab-defined" instead). Frozen at write time so
-  // renaming the preset list later does not retroactively change historical
-  // reports.
-  cliaPresetLabel: text("clia_preset_label"),
   instrumentMeta: text("instrument_meta"),
   // Phase 1 parity (2026-05-20): optional inputs for the simple precision
   // study that mirror other evaluation tools's "User's Specifications" panel. Vendor

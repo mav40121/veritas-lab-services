@@ -5455,7 +5455,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         teaUnit: req.body.teaUnit,
         cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
         cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
-        cliaPresetLabel: req.body.cliaPresetLabel,
         instrumentMeta: req.body.instrumentMeta,
         // 2026-06-01: createdAt is required NOT NULL in the studies table.
         // Same fix as the lab-scoped POST handler below.
@@ -5644,7 +5643,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare(`
       UPDATE studies SET
         test_name = ?, instrument = ?, analyst = ?, date = ?, study_type = ?,
-        clia_allowable_error = ?, clia_preset_label = ?, data_points = ?, instruments = ?, status = ?
+        clia_allowable_error = ?, data_points = ?, instruments = ?, status = ?
       WHERE id = ?
     `).run(
       payload.testName, payload.instrument, payload.analyst, payload.date, payload.studyType,
@@ -5655,11 +5654,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // wrapping the already-string form in another set of quotes and
       // corrupting the column. Surfaced 2026-05-20 during the Pfizer rename.
       payload.cliaAllowableError,
-      // clia_preset_label tracks alongside clia_allowable_error so editing
-      // the TEa preset on an existing study updates both atomically. Falling
-      // back to ?? null so payload.cliaPresetLabel = undefined writes NULL
-      // (custom-TEa branch) rather than the string "undefined".
-      payload.cliaPresetLabel ?? null,
       typeof payload.dataPoints === 'string' ? payload.dataPoints : JSON.stringify(payload.dataPoints),
       typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
@@ -5717,9 +5711,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       teaUnit: row.tea_unit,
       cliaAbsoluteFloor: row.clia_absolute_floor,
       cliaAbsoluteUnit: row.clia_absolute_unit,
-      // Frozen at write time. NULL on legacy rows = render the old
-      // value-only TEa line (no parenthetical).
-      cliaPresetLabel: row.clia_preset_label,
       instrumentMeta: row.instrument_meta,
       // Phase 1 simple-precision parity fields (added 2026-05-20). Mapped
       // from snake_case DB columns to camelCase so the client + PDF
@@ -5784,7 +5775,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         teaUnit: req.body.teaUnit,
         cliaAbsoluteFloor: req.body.cliaAbsoluteFloor,
         cliaAbsoluteUnit: req.body.cliaAbsoluteUnit,
-        cliaPresetLabel: req.body.cliaPresetLabel,
         instrumentMeta: req.body.instrumentMeta,
         // Phase 1 simple-precision parity inputs (optional).
         vendorSd: req.body.vendorSd,
@@ -5880,7 +5870,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare(`
       UPDATE studies SET
         test_name = ?, instrument = ?, analyst = ?, date = ?, study_type = ?,
-        clia_allowable_error = ?, clia_preset_label = ?, data_points = ?, instruments = ?, status = ?
+        clia_allowable_error = ?, data_points = ?, instruments = ?, status = ?
       WHERE id = ?
     `).run(
       payload.testName, payload.instrument, payload.analyst, payload.date, payload.studyType,
@@ -5891,9 +5881,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // wrapping the already-string form in another set of quotes and
       // corrupting the column. Surfaced 2026-05-20 during the Pfizer rename.
       payload.cliaAllowableError,
-      // clia_preset_label tracks alongside clia_allowable_error so editing
-      // the TEa preset on an existing study updates both atomically.
-      payload.cliaPresetLabel ?? null,
       typeof payload.dataPoints === 'string' ? payload.dataPoints : JSON.stringify(payload.dataPoints),
       typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
