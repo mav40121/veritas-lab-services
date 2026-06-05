@@ -1770,6 +1770,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(seats);
   });
 
+  // Admin: update user_seats.permissions for an existing seat by id.
+  // Body: { secret, seatId, permissions }
+  // Used to repair seats created before the invite endpoint defaulted to
+  // edit_all for active seats (2026-06-05). Logs the previous and new
+  // permissions for audit. permissions accepts the full SeatPermissions
+  // shape ({mode: "edit_all"|"view_all"|"custom", overrides?}).
+  app.post("/api/admin/set-seat-permissions", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { seatId, permissions } = req.body || {};
+    if (!seatId || !permissions || typeof permissions !== "object") {
+      return res.status(400).json({ error: "seatId and permissions (object) required" });
+    }
+    const sqlite = (db as any).$client;
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, permissions FROM user_seats WHERE id = ?").get(Number(seatId)) as any;
+    if (!seat) return res.status(404).json({ error: "Seat not found" });
+    const before = seat.permissions;
+    const after = JSON.stringify(permissions);
+    sqlite.prepare("UPDATE user_seats SET permissions = ? WHERE id = ?").run(after, Number(seatId));
+    console.log(`[admin/set-seat-permissions] seatId=${seatId} email=${seat.seat_email} owner=${seat.owner_user_id} permissions: ${before} -> ${after}`);
+    res.json({ ok: true, seatId: Number(seatId), before, after: permissions });
+  });
+
   // Admin: create a pending seat invite on behalf of a lab owner without
   // going through the customer-facing /api/labs/:labId/members POST.
   // Mirrors that endpoint's logic (user_seats row with invite_token, plus a
@@ -4750,7 +4773,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const now = new Date().toISOString();
     const newStatus = seatUserId ? "active" : "pending";
-    const permJson = JSON.stringify(permissions || { mode: "view_all" });
+    // Default permissions are derived from seat_type when the caller does not
+    // supply them explicitly: an active (writer) seat gets edit_all so the
+    // intuitive "I invited a staff member, they can do their job" workflow
+    // works on day one. A view_only seat gets view_all. Previously every
+    // invite defaulted to view_all regardless of seat_type, which is why
+    // ria.salcido@scahealth.org (active staff seat) was unable to edit
+    // anything after accepting her invitation on 2026-06-05.
+    const defaultPermissions = seatType === "view_only"
+      ? { mode: "view_all" }
+      : { mode: "edit_all" };
+    const permJson = JSON.stringify(permissions || defaultPermissions);
     const inviteToken = crypto.randomUUID();
 
     try {
