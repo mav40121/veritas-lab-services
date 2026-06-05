@@ -409,33 +409,19 @@ export default function VeritaCheckPage() {
   // Reset PHI banner when study type changes (new study started)
   useEffect(() => { setPhiBannerDismissed(false); }, [studyType]);
 
-  // Reset the VeritaMap instruments load gate when the active lab changes so
-  // the next render refetches against the new lab's lab-scoped endpoint.
-  useEffect(() => {
-    setVeritaMapLoaded(false);
-    setVeritaMapInstruments([]);
-  }, [activeLabId]);
-
-  // Fetch VeritaMap instruments for instrument picker dropdown.
-  // Lab-scoped URL when activeLabId is known. The legacy user-scoped
-  // endpoint misses instruments under maps whose user_id does not match
-  // the requester (multi-lab bleed class, customer-reported 2026-06-04 on
-  // San Carlos after a redundant map was deleted).
+  // Fetch VeritaMap instruments for instrument picker dropdown
   useEffect(() => {
     if (!isLoggedIn || veritaMapLoaded) return;
     (async () => {
       try {
-        const url = activeLabId
-          ? `${API_BASE}/api/labs/${activeLabId}/veritacheck/lab-instruments`
-          : `${API_BASE}/api/veritacheck/lab-instruments`;
-        const res = await fetch(url, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE}/api/veritacheck/lab-instruments`, { headers: authHeaders() });
         if (!res.ok) { setVeritaMapLoaded(true); return; }
         const instruments: LabInstrument[] = await res.json();
         setVeritaMapInstruments(instruments);
       } catch { /* no VeritaMap data */ }
       setVeritaMapLoaded(true);
     })();
-  }, [isLoggedIn, veritaMapLoaded, activeLabId]);
+  }, [isLoggedIn, veritaMapLoaded]);
 
   // Group instruments by VeritaMap map for the picker dropdown.
   // Large hospitals can keep separate maps (Chemistry, Hematology, etc.); the
