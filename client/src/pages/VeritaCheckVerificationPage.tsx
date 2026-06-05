@@ -346,17 +346,30 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Load VeritaMap instruments for pre-population
+  // Load VeritaMap instruments for pre-population.
+  // Prefers the lab-scoped endpoint when activeLabId is set; falls back to
+  // the legacy user-scoped URL only when activeLabId hasn't resolved. The
+  // prior implementation called the legacy URL unconditionally, which
+  // produced a multi-lab bleed for seat users and for owners on
+  // transferred labs (same shape as PR #534's San Carlos VeritaCheck
+  // instruments bug). Query key includes activeLabId so React Query
+  // refetches when the user switches labs.
   const { data: mapInstruments = [] } = useQuery<MapInstrument[]>({
-    queryKey: ["/api/veritamap/instruments-all"],
+    queryKey: ["/api/veritamap/instruments-all", activeLabId ?? "no-lab"],
     queryFn: async () => {
-      // Get all maps then their instruments
-      const mapsR = await fetch(`${API_BASE}/api/veritamap/maps`, { headers: authHeaders() });
+      // Get all maps then their instruments, lab-scoped when possible.
+      const mapsUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritamap/maps`
+        : `${API_BASE}/api/veritamap/maps`;
+      const mapsR = await fetch(mapsUrl, { headers: authHeaders() });
       if (!mapsR.ok) return [];
       const maps = await mapsR.json();
       const all: MapInstrument[] = [];
       for (const m of maps) {
-        const instrR = await fetch(`${API_BASE}/api/veritamap/maps/${m.id}/instruments`, { headers: authHeaders() });
+        const instrUrl = activeLabId
+          ? `${API_BASE}/api/labs/${activeLabId}/veritamap/maps/${m.id}/instruments`
+          : `${API_BASE}/api/veritamap/maps/${m.id}/instruments`;
+        const instrR = await fetch(instrUrl, { headers: authHeaders() });
         if (instrR.ok) {
           const instrs = await instrR.json();
           all.push(...instrs);
