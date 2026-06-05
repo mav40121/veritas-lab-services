@@ -689,10 +689,16 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const cfrReferenceValue = isCanonical
     ? `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`
     : "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I.";
+  // Append the picked CLIA preset name to the criterion row so a preset
+  // crosswire (e.g. picking pCO2 8% / 5 mm Hg thinking it was Carbon Dioxide
+  // 20%) is visible at report-review time. Customer report 2026-06-04.
+  // NULL on legacy studies = render the value alone (the old way).
+  const presetLabel: string | null = (study as any).cliaPresetLabel ?? null;
+  const teaStrWithPreset = presetLabel ? `${teaStr} (${presetLabel})` : teaStr;
   const specs: any[][] = [
     ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26-A)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
     ["Test Name", study.testName],
-    [criterionRowLabel, teaStr],
+    [criterionRowLabel, teaStrWithPreset],
     [cfrReferenceLabel, cfrReferenceValue],
     ["Allowable Systematic Error", teaStr],
   ];
@@ -2273,7 +2279,7 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Levels</div><div class="stat-value">${levels.length}</div></div>
       <div class="stat-item"><div class="stat-label">Max % Recovery</div><div class="stat-value">${sf(maxRecovery, 2)}%</div></div>
       <div class="stat-item"><div class="stat-label">Min % Recovery</div><div class="stat-value">${sf(minRecovery, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -2568,7 +2574,7 @@ function buildLinearityHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Intercept</div><div class="stat-value">${sf(intercept, 3)}</div></div>
       <div class="stat-item"><div class="stat-label">r²</div><div class="stat-value">${sf(r2, 4)}</div></div>
       <div class="stat-item"><div class="stat-label">|Slope - 1|</div><div class="stat-value">${sf(slopeBiasPct, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">±${teaPctTxt}</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">±${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -2699,7 +2705,7 @@ function buildReportableRangeHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Claimed Reportable Range</div><div class="stat-value">${claimedRangeTxt}</div></div>
       <div class="stat-item"><div class="stat-label">Levels Tested</div><div class="stat-value">${levels.length}</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}</div></div>
+      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 

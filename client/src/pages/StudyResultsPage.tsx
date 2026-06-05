@@ -597,6 +597,12 @@ function formatTeaDisplay(study: Study): string {
 
 function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
   const teaDisplay = formatTeaDisplay(study);
+  // Append the picked CLIA preset name to the criterion row so a preset
+  // crosswire (e.g. picking pCO2 8% / 5 mm Hg thinking it was Carbon Dioxide
+  // 20%) is visible at report-review time. NULL on legacy studies = render
+  // the value alone (the old way). Customer report 2026-06-04.
+  const presetLabel = (study as any).cliaPresetLabel ?? null;
+  const teaDisplayWithPreset = presetLabel ? `${teaDisplay} (${presetLabel})` : teaDisplay;
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -606,7 +612,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
             ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26-A)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"],
-            [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplay],
+            [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplayWithPreset],
             ["Analyst", study.analyst],
             ["Date", study.date],
             ["Instruments / Methods", instrumentNames.join(", ")],
@@ -1663,7 +1669,7 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}</div></div>
+            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
             <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
             <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
@@ -1924,7 +1930,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
             <div><div className="text-muted-foreground">Intercept</div><div className="font-mono">{fmt(intercept, 3)}</div></div>
             <div><div className="text-muted-foreground">r²</div><div className="font-mono">{fmt(r2, 4)}</div></div>
             <div><div className="text-muted-foreground">|Slope - 1|</div><div className="font-mono">{fmtPct(slopeBiasPct)}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}</div></div>
+            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
           </div>
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
@@ -2021,7 +2027,7 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
             <div><div className="text-muted-foreground">Claimed Range</div><div className="font-mono">{claimedTxt}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}</div></div>
+            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
           </div>
           {results.summary && (
