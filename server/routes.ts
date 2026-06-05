@@ -13491,16 +13491,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // wave. If the client doesn't supply them, derive sensible defaults so
     // existing-flow callers don't have to think about them: end = assessment
     // date, start = end minus 365 days.
-    const { reviewPeriodStart, reviewPeriodEnd } = req.body || {};
+    // folder added 2026-06-05 PR A (customer-blockers wave item #1): free-text
+    // organization label; null/empty = "No folder" group in the UI.
+    const { reviewPeriodStart, reviewPeriodEnd, folder } = req.body || {};
     const aDate = assessmentDate || now.split("T")[0];
     const defEnd = aDate;
     const defStart = new Date(new Date(aDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const finalReviewStart = reviewPeriodStart || defStart;
     const finalReviewEnd = reviewPeriodEnd || defEnd;
+    const folderClean = typeof folder === "string" && folder.trim().length > 0 ? folder.trim() : null;
     const result = (db as any).$client.prepare(
-      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, now);
+      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, folder, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
     const assessmentId = Number(result.lastInsertRowid);
 
     // Insert assessment items (with new element-specific columns)
@@ -13578,7 +13581,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (assessment.locked === 1) {
       return res.status(409).json({ error: "Assessment is locked. Unlock first to edit.", locked: true });
     }
-    const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, items } = req.body;
+    const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
     const sets: string[] = [];
     const vals: any[] = [];
     if (status !== undefined) { sets.push("status = ?"); vals.push(status); }
@@ -13590,6 +13593,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (supervisorAcknowledged !== undefined) { sets.push("supervisor_acknowledged = ?"); vals.push(supervisorAcknowledged ? 1 : 0); }
     if (reviewPeriodStart !== undefined) { sets.push("review_period_start = ?"); vals.push(reviewPeriodStart); }
     if (reviewPeriodEnd !== undefined) { sets.push("review_period_end = ?"); vals.push(reviewPeriodEnd); }
+    // folder added 2026-06-05 PR A. Pass "" to clear (sets folder NULL), or
+    // omit to leave unchanged.
+    if (folder !== undefined) {
+      const folderClean = typeof folder === "string" && folder.trim().length > 0 ? folder.trim() : null;
+      sets.push("folder = ?"); vals.push(folderClean);
+    }
     if (sets.length) {
       vals.push(req.params.id);
       (db as any).$client.prepare(`UPDATE competency_assessments SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
@@ -13712,7 +13721,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // and confirm employee is in the same lab.
   app.post("/api/labs/:labId/competency/assessments", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, items } = req.body;
+    // folder added 2026-06-05 PR A (customer-blockers wave item #1): see legacy
+    // POST above for rationale; identical behavior here.
+    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
     const labId = req.scope.labId;
     const program = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
@@ -13728,10 +13739,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const defStart = new Date(new Date(aDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const finalReviewStart = reviewPeriodStart || defStart;
     const finalReviewEnd = reviewPeriodEnd || defEnd;
+    const folderClean = typeof folder === "string" && folder.trim().length > 0 ? folder.trim() : null;
     const result = (db as any).$client.prepare(
-      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, now);
+      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, folder, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
     const assessmentId = Number(result.lastInsertRowid);
     if (Array.isArray(items)) {
       const stmt = (db as any).$client.prepare(
@@ -13786,6 +13798,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       autoCompleteCompetencyScanItems(userIdForScan, competencyType || "technical");
     }
     res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
+  });
+
+  // GET /api/labs/:labId/competency/folders — distinct folder values for the
+  // lab, for the autocomplete datalist in the New Assessment dialog.
+  // Added 2026-06-05 PR A (customer-blockers wave item #1). Sorted by usage
+  // count desc, then alphabetical, so the lab's most-used folders surface first.
+  app.get("/api/labs/:labId/competency/folders", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const rows = (db as any).$client.prepare(
+      `SELECT a.folder AS folder, COUNT(*) AS n
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE p.lab_id = ? AND a.folder IS NOT NULL AND a.folder != ''
+       GROUP BY a.folder
+       ORDER BY n DESC, folder ASC`
+    ).all(labId) as Array<{ folder: string; n: number }>;
+    res.json(rows.map(r => ({ folder: r.folder, count: r.n })));
   });
 
   app.delete("/api/labs/:labId/competency/assessments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
