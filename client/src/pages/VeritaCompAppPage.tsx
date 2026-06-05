@@ -1925,6 +1925,24 @@ function NewAssessmentDialog({
   // Get hire date when employee changes
   const currentEmployee = activeEmployees.find(e => e.id === employeeId);
 
+  // PR D: surface the employee's assigned VeritaMap instruments so the
+  // supervisor authoring the competency sees the context without having to
+  // open VeritaStaff in another tab. The actual method-group autoload from
+  // this assignment is a follow-up PR (separate mock-first design).
+  const employeeInstrumentsUrl = (activeLabId && employeeId)
+    ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/instruments`
+    : null;
+  const { data: assignedInstruments } = useQuery<Array<{ id: number; instrument_name: string; nickname: string | null; serial_number: string | null; category: string | null; map_name: string }>>({
+    queryKey: [employeeInstrumentsUrl ?? "no-asmt-employee-instruments"],
+    queryFn: async () => {
+      if (!employeeInstrumentsUrl) return [];
+      const r = await fetch(`${API_BASE}${employeeInstrumentsUrl}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!employeeInstrumentsUrl,
+  });
+
   // Initialize nontechnical items
   useEffect(() => {
     if (program.type === "nontechnical" && program.checklistItems) {
@@ -2198,6 +2216,28 @@ function NewAssessmentDialog({
                 <Input type="date" value={currentEmployee?.hire_date || ""} readOnly className="bg-muted/50 text-xs" />
               </div>
             </div>
+            {/*
+              * PR D info row: assigned instruments from VeritaStaff. Capped
+              * inline render at 6 with "+N more" to keep the header compact
+              * even for high-volume techs.
+              */}
+            {(assignedInstruments?.length ?? 0) > 0 && (
+              <div className="border border-border/60 rounded-md px-3 py-2 bg-muted/30">
+                <div className="text-xs font-medium text-muted-foreground mb-1">Assigned instruments</div>
+                <div className="flex flex-wrap gap-1">
+                  {assignedInstruments!.slice(0, 6).map(i => (
+                    <Badge key={i.id} variant="outline" className="text-[10px]">
+                      {i.instrument_name}{i.nickname ? ` (${i.nickname})` : ""}
+                    </Badge>
+                  ))}
+                  {assignedInstruments!.length > 6 && (
+                    <Badge variant="outline" className="text-[10px]">
+                      +{assignedInstruments!.length - 6} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium block mb-1">Assessment Type</label>

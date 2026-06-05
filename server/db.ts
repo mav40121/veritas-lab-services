@@ -1262,6 +1262,34 @@ for (const [col, colType] of newStaffDocCols) {
   }
 }
 
+// PR D of the VeritaComp customer-blockers wave (2026-06-05, item #8):
+// many-to-many join between staff_employees and veritamap_instruments. Lets
+// a lab director assign which instruments an employee actually runs so the
+// supervisor sees that context when authoring a competency. The autoload of
+// the assessment dialog's method-group tabs from this assignment is a
+// follow-up PR (separate mock-first design).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staff_employee_instruments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    instrument_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by_user_id INTEGER,
+    UNIQUE (employee_id, instrument_id),
+    FOREIGN KEY (employee_id) REFERENCES staff_employees(id),
+    FOREIGN KEY (instrument_id) REFERENCES veritamap_instruments(id)
+  );
+`);
+const empInstrCols = (sqlite.prepare("PRAGMA table_info(staff_employee_instruments)").all() as { name: string }[]).map(c => c.name);
+const newEmpInstrCols: [string, string][] = [
+  ["created_by_user_id", "INTEGER"],
+];
+for (const [col, colType] of newEmpInstrCols) {
+  if (!empInstrCols.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE staff_employee_instruments ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
 // Create competency_quizzes table
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS competency_quizzes (

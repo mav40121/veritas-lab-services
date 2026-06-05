@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
+import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Lab {
@@ -1074,6 +1075,9 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
 
         {/* PR C: Credentials / Documents card. Linked URLs only; files stay in the lab's own storage. */}
         <EmployeeDocumentsCard employeeId={employee.id} />
+
+        {/* PR D: Assigned Instruments card. Many-to-many to VeritaMap instruments. */}
+        <AssignedInstrumentsCard employeeId={employee.id} />
       </div>
 
       {showCompetency && (
@@ -1214,6 +1218,97 @@ function EmployeeDocumentsCard({ employeeId }: { employeeId: number }) {
           title="Link Credential / Document"
           docTypes={STAFF_DOC_TYPES}
           onSubmit={createDoc}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+// AssignedInstrumentsCard
+//
+// PR D of the VeritaComp customer-blockers wave (2026-06-05, item #8).
+// Renders the employee's assigned VeritaMap instruments + an Edit button
+// that opens the multi-select picker.
+function AssignedInstrumentsCard({ employeeId }: { employeeId: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const readOnly = useIsReadOnly('veritastaff');
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const assignedUrl = activeLabId ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/instruments` : null;
+  const availableUrl = activeLabId ? `/api/labs/${activeLabId}/veritamap/instruments-flat` : null;
+
+  const { data: assigned } = useQuery<LabInstrument[]>({
+    queryKey: [assignedUrl ?? "no-assigned-instruments"],
+    queryFn: async () => {
+      if (!assignedUrl) return [];
+      const r = await fetch(`${API_BASE}${assignedUrl}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!assignedUrl,
+  });
+
+  const { data: available } = useQuery<LabInstrument[]>({
+    queryKey: [availableUrl ?? "no-available-instruments"],
+    queryFn: async () => {
+      if (!availableUrl) return [];
+      const r = await fetch(`${API_BASE}${availableUrl}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: pickerOpen && !!availableUrl,
+  });
+
+  async function syncAssignments(instrumentIds: number[]) {
+    if (!activeLabId) throw new Error("Active lab required");
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees/${employeeId}/instruments`, {
+      method: "PUT",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ instrumentIds }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    toast({ title: "Instrument assignments saved" });
+    queryClient.invalidateQueries({ queryKey: [assignedUrl] });
+  }
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardContent className="p-5">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet size={16} className="text-primary" />
+            <h3 className="font-semibold">Assigned Instruments</h3>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)} disabled={readOnly}>
+            <Edit2 size={14} className="mr-1.5" /> Edit
+          </Button>
+        </div>
+        {(assigned?.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No instruments assigned yet. Pick the instruments this employee actually runs so the New Assessment dialog shows that context to the supervisor.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {assigned!.map(i => (
+              <Badge key={i.id} variant="outline" className="text-xs">
+                {i.instrument_name}
+                {i.nickname && <span className="ml-1 text-muted-foreground">({i.nickname})</span>}
+                {i.category && <span className="ml-1 text-muted-foreground">- {i.category}</span>}
+              </Badge>
+            ))}
+          </div>
+        )}
+        <EmployeeInstrumentsPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          available={available ?? []}
+          initiallySelected={(assigned ?? []).map(i => i.id)}
+          onSubmit={syncAssignments}
         />
       </CardContent>
     </Card>
