@@ -1184,6 +1184,11 @@ const newCompAsmtCols: [string, string][] = [
   ["locked", "INTEGER NOT NULL DEFAULT 0"],
   ["review_period_start", "TEXT"],
   ["review_period_end", "TEXT"],
+  // PR A of the VeritaComp customer-blockers wave (2026-06-05, item #1):
+  // free-text folder for organizing assessments. Null/empty = "No folder".
+  // No DB constraint on values; the UI does autocomplete via a distinct-
+  // values query so a lab settles into ~5-10 stable folder names organically.
+  ["folder", "TEXT"],
 ];
 for (const [col, colType] of newCompAsmtCols) {
   if (!compAsmtCols.includes(col)) {

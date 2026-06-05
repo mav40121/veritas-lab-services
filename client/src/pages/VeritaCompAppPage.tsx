@@ -381,8 +381,16 @@ function WipBanner() {
 function ProgramListView() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const readOnly = useIsReadOnly('veritacomp');
   const [wizardOpen, setWizardOpen] = useState(false);
+  // PR A (customer-blockers wave 2026-06-05, item #1): top-level "New
+  // Assessment" path. Opens a small picker that lets the lab director go
+  // straight from /veritacomp-app to a New Assessment dialog without
+  // first clicking into a program. If only one program exists, the picker
+  // skips itself and navigates directly.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickedProgramId, setPickedProgramId] = useState<number | null>(null);
 
   // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
   // Inner endpoints (programs/:id DELETE, assessments, quizzes) stay on
@@ -424,10 +432,38 @@ function ProgramListView() {
             CLIA Competency Assessment Management
           </p>
         </div>
-        <Button className="shrink-0" onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          New Program
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/*
+            * PR A (2026-06-05, customer-blockers wave item #1): top-level
+            * "New Assessment". Skips the picker when only one program exists.
+            * Friendly toast if zero programs (the lab director needs to
+            * make a program first).
+            */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              const list = programs ?? [];
+              if (list.length === 0) {
+                toast({ title: "Create a program first", description: "Add a competency program before recording assessments." });
+                return;
+              }
+              if (list.length === 1) {
+                navigate(labRoute(`/veritacomp-app/${list[0].id}?newAssessment=1`));
+                return;
+              }
+              setPickerOpen(true);
+            }}
+            disabled={readOnly}
+            title={readOnly ? "Resubscribe to add new records" : undefined}
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Assessment
+          </Button>
+          <Button onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Program
+          </Button>
+        </div>
       </div>
 
       {isLoading && (
@@ -520,6 +556,47 @@ function ProgramListView() {
           }}
         />
       )}
+
+      {/*
+        * PR A (2026-06-05): tiny program-picker for the top-level "New
+        * Assessment" button when the lab has 2+ programs. Single-program
+        * labs bypass this entirely (the button navigates directly).
+        */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Assessment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <p className="text-sm text-muted-foreground">Which program is this assessment for?</p>
+            <Select value={pickedProgramId ? String(pickedProgramId) : ""} onValueChange={v => setPickedProgramId(parseInt(v))}>
+              <SelectTrigger><SelectValue placeholder="Select a program..." /></SelectTrigger>
+              <SelectContent>
+                {(programs ?? []).map(p => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.name} <span className="text-muted-foreground text-xs ml-1">{p.department}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setPickerOpen(false); setPickedProgramId(null); }}>Cancel</Button>
+              <Button
+                disabled={!pickedProgramId}
+                onClick={() => {
+                  if (!pickedProgramId) return;
+                  const id = pickedProgramId;
+                  setPickerOpen(false);
+                  setPickedProgramId(null);
+                  navigate(labRoute(`/veritacomp-app/${id}?newAssessment=1`));
+                }}
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -874,8 +951,14 @@ function ProgramDetailView({ programId }: { programId: number }) {
   const [, navigate] = useLocation();
   const activeLabId = useActiveLabId();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">("overview");
-  const [newAssessmentOpen, setNewAssessmentOpen] = useState(false);
+  // PR A (customer-blockers wave 2026-06-05, item #1): if the URL carries
+  // ?newAssessment=1 (the top-level "New Assessment" button on the main
+  // /veritacomp-app page navigates here with that param), default the
+  // tab to Assessments and auto-open the New Assessment dialog so the
+  // user doesn't have to click through.
+  const initialNewAssessment = typeof window !== "undefined" && window.location.search.includes("newAssessment=1");
+  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">(initialNewAssessment ? "assessments" : "overview");
+  const [newAssessmentOpen, setNewAssessmentOpen] = useState(initialNewAssessment);
 
   // Lab-scoped program-detail when activeLabId is set. The legacy endpoint
   // pulls embedded employees by user_id which leaks across labs for
@@ -1174,15 +1257,34 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {assessments.map(a => {
-        const passColor = a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
-          a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
-          "text-amber-600 bg-amber-500/10 border-amber-500/20";
-        const passLabel = a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
-        return (
-          <Card key={a.id} className="hover:border-primary/30 transition-colors">
+  // PR A (customer-blockers wave 2026-06-05, item #1): group assessments by
+  // folder. "No folder" group is pinned to the top so a lab that hasn't
+  // adopted folders yet sees the same flat list they had before.
+  const FOLDER_NULL_LABEL = "No folder";
+  const groupedAssessments = (() => {
+    const map = new Map<string, typeof assessments>();
+    for (const a of assessments) {
+      const key = ((a as any).folder || "").trim() || FOLDER_NULL_LABEL;
+      const arr = map.get(key) ?? [];
+      arr.push(a);
+      map.set(key, arr);
+    }
+    const labels = Array.from(map.keys());
+    labels.sort((x, y) => {
+      if (x === FOLDER_NULL_LABEL) return -1;
+      if (y === FOLDER_NULL_LABEL) return 1;
+      return x.localeCompare(y);
+    });
+    return labels.map(label => ({ label, items: map.get(label)! }));
+  })();
+
+  const renderAssessmentCard = (a: typeof assessments[number]) => {
+    const passColor = a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
+      a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
+      "text-amber-600 bg-amber-500/10 border-amber-500/20";
+    const passLabel = a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
+    return (
+      <Card key={a.id} className="hover:border-primary/30 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
@@ -1277,7 +1379,25 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
             </CardContent>
           </Card>
         );
-      })}
+      };
+
+  return (
+    <div className="space-y-5">
+      {groupedAssessments.map(g => (
+        <div key={g.label}>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {g.label}
+            </h3>
+            <span className="text-xs text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">{g.items.length} assessment{g.items.length === 1 ? "" : "s"}</span>
+            <div className="flex-1 border-t border-border/60 ml-2" />
+          </div>
+          <div className="space-y-3">
+            {g.items.map(renderAssessmentCard)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1575,6 +1695,22 @@ function NewAssessmentDialog({
     d.setDate(d.getDate() - 365);
     return d.toISOString().split("T")[0];
   });
+  // Folder added 2026-06-05 PR A (customer-blockers wave item #1): free-text
+  // grouping label so labs can organize a growing list of assessments by
+  // their own ad-hoc structure (department, year, test system, whatever
+  // they want). The autocomplete <datalist> below pulls the lab's already-
+  // used folders so a lab settles into ~5-10 stable values organically.
+  const [folder, setFolder] = useState("");
+  const { data: knownFolders } = useQuery<Array<{ folder: string; count: number }>>({
+    queryKey: [activeLabId ? `/api/labs/${activeLabId}/competency/folders` : "no-folders"],
+    queryFn: async () => {
+      if (!activeLabId) return [];
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/folders`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!activeLabId,
+  });
   const [evaluatorName, setEvaluatorName] = useState("");
   const [evaluatorTitle, setEvaluatorTitle] = useState("");
   const [evaluatorTitleOther, setEvaluatorTitleOther] = useState("");
@@ -1851,6 +1987,7 @@ function NewAssessmentDialog({
           supervisorAcknowledged: !!(supPrintName && supInitials),
           reviewPeriodStart,
           reviewPeriodEnd,
+          folder: folder.trim() || null,
           items,
         }),
       });
@@ -1944,6 +2081,26 @@ function NewAssessmentDialog({
                 <label className="text-xs font-medium block mb-1">Review Period End</label>
                 <Input type="date" value={reviewPeriodEnd} onChange={e => setReviewPeriodEnd(e.target.value)} />
               </div>
+            </div>
+            {/*
+              * Folder (PR A of the customer-blockers wave, 2026-06-05).
+              * Free-text grouping label. Autocomplete from the lab's already-
+              * used folders. Optional: blank/null leaves the assessment in
+              * the "No folder" group in the list view.
+              */}
+            <div>
+              <label className="text-xs font-medium block mb-1">Folder <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <Input
+                list="comp-folder-suggestions"
+                placeholder="e.g. Chemistry, Hematology, 2026 Annual"
+                value={folder}
+                onChange={e => setFolder(e.target.value)}
+              />
+              {(knownFolders?.length ?? 0) > 0 && (
+                <datalist id="comp-folder-suggestions">
+                  {knownFolders!.map(f => <option key={f.folder} value={f.folder} />)}
+                </datalist>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
