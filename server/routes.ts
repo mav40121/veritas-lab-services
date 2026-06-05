@@ -4836,7 +4836,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "VeritaAssure™ <noreply@veritaslabservices.com>",
+            from: "VeritaAssure™ <info@veritaslabservices.com>",
             to: normalizedEmail,
             subject: `You've been invited to join ${labName} on VeritaAssure™`,
             html: `
@@ -6176,7 +6176,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "VeritaAssure™ <noreply@veritaslabservices.com>",
+            from: "VeritaAssure™ <info@veritaslabservices.com>",
             to: "info@veritaslabservices.com",
             reply_to: String(contactEmail).toLowerCase().trim(),
             subject: `New Founding Lab application: ${String(labName).trim()}`,
@@ -9746,7 +9746,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     if (resend) {
       await resend.emails.send({
-        from: "VeritaCheck\u2122 <noreply@veritaslabservices.com>",
+        from: "VeritaCheck\u2122 <info@veritaslabservices.com>",
         to: user.email,
         subject: "Reset your VeritaCheck\u2122 password",
         html: `
@@ -15442,7 +15442,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "VeritaAssure\u2122 <noreply@veritaslabservices.com>",
+          from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
           to: email.toLowerCase(),
           subject: `You've been invited to join ${labName} on VeritaAssure\u2122`,
           html: `
