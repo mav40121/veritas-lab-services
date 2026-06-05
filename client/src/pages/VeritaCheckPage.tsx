@@ -409,19 +409,39 @@ export default function VeritaCheckPage() {
   // Reset PHI banner when study type changes (new study started)
   useEffect(() => { setPhiBannerDismissed(false); }, [studyType]);
 
-  // Fetch VeritaMap instruments for instrument picker dropdown
+  // Reset the VeritaMap instruments load gate when the active lab changes so
+  // the next render refetches against the new lab's lab-scoped endpoint.
+  // Uses `editingLabId` (declared at the top of the function at line 231),
+  // NOT the `activeLabId` const declared ~1,000 lines below; both call
+  // useActiveLabId() and return the same value, but referencing the
+  // later-declared binding here puts us in the TDZ on first render and
+  // throws ReferenceError on EVERY mount of this page. PR #534 made that
+  // mistake and was reverted in PR #535.
+  useEffect(() => {
+    setVeritaMapLoaded(false);
+    setVeritaMapInstruments([]);
+  }, [editingLabId]);
+
+  // Fetch VeritaMap instruments for instrument picker dropdown.
+  // Lab-scoped URL when editingLabId is known. The legacy user-scoped
+  // endpoint misses instruments under maps whose user_id does not match
+  // the requester (multi-lab bleed class, customer-reported 2026-06-04 on
+  // San Carlos after a redundant map was deleted).
   useEffect(() => {
     if (!isLoggedIn || veritaMapLoaded) return;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/veritacheck/lab-instruments`, { headers: authHeaders() });
+        const url = editingLabId
+          ? `${API_BASE}/api/labs/${editingLabId}/veritacheck/lab-instruments`
+          : `${API_BASE}/api/veritacheck/lab-instruments`;
+        const res = await fetch(url, { headers: authHeaders() });
         if (!res.ok) { setVeritaMapLoaded(true); return; }
         const instruments: LabInstrument[] = await res.json();
         setVeritaMapInstruments(instruments);
       } catch { /* no VeritaMap data */ }
       setVeritaMapLoaded(true);
     })();
-  }, [isLoggedIn, veritaMapLoaded]);
+  }, [isLoggedIn, veritaMapLoaded, editingLabId]);
 
   // Group instruments by VeritaMap map for the picker dropdown.
   // Large hospitals can keep separate maps (Chemistry, Hematology, etc.); the
