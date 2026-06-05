@@ -4540,6 +4540,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, scope: req.scope });
   });
 
+  // resolveLegacyLabId — multi-lab-bleed root-cause helper added 2026-06-05.
+  //
+  // Background: across many legacy unscoped endpoints (no /labs/:labId/ in the
+  // URL), the data filter was `WHERE m.user_id = ?` over veritamap_* tables.
+  // That works for the original single-tenant model where one user owns one
+  // lab. For multi-lab users — owners with multiple CLIAs, admins joined into
+  // another lab, seat users on a different owner's lab — it silently hides any
+  // map whose `user_id` does not match the requester. Concrete failure: PR #534
+  // (San Carlos VeritaCheck instruments missing — Bobbi), PR #545 (VeritaCheck
+  // Verification multi-lab bleed), PR #548 (route-level wrap), and Michael's
+  // 2026-06-05 screenshot showing only 4 of 24 San Carlos instruments because
+  // the page momentarily hit the legacy endpoint before the redirect fired.
+  //
+  // This helper resolves the legacy request to a single lab_id by consulting
+  // `users.default_lab_id` (set by the LabSwitcher on every switch). If the
+  // user has not picked a default lab yet, it falls back to their oldest
+  // active lab_members row. Returns null only for users with no lab membership
+  // (onboarding case).
+  //
+  // Each legacy read endpoint that drives customer-visible map/instrument
+  // displays calls this helper and runs the lab-scoped query the lab-scoped
+  // variant already uses (`WHERE lab_id = ?`). The endpoint returns the same
+  // shape as before so the client does not need to change. The semantics
+  // narrow from "everything you created anywhere" to "everything in your
+  // active lab" — matching what LegacyWorkspaceRedirect would route to.
+  function resolveLegacyLabId(req: any): number | null {
+    const userId = req.user?.userId;
+    if (!userId) return null;
+    const sqlite = (db as any).$client;
+    const u = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(userId) as any;
+    if (u?.default_lab_id) return Number(u.default_lab_id);
+    const m = sqlite.prepare(
+      "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY id ASC LIMIT 1"
+    ).get(userId) as any;
+    return m?.lab_id ? Number(m.lab_id) : null;
+  }
+
   // ── LAB MEMBER MANAGEMENT (Phase 1: admin role + transfer ownership) ─────
   // Membership roles: 'owner' (one per lab), 'admin' (can invite/remove),
   // 'staff' (operational read/write per existing permissions_json). Existing
@@ -6506,10 +6543,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Multi-lab-bleed root-cause fix: lab-scope the legacy list endpoint.
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const maps = (db as any).$client.prepare(
-      "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
-    ).all(dataUserId);
+      "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId);
     const result = maps.map((m: any) => {
       const tests = (db as any).$client.prepare(
         "SELECT active, last_cal_ver, last_method_comp, complexity FROM veritamap_tests WHERE map_id = ?"
@@ -6603,10 +6642,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/veritamap/labwide", authMiddleware, (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Multi-lab-bleed root-cause fix: lab-scope the legacy labwide endpoint.
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return buildLabwideResponse([], res);
     const maps = (db as any).$client.prepare(
-      "SELECT id, name, updated_at FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
-    ).all(dataUserId) as Array<{ id: number; name: string; updated_at: string }>;
+      "SELECT id, name, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId) as Array<{ id: number; name: string; updated_at: string }>;
     return buildLabwideResponse(maps, res);
   });
 
@@ -7134,15 +7175,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // duplicate models across maps (large hospitals may keep separate maps for
   // Chemistry, Hematology, etc.).
   app.get("/api/veritacheck/lab-instruments", authMiddleware, (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Multi-lab-bleed root-cause fix (2026-06-05): resolve to the user's
+    // active lab and run the lab-scoped query. See resolveLegacyLabId comment
+    // above for the full chain of prior bandages this addresses.
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const instruments = (db as any).$client.prepare(
       `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.role, i.category,
               i.map_id, m.name AS map_name
        FROM veritamap_instruments i
        JOIN veritamap_maps m ON m.id = i.map_id
-       WHERE m.user_id = ?
+       WHERE m.lab_id = ?
        ORDER BY m.name, i.instrument_name, i.id`
-    ).all(dataUserId);
+    ).all(labId);
     res.json(instruments);
   });
 
@@ -11801,13 +11846,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITAPT v2 - Coverage Gap Analyzer ──────────────────────────────────
 
   // Helper: compute PT coverage for a given userId
-  function computePTCoverage(userId: number) {
+  function computePTCoverage(userId: number, labId?: number | null) {
     // cliaAnalytes and ptCategoryLinks imported at top of file
+    // Multi-lab-bleed root-cause fix (partial): the VeritaMap lookup below now
+    // prefers labId when callers pass it (lab-scoped /api/labs/:labId/pt/...
+    // route) or falls back to user_id for the legacy callers that have not been
+    // converted yet. The downstream pt_enrollments_v2 and aa_records reads
+    // below still key on user_id; those bleed risks belong to a separate
+    // root-cause sweep (see PR description follow-up notes).
 
     // Get the lab's test menu (unique analytes from VeritaMap)
-    const mapRow = (db as any).$client.prepare(
-      "SELECT id FROM veritamap_maps WHERE user_id = ? LIMIT 1"
-    ).get(userId) as any;
+    const mapRow = labId
+      ? (db as any).$client.prepare(
+          "SELECT id FROM veritamap_maps WHERE lab_id = ? LIMIT 1"
+        ).get(labId) as any
+      : (db as any).$client.prepare(
+          "SELECT id FROM veritamap_maps WHERE user_id = ? LIMIT 1"
+        ).get(userId) as any;
 
     if (!mapRow) return { coverage: [], summary: { totalAnalytes: 0, regulatedGaps: 0, regulatedCovered: 0, recommendedGaps: 0, recommendedCovered: 0, aaaCovered: 0, waived: 0 } };
 
@@ -12078,7 +12133,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/pt/coverage", authMiddleware, (req: any, res) => {
     try {
       const dataUserId = req.ownerUserId ?? req.user?.userId;
-      const result = computePTCoverage(dataUserId);
+      // Multi-lab-bleed root-cause fix: pass labId so the VeritaMap lookup
+      // inside computePTCoverage uses lab_id instead of user_id.
+      const labId = resolveLegacyLabId(req);
+      const result = computePTCoverage(dataUserId, labId);
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: "Failed to compute PT coverage", detail: err.message });
@@ -12246,8 +12304,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── MULTI-LAB Tier 2 — Phase 3.6b: lab-scoped VeritaPT entry endpoints ─────
   app.get("/api/labs/:labId/pt/coverage", authMiddleware, labScopeMiddleware, (req: any, res) => {
     try {
+      // Multi-lab-bleed root-cause fix: pass req.scope.labId so the VeritaMap
+      // lookup inside computePTCoverage filters by lab, not by the lab owner's
+      // user_id. The ownerUserId is still passed for the pt_enrollments/aa
+      // queries (separate follow-up).
       const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
-      res.json(computePTCoverage(ownerRow?.owner_user_id));
+      res.json(computePTCoverage(ownerRow?.owner_user_id, req.scope.labId));
     } catch (err: any) {
       res.status(500).json({ error: "Failed to compute PT coverage", detail: err.message });
     }
@@ -14374,8 +14436,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Get VeritaMap department suggestions
   app.get("/api/staff/veritamap-suggestions", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const maps = (db as any).$client.prepare("SELECT id, name FROM veritamap_maps WHERE user_id = ?").all(dataUserId) as any[];
+    // Multi-lab-bleed root-cause fix: lab-scope the legacy suggestions reader.
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
+    const maps = (db as any).$client.prepare("SELECT id, name FROM veritamap_maps WHERE lab_id = ?").all(labId) as any[];
     const suggestions: { department: string; specialties: { number: number; name: string }[] }[] = [];
     const seenDepts = new Set<string>();
 
@@ -16990,11 +17054,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/veritapt/recommendations", authMiddleware, (req: any, res) => {
     try {
       const userId = req.ownerUserId ?? req.user.userId;
+      // Multi-lab-bleed root-cause fix: lab-scope the legacy recommendations
+      // map lookup. The downstream `preferred_pt_vendor` read still keys on
+      // userId, which is correct (preference is per-user, not per-lab).
+      const labId = resolveLegacyLabId(req);
 
-      // 1. Get the user's most recent VeritaMap
-      const map = (db as any).$client.prepare(
-        "SELECT id, name FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
-      ).get(userId) as any;
+      // 1. Get the lab's most recent VeritaMap
+      const map = labId ? (db as any).$client.prepare(
+        "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC LIMIT 1"
+      ).get(labId) as any : null;
 
       // Fetch preferred PT vendor
       const prefRow = (db as any).$client.prepare("SELECT preferred_pt_vendor FROM users WHERE id = ?").get(userId) as any;
