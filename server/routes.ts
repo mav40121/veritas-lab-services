@@ -13425,10 +13425,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const emp = userCanAccessLabRow('competency_employees', employeeId, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const now = new Date().toISOString();
+    // reviewPeriodStart / reviewPeriodEnd added 2026-06-05 customer-blockers
+    // wave. If the client doesn't supply them, derive sensible defaults so
+    // existing-flow callers don't have to think about them: end = assessment
+    // date, start = end minus 365 days.
+    const { reviewPeriodStart, reviewPeriodEnd } = req.body || {};
+    const aDate = assessmentDate || now.split("T")[0];
+    const defEnd = aDate;
+    const defStart = new Date(new Date(aDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const finalReviewStart = reviewPeriodStart || defStart;
+    const finalReviewEnd = reviewPeriodEnd || defEnd;
     const result = (db as any).$client.prepare(
-      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, employeeId, assessmentType || "initial", assessmentDate || now.split("T")[0], evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, now);
+      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, now);
     const assessmentId = Number(result.lastInsertRowid);
 
     // Insert assessment items (with new element-specific columns)
@@ -13495,12 +13505,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
-      `SELECT a.id, p.user_id FROM competency_assessments a
+      `SELECT a.id, a.locked, p.user_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
-    ).get(req.params.id);
+    ).get(req.params.id) as any;
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
-    const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
+    // Locked assessments cannot be edited. The customer must POST to
+    // /:id/unlock first (owner / admin only). This is the enforcement
+    // behind the "Sign & Complete" workflow that closes out the cycle.
+    if (assessment.locked === 1) {
+      return res.status(409).json({ error: "Assessment is locked. Unlock first to edit.", locked: true });
+    }
+    const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, items } = req.body;
     const sets: string[] = [];
     const vals: any[] = [];
     if (status !== undefined) { sets.push("status = ?"); vals.push(status); }
@@ -13510,6 +13526,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (remediationPlan !== undefined) { sets.push("remediation_plan = ?"); vals.push(remediationPlan); }
     if (employeeAcknowledged !== undefined) { sets.push("employee_acknowledged = ?"); vals.push(employeeAcknowledged ? 1 : 0); }
     if (supervisorAcknowledged !== undefined) { sets.push("supervisor_acknowledged = ?"); vals.push(supervisorAcknowledged ? 1 : 0); }
+    if (reviewPeriodStart !== undefined) { sets.push("review_period_start = ?"); vals.push(reviewPeriodStart); }
+    if (reviewPeriodEnd !== undefined) { sets.push("review_period_end = ?"); vals.push(reviewPeriodEnd); }
     if (sets.length) {
       vals.push(req.params.id);
       (db as any).$client.prepare(`UPDATE competency_assessments SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
@@ -13583,6 +13601,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // Sign & Complete: stamp completion_date + final_signed_by_user_id and
+  // lock the assessment. Customer-blockers wave 2026-06-05: this is the
+  // closeout step that lets the supervisor say "this competency is done
+  // for the cycle." Subsequent PUTs are rejected with locked=true.
+  app.post("/api/competency/assessments/:id/sign", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const assessment = (db as any).$client.prepare(
+      `SELECT a.id, a.locked, p.user_id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ?`
+    ).get(req.params.id) as any;
+    if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1 WHERE id = ?"
+    ).run(now, req.userId, req.params.id);
+    res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId });
+  });
+
+  // Unlock: clears locked + completion_date so the supervisor can correct
+  // an honest mistake. Restricted to owner / admin role on the lab; staff
+  // role cannot reopen a finalized assessment.
+  app.post("/api/competency/assessments/:id/unlock", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required to unlock" });
+    const sqlite = (db as any).$client;
+    const assessment = sqlite.prepare(
+      `SELECT a.id, a.locked, p.lab_id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ?`
+    ).get(req.params.id) as any;
+    if (!assessment || assessment.lab_id !== req.scope.labId) return res.status(404).json({ error: "Assessment not found" });
+    if (assessment.locked !== 1) return res.status(409).json({ error: "Assessment is not currently locked" });
+    sqlite.prepare(
+      "UPDATE competency_assessments SET locked = 0, completion_date = NULL, final_signed_by_user_id = NULL WHERE id = ?"
+    ).run(req.params.id);
+    console.log(`[competency/${req.params.id}/unlock] unlocked by user_id=${req.userId} for lab=${req.scope.labId}`);
+    res.json({ ok: true, locked: false });
+  });
+
   // Lab-scoped POST + DELETE assessments (URL-hygiene fix 2026-05-20).
   // Legacy variants gate on the program's user_id (not lab_id), so a
   // multi-lab owner could create/delete an assessment from another lab.
@@ -13590,7 +13650,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // and confirm employee is in the same lab.
   app.post("/api/labs/:labId/competency/assessments", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
+    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, items } = req.body;
     const labId = req.scope.labId;
     const program = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
@@ -13601,10 +13661,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(employeeId, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const now = new Date().toISOString();
+    const aDate = assessmentDate || now.split("T")[0];
+    const defEnd = aDate;
+    const defStart = new Date(new Date(aDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const finalReviewStart = reviewPeriodStart || defStart;
+    const finalReviewEnd = reviewPeriodEnd || defEnd;
     const result = (db as any).$client.prepare(
-      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, employeeId, assessmentType || "initial", assessmentDate || now.split("T")[0], evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, now);
+      `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, now);
     const assessmentId = Number(result.lastInsertRowid);
     if (Array.isArray(items)) {
       const stmt = (db as any).$client.prepare(
