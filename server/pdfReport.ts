@@ -4120,6 +4120,25 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   }
 
   // Employee Acknowledgement box with TJC language (on page 1 - non-negotiable)
+  //
+  // PR B of the VeritaComp customer-blockers wave (2026-06-05, item #3 path A,
+  // wet-signature workflow). The previous layout printed the employee's name
+  // ON the signature line, which left nowhere for the employee to physically
+  // sign. The customer asked "how does the employee sign?" because the
+  // workflow had no terminal artifact they could sign with a pen. This change
+  // separates the signature line (now blank, ~24px tall) from the printed
+  // name (below the line) and the date (blank line below the name), so the
+  // supervisor prints the PDF, hands it to the employee, the employee wet-
+  // signs, and the lab scans the signed page back in via VeritaScan as the
+  // evidence document. Same shape on the supervisor side.
+  //
+  // The supervisor's "Sign & Complete" button (PR #553) still electronically
+  // stamps completion_date and locks the assessment record; this PDF region
+  // is the paper-trail companion. The auto-stamped assessment date stays in
+  // the assessment header up top so the assessment_date is still surveyor-
+  // visible without the employee having to fill it in.
+  const employeePrintLine = `${esc(assessment.employee_name) || ""}${assessment.employee_lis_initials ? " (" + esc(assessment.employee_lis_initials) + ")" : ""}`;
+  const supervisorPrintLine = `${esc(assessment.evaluator_name) || ""}${assessment.evaluator_initials ? " (" + esc(assessment.evaluator_initials) + ")" : ""}`;
   html += `<div class="ack-box">
     <div class="title">Employee Acknowledgement</div>
     <div class="text">Prior to performing laboratory duties, the following are completed:</div>
@@ -4127,14 +4146,19 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <li>The laboratory director or designee documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
       <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
     </ul>
-    <div class="sig-grid">
+    <div class="text" style="margin-top:6px;">By signing below, the employee acknowledges that this competency assessment has been reviewed with them and that they understand the duties for which they have been assessed competent.</div>
+    <div class="sig-grid" style="margin-top:10px;">
       <div>
-        <div class="sig-line">${esc(assessment.employee_name) || ""}</div>
-        <div class="sig-label">Employee Print Name / Initials / Date: ${dateStr}</div>
+        <div class="sig-line" style="min-height:24px;border-bottom:1px solid #1a1a1a;"></div>
+        <div class="sig-label" style="margin-top:2px;">Employee Signature</div>
+        <div style="font-size:7.5pt;margin-top:6px;">Print: <strong>${employeePrintLine || "______________________"}</strong></div>
+        <div style="font-size:7.5pt;margin-top:4px;display:flex;align-items:baseline;gap:6px;">Date: <span style="flex:1;border-bottom:1px solid #1a1a1a;min-height:12px;">&nbsp;</span></div>
       </div>
       <div>
-        <div class="sig-line">${esc(assessment.evaluator_name) || ""} ${assessment.evaluator_initials ? "(" + esc(assessment.evaluator_initials) + ")" : ""}</div>
-        <div class="sig-label">Supervisor Print Name / Initials / Date: ${dateStr}</div>
+        <div class="sig-line" style="min-height:24px;border-bottom:1px solid #1a1a1a;"></div>
+        <div class="sig-label" style="margin-top:2px;">Supervisor Signature</div>
+        <div style="font-size:7.5pt;margin-top:6px;">Print: <strong>${supervisorPrintLine || "______________________"}</strong></div>
+        <div style="font-size:7.5pt;margin-top:4px;display:flex;align-items:baseline;gap:6px;">Date: <span style="flex:1;border-bottom:1px solid #1a1a1a;min-height:12px;">&nbsp;</span></div>
       </div>
     </div>
   </div>`;
