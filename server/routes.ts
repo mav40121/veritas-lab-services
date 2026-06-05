@@ -7062,27 +7062,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(instruments);
   });
 
-  // GET /api/labs/:labId/veritacheck/lab-instruments — lab-scoped variant of
-  // the endpoint above. Required because the legacy user-scoped query misses
-  // instruments under maps whose user_id does not match the requester (the
-  // same multi-lab bleed class as the Print Labels lab-scope fix in PR #530,
-  // the John-Hall account-settings fix in PR #472/#473, and the count-sheet
-  // lab-scoping). Symptom on 2026-06-04: deleting one of two redundant maps
-  // on San Carlos caused VeritaCheck to stop showing any instruments,
-  // because the kept map's user_id did not match the requester even though
-  // its lab_id correctly pointed at San Carlos.
-  app.get("/api/labs/:labId/veritacheck/lab-instruments", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    const instruments = (db as any).$client.prepare(
-      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.role, i.category,
-              i.map_id, m.name AS map_name
-       FROM veritamap_instruments i
-       JOIN veritamap_maps m ON m.id = i.map_id
-       WHERE m.lab_id = ?
-       ORDER BY m.name, i.instrument_name, i.id`
-    ).all(req.scope.labId);
-    res.json(instruments);
-  });
-
   // Get all instruments for a map
   app.get("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
