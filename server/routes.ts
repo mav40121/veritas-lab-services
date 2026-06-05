@@ -4889,6 +4889,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, membershipId: memberId, role: newRole });
   });
 
+  // PATCH /api/labs/:labId/members/:memberId/permissions — update a member's
+  // per-module permissions. Owner or admin may call. Updates the user_seats
+  // row that links this member to the lab owner's seat pool (where the
+  // permissions actually live; lab_members.permissions_json is unused by
+  // the resolver as of 2026-06-05). Body: { permissions: SeatPermissions }
+  // accepting the {mode, overrides?} shape.
+  //
+  // Added 2026-06-05 because the customer-facing flow had no way to fix a
+  // member's access after invite. Pairs with PR #549 which changed the
+  // default permissions on new invites so this endpoint is rarely needed
+  // going forward, but still required for: (a) editing past invites,
+  // (b) granting view_only on a specific module, (c) custom mode setup.
+  app.patch("/api/labs/:labId/members/:memberId/permissions", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const { permissions } = req.body || {};
+    if (!permissions || typeof permissions !== "object") {
+      return res.status(400).json({ error: "permissions object required" });
+    }
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT lm.id, lm.user_id, u.email FROM lab_members lm JOIN users u ON u.id = lm.user_id WHERE lm.id = ? AND lm.lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const seat = sqlite.prepare(
+      "SELECT id, permissions FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
+    ).get(lab.owner_user_id, String(member.email).toLowerCase()) as any;
+    if (!seat) return res.status(404).json({ error: "Seat row not found for this member" });
+    const before = seat.permissions;
+    const after = JSON.stringify(permissions);
+    sqlite.prepare("UPDATE user_seats SET permissions = ? WHERE id = ?").run(after, seat.id);
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/permissions PATCH] seatId=${seat.id} email=${member.email} permissions: ${before} -> ${after} (by user_id=${req.userId})`);
+    res.json({ ok: true, membershipId: memberId, seatId: seat.id, before, after: permissions });
+  });
+
   // DELETE /api/labs/:labId/members/:memberId — remove a member from the lab.
   // Admin or owner. Refuses to remove the current owner.
   app.delete("/api/labs/:labId/members/:memberId", authMiddleware, labScopeMiddleware, (req: any, res) => {
