@@ -1,0 +1,165 @@
+name: Gate 3 Step 8 UI Evidence
+
+# Enforces CLAUDE.md Gate 3 step 8: any PR that ships a customer-clickable
+# button, link, form, or download trigger must include browser-verified
+# evidence in the PR body, OR add an automated browser test in the same PR.
+# Server-side verify scripts alone are NOT sufficient — that gap shipped a
+# PDF token race (PR #286) and two render-time crashes (PR #534 TDZ and
+# PR #537 Save Draft regression).
+#
+# Heuristic: if the PR diff touches any UI path under client/src/pages/,
+# client/src/components/, client/index.html, or client/src/App.tsx, this
+# check requires the PR description to contain BOTH:
+#   1. A "## Gate 3 step 8" heading (or "Gate 3 step 8:" line) followed by
+#      non-trivial content (>= 100 characters in that section), AND
+#   2. Either a Markdown image link (![...](url)) somewhere in the body,
+#      OR a fenced code block containing browser tool output ("Chrome MCP",
+#      "navigate", "click", "screenshot", or "preview"), OR a new file added
+#      under tests/playwright/, tests/e2e/, or playwright/.
+#
+# To make this block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass before merging -> select "gate3-ui-evidence".
+#
+# No bot-side escape hatch by design. If a hotfix genuinely cannot be
+# browser-verified (e.g. third-party API outage prevents prod render),
+# bypass via GitHub branch-protection admin override and document the
+# bypass reason in the PR.
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  gate3-ui-evidence:
+    name: gate3-ui-evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine UI-touching status
+        id: ui_changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+          echo "Changed files in this PR:"
+          echo "$CHANGED" | sed 's/^/  /'
+          echo ""
+
+          UI_HIT=0
+          if echo "$CHANGED" | grep -qE '^client/src/pages/|^client/src/components/|^client/src/App\.tsx$|^client/index\.html$'; then
+            UI_HIT=1
+          fi
+
+          TEST_ADDED=0
+          if echo "$CHANGED" | grep -qE '^tests/playwright/|^tests/e2e/|^playwright/'; then
+            TEST_ADDED=1
+          fi
+
+          echo "ui_hit=$UI_HIT" >> "$GITHUB_OUTPUT"
+          echo "test_added=$TEST_ADDED" >> "$GITHUB_OUTPUT"
+
+      - name: Skip when no UI files touched
+        if: steps.ui_changed.outputs.ui_hit == '0'
+        shell: bash
+        run: |
+          echo "No UI-path files touched in this PR. Gate 3 step 8 evidence not required."
+          echo "Paths watched: client/src/pages/, client/src/components/, client/src/App.tsx, client/index.html"
+
+      - name: Verify Gate 3 step 8 evidence in PR body
+        if: steps.ui_changed.outputs.ui_hit == '1'
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          TEST_ADDED: ${{ steps.ui_changed.outputs.test_added }}
+        run: |
+          set -euo pipefail
+          echo "UI paths touched. Gate 3 step 8 evidence required."
+          echo ""
+
+          # Test-file escape: a Playwright/e2e test added in the same PR
+          # satisfies Gate 3 step 8 on its own (the test IS the browser
+          # exercise). The CI runner of that test would catch the failure.
+          if [ "$TEST_ADDED" = "1" ]; then
+            echo "PASS: a Playwright/e2e test was added in this PR. Counts as automated Gate 3 step 8."
+            exit 0
+          fi
+
+          # Otherwise: the PR body must contain a Gate 3 step 8 section AND
+          # one of the supported evidence types.
+          BODY_FILE=$(mktemp)
+          printf '%s' "$PR_BODY" > "$BODY_FILE"
+
+          if ! grep -qE 'Gate 3 step 8' "$BODY_FILE"; then
+            echo "FAIL: PR body has no '## Gate 3 step 8' heading or 'Gate 3 step 8:' line."
+            echo ""
+            echo "Required: add a section to the PR description like:"
+            echo ""
+            echo "  ## Gate 3 step 8"
+            echo "  Drove /your-route on prod (commit <sha>) via Chrome MCP."
+            echo "  Clicked <button>, observed <result>. Screenshot below."
+            echo "  ![](https://...screenshot...)"
+            echo ""
+            echo "OR add an automated test under tests/playwright/ in the same PR."
+            exit 1
+          fi
+
+          # Extract Gate 3 section content. Lines starting with `## ` end it.
+          SECTION=$(awk '
+            BEGIN { in_section = 0 }
+            /^##[ ]*Gate 3 step 8/ { in_section = 1; next }
+            /Gate 3 step 8:/       { in_section = 1; next }
+            in_section && /^##[ ]/ && !/^##[ ]*Gate 3 step 8/ { in_section = 0 }
+            in_section { print }
+          ' "$BODY_FILE")
+
+          # Require non-trivial content (>= 100 chars stripped of whitespace).
+          SECTION_LEN=$(printf '%s' "$SECTION" | tr -d '[:space:]' | wc -c)
+          if [ "$SECTION_LEN" -lt 100 ]; then
+            echo "FAIL: Gate 3 step 8 section is too short ($SECTION_LEN chars)."
+            echo "Required: at least 100 non-whitespace characters describing the browser-verified exercise."
+            echo ""
+            echo "Section content found:"
+            printf '%s\n' "$SECTION" | sed 's/^/  /'
+            exit 1
+          fi
+
+          # Require at least one of: image link, browser-tool fenced block, or
+          # a code block that references a Chrome MCP / preview / navigate call.
+          HAS_IMAGE=0
+          if grep -qE '!\[[^]]*\]\([^)]+\)' "$BODY_FILE"; then
+            HAS_IMAGE=1
+          fi
+
+          HAS_BROWSER_BLOCK=0
+          # Match a fenced block containing one of the browser-tool markers.
+          if awk '
+            /^```/ { in_block = !in_block; next }
+            in_block && /(Chrome MCP|chrome-mcp|navigate|left_click|preview_click|screenshot|preview_screenshot)/ { found = 1 }
+            END { exit (found ? 0 : 1) }
+          ' "$BODY_FILE"; then
+            HAS_BROWSER_BLOCK=1
+          fi
+
+          if [ "$HAS_IMAGE" = "0" ] && [ "$HAS_BROWSER_BLOCK" = "0" ]; then
+            echo "FAIL: Gate 3 step 8 section present, but no acceptable evidence found in the PR body."
+            echo ""
+            echo "Required at least one of:"
+            echo "  - A Markdown image: ![alt](url) — for a screenshot of the rendered page on prod"
+            echo "  - A fenced code block containing a browser-tool transcript (Chrome MCP / Claude_Preview / Playwright)"
+            echo "  - A new file under tests/playwright/, tests/e2e/, or playwright/ in this PR"
+            exit 1
+          fi
+
+          echo "PASS: PR body contains Gate 3 step 8 section ($SECTION_LEN chars)"
+          [ "$HAS_IMAGE" = "1" ] && echo "  - image link found"
+          [ "$HAS_BROWSER_BLOCK" = "1" ] && echo "  - browser-tool fenced block found"
