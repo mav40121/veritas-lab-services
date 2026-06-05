@@ -105,7 +105,13 @@ const ACCREDITORS = [
 ];
 
 function getCompetencyStatus(schedule: CompetencySchedule | null): { label: string; color: string } {
-  if (!schedule) return { label: "Not set", color: "text-muted-foreground" };
+  // The other branches all return text + bg + border so the Badge renders
+  // legibly against any page surface. The "Not set" branch used to return
+  // only `text-muted-foreground`, which let the default Badge variant
+  // paint the badge teal (bg-primary) and the text muted gray, producing
+  // gray-on-teal that failed contrast in both light and dark modes
+  // (customer report 2026-06-05 on San Carlos / Ria's session).
+  if (!schedule) return { label: "Not set", color: "text-muted-foreground bg-muted/40 border-muted-foreground/30" };
 
   const now = new Date();
   const checkDue = (dueStr: string | null, completedStr: string | null) => {
