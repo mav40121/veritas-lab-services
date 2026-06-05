@@ -347,7 +347,7 @@ export async function runFindingReminders(): Promise<ReminderRunSummary> {
 
     try {
       await resend.emails.send({
-        from: "VeritaAssure <noreply@veritaslabservices.com>",
+        from: "VeritaAssure <info@veritaslabservices.com>",
         to: [c.recipient_email],
         subject,
         text,
