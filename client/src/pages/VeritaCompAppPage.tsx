@@ -2046,8 +2046,15 @@ function NewAssessmentDialog({
   // supervisor authoring the competency sees the context without having to
   // open VeritaStaff in another tab. The actual method-group autoload from
   // this assignment is a follow-up PR (separate mock-first design).
+  // Phase B1 of the employee-table unification (2026-06-06): hit the
+  // VeritaComp-side resolver endpoint that bridges competency_employees.id
+  // to staff_employees.id via the FK from PR #566. Used to read the dialog's
+  // pre-existing "no-employee_instruments-found" cross-surface gap because
+  // the two tables have independent id spaces; the new endpoint takes a
+  // competency_employees.id and resolves internally before returning the
+  // assigned VeritaStaff instruments.
   const employeeInstrumentsUrl = (activeLabId && employeeId)
-    ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/instruments`
+    ? `/api/labs/${activeLabId}/competency/employees/${employeeId}/staff-instruments`
     : null;
   const { data: assignedInstruments } = useQuery<Array<{ id: number; instrument_name: string; nickname: string | null; serial_number: string | null; category: string | null; map_name: string }>>({
     queryKey: [employeeInstrumentsUrl ?? "no-asmt-employee-instruments"],
