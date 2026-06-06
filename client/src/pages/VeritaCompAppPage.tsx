@@ -64,6 +64,7 @@ import { ObserverInitialsField, type QualifiedObserver } from "@/components/Obse
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
+import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -461,30 +462,37 @@ function ProgramListView() {
             <Archive className="h-4 w-4 mr-1.5" />
             Survey Bundle
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              const list = programs ?? [];
-              if (list.length === 0) {
-                toast({ title: "Create a program first", description: "Add a competency program before recording assessments." });
-                return;
-              }
-              if (list.length === 1) {
-                navigate(labRoute(`/veritacomp-app/${list[0].id}?newAssessment=1`));
-                return;
-              }
-              setPickerOpen(true);
-            }}
-            disabled={readOnly}
-            title={readOnly ? "Resubscribe to add new records" : undefined}
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            New Assessment
-          </Button>
-          <Button onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            New Program
-          </Button>
+          {/* Wave J PR J2 (2026-06-06): permissions tooltips. The
+              PermissionTooltip wrapper renders a branded Radix tooltip
+              on hover when the wrapped button is disabled, replacing
+              the inconsistent native title-attribute behavior. */}
+          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const list = programs ?? [];
+                if (list.length === 0) {
+                  toast({ title: "Create a program first", description: "Add a competency program before recording assessments." });
+                  return;
+                }
+                if (list.length === 1) {
+                  navigate(labRoute(`/veritacomp-app/${list[0].id}?newAssessment=1`));
+                  return;
+                }
+                setPickerOpen(true);
+              }}
+              disabled={readOnly}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              New Assessment
+            </Button>
+          </PermissionTooltip>
+          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+            <Button onClick={() => setWizardOpen(true)} disabled={readOnly}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              New Program
+            </Button>
+          </PermissionTooltip>
         </div>
       </div>
 
@@ -507,10 +515,12 @@ function ProgramListView() {
           <p className="text-sm text-muted-foreground mb-5">
             Create your first competency program to get started.
           </p>
-          <Button onClick={() => setWizardOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            New Program
-          </Button>
+          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+            <Button onClick={() => setWizardOpen(true)} disabled={readOnly}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              New Program
+            </Button>
+          </PermissionTooltip>
         </div>
       )}
 
