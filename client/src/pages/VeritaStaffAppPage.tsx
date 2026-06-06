@@ -342,7 +342,7 @@ export default function VeritaStaffAppPage() {
                   Surveyor walks in, lab director clicks once, downloads
                   appear: CMS-209 personnel report + locked competency
                   bundle (last 12 months). Two files because the bundle is
-                  already a zip — wrapping a zip in another zip is the
+                  already a zip; wrapping a zip in another zip is the
                   worst experience for the surveyor on the other end. */}
               <Button
                 size="sm"
@@ -519,6 +519,7 @@ export default function VeritaStaffAppPage() {
   // another zip is hostile UX for the surveyor on the other end (extra
   // unzip step, blurred file dates, lost folder structure).
   //
+  //
   // The two downloads land in the browser's downloads tray side by side,
   // both stamped with today's date and the lab's CLIA number so the lab
   // director can drop them straight into a shared folder for the survey
@@ -555,7 +556,7 @@ export default function VeritaStaffAppPage() {
         if (bundleRes.status === 404) {
           toast({
             title: "Day-1 packet partially ready",
-            description: "CMS-209 downloaded. No locked competency assessments in the last 12 months — sign and complete some, then re-run for the bundle.",
+            description: "CMS-209 downloaded. No locked competency assessments in the last 12 months. Sign and complete some, then re-run for the bundle.",
           });
           return;
         }
