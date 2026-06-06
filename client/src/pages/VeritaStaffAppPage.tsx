@@ -1128,6 +1128,28 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
         </div>
       </div>
 
+      {/* Wave G PR G3 (2026-06-06): NYS Department of Health surfacing.
+          When the lab carries a New York State clinical lab permit
+          (staff_labs.includes_nys = 1) AND the employee performs testing,
+          remind the lab director of the NYS-specific cadence: initial
+          competency assessed within 6 months of hire AND a second
+          biennial-cycle competency every 2 years thereafter. CLIA
+          annual cadence still applies in parallel; this banner is the
+          adjunct NYS layer, not a replacement.
+          Reg anchors: 10 NYCRR Part 58-1.10 (clinical laboratory technical
+          personnel competency), DOH Wadsworth Center CLEP guidance. */}
+      {lab.includes_nys === 1 && employee.performs_testing === 1 && (
+        <div className="mb-6 flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+          <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-amber-900">NYS Clinical Laboratory Evaluation Program (CLEP) cadence applies</div>
+            <div className="text-amber-800 text-xs mt-1">
+              In addition to CLIA, NYS requires initial competency within 6 months of hire and a biennial (every 2 years) re-evaluation. Track both alongside the standard CLIA initial / 6-month / 1st annual / annual cycle.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Info Card */}
         <Card>
