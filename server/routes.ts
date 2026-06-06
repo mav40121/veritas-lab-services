@@ -16527,6 +16527,158 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ── Wave I PR I4 (2026-06-06): VeritaComp bulk-import endpoints ──
+  //
+  // Three endpoints mirroring the staff bulk-import pattern (PR #571):
+  //   GET    .../assessments/bulk-template   : download empty xlsx
+  //   POST   .../assessments/bulk-preview    : parse + validate, no DB writes
+  //   POST   .../assessments/bulk-commit     : re-parse + commit transactionally
+  //
+  // Headline-only schema; locked = 1 + completion_date = assessment_date.
+  // Per-element items table not populated (historical records have no
+  // E1-E6 detail). PDF render falls back to "No data recorded" cleanly.
+  app.get("/api/labs/:labId/competency/assessments/bulk-template", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    try {
+      const { buildCompetencyBulkImportWorkbook } = await import("./competencyBulkImport");
+      const buf = await buildCompetencyBulkImportWorkbook();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaComp_Bulk_Import_Template.xlsx"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[competency/bulk-template] error:", err);
+      res.status(500).json({ error: err.message || "template_failed" });
+    }
+  });
+
+  app.post("/api/labs/:labId/competency/assessments/bulk-preview", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'),
+    (() => {
+      const m = require("multer");
+      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+    })(),
+    async (req: any, res) => {
+      if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+      const labId = req.scope.labId;
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const { parseAssessmentWorkbook, validateRows } = await import("./competencyBulkImport");
+        const parsed = await parseAssessmentWorkbook(req.file.buffer);
+        if (parsed.fatal) return res.status(400).json({ fatal: parsed.fatal, rows: [], summary: { total: 0, ok: 0, warning: 0, error: 0 } });
+        const ctx = buildBulkImportCtx(labId);
+        const validated = validateRows(parsed.rows, ctx);
+        const summary = {
+          total: validated.length,
+          ok: validated.filter((v) => v.status === "ok").length,
+          warning: validated.filter((v) => v.status === "warning").length,
+          error: validated.filter((v) => v.status === "error").length,
+        };
+        res.json({ rows: validated, summary });
+      } catch (err: any) {
+        console.error("[competency/bulk-preview] error:", err);
+        res.status(500).json({ error: err.message || "preview_failed" });
+      }
+    }
+  );
+
+  app.post("/api/labs/:labId/competency/assessments/bulk-commit", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'),
+    (() => {
+      const m = require("multer");
+      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+    })(),
+    async (req: any, res) => {
+      if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+      const labId = req.scope.labId;
+      const ownerUserId = req.scope.lab?.owner_user_id ?? req.userId;
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const { parseAssessmentWorkbook, validateRows } = await import("./competencyBulkImport");
+        const parsed = await parseAssessmentWorkbook(req.file.buffer);
+        if (parsed.fatal) return res.status(400).json({ fatal: parsed.fatal });
+        const ctx = buildBulkImportCtx(labId);
+        const validated = validateRows(parsed.rows, ctx);
+
+        const errorRows = validated.filter((v) => v.status === "error");
+        if (errorRows.length > 0) {
+          return res.status(400).json({
+            error: "validation_errors",
+            message: `Cannot commit: ${errorRows.length} row(s) have errors. Fix them and re-upload.`,
+            errorRows: errorRows.map((r) => ({ rowNumber: r.rowNumber, issues: r.issues })),
+          });
+        }
+
+        const now = new Date().toISOString();
+        const sqlite = (db as any).$client;
+        const results: Array<{ rowNumber: number; assessmentId: number; createdCompEmployee?: boolean }> = [];
+        const tx = sqlite.transaction(() => {
+          for (const r of validated) {
+            let empId = r.resolvedEmployeeId;
+            // Create competency_employees stub when only the staff_employees match exists.
+            if (empId === null && r.willCreateCompEmployee && r.resolvedStaffEmployeeId !== null) {
+              const ins = sqlite.prepare(
+                `INSERT INTO competency_employees (user_id, lab_id, staff_employee_id, name, title, status, created_at)
+                 VALUES (?, ?, ?, ?, '', 'active', ?)`
+              ).run(ownerUserId, labId, r.resolvedStaffEmployeeId, r.parsed.employeeName, now);
+              empId = Number(ins.lastInsertRowid);
+              results.push({ rowNumber: r.rowNumber, assessmentId: 0, createdCompEmployee: true });
+            }
+            if (empId === null || r.resolvedProgramId === null) {
+              throw new Error(`Row ${r.rowNumber}: resolution missing (employee=${empId}, program=${r.resolvedProgramId})`);
+            }
+            const insA = sqlite.prepare(
+              `INSERT INTO competency_assessments
+                (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials,
+                 competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at,
+                 locked, completion_date, final_signed_by_user_id)
+               VALUES (?, ?, ?, ?, ?, '', '', 'technical', ?, '', 0, 0, ?, 1, ?, ?)`
+            ).run(
+              r.resolvedProgramId, empId, r.parsed.assessmentType, r.parsed.assessmentDate,
+              r.parsed.evaluatorName || "", r.parsed.status, now, r.parsed.assessmentDate, req.userId
+            );
+            results.push({ rowNumber: r.rowNumber, assessmentId: Number(insA.lastInsertRowid) });
+          }
+        });
+        tx();
+
+        logAudit({
+          userId: req.userId,
+          ownerUserId: req.ownerUserId ?? req.userId,
+          module: "veritacomp",
+          action: "create",
+          entityType: "bulk_import",
+          entityId: String(labId),
+          entityLabel: `Bulk import (${results.filter(r => r.assessmentId > 0).length} assessments)`,
+          before: null,
+          after: { count: results.filter(r => r.assessmentId > 0).length },
+          ipAddress: req.ip,
+        });
+
+        res.json({
+          ok: true,
+          imported: results.filter(r => r.assessmentId > 0).length,
+          createdCompEmployees: results.filter(r => r.createdCompEmployee).length,
+        });
+      } catch (err: any) {
+        console.error("[competency/bulk-commit] error:", err);
+        res.status(500).json({ error: err.message || "commit_failed" });
+      }
+    }
+  );
+
+  // Shared validation context builder. Pulled out of the two endpoints
+  // so the preview and commit paths stay identical.
+  function buildBulkImportCtx(labId: number) {
+    const compRows = (db as any).$client.prepare(
+      `SELECT id, name, staff_employee_id FROM competency_employees WHERE lab_id = ? AND status = 'active'`
+    ).all(labId) as Array<{ id: number; name: string; staff_employee_id: number | null }>;
+    const staffRows = (db as any).$client.prepare(
+      `SELECT id, first_name, last_name FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active'`
+    ).all(labId) as Array<{ id: number; first_name: string; last_name: string }>;
+    const programRows = (db as any).$client.prepare(
+      `SELECT id, name FROM competency_programs WHERE lab_id = ?`
+    ).all(labId) as Array<{ id: number; name: string }>;
+    return { competencyEmployees: compRows, staffEmployees: staffRows, programs: programRows };
+  }
+
   // GET /api/labs/:labId/staff/credentials-dashboard-stats
   //
   // Wave F PR F3 (2026-06-06). Aggregate credential expiration stats from

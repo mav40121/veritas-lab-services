@@ -65,6 +65,7 @@ import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialo
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
+import { CompetencyBulkImportDialog } from "@/components/CompetencyBulkImportDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -406,6 +407,8 @@ function ProgramListView() {
   const [bundlePeriod, setBundlePeriod] = useState<"12" | "24" | "all">("24");
   const [bundleBuilding, setBundleBuilding] = useState(false);
   const [bundleError, setBundleError] = useState<string | null>(null);
+  // Wave I PR I4 (2026-06-06): bulk import historical assessments.
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
   // Inner endpoints (programs/:id DELETE, assessments, quizzes) stay on
@@ -462,6 +465,21 @@ function ProgramListView() {
             <Archive className="h-4 w-4 mr-1.5" />
             Survey Bundle
           </Button>
+          {/* Wave I PR I4 (2026-06-06): bulk import historical assessments
+              via xlsx. Lab director uploads a 6-column workbook; server
+              validates then commits transactionally with locked = 1 +
+              completion_date = assessment_date. */}
+          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+            <Button
+              variant="outline"
+              onClick={() => setBulkImportOpen(true)}
+              disabled={readOnly}
+              title="Upload historical paper-record assessments from an xlsx"
+            >
+              <Upload className="h-4 w-4 mr-1.5" />
+              Bulk Import
+            </Button>
+          </PermissionTooltip>
           {/* Wave J PR J2 (2026-06-06): permissions tooltips. The
               PermissionTooltip wrapper renders a branded Radix tooltip
               on hover when the wrapped button is disabled, replacing
@@ -704,6 +722,15 @@ function ProgramListView() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Wave I PR I4: bulk import dialog. Mounted as a sibling of the
+          bundle dialog so both float above the main list. */}
+      {activeLabId !== null && (
+        <CompetencyBulkImportDialog
+          open={bulkImportOpen}
+          onOpenChange={setBulkImportOpen}
+          labId={activeLabId}
+        />
+      )}
     </div>
   );
 }
