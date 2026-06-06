@@ -1442,17 +1442,59 @@ function AssignedInstrumentsCard({ employeeId }: { employeeId: number }) {
           <p className="text-sm text-muted-foreground">
             No instruments assigned yet. Pick the instruments this employee actually runs so the New Assessment dialog shows that context to the supervisor.
           </p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {assigned!.map(i => (
-              <Badge key={i.id} variant="outline" className="text-xs">
-                {i.instrument_name}
-                {i.nickname && <span className="ml-1 text-muted-foreground">({i.nickname})</span>}
-                {i.category && <span className="ml-1 text-muted-foreground">- {i.category}</span>}
-              </Badge>
-            ))}
-          </div>
-        )}
+        ) : (() => {
+          // Wave G PR G4 (2026-06-06). Visual grouping for manual methods.
+          // Heuristic: a row is a manual method if it has no serial_number
+          // OR its instrument_name starts with "Manual " (case-insensitive,
+          // matches the seed convention used in seedDemo.ts for Manual
+          // Differential and similar bench procedures). Everything else is
+          // instrument-based. We render the two sub-groups only when both
+          // are non-empty; otherwise fall back to the single-group layout
+          // so existing labs see no visual churn.
+          const isManual = (i: LabInstrument) => {
+            const noSn = !i.serial_number || i.serial_number.trim() === "";
+            const nameSignal = /^manual\b/i.test(i.instrument_name || "");
+            return noSn || nameSignal;
+          };
+          const manuals = assigned!.filter(isManual);
+          const instruments = assigned!.filter(i => !isManual(i));
+          const renderBadge = (i: LabInstrument) => (
+            <Badge key={i.id} variant="outline" className="text-xs">
+              {i.instrument_name}
+              {i.nickname && <span className="ml-1 text-muted-foreground">({i.nickname})</span>}
+              {i.category && <span className="ml-1 text-muted-foreground">- {i.category}</span>}
+            </Badge>
+          );
+          if (manuals.length === 0 || instruments.length === 0) {
+            // Single group fallback — preserves the pre-G4 layout when the
+            // lab only does one or the other.
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {assigned!.map(renderBadge)}
+              </div>
+            );
+          }
+          return (
+            <div className="space-y-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                  Instrument-based ({instruments.length})
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {instruments.map(renderBadge)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                  Manual methods ({manuals.length})
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {manuals.map(renderBadge)}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         <EmployeeInstrumentsPickerDialog
           open={pickerOpen}
           onOpenChange={setPickerOpen}
