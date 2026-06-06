@@ -15379,6 +15379,133 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length });
   });
 
+  // GET /api/labs/:labId/competency/programs/:programId/employees/:employeeId/suggested-method-groups
+  //
+  // PR D+ of the customer-blockers wave (2026-06-05). Resolves the
+  // VeritaComp employee to their VeritaStaff record (via the
+  // competency_employees.staff_employee_id FK added in the same PR;
+  // falls back to a normalized name match if the FK is null), pulls
+  // their assigned VeritaMap instruments and the instruments' analytes,
+  // then matches against the program's competency_method_groups under
+  // three rules:
+  //   1. Instrument-name overlap: any assigned instrument_name appears
+  //      (case-insensitive substring) in method_group.instruments JSON.
+  //   2. Analyte overlap: any assigned instrument_test.analyte exists
+  //      (case-insensitive exact) in method_group.analytes JSON.
+  //   3. Category match: method_group.name contains (case-insensitive)
+  //      any assigned instrument category (Chemistry, Hematology, etc).
+  //
+  // Returns { methodGroupIds, reasons } so the dialog can render a star
+  // on each suggested tab and a hover tooltip explaining why.
+  app.get("/api/labs/:labId/competency/programs/:programId/employees/:employeeId/suggested-method-groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+
+    const program = client.prepare(
+      "SELECT id FROM competency_programs WHERE id = ? AND lab_id = ?"
+    ).get(req.params.programId, labId);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+
+    const compEmp = client.prepare(
+      "SELECT id, staff_employee_id, name FROM competency_employees WHERE id = ? AND lab_id = ?"
+    ).get(req.params.employeeId, labId) as { id: number; staff_employee_id: number | null; name: string } | undefined;
+    if (!compEmp) return res.status(404).json({ error: "Employee not found" });
+
+    // Resolve to staff_employees.id. Use FK if set, else fall back to a
+    // live name lookup so a row that did not match in the boot backfill
+    // still works on the first dialog open after a manual data cleanup.
+    let staffEmpId: number | null = compEmp.staff_employee_id;
+    if (!staffEmpId) {
+      const liveMatch = client.prepare(`
+        SELECT id FROM staff_employees
+        WHERE tier2_lab_id = ?
+          AND (
+            LOWER(TRIM(first_name || ' ' || last_name)) = LOWER(TRIM(?))
+            OR LOWER(TRIM(last_name || ', ' || first_name)) = LOWER(TRIM(?))
+            OR LOWER(TRIM(last_name || ' ' || first_name)) = LOWER(TRIM(?))
+          )
+        LIMIT 1
+      `).get(labId, compEmp.name, compEmp.name, compEmp.name) as { id: number } | undefined;
+      if (liveMatch) {
+        staffEmpId = liveMatch.id;
+        // Persist the resolved FK so the next call is one query shorter.
+        client.prepare("UPDATE competency_employees SET staff_employee_id = ? WHERE id = ?").run(staffEmpId, compEmp.id);
+      }
+    }
+
+    const methodGroups = client.prepare(
+      "SELECT id, name, instruments, analytes FROM competency_method_groups WHERE program_id = ?"
+    ).all(req.params.programId) as Array<{ id: number; name: string; instruments: string; analytes: string }>;
+
+    if (!staffEmpId) {
+      return res.json({ methodGroupIds: [], reasons: {}, resolvedStaffEmployeeId: null, totalMethodGroups: methodGroups.length });
+    }
+
+    const instruments = client.prepare(`
+      SELECT i.id, i.instrument_name, i.category
+      FROM staff_employee_instruments j
+      JOIN veritamap_instruments i ON j.instrument_id = i.id
+      JOIN veritamap_maps m ON i.map_id = m.id
+      WHERE j.employee_id = ? AND m.lab_id = ?
+    `).all(staffEmpId, labId) as Array<{ id: number; instrument_name: string; category: string | null }>;
+
+    const empInstrumentNames = instruments.map(i => (i.instrument_name || "").trim()).filter(Boolean);
+    const empCategories = Array.from(new Set(instruments.map(i => (i.category || "").trim()).filter(Boolean)));
+
+    const empAnalytes: string[] = instruments.length === 0 ? [] : (() => {
+      const placeholders = instruments.map(() => "?").join(",");
+      const rows = client.prepare(
+        `SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE instrument_id IN (${placeholders}) AND active = 1`
+      ).all(...instruments.map(i => i.id)) as Array<{ analyte: string }>;
+      return rows.map(r => (r.analyte || "").trim()).filter(Boolean);
+    })();
+
+    const lowerSet = (xs: string[]) => new Set(xs.map(x => x.toLowerCase()));
+    const empInstrumentNamesLC = lowerSet(empInstrumentNames);
+    const empAnalytesLC = lowerSet(empAnalytes);
+    const empCategoriesLC = lowerSet(empCategories);
+
+    const parseJsonArray = (s: string): string[] => {
+      try { const v = JSON.parse(s || "[]"); return Array.isArray(v) ? v.map(x => String(x)) : []; } catch { return []; }
+    };
+
+    const suggested: number[] = [];
+    const reasons: Record<number, { instrumentNames: string[]; analytes: string[]; categories: string[] }> = {};
+
+    for (const mg of methodGroups) {
+      const mgInstruments = parseJsonArray(mg.instruments);
+      const mgAnalytes = parseJsonArray(mg.analytes);
+      const mgNameLC = (mg.name || "").toLowerCase();
+
+      const matchedInstruments = mgInstruments.filter(n => {
+        const lc = n.toLowerCase();
+        for (const empName of empInstrumentNamesLC) {
+          if (empName && (lc.includes(empName) || empName.includes(lc))) return true;
+        }
+        return false;
+      });
+      const matchedAnalytes = mgAnalytes.filter(a => empAnalytesLC.has(a.toLowerCase()));
+      const matchedCategories = empCategories.filter(c => mgNameLC.includes(c.toLowerCase()));
+
+      if (matchedInstruments.length > 0 || matchedAnalytes.length > 0 || matchedCategories.length > 0) {
+        suggested.push(mg.id);
+        reasons[mg.id] = {
+          instrumentNames: matchedInstruments,
+          analytes: matchedAnalytes,
+          categories: matchedCategories,
+        };
+      }
+    }
+
+    res.json({
+      methodGroupIds: suggested,
+      reasons,
+      resolvedStaffEmployeeId: staffEmpId,
+      totalMethodGroups: methodGroups.length,
+    });
+  });
+
   // GET /api/labs/:labId/competency/dashboard-stats
   //
   // PR E2 of the customer-blockers wave (2026-06-05). Single endpoint that

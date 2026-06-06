@@ -1982,6 +1982,34 @@ function NewAssessmentDialog({
   // Technical: element data per method group (key = "element-mgId")
   const [techData, setTechData] = useState<Record<string, TechElementData>>({});
   const [activeMgTab, setActiveMgTab] = useState<number>(program.methodGroups?.[0]?.id || 0);
+  const [userPickedMgTab, setUserPickedMgTab] = useState(false);
+
+  // PR D+ (2026-06-05): suggested method groups for this employee, based on
+  // their VeritaStaff-assigned instruments and the instruments' analytes.
+  // Tabs render with a star marker; the first suggested group becomes the
+  // default active tab unless the user has already picked one manually.
+  const suggestUrl = (activeLabId && employeeId && program.type === "technical")
+    ? `/api/labs/${activeLabId}/competency/programs/${program.id}/employees/${employeeId}/suggested-method-groups`
+    : null;
+  const { data: suggestData } = useQuery<{ methodGroupIds: number[]; reasons: Record<string, { instrumentNames: string[]; analytes: string[]; categories: string[] }>; resolvedStaffEmployeeId: number | null; totalMethodGroups: number }>({
+    queryKey: [suggestUrl ?? "no-suggest"],
+    queryFn: async () => {
+      if (!suggestUrl) return { methodGroupIds: [], reasons: {}, resolvedStaffEmployeeId: null, totalMethodGroups: 0 };
+      const r = await fetch(`${API_BASE}${suggestUrl}`, { headers: authHeaders() });
+      if (!r.ok) return { methodGroupIds: [], reasons: {}, resolvedStaffEmployeeId: null, totalMethodGroups: 0 };
+      return r.json();
+    },
+    enabled: !!suggestUrl,
+  });
+  const suggestedMgIds = new Set<number>(suggestData?.methodGroupIds ?? []);
+  useEffect(() => {
+    if (userPickedMgTab) return;
+    if (!suggestData || suggestData.methodGroupIds.length === 0) return;
+    const firstSuggested = suggestData.methodGroupIds[0];
+    if (program.methodGroups?.some(mg => mg.id === firstSuggested)) {
+      setActiveMgTab(firstSuggested);
+    }
+  }, [suggestData, userPickedMgTab, program.methodGroups]);
 
   // Quiz state
   const [quizActive, setQuizActive] = useState<{ mgId: number; quizId: number } | null>(null);
@@ -2427,19 +2455,37 @@ function NewAssessmentDialog({
             <div className="space-y-3">
               {/* Method group tabs */}
               {program.methodGroups.length > 1 && (
-                <div className="flex border-b border-border gap-0 overflow-x-auto">
-                  {program.methodGroups.map(mg => (
-                    <button
-                      key={mg.id}
-                      onClick={() => setActiveMgTab(mg.id)}
-                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
-                        activeMgTab === mg.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {mg.name}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="flex border-b border-border gap-0 overflow-x-auto">
+                    {program.methodGroups.map(mg => {
+                      const isSuggested = suggestedMgIds.has(mg.id);
+                      const reason = suggestData?.reasons?.[String(mg.id)];
+                      const reasonParts: string[] = [];
+                      if (reason?.instrumentNames?.length) reasonParts.push(`instruments: ${reason.instrumentNames.join(", ")}`);
+                      if (reason?.analytes?.length) reasonParts.push(`analytes: ${reason.analytes.join(", ")}`);
+                      if (reason?.categories?.length) reasonParts.push(`category: ${reason.categories.join(", ")}`);
+                      const tooltip = isSuggested && reasonParts.length > 0 ? `Suggested for this employee. Matched on ${reasonParts.join("; ")}.` : undefined;
+                      return (
+                        <button
+                          key={mg.id}
+                          onClick={() => { setActiveMgTab(mg.id); setUserPickedMgTab(true); }}
+                          title={tooltip}
+                          className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+                            activeMgTab === mg.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {isSuggested && <span className="text-amber-600 mr-1" aria-label="Suggested for this employee">★</span>}
+                          {mg.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {suggestedMgIds.size > 0 && (
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      Suggested for this employee: {suggestedMgIds.size} of {program.methodGroups.length} method groups. Hover the star for the matched-on reasons.
+                    </div>
+                  )}
+                </>
               )}
 
               {program.methodGroups.filter(mg => program.methodGroups!.length === 1 || mg.id === activeMgTab).map(mg => (
