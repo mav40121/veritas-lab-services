@@ -24,7 +24,7 @@ import {
 import {
   Plus, Trash2, ChevronLeft, Users, Lock, FileDown, Building2,
   CheckCircle2, AlertTriangle, Clock, UserPlus, Edit2, Calendar,
-  Download, X, Upload, FileSpreadsheet, FileText, ExternalLink,
+  Download, X, Upload, FileSpreadsheet, FileText, ExternalLink, Archive,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -156,6 +156,7 @@ export default function VeritaStaffAppPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCompetency, setShowCompetency] = useState<Employee | null>(null);
   const [generating209, setGenerating209] = useState(false);
+  const [generatingPacket, setGeneratingPacket] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
 
   // Auth + plan check
@@ -337,6 +338,22 @@ export default function VeritaStaffAppPage() {
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
                 <FileDown size={14} className="mr-1.5" /> {generating209 ? "Generating..." : "Generate CMS 209"}
               </Button>
+              {/* Wave G PR G5 (2026-06-06): one-click Day-1 survey packet.
+                  Surveyor walks in, lab director clicks once, downloads
+                  appear: CMS-209 personnel report + locked competency
+                  bundle (last 12 months). Two files because the bundle is
+                  already a zip — wrapping a zip in another zip is the
+                  worst experience for the surveyor on the other end. */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDayOnePacket}
+                disabled={generatingPacket || readOnly}
+                title="One click: CMS-209 + locked competency bundle (last 12 months)"
+              >
+                <Archive size={14} className="mr-1.5" />
+                {generatingPacket ? "Building packet..." : "Day-1 Survey Packet"}
+              </Button>
             </>
           )}
         </div>
@@ -492,6 +509,76 @@ export default function VeritaStaffAppPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setGenerating209(false);
+    }
+  }
+
+  // Wave G PR G5 (2026-06-06). Day-1 survey packet: one click, two
+  // downloads — CMS-209 personnel report + the last-12-months VeritaComp
+  // locked survey bundle. Composed client-side rather than server-side
+  // because the survey bundle is already a zip, and wrapping a zip in
+  // another zip is hostile UX for the surveyor on the other end (extra
+  // unzip step, blurred file dates, lost folder structure).
+  //
+  // The two downloads land in the browser's downloads tray side by side,
+  // both stamped with today's date and the lab's CLIA number so the lab
+  // director can drop them straight into a shared folder for the survey
+  // visit.
+  async function handleDayOnePacket() {
+    if (!activeLabId) {
+      toast({ title: "Active lab required", description: "Switch to the lab you are preparing for survey." });
+      return;
+    }
+    setGeneratingPacket(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const cliaTag = lab?.clia_number || "lab";
+
+      // Step 1: CMS-209 personnel report.
+      const cms209Res = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/cms209`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+      });
+      if (!cms209Res.ok) throw new Error(`CMS-209: ${await cms209Res.text()}`);
+      const cms209Json = await cms209Res.json();
+      downloadPdfToken(cms209Json.token, `Day1_Packet_${cliaTag}_${today}_1of2_CMS_209.pdf`);
+
+      // Step 2: VeritaComp locked survey bundle (last 12 months).
+      const bundleRes = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/survey-bundle`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ periodMonths: 12 }),
+      });
+      if (!bundleRes.ok) {
+        // 404 with periodMonths means no locked assessments in the
+        // window — surface that as an info toast, not an error, because
+        // the CMS-209 part still succeeded.
+        if (bundleRes.status === 404) {
+          toast({
+            title: "Day-1 packet partially ready",
+            description: "CMS-209 downloaded. No locked competency assessments in the last 12 months — sign and complete some, then re-run for the bundle.",
+          });
+          return;
+        }
+        throw new Error(`Survey bundle: ${await bundleRes.text()}`);
+      }
+      const bundleJson = await bundleRes.json();
+      // Survey-bundle returns its own filename and uses the same token
+      // store; we just open the zip endpoint with the token.
+      const a = document.createElement("a");
+      a.href = `${API_BASE}/api/zip/${bundleJson.token}`;
+      a.download = `Day1_Packet_${cliaTag}_${today}_2of2_${bundleJson.filename || "Bundle.zip"}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast({
+        title: "Day-1 packet ready",
+        description: `2 files downloaded: CMS-209 + ${bundleJson.count} locked competency assessment(s) covering the last 12 months.`,
+      });
+    } catch (err: any) {
+      toast({ title: "Packet failed", description: err.message, variant: "destructive" });
+    } finally {
+      setGeneratingPacket(false);
     }
   }
 }
