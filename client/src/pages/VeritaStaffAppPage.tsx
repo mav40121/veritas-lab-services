@@ -191,6 +191,25 @@ export default function VeritaStaffAppPage() {
     enabled: !!hasAccess && !!lab,
   });
 
+  // PR E2 hotfix (2026-06-05): the dashboard-stats endpoint is the single
+  // source of truth for the overdue set. Both the tile on the dashboard and
+  // the ?filter=overdue list in this page share it, so the counts cannot
+  // drift. Without this, the client-side getCompetencyStatus helper (which
+  // does not check Initial competency) classified zero employees as overdue
+  // while the server classified three.
+  const dashStatsUrl = activeLabId ? `/api/labs/${activeLabId}/competency/dashboard-stats` : null;
+  const { data: dashStats } = useQuery<{ overdueIds: number[] }>({
+    queryKey: [dashStatsUrl ?? "no-dash-stats"],
+    queryFn: async () => {
+      if (!dashStatsUrl) return { overdueIds: [] };
+      const r = await fetch(`${API_BASE}${dashStatsUrl}`, { headers: authHeaders() });
+      if (!r.ok) return { overdueIds: [] };
+      return r.json();
+    },
+    enabled: !!dashStatsUrl,
+  });
+  const overdueIdsSet = new Set<number>(dashStats?.overdueIds ?? []);
+
   // If URL has employeeId, show that employee detail
   const selectedEmployee = params.employeeId
     ? employees.find((e) => e.id === Number(params.employeeId))
@@ -310,11 +329,10 @@ export default function VeritaStaffAppPage() {
       {(() => {
         const filter = (typeof window !== "undefined") ? new URLSearchParams(window.location.search).get("filter") : null;
         if (filter !== "overdue") return null;
-        const overdueCount = employees.filter(e => e.performs_testing === 1 && getCompetencyStatus(e.competencySchedule).label === "Overdue").length;
         return (
           <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
             <AlertTriangle size={12} className="text-amber-600" />
-            <span className="font-medium">Showing {overdueCount} overdue testing personnel.</span>
+            <span className="font-medium">Showing {overdueIdsSet.size} overdue testing personnel.</span>
             <button
               onClick={() => navigate(labRoute("/veritastaff-app"))}
               className="ml-auto text-primary hover:underline"
@@ -345,7 +363,7 @@ export default function VeritaStaffAppPage() {
             .filter(emp => {
               const filter = (typeof window !== "undefined") ? new URLSearchParams(window.location.search).get("filter") : null;
               if (filter !== "overdue") return true;
-              return emp.performs_testing === 1 && getCompetencyStatus(emp.competencySchedule).label === "Overdue";
+              return overdueIdsSet.has(emp.id);
             })
             .map((emp) => {
             const compStatus = getCompetencyStatus(emp.competencySchedule);
