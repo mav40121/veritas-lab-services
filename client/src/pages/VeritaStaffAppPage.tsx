@@ -90,6 +90,9 @@ interface Employee {
   terminated_at: string | null;
   termination_reason: string | null;
   qualifications_text: string | null;
+  /** Wave H PR H2: structured qualifications-verification metadata. */
+  qualifications_verified_at: string | null;
+  qualifications_verified_by: string | null;
   highest_complexity: string;
   performs_testing: number;
   status: string;
@@ -780,7 +783,9 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
 
   const [form, setForm] = useState({
     lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "",
-    hireDate: "", qualificationsText: "", highestComplexity: "H",
+    hireDate: "", qualificationsText: "",
+    qualificationsVerifiedAt: "", qualificationsVerifiedBy: "",
+    highestComplexity: "H",
     performsTesting: true,
   });
   const [roles, setRoles] = useState<{ role: string; specialtyNumber: number | null }[]>([]);
@@ -793,11 +798,13 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
         middleInitial: employee.middle_initial || "", title: employee.title || "",
         titleCode: employee.title_code || "",
         hireDate: employee.hire_date || "", qualificationsText: employee.qualifications_text || "",
+        qualificationsVerifiedAt: employee.qualifications_verified_at || "",
+        qualificationsVerifiedBy: employee.qualifications_verified_by || "",
         highestComplexity: employee.highest_complexity, performsTesting: employee.performs_testing === 1,
       });
       setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number })));
     } else {
-      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", highestComplexity: "H", performsTesting: true });
+      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true });
       setRoles([]);
     }
   }, [employee, open]);
@@ -973,6 +980,30 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
           <div>
             <label className="text-sm font-medium">Qualifications</label>
             <Textarea value={form.qualificationsText} onChange={(e) => setForm({ ...form, qualificationsText: e.target.value })} placeholder="Degree, certification, years of experience..." rows={2} />
+          </div>
+          {/* Wave H PR H2 (2026-06-06): structured qualifications-verification
+              metadata. Surveyors ask "who verified this employee's qualifications
+              and when". Two fields satisfy that question at a glance.
+              License documents (URL + expiration) still belong in the
+              Documents card via the PR #558 linker. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium">Qualifications verified by</label>
+              <Input
+                value={form.qualificationsVerifiedBy}
+                onChange={(e) => setForm({ ...form, qualificationsVerifiedBy: e.target.value })}
+                placeholder="LD initials, e.g., MV"
+                maxLength={10}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Verification date</label>
+              <Input
+                type="date"
+                value={form.qualificationsVerifiedAt}
+                onChange={(e) => setForm({ ...form, qualificationsVerifiedAt: e.target.value })}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1368,6 +1399,18 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
               <div className="flex justify-between"><span className="text-muted-foreground">Complexity</span><Badge variant="outline">{employee.highest_complexity === "H" ? "High" : "Moderate"}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Performs Testing</span><span>{employee.performs_testing ? "Yes" : "No"}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Qualifications</span><span className="text-right max-w-[60%]">{employee.qualifications_text || "N/A"}</span></div>
+              {/* Wave H PR H2: verification line. Renders only when at least
+                  one of the two structured fields is populated, so the
+                  pre-H2 employees with no verification metadata don't get
+                  a "Not verified" scare. */}
+              {(employee.qualifications_verified_at || employee.qualifications_verified_by) && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Qualifications verified</span>
+                  <span className="text-right max-w-[60%]">
+                    {employee.qualifications_verified_by || "?"} on {employee.qualifications_verified_at || "?"}
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

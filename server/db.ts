@@ -4330,3 +4330,23 @@ try {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN termination_reason TEXT"); } catch {}
   }
 }
+
+// Wave H PR H2 (2026-06-06). Structured qualifications-verification
+// metadata on staff_employees. Two columns, both nullable, both free-text.
+// Surveyor's first question on a personnel file is "who verified this
+// employee's qualifications, and when". The existing qualifications_text
+// column is the narrative; these two are the verification act.
+//
+// License document metadata (URL, expiration, state) intentionally NOT
+// added here. That belongs in staff_employee_documents (PR #558) so the
+// lab can attach a real PDF / SharePoint link with its own
+// expiration_date. Adding parallel license columns would create drift.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("qualifications_verified_at")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN qualifications_verified_at TEXT"); } catch {}
+  }
+  if (!cols.includes("qualifications_verified_by")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN qualifications_verified_by TEXT"); } catch {}
+  }
+}
