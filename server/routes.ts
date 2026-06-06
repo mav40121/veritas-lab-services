@@ -15157,6 +15157,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete employee (hard delete)
+  // Wave H PR H1 (2026-06-06). Soft-delete: termination instead of hard
+  // DELETE. CMS 42 CFR \u00a7493.1105 requires personnel records to be
+  // retained at least 2 years post-departure; TJC HR.01.07.01 mirrors.
+  // Preserves staff_roles, staff_competency_schedules, and
+  // staff_employee_documents so the surveyor record is intact. Body
+  // accepts { terminatedAt?, terminationReason? } both optional for
+  // backwards compat with legacy clients calling DELETE bare.
   app.delete("/api/staff/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -15164,13 +15171,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!lab) return res.status(400).json({ error: "Lab not found" });
     const emp = (db as any).$client.prepare("SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const delEmployee = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id) as any;
-    const delRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
-    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastaff", action: "delete", entityType: "employee", entityId: req.params.id, entityLabel: delEmployee ? `${delEmployee.first_name} ${delEmployee.last_name}` : undefined, before: { employee: delEmployee, roles: delRoles }, ipAddress: req.ip });
-    (db as any).$client.prepare("DELETE FROM staff_competency_schedules WHERE employee_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
-    res.json({ ok: true, deleted: req.params.id });
+    const before = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id) as any;
+    const beforeRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
+    const terminatedAt = (typeof req.body?.terminatedAt === "string" && req.body.terminatedAt) ? req.body.terminatedAt : new Date().toISOString().split("T")[0];
+    const terminationReason = typeof req.body?.terminationReason === "string" ? req.body.terminationReason : "";
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastaff", action: "delete", entityType: "employee", entityId: req.params.id, entityLabel: before ? `${before.first_name} ${before.last_name}` : undefined, before: { employee: before, roles: beforeRoles }, after: { terminatedAt, terminationReason }, ipAddress: req.ip });
+    (db as any).$client.prepare(
+      "UPDATE staff_employees SET status = 'terminated', terminated_at = ?, termination_reason = ?, updated_at = ? WHERE id = ?"
+    ).run(terminatedAt, terminationReason, new Date().toISOString(), req.params.id);
+    res.json({ ok: true, terminated: req.params.id, terminatedAt, terminationReason });
   });
 
   // ── MULTI-LAB Tier 2 — Phase 3.9b: lab-scoped VeritaStaff entry endpoints ──
@@ -15385,6 +15394,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete employee in the active lab (hard delete)
+  // Wave H PR H1 (2026-06-06). Lab-scoped soft-delete. Same shape as the
+  // legacy endpoint above: terminate by status flip + terminated_at +
+  // termination_reason. Preserves roles, schedules, documents so
+  // §493.1105 records retention is satisfied across multi-lab.
   app.delete("/api/labs/:labId/staff/employees/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const tier2LabId = req.scope.labId;
@@ -15392,13 +15405,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.id, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const delRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
-    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastaff", action: "delete", entityType: "employee", entityId: req.params.id, entityLabel: emp ? `${emp.first_name} ${emp.last_name}` : undefined, before: { employee: emp, roles: delRoles }, ipAddress: req.ip });
-    (db as any).$client.prepare("DELETE FROM staff_competency_schedules WHERE employee_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM staff_employee_documents WHERE employee_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM staff_employees WHERE id = ?").run(req.params.id);
-    res.json({ ok: true, deleted: req.params.id });
+    const beforeRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
+    const terminatedAt = (typeof req.body?.terminatedAt === "string" && req.body.terminatedAt) ? req.body.terminatedAt : new Date().toISOString().split("T")[0];
+    const terminationReason = typeof req.body?.terminationReason === "string" ? req.body.terminationReason : "";
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastaff", action: "delete", entityType: "employee", entityId: req.params.id, entityLabel: emp ? `${emp.first_name} ${emp.last_name}` : undefined, before: { employee: emp, roles: beforeRoles }, after: { terminatedAt, terminationReason }, ipAddress: req.ip });
+    (db as any).$client.prepare(
+      "UPDATE staff_employees SET status = 'terminated', terminated_at = ?, termination_reason = ?, updated_at = ? WHERE id = ?"
+    ).run(terminatedAt, terminationReason, new Date().toISOString(), req.params.id);
+    res.json({ ok: true, terminated: req.params.id, terminatedAt, terminationReason });
+  });
+
+  // GET /api/labs/:labId/staff/employees-terminated
+  //
+  // Wave H PR H1: read-only roster of terminated employees so the lab
+  // director can show a surveyor the historical chain on a "where did
+  // employee X's competency records go" question. Same shape as the
+  // active roster endpoint, scoped by tier2_lab_id, but filters by
+  // status = 'terminated'. Includes terminated_at + termination_reason
+  // so the surveyor can see when and why.
+  app.get("/api/labs/:labId/staff/employees-terminated", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const employees = (db as any).$client.prepare(
+      "SELECT * FROM staff_employees WHERE tier2_lab_id = ? AND status = 'terminated' ORDER BY terminated_at DESC, last_name, first_name"
+    ).all(req.scope.labId) as any[];
+    const result = employees.map((emp: any) => {
+      const roles = (db as any).$client.prepare(
+        "SELECT * FROM staff_roles WHERE employee_id = ?"
+      ).all(emp.id);
+      return { ...emp, roles };
+    });
+    res.json(result);
   });
 
   // ── EMPLOYEE DOCUMENT LINKERS (PR C, customer-blockers wave 2026-06-05) ──

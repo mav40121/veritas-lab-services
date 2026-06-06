@@ -86,6 +86,9 @@ interface Employee {
    *  picked one yet (legacy free-text title still rendered as fallback). */
   title_code: string | null;
   hire_date: string | null;
+  /** Wave H PR H1: soft-delete metadata. Nullable for active employees. */
+  terminated_at: string | null;
+  termination_reason: string | null;
   qualifications_text: string | null;
   highest_complexity: string;
   performs_testing: number;
@@ -1227,22 +1230,34 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
   const tcSpecs = employee.roles.filter((r) => r.role === "TC" && r.specialty_number);
   const tsSpecs = employee.roles.filter((r) => r.role === "TS" && r.specialty_number);
   const compStatus = getCompetencyStatus(employee.competencySchedule);
+  // Wave H PR H1: termination state for the dialog. The Remove button
+  // opens the dialog instead of immediately calling DELETE so the lab
+  // director can capture date + reason for the surveyor record.
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminatedAt, setTerminatedAt] = useState(() => new Date().toISOString().split("T")[0]);
+  const [terminationReason, setTerminationReason] = useState("");
+  const [terminating, setTerminating] = useState(false);
 
   async function handleDelete() {
+    setTerminating(true);
     try {
       const deleteUrl = activeLabId
         ? `${API_BASE}/api/labs/${activeLabId}/staff/employees/${employee.id}`
         : `${API_BASE}/api/staff/employees/${employee.id}`;
       const res = await fetch(deleteUrl, {
         method: "DELETE",
-        headers: authHeaders(),
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ terminatedAt, terminationReason }),
       });
       if (!res.ok) throw new Error(await res.text());
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
-      toast({ title: "Employee removed" });
+      toast({ title: "Employee terminated", description: `Records preserved per CMS records-retention rules. Status set to terminated as of ${terminatedAt}.` });
+      setTerminateOpen(false);
       onBack();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setTerminating(false);
     }
   }
 
@@ -1263,18 +1278,63 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
           <Button variant="outline" size="sm" onClick={onEdit} disabled={readOnly}>
             <Edit2 size={14} className="mr-1" /> Edit
           </Button>
-          <ConfirmDialog
-            title="Remove Employee?"
-            message={`Remove ${employee.first_name} ${employee.last_name} from the roster? All competency records for this employee will also be removed.`}
-            confirmLabel="Remove"
-            onConfirm={handleDelete}
+          {/* Wave H PR H1 (2026-06-06): Terminate replaces Remove. Soft-delete
+              preserves the employee row + competency schedule + assessment
+              history + linked credential URLs so the CMS §493.1105 +
+              TJC HR.01.07.01 records-retention chain stays intact. */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={readOnly}
+            className="text-red-600 hover:text-red-700"
+            onClick={() => setTerminateOpen(true)}
           >
-            <Button variant="outline" size="sm" disabled={readOnly} className="text-red-600 hover:text-red-700">
-              <Trash2 size={14} className="mr-1" /> Remove
-            </Button>
-          </ConfirmDialog>
+            <Trash2 size={14} className="mr-1" /> Terminate
+          </Button>
         </div>
       </div>
+
+      {/* Wave H PR H1: termination dialog. Date defaults to today; reason is
+          a free-text textarea so the lab director can capture the specifics
+          (resigned, retired, ended employment, position eliminated, etc.).
+          Empty reason is allowed for backwards compat with quick-removes. */}
+      <Dialog open={terminateOpen} onOpenChange={setTerminateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Terminate Employee</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              {employee.first_name} {employee.last_name} will be marked as terminated. Their roles, competency schedule, assessment history, and linked credentials are preserved for CMS records retention (42 CFR §493.1105). The employee will not appear on the active roster or CMS 209.
+            </div>
+            <div>
+              <label className="text-sm font-medium">Termination date</label>
+              <Input
+                type="date"
+                value={terminatedAt}
+                onChange={(e) => setTerminatedAt(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Reason (optional)</label>
+              <Textarea
+                rows={3}
+                placeholder="e.g., Resigned, Retired, End of contract, Position eliminated"
+                value={terminationReason}
+                onChange={(e) => setTerminationReason(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleDelete} disabled={terminating} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                {terminating ? "Terminating..." : "Terminate Employee"}
+              </Button>
+              <Button variant="outline" onClick={() => setTerminateOpen(false)} disabled={terminating}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Wave G PR G3 (2026-06-06): NYS Department of Health surfacing.
           When the lab carries a New York State clinical lab permit
