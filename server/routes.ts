@@ -13200,10 +13200,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(program.id);
     const employees = (db as any).$client.prepare(employeesSql).all(employeesArg);
+    // Phase B3 lite (2026-06-06): LEFT JOIN staff_employees via the FK
+    // added in PR #566. When the FK is set, staff_* columns carry the
+    // canonical VeritaStaff name/credentials. When NULL (unmatched rows
+    // still pending manual cleanup), staff_* are NULL and the e.* values
+    // continue to be the source of truth. Read-site graceful fallback.
     const assessments = (db as any).$client.prepare(
-      `SELECT a.*, e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+      `SELECT a.*,
+              e.name as employee_name, e.title as employee_title,
+              e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials,
+              se.id as staff_employee_id, se.first_name as staff_first_name,
+              se.last_name as staff_last_name, se.middle_initial as staff_middle_initial,
+              se.title as staff_title, se.hire_date as staff_hire_date,
+              se.lis_initials as staff_lis_initials
        FROM competency_assessments a
        JOIN competency_employees e ON a.employee_id = e.id
+       LEFT JOIN staff_employees se ON se.id = e.staff_employee_id
        WHERE a.program_id = ?
        ORDER BY a.created_at DESC`
     ).all(program.id);
@@ -13311,6 +13323,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/competency/employees", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    // Phase B3 lite (2026-06-06): deprecation log line. New employees should
+    // be created via VeritaStaff (POST /api/labs/:labId/staff/employees) and
+    // surfaced into VeritaComp via the shim path from PR #567. The log here
+    // lets us see who is still hitting the legacy endpoint before we drop it.
+    console.warn(`[deprecated] POST /api/competency/employees called by userId=${req.user?.userId ?? "unknown"} (Phase B3 cutover pending)`);
     const { name, title, hireDate, lisInitials } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Employee name required" });
     const now = new Date().toISOString();
@@ -13498,6 +13515,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    // Phase B3 lite (2026-06-06): deprecation log line. New assessments
+    // should be created via the lab-scoped endpoint which accepts both
+    // employeeId and the staffEmployeeId shim path. Surface usage so we
+    // can confirm zero remaining callers before drop.
+    console.warn(`[deprecated] POST /api/competency/assessments called by userId=${req.user?.userId ?? "unknown"} (Phase B3 cutover pending)`);
     const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
     // Verify program and employee belong to user
     const dataUserId = req.ownerUserId ?? req.user.userId;
