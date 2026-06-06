@@ -3981,6 +3981,14 @@ interface CompetencyPDFInput {
   // the printed competency PDF sees the citation chain inline, not just
   // in the survey bundle's Index workbook.
   elementDocuments?: CompetencyElementDocument[];
+  // Wave G PR G1 (2026-06-06). When true, render the paper-completion
+  // worksheet variant: PASS/FAIL verdict swapped for a "BLANK ASSESSMENT
+  // TEMPLATE" header, employee + evaluator fill-line strings empty,
+  // each element table contains one blank row per method group with
+  // empty cells + an unchecked "[ ] Pass  [ ] Fail" placeholder column.
+  // Lab director prints, hands to tech for paper completion, transcribes
+  // back into VeritaComp using the normal New Assessment dialog.
+  blank?: boolean;
 }
 
 // Human-readable label for the doc_type enum from competency_element_documents.
@@ -4134,12 +4142,22 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     </div>`;
   }
 
-  // PASS/FAIL/REMEDIATION box
-  const verdictBg = assessment.status === "pass" ? "#dcfce7" : assessment.status === "fail" ? "#fce7f3" : "#fef3c7";
-  html += `<div class="verdict-box" style="background:${verdictBg}">
-    <div class="label">Overall Determination</div>
-    <div class="verdict" style="color:${passColor}">${passLabel}</div>
-  </div>`;
+  // PASS/FAIL/REMEDIATION box. Wave G PR G1: in blank mode the verdict
+  // doesn't exist yet (the tech hasn't been assessed) — render a paper-
+  // worksheet header instead.
+  if (input.blank) {
+    html += `<div class="verdict-box" style="background:#f3f4f6;border:1px dashed #888;">
+      <div class="label">Worksheet</div>
+      <div class="verdict" style="color:#444;letter-spacing:1px;">BLANK ASSESSMENT TEMPLATE</div>
+      <div style="font-size:7.5pt;color:#555;margin-top:4px;">Print, complete on paper, then transcribe into VeritaComp.</div>
+    </div>`;
+  } else {
+    const verdictBg = assessment.status === "pass" ? "#dcfce7" : assessment.status === "fail" ? "#fce7f3" : "#fef3c7";
+    html += `<div class="verdict-box" style="background:${verdictBg}">
+      <div class="label">Overall Determination</div>
+      <div class="verdict" style="color:${passColor}">${passLabel}</div>
+    </div>`;
+  }
 
   // Remediation box
   if (assessment.status === "remediation" || assessment.status === "fail") {
@@ -4274,6 +4292,30 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         <div class="section-note">${elDef.note} <span style="color:#888;font-size:7pt;">(42 CFR &sect;493.1235(a)(${elDef.num}))</span></div>
         <table>
           <tr>${elDef.cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
+
+      // Wave G PR G1: blank-worksheet branch. Render one placeholder row
+      // per method group with empty cells + a "[ ] Pass  [ ] Fail" column
+      // so the tech can hand-write entries and check the verdict box.
+      // The first column is always the method group name so the tech
+      // knows which row maps to which analyte/instrument.
+      if (input.blank) {
+        const groups = methodGroups.length > 0 ? methodGroups : [{ id: 0, name: "" }];
+        for (const mg of groups) {
+          const blankCells = elDef.cols.map((c, idx) => {
+            if (idx === 0) return `<td>${esc(mg.name || "")}</td>`;
+            if (c === "Pass") {
+              return `<td style="font-size:9pt;letter-spacing:1px;">&#9744; Pass &nbsp; &#9744; Fail</td>`;
+            }
+            // Underline cells with non-breaking spaces so the cell has
+            // a visible fill line in print preview.
+            return `<td>&nbsp;</td>`;
+          }).join("");
+          html += `<tr style="height:22px;">${blankCells}</tr>`;
+        }
+        html += `</table></div>`;
+        continue;
+      }
+
       const elItems = items.filter((i: any) => (i.element_number || i.method_number) === elDef.num);
       // Check if all items for this element are N/A
       const allNa = elItems.length > 0 && elItems.every((i: any) => i[naKey]);
@@ -4349,16 +4391,33 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div class="section-header">Waived Testing Competency - 2 of 4 Methods Required Per Test</div>
       <table>
         <tr><th>Assessment Method</th><th>Instrument/Test</th><th>Evidence</th><th>Date</th><th>Initials</th><th>Pass</th></tr>`;
-    for (const item of items) {
-      const methodLabel = WAIVED_METHODS[(item.method_number || item.waived_method_number || 1) - 1] || `Method ${item.method_number}`;
-      html += `<tr>
-        <td>${methodLabel}</td>
-        <td>${esc(item.waived_instrument || "")} ${esc(item.waived_test || "")}</td>
-        <td>${esc(item.waived_evidence || item.evidence || "")}</td>
-        <td>${esc(item.waived_date || item.date_met || "")}</td>
-        <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
-        <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>
-      </tr>`;
+    // Wave G PR G1: blank-worksheet branch for waived programs. Render
+    // one row per WAIVED_METHOD with empty cells so the lab can hand-
+    // complete on paper. Otherwise iterate the real items.
+    if (input.blank) {
+      for (let i = 0; i < WAIVED_METHODS.length; i++) {
+        const methodLabel = WAIVED_METHODS[i];
+        html += `<tr style="height:22px;">
+          <td>${methodLabel}</td>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+          <td style="font-size:9pt;letter-spacing:1px;">&#9744; Pass &nbsp; &#9744; Fail</td>
+        </tr>`;
+      }
+    } else {
+      for (const item of items) {
+        const methodLabel = WAIVED_METHODS[(item.method_number || item.waived_method_number || 1) - 1] || `Method ${item.method_number}`;
+        html += `<tr>
+          <td>${methodLabel}</td>
+          <td>${esc(item.waived_instrument || "")} ${esc(item.waived_test || "")}</td>
+          <td>${esc(item.waived_evidence || item.evidence || "")}</td>
+          <td>${esc(item.waived_date || item.date_met || "")}</td>
+          <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
+          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>
+        </tr>`;
+      }
     }
     html += `</table></div>`;
 
@@ -4369,14 +4428,29 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div class="section-header">Non-Technical Competency Checklist - ${esc(assessment.department)}</div>
       <table>
         <tr><th style="width:5%">#</th><th>Competency Item</th><th style="width:12%">Date Met</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
-    for (const item of items) {
-      html += `<tr>
-        <td><strong>${esc(item.nt_item_label || item.item_label || "")}</strong></td>
-        <td>${esc(item.nt_item_description || item.item_description || "")}</td>
-        <td>${esc(item.nt_date_met || item.date_met || "")}</td>
-        <td>${esc(item.nt_employee_initials || item.employee_initials || "")}</td>
-        <td>${esc(item.nt_supervisor_initials || item.supervisor_initials || "")}</td>
-      </tr>`;
+    // Wave G PR G1: blank-worksheet branch for nontechnical programs.
+    // Render one row per checklist item from the program with blank
+    // date/initials cells so the supervisor can hand-complete on paper.
+    if (input.blank) {
+      for (const ci of checklistItems) {
+        html += `<tr style="height:22px;">
+          <td><strong>${esc(ci.label || "")}</strong></td>
+          <td>${esc(ci.description || "")}</td>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+        </tr>`;
+      }
+    } else {
+      for (const item of items) {
+        html += `<tr>
+          <td><strong>${esc(item.nt_item_label || item.item_label || "")}</strong></td>
+          <td>${esc(item.nt_item_description || item.item_description || "")}</td>
+          <td>${esc(item.nt_date_met || item.date_met || "")}</td>
+          <td>${esc(item.nt_employee_initials || item.employee_initials || "")}</td>
+          <td>${esc(item.nt_supervisor_initials || item.supervisor_initials || "")}</td>
+        </tr>`;
+      }
     }
     html += `</table></div>`;
   }

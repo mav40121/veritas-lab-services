@@ -1108,10 +1108,40 @@ function ProgramDetailView({ programId }: { programId: number }) {
           </div>
           <p className="text-sm text-muted-foreground">{program.department} Department</p>
         </div>
-        <Button onClick={() => setNewAssessmentOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          New Assessment
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Wave G PR G1: paper worksheet download. Renders the six-element
+              framework (or waived 4-method, or nontechnical checklist) with
+              blank fields so the tech can hand-complete and the lab can
+              transcribe back in. */}
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!activeLabId) return;
+              try {
+                const r = await fetch(
+                  `${API_BASE}/api/labs/${activeLabId}/competency/programs/${programId}/blank-template-pdf`,
+                  { headers: authHeaders() }
+                );
+                if (!r.ok) throw new Error(await r.text());
+                const { token } = await r.json();
+                const typeLabel = program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
+                const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+                const date = new Date().toISOString().split("T")[0];
+                downloadPdfToken(token, `VeritaComp_BLANK_${typeLabel}_${safeName}_${date}.pdf`);
+              } catch (err: any) {
+                console.error("Print blank template failed:", err);
+              }
+            }}
+            title="Download a blank worksheet for paper completion"
+          >
+            <FileDown className="h-4 w-4 mr-1.5" />
+            Print Blank Template
+          </Button>
+          <Button onClick={() => setNewAssessmentOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            New Assessment
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}

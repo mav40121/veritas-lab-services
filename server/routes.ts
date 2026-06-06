@@ -14360,6 +14360,84 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/labs/:labId/competency/programs/:programId/blank-template-pdf
+  //
+  // Wave G PR G1 (2026-06-06). Renders the program's six-element framework
+  // (or the waived 4-method or non-technical checklist variant) with no
+  // data filled in. Lab director prints, hands the worksheet to the tech
+  // for paper completion, then transcribes back into VeritaComp via the
+  // normal New Assessment dialog.
+  //
+  // Why this exists: a number of labs still want a physical worksheet
+  // floating around the bench during the assessment day. Until now they
+  // were screenshotting the new-assessment dialog or rebuilding the
+  // framework in Word. This is the same generateCompetencyPDF call as
+  // /assessments/:id/pdf but with blank: true and a stub assessment shaped
+  // to fall through the existing render path.
+  app.get("/api/labs/:labId/competency/programs/:programId/blank-template-pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const program = (db as any).$client.prepare(
+      `SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?`
+    ).get(req.params.programId, req.scope.labId);
+    if (!program) return res.status(404).json({ error: "Program not found in this lab" });
+    const methodGroups = (db as any).$client.prepare(
+      "SELECT * FROM competency_method_groups WHERE program_id = ? ORDER BY id"
+    ).all(program.id);
+    const checklistItems = (db as any).$client.prepare(
+      "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
+    ).all(program.id);
+    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const labName = compLab?.lab_name || "Clinical Laboratory";
+    const cliaForComp = compLab?.clia_number || undefined;
+
+    // Stub assessment shaped to fall through the existing render path
+    // without polluting any DB tables. Fields the renderer reads:
+    // competency_type, program_name, department, employee_name,
+    // evaluator_name, assessment_date, status. All empty so the blank
+    // worksheet rendering kicks in.
+    const stubAssessment = {
+      id: 0,
+      program_id: program.id,
+      employee_id: 0,
+      competency_type: program.type,
+      program_name: program.name,
+      department: program.department,
+      employee_name: "",
+      employee_title: "",
+      employee_lis_initials: "",
+      employee_hire_date: "",
+      evaluator_name: "",
+      evaluator_title: "",
+      evaluator_initials: "",
+      assessment_date: "",
+      status: "pass", // never rendered because input.blank short-circuits the verdict box
+      remediation_plan: "",
+    };
+
+    try {
+      const pdfBuffer = await generateCompetencyPDF({
+        assessment: stubAssessment,
+        items: [],
+        methodGroups,
+        checklistItems,
+        labName,
+        quizResults: [],
+        cliaNumber: cliaForComp,
+        elementDocuments: [],
+        blank: true,
+      }, licenseCtxFromReq(req));
+      const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
+      const date = new Date().toISOString().split("T")[0];
+      const typeLabel = program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
+      const filename = `VeritaComp_BLANK_${typeLabel}_${safeName}_${date}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      return res.json({ token });
+    } catch (err: any) {
+      console.error("Blank template PDF generation error:", err);
+      return res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
   // POST /api/labs/:labId/competency/survey-bundle
   //
   // PR E1 of the VeritaComp customer-blockers wave (2026-06-05). Generates
