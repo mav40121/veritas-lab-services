@@ -423,6 +423,19 @@ sqlite.exec(`
     FOREIGN KEY (lab_id) REFERENCES labs(id)
   );
 
+  CREATE TABLE IF NOT EXISTS staff_duty_change_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    instrument_id INTEGER NOT NULL,
+    detected_at TEXT NOT NULL,
+    resolved_at TEXT,
+    resolved_assessment_id INTEGER,
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (employee_id) REFERENCES staff_employees(id),
+    FOREIGN KEY (instrument_id) REFERENCES veritamap_instruments(id)
+  );
+
   CREATE TABLE IF NOT EXISTS lab_certificates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -4341,6 +4354,23 @@ try {
   if (!cols.includes("termination_reason")) {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN termination_reason TEXT"); } catch {}
   }
+}
+
+// Wave H PR H4 (2026-06-06). NEW DB TABLE RULE sentinel for
+// staff_duty_change_events (CREATE above with the other staff_* tables).
+// Captures one row per added instrument when an employee's assignment
+// list grows. Resolved when a competency_assessment with
+// assessment_type='duty_change' for the same employee_id lands with
+// assessment_date >= detected_at. Lazy-evaluated on GET to avoid
+// wiring a trigger on every assessment insert.
+//
+// Reg anchor: 42 CFR §493.1235(a) — competency assessment whenever an
+// employee's testing duties change. TJC HR.01.06.01 mirrors.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_duty_change_events)").all() as any[]).map(c => c.name);
+  void cols;
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_duty_change_events_lab_open ON staff_duty_change_events(lab_id, resolved_at)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_duty_change_events_emp ON staff_duty_change_events(employee_id, resolved_at)"); } catch {}
 }
 
 // Wave H PR H3 (2026-06-06). NEW DB TABLE RULE sentinel for
