@@ -13773,13 +13773,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // appears in the dialog's existing employee picker. user_id falls
         // back to the lab's owner so the legacy WHERE user_id read sites
         // continue to render it for the lab's owner-scoped queries.
+        //
+        // Phase B2 of the unification (2026-06-06): the partial UNIQUE index
+        // on (staff_employee_id, lab_id) catches a SELECT-then-INSERT race.
+        // On conflict, re-SELECT to pick up the row the racing writer
+        // created. Idempotent and safe under concurrency.
         const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as { owner_user_id: number } | undefined;
         const ownerUserId = ownerRow?.owner_user_id ?? req.userId;
         const compName = [staffEmp.first_name, staffEmp.last_name].filter(Boolean).join(" ") + (staffEmp.middle_initial ? ` ${staffEmp.middle_initial}` : "");
-        const ins = (db as any).$client.prepare(
-          "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, lis_initials, status, created_at, staff_employee_id) VALUES (?, ?, ?, '', ?, NULL, 'active', ?, ?)"
-        ).run(ownerUserId, labId, compName, staffEmp.hire_date || null, new Date().toISOString(), staffEmpId);
-        resolvedEmployeeId = Number(ins.lastInsertRowid);
+        try {
+          const ins = (db as any).$client.prepare(
+            "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, lis_initials, status, created_at, staff_employee_id) VALUES (?, ?, ?, '', ?, NULL, 'active', ?, ?)"
+          ).run(ownerUserId, labId, compName, staffEmp.hire_date || null, new Date().toISOString(), staffEmpId);
+          resolvedEmployeeId = Number(ins.lastInsertRowid);
+        } catch (insertErr: any) {
+          const raced = (db as any).$client.prepare(
+            "SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?"
+          ).get(staffEmpId, labId) as { id: number } | undefined;
+          if (!raced) {
+            return res.status(500).json({ error: "Shim insert failed", detail: insertErr?.message || "unknown" });
+          }
+          resolvedEmployeeId = Number(raced.id);
+        }
       }
     }
     if (!resolvedEmployeeId) return res.status(400).json({ error: "employeeId or staffEmployeeId required" });
@@ -18814,6 +18829,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[finding-reminder] Manual trigger failed:", err);
       res.status(500).json({ error: err?.message || "Run failed" });
     }
+  });
+
+  // ── ADMIN: Phase B2 unmatched-comp-employee audit ────────────────────────
+  //
+  // Lists competency_employees rows whose staff_employee_id FK is still NULL
+  // after the boot backfills (PR #566 forward + Phase B2 reverse). Used by
+  // scripts/audit-comp-employee-unmatched.js to surface manual-cleanup
+  // candidates before Phase B3 drops the legacy read sites.
+  app.get("/api/admin/competency-employees/unmatched", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const rows = (db as any).$client.prepare(
+      "SELECT id, lab_id, name, status, hire_date FROM competency_employees WHERE staff_employee_id IS NULL ORDER BY lab_id, name"
+    ).all();
+    res.json({ count: rows.length, rows });
   });
 
   // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
