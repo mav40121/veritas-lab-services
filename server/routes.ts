@@ -13748,9 +13748,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
     ).get(programId, labId);
     if (!program) return res.status(404).json({ error: "Program not found" });
+    // Phase B1 of the employee-table unification (2026-06-06): the dialog
+    // can pass either `employeeId` (the competency_employees.id, legacy path)
+    // OR `staffEmployeeId` (the staff_employees.id, new path). If the staff
+    // path is taken, look up or create a competency_employees shim row whose
+    // staff_employee_id FK points back at the staff record. Existing legacy
+    // POST callers continue to work without change.
+    let resolvedEmployeeId: number | null = (employeeId !== undefined && employeeId !== null) ? Number(employeeId) : null;
+    const staffEmployeeIdInput = req.body?.staffEmployeeId;
+    if (!resolvedEmployeeId && staffEmployeeIdInput) {
+      const staffEmpId = Number(staffEmployeeIdInput);
+      const staffEmp = (db as any).$client.prepare(
+        "SELECT id, first_name, last_name, middle_initial, hire_date FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+      ).get(staffEmpId, labId) as any;
+      if (!staffEmp) return res.status(404).json({ error: "Staff employee not found" });
+      const existingShim = (db as any).$client.prepare(
+        "SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?"
+      ).get(staffEmpId, labId) as { id: number } | undefined;
+      if (existingShim) {
+        resolvedEmployeeId = Number(existingShim.id);
+      } else {
+        // Synthesize the shim. Name format matches the existing convention:
+        // "First Last" + optional middle initial. Status active so the row
+        // appears in the dialog's existing employee picker. user_id falls
+        // back to the lab's owner so the legacy WHERE user_id read sites
+        // continue to render it for the lab's owner-scoped queries.
+        const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as { owner_user_id: number } | undefined;
+        const ownerUserId = ownerRow?.owner_user_id ?? req.userId;
+        const compName = [staffEmp.first_name, staffEmp.last_name].filter(Boolean).join(" ") + (staffEmp.middle_initial ? ` ${staffEmp.middle_initial}` : "");
+        const ins = (db as any).$client.prepare(
+          "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, lis_initials, status, created_at, staff_employee_id) VALUES (?, ?, ?, '', ?, NULL, 'active', ?, ?)"
+        ).run(ownerUserId, labId, compName, staffEmp.hire_date || null, new Date().toISOString(), staffEmpId);
+        resolvedEmployeeId = Number(ins.lastInsertRowid);
+      }
+    }
+    if (!resolvedEmployeeId) return res.status(400).json({ error: "employeeId or staffEmployeeId required" });
     const emp = (db as any).$client.prepare(
       "SELECT * FROM competency_employees WHERE id = ? AND lab_id = ?"
-    ).get(employeeId, labId);
+    ).get(resolvedEmployeeId, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const now = new Date().toISOString();
     const aDate = assessmentDate || now.split("T")[0];
@@ -13762,7 +13797,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, folder, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
+    ).run(programId, resolvedEmployeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
     const assessmentId = Number(result.lastInsertRowid);
     if (Array.isArray(items)) {
       const stmt = (db as any).$client.prepare(
@@ -15504,6 +15539,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       resolvedStaffEmployeeId: staffEmpId,
       totalMethodGroups: methodGroups.length,
     });
+  });
+
+  // GET /api/labs/:labId/competency/employees/:id/staff-instruments
+  //
+  // Phase B1 of the employee-table unification (2026-06-06). Resolves a
+  // competency_employees.id to its paired staff_employees record via the FK
+  // added in PR #566 (live name-match fallback when null), then returns the
+  // VeritaStaff-assigned instruments for that staff record. Lets the
+  // assessment dialog's cross-surface "Assigned instruments" info row
+  // populate without needing the two tables to share an id space.
+  app.get("/api/labs/:labId/competency/employees/:id/staff-instruments", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+    const compEmp = client.prepare(
+      "SELECT id, staff_employee_id, name FROM competency_employees WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, labId) as { id: number; staff_employee_id: number | null; name: string } | undefined;
+    if (!compEmp) return res.status(404).json({ error: "Employee not found" });
+    let staffEmpId: number | null = compEmp.staff_employee_id;
+    if (!staffEmpId) {
+      const liveMatch = client.prepare(`
+        SELECT id FROM staff_employees
+        WHERE tier2_lab_id = ?
+          AND (
+            LOWER(TRIM(first_name || ' ' || last_name)) = LOWER(TRIM(?))
+            OR LOWER(TRIM(last_name || ', ' || first_name)) = LOWER(TRIM(?))
+            OR LOWER(TRIM(last_name || ' ' || first_name)) = LOWER(TRIM(?))
+          )
+        LIMIT 1
+      `).get(labId, compEmp.name, compEmp.name, compEmp.name) as { id: number } | undefined;
+      if (liveMatch) {
+        staffEmpId = liveMatch.id;
+        client.prepare("UPDATE competency_employees SET staff_employee_id = ? WHERE id = ?").run(staffEmpId, compEmp.id);
+      }
+    }
+    if (!staffEmpId) return res.json([]);
+    const rows = client.prepare(
+      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.category, i.map_id, m.name AS map_name
+       FROM staff_employee_instruments j
+       JOIN veritamap_instruments i ON j.instrument_id = i.id
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE j.employee_id = ? AND m.lab_id = ?
+       ORDER BY m.name, i.instrument_name, i.id`
+    ).all(staffEmpId, labId);
+    res.json(rows);
   });
 
   // GET /api/labs/:labId/competency/dashboard-stats
