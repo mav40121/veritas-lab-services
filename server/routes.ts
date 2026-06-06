@@ -14438,6 +14438,82 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/labs/:labId/competency/assessments/:id/prior-year-comparison
+  //
+  // Wave I PR I2 (2026-06-06). Returns the employee's prior assessments
+  // for the same program (assessment_date < current), with a per-element
+  // pass/fail/N-A summary so a lab director signing off on this year's
+  // assessment sees the year-over-year delta at the moment of sign-off.
+  // Reg anchor: §493.1235(b) "continuing competency" expects the LD to
+  // track patterns over time, not just point-in-time.
+  app.get("/api/labs/:labId/competency/assessments/:id/prior-year-comparison", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const current = (db as any).$client.prepare(
+      `SELECT a.id, a.employee_id, a.program_id, a.assessment_date, a.status
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, req.scope.labId) as any;
+    if (!current) return res.status(404).json({ error: "Assessment not found in this lab" });
+
+    // Prior assessments for the same (employee, program) strictly before
+    // the current's date. Limit 5 so a long history still renders tight.
+    const priors = (db as any).$client.prepare(
+      `SELECT a.id, a.assessment_date, a.assessment_type, a.status, a.evaluator_name, a.completion_date, a.locked
+       FROM competency_assessments a
+       WHERE a.employee_id = ? AND a.program_id = ?
+         AND date(a.assessment_date) < date(?)
+       ORDER BY date(a.assessment_date) DESC, a.id DESC
+       LIMIT 5`
+    ).all(current.employee_id, current.program_id, current.assessment_date) as any[];
+
+    // For each prior, summarize elements 1-6 from competency_assessment_items.
+    // Status per element: "pass" if any pass and no fail; "fail" if any fail;
+    // "na" if all N/A; "none" if no items recorded.
+    const itemsStmt = (db as any).$client.prepare(
+      `SELECT element_number, method_number, passed,
+              el1_na, el2_na, el3_na, el4_na, el5_na, el6_na,
+              el1_observer_initials, el4_observer_initials
+       FROM competency_assessment_items WHERE assessment_id = ?`
+    );
+    function summarizeElements(items: any[]) {
+      const buckets: Record<number, { pass: number; fail: number; na: number; observer: string | null }> = {};
+      for (let n = 1; n <= 6; n++) buckets[n] = { pass: 0, fail: 0, na: 0, observer: null };
+      for (const it of items) {
+        const n = Number(it.element_number || it.method_number || 0);
+        if (n < 1 || n > 6) continue;
+        const naFlag = !!it[`el${n}_na`];
+        if (naFlag) { buckets[n].na += 1; continue; }
+        if (it.passed === 1) buckets[n].pass += 1; else buckets[n].fail += 1;
+        if (n === 1 && it.el1_observer_initials && !buckets[1].observer) buckets[1].observer = it.el1_observer_initials;
+        if (n === 4 && it.el4_observer_initials && !buckets[4].observer) buckets[4].observer = it.el4_observer_initials;
+      }
+      const elements: Record<string, { status: "pass" | "fail" | "na" | "none"; observer: string | null }> = {};
+      for (let n = 1; n <= 6; n++) {
+        const b = buckets[n];
+        let status: "pass" | "fail" | "na" | "none" = "none";
+        if (b.fail > 0) status = "fail";
+        else if (b.pass > 0) status = "pass";
+        else if (b.na > 0) status = "na";
+        elements[String(n)] = { status, observer: b.observer };
+      }
+      return elements;
+    }
+
+    res.json({
+      current: { id: current.id, date: current.assessment_date, status: current.status },
+      priors: priors.map(p => ({
+        id: p.id,
+        date: p.assessment_date,
+        type: p.assessment_type,
+        status: p.status,
+        evaluatorName: p.evaluator_name,
+        locked: p.locked === 1,
+        elements: summarizeElements(itemsStmt.all(p.id) as any[]),
+      })),
+    });
+  });
+
   // POST /api/labs/:labId/competency/survey-bundle
   //
   // PR E1 of the VeritaComp customer-blockers wave (2026-06-05). Generates

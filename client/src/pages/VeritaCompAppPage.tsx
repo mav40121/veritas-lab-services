@@ -61,6 +61,7 @@ import {
 } from "lucide-react";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
+import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1299,6 +1300,9 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   const assessments = program.assessments || [];
   // PR C: per-assessment element-document linker. null = closed; number = assessment id.
   const [docsAssessmentId, setDocsAssessmentId] = useState<number | null>(null);
+  // Wave I PR I2: prior-year comparison dialog. Stores the open assessment + employee
+  // so the dialog header can show "Smith on Hematology Annual" while it loads.
+  const [priorYearTarget, setPriorYearTarget] = useState<{ id: number; employeeName: string } | null>(null);
 
   const downloadPdf = async (assessmentId: number) => {
     // Lab-scoped URL when activeLabId is set, so lab MEMBERS (not just the
@@ -1448,6 +1452,18 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="Linked documents" onClick={() => setDocsAssessmentId(a.id)}>
                     <Paperclip className="h-4 w-4" />
                   </Button>
+                  {/* Wave I PR I2: prior-year comparison. Opens a dialog showing
+                      this employee's prior assessments for the same program
+                      with per-element pass/fail/N-A so the LD spots regressions. */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    title="Compare to prior assessments for this employee on this program"
+                    onClick={() => setPriorYearTarget({ id: a.id, employeeName: a.employee_name })}
+                  >
+                    Prior
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)}>
                     <FileDown className="h-4 w-4" />
                   </Button>
@@ -1533,6 +1549,17 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
           onClose={() => setDocsAssessmentId(null)}
         />
       )}
+      {/* Wave I PR I2: prior-year comparison dialog. Mounted at the
+          AssessmentsTab scope so it works for any card the user clicks
+          Prior on. Loads lazily (the useQuery is enabled only when open). */}
+      <PriorYearComparisonDialog
+        open={priorYearTarget !== null}
+        onOpenChange={(v) => { if (!v) setPriorYearTarget(null); }}
+        assessmentId={priorYearTarget?.id ?? 0}
+        labId={activeLabId ?? null}
+        employeeName={priorYearTarget?.employeeName ?? ""}
+        programName={program.name}
+      />
     </div>
   );
 }
