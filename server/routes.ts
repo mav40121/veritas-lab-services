@@ -15839,6 +15839,110 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // GET /api/labs/:labId/competency/reassessment-stats
+  //
+  // Wave G PR G2 (2026-06-06). Per §493.1235(b)(7) and TJC HR.01.06.01,
+  // when an employee fails a competency assessment they must be reassessed
+  // and may not perform unsupervised testing on the affected method group
+  // until they pass. This endpoint surfaces the failed-without-resolution
+  // queue so the lab director catches gaps before the surveyor does.
+  //
+  // For each (employee_id, program_id) pair where the MOST RECENT
+  // assessment is status='fail', we check whether a subsequent passing
+  // assessment exists. If not, we bucket by days-since-fail:
+  //   - awaitingReassessment: failed <= 30d ago, no follow-up pass yet
+  //   - overdueReassessment:  failed > 30d ago, no follow-up pass yet
+  //   - resolved:              fail followed by a later pass (not surfaced)
+  // 30d is the customary corrective-action window; longer is a finding.
+  app.get("/api/labs/:labId/competency/reassessment-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    // Pull every assessment in the lab, ordered by employee+program+date so
+    // we can walk in JS and find the most recent per pair.
+    const rows = (db as any).$client.prepare(
+      `SELECT a.id, a.employee_id, a.program_id, a.assessment_date, a.status,
+              e.name AS employee_name, p.name AS program_name
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE p.lab_id = ?
+       ORDER BY a.employee_id, a.program_id, a.assessment_date DESC, a.id DESC`
+    ).all(labId) as Array<{
+      id: number; employee_id: number; program_id: number; assessment_date: string; status: string;
+      employee_name: string; program_name: string;
+    }>;
+
+    interface PairState {
+      employee_id: number;
+      program_id: number;
+      employee_name: string;
+      program_name: string;
+      lastFailDate: string | null;
+      hasSubsequentPass: boolean;
+    }
+    const pairs = new Map<string, PairState>();
+    for (const r of rows) {
+      const key = `${r.employee_id}:${r.program_id}`;
+      if (!pairs.has(key)) {
+        pairs.set(key, {
+          employee_id: r.employee_id,
+          program_id: r.program_id,
+          employee_name: r.employee_name,
+          program_name: r.program_name,
+          lastFailDate: null,
+          hasSubsequentPass: false,
+        });
+      }
+      const p = pairs.get(key)!;
+      if (r.status === "fail" && !p.lastFailDate) {
+        // First fail we hit (rows ordered DESC) — this is the most recent fail.
+        p.lastFailDate = r.assessment_date;
+      } else if (r.status === "pass" && !p.lastFailDate) {
+        // A pass before any fail in DESC order means the most recent
+        // assessment is a pass; the pair is resolved by definition.
+        p.hasSubsequentPass = true;
+      }
+    }
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+    let awaiting = 0, overdue = 0;
+    const sample: Array<{
+      employeeId: number; programId: number; employeeName: string; programName: string;
+      failDate: string; daysSinceFail: number; bucket: "awaiting" | "overdue";
+    }> = [];
+
+    for (const p of pairs.values()) {
+      if (p.hasSubsequentPass || !p.lastFailDate) continue;
+      const fail = new Date(p.lastFailDate);
+      if (Number.isNaN(fail.getTime())) continue;
+      fail.setHours(0, 0, 0, 0);
+      const daysSinceFail = Math.floor((today.getTime() - fail.getTime()) / dayMs);
+      const bucket: "awaiting" | "overdue" = daysSinceFail <= 30 ? "awaiting" : "overdue";
+      if (bucket === "awaiting") awaiting += 1; else overdue += 1;
+      sample.push({
+        employeeId: p.employee_id,
+        programId: p.program_id,
+        employeeName: p.employee_name,
+        programName: p.program_name,
+        failDate: p.lastFailDate,
+        daysSinceFail,
+        bucket,
+      });
+    }
+
+    // Sort by most-overdue first so the lab director's eye lands on the
+    // worst case (longest reassessment delay) in the at-a-glance preview.
+    sample.sort((a, b) => b.daysSinceFail - a.daysSinceFail);
+    const totalOpen = awaiting + overdue;
+    res.json({
+      awaiting,
+      overdue,
+      totalOpen,
+      sample: sample.slice(0, 5),
+    });
+  });
+
   // GET /api/labs/:labId/staff/credentials-dashboard-stats
   //
   // Wave F PR F3 (2026-06-06). Aggregate credential expiration stats from

@@ -15,6 +15,7 @@ import { getToken } from "@/lib/auth";
 import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
 import { CompetencyStatusTile } from "@/components/CompetencyStatusTile";
 import { CredentialExpirationTile } from "@/components/CredentialExpirationTile";
+import { ReassessmentTrackerTile } from "@/components/ReassessmentTrackerTile";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -154,6 +155,12 @@ export default function Dashboard() {
           has zero credentials with an expiration_date. Pairs visually with
           the competency tile so surveyors see both signals adjacently. */}
       <CredentialExpirationTile className="mb-6" />
+
+      {/* Wave G PR G2: Open-reassessment queue tile. Self-hides when no
+          failing assessments are open. Per §493.1235(b)(7) a failing
+          assessment triggers a mandatory reassessment cycle; this tile
+          surfaces who still owes a follow-up. */}
+      <ReassessmentTrackerTile className="mb-6" />
 
       {/* Correlations due soon */}
       <CorrelationsDueSoonWidget className="mb-6" />
