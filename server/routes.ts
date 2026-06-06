@@ -14267,7 +14267,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const labName = compLab?.lab_name || "Clinical Laboratory";
     const cliaForComp = compLab?.clia_number || undefined;
     try {
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
+      // PR C+ (2026-06-05): pull element-document URLs so the PDF renders
+      // the citation chain per element.
+      const elementDocuments = (db as any).$client.prepare(
+        `SELECT element_number, doc_type, title, url
+         FROM competency_element_documents
+         WHERE assessment_id = ?
+         ORDER BY element_number, created_at`
+      ).all(assessment.id);
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp, elementDocuments }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
@@ -14361,7 +14369,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
            JOIN competency_quizzes q ON qr.quiz_id = q.id
            WHERE qr.assessment_id = ?`
         ).all(a.id);
-        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items, methodGroups, checklistItems, labName, quizResults, cliaNumber }, licenseCtxFromReq(req));
+        // PR C+ (2026-06-05): pull element-document URLs so each PDF in the
+        // bundle renders the citation chain per element. Same shape and
+        // sort order as the standalone /assessments/:id/pdf endpoint.
+        const elementDocuments = (db as any).$client.prepare(
+          `SELECT element_number, doc_type, title, url
+           FROM competency_element_documents
+           WHERE assessment_id = ?
+           ORDER BY element_number, created_at`
+        ).all(a.id);
+        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items, methodGroups, checklistItems, labName, quizResults, cliaNumber, elementDocuments }, licenseCtxFromReq(req));
         zip.file(candidate, pdfBuffer);
         bundleRows.push({ a, filename: candidate, ok: true });
       } catch (err: any) {
