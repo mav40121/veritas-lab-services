@@ -15761,6 +15761,103 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // GET /api/labs/:labId/staff/credentials-dashboard-stats
+  //
+  // Wave F PR F3 (2026-06-06). Aggregate credential expiration stats from
+  // staff_employee_documents joined to staff_employees. Shape mirrors the
+  // competency dashboard-stats endpoint so the tile + list filter pattern
+  // can be reused (?filter=expiring uses expiringEmployeeIds as the single
+  // source of truth, same hotfix shape PR E2 needed for overdue).
+  //
+  // Buckets:
+  //   - expired:    expiration_date < today
+  //   - expiring30: today <= expiration_date <= today + 30d
+  //   - expiring60: today + 30d < expiration_date <= today + 60d
+  //   - current:    expiration_date > today + 60d
+  // Documents without an expiration_date are excluded from the denominator
+  // since they cannot expire (TJC/CMS don't require expiration on every
+  // credential type — diplomas, training certificates, etc.).
+  app.get("/api/labs/:labId/staff/credentials-dashboard-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const rows = (db as any).$client.prepare(
+      `SELECT d.id AS doc_id, d.doc_type, d.title AS doc_title, d.expiration_date,
+              e.id AS emp_id, e.first_name, e.last_name, e.middle_initial
+       FROM staff_employee_documents d
+       JOIN staff_employees e ON d.employee_id = e.id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND d.expiration_date IS NOT NULL`
+    ).all(labId) as Array<{
+      doc_id: number; doc_type: string; doc_title: string | null; expiration_date: string;
+      emp_id: number; first_name: string; last_name: string; middle_initial: string | null;
+    }>;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    type Bucket = "expired" | "expiring30" | "expiring60" | "current";
+    const counts: Record<Bucket, number> = { expired: 0, expiring30: 0, expiring60: 0, current: 0 };
+    const expiringEmployeeIdsSet = new Set<number>();
+
+    interface ExpiringSampleRow {
+      docId: number;
+      empId: number;
+      name: string;
+      docType: string;
+      docTitle: string | null;
+      expirationDate: string;
+      daysRemaining: number;
+    }
+    const allExpiring: ExpiringSampleRow[] = [];
+
+    for (const r of rows) {
+      const exp = new Date(r.expiration_date);
+      if (Number.isNaN(exp.getTime())) continue;
+      exp.setHours(0, 0, 0, 0);
+      const daysRemaining = Math.floor((exp.getTime() - today.getTime()) / dayMs);
+
+      let bucket: Bucket;
+      if (daysRemaining < 0) bucket = "expired";
+      else if (daysRemaining <= 30) bucket = "expiring30";
+      else if (daysRemaining <= 60) bucket = "expiring60";
+      else bucket = "current";
+
+      counts[bucket] += 1;
+
+      if (bucket !== "current") {
+        expiringEmployeeIdsSet.add(r.emp_id);
+        const name = [r.last_name, r.first_name].filter(Boolean).join(", ") + (r.middle_initial ? ` ${r.middle_initial}.` : "");
+        allExpiring.push({
+          docId: r.doc_id,
+          empId: r.emp_id,
+          name: name || `Employee #${r.emp_id}`,
+          docType: r.doc_type,
+          docTitle: r.doc_title,
+          expirationDate: r.expiration_date,
+          daysRemaining,
+        });
+      }
+    }
+
+    // Sort by most urgent first (most negative daysRemaining bubbles up) and
+    // keep the first five for the at-a-glance preview.
+    allExpiring.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    const expiringSample = allExpiring.slice(0, 5);
+
+    const total = rows.length;
+    const percentCurrent = total > 0 ? Math.round((counts.current / total) * 100) : 100;
+
+    res.json({
+      expired: counts.expired,
+      expiring30: counts.expiring30,
+      expiring60: counts.expiring60,
+      current: counts.current,
+      total,
+      percentCurrent,
+      expiringSample,
+      expiringEmployeeIds: Array.from(expiringEmployeeIdsSet),
+    });
+  });
+
   // GET flat list of every instrument across the lab's VeritaMaps for the
   // assignment picker dialog. Grouped client-side by map_name.
   app.get("/api/labs/:labId/veritamap/instruments-flat", authMiddleware, labScopeMiddleware, (req: any, res) => {
