@@ -13211,8 +13211,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials,
               se.id as staff_employee_id, se.first_name as staff_first_name,
               se.last_name as staff_last_name, se.middle_initial as staff_middle_initial,
-              se.title as staff_title, se.hire_date as staff_hire_date,
-              se.lis_initials as staff_lis_initials
+              se.title as staff_title, se.hire_date as staff_hire_date
        FROM competency_assessments a
        JOIN competency_employees e ON a.employee_id = e.id
        LEFT JOIN staff_employees se ON se.id = e.staff_employee_id
