@@ -63,6 +63,7 @@ import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDia
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
+import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1304,6 +1305,9 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   // Wave I PR I2: prior-year comparison dialog. Stores the open assessment + employee
   // so the dialog header can show "Smith on Hematology Annual" while it loads.
   const [priorYearTarget, setPriorYearTarget] = useState<{ id: number; employeeName: string } | null>(null);
+  // Wave J PR J3 (2026-06-06): audit trail dialog. Same shape as the
+  // prior-year target — id + employee name carry through to the dialog header.
+  const [auditTarget, setAuditTarget] = useState<{ id: number; employeeName: string } | null>(null);
 
   const downloadPdf = async (assessmentId: number) => {
     // Lab-scoped URL when activeLabId is set, so lab MEMBERS (not just the
@@ -1465,6 +1469,18 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                   >
                     Prior
                   </Button>
+                  {/* Wave J PR J3: audit trail. Opens a dialog showing
+                      who did what to this assessment row with before/after
+                      diffs. Surveyor-defensible chain of custody. */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    title="Audit trail (who modified this assessment, when, and what changed)"
+                    onClick={() => setAuditTarget({ id: a.id, employeeName: a.employee_name })}
+                  >
+                    Audit
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)}>
                     <FileDown className="h-4 w-4" />
                   </Button>
@@ -1559,6 +1575,16 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
         assessmentId={priorYearTarget?.id ?? 0}
         labId={activeLabId ?? null}
         employeeName={priorYearTarget?.employeeName ?? ""}
+        programName={program.name}
+      />
+      {/* Wave J PR J3: audit trail dialog. Same mount scope as the
+          prior-year dialog. Lazy-loads when opened. */}
+      <AuditTrailDialog
+        open={auditTarget !== null}
+        onOpenChange={(v) => { if (!v) setAuditTarget(null); }}
+        assessmentId={auditTarget?.id ?? 0}
+        labId={activeLabId ?? null}
+        employeeName={auditTarget?.employeeName ?? ""}
         programName={program.name}
       />
     </div>
