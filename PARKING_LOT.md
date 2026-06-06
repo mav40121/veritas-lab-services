@@ -971,6 +971,64 @@ The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_c
 
 ---
 
+### 42. Outbound demo-invite messaging campaign to 1st-degree LinkedIn contacts
+
+**Effort:** L (1 week prep + 4-6 weeks of staged sends)
+**Importance:** High. Converts existing warm network (~2,500 1st-degree contacts and growing weekly via the connection-invite cycle) into a demo pipeline. Complements COLA cohort outreach and content-driven inbound; only pipeline that leverages contacts already in 1st degree. The contact base is being built right now (80 sent this week, 80/week ongoing) and will be ready for activation within 4-6 weeks.
+
+**What:** A staged outbound DM campaign walking Michael's 1st-degree LinkedIn contacts through tier-segmented demo invitations for VeritaAssure. Goal: convert warmest contacts into demo conversations first, then chain into trials and paid subscriptions. Separate pipeline from COLA cohort follow-up and from content-driven inbound; all three feed the same demo funnel but originate from different warmth sources.
+
+**Tiered targeting (conversion-likelihood ranked):**
+
+- **Tier 1 — Engagers + role match (highest conversion).** 1st-degree contacts who liked, commented, or shared a Michael Veri post in the last 90 days AND whose role is Lab Director, Quality Officer, Lab Manager, or Hospital Lab Leadership. Estimated size: 30-60 contacts. Highest expected conversion rate.
+- **Tier 2 — Role match, no engagement.** 1st-degree contacts whose role matches the ICP but have not engaged with content. Accepted the connection but not been activated. Estimated size: 300-500 contacts. Moderate conversion.
+- **Tier 3 — Allied roles.** Quality managers, lab supervisors, POC coordinators. Influence the buyer but are not the decision-maker. Estimated size: 200-400 contacts. Lower direct conversion, useful for organizational reach.
+- **Tier 4 — Adjacent (consultants, accreditor staff, IVD vendors).** Influencer audience, not buyers. Estimated size: 100-300 contacts. Low conversion to direct demo, useful for word-of-mouth referrals.
+
+**Message templates per tier:**
+
+- Tier 1: Reference specific engagement and align to a VeritaAssure module. Anchor example: "Your comment on the reference-range post got me thinking about how VeritaCheck handles exactly that workflow, would you want a 30-minute walkthrough?"
+- Tier 2: Soft intro anchored on Michael's recent content arc and Lab Management 101 release, then demo offer. No assumption of prior engagement.
+- Tier 3: Position as a tool that makes their work easier in support of their director. Demo offer or trial.
+- Tier 4: "fyi this exists, happy to walk you through it if useful" framing. No hard demo push.
+
+**Pre-implementation work (must be done before any send):**
+
+1. Export 1st-degree contact list from LinkedIn (Settings, Get a copy of your data, generates CSV with name, headline, email, company, position, connected-on date).
+2. Cross-reference with content engagers list (manual pull from past 90 days of post analytics, or LinkedIn SSI export).
+3. Build Tier 1-4 buckets in a working CSV with columns: name, LinkedIn URL, role, tier, engagement notes, sent date, replied, demo booked, outcome.
+4. Filter out: existing VeritaAssure customers (pull current customer list from production DB), named contacts in COLA follow-up batch, contacts who explicitly opted out, contacts whose last LinkedIn activity is more than 2 years old.
+5. Draft tier-specific message templates, store in `linkedin_search/outbound_messages_v1.md`.
+6. Confirm cap pacing: LinkedIn 1st-degree DM cap is roughly 80-100 per day rolling. Plan 20-30/day to stay safely under.
+
+**Pacing strategy:**
+
+- Week 1: Tier 1 only, small batch. Watch reply and demo-book rate. Refine messaging if signal is weak.
+- Weeks 2-4: Tier 2 staggered batches of 20-30/day, paced to LinkedIn rate limits.
+- Week 5: Tier 3 after Tier 1/2 momentum is visible.
+- Week 6+: Tier 4 light cadence, lowest priority.
+
+**Risks to surface at implementation time:**
+
+- Mass identical DMs trigger LinkedIn spam detection. Vary message bodies per recipient.
+- LinkedIn ToS allows messaging 1st-degree but discourages bulk patterns. Pace strictly.
+- Tier 1 reply rate is the leading indicator. If Tier 1 does not convert, do not push Tier 2.
+- Coordinate with COLA cohort sender list to prevent double-touch of named contacts.
+- Existing customers need to be deduped from the contact list. Pull current customer list from production DB as the source of truth.
+
+**Implementation triggers (decide when to lift off parking lot):**
+
+- Lab Management 101 has shipped (book gives a tangible asset to attach to the message).
+- Tier 1 engagement size has hit 50+ (worth running).
+- COLA cohort outreach concludes (avoid double-loading sender time).
+- Michael has 2-3 hours/week to drive batches via in-panel Claude.
+
+**Source:** 2026-06-04 session, after weekly LinkedIn invite batch completion (80 sent, cap hit at #84 Victoria Allen).
+
+**Status:** Parked. Plan documented. Implementation deferred until trigger conditions met.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
