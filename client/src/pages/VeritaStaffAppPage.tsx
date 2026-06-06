@@ -214,6 +214,23 @@ export default function VeritaStaffAppPage() {
   });
   const overdueIdsSet = new Set<number>(dashStats?.overdueIds ?? []);
 
+  // Wave F PR F3 (2026-06-06): same single-source-of-truth pattern as PR
+  // E2's overdueIds. The credentials-dashboard-stats endpoint owns the
+  // expiringEmployeeIds set so the tile count and the ?filter=expiring
+  // banner cannot drift. Window is the server's default 60 days.
+  const credStatsUrl = activeLabId ? `/api/labs/${activeLabId}/staff/credentials-dashboard-stats` : null;
+  const { data: credStats } = useQuery<{ expiringEmployeeIds: number[] }>({
+    queryKey: [credStatsUrl ?? "no-cred-stats"],
+    queryFn: async () => {
+      if (!credStatsUrl) return { expiringEmployeeIds: [] };
+      const r = await fetch(`${API_BASE}${credStatsUrl}`, { headers: authHeaders() });
+      if (!r.ok) return { expiringEmployeeIds: [] };
+      return r.json();
+    },
+    enabled: !!credStatsUrl,
+  });
+  const expiringEmployeeIdsSet = new Set<number>(credStats?.expiringEmployeeIds ?? []);
+
   // If URL has employeeId, show that employee detail
   const selectedEmployee = params.employeeId
     ? employees.find((e) => e.id === Number(params.employeeId))
@@ -347,6 +364,26 @@ export default function VeritaStaffAppPage() {
         );
       })()}
 
+      {/* Wave F PR F3: same banner pattern for ?filter=expiring driven by the
+          CredentialExpirationTile drilldown. Limits to employees with at
+          least one credential expired or expiring within 60 days. */}
+      {(() => {
+        const filter = (typeof window !== "undefined") ? new URLSearchParams(window.location.search).get("filter") : null;
+        if (filter !== "expiring") return null;
+        return (
+          <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
+            <Clock size={12} className="text-amber-600" />
+            <span className="font-medium">Showing {expiringEmployeeIdsSet.size} personnel with credentials expiring within 60 days.</span>
+            <button
+              onClick={() => navigate(labRoute("/veritastaff-app"))}
+              className="ml-auto text-primary hover:underline"
+            >
+              Clear filter
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Employee List */}
       {empLoading ? (
         <p className="text-muted-foreground">Loading employees...</p>
@@ -366,8 +403,9 @@ export default function VeritaStaffAppPage() {
           {employees
             .filter(emp => {
               const filter = (typeof window !== "undefined") ? new URLSearchParams(window.location.search).get("filter") : null;
-              if (filter !== "overdue") return true;
-              return overdueIdsSet.has(emp.id);
+              if (filter === "overdue") return overdueIdsSet.has(emp.id);
+              if (filter === "expiring") return expiringEmployeeIdsSet.has(emp.id);
+              return true;
             })
             .map((emp) => {
             const compStatus = getCompetencyStatus(emp.competencySchedule);

@@ -14,6 +14,7 @@ import { useState } from "react";
 import { getToken } from "@/lib/auth";
 import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
 import { CompetencyStatusTile } from "@/components/CompetencyStatusTile";
+import { CredentialExpirationTile } from "@/components/CredentialExpirationTile";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -148,6 +149,11 @@ export default function Dashboard() {
           lab has zero active testing personnel or the user is on the legacy
           /dashboard URL. */}
       <CompetencyStatusTile className="mb-6" />
+
+      {/* Wave F PR F3: Credential expiration tile. Hides itself when the lab
+          has zero credentials with an expiration_date. Pairs visually with
+          the competency tile so surveyors see both signals adjacently. */}
+      <CredentialExpirationTile className="mb-6" />
 
       {/* Correlations due soon */}
       <CorrelationsDueSoonWidget className="mb-6" />
