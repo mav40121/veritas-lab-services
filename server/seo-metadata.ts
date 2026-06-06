@@ -178,6 +178,42 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "Trust & Security | Veritas Lab Services",
     description: "How VeritaAssure\u2122 protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
   },
+  "/operations": {
+    title: "Operations | VeritaAssure\u2122 Lab Productivity & CPRT",
+    description: "VeritaOps\u2122 tools for lab operations: cost-per-reportable-test analytics, productivity benchmarking, by-hour staffing, monthly tracking, and quality metrics.",
+  },
+  "/book/scoping-call": {
+    title: "Book a Scoping Call | Veritas Lab Services",
+    description: "Schedule a 30-minute scoping call with Michael Veri to plan your VeritaAssure\u2122 rollout, accreditation timeline, or lab operations review.",
+  },
+  "/founding-lab/apply": {
+    title: "Founding Lab Program Application | VeritaAssure\u2122",
+    description: "Apply to the VeritaAssure\u2122 Founding Lab Program. Locked rate, annual at-will mutual renewal, priority support Year 1, and named recognition.",
+  },
+  "/demo/cprt": {
+    title: "VeritaOps\u2122 CPRT Demo | Cost Per Reportable Test",
+    description: "Interactive demo of the CPRT (Cost-Per-Reportable-Test) four-layer framework built on CLSI GP11-A. Lab director and CFO perspective in one workspace.",
+  },
+  "/demo/qc": {
+    title: "VeritaQC\u2122 Demo | Westgard QC + Monthly Attestation",
+    description: "Try the VeritaQC\u2122 demo. Westgard QC rules, monthly attestation, daily review queue, and director sign-off built for clinical laboratories.",
+  },
+  "/resources/manual-logs-why-most-labs-should-stop": {
+    title: "Manual Logs: Why Most Labs Should Stop | Veritas Lab Services",
+    description: "Most clinical labs still use paper or Excel logs for QC, maintenance, and competency. Why that fails CLIA, TJC, and CAP audits, and what to do instead.",
+  },
+  "/resources/precision-verification-report-interpretation-guide": {
+    title: "Interpret EP15 Precision Reports | Veritas Lab Services",
+    description: "How to interpret EP15-A3 precision verification reports for CLIA compliance: SD, CV, total imprecision, and what surveyors look for in your documentation.",
+  },
+  "/resources/cost-per-reportable-test-four-layer-framework": {
+    title: "CPRT Four-Layer Framework | Veritas Lab Services",
+    description: "The CPRT four-layer framework (reagents, labor, equipment, overhead) built on CLSI GP11-A. How to use it for budget, capital, and contract negotiations.",
+  },
+  "/resources/why-veritacheck-vs-legacy-verification": {
+    title: "VeritaCheck\u2122 vs Legacy Verification | Veritas Lab Services",
+    description: "How VeritaCheck\u2122 improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+  },
 };
 
 export function getBaseUrl(): string {
