@@ -60,6 +60,7 @@ import {
   Archive,
 } from "lucide-react";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
+import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1962,6 +1963,20 @@ function NewAssessmentDialog({
     },
     enabled: !!activeLabId,
   });
+
+  // Wave F PR F4: qualified observers (LD / TC / TS) for the Element 1 + 4
+  // observer-initials Select. Empty list is acceptable — paper-first labs
+  // with no staff roster fall through to the free-text Input branch.
+  const { data: qualifiedObservers, isLoading: observersLoading } = useQuery<QualifiedObserver[]>({
+    queryKey: [activeLabId ? `/api/labs/${activeLabId}/staff/qualified-observers` : "no-observers"],
+    queryFn: async () => {
+      if (!activeLabId) return [];
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/qualified-observers`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!activeLabId,
+  });
   const [evaluatorName, setEvaluatorName] = useState("");
   const [evaluatorTitle, setEvaluatorTitle] = useState("");
   const [evaluatorTitleOther, setEvaluatorTitleOther] = useState("");
@@ -2518,9 +2533,14 @@ function NewAssessmentDialog({
                           <label className="text-[10px] text-muted-foreground">Specimen ID</label>
                           <Input className="text-xs h-7" placeholder="Specimen ID observed" value={getTechDataForElement(1, mg.id).el1_specimen_id} onChange={e => setTechField(1, mg.id, "el1_specimen_id", e.target.value)} />
                         </div>
-                        <div className="w-24">
-                          <label className="text-[10px] text-muted-foreground">Observer Initials</label>
-                          <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(1, mg.id).el1_observer_initials} onChange={e => setTechField(1, mg.id, "el1_observer_initials", e.target.value)} maxLength={10} />
+                        <div className="w-56">
+                          <label className="text-[10px] text-muted-foreground">Observer (LD / TC / TS)</label>
+                          <ObserverInitialsField
+                            value={getTechDataForElement(1, mg.id).el1_observer_initials}
+                            onChange={(v) => setTechField(1, mg.id, "el1_observer_initials", v)}
+                            observers={qualifiedObservers || []}
+                            isLoading={observersLoading}
+                          />
                         </div>
                         <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
                           <input type="checkbox" checked={getTechDataForElement(1, mg.id).passed} onChange={e => setTechField(1, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
@@ -2613,9 +2633,14 @@ function NewAssessmentDialog({
                           <label className="text-[10px] text-muted-foreground">Date Observed</label>
                           <Input type="date" className="text-xs h-7" value={getTechDataForElement(4, mg.id).el4_date_observed} onChange={e => setTechField(4, mg.id, "el4_date_observed", e.target.value)} />
                         </div>
-                        <div className="w-24">
-                          <label className="text-[10px] text-muted-foreground">Observer Initials</label>
-                          <Input className="text-xs h-7" placeholder="Init" value={getTechDataForElement(4, mg.id).el4_observer_initials} onChange={e => setTechField(4, mg.id, "el4_observer_initials", e.target.value)} maxLength={10} />
+                        <div className="w-56">
+                          <label className="text-[10px] text-muted-foreground">Observer (LD / TC / TS)</label>
+                          <ObserverInitialsField
+                            value={getTechDataForElement(4, mg.id).el4_observer_initials}
+                            onChange={(v) => setTechField(4, mg.id, "el4_observer_initials", v)}
+                            observers={qualifiedObservers || []}
+                            isLoading={observersLoading}
+                          />
                         </div>
                         <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
                           <input type="checkbox" checked={getTechDataForElement(4, mg.id).passed} onChange={e => setTechField(4, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />

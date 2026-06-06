@@ -15858,6 +15858,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // GET /api/labs/:labId/staff/qualified-observers
+  //
+  // Wave F PR F4 (2026-06-06). Returns the staff_employees who hold one of
+  // the CLIA observer-qualified roles (LD, TC, TS) so the VeritaComp
+  // Element 1 and Element 4 observer-initials field can offer a controlled
+  // list. Per TJC HR.01.06.01 EP 18 and 42 CFR §493.1235, the direct
+  // observation steps of competency assessment must be performed by a Lab
+  // Director or designee, a Technical Consultant (moderate complexity), or
+  // a Technical Supervisor (high complexity).
+  //
+  // Initials are computed from first_name / middle_initial / last_name so
+  // the lab does not have to maintain a parallel "official initials" field.
+  // The free-text fallback in the dialog satisfies paper-first labs whose
+  // observer signed the paper record and is being transcribed here.
+  app.get("/api/labs/:labId/staff/qualified-observers", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const rows = (db as any).$client.prepare(
+      `SELECT e.id AS employee_id, e.first_name, e.last_name, e.middle_initial,
+              GROUP_CONCAT(DISTINCT r.role) AS role_csv
+       FROM staff_employees e
+       JOIN staff_roles r ON r.employee_id = e.id
+       WHERE e.tier2_lab_id = ?
+         AND e.status = 'active'
+         AND r.role IN ('LD', 'TC', 'TS')
+       GROUP BY e.id, e.first_name, e.last_name, e.middle_initial
+       ORDER BY e.last_name, e.first_name`
+    ).all(labId) as Array<{
+      employee_id: number; first_name: string; last_name: string; middle_initial: string | null; role_csv: string;
+    }>;
+
+    const observers = rows.map((r) => {
+      const firstInitial = (r.first_name || "").trim().charAt(0).toUpperCase();
+      const middleInitial = (r.middle_initial || "").trim().charAt(0).toUpperCase();
+      const lastInitial = (r.last_name || "").trim().charAt(0).toUpperCase();
+      const initials = [firstInitial, middleInitial, lastInitial].filter(Boolean).join("");
+      const name = [r.last_name, r.first_name].filter(Boolean).join(", ") + (r.middle_initial ? ` ${r.middle_initial}.` : "");
+      const roles = (r.role_csv || "").split(",").filter(Boolean);
+      return {
+        employeeId: r.employee_id,
+        name: name || `Employee #${r.employee_id}`,
+        initials,
+        roles,
+      };
+    });
+    res.json(observers);
+  });
+
   // GET flat list of every instrument across the lab's VeritaMaps for the
   // assignment picker dialog. Grouped client-side by map_name.
   app.get("/api/labs/:labId/veritamap/instruments-flat", authMiddleware, labScopeMiddleware, (req: any, res) => {
