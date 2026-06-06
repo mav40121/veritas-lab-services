@@ -411,6 +411,18 @@ sqlite.exec(`
     FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
   );
 
+  CREATE TABLE IF NOT EXISTS staff_position_descriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    title TEXT,
+    description TEXT,
+    updated_at TEXT NOT NULL,
+    updated_by_user_id INTEGER,
+    UNIQUE(lab_id, role),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+
   CREATE TABLE IF NOT EXISTS lab_certificates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -4329,6 +4341,18 @@ try {
   if (!cols.includes("termination_reason")) {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN termination_reason TEXT"); } catch {}
   }
+}
+
+// Wave H PR H3 (2026-06-06). NEW DB TABLE RULE sentinel for
+// staff_position_descriptions (CREATE statement above with the other
+// staff_* tables). One row per (lab_id, role). The UNIQUE constraint
+// is encoded in the CREATE; this sentinel exists so the PRAGMA
+// table_info path doesn't blow up on labs upgrading from before the
+// columns were added (future-proof for columns we layer on later).
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_position_descriptions)").all() as any[]).map(c => c.name);
+  void cols;
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_position_descriptions_lab ON staff_position_descriptions(lab_id)"); } catch {}
 }
 
 // Wave H PR H2 (2026-06-06). Structured qualifications-verification

@@ -465,6 +465,11 @@ export default function VeritaStaffAppPage() {
         </div>
       )}
 
+      {/* Wave H PR H3 (2026-06-06): per-CLIA-role position descriptions.
+          Surveyors expect to see a written PD per role on file
+          (§493.1235(b)(7)). One card with six expandable role rows. */}
+      {lab && <PositionDescriptionsCard className="mt-6" />}
+
       {/* Lab Setup Dialog */}
       <LabSetupDialog open={showLabSetup} onOpenChange={setShowLabSetup} lab={lab ?? null} isStaffAccreditorAllowed={isStaffAccreditorAllowed} />
 
@@ -2044,5 +2049,175 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── PositionDescriptionsCard ───────────────────────────────────────
+//
+// Wave H PR H3 (2026-06-06). Surfaces the lab's six per-CLIA-role
+// position descriptions. Six expandable rows; each opens to a title
+// input + description textarea + Save button. Reg anchor:
+// 42 CFR §493.1235(b)(7) — lab director documents personnel duties
+// and responsibilities. The PD is the canonical surveyor artifact.
+
+interface PositionDescription {
+  role: string;
+  title: string | null;
+  description: string | null;
+  updated_at: string | null;
+  updated_by_user_id: number | null;
+}
+
+const PD_ROLE_LABELS: Record<string, string> = {
+  LD: "Lab Director",
+  CC: "Clinical Consultant",
+  TC: "Technical Consultant (moderate complexity)",
+  TS: "Technical Supervisor (high complexity)",
+  GS: "General Supervisor (high complexity)",
+  TP: "Testing Personnel",
+};
+const PD_ROLE_ORDER = ["LD", "CC", "TC", "TS", "GS", "TP"];
+
+function PositionDescriptionsCard({ className = "" }: { className?: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const readOnly = useIsReadOnly('veritastaff');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, { title: string; description: string }>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const url = activeLabId ? `/api/labs/${activeLabId}/staff/position-descriptions` : null;
+  const { data: pds = [] } = useQuery<PositionDescription[]>({
+    queryKey: [url ?? "no-pds"],
+    queryFn: async () => {
+      if (!url) return [];
+      const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!url,
+  });
+
+  function ensureDraft(role: string) {
+    if (drafts[role]) return drafts[role];
+    const existing = pds.find(p => p.role === role);
+    const seed = { title: existing?.title || "", description: existing?.description || "" };
+    setDrafts(d => ({ ...d, [role]: seed }));
+    return seed;
+  }
+
+  async function save(role: string) {
+    if (!activeLabId) return;
+    const draft = drafts[role] || ensureDraft(role);
+    setSaving(role);
+    try {
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/position-descriptions/${role}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ title: draft.title, description: draft.description }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await queryClient.invalidateQueries({ queryKey: [url] });
+      toast({ title: "Position description saved", description: `${PD_ROLE_LABELS[role]} updated.` });
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  if (!activeLabId) return null;
+
+  return (
+    <Card className={className}>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-primary" />
+            <h3 className="font-semibold">Position Descriptions</h3>
+            <span className="text-xs text-muted-foreground">
+              one per CLIA role, per §493.1235(b)(7)
+            </span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {PD_ROLE_ORDER.map(role => {
+            const existing = pds.find(p => p.role === role);
+            const hasContent = !!(existing && (existing.title || existing.description));
+            const isOpen = expanded === role;
+            const draft = drafts[role] || { title: existing?.title || "", description: existing?.description || "" };
+            return (
+              <div key={role} className="rounded-md border border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isOpen) {
+                      setExpanded(null);
+                    } else {
+                      ensureDraft(role);
+                      setExpanded(role);
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="font-mono text-xs">{role}</Badge>
+                    <span className="text-sm">{PD_ROLE_LABELS[role]}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasContent ? (
+                      <Badge className="text-[10px] border bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                        On file
+                      </Badge>
+                    ) : (
+                      <Badge className="text-[10px] border bg-amber-500/10 text-amber-700 border-amber-500/30">
+                        No description yet
+                      </Badge>
+                    )}
+                    <ChevronLeft size={12} className={`transition-transform ${isOpen ? "rotate-90" : "-rotate-90"}`} />
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="border-t border-border p-3 space-y-2">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Title</label>
+                      <Input
+                        value={draft.title}
+                        onChange={(e) => setDrafts(d => ({ ...d, [role]: { ...draft, title: e.target.value } }))}
+                        placeholder={`e.g., ${PD_ROLE_LABELS[role]}`}
+                        disabled={readOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Description</label>
+                      <Textarea
+                        rows={5}
+                        value={draft.description}
+                        onChange={(e) => setDrafts(d => ({ ...d, [role]: { ...draft, description: e.target.value } }))}
+                        placeholder="Duties, responsibilities, minimum qualifications, reporting relationships..."
+                        disabled={readOnly}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] text-muted-foreground">
+                        {existing?.updated_at ? `Last updated ${existing.updated_at.split("T")[0]}` : "Never saved"}
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => save(role)}
+                        disabled={readOnly || saving === role}
+                      >
+                        {saving === role ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

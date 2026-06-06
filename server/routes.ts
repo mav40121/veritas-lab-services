@@ -16128,6 +16128,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(observers);
   });
 
+  // GET /api/labs/:labId/staff/position-descriptions
+  //
+  // Wave H PR H3 (2026-06-06). Returns the lab's per-CLIA-role position
+  // descriptions. One row per (lab_id, role); roles allowlisted to
+  // {LD, CC, TC, TS, GS, TP} per CLIA Subpart M. The shape always
+  // includes all six roles (synthesized empties when no row exists)
+  // so the client can render six slots without an extra round-trip.
+  //
+  // PR review-defense: §493.1235(b)(7) puts the lab director on the
+  // hook for documenting "the duties and responsibilities of personnel".
+  // A surveyor opens the personnel file expecting a PD per role; this
+  // is where the lab stores it.
+  const CLIA_ROLE_ALLOWLIST = ["LD", "CC", "TC", "TS", "GS", "TP"] as const;
+  app.get("/api/labs/:labId/staff/position-descriptions", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const rows = (db as any).$client.prepare(
+      `SELECT role, title, description, updated_at, updated_by_user_id
+       FROM staff_position_descriptions
+       WHERE lab_id = ?`
+    ).all(labId) as Array<{ role: string; title: string | null; description: string | null; updated_at: string; updated_by_user_id: number | null }>;
+    const byRole = new Map(rows.map(r => [r.role, r]));
+    const result = CLIA_ROLE_ALLOWLIST.map(role => {
+      const r = byRole.get(role);
+      return r
+        ? { role, title: r.title, description: r.description, updated_at: r.updated_at, updated_by_user_id: r.updated_by_user_id }
+        : { role, title: null, description: null, updated_at: null, updated_by_user_id: null };
+    });
+    res.json(result);
+  });
+
+  // PUT /api/labs/:labId/staff/position-descriptions/:role
+  //
+  // Wave H PR H3: upsert one role's position description. Role must be
+  // in the CLIA allowlist (explicit allowlist per CLAUDE.md §8). Body
+  // accepts { title?, description? } both optional. Empty body acts as
+  // a no-op upsert (creates an empty row if one didn't exist).
+  app.put("/api/labs/:labId/staff/position-descriptions/:role", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const role = String(req.params.role || "").toUpperCase();
+    if (!CLIA_ROLE_ALLOWLIST.includes(role as any)) {
+      return res.status(400).json({ error: `Role must be one of ${CLIA_ROLE_ALLOWLIST.join(", ")}` });
+    }
+    const title = typeof req.body?.title === "string" ? req.body.title : null;
+    const description = typeof req.body?.description === "string" ? req.body.description : null;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      `INSERT INTO staff_position_descriptions (lab_id, role, title, description, updated_at, updated_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(lab_id, role) DO UPDATE SET
+         title = excluded.title,
+         description = excluded.description,
+         updated_at = excluded.updated_at,
+         updated_by_user_id = excluded.updated_by_user_id`
+    ).run(labId, role, title, description, now, req.userId || null);
+    const row = (db as any).$client.prepare(
+      `SELECT role, title, description, updated_at, updated_by_user_id FROM staff_position_descriptions WHERE lab_id = ? AND role = ?`
+    ).get(labId, role);
+    res.json(row);
+  });
+
   // GET flat list of every instrument across the lab's VeritaMaps for the
   // assignment picker dialog. Grouped client-side by map_name.
   app.get("/api/labs/:labId/veritamap/instruments-flat", authMiddleware, labScopeMiddleware, (req: any, res) => {
