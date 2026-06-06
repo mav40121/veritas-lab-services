@@ -4309,3 +4309,24 @@ try {
     console.log(`[migration] Wave F PR F2 staff_employees.title_code backfilled on ${backfill.changes} row(s)`);
   }
 }
+
+// Wave H PR H1 (2026-06-06). Soft-delete columns on staff_employees:
+// terminated_at + termination_reason. Replaces hard-DELETE so that the
+// employee row, their roles, their competency schedule, their assessment
+// PDFs, and their linked credential URLs all survive past the day the
+// lab director hits Terminate. CMS records retention (42 CFR §493.1105)
+// requires personnel records to be retained for at least 2 years after
+// the employee leaves the lab; TJC HR.01.07.01 mirrors. Hard delete
+// loses the surveyor trail.
+//
+// "Boot migrations: no cascading writes" rule respected — this only
+// adds columns; no UPDATE walks rows.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("terminated_at")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN terminated_at TEXT"); } catch {}
+  }
+  if (!cols.includes("termination_reason")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN termination_reason TEXT"); } catch {}
+  }
+}
