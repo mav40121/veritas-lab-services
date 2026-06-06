@@ -36,10 +36,12 @@ async function fetchTemplate() {
 }
 
 async function buildSyntheticXlsx(rows) {
-  // We avoid bundling ExcelJS into this script's dependencies and instead
-  // build the workbook via the repo's exceljs dep, called from the same
-  // Node process.
-  const ExcelJS = require(require.resolve("exceljs", { paths: [process.cwd()] }));
+  // Repo package.json declares "type": "module" so `require` is not
+  // defined at top-level. Use createRequire to pull in exceljs from the
+  // repo's node_modules without bundling it into this script.
+  const { createRequire } = await import("module");
+  const req = createRequire(`${process.cwd()}/package.json`);
+  const ExcelJS = req("exceljs");
   const wb = new ExcelJS.Workbook();
   const sheet = wb.addWorksheet("Assessments");
   sheet.columns = HEADERS_LIST.map((h) => ({ header: h, width: 22 }));
