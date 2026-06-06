@@ -13730,6 +13730,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare(
       "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1 WHERE id = ?"
     ).run(now, req.userId, req.params.id);
+    // Wave J PR J3 (2026-06-06): instrument the sign action so the
+    // surveyor-facing "when was this signed off and by whom" question
+    // gets a real answer from the audit_log later. before/after capture
+    // the lock transition so the dialog can render the diff cleanly.
+    logAudit({
+      userId: req.userId,
+      ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritacomp",
+      action: "update",
+      entityType: "assessment",
+      entityId: String(req.params.id),
+      entityLabel: "Sign and Complete",
+      before: { locked: 0, completion_date: null, final_signed_by_user_id: null },
+      after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId },
+      ipAddress: req.ip,
+    });
     res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId });
   });
 
@@ -13741,7 +13757,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required to unlock" });
     const sqlite = (db as any).$client;
     const assessment = sqlite.prepare(
-      `SELECT a.id, a.locked, p.lab_id FROM competency_assessments a
+      `SELECT a.id, a.locked, a.completion_date, a.final_signed_by_user_id, p.lab_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
     ).get(req.params.id) as any;
@@ -13750,6 +13766,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     sqlite.prepare(
       "UPDATE competency_assessments SET locked = 0, completion_date = NULL, final_signed_by_user_id = NULL WHERE id = ?"
     ).run(req.params.id);
+    // Wave J PR J3: instrument unlock. Owner/admin only per the existing
+    // gate above; capturing this in the audit log keeps the trail honest
+    // when a signed assessment gets reopened for correction.
+    logAudit({
+      userId: req.userId,
+      ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritacomp",
+      action: "update",
+      entityType: "assessment",
+      entityId: String(req.params.id),
+      entityLabel: "Unlock",
+      before: { locked: 1, completion_date: assessment.completion_date, final_signed_by_user_id: assessment.final_signed_by_user_id },
+      after: { locked: 0, completion_date: null, final_signed_by_user_id: null },
+      ipAddress: req.ip,
+    });
     console.log(`[competency/${req.params.id}/unlock] unlocked by user_id=${req.userId} for lab=${req.scope.labId}`);
     res.json({ ok: true, locked: false });
   });
@@ -14436,6 +14467,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("Blank template PDF generation error:", err);
       return res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
+  });
+
+  // GET /api/labs/:labId/competency/assessments/:id/audit-log
+  //
+  // Wave J PR J3 (2026-06-06). Returns the audit_log rows scoped to a
+  // single competency_assessment so the dialog can render the change
+  // history. Surveyor question: "who modified this assessment after it
+  // was signed, and when". audit_log carries actor (user_id), action,
+  // before/after JSON snapshots, IP, and timestamp.
+  //
+  // Honest note on coverage: only sign / unlock / delete actions are
+  // instrumented as of this PR. Create + per-field update are NOT yet
+  // captured. The dialog says so explicitly in its footer until those
+  // get instrumented in a follow-up.
+  app.get("/api/labs/:labId/competency/assessments/:id/audit-log", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    // Confirm the assessment lives in this lab so a member of lab A can't
+    // pull audit data for lab B's assessment id.
+    const owns = (db as any).$client.prepare(
+      `SELECT a.id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, req.scope.labId);
+    if (!owns) return res.status(404).json({ error: "Assessment not found in this lab" });
+    const rows = (db as any).$client.prepare(
+      `SELECT al.id, al.user_id, al.module, al.action, al.entity_type, al.entity_label,
+              al.before_json, al.after_json, al.ip_address, al.created_at,
+              u.email AS actor_email, u.lab_name AS actor_lab
+       FROM audit_log al
+       LEFT JOIN users u ON al.user_id = u.id
+       WHERE al.module = 'veritacomp'
+         AND al.entity_type = 'assessment'
+         AND al.entity_id = ?
+       ORDER BY al.created_at DESC, al.id DESC
+       LIMIT 100`
+    ).all(String(req.params.id));
+    res.json(rows);
   });
 
   // GET /api/labs/:labId/competency/assessments/:id/prior-year-comparison
