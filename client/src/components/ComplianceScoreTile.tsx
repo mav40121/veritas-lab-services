@@ -153,7 +153,7 @@ export function ComplianceScoreTile({ className = "" }: { className?: string }) 
             {data.perProgram.length > 0 && (
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                  Per-program (worst-first, A + C only — B/D/E are lab-level)
+                  Per-program (worst-first; A + C only; B/D/E are lab-level)
                 </div>
                 <table className="w-full text-xs">
                   <thead>
