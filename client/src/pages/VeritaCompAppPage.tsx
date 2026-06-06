@@ -62,6 +62,7 @@ import {
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
+import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2021,6 +2022,11 @@ function NewAssessmentDialog({
     enabled: !!activeLabId,
   });
 
+  // Wave I PR I3 (2026-06-06): PT sample picker. Holds the method_group_id
+  // the picker is currently open against, so onSelect updates the right
+  // row's el5_sample_id / el5_acceptable fields. null = picker closed.
+  const [ptPickerMgId, setPtPickerMgId] = useState<number | null>(null);
+
   // Wave F PR F4: qualified observers (LD / TC / TS) for the Element 1 + 4
   // observer-initials Select. Empty list is acceptable — paper-first labs
   // with no staff roster fall through to the free-text Input branch.
@@ -2387,6 +2393,7 @@ function NewAssessmentDialog({
   }
 
   return (
+    <>
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -2717,6 +2724,26 @@ function NewAssessmentDialog({
                       </label>
                     </div>
                     <p className="text-[10px] italic text-muted-foreground mb-2">The PT report or blind sample log serves as the supporting record. Do not enter patient specimen data here.</p>
+                    {/* Wave I PR I3: Import from VeritaPT. Opens a picker
+                        of the lab's recent pt_events filtered loosely by
+                        this program's analytes. Selecting an event fills
+                        Sample ID and Acceptable for the current method
+                        group. The lab director picks the Sample Type
+                        from the existing dropdown themselves. */}
+                    {!getTechDataForElement(5, mg.id).el5_na && (
+                      <div className="mb-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => setPtPickerMgId(mg.id)}
+                          title="Pick a recent PT event from VeritaPT"
+                        >
+                          Import from VeritaPT
+                        </Button>
+                      </div>
+                    )}
                     {getTechDataForElement(5, mg.id).el5_na ? (
                       <div>
                         <label className="text-[10px] text-muted-foreground">Justification (required)</label>
@@ -3060,6 +3087,23 @@ function NewAssessmentDialog({
         </div>
       </DialogContent>
     </Dialog>
+    {/* Wave I PR I3: PT sample picker. Mounted as a sibling of the
+        main dialog so it floats above. onSelect fills sample_id and
+        acceptable for the method group that opened it; the lab director
+        still chooses the Sample Type from the existing curated dropdown. */}
+    <PTSamplePickerDialog
+      open={ptPickerMgId !== null}
+      onOpenChange={(v) => { if (!v) setPtPickerMgId(null); }}
+      labId={activeLabId ?? null}
+      programId={program.id}
+      onSelect={(s: PTSample) => {
+        if (ptPickerMgId === null) return;
+        setTechField(5, ptPickerMgId, "el5_sample_id", s.suggestedSampleId);
+        if (s.suggestedAcceptable === 1) setTechField(5, ptPickerMgId, "el5_acceptable", true);
+        else if (s.suggestedAcceptable === 0) setTechField(5, ptPickerMgId, "el5_acceptable", false);
+      }}
+    />
+    </>
   );
 }
 

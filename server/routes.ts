@@ -15874,6 +15874,106 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // GET /api/labs/:labId/veritacomp/programs/:programId/pt-samples
+  //
+  // Wave I PR I3 (2026-06-06). Cross-module bridge from VeritaPT into
+  // the VeritaComp New Assessment dialog's Element 5 row. Returns the
+  // lab owner's recent pt_events filtered loosely by analytes appearing
+  // in the program's method groups, capped at 25 most recent (event_date
+  // DESC). Lets the lab director pick a real recorded PT event instead
+  // of typing the sample id, date, and acceptable status by hand.
+  //
+  // Schema reality: pt_events.user_id is the LAB OWNER, not an employee
+  // (PT events are not attributed per testing personnel in our schema).
+  // The original I3 framing ("the employee's PT samples") was rescoped
+  // to "the lab's recent PT events" because the data model doesn't
+  // support per-employee attribution. The lab director picks which event
+  // was run by the employee being assessed.
+  //
+  // Filtering: program.method_groups[].analytes is a JSON array of
+  // analyte names. We pull recent pt_events for the lab and keep only
+  // rows whose analyte text appears in (or contains) any of those
+  // program analytes (case-insensitive). When the program has no
+  // analytes recorded, we return all recent events as a fallback.
+  app.get("/api/labs/:labId/veritacomp/programs/:programId/pt-samples", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const ownerUserId = labOwnerUserId(req);
+    const program = (db as any).$client.prepare(
+      `SELECT id, name FROM competency_programs WHERE id = ? AND lab_id = ?`
+    ).get(req.params.programId, req.scope.labId) as any;
+    if (!program) return res.status(404).json({ error: "Program not found in this lab" });
+
+    // Collect the program's analytes from its method groups. analytes is
+    // a JSON-encoded text array; tolerate parse failure by ignoring.
+    const mgs = (db as any).$client.prepare(
+      `SELECT analytes FROM competency_method_groups WHERE program_id = ?`
+    ).all(program.id) as Array<{ analytes: string | null }>;
+    const programAnalytes = new Set<string>();
+    for (const mg of mgs) {
+      if (!mg.analytes) continue;
+      try {
+        const arr = JSON.parse(mg.analytes);
+        if (Array.isArray(arr)) {
+          for (const a of arr) {
+            if (typeof a === "string" && a.trim()) programAnalytes.add(a.trim().toLowerCase());
+          }
+        }
+      } catch { /* swallow */ }
+    }
+
+    // Pull recent PT events for the lab owner. 18 months is the practical
+    // surveyor-defensible window (CMS Subpart H allows the lab to use any
+    // event in the current calendar year; widening to 18 months lets the
+    // LD also reach a late-year event from the prior cycle).
+    const since = new Date();
+    since.setMonth(since.getMonth() - 18);
+    const sinceDate = since.toISOString().split("T")[0];
+    const events = (db as any).$client.prepare(
+      `SELECT id, event_id, event_name, event_date, analyte, your_result, your_method,
+              acceptable_low, acceptable_high, sdi, pass_fail
+       FROM pt_events
+       WHERE user_id = ? AND date(event_date) >= date(?)
+       ORDER BY date(event_date) DESC, id DESC
+       LIMIT 200`
+    ).all(ownerUserId, sinceDate) as Array<{
+      id: number; event_id: string | null; event_name: string | null; event_date: string;
+      analyte: string; your_result: number | null; your_method: string | null;
+      acceptable_low: number | null; acceptable_high: number | null; sdi: number | null;
+      pass_fail: string;
+    }>;
+
+    // Filter against program analytes when we have them; otherwise return
+    // all. The match is case-insensitive substring both ways so "ALT" in
+    // pt_events.analyte matches "ALT (SGPT)" in program analytes, and
+    // vice versa.
+    const filtered = programAnalytes.size === 0 ? events : events.filter(e => {
+      const a = (e.analyte || "").toLowerCase();
+      for (const pa of programAnalytes) {
+        if (a.includes(pa) || pa.includes(a)) return true;
+      }
+      return false;
+    });
+
+    res.json(filtered.slice(0, 25).map(e => ({
+      id: e.id,
+      eventId: e.event_id,
+      eventName: e.event_name,
+      eventDate: e.event_date,
+      analyte: e.analyte,
+      yourResult: e.your_result,
+      yourMethod: e.your_method,
+      acceptableLow: e.acceptable_low,
+      acceptableHigh: e.acceptable_high,
+      sdi: e.sdi,
+      passFail: e.pass_fail,
+      // Convenience pre-formatted fields the picker can drop straight
+      // into the Element 5 form state.
+      suggestedSampleType: "PT",
+      suggestedSampleId: e.event_id || e.event_name || `PT event #${e.id}`,
+      suggestedAcceptable: e.pass_fail === "pass" ? 1 : (e.pass_fail === "fail" ? 0 : null),
+    })));
+  });
+
   // GET /api/labs/:labId/competency/employees/:id/staff-instruments
   //
   // Phase B1 of the employee-table unification (2026-06-06). Resolves a
