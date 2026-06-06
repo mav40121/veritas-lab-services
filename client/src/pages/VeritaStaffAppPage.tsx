@@ -19,7 +19,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Plus, Trash2, ChevronLeft, Users, Lock, FileDown, Building2,
@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
+import { getStaffTitleLabel, getStaffTitleGroups } from "@shared/staffTitles";
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Lab {
@@ -81,6 +82,9 @@ interface Employee {
   first_name: string;
   middle_initial: string | null;
   title: string | null;
+  /** Wave F PR F2: codified credential family. Nullable when the lab has not
+   *  picked one yet (legacy free-text title still rendered as fallback). */
+  title_code: string | null;
   hire_date: string | null;
   qualifications_text: string | null;
   highest_complexity: string;
@@ -646,7 +650,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
   const isEdit = !!employee;
 
   const [form, setForm] = useState({
-    lastName: "", firstName: "", middleInitial: "", title: "",
+    lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "",
     hireDate: "", qualificationsText: "", highestComplexity: "H",
     performsTesting: true,
   });
@@ -658,12 +662,13 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
       setForm({
         lastName: employee.last_name, firstName: employee.first_name,
         middleInitial: employee.middle_initial || "", title: employee.title || "",
+        titleCode: employee.title_code || "",
         hireDate: employee.hire_date || "", qualificationsText: employee.qualifications_text || "",
         highestComplexity: employee.highest_complexity, performsTesting: employee.performs_testing === 1,
       });
       setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number })));
     } else {
-      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", hireDate: "", qualificationsText: "", highestComplexity: "H", performsTesting: true });
+      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", highestComplexity: "H", performsTesting: true });
       setRoles([]);
     }
   }, [employee, open]);
@@ -755,7 +760,45 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium">Credentials/Title</label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g., MLS(ASCP)" />
+              {/* Wave F PR F2: controlled vocabulary with free-text "Other" escape hatch.
+                  Picking a canonical code populates `title` with the display label so the
+                  surveyor-facing rendering (employee cards, list rows) stays unchanged.
+                  Picking OTHER reveals the free-text Input below, which writes directly
+                  to `title` while title_code stays "OTHER" for query stability. */}
+              <Select
+                value={form.titleCode || "__none"}
+                onValueChange={(v) => {
+                  if (v === "__none") {
+                    setForm({ ...form, titleCode: "", title: "" });
+                  } else if (v === "OTHER") {
+                    // Keep whatever the lab already typed in `title`; only the code changes.
+                    setForm({ ...form, titleCode: "OTHER" });
+                  } else {
+                    setForm({ ...form, titleCode: v, title: getStaffTitleLabel(v) });
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select credential…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">(not specified)</SelectItem>
+                  {Object.entries(getStaffTitleGroups()).map(([group, opts]) => (
+                    <SelectGroup key={group}>
+                      <SelectLabel>{group}</SelectLabel>
+                      {opts.map((o) => (
+                        <SelectItem key={o.code} value={o.code}>{o.label}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.titleCode === "OTHER" && (
+                <Input
+                  className="mt-2"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="Type credential exactly as written…"
+                />
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Hire Date</label>

@@ -4255,3 +4255,57 @@ try {
   const bookingCols = (sqlite.prepare("PRAGMA table_info(schedule_bookings)").all() as { name: string }[]).map((c) => c.name);
   void bookingCols;
 }
+
+// Wave F PR F2 (2026-06-06). Controlled-vocabulary `title_code` column on
+// staff_employees. Free-text `title` stays for display; `title_code`
+// codifies the credential family so roster queries and audit views see
+// stable identity. Backfill is keyword-driven and shaped by the shared
+// inferStaffTitleCode() helper so client and server cannot drift.
+//
+// CMS-209 is unaffected: that personnel report renders from
+// qualifications_text, not title.
+//
+// "Boot migrations: no cascading writes" rule respected — this UPDATE
+// only reads/writes the title_code column it just created. It does not
+// derive from a mutable downstream column.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("title_code")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN title_code TEXT"); } catch {}
+  }
+
+  // Inline keyword backfill. Mirror of inferStaffTitleCode() — kept in SQL
+  // for the one-shot boot pass so we do not have to load every row into
+  // Node. Order matches the priority in shared/staffTitles.ts: specialists
+  // before generalists, ASCP before AMT.
+  const backfill = sqlite.prepare(`
+    UPDATE staff_employees
+    SET title_code = CASE
+      WHEN LOWER(title) LIKE '%sbb(ascp)%' OR LOWER(title) LIKE '%sbb (ascp)%' OR LOWER(title) LIKE '%sbb ascp%' THEN 'SBB_ASCP'
+      WHEN LOWER(title) LIKE '%sc(ascp)%'  OR LOWER(title) LIKE '%sc (ascp)%'  OR LOWER(title) LIKE '%sc ascp%'  THEN 'SC_ASCP'
+      WHEN LOWER(title) LIKE '%sh(ascp)%'  OR LOWER(title) LIKE '%sh (ascp)%'  OR LOWER(title) LIKE '%sh ascp%'  THEN 'SH_ASCP'
+      WHEN LOWER(title) LIKE '%sm(ascp)%'  OR LOWER(title) LIKE '%sm (ascp)%'  OR LOWER(title) LIKE '%sm ascp%'  THEN 'SM_ASCP'
+      WHEN LOWER(title) LIKE '%mb(ascp)%'  OR LOWER(title) LIKE '%mb (ascp)%'  OR LOWER(title) LIKE '%mb ascp%'  THEN 'MB_ASCP'
+      WHEN LOWER(title) LIKE '%htl(ascp)%' OR LOWER(title) LIKE '%htl (ascp)%' OR LOWER(title) LIKE '%htl ascp%' OR LOWER(title) LIKE '%histotechnologist%' THEN 'HTL_ASCP'
+      WHEN LOWER(title) LIKE '%ht(ascp)%'  OR LOWER(title) LIKE '%ht (ascp)%'  OR LOWER(title) LIKE '%ht ascp%'  OR LOWER(title) LIKE '%histotechnician%' THEN 'HT_ASCP'
+      WHEN LOWER(title) LIKE '%ct(ascp)%'  OR LOWER(title) LIKE '%ct (ascp)%'  OR LOWER(title) LIKE '%ct ascp%'  OR LOWER(title) LIKE '%cytotechnologist%' THEN 'CT_ASCP'
+      WHEN LOWER(title) LIKE '%mls(ascp)%' OR LOWER(title) LIKE '%mls (ascp)%' OR LOWER(title) LIKE '%mls ascp%' OR LOWER(title) LIKE '%medical laboratory scientist%' THEN 'MLS_ASCP'
+      WHEN LOWER(title) LIKE '%mlt(ascp)%' OR LOWER(title) LIKE '%mlt (ascp)%' OR LOWER(title) LIKE '%mlt ascp%' OR LOWER(title) LIKE '%medical laboratory technician%' THEN 'MLT_ASCP'
+      WHEN LOWER(title) LIKE '%mt(ascp)%'  OR LOWER(title) LIKE '%mt (ascp)%'  OR LOWER(title) LIKE '%mt ascp%'  OR LOWER(title) LIKE '%medical technologist%' THEN 'MT_ASCP'
+      WHEN LOWER(title) LIKE '%mt(amt)%'   OR LOWER(title) LIKE '%mt (amt)%'   OR LOWER(title) LIKE '%mt amt%'   THEN 'MT_AMT'
+      WHEN LOWER(title) LIKE '%mlt(amt)%'  OR LOWER(title) LIKE '%mlt (amt)%'  OR LOWER(title) LIKE '%mlt amt%'  THEN 'MLT_AMT'
+      WHEN LOWER(title) LIKE '%ph.d.%'  OR LOWER(title) LIKE '%phd%'         THEN 'PhD'
+      WHEN LOWER(title) LIKE '%m.d.%'   OR title = 'MD' OR title LIKE 'MD %' OR title LIKE '% MD%' THEN 'MD'
+      WHEN LOWER(title) LIKE '%d.o.%'   OR title = 'DO' OR title LIKE 'DO %' OR title LIKE '% DO%' THEN 'DO'
+      WHEN LOWER(title) LIKE '%m.s.%'   OR LOWER(title) LIKE '%master of science%' THEN 'MS'
+      WHEN LOWER(title) LIKE '%b.s.%'   OR LOWER(title) LIKE '%b.a.%' OR LOWER(title) LIKE '%bachelor%' THEN 'BS_BA'
+      WHEN LOWER(title) LIKE '%a.s.%'   OR LOWER(title) LIKE '%associate%' THEN 'AS'
+      WHEN LOWER(title) LIKE '%high school%' OR LOWER(title) LIKE '%ged%' THEN 'HS_GED'
+      ELSE title_code
+    END
+    WHERE title_code IS NULL AND title IS NOT NULL AND TRIM(title) <> ''
+  `).run();
+  if (backfill.changes > 0) {
+    console.log(`[migration] Wave F PR F2 staff_employees.title_code backfilled on ${backfill.changes} row(s)`);
+  }
+}
