@@ -862,6 +862,42 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
   const hasTC = roles.some((r) => r.role === "TC");
   const hasTS = roles.some((r) => r.role === "TS");
 
+  // Wave G PR G6 (2026-06-06). Inline CLIA role qualification reminders.
+  // Paraphrased from 42 CFR §§493.1405, 493.1411, 493.1417, 493.1441,
+  // 493.1443, 493.1447, 493.1449, 493.1461, 493.1489. Specific board
+  // certifications and grandfather clauses are summarized; the cite gives
+  // the lab director the exact regulation to consult before hiring.
+  // Surfaced only when a role is selected so the dialog stays compact for
+  // labs that just want to add a TP and move on.
+  const CLIA_ROLE_QUALIFICATIONS: Record<string, { high: string; moderate: string }> = {
+    LD: {
+      high: "MD/DO/DPM with 1 year of high-complexity laboratory training/experience after residency; or PhD in a chemical/biological/clinical lab science with board certification (ABCC, ABMG, ABMM, ABMS, etc.). 42 CFR §493.1443.",
+      moderate: "MD/DO/DPM, or PhD with board certification, or MS/BS in chemical/biological/clinical lab science with documented training and experience. 42 CFR §493.1405.",
+    },
+    CC: {
+      high: "MD/DO with current license and qualified by training and experience to consult on patient testing. 42 CFR §493.1417.",
+      moderate: "Same as high complexity. 42 CFR §493.1417.",
+    },
+    TC: {
+      high: "Not used at high complexity (see TS instead).",
+      moderate: "MD/DO/DPM; or PhD/MS/BS in chemical/biological/clinical lab science with 1-2 years experience in the assigned specialty. 42 CFR §493.1411.",
+    },
+    TS: {
+      high: "MD/DO/DPM with 1 year specialty experience; or PhD with 1 year experience and specialty-specific board certification; or MS with 2 years of high-complexity testing experience in the specialty. 42 CFR §493.1449.",
+      moderate: "Not used at moderate complexity (see TC instead).",
+    },
+    GS: {
+      high: "MD/DO/DPM, or PhD/MS, or BS with 2 years of high-complexity testing experience, or AS with 2 years of high-complexity experience plus 20 CEUs. 42 CFR §493.1461.",
+      moderate: "Not used at moderate complexity. 42 CFR §493.1459.",
+    },
+    TP: {
+      high: "MD/DO/DPM, or PhD/MS/BS in chemical/biological/clinical lab science, or AS/equivalent with documented training and experience. 42 CFR §493.1489.",
+      moderate: "MD/DO/DPM, PhD/MS/BS, AS, or high school diploma/GED with documented training before reporting patient results. 42 CFR §§493.1421-1423.",
+    },
+  };
+  const complexityForQual: "high" | "moderate" = complexity === "moderate" ? "moderate" : "high";
+  const activeRolesForReminder = Array.from(new Set(roles.map(r => r.role)));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -973,6 +1009,30 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
                 );
               })}
             </div>
+
+            {/* Wave G PR G6 (2026-06-06): inline CLIA qualification reminders.
+                Surfaces minimum personnel requirements per selected role at
+                the lab's complexity, paraphrased from 42 CFR §493 Subpart M.
+                The dialog stays compact when no role is selected. */}
+            {activeRolesForReminder.length > 0 && (
+              <div className="mb-3 rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-800 mb-1.5">
+                  Minimum CLIA qualifications ({complexityForQual} complexity)
+                </div>
+                <ul className="space-y-1 text-[11px] text-blue-900">
+                  {activeRolesForReminder.map(role => {
+                    const entry = CLIA_ROLE_QUALIFICATIONS[role];
+                    if (!entry) return null;
+                    return (
+                      <li key={role} className="flex gap-1.5">
+                        <span className="font-mono font-bold shrink-0">{role}:</span>
+                        <span className="leading-snug">{entry[complexityForQual]}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
             {/* TC Specialties */}
             {hasTC && (
