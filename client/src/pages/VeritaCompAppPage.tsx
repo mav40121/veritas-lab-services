@@ -57,6 +57,7 @@ import {
   FileText,
   ExternalLink,
   Paperclip,
+  Archive,
 } from "lucide-react";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 
@@ -395,6 +396,11 @@ function ProgramListView() {
   // skips itself and navigates directly.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickedProgramId, setPickedProgramId] = useState<number | null>(null);
+  // PR E1 (2026-06-05): survey bundle download.
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundlePeriod, setBundlePeriod] = useState<"12" | "24" | "all">("24");
+  const [bundleBuilding, setBundleBuilding] = useState(false);
+  const [bundleError, setBundleError] = useState<string | null>(null);
 
   // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
   // Inner endpoints (programs/:id DELETE, assessments, quizzes) stay on
@@ -443,6 +449,14 @@ function ProgramListView() {
             * Friendly toast if zero programs (the lab director needs to
             * make a program first).
             */}
+          <Button
+            variant="outline"
+            onClick={() => setBundleOpen(true)}
+            title="Bundle all locked competency PDFs + an Index workbook into one zip"
+          >
+            <Archive className="h-4 w-4 mr-1.5" />
+            Survey Bundle
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
@@ -596,6 +610,81 @@ function ProgramListView() {
                 }}
               >
                 Continue
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        * PR E1 (2026-06-05): Survey Bundle download dialog. Period radio
+        * (12 / 24 / all-time), POSTs to the bundle endpoint, then triggers
+        * the zip download via the standard /api/zip/<token> route.
+        */}
+      <Dialog open={bundleOpen} onOpenChange={(v) => { if (!v) { setBundleError(null); } setBundleOpen(v); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Survey Bundle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Builds a zip containing every locked competency PDF for this lab in the selected window, plus an Index.xlsx workbook listing what is in the bundle. This is the artifact you hand a TJC surveyor on day 1.
+            </p>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Period</div>
+              {(["12", "24", "all"] as const).map(opt => (
+                <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="bundle-period" value={opt} checked={bundlePeriod === opt} onChange={() => setBundlePeriod(opt)} />
+                  <span className="text-sm">
+                    {opt === "12" ? "Last 12 months" : opt === "24" ? "Last 24 months (TJC look-back standard)" : "All-time (everything on file)"}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {bundleError && <div className="text-xs text-destructive">{bundleError}</div>}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBundleOpen(false)} disabled={bundleBuilding}>Cancel</Button>
+              <Button
+                disabled={bundleBuilding || !activeLabId}
+                onClick={async () => {
+                  if (!activeLabId) return;
+                  setBundleBuilding(true);
+                  setBundleError(null);
+                  try {
+                    const periodMonths = bundlePeriod === "12" ? 12 : bundlePeriod === "24" ? 24 : null;
+                    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/survey-bundle`, {
+                      method: "POST",
+                      headers: { ...authHeaders(), "Content-Type": "application/json" },
+                      body: JSON.stringify({ periodMonths }),
+                    });
+                    if (!r.ok) {
+                      const err = await r.json().catch(() => ({}));
+                      throw new Error(err.error || `HTTP ${r.status}`);
+                    }
+                    const data = await r.json();
+                    // Native download: hit /api/zip/<token>. Same pattern as
+                    // downloadPdfToken but for application/zip with attachment
+                    // disposition. The server already sets the content type
+                    // and filename, so a plain anchor click is enough.
+                    const a = document.createElement("a");
+                    a.href = `${API_BASE}/api/zip/${data.token}`;
+                    a.download = data.filename || "VeritaComp_Bundle.zip";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    toast({
+                      title: "Survey bundle ready",
+                      description: `${data.count} assessment${data.count === 1 ? "" : "s"} bundled${data.errorCount ? `, ${data.errorCount} skipped due to errors (see Index sheet)` : ""}.`,
+                    });
+                    setBundleOpen(false);
+                  } catch (err: any) {
+                    setBundleError(err?.message || "Bundle failed");
+                  } finally {
+                    setBundleBuilding(false);
+                  }
+                }}
+              >
+                {bundleBuilding ? "Building..." : "Build Bundle"}
               </Button>
             </div>
           </div>
