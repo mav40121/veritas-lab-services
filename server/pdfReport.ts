@@ -4008,7 +4008,12 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const isNonTech = assessment.competency_type === "nontechnical";
 
   const typeLabel = isTechnical ? "Technical Competency Assessment" : isWaived ? "Waived Testing Competency Assessment" : "Non-Technical Competency Assessment";
-  const standardRef = isTechnical ? "HR.01.06.01 EP 18 &middot; 42 CFR &sect;493.1451" : isWaived ? "WT.03.01.01 EP 5 &middot; 42 CFR &sect;493.15" : "HR.01.06.01 EP 5/6";
+  // Wave F PR F1 (2026-06-06). Cite §493.1235 (competency assessment) rather
+  // than §493.1451 (high-complexity testing personnel responsibilities). The
+  // six-element framework rendered on pages 2+ flows directly from
+  // §493.1235(a)(1)-(6); citing the personnel CFR mis-targets the survey
+  // defense. TJC HR.01.06.01 EP 18 (observer qualification) is retained.
+  const standardRef = isTechnical ? "HR.01.06.01 EP 18 &middot; 42 CFR &sect;493.1235" : isWaived ? "WT.03.01.01 EP 5 &middot; 42 CFR &sect;493.15" : "HR.01.06.01 EP 5/6";
 
   const passColor = assessment.status === "pass" ? "#437A22" : assessment.status === "fail" ? "#A12C7B" : "#d97706";
   const passLabel = assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "REMEDIATION REQUIRED";
@@ -4261,9 +4266,12 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     for (const elDef of elementDefs) {
       const naKey = `el${elDef.num}_na` as string;
       const naJustKey = `el${elDef.num}_na_justification` as string;
+      // Wave F PR F1: each element gets the matching §493.1235 subsection cited
+      // inline so a surveyor reading the printed PDF sees the regulatory anchor
+      // alongside the activity, not just on page 1.
       html += `<div class="section" style="margin-bottom:6px;">
         <div class="section-header">${elDef.title}</div>
-        <div class="section-note">${elDef.note}</div>
+        <div class="section-note">${elDef.note} <span style="color:#888;font-size:7pt;">(42 CFR &sect;493.1235(a)(${elDef.num}))</span></div>
         <table>
           <tr>${elDef.cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
       const elItems = items.filter((i: any) => (i.element_number || i.method_number) === elDef.num);
