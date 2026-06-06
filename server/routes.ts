@@ -14966,13 +14966,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
 
-    const { lastName, firstName, middleInitial, title, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
     if (!lastName?.trim() || !firstName?.trim()) return res.status(400).json({ error: "Name required" });
 
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(lab.id, dataUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, hireDate || null, qualificationsText || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
+      "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(lab.id, dataUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
     const empId = result.lastInsertRowid;
     // Phase 3.9 dual-write tier2_lab_id on the employee row.
     try {
@@ -15046,15 +15046,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
 
-    const { lastName, firstName, middleInitial, title, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
     const now = new Date().toISOString();
 
     (db as any).$client.prepare(
-      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
+      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
     ).run(
       lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
       middleInitial !== undefined ? middleInitial : emp.middle_initial,
       title !== undefined ? title : emp.title,
+      titleCode !== undefined ? titleCode : emp.title_code,
       hireDate !== undefined ? hireDate : emp.hire_date,
       qualificationsText !== undefined ? qualificationsText : emp.qualifications_text,
       highestComplexity || emp.highest_complexity,
@@ -15214,12 +15215,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerUserId = req.scope.lab?.owner_user_id ?? req.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(tier2LabId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
-    const { lastName, firstName, middleInitial, title, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
     if (!lastName?.trim() || !firstName?.trim()) return res.status(400).json({ error: "Name required" });
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, hireDate || null, qualificationsText || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
+      "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
     const empId = result.lastInsertRowid;
     if (Array.isArray(roles)) {
       const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
@@ -15272,14 +15273,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.id, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const { lastName, firstName, middleInitial, title, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, highestComplexity, performsTesting, roles } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(
-      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
+      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
     ).run(
       lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
       middleInitial !== undefined ? middleInitial : emp.middle_initial,
       title !== undefined ? title : emp.title,
+      titleCode !== undefined ? titleCode : emp.title_code,
       hireDate !== undefined ? hireDate : emp.hire_date,
       qualificationsText !== undefined ? qualificationsText : emp.qualifications_text,
       highestComplexity || emp.highest_complexity,
