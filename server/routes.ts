@@ -15078,6 +15078,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ...emp, roles, competencySchedule: schedule || null });
   });
 
+  // PR E3 of the VeritaComp customer-blockers wave (2026-06-05): auto-populate
+  // the staff_competency_schedules milestones from hire_date per the CLIA
+  // timeline encoded in CLAUDE.md §5:
+  //   - six_month_due_at  = hire + 6 months
+  //   - first_annual_due_at = hire + 12 months  (6 months after the 6-month)
+  //   - annual_due_at     = hire + 24 months    (1 year after the 1st annual)
+  // Initial competency has no due_at column; "before performing testing" is
+  // the regulatory requirement and the supervisor stamps initial_completed_at
+  // when they sign off.
+  //
+  // Idempotent. Only populates NULL columns so a lab that hand-set a
+  // milestone (e.g. moved the 6-month forward) does not lose it. Existing
+  // POST handler still computes six_month_due_at on its own per the
+  // accreditor / NYS rules; this helper layers first_annual + annual on top
+  // and back-fills six_month if missing.
+  function ensureCompetencyScheduleMilestones(empId: number | bigint, labId: number, hireDateStr: string | null | undefined) {
+    if (!hireDateStr) return;
+    const hire = new Date(hireDateStr);
+    if (Number.isNaN(hire.getTime())) return;
+    const ymd = (d: Date) => d.toISOString().split('T')[0];
+    const six = new Date(hire); six.setMonth(six.getMonth() + 6);
+    const firstAnnual = new Date(hire); firstAnnual.setMonth(firstAnnual.getMonth() + 12);
+    const annual = new Date(hire); annual.setMonth(annual.getMonth() + 24);
+    const client = (db as any).$client;
+    const row = client.prepare("SELECT id, six_month_due_at, first_annual_due_at, annual_due_at FROM staff_competency_schedules WHERE employee_id = ?").get(empId) as any;
+    if (!row) {
+      client.prepare(
+        "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at) VALUES (?,?,?,?,?)"
+      ).run(empId, labId, ymd(six), ymd(firstAnnual), ymd(annual));
+      return;
+    }
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (!row.six_month_due_at) { sets.push("six_month_due_at = ?"); vals.push(ymd(six)); }
+    if (!row.first_annual_due_at) { sets.push("first_annual_due_at = ?"); vals.push(ymd(firstAnnual)); }
+    if (!row.annual_due_at) { sets.push("annual_due_at = ?"); vals.push(ymd(annual)); }
+    if (sets.length === 0) return;
+    vals.push(empId);
+    client.prepare(`UPDATE staff_competency_schedules SET ${sets.join(", ")} WHERE employee_id = ?`).run(...vals);
+  }
+
   // Create employee in the active lab
   app.post("/api/labs/:labId/staff/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
@@ -15124,6 +15165,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
       ).run(empId, lab.id, sixMonthDue, nysSixMonthDue);
     }
+    // PR E3: layer first_annual_due_at + annual_due_at + back-fill six_month
+    // on top of whatever the accreditor-specific block above already wrote.
+    if (performsTesting && hireDate) {
+      ensureCompetencyScheduleMilestones(empId, lab.id, hireDate);
+    }
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
     const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
@@ -15156,6 +15202,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
       const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
       for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null);
+    }
+    // PR E3: ensure milestones populate when hire_date is now present and
+    // performs_testing is on. Same idempotent helper used at POST time.
+    const effectivePerformsTesting = performsTesting !== undefined ? !!performsTesting : !!emp.performs_testing;
+    const effectiveHireDate = hireDate !== undefined ? hireDate : emp.hire_date;
+    if (effectivePerformsTesting && effectiveHireDate) {
+      ensureCompetencyScheduleMilestones(Number(req.params.id), emp.lab_id, effectiveHireDate);
     }
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
     const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
