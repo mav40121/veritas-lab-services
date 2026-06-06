@@ -2614,6 +2614,42 @@ for (const t of ["staff_employees", "staff_roles"]) {
   }
 }
 
+// PR D+ of the VeritaComp customer-blockers wave (2026-06-05):
+// staff_employee_id foreign-key column on competency_employees so the
+// assessment dialog can resolve a competency employee to their VeritaStaff
+// record and pull assigned instruments for the suggested-method-groups
+// hint. Idempotent additive ALTER; the backfill normalizes "First Last",
+// "Last, First", and "Last First" forms case-insensitively to bridge the
+// existing legacy data. Rows that do not match fall back to live name
+// matching in the suggested-method-groups endpoint.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(competency_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("staff_employee_id")) {
+    try { sqlite.exec("ALTER TABLE competency_employees ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_competency_employees_staff_id ON competency_employees(staff_employee_id)"); } catch {}
+  const backfill = sqlite.prepare(`
+    UPDATE competency_employees
+    SET staff_employee_id = (
+      SELECT se.id
+      FROM staff_employees se
+      WHERE se.tier2_lab_id = competency_employees.lab_id
+        AND (
+          LOWER(TRIM(se.first_name || ' ' || se.last_name)) = LOWER(TRIM(competency_employees.name))
+          OR LOWER(TRIM(se.last_name || ', ' || se.first_name)) = LOWER(TRIM(competency_employees.name))
+          OR LOWER(TRIM(se.last_name || ' ' || se.first_name)) = LOWER(TRIM(competency_employees.name))
+        )
+      LIMIT 1
+    )
+    WHERE staff_employee_id IS NULL
+      AND lab_id IS NOT NULL
+      AND name IS NOT NULL
+  `).run();
+  if (backfill.changes > 0) {
+    console.log(`[migration] PR D+ competency_employees.staff_employee_id backfilled on ${backfill.changes} row(s)`);
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.4 (VeritaScan module):
 // veritascan_scans carries user_id; veritascan_items scopes through scan_id
 // and is transitively lab-scoped via the parent. Add lab_id to scans only.
