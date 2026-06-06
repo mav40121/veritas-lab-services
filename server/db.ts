@@ -2648,6 +2648,35 @@ for (const t of ["staff_employees", "staff_roles"]) {
   if (backfill.changes > 0) {
     console.log(`[migration] PR D+ competency_employees.staff_employee_id backfilled on ${backfill.changes} row(s)`);
   }
+
+  // Phase B2 of the unification (2026-06-06): partial UNIQUE index on
+  // (staff_employee_id, lab_id). Prevents the Phase B1 shim INSERT path
+  // from creating two competency_employees rows pointing at the same
+  // staff record under a race. Partial index (WHERE staff_employee_id
+  // IS NOT NULL) so legacy unbridged rows still pass.
+  //
+  // Boot order safety: the index can fail to create if pre-existing
+  // duplicates exist. Probe first; if duplicates are found, log a loud
+  // warning and skip the index. The audit script in scripts/ surfaces
+  // them for manual cleanup. On a clean DB the CREATE succeeds.
+  try {
+    const dupCount = (sqlite.prepare(`
+      SELECT COUNT(*) AS n FROM (
+        SELECT staff_employee_id, lab_id
+        FROM competency_employees
+        WHERE staff_employee_id IS NOT NULL
+        GROUP BY staff_employee_id, lab_id
+        HAVING COUNT(*) > 1
+      )
+    `).get() as { n: number }).n;
+    if (dupCount > 0) {
+      console.warn(`[migration] Phase B2: ${dupCount} duplicate (staff_employee_id, lab_id) pair(s) on competency_employees. UNIQUE index skipped; run scripts/audit-comp-employee-unmatched.js then resolve manually.`);
+    } else {
+      sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_competency_employees_staff_lab_unique ON competency_employees(staff_employee_id, lab_id) WHERE staff_employee_id IS NOT NULL");
+    }
+  } catch (err: any) {
+    console.warn(`[migration] Phase B2 UNIQUE index probe error: ${err?.message || err}`);
+  }
 }
 
 // Multi-Lab Tier 2 — Phase 3.4 (VeritaScan module):
