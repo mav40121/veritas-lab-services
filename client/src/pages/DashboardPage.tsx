@@ -16,6 +16,7 @@ import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidge
 import { CompetencyStatusTile } from "@/components/CompetencyStatusTile";
 import { CredentialExpirationTile } from "@/components/CredentialExpirationTile";
 import { ReassessmentTrackerTile } from "@/components/ReassessmentTrackerTile";
+import { DutyChangeTile } from "@/components/DutyChangeTile";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -161,6 +162,13 @@ export default function Dashboard() {
           assessment triggers a mandatory reassessment cycle; this tile
           surfaces who still owes a follow-up. */}
       <ReassessmentTrackerTile className="mb-6" />
+
+      {/* Wave H PR H4: Duty-change reassessment queue tile. Self-hides
+          when no employee has an open duty-change event (instrument
+          added but no follow-up duty-change competency assessment).
+          Per §493.1235(a) and TJC HR.01.06.01, an employee's testing
+          duties changing triggers a reassessment. */}
+      <DutyChangeTile className="mb-6" />
 
       {/* Correlations due soon */}
       <CorrelationsDueSoonWidget className="mb-6" />

@@ -15557,6 +15557,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const now = new Date().toISOString();
     const client = (db as any).$client;
+    // Wave H PR H4: diff the old vs new assignment set BEFORE the
+    // transaction overwrites the joined rows, so we know which
+    // instruments are NEW additions that trigger a duty-change
+    // reassessment per §493.1235(a). Removals are intentionally
+    // ignored — taking an instrument away does not trigger a
+    // reassessment under standard CLIA reading.
+    const oldRows = client.prepare(
+      "SELECT instrument_id FROM staff_employee_instruments WHERE employee_id = ?"
+    ).all(req.params.id) as Array<{ instrument_id: number }>;
+    const oldIds = new Set(oldRows.map(r => Number(r.instrument_id)));
+    const addedIds = validIds.filter(id => !oldIds.has(id));
+
     const txn = client.transaction(() => {
       client.prepare("DELETE FROM staff_employee_instruments WHERE employee_id = ?").run(req.params.id);
       const ins = client.prepare(
@@ -15565,9 +15577,98 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const iid of validIds) {
         ins.run(req.params.id, iid, now, req.userId ?? null);
       }
+      // Wave H PR H4: emit one duty-change event per newly added
+      // instrument. The lab director sees these on the dashboard tile
+      // until a competency_assessment with type='duty_change' resolves
+      // them lazily on GET.
+      if (addedIds.length > 0) {
+        const evt = client.prepare(
+          "INSERT INTO staff_duty_change_events (lab_id, employee_id, instrument_id, detected_at) VALUES (?, ?, ?, ?)"
+        );
+        for (const iid of addedIds) {
+          evt.run(labId, req.params.id, iid, now);
+        }
+      }
     });
     txn();
-    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length });
+    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: addedIds.length });
+  });
+
+  // GET /api/labs/:labId/staff/duty-change-events
+  //
+  // Wave H PR H4 (2026-06-06). Returns the lab's open duty-change
+  // events with lazy auto-resolve. An event is resolved when:
+  //   - the employee has a completed competency_assessment with
+  //     assessment_type='duty_change' AND assessment_date >= the event's
+  //     detected_at, OR
+  //   - the lab manually closes the event (POST /resolve, future PR).
+  //
+  // Lazy approach: on GET we walk the open events, look for a matching
+  // assessment, UPDATE resolved_at + resolved_assessment_id when found.
+  // No trigger on the assessment-insert path; the surface stays the
+  // source of truth for "what's still open right now".
+  //
+  // Reg anchor: 42 CFR §493.1235(a) + TJC HR.01.06.01.
+  app.get("/api/labs/:labId/staff/duty-change-events", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+
+    // Step 1: pull all currently-open events for this lab.
+    const open = client.prepare(
+      `SELECT e.id, e.employee_id, e.instrument_id, e.detected_at,
+              se.first_name, se.last_name,
+              i.instrument_name, i.serial_number, i.nickname, i.category
+       FROM staff_duty_change_events e
+       JOIN staff_employees se ON e.employee_id = se.id
+       LEFT JOIN veritamap_instruments i ON e.instrument_id = i.id
+       WHERE e.lab_id = ? AND e.resolved_at IS NULL
+       ORDER BY e.detected_at ASC`
+    ).all(labId) as Array<{
+      id: number; employee_id: number; instrument_id: number; detected_at: string;
+      first_name: string; last_name: string;
+      instrument_name: string | null; serial_number: string | null; nickname: string | null; category: string | null;
+    }>;
+
+    // Step 2: lazy-resolve any event for which a duty-change assessment
+    // dated >= detected_at exists for the same employee. The match is
+    // intentionally per-employee not per-instrument: a single
+    // duty-change assessment covers all duty changes in the window.
+    const matchStmt = client.prepare(
+      `SELECT a.id, a.assessment_date FROM competency_assessments a
+       JOIN competency_employees ce ON a.employee_id = ce.id
+       WHERE ce.staff_employee_id = ?
+         AND a.assessment_type = 'duty_change'
+         AND date(a.assessment_date) >= date(?)
+       ORDER BY a.assessment_date ASC
+       LIMIT 1`
+    );
+    const resolveStmt = client.prepare(
+      "UPDATE staff_duty_change_events SET resolved_at = ?, resolved_assessment_id = ? WHERE id = ?"
+    );
+    const stillOpen: typeof open = [];
+    const now = new Date().toISOString();
+    for (const e of open) {
+      const m = matchStmt.get(e.employee_id, e.detected_at) as { id: number; assessment_date: string } | undefined;
+      if (m) {
+        resolveStmt.run(now, m.id, e.id);
+      } else {
+        stillOpen.push(e);
+      }
+    }
+
+    res.json(stillOpen.map(e => ({
+      id: e.id,
+      employeeId: e.employee_id,
+      employeeName: `${e.last_name}, ${e.first_name}`,
+      instrumentId: e.instrument_id,
+      instrumentName: e.instrument_name || `Instrument #${e.instrument_id}`,
+      serialNumber: e.serial_number,
+      nickname: e.nickname,
+      category: e.category,
+      detectedAt: e.detected_at,
+      daysOpen: Math.max(0, Math.floor((new Date(now).getTime() - new Date(e.detected_at).getTime()) / (1000 * 60 * 60 * 24))),
+    })));
   });
 
   // GET /api/labs/:labId/competency/programs/:programId/employees/:employeeId/suggested-method-groups
