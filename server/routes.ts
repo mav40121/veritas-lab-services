@@ -6134,6 +6134,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.send(entry.buffer);
   });
 
+  // GET /api/zip/:token — sibling of /api/pdf/:token, identical claim
+  // semantics, but serves application/zip with attachment disposition so
+  // the browser triggers a download. Added 2026-06-05 for the VeritaComp
+  // Survey Bundle (Wave PR E1). Shares the same pdf_tokens table; the
+  // separate endpoint keeps content-type and disposition explicit per
+  // surface rather than detecting by file extension.
+  app.get("/api/zip/:token", (req, res) => {
+    const entry = claimPdfToken(req.params.token);
+    if (!entry) {
+      return res.status(404).json({ error: "Bundle token expired or not found" });
+    }
+    const encoded = encodeURIComponent(entry.filename);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
+    res.setHeader("Content-Length", entry.buffer.length);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(entry.buffer);
+  });
+
   // ── CONTACT ───────────────────────────────────────────────────────────────
   app.post("/api/contact", (req, res) => {
     const parsed = insertContactSchema.safeParse(req.body);
@@ -14260,6 +14279,227 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("Competency PDF generation error (lab-scoped):", err);
       return res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
+  });
+
+  // POST /api/labs/:labId/competency/survey-bundle
+  //
+  // PR E1 of the VeritaComp customer-blockers wave (2026-06-05). Generates
+  // a single zip the lab director hands a TJC surveyor on day 1: one PDF per
+  // locked competency assessment in the window, plus an Index.xlsx workbook
+  // that names what is in the zip and stamps the lab identity per CLAUDE.md
+  // §6 (About sheet, password protection, header/footer identity).
+  //
+  // Body: { periodMonths: 12 | 24 | null } (null = all-time).
+  // Returns { token, count, periodMonths } — client opens /api/zip/<token>.
+  //
+  // Only `locked=1` assessments are included. An unlocked draft is not
+  // surveyor-defensible evidence; this is the same rule PR #553's Sign &
+  // Complete workflow encodes.
+  app.post("/api/labs/:labId/competency/survey-bundle", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const periodInput = req.body?.periodMonths;
+    const periodMonths: 12 | 24 | null = (periodInput === 12 || periodInput === 24) ? periodInput : null;
+
+    let windowStart: string | null = null;
+    if (periodMonths) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - periodMonths);
+      windowStart = d.toISOString().split("T")[0];
+    }
+
+    const sqlBase = `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+            e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       JOIN competency_employees e ON a.employee_id = e.id
+       WHERE p.lab_id = ? AND a.locked = 1`;
+    const sql = windowStart ? `${sqlBase} AND date(a.assessment_date) >= date(?) ORDER BY a.assessment_date DESC, a.id DESC` : `${sqlBase} ORDER BY a.assessment_date DESC, a.id DESC`;
+    const assessments = (windowStart
+      ? (db as any).$client.prepare(sql).all(labId, windowStart)
+      : (db as any).$client.prepare(sql).all(labId)) as any[];
+
+    if (assessments.length === 0) {
+      return res.status(404).json({ error: "No locked assessments in the selected window", periodMonths, count: 0 });
+    }
+
+    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+    const labName: string = compLab?.lab_name || "Clinical Laboratory";
+    const cliaNumber: string = compLab?.clia_number || "";
+
+    // Build the per-assessment PDFs. A failure on one assessment does NOT
+    // abort the bundle; we collect the failure into the index instead so the
+    // surveyor can see the gap rather than the entire export disappearing.
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    type BundleRow = { a: any; filename: string; ok: boolean; error?: string };
+    const bundleRows: BundleRow[] = [];
+    const usedFilenames = new Set<string>();
+
+    for (const a of assessments) {
+      const nameRaw = (a.employee_name || "Unknown").trim();
+      const parts = nameRaw.split(/\s+/);
+      const last = parts[parts.length - 1] || "Unknown";
+      const first = parts.slice(0, -1).join("_") || "Unknown";
+      const typeMap: Record<string, string> = { initial: "Initial", "6month": "6Month", annual: "Annual", reassessment: "Reassessment", orientation: "Orientation", duty_change: "DutyChange" };
+      const typeLabel = typeMap[a.assessment_type] || String(a.assessment_type || "Assessment").replace(/[^a-zA-Z0-9]/g, "");
+      const date = a.assessment_date || "no-date";
+      let base = `${last}_${first}_${typeLabel}_${date}`.replace(/[^a-zA-Z0-9_\-]/g, "_");
+      // Disambiguate duplicate names (same employee, same type, same date)
+      let candidate = `${base}.pdf`;
+      let n = 2;
+      while (usedFilenames.has(candidate)) { candidate = `${base}_${n}.pdf`; n += 1; }
+      usedFilenames.add(candidate);
+
+      try {
+        const items = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(a.id);
+        const methodGroups = (db as any).$client.prepare("SELECT * FROM competency_method_groups WHERE program_id = ?").all(a.program_id);
+        const checklistItems = (db as any).$client.prepare("SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(a.program_id);
+        const quizResults = (db as any).$client.prepare(
+          `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
+           FROM competency_quiz_results qr
+           JOIN competency_quizzes q ON qr.quiz_id = q.id
+           WHERE qr.assessment_id = ?`
+        ).all(a.id);
+        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items, methodGroups, checklistItems, labName, quizResults, cliaNumber }, licenseCtxFromReq(req));
+        zip.file(candidate, pdfBuffer);
+        bundleRows.push({ a, filename: candidate, ok: true });
+      } catch (err: any) {
+        console.error(`Survey bundle: PDF generation failed for assessment ${a.id}:`, err?.message);
+        bundleRows.push({ a, filename: candidate, ok: false, error: err?.message || "PDF generation failed" });
+      }
+    }
+
+    // Build Index.xlsx per CLAUDE.md §6 (About + Bundle sheets, brand teal,
+    // password protection, identity in three layers).
+    const { default: ExcelJS } = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "VeritaAssure";
+    wb.lastModifiedBy = "VeritaAssure";
+    const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+    const borderThin: any = { top: { style: "thin", color: { argb: "FFD0D0D0" } }, bottom: { style: "thin", color: { argb: "FFD0D0D0" } }, left: { style: "thin", color: { argb: "FFD0D0D0" } }, right: { style: "thin", color: { argb: "FFD0D0D0" } } };
+
+    // About sheet
+    const about = wb.addWorksheet("About");
+    about.getColumn(1).width = 110;
+    const aTitle = about.getCell("A1");
+    aTitle.value = "VeritaComp Survey Bundle Index";
+    aTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+    aTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+    aTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    about.getRow(1).height = 30;
+    const aIdent = about.getCell("A2");
+    aIdent.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+    aIdent.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
+    aIdent.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
+    aIdent.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+    aIdent.border = borderThin;
+    about.getRow(2).height = 24;
+    let aRow = 3;
+    const aSection = (text: string) => { const c = about.getCell(`A${aRow}`); c.value = text; c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } }; c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } }; c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 }; c.border = borderThin; about.getRow(aRow).height = 22; aRow += 1; };
+    const aBody = (text: string) => { const c = about.getCell(`A${aRow}`); c.value = text; c.font = { name: "Calibri", size: 11, color: { argb: "FF28251D" } }; c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 }; c.border = borderThin; const segs = String(text || "").split(/\r?\n/); let est = 0; for (const s of segs) est += Math.max(1, Math.ceil(s.length / 88)); about.getRow(aRow).height = Math.max(2, est) * 16 + 4; aRow += 1; };
+    const aBlank = () => { about.getRow(aRow).height = 8; aRow += 1; };
+
+    aSection("About this bundle");
+    aBody("This zip is a single, surveyor-ready package of every locked VeritaComp competency assessment for this laboratory in the selected window. The Bundle sheet lists each PDF, its employee, program, assessment type, dates, and folder. The PDFs themselves carry the regulatory determination, the 6 CLIA elements, and the signature region.");
+    aBlank();
+    aSection("How to use this workbook");
+    aBody("Open the Bundle sheet. The Filename column lists each PDF in this zip in alphabetical order by employee. Filter the Employee column to find one technician's records, or sort by Assessment Date for chronological order.");
+    aBlank();
+    aSection("Window");
+    aBody(periodMonths ? `This bundle covers the last ${periodMonths} months of locked assessments (assessment date >= ${windowStart || ""}).` : "This bundle covers all locked assessments on file for this laboratory, with no window cutoff.");
+    aBlank();
+    aSection("What is NOT included");
+    aBody("Draft (unlocked) assessments are excluded. An assessment is locked when the supervisor clicks Sign and Complete, which stamps the completion date and prevents further edits. Drafts are not surveyor-defensible evidence.");
+    aBlank();
+    aSection("Disclaimer");
+    aBody("This bundle is a convenience export of the per-assessment PDF reports that VeritaComp generated when each competency was completed. The PDFs themselves are the audit-grade record. If there is a conflict between this workbook and a per-assessment PDF, the per-assessment PDF governs. The laboratory director is responsible for the accuracy of the underlying data.");
+    aBlank();
+    aSection("Lab identity");
+    aBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+    aBlank();
+    aSection("Coverage gaps");
+    aBody("If your laboratory needs a field, period option, or filter not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+    about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaComp Survey Bundle Index&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+    about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    await about.protect(exportPwd, { selectLockedCells: false, selectUnlockedCells: false, formatCells: false, formatColumns: false, formatRows: false, insertRows: false, insertColumns: false, insertHyperlinks: false, deleteRows: false, deleteColumns: false, sort: false, autoFilter: false, pivotTables: false });
+
+    // Bundle sheet
+    const bundle = wb.addWorksheet("Bundle");
+    bundle.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
+    bundle.columns = [
+      { header: "Employee", key: "employee", width: 28 },
+      { header: "Program", key: "program", width: 26 },
+      { header: "Type", key: "type", width: 14 },
+      { header: "Assessment Date", key: "assessment_date", width: 16 },
+      { header: "Review Period Start", key: "review_period_start", width: 18 },
+      { header: "Review Period End", key: "review_period_end", width: 18 },
+      { header: "Completion Date", key: "completion_date", width: 16 },
+      { header: "Folder", key: "folder", width: 20 },
+      { header: "Status", key: "status", width: 16 },
+      { header: "Filename", key: "filename", width: 50 },
+    ];
+    const headerRow = bundle.getRow(1);
+    headerRow.height = 20;
+    headerRow.eachCell((cell) => {
+      cell.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+      cell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      cell.border = borderThin;
+    });
+    const altFill: any = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEBF3F8" } };
+    bundleRows.sort((x, y) => {
+      // Sort by employee name asc, then by assessment date desc, so the Bundle
+      // sheet groups one tech's records together for the surveyor.
+      const en = String(x.a.employee_name || "").localeCompare(String(y.a.employee_name || ""));
+      if (en !== 0) return en;
+      return String(y.a.assessment_date || "").localeCompare(String(x.a.assessment_date || ""));
+    });
+    bundleRows.forEach((row, idx) => {
+      const r = bundle.addRow({
+        employee: row.a.employee_name || "",
+        program: row.a.program_name || "",
+        type: ({initial:"Initial","6month":"6-Month",annual:"Annual",reassessment:"Reassessment",orientation:"Orientation",duty_change:"Duty Change"} as Record<string,string>)[row.a.assessment_type] || row.a.assessment_type || "",
+        assessment_date: row.a.assessment_date || "",
+        review_period_start: row.a.review_period_start || "",
+        review_period_end: row.a.review_period_end || "",
+        completion_date: row.a.completion_date ? String(row.a.completion_date).split("T")[0] : "",
+        folder: row.a.folder || "",
+        status: row.ok ? "Included" : `Error: ${row.error || ""}`.slice(0, 80),
+        filename: row.filename,
+      });
+      r.height = 20;
+      r.eachCell((cell) => {
+        cell.font = { name: "Calibri", size: 10, color: { argb: "FF28251D" } };
+        cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true, indent: 1 };
+        cell.border = borderThin;
+        if (idx % 2 === 1) cell.fill = altFill;
+      });
+      const statusCell = r.getCell("status");
+      if (row.ok) statusCell.font = { name: "Calibri", size: 10, bold: true, color: { argb: "FF437A22" } };
+      else statusCell.font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFA12C7B" } };
+    });
+    bundle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: bundle.columnCount } };
+    bundle.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaComp Survey Bundle&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+    bundle.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    await bundle.protect(exportPwd, { selectLockedCells: false, selectUnlockedCells: false, autoFilter: true });
+
+    const xlsxBuffer = await wb.xlsx.writeBuffer();
+    zip.file("Index.xlsx", Buffer.from(xlsxBuffer));
+
+    const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    const dateStr = new Date().toISOString().split("T")[0];
+    const safeLab = labName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_") || "Lab";
+    const zipFilename = `${safeLab}_VeritaComp_Bundle_${dateStr}.zip`;
+    const token = storePdfToken(zipBuffer, zipFilename);
+
+    res.json({
+      token,
+      filename: zipFilename,
+      count: bundleRows.filter(r => r.ok).length,
+      errorCount: bundleRows.filter(r => !r.ok).length,
+      periodMonths,
+    });
   });
 
   // GET /api/veritacomp/assessments/:id/pdf
