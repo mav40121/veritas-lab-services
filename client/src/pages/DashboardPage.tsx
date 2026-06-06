@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useState } from "react";
 import { getToken } from "@/lib/auth";
 import { CorrelationsDueSoonWidget } from "@/components/CorrelationsDueSoonWidget";
+import { CompetencyStatusTile } from "@/components/CompetencyStatusTile";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -142,6 +143,11 @@ export default function Dashboard() {
           "The medical director or designee signs; download the PDF and file with your CLIA records.",
         ]}
       />
+
+      {/* PR E2: Competency status tile (lab-scoped). Hides itself when the
+          lab has zero active testing personnel or the user is on the legacy
+          /dashboard URL. */}
+      <CompetencyStatusTile className="mb-6" />
 
       {/* Correlations due soon */}
       <CorrelationsDueSoonWidget className="mb-6" />

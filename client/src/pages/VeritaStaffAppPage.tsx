@@ -302,6 +302,29 @@ export default function VeritaStaffAppPage() {
         </div>
       </div>
 
+      {/* PR E2 (2026-06-05): respect ?filter=overdue from the dashboard tile
+          drilldown. Limits the rendered list to performs_testing employees
+          whose competency status resolves to Overdue. Shows a "Showing overdue
+          only" banner with a Clear link so the user can return to the full
+          roster without typing in the address bar. */}
+      {(() => {
+        const filter = (typeof window !== "undefined") ? new URLSearchParams(window.location.search).get("filter") : null;
+        if (filter !== "overdue") return null;
+        const overdueCount = employees.filter(e => e.performs_testing === 1 && getCompetencyStatus(e.competencySchedule).label === "Overdue").length;
+        return (
+          <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
+            <AlertTriangle size={12} className="text-amber-600" />
+            <span className="font-medium">Showing {overdueCount} overdue testing personnel.</span>
+            <button
+              onClick={() => navigate(labRoute("/veritastaff-app"))}
+              className="ml-auto text-primary hover:underline"
+            >
+              Clear filter
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Employee List */}
       {empLoading ? (
         <p className="text-muted-foreground">Loading employees...</p>
@@ -318,7 +341,13 @@ export default function VeritaStaffAppPage() {
         </Card>
       ) : (
         <div className="grid gap-3">
-          {employees.map((emp) => {
+          {employees
+            .filter(emp => {
+              const filter = (typeof window !== "undefined") ? new URLSearchParams(window.location.search).get("filter") : null;
+              if (filter !== "overdue") return true;
+              return emp.performs_testing === 1 && getCompetencyStatus(emp.competencySchedule).label === "Overdue";
+            })
+            .map((emp) => {
             const compStatus = getCompetencyStatus(emp.competencySchedule);
             const roleNames = Array.from(new Set(emp.roles.map((r) => r.role)));
             return (

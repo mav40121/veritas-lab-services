@@ -15309,6 +15309,131 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length });
   });
 
+  // GET /api/labs/:labId/competency/dashboard-stats
+  //
+  // PR E2 of the customer-blockers wave (2026-06-05). Single endpoint that
+  // returns the four counts the dashboard tile renders + a small sample of
+  // the overdue employees for the at-a-glance preview. The "next due"
+  // computation is JS-side because expressing the milestone walk in raw
+  // SQL would be more brittle than it is worth at this scale (a lab with
+  // 500 active testing employees still completes in a single sub-100ms
+  // pass through the array).
+  //
+  // Classification:
+  //   - overdue:    nextDue < today, OR employee needs Initial and hired >90d ago
+  //   - dueSoon30:  today <= nextDue <= today + 30d
+  //   - dueSoon90:  today + 30d < nextDue <= today + 90d
+  //   - compliant:  nextDue > today + 90d, all milestones completed in current
+  //                 annual cycle, or no schedule obligations on file
+  app.get("/api/labs/:labId/competency/dashboard-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const rows = (db as any).$client.prepare(
+      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.hire_date,
+              s.initial_completed_at,
+              s.six_month_due_at, s.six_month_completed_at,
+              s.first_annual_due_at, s.first_annual_completed_at,
+              s.annual_due_at, s.last_annual_completed_at
+       FROM staff_employees e
+       LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
+    ).all(labId) as Array<{
+      id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null; hire_date: string | null;
+      initial_completed_at: string | null;
+      six_month_due_at: string | null; six_month_completed_at: string | null;
+      first_annual_due_at: string | null; first_annual_completed_at: string | null;
+      annual_due_at: string | null; last_annual_completed_at: string | null;
+    }>;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const plus30 = new Date(today.getTime() + 30 * dayMs);
+    const plus90 = new Date(today.getTime() + 90 * dayMs);
+    const parse = (s: string | null): Date | null => {
+      if (!s) return null;
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    type Bucket = "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
+    const counts: Record<Bucket, number> = { overdue: 0, dueSoon30: 0, dueSoon90: 0, compliant: 0 };
+    const overdueSample: Array<{ id: number; name: string; nextDue: string | null; reason: string }> = [];
+
+    for (const e of rows) {
+      let bucket: Bucket = "compliant";
+      let nextDue: Date | null = null;
+      let reason = "";
+
+      if (!e.initial_completed_at) {
+        const hire = parse(e.hire_date);
+        if (hire) {
+          const initialDeadline = new Date(hire.getTime() + 90 * dayMs);
+          nextDue = initialDeadline;
+          reason = "Initial competency not completed";
+        } else {
+          nextDue = today;
+          reason = "Initial competency not completed (no hire date)";
+        }
+      } else if (e.six_month_due_at && !e.six_month_completed_at) {
+        nextDue = parse(e.six_month_due_at);
+        reason = "6-month competency due";
+      } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
+        nextDue = parse(e.first_annual_due_at);
+        reason = "1st annual competency due";
+      } else if (e.annual_due_at) {
+        const due = parse(e.annual_due_at);
+        const lastDone = parse(e.last_annual_completed_at);
+        if (due) {
+          if (lastDone && lastDone.getTime() > due.getTime() - 365 * dayMs) {
+            const next = new Date(due.getTime() + 365 * dayMs);
+            if (next.getTime() < today.getTime()) { nextDue = next; reason = "Annual cycle overdue"; }
+            else { nextDue = next; reason = "Annual due"; }
+          } else {
+            nextDue = due;
+            reason = "Annual competency due";
+          }
+        }
+      }
+
+      if (nextDue === null) {
+        bucket = "compliant";
+      } else if (nextDue.getTime() < today.getTime()) {
+        bucket = "overdue";
+      } else if (nextDue.getTime() <= plus30.getTime()) {
+        bucket = "dueSoon30";
+      } else if (nextDue.getTime() <= plus90.getTime()) {
+        bucket = "dueSoon90";
+      } else {
+        bucket = "compliant";
+      }
+
+      counts[bucket] += 1;
+
+      if (bucket === "overdue" && overdueSample.length < 5) {
+        const name = [e.last_name, e.first_name].filter(Boolean).join(", ") + (e.middle_initial ? ` ${e.middle_initial}.` : "");
+        overdueSample.push({
+          id: e.id,
+          name: name || `Employee #${e.id}`,
+          nextDue: nextDue ? nextDue.toISOString().split("T")[0] : null,
+          reason,
+        });
+      }
+    }
+
+    const total = rows.length;
+    const percentCompliant = total > 0 ? Math.round((counts.compliant / total) * 100) : 100;
+
+    res.json({
+      overdue: counts.overdue,
+      dueSoon30: counts.dueSoon30,
+      dueSoon90: counts.dueSoon90,
+      compliant: counts.compliant,
+      total,
+      percentCompliant,
+      overdueSample,
+    });
+  });
+
   // GET flat list of every instrument across the lab's VeritaMaps for the
   // assignment picker dialog. Grouped client-side by map_name.
   app.get("/api/labs/:labId/veritamap/instruments-flat", authMiddleware, labScopeMiddleware, (req: any, res) => {
