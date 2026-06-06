@@ -3960,6 +3960,13 @@ const WAIVED_METHODS = [
   "4. Use of a written test specific to the test assessed",
 ];
 
+interface CompetencyElementDocument {
+  element_number: number;
+  doc_type: string;
+  title: string | null;
+  url: string;
+}
+
 interface CompetencyPDFInput {
   assessment: any;
   items: any[];
@@ -3968,7 +3975,24 @@ interface CompetencyPDFInput {
   labName: string;
   quizResults?: any[];
   cliaNumber?: string;
+  // PR C+ of the VeritaComp customer-blockers wave (2026-06-05). Per-element
+  // URL-pointer documents linked via PR #558. Rendered as a subsection at
+  // the end of each element's table in the PDF so a TJC surveyor reading
+  // the printed competency PDF sees the citation chain inline, not just
+  // in the survey bundle's Index workbook.
+  elementDocuments?: CompetencyElementDocument[];
 }
+
+// Human-readable label for the doc_type enum from competency_element_documents.
+// Kept in this file so the PDF generator does not need to import client code.
+const COMP_DOC_TYPE_LABELS: Record<string, string> = {
+  quiz_scan: "Quiz scan",
+  observation_notes: "Observation notes",
+  qc_record: "QC record",
+  pt_report: "PT report",
+  blind_sample_record: "Blind sample record",
+  evidence_other: "Other evidence",
+};
 
 function esc(s: string | null | undefined): string {
   if (!s) return "";
@@ -3977,6 +4001,7 @@ function esc(s: string | null | undefined): string {
 
 function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const { assessment, items, methodGroups, checklistItems, labName, quizResults } = input;
+  const elementDocuments: CompetencyElementDocument[] = input.elementDocuments || [];
   const dateStr = assessment.assessment_date || new Date().toISOString().split("T")[0];
   const isTechnical = assessment.competency_type === "technical";
   const isWaived = assessment.competency_type === "waived";
@@ -4276,7 +4301,38 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           }
         }
       }
-      html += `</table></div>`;
+      html += `</table>`;
+
+      // PR C+ (2026-06-05): per-element linked documents subsection.
+      // Surveyor-defensible citation chain. URL-pointer architecture only;
+      // the file content is never embedded, only its URL is printed.
+      // Hidden when this element has zero linked docs.
+      const elDocs = elementDocuments
+        .filter(d => d.element_number === elDef.num)
+        .slice()
+        .sort((a, b) => 0); // server already sorts by created_at; preserve.
+      if (elDocs.length > 0) {
+        html += `<div style="margin-top:6px;">
+          <div style="font-size:7.5pt;font-weight:600;color:#555;margin-bottom:3px;">Linked documents (${elDocs.length})</div>
+          <table style="font-size:7.5pt;">
+            <tr><th style="width:20%;">Type</th><th style="width:30%;">Title</th><th>URL</th></tr>`;
+        for (const d of elDocs) {
+          const typeLabel = COMP_DOC_TYPE_LABELS[d.doc_type] || d.doc_type;
+          const titleText = d.title && d.title.trim() ? d.title.trim() : "(no title)";
+          // Title truncated visually to 80 chars; word-break on the URL
+          // cell so a long SharePoint link wraps inside the cell without
+          // overflowing the page width.
+          const titleDisplay = titleText.length > 80 ? titleText.slice(0, 77) + "..." : titleText;
+          html += `<tr>
+            <td>${esc(typeLabel)}</td>
+            <td title="${esc(titleText)}">${esc(titleDisplay)}</td>
+            <td style="word-break:break-all;font-family:monospace;font-size:7pt;"><a href="${esc(d.url)}" style="color:#01696F;text-decoration:underline;">${esc(d.url)}</a></td>
+          </tr>`;
+        }
+        html += `</table></div>`;
+      }
+
+      html += `</div>`;
     }
 
   } else if (isWaived) {
