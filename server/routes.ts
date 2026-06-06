@@ -15358,6 +15358,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     type Bucket = "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
     const counts: Record<Bucket, number> = { overdue: 0, dueSoon30: 0, dueSoon90: 0, compliant: 0 };
     const overdueSample: Array<{ id: number; name: string; nextDue: string | null; reason: string }> = [];
+    // Full list of overdue employee ids so the VeritaStaff list filter can
+    // drive its rendering from the same single source of truth the tile
+    // shows. Without this, the client-side getCompetencyStatus helper (which
+    // does not check Initial) and the server-side classification drift, and
+    // the user sees "3 overdue" on the tile but "Showing 0" on the filtered
+    // list. Hotfix to PR E2 (2026-06-05).
+    const overdueIds: number[] = [];
 
     for (const e of rows) {
       let bucket: Bucket = "compliant";
@@ -15409,6 +15416,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       counts[bucket] += 1;
 
+      if (bucket === "overdue") {
+        overdueIds.push(e.id);
+      }
+
       if (bucket === "overdue" && overdueSample.length < 5) {
         const name = [e.last_name, e.first_name].filter(Boolean).join(", ") + (e.middle_initial ? ` ${e.middle_initial}.` : "");
         overdueSample.push({
@@ -15431,6 +15442,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       total,
       percentCompliant,
       overdueSample,
+      overdueIds,
     });
   });
 
