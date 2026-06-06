@@ -17,6 +17,7 @@ import { CompetencyStatusTile } from "@/components/CompetencyStatusTile";
 import { CredentialExpirationTile } from "@/components/CredentialExpirationTile";
 import { ReassessmentTrackerTile } from "@/components/ReassessmentTrackerTile";
 import { DutyChangeTile } from "@/components/DutyChangeTile";
+import { ComplianceScoreTile } from "@/components/ComplianceScoreTile";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -146,6 +147,14 @@ export default function Dashboard() {
           "The medical director or designee signs; download the PDF and file with your CLIA records.",
         ]}
       />
+
+      {/* Wave J PR J4 (2026-06-06): headline compliance score for the lab.
+          Aggregates the five tile signals into a single number with a
+          colored band, plus a drill-down panel listing per-program scores
+          ranked worst-first. Self-hides when nothing is on file. Mounted
+          first so the LD's eye lands on the overall score before any
+          per-area tile. */}
+      <ComplianceScoreTile className="mb-6" />
 
       {/* PR E2: Competency status tile (lab-scoped). Hides itself when the
           lab has zero active testing personnel or the user is on the legacy

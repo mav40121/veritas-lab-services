@@ -16328,6 +16328,205 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // GET /api/labs/:labId/compliance/score
+  //
+  // Wave J PR J4 (2026-06-06). Roll-up compliance score for the lab,
+  // computed as the equal-weight average of five signals that already
+  // ship as individual dashboard tiles:
+  //
+  //   A. Competency current: % of active testing employees not overdue.
+  //   B. Credentials current: % of tracked credentials not expired.
+  //   C. Reassessments resolved: % of (employee x program) pairs whose
+  //      most recent assessment is not a failed pair awaiting follow-up.
+  //   D. Position descriptions on file: ratio of CLIA roles (out of 6)
+  //      with a PD in staff_position_descriptions.
+  //   E. Duty-change events resolved: % of duty_change_events resolved.
+  //
+  // Each signal returns 100% when there's nothing to grade (no testing
+  // employees, no credentials, no programs, etc.). That's the surveyor-
+  // defensible "no data = clean" framing; it also keeps the headline
+  // score from going amber on a brand-new lab.
+  //
+  // Per-program drill-down uses only signals A and C (the two that
+  // meaningfully scope to a single program). B / D / E are lab-level
+  // and don't decompose per program.
+  //
+  // Color band: green >= 90, amber 75-89, red < 75.
+  //
+  // Reg framing: the score is a lab-management aid, not a regulatory
+  // verdict. Each underlying signal anchors to its own §493 cite via
+  // the existing tiles; the dashboard tile carries no new regulatory
+  // claim. The footer in the UI says so.
+  app.get("/api/labs/:labId/compliance/score", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab) && !hasStaffAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaComp™ or VeritaStaff™ subscription required" });
+    }
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const plus30 = new Date(today.getTime() + 30 * dayMs);
+    const plus90 = new Date(today.getTime() + 90 * dayMs);
+    function parse(s: string | null): Date | null {
+      if (!s) return null;
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    // ── Signal A: Competency current ──
+    // Reuses the same per-employee classification as
+    // /competency/dashboard-stats (PR #562). Score = (compliant + dueSoon90) / total.
+    // "Due in 90 days" employees still count toward current because the
+    // lab has runway to address them; "overdue" and "due in 30 days"
+    // drag the score.
+    const empRows = client.prepare(
+      `SELECT e.id, e.hire_date,
+              s.initial_completed_at,
+              s.six_month_due_at, s.six_month_completed_at,
+              s.first_annual_due_at, s.first_annual_completed_at,
+              s.annual_due_at, s.last_annual_completed_at
+       FROM staff_employees e
+       LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
+    ).all(labId) as Array<any>;
+    let compCurrent = 0, compTotal = empRows.length;
+    for (const e of empRows) {
+      let nextDue: Date | null = null;
+      if (!e.initial_completed_at) {
+        const hire = parse(e.hire_date);
+        nextDue = hire ? new Date(hire.getTime() + 90 * dayMs) : today;
+      } else if (e.six_month_due_at && !e.six_month_completed_at) {
+        nextDue = parse(e.six_month_due_at);
+      } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
+        nextDue = parse(e.first_annual_due_at);
+      } else if (e.annual_due_at) {
+        nextDue = parse(e.annual_due_at);
+      }
+      const ok = nextDue === null || nextDue.getTime() > plus30.getTime();
+      if (ok) compCurrent += 1;
+    }
+    const signalA = compTotal === 0 ? 100 : Math.round((compCurrent / compTotal) * 100);
+
+    // ── Signal B: Credentials current ──
+    const credRows = client.prepare(
+      `SELECT d.expiration_date
+       FROM staff_employee_documents d
+       JOIN staff_employees e ON d.employee_id = e.id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND d.expiration_date IS NOT NULL`
+    ).all(labId) as Array<{ expiration_date: string }>;
+    let credCurrent = 0;
+    for (const r of credRows) {
+      const exp = parse(r.expiration_date);
+      if (exp && exp.getTime() >= today.getTime()) credCurrent += 1;
+    }
+    const signalB = credRows.length === 0 ? 100 : Math.round((credCurrent / credRows.length) * 100);
+
+    // ── Signal C: Reassessments resolved ──
+    // Same logic as the open-reassessment endpoint (PR #578) but
+    // inverted: count (employee, program) pairs whose most recent
+    // assessment is NOT a fail awaiting follow-up.
+    const allAssessments = client.prepare(
+      `SELECT a.employee_id, a.program_id, a.assessment_date, a.status
+       FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE p.lab_id = ?
+       ORDER BY a.employee_id, a.program_id, a.assessment_date DESC, a.id DESC`
+    ).all(labId) as Array<{ employee_id: number; program_id: number; assessment_date: string; status: string }>;
+    const pairLastFail = new Map<string, { hasLaterPass: boolean }>();
+    for (const r of allAssessments) {
+      const key = `${r.employee_id}:${r.program_id}`;
+      if (!pairLastFail.has(key)) pairLastFail.set(key, { hasLaterPass: false });
+      const state = pairLastFail.get(key)!;
+      if (r.status === "fail" && !state.hasLaterPass) {
+        // First fail seen in DESC traversal with no later pass observed yet.
+        // (state initial value covers the case.)
+      } else if (r.status === "pass" && !state.hasLaterPass) {
+        // Pass observed before any fail in DESC order means most recent is a pass.
+        state.hasLaterPass = true;
+      }
+    }
+    const pairsTotal = pairLastFail.size;
+    let pairsResolved = 0;
+    for (const v of pairLastFail.values()) if (v.hasLaterPass) pairsResolved += 1;
+    // Pairs with NO records at all aren't represented; that's fine.
+    // 100% when no fails ever recorded.
+    const signalC = pairsTotal === 0 ? 100 : Math.round((pairsResolved / pairsTotal) * 100);
+
+    // ── Signal D: Position descriptions on file ──
+    const pdRows = client.prepare(
+      `SELECT role, title, description FROM staff_position_descriptions WHERE lab_id = ?`
+    ).all(labId) as Array<{ role: string; title: string | null; description: string | null }>;
+    const PD_REQUIRED = 6; // LD, CC, TC, TS, GS, TP
+    const pdOnFile = pdRows.filter(r => (r.title && r.title.trim()) || (r.description && r.description.trim())).length;
+    const signalD = Math.round((Math.min(pdOnFile, PD_REQUIRED) / PD_REQUIRED) * 100);
+
+    // ── Signal E: Duty-change events resolved ──
+    const dcTotal = (client.prepare(
+      `SELECT COUNT(*) AS c FROM staff_duty_change_events WHERE lab_id = ?`
+    ).get(labId) as { c: number }).c;
+    const dcResolved = (client.prepare(
+      `SELECT COUNT(*) AS c FROM staff_duty_change_events WHERE lab_id = ? AND resolved_at IS NOT NULL`
+    ).get(labId) as { c: number }).c;
+    const signalE = dcTotal === 0 ? 100 : Math.round((dcResolved / dcTotal) * 100);
+
+    // ── Roll-up ──
+    const overall = Math.round((signalA + signalB + signalC + signalD + signalE) / 5);
+    const band: "green" | "amber" | "red" = overall >= 90 ? "green" : overall >= 75 ? "amber" : "red";
+
+    // ── Per-program drill-down (signals A + C only) ──
+    const programs = client.prepare(
+      `SELECT id, name FROM competency_programs WHERE lab_id = ? ORDER BY name`
+    ).all(labId) as Array<{ id: number; name: string }>;
+    // Pull all assessments for the lab once; group per program below.
+    const allByProgram = new Map<number, Array<{ employee_id: number; assessment_date: string; status: string }>>();
+    for (const r of allAssessments) {
+      if (!allByProgram.has(r.program_id)) allByProgram.set(r.program_id, []);
+      allByProgram.get(r.program_id)!.push({ employee_id: r.employee_id, assessment_date: r.assessment_date, status: r.status });
+    }
+    const perProgram = programs.map(p => {
+      const rows = allByProgram.get(p.id) || [];
+      // Per-program A: same nextDue check as the lab-level, but the
+      // staff_competency_schedules is not per-program (it's a single
+      // schedule per employee). Per-program competency-current isn't
+      // well-defined; approximate by reusing the lab-level A% for now.
+      const aPct = signalA;
+      // Per-program C
+      const byEmp = new Map<number, { hasLaterPass: boolean }>();
+      for (const r of rows) {
+        if (!byEmp.has(r.employee_id)) byEmp.set(r.employee_id, { hasLaterPass: false });
+        const st = byEmp.get(r.employee_id)!;
+        if (r.status === "pass" && !st.hasLaterPass) st.hasLaterPass = true;
+      }
+      const totalE = byEmp.size;
+      const resolvedE = Array.from(byEmp.values()).filter(v => v.hasLaterPass).length;
+      const cPct = totalE === 0 ? 100 : Math.round((resolvedE / totalE) * 100);
+      const programScore = Math.round((aPct + cPct) / 2);
+      return { programId: p.id, name: p.name, score: programScore, competencyCurrent: aPct, reassessmentsResolved: cPct };
+    });
+    // Sort worst-first so the LD's eye lands on the program dragging the average.
+    perProgram.sort((a, b) => a.score - b.score);
+
+    res.json({
+      overall,
+      band,
+      signals: {
+        competencyCurrent: signalA,
+        credentialsCurrent: signalB,
+        reassessmentsResolved: signalC,
+        positionDescriptionsOnFile: signalD,
+        dutyChangesResolved: signalE,
+      },
+      counts: {
+        activeTestingEmployees: compTotal,
+        trackedCredentials: credRows.length,
+        evaluatedPairs: pairsTotal,
+        positionDescriptionsOnFile: pdOnFile,
+        dutyChangeEvents: dcTotal,
+      },
+      perProgram,
+    });
+  });
+
   // GET /api/labs/:labId/staff/credentials-dashboard-stats
   //
   // Wave F PR F3 (2026-06-06). Aggregate credential expiration stats from
