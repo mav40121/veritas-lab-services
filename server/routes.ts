@@ -8945,6 +8945,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const pattern = `%${String(req.query.q)}%`;
       params.push(pattern, pattern, pattern);
     }
+    // Wave A1.1 (2026-06-06): ?filter=needs-review surfaces rows missing
+    // effective_date OR missing review_due_date OR past their review
+    // due date. Lets the director clean up rows linked before the
+    // required-date gate landed without forcing a destructive
+    // backfill on the DB column.
+    if (req.query.filter === "needs-review") {
+      const today = new Date().toISOString().slice(0, 10);
+      filters.push("(effective_date IS NULL OR review_due_date IS NULL OR review_due_date < ?)");
+      params.push(today);
+    }
     const rows = sqlite.prepare(
       `SELECT id, lab_id, title, description, document_type, display_label, external_url,
               storage_provider, version, status, superseded_by_document_id,
@@ -8974,6 +8984,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (storage_provider && !VALID_STORAGE_PROVIDERS.includes(storage_provider)) {
       return res.status(400).json({ error: `storage_provider must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
     }
+    // Wave A1.1 (2026-06-06): effective_date is required at write time.
+    // Surveyor-defensibility move 2 — every linked document must declare
+    // when the lab adopted that version. The DB column stays nullable so
+    // historical rows linked before this gate aren't broken; the
+    // ?filter=needs-review surface (added below) lists them for cleanup.
+    const isYmd = (s: any) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    if (!effective_date || !isYmd(effective_date)) {
+      return res.status(400).json({ error: "effective_date required (YYYY-MM-DD): when did this document version go into effect at the lab?" });
+    }
     const sqlite = (db as any).$client;
     // Auto-fill review_due_date from lab default if not supplied
     let resolvedReviewDue: string | null = review_due_date || null;
@@ -8989,6 +9008,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           resolvedReviewDue = due.toISOString().slice(0, 10);
         }
       }
+    }
+    if (!resolvedReviewDue || !isYmd(resolvedReviewDue)) {
+      return res.status(400).json({ error: "review_due_date required (YYYY-MM-DD): when must this document be reviewed next? Supply review_due_date or set a default_review_days for this document_type." });
     }
     const now = new Date().toISOString();
     const ins = sqlite.prepare(
@@ -9039,6 +9061,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const allowed = ["title", "description", "document_type", "display_label", "external_url", "storage_provider", "version", "status", "effective_date", "review_due_date"];
     const updates: string[] = [];
     const params: any[] = [];
+    // Wave A1.1 (2026-06-06): PATCH cannot clear effective_date or
+    // review_due_date once set. The director can move them forward (new
+    // version effective date, new review cycle) but cannot blank them.
+    const isYmdPatch = (s: any) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
     for (const field of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
         const val = req.body[field];
@@ -9050,6 +9076,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
         if (field === "status" && val && !VALID_DOCUMENT_STATUSES.includes(val)) {
           return res.status(400).json({ error: `status must be one of: ${VALID_DOCUMENT_STATUSES.join(", ")}` });
+        }
+        if ((field === "effective_date" || field === "review_due_date") && (val === null || val === "" || !isYmdPatch(val))) {
+          return res.status(400).json({ error: `${field} cannot be cleared once set; must be YYYY-MM-DD.` });
         }
         updates.push(`${field} = ?`);
         params.push(typeof val === "string" ? val.trim() || null : val);
