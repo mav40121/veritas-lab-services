@@ -4590,6 +4590,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return scope?.role === "owner";
   }
 
+  // ── Wave K1 (2026-06-07): Inventory PIN management ────────────────────────
+  // Director / admin endpoints to rotate the shared kiosk PIN and read
+  // its status (without ever returning the PIN itself). Login + actual
+  // inventory operations land in K2 / K3.
+
+  // POST /api/labs/:labId/inventory-pin/regenerate
+  //   Owner / admin only. Generates a fresh 6-digit PIN, hashes it with
+  //   a per-lab salt, stores the hash, resets failed_attempts +
+  //   locked_until. Returns the plaintext PIN ONCE in the response so
+  //   the director can write it down. Audit-logged.
+  app.post("/api/labs/:labId/inventory-pin/regenerate", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) {
+      return res.status(403).json({ error: "Owner or admin role required to rotate the inventory PIN." });
+    }
+    try {
+      const { generate6DigitPin, hashPin } = require("./inventoryPin");
+      const pin = generate6DigitPin();
+      const { hash, salt } = hashPin(pin);
+      const now = new Date().toISOString();
+      const sqlite = (db as any).$client;
+      sqlite.prepare(
+        `UPDATE labs SET inventory_pin_hash = ?, inventory_pin_salt = ?,
+                         inventory_pin_updated_at = ?, inventory_pin_locked_until = NULL,
+                         inventory_pin_failed_attempts = 0
+         WHERE id = ?`
+      ).run(hash, salt, now, req.scope.labId);
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+        module: "veritastock", action: "update", entityType: "inventory_pin",
+        entityId: String(req.scope.labId),
+        entityLabel: `Inventory PIN rotated`,
+        before: null, after: { rotated_at: now },
+        ipAddress: req.ip,
+      });
+      res.json({ pin, updated_at: now });
+    } catch (err: any) {
+      console.error("[inventory-pin/regenerate] error:", err);
+      res.status(500).json({ error: err.message || "regenerate_failed" });
+    }
+  });
+
+  // GET /api/labs/:labId/inventory-pin/status
+  //   Owner / admin only. Returns presence + last-rotated-at + lock
+  //   state. NEVER returns the PIN itself or the hash.
+  app.get("/api/labs/:labId/inventory-pin/status", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) {
+      return res.status(403).json({ error: "Owner or admin role required to read inventory PIN status." });
+    }
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare(
+      `SELECT inventory_pin_hash, inventory_pin_updated_at,
+              inventory_pin_locked_until, inventory_pin_failed_attempts
+       FROM labs WHERE id = ?`
+    ).get(req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Lab not found" });
+    const now = new Date();
+    const lockedUntil = row.inventory_pin_locked_until ? new Date(row.inventory_pin_locked_until) : null;
+    const isLocked = lockedUntil !== null && lockedUntil.getTime() > now.getTime();
+    res.json({
+      has_pin: row.inventory_pin_hash !== null && row.inventory_pin_hash !== "",
+      last_rotated_at: row.inventory_pin_updated_at,
+      failed_attempts: row.inventory_pin_failed_attempts ?? 0,
+      locked_until: isLocked ? row.inventory_pin_locked_until : null,
+      is_locked: isLocked,
+    });
+  });
+
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
