@@ -22011,6 +22011,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Wave A2.3 (2026-06-07): plain-language summary coverage report ──────
+  //
+  // Lists every system policy template with its CFR-block count and a flag
+  // showing whether the optional plain_language_summary has been authored.
+  // Sorted descending by CFR-block count so the templates with the most
+  // surveyor exposure surface first — that's the priority order for which
+  // 10 to author next. Unauthenticated read because the catalog of which
+  // policies exist (without bodies) is not sensitive.
+  app.get('/api/veritapolicy/templates/coverage', (_req: any, res) => {
+    try {
+      const { findTemplatePath, loadTemplate } = require('./veritapolicyDocx');
+      // Sweep policy ids 1..200 (catalog is currently 59 files; the range
+      // tolerates future additions without changing this endpoint).
+      const rows: any[] = [];
+      for (let i = 1; i <= 200; i++) {
+        const padded = String(i).padStart(3, '0');
+        if (!findTemplatePath(padded)) continue;
+        const tmpl = loadTemplate(padded);
+        if (!tmpl) continue;
+        const cfrCount = Array.isArray(tmpl.cfr_text_blocks) ? tmpl.cfr_text_blocks.length : 0;
+        const summary = (tmpl.plain_language_summary || '').trim();
+        rows.push({
+          policy_id: tmpl.policy_id,
+          slug: tmpl.slug || null,
+          policy_name: tmpl.policy_name,
+          section: tmpl.section || null,
+          cfr_block_count: cfrCount,
+          has_summary: summary.length > 0,
+          summary_length: summary.length,
+        });
+      }
+      // CFR-block count desc, then policy name asc for stable ties.
+      rows.sort((a, b) => {
+        if (a.cfr_block_count !== b.cfr_block_count) return b.cfr_block_count - a.cfr_block_count;
+        return a.policy_name.localeCompare(b.policy_name);
+      });
+      const authored = rows.filter((r) => r.has_summary).length;
+      res.json({
+        templates: rows,
+        total: rows.length,
+        authored,
+        outstanding: rows.length - authored,
+        // The "Top 10 to author next" suggestion is just the head of the
+        // sorted list filtered to ones that don't yet have a summary.
+        top_10_to_author: rows.filter((r) => !r.has_summary).slice(0, 10).map((r) => ({
+          policy_id: r.policy_id,
+          policy_name: r.policy_name,
+          cfr_block_count: r.cfr_block_count,
+        })),
+      });
+    } catch (err: any) {
+      console.error('[veritapolicy/templates/coverage] error:', err);
+      res.status(500).json({ error: err.message || 'Coverage report failed' });
+    }
+  });
+
   // GET /api/labs/:labId/veritapolicy/templates/:policyId/docx
   //   Per-policy Word download. Reads the JSON template from
   //   server/policyTemplates/data/, substitutes <<LAB_NAME>> with the live
