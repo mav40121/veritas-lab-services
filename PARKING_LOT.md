@@ -956,7 +956,7 @@ The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_c
 - ~~Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method~~ ✅ backfilled 2026-06-06 in `scripts/verify-deming-lot-to-lot.js` (30/30 PASS).
 - CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit
 - ~~Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep28-reference-interval.js` (31/31 PASS).
-- Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics
+- ~~Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics~~ ✅ backfilled 2026-06-06 in `scripts/verify-deming-ols-ci.js` (28/28 PASS).
 - Precision Verification EP15 ANOVA simple + advanced modes (#9643934) — variance decomposition
 - ~~Qualitative + semi-quantitative method comparison (#4e14d1a) — categorical comparison logic~~ ✅ backfilled 2026-06-06 in `scripts/verify-method-comparison-qualitative.js` (37/37 PASS).
 - ~~TEa boundary comparison fix (#6e02c0d) — boundary math fix without verification~~ ✅ backfilled 2026-06-03 in `scripts/verify-tea-boundary.js` (19/19 PASS).
