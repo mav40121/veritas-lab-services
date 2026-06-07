@@ -4748,6 +4748,127 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Wave K3 (2026-06-07): Kiosk inventory-session endpoints ──────────────
+  //
+  // Read + qty-adjust surface for the bench tech who logged in via
+  // /api/inventory-login (K2). Gated by inventoryAuthMiddleware so a
+  // user JWT can never reach these routes and a kiosk JWT cannot
+  // reach the regular user routes. Every adjustment requires initials
+  // (2-4 alphanumeric) and writes an audit row with before/after qty.
+  //
+  // Item shape is the minimum needed to count bottles: name, catalog,
+  // lot, unit, location, barcode, expiration. Vendor pricing and
+  // ordering knobs (burn rate, lead time) are NOT exposed — the kiosk
+  // is for counting, not reordering.
+
+  function decorateKioskItem(row: any) {
+    if (!row) return null;
+    return {
+      id: row.id,
+      item_name: row.item_name,
+      catalog_number: row.catalog_number,
+      lot_number: row.lot_number,
+      department: row.department,
+      category: row.category,
+      quantity_on_hand: row.quantity_on_hand,
+      unit: row.unit,
+      storage_location: row.storage_location,
+      barcode_value: row.barcode_value,
+      expiration_date: row.expiration_date,
+    };
+  }
+
+  // GET /api/inventory-session/items — list inventory items for the
+  // JWT's lab. No paging; a single lab's count fits comfortably in one
+  // response. Ordered by item_name for predictable on-screen layout.
+  app.get("/api/inventory-session/items", inventoryAuthMiddleware, (req: any, res) => {
+    try {
+      const sqlite = (db as any).$client;
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+      ).all(req.inventoryLabId);
+      const items = (rows as any[]).map(decorateKioskItem);
+      res.json({ items, total: items.length, lab_id: req.inventoryLabId });
+    } catch (err: any) {
+      console.error("[inventory-session/items] error:", err);
+      res.status(500).json({ error: err.message || "list_failed" });
+    }
+  });
+
+  // POST /api/inventory-session/items/:id/adjust
+  //   body: { new_quantity, initials, reason? }
+  // Validates: item belongs to JWT's lab, new_quantity is a non-negative
+  // integer, initials are 2-4 alphanumeric. Captures before/after qty.
+  // Writes an audit_log row with module="veritastock", action="update",
+  // entityType="inventory_item", entityLabel="{name} qty by {initials}".
+  // userId on the audit row is 0 (kiosk sentinel) but ownerUserId is the
+  // lab's owner so the trail still ties to the billing account.
+  app.post("/api/inventory-session/items/:id/adjust", inventoryAuthMiddleware, (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: "Invalid item id" });
+      }
+      const { new_quantity, initials, reason } = req.body || {};
+      if (typeof new_quantity !== "number" || !Number.isFinite(new_quantity) || new_quantity < 0 || !Number.isInteger(new_quantity)) {
+        return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+      }
+      if (typeof initials !== "string" || !/^[A-Za-z0-9]{2,4}$/.test(initials)) {
+        return res.status(400).json({ error: "initials must be 2-4 alphanumeric characters" });
+      }
+      const sqlite = (db as any).$client;
+      const item = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE id = ? AND lab_id = ?"
+      ).get(id, req.inventoryLabId) as any;
+      if (!item) {
+        // 404 not 403: the kiosk has no way to know about items in other
+        // labs, so leaking "exists but you can't see it" would be wrong.
+        return res.status(404).json({ error: "Item not found in this lab" });
+      }
+      const beforeQty = item.quantity_on_hand;
+      const nowIso = new Date().toISOString();
+      sqlite.prepare(
+        "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
+      ).run(new_quantity, nowIso, id);
+
+      // Look up the lab's owner so the audit row ties to the billing
+      // account, not to userId=0 alone.
+      const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.inventoryLabId) as any;
+      logAudit({
+        userId: 0, // kiosk sentinel; the human identity is the initials
+        ownerUserId: lab?.owner_user_id ?? 0,
+        module: "veritastock",
+        action: "update",
+        entityType: "inventory_item",
+        entityId: String(id),
+        entityLabel: `${item.item_name} qty by ${initials.toUpperCase()}`,
+        before: { quantity_on_hand: beforeQty },
+        after: {
+          quantity_on_hand: new_quantity,
+          initials: initials.toUpperCase(),
+          reason: reason || null,
+          via: "kiosk",
+        },
+        ipAddress: req.ip,
+      });
+
+      const updated = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
+      res.json({
+        item: decorateKioskItem(updated),
+        adjustment: {
+          before_qty: beforeQty,
+          after_qty: new_quantity,
+          delta: new_quantity - beforeQty,
+          initials: initials.toUpperCase(),
+          at: nowIso,
+        },
+      });
+    } catch (err: any) {
+      console.error("[inventory-session/adjust] error:", err);
+      res.status(500).json({ error: err.message || "adjust_failed" });
+    }
+  });
+
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
