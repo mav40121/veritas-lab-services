@@ -236,10 +236,38 @@ sqlite.exec(`
     UNIQUE(lab_id, document_type)
   );
 
+  -- Wave A1.5 (2026-06-06): Cross-link slots so other VeritaAssure
+  -- modules can attach a VeritaScan document as evidence. The existing
+  -- document_checklist_links table targets the static SCAN_ITEMS
+  -- checklist; this table targets module records (VeritaPolicy policy,
+  -- VeritaComp program / assessment, VeritaCheck study,
+  -- VeritaResponse citation, etc.). One row per
+  -- (document, target_module, target_entity_id); the UNIQUE constraint
+  -- below prevents duplicate links to the same target. lab_id is
+  -- denormalized for fast lab-scoped queries (matches the lab_documents
+  -- pattern).
+  CREATE TABLE IF NOT EXISTS lab_document_cross_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    target_module TEXT NOT NULL,
+    target_entity_id INTEGER NOT NULL,
+    target_entity_label TEXT,
+    notes TEXT,
+    linked_at TEXT NOT NULL,
+    linked_by_user_id INTEGER NOT NULL,
+    UNIQUE(document_id, target_module, target_entity_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_lab_documents_lab_status ON lab_documents(lab_id, status);
   CREATE INDEX IF NOT EXISTS idx_lab_documents_lab_type   ON lab_documents(lab_id, document_type);
   CREATE INDEX IF NOT EXISTS idx_doc_links_item            ON document_checklist_links(checklist_item_id);
   CREATE INDEX IF NOT EXISTS idx_doc_links_doc             ON document_checklist_links(document_id);
+  -- Wave A1.5 (2026-06-06): cross-link indexes for the by-document
+  -- and by-target lookups (the two read paths the endpoints serve).
+  CREATE INDEX IF NOT EXISTS idx_doc_xlinks_doc            ON lab_document_cross_links(document_id);
+  CREATE INDEX IF NOT EXISTS idx_doc_xlinks_target         ON lab_document_cross_links(target_module, target_entity_id);
+  CREATE INDEX IF NOT EXISTS idx_doc_xlinks_lab            ON lab_document_cross_links(lab_id);
 
   CREATE TABLE IF NOT EXISTS newsletter_subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1115,6 +1143,28 @@ const labDocColumnDefs: [string, string][] = [
   ["owner_name", "TEXT"],
   ["owner_attested_at", "TEXT"],
 ];
+
+// Wave A1.5 (2026-06-06): migration safety net for the new
+// lab_document_cross_links table. Per CLAUDE.md §8 NEW DB TABLE RULE.
+// The earlier table-create statement lands the full shape on a fresh
+// volume; this PRAGMA block fills in any column that was missing on an
+// older volume if a prior deploy created the table with a subset.
+const labDocXlinkCols = (sqlite.prepare("PRAGMA table_info(lab_document_cross_links)").all() as { name: string }[]).map(c => c.name);
+const labDocXlinkColumnDefs: [string, string][] = [
+  ["lab_id", "INTEGER NOT NULL DEFAULT 0"],
+  ["document_id", "INTEGER NOT NULL DEFAULT 0"],
+  ["target_module", "TEXT NOT NULL DEFAULT ''"],
+  ["target_entity_id", "INTEGER NOT NULL DEFAULT 0"],
+  ["target_entity_label", "TEXT"],
+  ["notes", "TEXT"],
+  ["linked_at", "TEXT NOT NULL DEFAULT ''"],
+  ["linked_by_user_id", "INTEGER NOT NULL DEFAULT 0"],
+];
+for (const [col, colType] of labDocXlinkColumnDefs) {
+  if (!labDocXlinkCols.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE lab_document_cross_links ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
 for (const [col, type] of labDocColumnDefs) {
   if (!labDocCols.includes(col)) sqlite.exec(`ALTER TABLE lab_documents ADD COLUMN ${col} ${type}`);
 }

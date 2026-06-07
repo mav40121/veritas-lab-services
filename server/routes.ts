@@ -9350,6 +9350,121 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(links);
   });
 
+  // ── Wave A1.5 (2026-06-06): VeritaScan cross-link endpoints ────────────
+  // Open the slots so other modules (VeritaPolicy, VeritaComp, VeritaCheck,
+  // VeritaResponse, etc.) can attach a VeritaScan document as evidence.
+  // Schema in db.ts (lab_document_cross_links table). No consumer-module
+  // wiring yet; that ships when the target module is hardened.
+  const VALID_XLINK_MODULES = ["veritapolicy", "veritacomp", "veritacheck", "veritaresponse", "veritamap", "veritapt", "veritaqc", "veritalab"] as const;
+
+  // POST /api/labs/:labId/veritascan/documents/:docId/cross-links
+  app.post("/api/labs/:labId/veritascan/documents/:docId/cross-links", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const sqlite = (db as any).$client;
+    const docId = Number(req.params.docId);
+    const doc = sqlite.prepare(
+      "SELECT id FROM lab_documents WHERE id = ? AND lab_id = ?"
+    ).get(docId, req.scope.labId) as any;
+    if (!doc) return res.status(404).json({ error: "Document not found in this lab" });
+
+    const { target_module, target_entity_id, target_entity_label, notes } = req.body || {};
+    if (!target_module || !(VALID_XLINK_MODULES as readonly string[]).includes(target_module)) {
+      return res.status(400).json({ error: `target_module must be one of: ${VALID_XLINK_MODULES.join(", ")}` });
+    }
+    const entIdNum = Number(target_entity_id);
+    if (!Number.isFinite(entIdNum) || entIdNum <= 0) {
+      return res.status(400).json({ error: "target_entity_id required (positive integer)" });
+    }
+    const now = new Date().toISOString();
+    try {
+      const ins = sqlite.prepare(
+        `INSERT INTO lab_document_cross_links
+         (lab_id, document_id, target_module, target_entity_id, target_entity_label, notes, linked_at, linked_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        req.scope.labId, docId, target_module, entIdNum,
+        (target_entity_label || "").toString().trim() || null,
+        (notes || "").toString().trim() || null,
+        now, req.userId
+      );
+      const created = sqlite.prepare("SELECT * FROM lab_document_cross_links WHERE id = ?").get(Number(ins.lastInsertRowid));
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+        module: "veritascan", action: "create", entityType: "cross_link",
+        entityId: String(ins.lastInsertRowid),
+        entityLabel: `${target_module}:${entIdNum} <- doc ${docId}`,
+        after: created, ipAddress: req.ip,
+      });
+      res.json(created);
+    } catch (err: any) {
+      if (String(err.message || "").includes("UNIQUE")) {
+        return res.status(400).json({ error: "Cross-link already exists for this (document, target_module, target_entity_id)." });
+      }
+      console.error("[veritascan/cross-links POST] error:", err);
+      res.status(500).json({ error: err.message || "create_failed" });
+    }
+  });
+
+  // DELETE /api/labs/:labId/veritascan/documents/:docId/cross-links/:linkId
+  app.delete("/api/labs/:labId/veritascan/documents/:docId/cross-links/:linkId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare(
+      "SELECT * FROM lab_document_cross_links WHERE id = ? AND document_id = ? AND lab_id = ?"
+    ).get(Number(req.params.linkId), Number(req.params.docId), req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Cross-link not found" });
+    sqlite.prepare("DELETE FROM lab_document_cross_links WHERE id = ?").run(Number(req.params.linkId));
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritascan", action: "delete", entityType: "cross_link",
+      entityId: String(req.params.linkId),
+      entityLabel: `${existing.target_module}:${existing.target_entity_id} <- doc ${req.params.docId}`,
+      before: existing, ipAddress: req.ip,
+    });
+    res.json({ ok: true });
+  });
+
+  // GET /api/labs/:labId/veritascan/documents/:docId/cross-links
+  app.get("/api/labs/:labId/veritascan/documents/:docId/cross-links", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT * FROM lab_document_cross_links
+       WHERE document_id = ? AND lab_id = ?
+       ORDER BY linked_at DESC`
+    ).all(Number(req.params.docId), req.scope.labId);
+    res.json(rows);
+  });
+
+  // GET /api/labs/:labId/veritascan/cross-links/by-target/:module/:entityId
+  // Reverse lookup that consumer modules use to surface "which evidence
+  // documents are attached to this policy / program / study / citation?"
+  app.get("/api/labs/:labId/veritascan/cross-links/by-target/:module/:entityId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    const mod = String(req.params.module);
+    if (!(VALID_XLINK_MODULES as readonly string[]).includes(mod)) {
+      return res.status(400).json({ error: `module must be one of: ${VALID_XLINK_MODULES.join(", ")}` });
+    }
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT x.*, d.title AS document_title, d.external_url, d.storage_provider,
+              d.effective_date, d.review_due_date, d.owner_name, d.owner_attested_at
+       FROM lab_document_cross_links x
+       JOIN lab_documents d ON d.id = x.document_id
+       WHERE x.lab_id = ? AND x.target_module = ? AND x.target_entity_id = ?
+       ORDER BY x.linked_at DESC`
+    ).all(req.scope.labId, mod, Number(req.params.entityId));
+    res.json(rows);
+  });
+
   // GET /api/labs/:labId/veritascan/coverage
   // Returns all active document<->checklist links for the lab in one shot.
   // The Inspection Proof view (Phase C) aggregates client-side to drive a
