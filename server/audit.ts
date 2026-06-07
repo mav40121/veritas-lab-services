@@ -14,6 +14,7 @@ export type AuditModule =
   | "veritalab"
   | "veritacheck"
   | "veritapt"
+  | "veritastock"
   | "account";
 
 export type AuditAction = "create" | "update" | "delete" | "restore";

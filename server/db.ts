@@ -1720,6 +1720,18 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("study_credits",              "ALTER TABLE labs ADD COLUMN study_credits INTEGER DEFAULT 0");
   ensure("has_completed_onboarding",   "ALTER TABLE labs ADD COLUMN has_completed_onboarding INTEGER DEFAULT 0");
   ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
+  // Wave K1 (2026-06-07): Inventory PIN. Shared 6-digit code that grants
+  // a scoped JWT (subject = inv:lab_<id>) good only for reading the
+  // inventory_items list and adjusting quantity_on_hand. Hashed at rest
+  // with pbkdf2-sha256 + a per-lab 16-byte salt. failed_attempts +
+  // locked_until provide rate-limiting on the login endpoint
+  // (K2). Director / admin rotate via /inventory-pin/regenerate;
+  // tech kiosk authenticates via POST /api/inventory-login (K2).
+  ensure("inventory_pin_hash",         "ALTER TABLE labs ADD COLUMN inventory_pin_hash TEXT");
+  ensure("inventory_pin_salt",         "ALTER TABLE labs ADD COLUMN inventory_pin_salt TEXT");
+  ensure("inventory_pin_updated_at",   "ALTER TABLE labs ADD COLUMN inventory_pin_updated_at TEXT");
+  ensure("inventory_pin_locked_until", "ALTER TABLE labs ADD COLUMN inventory_pin_locked_until TEXT");
+  ensure("inventory_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN inventory_pin_failed_attempts INTEGER DEFAULT 0");
 }
 
 // users.default_lab_id — bare-route redirect target (per doc Section 4).
