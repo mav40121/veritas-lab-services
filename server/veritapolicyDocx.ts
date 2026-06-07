@@ -53,6 +53,12 @@ export interface PolicyTemplate {
   procedure_steps?: string[];
   definitions?: Array<[string, string] | string>;
   cfr_text_blocks?: Array<{ citation: string; label?: string; verbatim: string }>;
+  // Wave A2.3 (2026-06-07): optional plain-language summary the lab
+  // director writes in their own voice. Renders as a teal callout
+  // above the Purpose section so surveyors and bench techs both read
+  // the plain-English framing before the formal regulatory language.
+  // Empty / null = no summary yet; the callout is skipped.
+  plain_language_summary?: string | null;
 }
 
 export interface LabContext {
@@ -323,6 +329,64 @@ function gap(after = 120) {
   return new Paragraph({ spacing: { after }, children: [new TextRun({ text: "", size: 2 })] });
 }
 
+// ─── Wave A2.3: plain-language summary callout ─────────────────────────────
+//
+// Renders the optional `plain_language_summary` field as a single-cell
+// teal-tinted callout box, positioned between the signature block and
+// the Purpose section so surveyors and bench techs both read the
+// plain-English framing first. Labeled "What this means in plain
+// English" so the regulatory framing of everything BELOW is set in
+// the right context.
+function plainLanguageCallout(summary: string, lab: LabContext): Table {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    borders: {
+      top:    { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      bottom: { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      left:   { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      right:  { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      insideVertical:   { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 9360, type: WidthType.DXA },
+            shading: { fill: TINT, type: ShadingType.CLEAR },
+            margins: { top: 200, bottom: 200, left: 300, right: 300 },
+            children: [
+              new Paragraph({
+                spacing: { after: 120 },
+                children: [
+                  new TextRun({
+                    text: "What this means in plain English",
+                    bold: true,
+                    color: TEAL_DARK,
+                    size: 22,
+                    font: "Calibri",
+                  }),
+                ],
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: sub(summary, lab),
+                    color: TEXT_DARK,
+                    size: 22,
+                    font: "Calibri",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
 // Crosswalk row: accreditor label in bold teal in the left cell, citation
 // string in the right cell. Skips rows where citation is empty.
 function crosswalkRow(label: string, citation: string): TableRow {
@@ -384,6 +448,15 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: Accred
   children.push(identityRow(lab));
   children.push(dateLines());
   children.push(signatureBlock());
+
+  // Wave A2.3: plain-language summary callout, just below the signature
+  // block. Set in the lab director's voice so surveyors and bench techs
+  // get the plain-English framing before the formal sections.
+  if (tmpl.plain_language_summary && tmpl.plain_language_summary.trim()) {
+    children.push(gap(120));
+    children.push(plainLanguageCallout(tmpl.plain_language_summary, lab));
+    children.push(gap(160));
+  }
 
   if (tmpl.purpose) {
     children.push(sectionHeading("Purpose"));
