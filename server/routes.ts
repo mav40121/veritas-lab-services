@@ -8952,15 +8952,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // backfill on the DB column.
     if (req.query.filter === "needs-review") {
       const today = new Date().toISOString().slice(0, 10);
-      // Wave A1.2 (2026-06-06): also surface rows with NULL storage_provider
-      // so the lab can clean up legacy rows linked before A1.2 landed.
-      filters.push("(effective_date IS NULL OR review_due_date IS NULL OR review_due_date < ? OR storage_provider IS NULL)");
+      // Wave A1.2 (2026-06-06): also surface rows with NULL storage_provider.
+      // Wave A1.3 (2026-06-06): also surface rows with NULL owner_user_id
+      // (no attestation captured).
+      filters.push("(effective_date IS NULL OR review_due_date IS NULL OR review_due_date < ? OR storage_provider IS NULL OR owner_user_id IS NULL)");
       params.push(today);
     }
     const rows = sqlite.prepare(
       `SELECT id, lab_id, title, description, document_type, display_label, external_url,
               storage_provider, version, status, superseded_by_document_id,
-              effective_date, review_due_date, linked_at, linked_by_user_id
+              effective_date, review_due_date, linked_at, linked_by_user_id,
+              owner_user_id, owner_name, owner_attested_at
        FROM lab_documents
        WHERE ${filters.join(" AND ")}
        ORDER BY linked_at DESC`
@@ -8975,7 +8977,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
       return res.status(403).json({ error: "VeritaScan™ subscription required" });
     }
-    const { title, description, document_type, display_label, external_url, storage_provider, version, effective_date, review_due_date } = req.body || {};
+    const { title, description, document_type, display_label, external_url, storage_provider, version, effective_date, review_due_date, owner_user_id } = req.body || {};
     if (!title || typeof title !== "string" || !title.trim()) return res.status(400).json({ error: "title required" });
     if (!document_type || !VALID_DOCUMENT_TYPES.includes(document_type)) {
       return res.status(400).json({ error: `document_type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
@@ -9019,18 +9021,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!resolvedReviewDue || !isYmd(resolvedReviewDue)) {
       return res.status(400).json({ error: "review_due_date required (YYYY-MM-DD): when must this document be reviewed next? Supply review_due_date or set a default_review_days for this document_type." });
     }
+    // Wave A1.3 (2026-06-06): owner_user_id required + must be an active
+    // member of this lab. Captures the person attesting that the linked
+    // URL is the lab's authoritative document. owner_name + owner_attested_at
+    // are set server-side from the users row + clock.
+    const ownerIdNum = Number(owner_user_id);
+    if (!Number.isFinite(ownerIdNum) || ownerIdNum <= 0) {
+      return res.status(400).json({ error: "owner_user_id required: which active lab member attests this URL is the authoritative document?" });
+    }
+    const ownerRow = sqlite.prepare(
+      `SELECT u.id, u.name FROM users u
+       JOIN lab_members lm ON lm.user_id = u.id
+       WHERE u.id = ? AND lm.lab_id = ? AND lm.status = 'active'`
+    ).get(ownerIdNum, req.scope.labId) as any;
+    if (!ownerRow) {
+      return res.status(400).json({ error: "owner_user_id must be an active member of this lab." });
+    }
+    const ownerName = ownerRow.name || "";
+    const ownerAttestedAt = new Date().toISOString();
     const now = new Date().toISOString();
     const ins = sqlite.prepare(
       `INSERT INTO lab_documents
        (lab_id, title, description, document_type, display_label, external_url,
         storage_provider, version, status, effective_date, review_due_date,
-        linked_at, linked_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`
+        linked_at, linked_by_user_id, owner_user_id, owner_name, owner_attested_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       req.scope.labId, title.trim(), description?.trim() || null, document_type,
       display_label?.trim() || null, external_url.trim(),
       storage_provider || null, version?.trim() || null,
       effective_date || null, resolvedReviewDue, now, req.userId,
+      ownerIdNum, ownerName, ownerAttestedAt,
     );
     const created = sqlite.prepare("SELECT * FROM lab_documents WHERE id = ?").get(Number(ins.lastInsertRowid));
     logAudit({
@@ -9065,13 +9086,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(Number(req.params.docId), req.scope.labId) as any;
     if (!existing) return res.status(404).json({ error: "Document not found in this lab" });
 
-    const allowed = ["title", "description", "document_type", "display_label", "external_url", "storage_provider", "version", "status", "effective_date", "review_due_date"];
+    const allowed = ["title", "description", "document_type", "display_label", "external_url", "storage_provider", "version", "status", "effective_date", "review_due_date", "owner_user_id"];
     const updates: string[] = [];
     const params: any[] = [];
     // Wave A1.1 (2026-06-06): PATCH cannot clear effective_date or
     // review_due_date once set. The director can move them forward (new
     // version effective date, new review cycle) but cannot blank them.
     const isYmdPatch = (s: any) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    // Wave A1.3 (2026-06-06): when owner_user_id changes, refresh
+    // owner_name and owner_attested_at server-side so the attestation
+    // record is always (who, when, captured name).
+    let newOwnerName: string | null = null;
+    let newOwnerAttestedAt: string | null = null;
     for (const field of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
         const val = req.body[field];
@@ -9090,9 +9116,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if ((field === "effective_date" || field === "review_due_date") && (val === null || val === "" || !isYmdPatch(val))) {
           return res.status(400).json({ error: `${field} cannot be cleared once set; must be YYYY-MM-DD.` });
         }
+        if (field === "owner_user_id") {
+          const ownerIdNum = Number(val);
+          if (!Number.isFinite(ownerIdNum) || ownerIdNum <= 0) {
+            return res.status(400).json({ error: "owner_user_id cannot be cleared once set; must be an active member of this lab." });
+          }
+          const ownerRow = sqlite.prepare(
+            `SELECT u.id, u.name FROM users u
+             JOIN lab_members lm ON lm.user_id = u.id
+             WHERE u.id = ? AND lm.lab_id = ? AND lm.status = 'active'`
+          ).get(ownerIdNum, req.scope.labId) as any;
+          if (!ownerRow) {
+            return res.status(400).json({ error: "owner_user_id must be an active member of this lab." });
+          }
+          newOwnerName = ownerRow.name || "";
+          newOwnerAttestedAt = new Date().toISOString();
+        }
         updates.push(`${field} = ?`);
         params.push(typeof val === "string" ? val.trim() || null : val);
       }
+    }
+    // Append the auto-tracked owner fields when owner_user_id was in body.
+    if (newOwnerAttestedAt) {
+      updates.push("owner_name = ?");
+      params.push(newOwnerName);
+      updates.push("owner_attested_at = ?");
+      params.push(newOwnerAttestedAt);
     }
     if (updates.length === 0) return res.json(existing);
     params.push(Number(req.params.docId), req.scope.labId);

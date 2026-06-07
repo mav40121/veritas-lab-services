@@ -1106,6 +1106,14 @@ const labDocColumnDefs: [string, string][] = [
   ["effective_date", "TEXT"],
   ["review_due_date", "TEXT"],
   ["description", "TEXT"],
+  // Wave A1.3 (2026-06-06): per-link owner attestation. Surveyor-
+  // defensibility move 2 — the artifact needs to say WHO inside the lab
+  // attests that this URL points to the authoritative document, and
+  // WHEN they last attested. owner_name is captured at attestation time
+  // so future user-record name changes don't rewrite history.
+  ["owner_user_id", "INTEGER"],
+  ["owner_name", "TEXT"],
+  ["owner_attested_at", "TEXT"],
 ];
 for (const [col, type] of labDocColumnDefs) {
   if (!labDocCols.includes(col)) sqlite.exec(`ALTER TABLE lab_documents ADD COLUMN ${col} ${type}`);

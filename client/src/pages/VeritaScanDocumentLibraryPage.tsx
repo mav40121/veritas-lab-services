@@ -76,6 +76,17 @@ interface LabDocument {
   review_due_date: string | null;
   linked_at: string;
   linked_by_user_id: number;
+  // Wave A1.3 (2026-06-06): per-link owner attestation.
+  owner_user_id: number | null;
+  owner_name: string | null;
+  owner_attested_at: string | null;
+}
+
+// Wave A1.3 (2026-06-06): lab members for the Owner picker.
+interface LabMemberPick {
+  user_id: number;
+  name: string;
+  email: string;
 }
 
 interface TypeDefault {
@@ -391,6 +402,7 @@ export default function VeritaScanDocumentLibraryPage() {
 
       <AddDocumentDialog
         open={addOpen}
+        labId={labId!}
         onClose={() => setAddOpen(false)}
         onSubmit={(body) => createMutation.mutate(body)}
         pending={createMutation.isPending}
@@ -399,6 +411,7 @@ export default function VeritaScanDocumentLibraryPage() {
       {editDoc && (
         <EditDocumentDialog
           doc={editDoc}
+          labId={labId!}
           onClose={() => setEditDoc(null)}
           onSubmit={(body) => updateMutation.mutate({ id: editDoc.id, body })}
           onArchive={() => archiveMutation.mutate(editDoc.id)}
@@ -445,8 +458,9 @@ function DefaultRow({ typeValue, typeLabel, initialDays, onSave }: {
   );
 }
 
-function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
+function AddDocumentDialog({ open, labId, onClose, onSubmit, pending }: {
   open: boolean;
+  labId: number;
   onClose: () => void;
   onSubmit: (body: Record<string, any>) => void;
   pending: boolean;
@@ -461,20 +475,33 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
     effective_date: "",
     review_due_date: "",
     description: "",
+    owner_user_id: "" as string,
   });
   useEffect(() => {
     if (open) setForm({
       title: "", document_type: "policy", display_label: "", external_url: "",
       storage_provider: "", version: "", effective_date: "", review_due_date: "",
-      description: "",
+      description: "", owner_user_id: "",
     });
   }, [open]);
+  // Wave A1.3 (2026-06-06): pull active members for the Owner picker.
+  const membersQuery = useQuery<LabMemberPick[]>({
+    queryKey: [`/api/labs/${labId}/members`],
+    enabled: open && !!labId,
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/labs/${labId}/members`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data?.members) ? data.members : Array.isArray(data) ? data : [];
+    },
+  });
+  const members = membersQuery.data || [];
   // Wave A1.1 (2026-06-06): effective_date is required at write time; the
   // server validates the same constraint so submitting without it would
   // return a 400. Surface the requirement in the form before the request.
-  // Wave A1.2 (2026-06-06): storage_provider added to the gate for the
-  // same reason — surveyor-defensibility requires "where does this live."
-  const canSubmit = form.title.trim() && form.external_url.trim() && form.effective_date.trim() && form.storage_provider.trim();
+  // Wave A1.2 (2026-06-06): storage_provider added to the gate.
+  // Wave A1.3 (2026-06-06): owner_user_id added to the gate.
+  const canSubmit = form.title.trim() && form.external_url.trim() && form.effective_date.trim() && form.storage_provider.trim() && form.owner_user_id.trim();
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl">
@@ -532,6 +559,18 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
             </div>
           </div>
           <div className="space-y-1">
+            <Label>Owner <span className="text-red-500" aria-hidden>*</span></Label>
+            <Select value={form.owner_user_id} onValueChange={v => setForm({ ...form, owner_user_id: v })}>
+              <SelectTrigger data-testid="select-add-owner"><SelectValue placeholder="Who attests this URL is authoritative?" /></SelectTrigger>
+              <SelectContent>
+                {members.map(m => (
+                  <SelectItem key={m.user_id} value={String(m.user_id)}>{m.name || m.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Their name + the current date are stamped on the record as the attestation.</p>
+          </div>
+          <div className="space-y-1">
             <Label>Description</Label>
             <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </div>
@@ -541,6 +580,7 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
           <Button
             onClick={() => onSubmit({
               ...form,
+              owner_user_id: Number(form.owner_user_id) || null,
               storage_provider: form.storage_provider || null,
               display_label: form.display_label || null,
               version: form.version || null,
@@ -559,8 +599,9 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
   );
 }
 
-function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
+function EditDocumentDialog({ doc, labId, onClose, onSubmit, onArchive, pending }: {
   doc: LabDocument;
+  labId: number;
   onClose: () => void;
   onSubmit: (body: Record<string, any>) => void;
   onArchive: () => void;
@@ -577,7 +618,20 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
     review_due_date: doc.review_due_date || "",
     description: doc.description || "",
     status: doc.status,
+    owner_user_id: doc.owner_user_id ? String(doc.owner_user_id) : "",
   });
+  // Wave A1.3 (2026-06-06): pull active members for the Owner picker.
+  const membersQuery = useQuery<LabMemberPick[]>({
+    queryKey: [`/api/labs/${labId}/members`],
+    enabled: !!labId,
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/labs/${labId}/members`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data?.members) ? data.members : Array.isArray(data) ? data : [];
+    },
+  });
+  const members = membersQuery.data || [];
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl">
@@ -606,11 +660,10 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Storage Provider</Label>
-              <Select value={form.storage_provider || "none"} onValueChange={v => setForm({ ...form, storage_provider: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label>Storage Provider <span className="text-red-500" aria-hidden>*</span></Label>
+              <Select value={form.storage_provider || ""} onValueChange={v => setForm({ ...form, storage_provider: v })}>
+                <SelectTrigger><SelectValue placeholder="Pick one" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Not specified</SelectItem>
                   {STORAGE_PROVIDERS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -633,6 +686,20 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
               <Label>Review Due</Label>
               <Input type="date" value={form.review_due_date} onChange={e => setForm({ ...form, review_due_date: e.target.value })} />
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Owner <span className="text-red-500" aria-hidden>*</span></Label>
+            <Select value={form.owner_user_id} onValueChange={v => setForm({ ...form, owner_user_id: v })}>
+              <SelectTrigger data-testid="select-edit-owner"><SelectValue placeholder="Who attests this URL is authoritative?" /></SelectTrigger>
+              <SelectContent>
+                {members.map(m => (
+                  <SelectItem key={m.user_id} value={String(m.user_id)}>{m.name || m.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {doc.owner_name && doc.owner_attested_at && (
+              <p className="text-xs text-muted-foreground">Last attested by <strong>{doc.owner_name}</strong> on {doc.owner_attested_at.slice(0, 10)}. Changing owner restamps the attestation.</p>
+            )}
           </div>
           <div className="space-y-1">
             <Label>Description</Label>
@@ -658,7 +725,7 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
                   version: form.version || null,
                   description: form.description || null,
                 };
-                // Wave A1.1 + A1.2 (2026-06-06): the server PATCH rejects
+                // Wave A1.1 + A1.2 + A1.3 (2026-06-06): the server PATCH rejects
                 // clearing required fields once set. If the user blanks
                 // them here, skip the field so the existing value stays.
                 // Non-empty values flow through normally. This lets
@@ -671,6 +738,8 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
                 else delete body.review_due_date;
                 if (form.storage_provider.trim()) body.storage_provider = form.storage_provider;
                 else delete body.storage_provider;
+                if (form.owner_user_id.trim()) body.owner_user_id = Number(form.owner_user_id);
+                else delete body.owner_user_id;
                 onSubmit(body);
               }}
               disabled={pending}
