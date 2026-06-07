@@ -556,6 +556,28 @@ function requireWriteAccess(req: any, res: any, next: any) {
   next();
 }
 
+// ── Wave K2 (2026-06-07): Inventory-scoped JWT middleware ────────────────
+//
+// Distinct from authMiddleware: rejects any token that doesn't carry
+// kind="inventory" + a labId. Used by K3's inventory items + adjust
+// endpoints so a kiosk JWT can never reach a user-scoped route, and a
+// user JWT can never reach the kiosk read/write surface. Stashes
+// req.inventoryLabId for the route handlers.
+export function inventoryAuthMiddleware(req: any, res: any, next: any) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
+    if (!payload || payload.kind !== "inventory" || typeof payload.labId !== "number") {
+      return res.status(401).json({ error: "Not an inventory session" });
+    }
+    req.inventoryLabId = payload.labId;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
 function authMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
@@ -4655,6 +4677,75 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       locked_until: isLocked ? row.inventory_pin_locked_until : null,
       is_locked: isLocked,
     });
+  });
+
+  // ── Wave K2 (2026-06-07): Inventory login + scoped JWT middleware ─────────
+  //
+  // POST /api/inventory-login body { clia, pin } → returns a JWT scoped
+  // to the lab's inventory operations only. JWT payload shape is
+  // { kind: "inventory", labId } so it cannot be mistaken for a user
+  // session by authMiddleware (which expects { userId }). 8-hour TTL
+  // (one shift). 5 failed attempts trip a 15-minute lockout per lab.
+  //
+  // K3 wires this middleware into the read + qty-adjust endpoints.
+  app.post("/api/inventory-login", (req: any, res) => {
+    try {
+      const { clia, pin } = req.body || {};
+      if (!clia || !pin || typeof clia !== "string" || typeof pin !== "string") {
+        return res.status(400).json({ error: "clia and pin required" });
+      }
+      const sqlite = (db as any).$client;
+      // Look up the lab by CLIA. CLIA is the kiosk-facing identifier
+      // because lab-id rotation across multi-lab accounts would force
+      // the tech to keep track of the right number.
+      const lab = sqlite.prepare(
+        `SELECT id, name, clia_number,
+                inventory_pin_hash, inventory_pin_salt,
+                inventory_pin_locked_until, inventory_pin_failed_attempts
+         FROM labs WHERE clia_number = ?`
+      ).get(clia.trim()) as any;
+      if (!lab) {
+        // Generic message; do not leak which CLIA exists.
+        return res.status(401).json({ error: "Invalid CLIA or PIN." });
+      }
+      if (!lab.inventory_pin_hash || !lab.inventory_pin_salt) {
+        return res.status(401).json({ error: "Inventory access not set up for this lab. Ask the lab director to generate a PIN." });
+      }
+      const now = new Date();
+      if (lab.inventory_pin_locked_until && new Date(lab.inventory_pin_locked_until).getTime() > now.getTime()) {
+        return res.status(423).json({
+          error: "Too many failed attempts. Try again after the lockout expires.",
+          locked_until: lab.inventory_pin_locked_until,
+        });
+      }
+      const { verifyPin } = require("./inventoryPin");
+      const ok = verifyPin(pin, lab.inventory_pin_hash, lab.inventory_pin_salt);
+      if (!ok) {
+        const newAttempts = (lab.inventory_pin_failed_attempts ?? 0) + 1;
+        let lockedUntilIso: string | null = null;
+        if (newAttempts >= 5) {
+          const until = new Date(now.getTime() + 15 * 60 * 1000); // 15 min
+          lockedUntilIso = until.toISOString();
+        }
+        sqlite.prepare(
+          "UPDATE labs SET inventory_pin_failed_attempts = ?, inventory_pin_locked_until = ? WHERE id = ?"
+        ).run(newAttempts, lockedUntilIso, lab.id);
+        return res.status(401).json({ error: "Invalid CLIA or PIN." });
+      }
+      // Success: reset attempts + lockout, mint a scoped JWT.
+      sqlite.prepare(
+        "UPDATE labs SET inventory_pin_failed_attempts = 0, inventory_pin_locked_until = NULL WHERE id = ?"
+      ).run(lab.id);
+      const token = jwt.sign({ kind: "inventory", labId: lab.id }, JWT_SECRET, { expiresIn: "8h" });
+      return res.json({
+        token,
+        lab: { id: lab.id, name: lab.name, clia_number: lab.clia_number },
+        expires_in_seconds: 8 * 60 * 60,
+      });
+    } catch (err: any) {
+      console.error("[inventory-login] error:", err);
+      return res.status(500).json({ error: err.message || "login_failed" });
+    }
   });
 
   // GET /api/labs/:labId/members — list all active members of the lab.
