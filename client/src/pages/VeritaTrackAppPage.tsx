@@ -174,7 +174,12 @@ function sortTasks(tasks: Task[]): Task[] {
 }
 
 // ── Sign-off dialog ───────────────────────────────────────────────────────────
-function SignoffDialog({ task, onDone }: { task: Task; onDone: () => void }) {
+// Multi-Lab Tier 2 (2026-06-07 hotfix): tasksKey + dashKey passed in from
+// the page-level scope so the cache invalidation on success refreshes
+// the actual lab-scoped list query, not the unscoped legacy key.
+function SignoffDialog({ task, onDone, tasksKey, dashKey }: {
+  task: Task; onDone: () => void; tasksKey: string; dashKey: string;
+}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -193,8 +198,8 @@ function SignoffDialog({ task, onDone }: { task: Task; onDone: () => void }) {
       return r.json();
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/veritatrack/tasks"] });
-      qc.invalidateQueries({ queryKey: ["/api/veritatrack/dashboard"] });
+      qc.invalidateQueries({ queryKey: [tasksKey] });
+      qc.invalidateQueries({ queryKey: [dashKey] });
       setOpen(false);
       onDone();
     },
@@ -239,8 +244,16 @@ function SignoffDialog({ task, onDone }: { task: Task; onDone: () => void }) {
 }
 
 // ── Task form dialog ──────────────────────────────────────────────────────────
-function TaskFormDialog({ trigger, existing, onDone }: {
+// Multi-Lab Tier 2 (2026-06-07 hotfix): trackApi + tasksKey + dashKey passed
+// from the page-level scope. New tasks are POSTed to the LAB-SCOPED endpoint
+// when activeLabId is set so the row lands with lab_id=activeLabId. The
+// unscoped POST (with no labId) used to write lab_id = users.lab_id, which
+// silently sent the new task to the user's primary lab even when they were
+// viewing a secondary lab. The cache invalidation also targets the
+// lab-scoped query key now so the list actually refreshes.
+function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey }: {
   trigger: React.ReactNode; existing?: Task; onDone: () => void;
+  trackApi: string; tasksKey: string; dashKey: string;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -253,7 +266,12 @@ function TaskFormDialog({ trigger, existing, onDone }: {
 
   const mut = useMutation({
     mutationFn: async () => {
-      const url = existing ? `${API_BASE}/api/veritatrack/tasks/${existing.id}` : `${API_BASE}/api/veritatrack/tasks`;
+      // PUT for edit still hits the unscoped endpoint (no scoped PUT exists
+      // server-side yet). The unscoped PUT updates by task id and is
+      // safe because existing tasks already carry the right lab_id.
+      const url = existing
+        ? `${API_BASE}/api/veritatrack/tasks/${existing.id}`
+        : `${trackApi}/tasks`;
       const r = await fetch(url, {
         method: existing ? "PUT" : "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -263,8 +281,8 @@ function TaskFormDialog({ trigger, existing, onDone }: {
       return r.json();
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/veritatrack/tasks"] });
-      qc.invalidateQueries({ queryKey: ["/api/veritatrack/dashboard"] });
+      qc.invalidateQueries({ queryKey: [tasksKey] });
+      qc.invalidateQueries({ queryKey: [dashKey] });
       setOpen(false);
       onDone();
     },
@@ -331,7 +349,9 @@ function TaskFormDialog({ trigger, existing, onDone }: {
 }
 
 // ── Compact task row (inside accordion) ───────────────────────────────────────
-function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void }) {
+function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
+  task: Task; onRefresh: () => void; trackApi: string; tasksKey: string; dashKey: string;
+}) {
   const qc = useQueryClient();
 
   const deleteTask = useMutation({
@@ -339,8 +359,10 @@ function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void
       await fetch(`${API_BASE}/api/veritatrack/tasks/${task.id}`, { method: "DELETE", headers: authHeaders() });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/veritatrack/tasks"] });
-      qc.invalidateQueries({ queryKey: ["/api/veritatrack/dashboard"] });
+      // Multi-Lab hotfix (2026-06-07): invalidate the scoped keys so the
+      // active lab's list/dashboard refresh, not just the legacy unscoped key.
+      qc.invalidateQueries({ queryKey: [tasksKey] });
+      qc.invalidateQueries({ queryKey: [dashKey] });
     },
   });
 
@@ -385,11 +407,14 @@ function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <SignoffDialog task={task} onDone={onRefresh} />
+        <SignoffDialog task={task} onDone={onRefresh} tasksKey={tasksKey} dashKey={dashKey} />
         <TaskFormDialog
           trigger={<Button size="sm" variant="ghost" className="h-6 w-6 p-0"><Pencil size={10} /></Button>}
           existing={task}
           onDone={onRefresh}
+          trackApi={trackApi}
+          tasksKey={tasksKey}
+          dashKey={dashKey}
         />
         <ConfirmDialog
           title="Delete Task?"
@@ -406,7 +431,7 @@ function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void
       {/* Sign off always visible on overdue/due_soon */}
       {(isOverdue || isDueSoon) && (
         <div className="shrink-0 group-hover:hidden">
-          <SignoffDialog task={task} onDone={onRefresh} />
+          <SignoffDialog task={task} onDone={onRefresh} tasksKey={tasksKey} dashKey={dashKey} />
         </div>
       )}
     </div>
@@ -414,11 +439,14 @@ function CompactTaskRow({ task, onRefresh }: { task: Task; onRefresh: () => void
 }
 
 // ── Group accordion ───────────────────────────────────────────────────────────
-function GroupAccordion({ category, tasks, onRefresh, defaultOpen }: {
+function GroupAccordion({ category, tasks, onRefresh, defaultOpen, trackApi, tasksKey, dashKey }: {
   category: string;
   tasks: Task[];
   onRefresh: () => void;
   defaultOpen?: boolean;
+  trackApi: string;
+  tasksKey: string;
+  dashKey: string;
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   const sorted = useMemo(() => sortTasks(tasks), [tasks]);
@@ -481,7 +509,7 @@ function GroupAccordion({ category, tasks, onRefresh, defaultOpen }: {
             <span className="w-24 shrink-0" />
           </div>
           {sorted.map(t => (
-            <CompactTaskRow key={t.id} task={t} onRefresh={onRefresh} />
+            <CompactTaskRow key={t.id} task={t} onRefresh={onRefresh} trackApi={trackApi} tasksKey={tasksKey} dashKey={dashKey} />
           ))}
         </div>
       )}
@@ -645,8 +673,11 @@ export default function VeritaTrackAppPage() {
       const data = await r.json();
       if (r.ok) {
         setSeedResult({ created: data.created, skipped: data.skipped });
-        qc.invalidateQueries({ queryKey: ["/api/veritatrack/tasks"] });
-        qc.invalidateQueries({ queryKey: ["/api/veritatrack/dashboard"] });
+        // Multi-Lab hotfix (2026-06-07): invalidate the scoped query keys
+        // so the active lab's list/dashboard refresh, not just the legacy
+        // unscoped key (which was the only one this used to hit).
+        qc.invalidateQueries({ queryKey: [tasksKey] });
+        qc.invalidateQueries({ queryKey: [dashKey] });
       }
     } finally {
       setSeeding(false);
@@ -663,8 +694,11 @@ export default function VeritaTrackAppPage() {
       const data = await r.json();
       if (r.ok) {
         setImportResult({ created: data.created, skipped: data.skipped });
-        qc.invalidateQueries({ queryKey: ["/api/veritatrack/tasks"] });
-        qc.invalidateQueries({ queryKey: ["/api/veritatrack/dashboard"] });
+        // Multi-Lab hotfix (2026-06-07): invalidate the scoped query keys
+        // so the active lab's list/dashboard refresh, not just the legacy
+        // unscoped key (which was the only one this used to hit).
+        qc.invalidateQueries({ queryKey: [tasksKey] });
+        qc.invalidateQueries({ queryKey: [dashKey] });
       }
     } finally {
       setImportLoading(false);
@@ -746,6 +780,9 @@ export default function VeritaTrackAppPage() {
           <TaskFormDialog
             trigger={<Button size="sm" className="h-8 text-xs gap-1"><Plus size={12} />Add Task</Button>}
             onDone={() => refetch()}
+            trackApi={trackApi}
+            tasksKey={tasksKey}
+            dashKey={dashKey}
           />
         </div>
       </div>
@@ -893,7 +930,7 @@ export default function VeritaTrackAppPage() {
             <Button size="sm" variant="outline" onClick={handleImport} disabled={importLoading}>
               <Upload size={12} className="mr-1" />Import from VeritaMap™
             </Button>
-            <TaskFormDialog trigger={<Button size="sm"><Plus size={12} className="mr-1" />Add Task</Button>} onDone={() => refetch()} />
+            <TaskFormDialog trigger={<Button size="sm"><Plus size={12} className="mr-1" />Add Task</Button>} onDone={() => refetch()} trackApi={trackApi} tasksKey={tasksKey} dashKey={dashKey} />
           </div>
         </div>
       )}
@@ -911,6 +948,9 @@ export default function VeritaTrackAppPage() {
               tasks={catTasks}
               onRefresh={() => refetch()}
               defaultOpen={worstStatus(catTasks) === "overdue" || worstStatus(catTasks) === "due_soon"}
+              trackApi={trackApi}
+              tasksKey={tasksKey}
+              dashKey={dashKey}
             />
           ))}
         </div>
