@@ -1,14 +1,11 @@
 {
-  "_comment": "Multi-lab mutation audit baseline. Captures the count of known violations as of the discovery PR (2026-06-07). scripts/audit_multilab_mutations.py fails CI if the current count exceeds the per-page baseline below, so new code can't introduce new violations. Drive these to zero over a series of fix PRs; each fix lowers the per-page count.",
+  "_comment": "Multi-lab mutation audit baseline. scripts/audit_multilab_mutations.py fails CI if the current count exceeds the per-page baseline below. As of 2026-06-08 the baseline is empty: every known instance has been fixed or the path has been exempted with a documented architectural reason in EXEMPT_PREFIXES.",
   "_canonical_fix": "PR #606 (VeritaTrack Add Task) — pass trackApi/tasksKey/dashKey props from the page-level scope into mutation components; POST to ${trackApi}/<endpoint>; invalidateQueries({queryKey: [tasksKey/dashKey]}).",
-  "baseline": {
-    "client/src/pages/VeritaCompAppPage.tsx": 16
-  },
-  "_total": 16,
-  "_notes": {
-    "AccountSettingsPage.tsx": "CLEARED 2026-06-07: confirmed user-scoped endpoints. Both /api/account/settings and /api/onboarding/status moved to EXEMPT_PREFIXES in audit_multilab_mutations.py.",
-    "VeritaCheckPage.tsx": "CLEARED 2026-06-07: /api/studies is the legacy single-lab endpoint that pre-dates Tier 2. The page already invalidates BOTH the unscoped and scoped queryKey (belt-and-suspenders pattern). Exempted /api/studies in EXEMPT_PREFIXES.",
-    "VeritaCheckVerificationPage.tsx": "CLEARED 2026-06-07: real bug. onDeleted + onCreated callbacks were invalidating the hardcoded unscoped key instead of the verificationsUrl variable that already correctly switches on activeLabId. Fixed both call sites in the same PR.",
-    "VeritaCompAppPage.tsx": "PROBABLE REAL BUG, LARGEST SURFACE: 16 invalidations across /api/competency/* and /api/veritacomp/* paths on a lab-aware page. Almost certainly matches the VeritaTrack bug class exactly. Highest-priority remaining fix."
+  "baseline": {},
+  "_total": 0,
+  "_history": {
+    "2026-06-07_initial": "Baseline established at 16 in VeritaCompAppPage.tsx.",
+    "2026-06-07_cleared_a": "AccountSettingsPage.tsx + VeritaCheckPage.tsx + VeritaCheckVerificationPage.tsx all cleared via EXEMPT_PREFIXES additions and the verification page bugfix.",
+    "2026-06-08_cleared_b": "VeritaCompAppPage.tsx CLEARED. 11 queryKey/fetch sites swapped to lab-scoped form (programs, programs/${id}, employees). 5 remaining /api/veritacomp/programs/${id}/quizzes and /api/veritacomp/quizzes/${id}/withAnswers sites exempted because useQuery and invalidateQueries use the SAME unscoped key (internally consistent, no cache miss). The quizzes endpoint is account-scoped by design; a future architectural change could promote it to per-lab, at which point the exemption goes away."
   }
 }

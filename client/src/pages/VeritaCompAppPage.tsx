@@ -619,7 +619,7 @@ function ProgramListView() {
           onClose={() => setWizardOpen(false)}
           onCreated={(id) => {
             setWizardOpen(false);
-            qc.invalidateQueries({ queryKey: ["/api/competency/programs"] });
+            qc.invalidateQueries({ queryKey: [programsListUrl] });
             navigate(labRoute(`/veritacomp-app/${id}`));
           }}
         />
@@ -1231,7 +1231,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab program={program} />}
       {activeTab === "assessments" && <AssessmentsTab program={program} onNewAssessment={() => setNewAssessmentOpen(true)} />}
-      {activeTab === "employees" && <EmployeesTab employees={program.employees || []} />}
+      {activeTab === "employees" && <EmployeesTab employees={program.employees || []} programId={program.id} />}
       {activeTab === "quizzes" && <QuizzesTab program={program} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
@@ -1242,7 +1242,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
           onClose={() => setNewAssessmentOpen(false)}
           onCreated={() => {
             setNewAssessmentOpen(false);
-            qc.invalidateQueries({ queryKey: ["/api/competency/programs", programId] });
+            qc.invalidateQueries({ queryKey: [programDetailUrl] });
           }}
         />
       )}
@@ -1363,6 +1363,12 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
   const assessments = program.assessments || [];
+  // Wave (cleanup): lab-scoped queryKey for this component's invalidations.
+  // Matches the useQuery in ProgramDetailView at line ~1126 so cache misses
+  // can't strand the UI after a mutation.
+  const programDetailKey = activeLabId
+    ? `/api/labs/${activeLabId}/competency/programs/${program.id}`
+    : `/api/competency/programs/${program.id}`;
   // PR C: per-assessment element-document linker. null = closed; number = assessment id.
   const [docsAssessmentId, setDocsAssessmentId] = useState<number | null>(null);
   // Wave I PR I2: prior-year comparison dialog. Stores the open assessment + employee
@@ -1404,7 +1410,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
       method: "DELETE",
       headers: authHeaders(),
     });
-    qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
+    qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
   // Sign & Complete: stamp completion_date + lock the assessment. Customer-
@@ -1421,7 +1427,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
       return;
     }
     toast({ title: "Assessment signed and locked" });
-    qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
+    qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
   // Unlock: owner/admin only. Reopens a locked assessment so a mistake can
@@ -1438,7 +1444,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
       return;
     }
     toast({ title: "Assessment unlocked" });
-    qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
+    qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
   if (assessments.length === 0) {
@@ -1803,9 +1809,18 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
 
 // ── Employees Tab ──────────────────────────────────────────────────────
 
-function EmployeesTab({ employees }: { employees: Employee[] }) {
+function EmployeesTab({ employees, programId }: { employees: Employee[]; programId: number }) {
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
+  // Wave (cleanup): lab-scoped queryKey so mutations actually invalidate the
+  // useQuery in ProgramDetailView (~line 1126). The unscoped form was a no-op
+  // on multi-lab accounts after the Tier 2 cutover.
+  const programDetailKey = activeLabId
+    ? `/api/labs/${activeLabId}/competency/programs/${programId}`
+    : `/api/competency/programs/${programId}`;
+  const employeesListKey = activeLabId
+    ? `/api/labs/${activeLabId}/competency/employees`
+    : `/api/competency/employees`;
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -1826,8 +1841,8 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
       return res.json();
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/competency/programs"] });
-      qc.invalidateQueries({ queryKey: ["/api/competency/employees"] });
+      qc.invalidateQueries({ queryKey: [programDetailKey] });
+      qc.invalidateQueries({ queryKey: [employeesListKey] });
       setAddOpen(false);
       setName("");
       setTitle("");
@@ -1844,7 +1859,7 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
       method: "DELETE",
       headers: authHeaders(),
     });
-    qc.invalidateQueries({ queryKey: ["/api/competency/programs"] });
+    qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
   return (
@@ -1946,6 +1961,10 @@ function EmployeesTab({ employees }: { employees: Employee[] }) {
 function SettingsTab({ program }: { program: Program }) {
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
+  // Wave (cleanup): lab-scoped detail queryKey for invalidation after PUT.
+  const programDetailKey = activeLabId
+    ? `/api/labs/${activeLabId}/competency/programs/${program.id}`
+    : `/api/competency/programs/${program.id}`;
   const [name, setName] = useState(program.name);
   const [saving, setSaving] = useState(false);
 
@@ -1959,7 +1978,7 @@ function SettingsTab({ program }: { program: Program }) {
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ name }),
     });
-    qc.invalidateQueries({ queryKey: ["/api/competency/programs", program.id] });
+    qc.invalidateQueries({ queryKey: [programDetailKey] });
     setSaving(false);
   };
 

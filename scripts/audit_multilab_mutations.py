@@ -69,6 +69,18 @@ EXEMPT_PREFIXES = (
     # Exempt the unscoped form from the audit; the scoped invalidation
     # is what matters for the lab-aware path.
     "/api/studies",
+    # 2026-06-07: VeritaComp quizzes are account-scoped by design
+    # (one author writes a quiz, it's shared across that account's
+    # labs). useQuery and invalidateQueries both use the unscoped
+    # ["/api/veritacomp/programs", id, "quizzes"] key, so the
+    # internally-consistent pair means there is no cache miss after
+    # mutation. The audit can't distinguish "internally consistent
+    # unscoped" from "scope-mismatched unscoped"; this exemption
+    # whitelists the quizzes paths so the genuine bug-class signal
+    # isn't drowned out. A future architectural decision could
+    # promote quizzes to per-lab — at that point flip this back.
+    "/api/veritacomp/quizzes",
+    "/api/veritacomp/programs",
 )
 
 def is_exempt_url(url: str) -> bool:
