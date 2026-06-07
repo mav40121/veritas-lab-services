@@ -235,13 +235,13 @@ export default function VeritaCheckVerificationPage() {
           verifications={verifications}
           isLoading={isLoading}
           onOpen={openDetail}
-          onDeleted={() => qc.invalidateQueries({ queryKey: ["/api/veritacheck/verifications"] })}
+          onDeleted={() => qc.invalidateQueries({ queryKey: [verificationsUrl] })}
           onNew={() => setView("new")}
         />
       )}
       {view === "new" && (
         <NewVerificationForm
-          onCreated={(id) => { qc.invalidateQueries({ queryKey: ["/api/veritacheck/verifications"] }); openDetail(id); }}
+          onCreated={(id) => { qc.invalidateQueries({ queryKey: [verificationsUrl] }); openDetail(id); }}
           onCancel={() => setView("list")}
         />
       )}
