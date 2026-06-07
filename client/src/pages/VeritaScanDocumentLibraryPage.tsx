@@ -106,17 +106,22 @@ export default function VeritaScanDocumentLibraryPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [searchQ, setSearchQ] = useState("");
+  // Wave A1.1 (2026-06-06): "Needs review" filter surfaces rows linked
+  // before the required-date gate landed (NULL effective_date or NULL
+  // review_due_date) plus rows past their review_due_date.
+  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editDoc, setEditDoc] = useState<LabDocument | null>(null);
 
   const docsQuery = useQuery<LabDocument[]>({
-    queryKey: [`/api/labs/${labId}/veritascan/documents`, filterType, includeArchived, searchQ],
+    queryKey: [`/api/labs/${labId}/veritascan/documents`, filterType, includeArchived, searchQ, needsReviewOnly],
     enabled: !!labId,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("type", filterType);
       if (includeArchived) params.set("include_archived", "1");
       if (searchQ.trim()) params.set("q", searchQ.trim());
+      if (needsReviewOnly) params.set("filter", "needs-review");
       const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents?${params}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`Failed to load documents (${res.status})`);
       return res.json();
@@ -279,6 +284,11 @@ export default function VeritaScanDocumentLibraryPage() {
                 <label className="flex items-center gap-1.5 text-xs">
                   <input type="checkbox" checked={includeArchived} onChange={e => setIncludeArchived(e.target.checked)} />
                   Include archived
+                </label>
+                {/* Wave A1.1: Needs review surface (NULL or past-due dates) */}
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input type="checkbox" checked={needsReviewOnly} onChange={e => setNeedsReviewOnly(e.target.checked)} data-testid="checkbox-needs-review" />
+                  Needs review
                 </label>
               </div>
 
@@ -459,7 +469,10 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
       description: "",
     });
   }, [open]);
-  const canSubmit = form.title.trim() && form.external_url.trim();
+  // Wave A1.1 (2026-06-06): effective_date is required at write time; the
+  // server validates the same constraint so submitting without it would
+  // return a 400. Surface the requirement in the form before the request.
+  const canSubmit = form.title.trim() && form.external_url.trim() && form.effective_date.trim();
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl">
@@ -509,8 +522,8 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
               <Input value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} placeholder="3.2" />
             </div>
             <div className="space-y-1">
-              <Label>Effective Date</Label>
-              <Input type="date" value={form.effective_date} onChange={e => setForm({ ...form, effective_date: e.target.value })} />
+              <Label>Effective Date <span className="text-red-500" aria-hidden>*</span></Label>
+              <Input type="date" value={form.effective_date} onChange={e => setForm({ ...form, effective_date: e.target.value })} required />
             </div>
             <div className="space-y-1">
               <Label>Review Due</Label>
@@ -612,8 +625,8 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
               <Input value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} />
             </div>
             <div className="space-y-1">
-              <Label>Effective Date</Label>
-              <Input type="date" value={form.effective_date} onChange={e => setForm({ ...form, effective_date: e.target.value })} />
+              <Label>Effective Date <span className="text-red-500" aria-hidden>*</span></Label>
+              <Input type="date" value={form.effective_date} onChange={e => setForm({ ...form, effective_date: e.target.value })} required />
             </div>
             <div className="space-y-1">
               <Label>Review Due</Label>
@@ -633,15 +646,24 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={pending}>Cancel</Button>
             <Button
-              onClick={() => onSubmit({
-                ...form,
-                storage_provider: form.storage_provider || null,
-                display_label: form.display_label || null,
-                version: form.version || null,
-                effective_date: form.effective_date || null,
-                review_due_date: form.review_due_date || null,
-                description: form.description || null,
-              })}
+              onClick={() => {
+                // Wave A1.1 (2026-06-06): the server PATCH rejects clearing
+                // effective_date or review_due_date once set. If the user
+                // blanks them here, skip the field so the existing value
+                // stays. Non-empty dates flow through normally.
+                const body: Record<string, any> = {
+                  ...form,
+                  storage_provider: form.storage_provider || null,
+                  display_label: form.display_label || null,
+                  version: form.version || null,
+                  description: form.description || null,
+                };
+                if (form.effective_date.trim()) body.effective_date = form.effective_date;
+                else delete body.effective_date;
+                if (form.review_due_date.trim()) body.review_due_date = form.review_due_date;
+                else delete body.review_due_date;
+                onSubmit(body);
+              }}
               disabled={pending}
               data-testid="button-submit-edit"
             >
