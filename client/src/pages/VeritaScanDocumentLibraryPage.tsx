@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ExternalLink, Archive, Pencil, Plus, Search, Link2, X, FileCheck2 } from "lucide-react";
+import { ExternalLink, Archive, Pencil, Plus, Search, Link2, X, FileCheck2, FileSpreadsheet } from "lucide-react";
 import { SCAN_ITEMS } from "@/lib/veritaScanData";
 import { Link as RouterLink } from "wouter";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -256,6 +256,33 @@ export default function VeritaScanDocumentLibraryPage() {
             <RouterLink href={labRoute("/veritascan/inspection-proof")}>
               <FileCheck2 size={14} className="mr-1.5" />Inspection Proof View
             </RouterLink>
+          </Button>
+          {/* Wave A1.4 (2026-06-06): xlsx export with surveyor-defensibility
+              About sheet (URL pointers only, no PHI by architecture,
+              per-document attestation). Same auth path as the list endpoint. */}
+          <Button
+            variant="outline"
+            data-testid="button-export-library"
+            onClick={async () => {
+              try {
+                const r = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents/export.xlsx`, { headers: authHeaders() });
+                if (!r.ok) throw new Error(`Export failed (${r.status})`);
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const today = new Date().toISOString().slice(0, 10);
+                a.download = `VeritaScan_Library_${today}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              } catch (err: any) {
+                toast({ title: "Export failed", description: err.message, variant: "destructive" });
+              }
+            }}
+          >
+            <FileSpreadsheet size={14} className="mr-1.5" />Export
           </Button>
           <Button onClick={() => setAddOpen(true)} data-testid="button-add-document">
             <Plus size={14} className="mr-1.5" />Add Document
