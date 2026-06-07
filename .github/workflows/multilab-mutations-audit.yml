@@ -1,0 +1,44 @@
+name: Multi-Lab Mutations Audit
+
+# Hard CI gate that catches the bug class behind PR #606 (VeritaTrack
+# Add Task on /labs/3 silently writes to the user's primary lab). The
+# canonical failure shape: a client page is lab-aware (uses
+# useActiveLabId / activeLabId) but one of its mutations either POSTs
+# to an unscoped /api/<module>/... endpoint or invalidates the
+# unscoped queryKey instead of the lab-scoped one. The result is
+# invisible until a customer on a secondary lab clicks the button.
+#
+# scripts/audit_multilab_mutations.py walks every client/src/pages/*.tsx,
+# flags both failure modes, and compares the per-page count against
+# scripts/multilab_audit_baseline.json. CI fails only when a PR adds
+# new violations beyond the baseline; existing violations are tracked
+# and driven to zero via follow-up fix PRs.
+#
+# To make this block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass before merging -> select "multilab-mutations".
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  multilab-mutations:
+    name: multilab-mutations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run multi-lab mutations audit
+        run: python scripts/audit_multilab_mutations.py
