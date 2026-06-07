@@ -953,7 +953,7 @@ What's deferred: the actual user flow at `https://www.veritaslabservices.com/lab
 
 The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_coverage.py` (run with default --since 90 days). Strike-through = backfill landed.
 - ~~EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep17-sensitivity.js` (34/34 PASS).
-- Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method
+- ~~Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method~~ ✅ backfilled 2026-06-06 in `scripts/verify-deming-lot-to-lot.js` (30/30 PASS).
 - CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit
 - ~~Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep28-reference-interval.js` (31/31 PASS).
 - Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics
