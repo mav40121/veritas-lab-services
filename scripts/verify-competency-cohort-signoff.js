@@ -63,7 +63,7 @@ async function preview(body) {
     console.log(`PASS Branch B (unknown program flagged): "${sharedErrB.message}"`);
     pass++;
   } else {
-    console.error(`FAIL Branch B: status=${b.status} sharedIssues=${JSON.stringify(b.body && b.body.sharedIssues).slice(0,200)}`);
+    console.error(`FAIL Branch B: status=${b.status} sharedIssues=${JSON.stringify(b.body?.sharedIssues || null).slice(0,200)}`);
     fail++;
   }
 
@@ -78,7 +78,7 @@ async function preview(body) {
     console.log(`PASS Branch C (bad date flagged): "${sharedErrC.message}"`);
     pass++;
   } else {
-    console.error(`FAIL Branch C: status=${c.status} sharedIssues=${JSON.stringify(c.body && c.body.sharedIssues).slice(0,200)}`);
+    console.error(`FAIL Branch C: status=${c.status} sharedIssues=${JSON.stringify(c.body?.sharedIssues || null).slice(0,200)}`);
     fail++;
   }
 
