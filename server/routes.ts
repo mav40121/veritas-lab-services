@@ -8920,6 +8920,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Accreditors enum lives elsewhere in routes.ts and is reused by Phase B.
   // Intentionally not redeclared here.
 
+  // GET /api/labs/:labId/veritascan/documents/export.xlsx
+  //
+  // Wave A1.4 (2026-06-06). Surveyor-defensibility export.
+  // Returns the full lab_documents set as a customer-facing xlsx with
+  // an About sheet that hammers the URL-pointer architecture for the
+  // surveyor opening it cold. Per CLAUDE.md §6 mandatory rules:
+  // About sheet first, lab identity in three layers, sheet protection,
+  // no em-dashes in workbook content.
+  app.get("/api/labs/:labId/veritascan/documents/export.xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
+      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    }
+    try {
+      const sqlite = (db as any).$client;
+      const rows = sqlite.prepare(
+        `SELECT id, title, display_label, document_type, external_url, storage_provider,
+                version, status, effective_date, review_due_date,
+                owner_user_id, owner_name, owner_attested_at, linked_at
+         FROM lab_documents
+         WHERE lab_id = ?
+         ORDER BY linked_at DESC`
+      ).all(req.scope.labId) as any[];
+
+      // Lab identity from the active lab (CLAUDE.md §7).
+      const user = await storage.getUserById(req.userId);
+      const labName = req.scope?.lab?.name || null;
+      const cliaNumber = req.scope?.lab?.clia_number || null;
+      const preparedBy = user?.name || null;
+
+      const { generateVeritascanLibraryExcel } = await import("./veritascanDocumentLibraryExcel");
+      const buf = await generateVeritascanLibraryExcel(rows, { labName, cliaNumber, preparedBy });
+
+      const filename = `VeritaScan_Library_${(labName || "Lab").replace(/[^a-z0-9]+/gi, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[veritascan/export.xlsx] error:", err);
+      res.status(500).json({ error: err.message || "export_failed" });
+    }
+  });
+
   // GET /api/labs/:labId/veritascan/documents — list documents for this lab
   // Query params: ?type=policy, ?status=active, ?q=critical, ?include_archived=1
   app.get("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
