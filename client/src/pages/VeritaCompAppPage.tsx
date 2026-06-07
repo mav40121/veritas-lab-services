@@ -66,6 +66,7 @@ import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePicker
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
 import { CompetencyBulkImportDialog } from "@/components/CompetencyBulkImportDialog";
+import { CompetencyCohortSignoffDialog } from "@/components/CompetencyCohortSignoffDialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -409,6 +410,8 @@ function ProgramListView() {
   const [bundleError, setBundleError] = useState<string | null>(null);
   // Wave I PR I4 (2026-06-06): bulk import historical assessments.
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  // Wave I PR I1 (2026-06-06): cohort sign-off (one program × N employees).
+  const [cohortSignoffOpen, setCohortSignoffOpen] = useState(false);
 
   // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
   // Inner endpoints (programs/:id DELETE, assessments, quizzes) stay on
@@ -478,6 +481,21 @@ function ProgramListView() {
             >
               <Upload className="h-4 w-4 mr-1.5" />
               Bulk Import
+            </Button>
+          </PermissionTooltip>
+          {/* Wave I PR I1 (2026-06-06): cohort sign-off. Same program ×
+              N employees with shared date / result / evaluator. Each row
+              lands locked. For per-tech element notes, the director
+              unlocks the individual assessment, edits, re-locks. */}
+          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+            <Button
+              variant="outline"
+              onClick={() => setCohortSignoffOpen(true)}
+              disabled={readOnly}
+              title="Sign off N employees for one program in one action"
+            >
+              <Users className="h-4 w-4 mr-1.5" />
+              Cohort Sign-off
             </Button>
           </PermissionTooltip>
           {/* Wave J PR J2 (2026-06-06): permissions tooltips. The
@@ -728,6 +746,14 @@ function ProgramListView() {
         <CompetencyBulkImportDialog
           open={bulkImportOpen}
           onOpenChange={setBulkImportOpen}
+          labId={activeLabId}
+        />
+      )}
+      {/* Wave I PR I1: cohort sign-off dialog. */}
+      {activeLabId !== null && (
+        <CompetencyCohortSignoffDialog
+          open={cohortSignoffOpen}
+          onOpenChange={setCohortSignoffOpen}
           labId={activeLabId}
         />
       )}
