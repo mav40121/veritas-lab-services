@@ -25,8 +25,13 @@
 // Token semantics:
 //   - 300s TTL (was 60s in the in-memory version; bumped 2026-05-XX for the
 //     cold-puppeteer-launch case where the POST itself takes 30-60s).
-//   - Single-use: a successful claim deletes the row. A failed claim against
-//     an expired token also deletes the row (cleanup).
+//   - TTL-only (replayable within the window). 2026-06-07: dropped the
+//     single-use semantics. Chrome's PDF viewer fires two GETs against
+//     the same URL on open (one to download, one to render inline); the
+//     single-use claim killed the second fetch and showed
+//     "PDF token expired or not found" in the tab even though the file
+//     itself downloaded successfully. The TTL + unguessable UUID v4 +
+//     no-PHI-by-architecture guard is the actual security boundary.
 //   - UUID v4 (crypto.randomUUID), unguessable.
 
 import crypto from "crypto";
@@ -75,16 +80,22 @@ export function storePdfToken(buffer: Buffer, filename: string): string {
   return token;
 }
 
-// Single-use claim. Returns the token's PDF buffer + filename on success,
-// or null if the token is missing or already expired. Deletes the row
-// either way (so an expired-token lookup also cleans up).
+// TTL-based claim. Returns the token's PDF buffer + filename on success,
+// or null if the token is missing or already expired. Expired rows are
+// pruned lazily; in-window rows survive multiple reads so Chrome's
+// double-GET pattern (one for download, one for inline preview) both
+// succeed and the tab can render the PDF.
 //
-// Used by the GET /api/pdf/:token handler in server/routes.ts.
+// Used by the GET /api/pdf/:token and GET /api/zip/:token handlers in
+// server/routes.ts.
 export function claimPdfToken(token: string): PdfTokenEntry | null {
   const { selectStmt, deleteStmt } = stmts();
   const row = selectStmt.get(token) as { buffer: Buffer; filename: string; expires: number } | undefined;
   if (!row) return null;
-  try { deleteStmt.run(token); } catch {}
-  if (row.expires < Date.now()) return null;
+  if (row.expires < Date.now()) {
+    // Expired: prune the row but treat as missing.
+    try { deleteStmt.run(token); } catch {}
+    return null;
+  }
   return { buffer: row.buffer, filename: row.filename, expires: row.expires };
 }
