@@ -162,6 +162,16 @@ function dateLines() {
 }
 
 function signatureBlock() {
+  // Wave A2.1 (2026-06-07): surveyor-defensibility hardening.
+  // Adds three move-2 elements to the existing review block:
+  //   1. Title line with controlled-vocab hint so surveyors can confirm
+  //      the signer holds a role authorized to adopt the policy
+  //      (Laboratory Director or designee per CLIA §493.1251).
+  //   2. Annual review-due-date line for the lab to mark forward when
+  //      the next review is required (matches §493.1251(b)(13) annual
+  //      review cycle).
+  //   3. Footnote citing 42 CFR §493.1251(b)(13) so the regulatory
+  //      basis for the signature is on the printed page itself.
   return new Table({
     width: { size: 9360, type: WidthType.DXA },
     columnWidths: [9360],
@@ -198,14 +208,41 @@ function signatureBlock() {
           new Paragraph({
             spacing: { after: 80 },
             children: [
+              new TextRun({ text: "Title:           ", bold: true, color: TEXT_DARK, size: 20, font: "Calibri" }),
+              new TextRun({ text: "______________________________________", color: TEXT_DARK, size: 20, font: "Calibri" }),
+              new TextRun({ text: "  (Laboratory Director or designee)", italics: true, color: TEXT_DARK, size: 18, font: "Calibri" }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 80 },
+            children: [
               new TextRun({ text: "Signature:   ", bold: true, color: TEXT_DARK, size: 20, font: "Calibri" }),
               new TextRun({ text: "______________________________________", color: TEXT_DARK, size: 20, font: "Calibri" }),
             ],
           }),
           new Paragraph({
+            spacing: { after: 80 },
             children: [
               new TextRun({ text: "Date:           ", bold: true, color: TEXT_DARK, size: 20, font: "Calibri" }),
               new TextRun({ text: "______________________________________", color: TEXT_DARK, size: 20, font: "Calibri" }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 120 },
+            children: [
+              new TextRun({ text: "Annual review due: ", bold: true, color: TEXT_DARK, size: 20, font: "Calibri" }),
+              new TextRun({ text: "______________________________________", color: TEXT_DARK, size: 20, font: "Calibri" }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "Per 42 CFR §493.1251(b)(13), the laboratory director is responsible for ensuring procedures are reviewed and approved at least annually by the director or designee.",
+                italics: true,
+                color: TEXT_DARK,
+                size: 16,
+                font: "Calibri",
+              }),
             ],
           }),
         ],
