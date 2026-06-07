@@ -4699,7 +4699,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // because lab-id rotation across multi-lab accounts would force
       // the tech to keep track of the right number.
       const lab = sqlite.prepare(
-        `SELECT id, name, clia_number,
+        `SELECT id, lab_name, clia_number,
                 inventory_pin_hash, inventory_pin_salt,
                 inventory_pin_locked_until, inventory_pin_failed_attempts
          FROM labs WHERE clia_number = ?`
@@ -4739,7 +4739,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const token = jwt.sign({ kind: "inventory", labId: lab.id }, JWT_SECRET, { expiresIn: "8h" });
       return res.json({
         token,
-        lab: { id: lab.id, name: lab.name, clia_number: lab.clia_number },
+        lab: { id: lab.id, name: lab.lab_name, clia_number: lab.clia_number },
         expires_in_seconds: 8 * 60 * 60,
       });
     } catch (err: any) {
