@@ -16679,6 +16679,159 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return { competencyEmployees: compRows, staffEmployees: staffRows, programs: programRows };
   }
 
+  // POST /api/labs/:labId/competency/assessments/cohort-preview
+  //
+  // Wave I PR I1 (2026-06-06). Cohort sign-off: one program × N employees,
+  // same shared (assessmentType, assessmentDate, status, evaluatorName).
+  // Returns per-employee validation results + a shared-fields validity
+  // block. No DB writes. Mirrors the bulk-import preview/commit split so
+  // the lab director sees the same review-then-commit shape across both
+  // bulk operations.
+  app.post("/api/labs/:labId/competency/assessments/cohort-preview", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'),
+    async (req: any, res) => {
+      if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+      const labId = req.scope.labId;
+      const body = req.body || {};
+      try {
+        const { validateCohort } = await import("./competencyCohortSignoff");
+        const input = {
+          programId: Number(body.programId),
+          employeeIds: Array.isArray(body.employeeIds) ? body.employeeIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [],
+          assessmentType: String(body.assessmentType || ""),
+          assessmentDate: String(body.assessmentDate || ""),
+          status: String(body.status || ""),
+          evaluatorName: String(body.evaluatorName || ""),
+        };
+        if (input.employeeIds.length === 0) {
+          return res.status(400).json({
+            fatal: "Pick at least one employee.",
+            rows: [],
+            sharedIssues: [],
+            summary: { total: 0, ok: 0, warning: 0, error: 0 },
+          });
+        }
+        const ctx = buildCohortCtx(labId);
+        const preview = validateCohort(input, ctx);
+        res.json(preview);
+      } catch (err: any) {
+        console.error("[competency/cohort-preview] error:", err);
+        res.status(500).json({ error: err.message || "preview_failed" });
+      }
+    }
+  );
+
+  // POST /api/labs/:labId/competency/assessments/cohort-commit
+  //
+  // Wave I PR I1 (2026-06-06). Atomic transactional insert of N locked
+  // assessments. Skips warning rows (open-dup-on-same-day) per the
+  // preview semantics so the director's "Yes, commit these N" matches
+  // exactly what they signed off on. Refuses to commit if any shared
+  // field is invalid or any row is "error". Audit log entity_type
+  // = "cohort_signoff" for clean retrieval in audit trail dialogs.
+  app.post("/api/labs/:labId/competency/assessments/cohort-commit", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'),
+    async (req: any, res) => {
+      if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+      const labId = req.scope.labId;
+      const body = req.body || {};
+      try {
+        const { validateCohort } = await import("./competencyCohortSignoff");
+        const input = {
+          programId: Number(body.programId),
+          employeeIds: Array.isArray(body.employeeIds) ? body.employeeIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [],
+          assessmentType: String(body.assessmentType || ""),
+          assessmentDate: String(body.assessmentDate || ""),
+          status: String(body.status || ""),
+          evaluatorName: String(body.evaluatorName || ""),
+        };
+        if (input.employeeIds.length === 0) {
+          return res.status(400).json({ error: "no_employees", message: "Pick at least one employee." });
+        }
+        const ctx = buildCohortCtx(labId);
+        const preview = validateCohort(input, ctx);
+        const sharedErr = preview.sharedIssues.find((i) => i.severity === "error");
+        if (sharedErr) {
+          return res.status(400).json({ error: "shared_field_invalid", message: sharedErr.message, sharedIssues: preview.sharedIssues });
+        }
+        const errorRows = preview.rows.filter((r) => r.status === "error");
+        if (errorRows.length > 0) {
+          return res.status(400).json({
+            error: "row_errors",
+            message: `Cannot commit: ${errorRows.length} employee row(s) have errors.`,
+            errorRows: errorRows.map((r) => ({ employeeId: r.employeeId, issues: r.issues })),
+          });
+        }
+        // Commit OK + warning rows that aren't open-duplicates. Open dups
+        // are surfaced as warnings in preview AND skipped on commit so
+        // the director's "Sign N" intent doesn't accidentally double up.
+        const toInsert = preview.rows.filter((r) => r.status === "ok" || (r.status === "warning" && r.duplicateOf === null));
+        const skipped = preview.rows.filter((r) => r.duplicateOf !== null);
+
+        const now = new Date().toISOString();
+        const sqlite = (db as any).$client;
+        const insertedIds: number[] = [];
+        const tx = sqlite.transaction(() => {
+          for (const r of toInsert) {
+            const ins = sqlite.prepare(
+              `INSERT INTO competency_assessments
+                (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials,
+                 competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at,
+                 locked, completion_date, final_signed_by_user_id)
+               VALUES (?, ?, ?, ?, ?, '', '', 'technical', ?, '', 0, 0, ?, 1, ?, ?)`
+            ).run(
+              input.programId, r.employeeId, input.assessmentType, input.assessmentDate,
+              input.evaluatorName.trim(), input.status, now, input.assessmentDate, req.userId
+            );
+            insertedIds.push(Number(ins.lastInsertRowid));
+          }
+        });
+        tx();
+
+        logAudit({
+          userId: req.userId,
+          ownerUserId: req.ownerUserId ?? req.userId,
+          module: "veritacomp",
+          action: "create",
+          entityType: "cohort_signoff",
+          entityId: String(labId),
+          entityLabel: `Cohort sign-off (${insertedIds.length} assessments, program ${input.programId})`,
+          before: null,
+          after: { count: insertedIds.length, programId: input.programId, assessmentDate: input.assessmentDate, assessmentType: input.assessmentType, status: input.status },
+          ipAddress: req.ip,
+        });
+
+        res.json({
+          ok: true,
+          inserted: insertedIds.length,
+          skipped: skipped.length,
+          assessmentIds: insertedIds,
+        });
+      } catch (err: any) {
+        console.error("[competency/cohort-commit] error:", err);
+        res.status(500).json({ error: err.message || "commit_failed" });
+      }
+    }
+  );
+
+  // Shared cohort-signoff context builder. Pulls competency_employees
+  // (active only), programs scoped to the lab, and the subset of
+  // existing assessments relevant for dup-check on commit.
+  function buildCohortCtx(labId: number) {
+    const sqlite = (db as any).$client;
+    const compRows = sqlite.prepare(
+      `SELECT id, name FROM competency_employees WHERE lab_id = ? AND status = 'active' ORDER BY name`
+    ).all(labId) as Array<{ id: number; name: string }>;
+    const programRows = sqlite.prepare(
+      `SELECT id, name FROM competency_programs WHERE lab_id = ? ORDER BY name`
+    ).all(labId) as Array<{ id: number; name: string }>;
+    const existingAsmt = sqlite.prepare(
+      `SELECT a.id, a.program_id, a.employee_id, a.completion_date, a.locked
+       FROM competency_assessments a
+       JOIN competency_programs p ON p.id = a.program_id
+       WHERE p.lab_id = ? AND a.completion_date IS NOT NULL`
+    ).all(labId) as Array<{ id: number; program_id: number; employee_id: number; completion_date: string | null; locked: number }>;
+    return { competencyEmployees: compRows, programs: programRows, existingAssessments: existingAsmt };
+  }
+
   // GET /api/labs/:labId/staff/credentials-dashboard-stats
   //
   // Wave F PR F3 (2026-06-06). Aggregate credential expiration stats from
