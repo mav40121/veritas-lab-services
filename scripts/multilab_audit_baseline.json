@@ -2,16 +2,13 @@
   "_comment": "Multi-lab mutation audit baseline. Captures the count of known violations as of the discovery PR (2026-06-07). scripts/audit_multilab_mutations.py fails CI if the current count exceeds the per-page baseline below, so new code can't introduce new violations. Drive these to zero over a series of fix PRs; each fix lowers the per-page count.",
   "_canonical_fix": "PR #606 (VeritaTrack Add Task) — pass trackApi/tasksKey/dashKey props from the page-level scope into mutation components; POST to ${trackApi}/<endpoint>; invalidateQueries({queryKey: [tasksKey/dashKey]}).",
   "baseline": {
-    "client/src/pages/AccountSettingsPage.tsx": 2,
-    "client/src/pages/VeritaCheckPage.tsx": 1,
-    "client/src/pages/VeritaCheckVerificationPage.tsx": 2,
     "client/src/pages/VeritaCompAppPage.tsx": 16
   },
-  "_total": 21,
+  "_total": 16,
   "_notes": {
-    "AccountSettingsPage.tsx": "POSSIBLE FALSE POSITIVE: /api/account/settings and /api/onboarding/status are user-scoped, not lab-scoped. Confirm and move to the allowlist in audit_multilab_mutations.py if so; otherwise scope.",
-    "VeritaCheckPage.tsx": "POSSIBLE FALSE POSITIVE: /api/studies legacy endpoint, likely user-scoped. Verify against the GET query keyspace.",
-    "VeritaCheckVerificationPage.tsx": "PROBABLE REAL BUG: /api/veritacheck/verifications mutations on a lab-aware page. Investigate in the fix PR.",
-    "VeritaCompAppPage.tsx": "PROBABLE REAL BUG, LARGEST SURFACE: 18 invalidations across /api/competency/* and /api/veritacomp/* paths on a lab-aware page. Likely matches the VeritaTrack bug class exactly. Highest-priority fix."
+    "AccountSettingsPage.tsx": "CLEARED 2026-06-07: confirmed user-scoped endpoints. Both /api/account/settings and /api/onboarding/status moved to EXEMPT_PREFIXES in audit_multilab_mutations.py.",
+    "VeritaCheckPage.tsx": "CLEARED 2026-06-07: /api/studies is the legacy single-lab endpoint that pre-dates Tier 2. The page already invalidates BOTH the unscoped and scoped queryKey (belt-and-suspenders pattern). Exempted /api/studies in EXEMPT_PREFIXES.",
+    "VeritaCheckVerificationPage.tsx": "CLEARED 2026-06-07: real bug. onDeleted + onCreated callbacks were invalidating the hardcoded unscoped key instead of the verificationsUrl variable that already correctly switches on activeLabId. Fixed both call sites in the same PR.",
+    "VeritaCompAppPage.tsx": "PROBABLE REAL BUG, LARGEST SURFACE: 16 invalidations across /api/competency/* and /api/veritacomp/* paths on a lab-aware page. Almost certainly matches the VeritaTrack bug class exactly. Highest-priority remaining fix."
   }
 }

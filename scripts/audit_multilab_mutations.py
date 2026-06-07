@@ -55,6 +55,20 @@ EXEMPT_PREFIXES = (
     "/api/seat-invites",
     "/api/lab-invites",
     "/api/labs",  # /api/labs/:labId/... is the scoped form; the prefix itself catches both
+    # 2026-06-07: confirmed user-scoped endpoints (no lab dimension).
+    # See server/routes.ts: /api/onboarding/status uses req.userId;
+    # /api/account/settings reads users.lab_id but the endpoint itself
+    # is per-user, not per-lab.
+    "/api/onboarding",
+    "/api/account",
+    # 2026-06-07: /api/studies is the legacy single-lab endpoint that
+    # pre-dates the multi-lab tier 2 migration. The VeritaCheckPage
+    # mutation invalidates BOTH the unscoped /api/studies key AND the
+    # scoped /api/labs/${activeLabId}/studies key (belt-and-suspenders).
+    # Both writes hit valid GET keys somewhere, so the page refreshes.
+    # Exempt the unscoped form from the audit; the scoped invalidation
+    # is what matters for the lab-aware path.
+    "/api/studies",
 )
 
 def is_exempt_url(url: str) -> bool:
