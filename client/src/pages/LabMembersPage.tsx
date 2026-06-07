@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check } from "lucide-react";
 
 interface LabMember {
   membership_id: number;
@@ -255,6 +255,10 @@ export default function LabMembersPage() {
       )}
 
       {canManage && (
+        <InventoryPinCard labId={activeLabId} />
+      )}
+
+      {canManage && (
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserPlus size={16} /> Invite a new member</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -459,5 +463,160 @@ export default function LabMembersPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ── Wave K4: Inventory Kiosk PIN management card ─────────────────────────
+// Owner/admin only. Reads K1's /api/labs/:labId/inventory-pin/status and
+// rotates via /api/labs/:labId/inventory-pin/regenerate. New PIN is shown
+// ONCE in a modal with a Copy button; closing the modal forgets the PIN.
+interface PinStatus {
+  has_pin: boolean;
+  last_rotated_at: string | null;
+  failed_attempts: number;
+  locked_until: string | null;
+  is_locked: boolean;
+}
+
+function InventoryPinCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const { data: status, isLoading } = useQuery<PinStatus>({
+    queryKey: ["/api/labs", labId, "inventory-pin/status"],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealedPin, setRevealedPin] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const rotateMutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", `/api/labs/${labId}/inventory-pin/regenerate`, {});
+      return r as unknown as { pin: string; updated_at: string };
+    },
+    onSuccess: (data) => {
+      setRevealedPin(data.pin);
+      setRevealOpen(true);
+      setConfirmOpen(false);
+      setCopied(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/labs", labId, "inventory-pin/status"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "PIN rotation failed", description: err.message || "Try again.", variant: "destructive" });
+    },
+  });
+
+  function copyPin() {
+    if (!revealedPin) return;
+    navigator.clipboard.writeText(revealedPin).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      toast({ title: "Copy failed", description: "Highlight the PIN manually.", variant: "destructive" });
+    });
+  }
+
+  function closeReveal() {
+    setRevealOpen(false);
+    setRevealedPin(null);
+    setCopied(false);
+  }
+
+  return (
+    <Card data-testid="inventory-pin-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound size={16} /> Inventory Kiosk PIN
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Bench techs sign into the kiosk at <code className="font-mono text-xs bg-slate-100 px-1 rounded">/inventory</code> with the lab's CLIA and this 6-digit PIN. They can adjust quantities on hand with their initials; they cannot reach any other module. Rotate the PIN if it leaks or a tech leaves.
+        </p>
+
+        {isLoading ? (
+          <div className="text-xs text-muted-foreground">Loading status...</div>
+        ) : !status?.has_pin ? (
+          <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-2" data-testid="inventory-pin-status">
+            No PIN set. Generate one to enable kiosk access.
+          </div>
+        ) : (
+          <div className="text-xs text-slate-700 space-y-1" data-testid="inventory-pin-status">
+            <div>
+              <span className="font-medium">Status:</span>{" "}
+              {status.is_locked
+                ? <span className="text-rose-700">Locked out after 5 failed attempts until {status.locked_until ? new Date(status.locked_until).toLocaleTimeString() : "soon"}. Rotate to clear.</span>
+                : <span className="text-emerald-700">Active</span>}
+            </div>
+            <div>
+              <span className="font-medium">Last rotated:</span>{" "}
+              {status.last_rotated_at ? new Date(status.last_rotated_at).toLocaleString() : "never"}
+            </div>
+            {status.failed_attempts > 0 && !status.is_locked && (
+              <div className="text-amber-900">
+                {status.failed_attempts} failed attempt{status.failed_attempts === 1 ? "" : "s"} since last rotation.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div>
+          <Button
+            size="sm"
+            onClick={() => setConfirmOpen(true)}
+            disabled={rotateMutation.isPending}
+            data-testid="inventory-pin-rotate-button"
+          >
+            {rotateMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+            {status?.has_pin ? "Rotate PIN" : "Generate PIN"}
+          </Button>
+        </div>
+      </CardContent>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{status?.has_pin ? "Rotate inventory PIN?" : "Generate inventory PIN?"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-700">
+            {status?.has_pin
+              ? "The current PIN will stop working immediately. Anyone using the kiosk will need the new PIN on their next sign-in."
+              : "A new 6-digit PIN will be generated and shown once. Share it with the bench techs who need to take inventory."}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => rotateMutation.mutate()} disabled={rotateMutation.isPending} data-testid="inventory-pin-confirm-button">
+              {rotateMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+              {status?.has_pin ? "Rotate now" : "Generate now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={revealOpen} onOpenChange={(o) => { if (!o) closeReveal(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New inventory PIN</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700">
+              Write this down or copy it now. It will not be shown again. Closing this dialog erases it from this screen.
+            </p>
+            <div className="bg-slate-100 border border-slate-300 rounded p-4 flex items-center justify-between" data-testid="inventory-pin-reveal">
+              <div className="text-3xl font-mono font-bold tracking-widest">{revealedPin}</div>
+              <Button size="sm" variant="outline" onClick={copyPin} data-testid="inventory-pin-copy-button">
+                {copied ? <><Check size={14} className="mr-1" /> Copied</> : <><Copy size={14} className="mr-1" /> Copy</>}
+              </Button>
+            </div>
+            <div className="text-xs text-slate-500">
+              Bench techs sign in at <code className="font-mono text-xs bg-slate-100 px-1 rounded">/inventory</code> using the lab's CLIA + this PIN.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button size="sm" onClick={closeReveal} data-testid="inventory-pin-dismiss-button">I've recorded it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
