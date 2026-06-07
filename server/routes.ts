@@ -23065,6 +23065,112 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Wave A2.2 (2026-06-07): merged audit-trail endpoint ─────────────────
+  //
+  // GET /documents/:id/audit-trail returns the merged chronological view of
+  // BOTH policy_audit_log events (uploaded / edited / workflow_assigned /
+  // attestation_assigned / archived / restored / etc.) AND policy_signoffs
+  // events (the 21 CFR Part 11 signature events with typed_signature +
+  // hash + IP). Signoffs already render in the View modal's "Signature
+  // history" strip; this endpoint gives the surveyor-visible full trail.
+  //
+  // Sorted ascending so the timeline reads top-down. Both event kinds
+  // carry { kind, ts, user_id, user_name, action }, with kind-specific
+  // extras: signoffs add typed_signature/hash/step_name/comment;
+  // audit_log adds parsed details JSON.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/audit-trail",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+
+      const auditRows = sqlite
+        .prepare(
+          `SELECT a.id, a.action, a.details, a.ip_address, a.user_agent,
+                  a.created_at, a.user_id,
+                  u.name AS user_name, u.email AS user_email
+             FROM policy_audit_log a
+             LEFT JOIN users u ON u.id = a.user_id
+            WHERE a.document_id = ?`
+        )
+        .all(id) as any[];
+
+      const signoffRows = sqlite
+        .prepare(
+          `SELECT s.id, s.action, s.comment, s.typed_signature,
+                  s.signed_document_hash, s.ip_address, s.user_agent,
+                  s.signed_at, s.user_id, s.workflow_step_id, s.version_id,
+                  u.name AS user_name, u.email AS user_email,
+                  st.step_name, st.step_order
+             FROM policy_signoffs s
+             LEFT JOIN users u ON u.id = s.user_id
+             LEFT JOIN policy_approval_steps st ON st.id = s.workflow_step_id
+            WHERE s.document_id = ?`
+        )
+        .all(id) as any[];
+
+      const events = [
+        ...auditRows.map((r) => {
+          let parsedDetails: any = null;
+          if (r.details) {
+            try { parsedDetails = JSON.parse(r.details); } catch { parsedDetails = r.details; }
+          }
+          return {
+            kind: "audit_log" as const,
+            id: r.id,
+            ts: r.created_at,
+            user_id: r.user_id,
+            user_name: r.user_name,
+            user_email: r.user_email,
+            action: r.action,
+            details: parsedDetails,
+            ip_address: r.ip_address,
+            user_agent: r.user_agent,
+          };
+        }),
+        ...signoffRows.map((s) => ({
+          kind: "signoff" as const,
+          id: s.id,
+          ts: s.signed_at,
+          user_id: s.user_id,
+          user_name: s.user_name,
+          user_email: s.user_email,
+          action: s.action,
+          comment: s.comment,
+          typed_signature: s.typed_signature,
+          signed_document_hash: s.signed_document_hash,
+          step_name: s.step_name,
+          step_order: s.step_order,
+          version_id: s.version_id,
+          ip_address: s.ip_address,
+          user_agent: s.user_agent,
+        })),
+      ];
+
+      // Ascending by timestamp; for events with identical ts (signoff +
+      // audit_log are written separately for the same approve action),
+      // signoffs come second so the Part 11 record renders after the
+      // workflow row that triggered it.
+      events.sort((a, b) => {
+        const ta = new Date(a.ts).getTime();
+        const tb = new Date(b.ts).getTime();
+        if (ta !== tb) return ta - tb;
+        if (a.kind === b.kind) return a.id - b.id;
+        return a.kind === "audit_log" ? -1 : 1;
+      });
+
+      res.json({ events, total: events.length });
+    }
+  );
+
   // ── VeritaPolicy approval workflow Phase 2: workflow engine ─────────────
   //
   // State machine:
