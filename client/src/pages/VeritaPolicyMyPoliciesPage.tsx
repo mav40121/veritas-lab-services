@@ -44,6 +44,7 @@ import {
   Pencil,
   ShieldCheck,
   Clock,
+  History,
 } from "lucide-react";
 
 interface Manual {
@@ -721,6 +722,37 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<any[]>([]);
+
+  // Wave A2.2: Full audit trail dialog state (lazy-loaded when opened).
+  const [auditTrailOpen, setAuditTrailOpen] = useState(false);
+  const [auditTrailEvents, setAuditTrailEvents] = useState<any[] | null>(null);
+  const [auditTrailLoading, setAuditTrailLoading] = useState(false);
+  const [auditTrailErr, setAuditTrailErr] = useState<string | null>(null);
+  const openAuditTrail = async () => {
+    if (!viewDoc || !activeLabId) return;
+    setAuditTrailOpen(true);
+    setAuditTrailEvents(null);
+    setAuditTrailErr(null);
+    setAuditTrailLoading(true);
+    try {
+      const token = localStorage.getItem("veritas_token") || "";
+      const r = await fetch(`/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc.id}/audit-trail`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body?.error || `Failed (${r.status})`);
+      setAuditTrailEvents(body.events || []);
+    } catch (e: any) {
+      setAuditTrailErr(e?.message || "Failed to load");
+    } finally {
+      setAuditTrailLoading(false);
+    }
+  };
+  const closeAuditTrail = () => {
+    setAuditTrailOpen(false);
+    setAuditTrailEvents(null);
+    setAuditTrailErr(null);
+  };
 
   const openView = async (doc: PolicyDocument) => {
     setViewDoc(doc);
@@ -1458,6 +1490,16 @@ export default function VeritaPolicyMyPoliciesPage() {
               </ul>
             </div>
           )}
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={openAuditTrail}
+              data-testid="audit-trail-button"
+            >
+              <History size={14} className="mr-1" /> View full audit trail
+            </Button>
+          </div>
           {viewSignoffs.length > 0 && (
             <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
               <div className="font-medium flex items-center gap-1">
@@ -1513,6 +1555,91 @@ export default function VeritaPolicyMyPoliciesPage() {
             <Button variant="outline" onClick={closeView}>
               Close
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Wave A2.2: full audit trail dialog ──────────────────────── */}
+      <Dialog open={auditTrailOpen} onOpenChange={(o) => { if (!o) closeAuditTrail(); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History size={16} /> Audit trail
+              {viewDoc && <span className="text-sm font-normal text-muted-foreground">: {viewDoc.title}</span>}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+            <p className="text-xs text-muted-foreground">
+              Append-only chronological record per 21 CFR Part 11 §11.10(e). Includes every workflow event and electronic signature for this document, in the order they happened.
+            </p>
+            {auditTrailLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground p-4">
+                <Loader2 size={14} className="animate-spin" /> Loading audit trail...
+              </div>
+            )}
+            {auditTrailErr && (
+              <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-2">
+                {auditTrailErr}
+              </div>
+            )}
+            {auditTrailEvents && auditTrailEvents.length === 0 && (
+              <div className="text-sm text-muted-foreground p-4">No events recorded for this document yet.</div>
+            )}
+            {auditTrailEvents && auditTrailEvents.length > 0 && (
+              <ol className="space-y-1.5" data-testid="audit-trail-list">
+                {auditTrailEvents.map((ev: any, idx: number) => (
+                  <li
+                    key={`${ev.kind}-${ev.id}`}
+                    className={`border rounded px-2 py-1.5 text-xs ${
+                      ev.kind === "signoff"
+                        ? ev.action === "approved"
+                          ? "bg-emerald-50 border-emerald-200"
+                          : ev.action === "rejected"
+                          ? "bg-rose-50 border-rose-200"
+                          : "bg-amber-50 border-amber-200"
+                        : "bg-slate-50 border-slate-200"
+                    }`}
+                    data-testid={`audit-trail-event-${idx}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase border bg-white">
+                        {ev.kind === "signoff" ? `signed · ${ev.action}` : ev.action}
+                      </span>
+                      <span className="flex-1">
+                        <span className="font-medium">
+                          {ev.kind === "signoff" ? (ev.typed_signature || ev.user_name) : (ev.user_name || ev.user_email || `User ${ev.user_id}`)}
+                        </span>
+                        {ev.step_name && (
+                          <span className="text-muted-foreground"> on {ev.step_name}</span>
+                        )}
+                        <span className="text-muted-foreground"> at {fmtDate(ev.ts)}</span>
+                        {ev.comment && (
+                          <div className="italic text-muted-foreground">{ev.comment}</div>
+                        )}
+                        {ev.kind === "audit_log" && ev.details && typeof ev.details === "object" && Object.keys(ev.details).length > 0 && (
+                          <div className="text-[10px] text-muted-foreground font-mono break-all">
+                            {Object.entries(ev.details).slice(0, 3).map(([k, v]) => (
+                              <span key={k} className="mr-2">{k}: {typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+                            ))}
+                          </div>
+                        )}
+                        {ev.kind === "signoff" && ev.signed_document_hash && (
+                          <div className="text-[10px] font-mono text-muted-foreground break-all">
+                            sha256: {ev.signed_document_hash.slice(0, 24)}…
+                          </div>
+                        )}
+                        {ev.ip_address && (
+                          <div className="text-[10px] text-muted-foreground">from {ev.ip_address}</div>
+                        )}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeAuditTrail}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
