@@ -8952,7 +8952,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // backfill on the DB column.
     if (req.query.filter === "needs-review") {
       const today = new Date().toISOString().slice(0, 10);
-      filters.push("(effective_date IS NULL OR review_due_date IS NULL OR review_due_date < ?)");
+      // Wave A1.2 (2026-06-06): also surface rows with NULL storage_provider
+      // so the lab can clean up legacy rows linked before A1.2 landed.
+      filters.push("(effective_date IS NULL OR review_due_date IS NULL OR review_due_date < ? OR storage_provider IS NULL)");
       params.push(today);
     }
     const rows = sqlite.prepare(
@@ -8981,8 +8983,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!external_url || typeof external_url !== "string" || !external_url.trim()) {
       return res.status(400).json({ error: "external_url required (URL pointer to your document in SharePoint, Drive, OneDrive, etc.)" });
     }
-    if (storage_provider && !VALID_STORAGE_PROVIDERS.includes(storage_provider)) {
-      return res.status(400).json({ error: `storage_provider must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
+    // Wave A1.2 (2026-06-06): storage_provider is required at write time
+    // and must be one of the VALID_STORAGE_PROVIDERS allowlist. Surveyor-
+    // defensibility move 2 — "where does this document live" can never
+    // be blank on a new link. Existing NULL rows surface in
+    // ?filter=needs-review for the lab to clean up.
+    if (!storage_provider || !VALID_STORAGE_PROVIDERS.includes(storage_provider)) {
+      return res.status(400).json({ error: `storage_provider required and must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
     }
     // Wave A1.1 (2026-06-06): effective_date is required at write time.
     // Surveyor-defensibility move 2 — every linked document must declare
@@ -9071,8 +9078,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (field === "document_type" && val && !VALID_DOCUMENT_TYPES.includes(val)) {
           return res.status(400).json({ error: `document_type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
         }
-        if (field === "storage_provider" && val && !VALID_STORAGE_PROVIDERS.includes(val)) {
-          return res.status(400).json({ error: `storage_provider must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
+        if (field === "storage_provider" && (!val || !VALID_STORAGE_PROVIDERS.includes(val))) {
+          // Wave A1.2 (2026-06-06): once set, storage_provider cannot be
+          // cleared. The director can switch providers (SharePoint -> Drive)
+          // but the field must always carry a value.
+          return res.status(400).json({ error: `storage_provider cannot be cleared once set; must be one of: ${VALID_STORAGE_PROVIDERS.join(", ")}` });
         }
         if (field === "status" && val && !VALID_DOCUMENT_STATUSES.includes(val)) {
           return res.status(400).json({ error: `status must be one of: ${VALID_DOCUMENT_STATUSES.join(", ")}` });

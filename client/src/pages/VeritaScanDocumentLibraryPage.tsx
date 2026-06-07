@@ -472,7 +472,9 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
   // Wave A1.1 (2026-06-06): effective_date is required at write time; the
   // server validates the same constraint so submitting without it would
   // return a 400. Surface the requirement in the form before the request.
-  const canSubmit = form.title.trim() && form.external_url.trim() && form.effective_date.trim();
+  // Wave A1.2 (2026-06-06): storage_provider added to the gate for the
+  // same reason — surveyor-defensibility requires "where does this live."
+  const canSubmit = form.title.trim() && form.external_url.trim() && form.effective_date.trim() && form.storage_provider.trim();
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl">
@@ -502,11 +504,10 @@ function AddDocumentDialog({ open, onClose, onSubmit, pending }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Storage Provider</Label>
-              <Select value={form.storage_provider || "none"} onValueChange={v => setForm({ ...form, storage_provider: v === "none" ? "" : v })}>
+              <Label>Storage Provider <span className="text-red-500" aria-hidden>*</span></Label>
+              <Select value={form.storage_provider || ""} onValueChange={v => setForm({ ...form, storage_provider: v })}>
                 <SelectTrigger><SelectValue placeholder="Pick one" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Not specified</SelectItem>
                   {STORAGE_PROVIDERS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -653,15 +654,23 @@ function EditDocumentDialog({ doc, onClose, onSubmit, onArchive, pending }: {
                 // stays. Non-empty dates flow through normally.
                 const body: Record<string, any> = {
                   ...form,
-                  storage_provider: form.storage_provider || null,
                   display_label: form.display_label || null,
                   version: form.version || null,
                   description: form.description || null,
                 };
+                // Wave A1.1 + A1.2 (2026-06-06): the server PATCH rejects
+                // clearing required fields once set. If the user blanks
+                // them here, skip the field so the existing value stays.
+                // Non-empty values flow through normally. This lets
+                // labs save other field edits without being forced to
+                // fix every required field at once; the needs-review
+                // filter still surfaces incomplete rows for cleanup.
                 if (form.effective_date.trim()) body.effective_date = form.effective_date;
                 else delete body.effective_date;
                 if (form.review_due_date.trim()) body.review_due_date = form.review_due_date;
                 else delete body.review_due_date;
+                if (form.storage_provider.trim()) body.storage_provider = form.storage_provider;
+                else delete body.storage_provider;
                 onSubmit(body);
               }}
               disabled={pending}
