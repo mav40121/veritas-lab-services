@@ -221,19 +221,27 @@ export default function BarcodeScannerModal({
       try {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (cancelled) return;
-        // 2026-06-08 iOS scan-fail fix. Three changes:
-        //   1) Code 128 only. QR_CODE is removed; inventory labels are
-        //      always Code 128. Trying both formats per frame slowed the
-        //      ZXing JS decoder enough to miss the decode window.
+        // 2026-06-08 iOS scan-fail fix (hotfix 2026-06-08 13:54 AZ).
+        //
+        // html5-qrcode's start() API has a strict shape contract:
+        //
+        //   start(cameraIdOrConfig, configuration, success, error)
+        //
+        // cameraIdOrConfig is either a string device id OR a SINGLE-KEY
+        // MediaTrackConstraints object (just `{facingMode}` or just
+        // `{deviceId}`). Passing 4 keys throws "cameraIdOrConfig object
+        // should have exactly 1 key" the moment the camera tries to
+        // start. Additional constraints (focusMode, width, height) go
+        // into the SECOND argument under `videoConstraints`, which the
+        // library forwards into getUserMedia.
+        //
+        // Three behavior changes preserved from the original fix:
+        //   1) Code 128 only. QR_CODE removed.
         //   2) experimentalFeatures.useBarCodeDetectorIfSupported = true
-        //      delegates to the native BarcodeDetector API on iOS 17+
-        //      Safari, ~10x faster than ZXing JS. Falls back to ZXing on
-        //      browsers without it.
-        //   3) videoConstraints request continuous autofocus and a
-        //      1920x1080 ideal capture so close-range Code 128 bars stay
-        //      legible. fps bumped 10 -> 25 so the decoder gets more
-        //      attempts per second when the label drifts in and out of
-        //      focus.
+        //      for the native iOS BarcodeDetector path.
+        //   3) Continuous autofocus + 1920x1080 ideal + fps 25 in
+        //      videoConstraints inside the configuration arg (not the
+        //      camera selector arg).
         const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
           formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128],
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
@@ -241,13 +249,18 @@ export default function BarcodeScannerModal({
         } as any);
         scannerRef.current = scanner;
         await scanner.start(
+          { facingMode: "environment" },
           {
-            facingMode: "environment",
-            focusMode: "continuous",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            fps: 25,
+            qrbox: { width: 280, height: 140 },
+            aspectRatio: 4 / 3,
+            videoConstraints: {
+              facingMode: "environment",
+              focusMode: "continuous",
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
           } as any,
-          { fps: 25, qrbox: { width: 280, height: 140 }, aspectRatio: 4 / 3 } as any,
           (decoded: string) => { void handleScan(decoded); },
           () => {} // ignore per-frame decode failures
         );
